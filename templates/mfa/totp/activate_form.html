@@ -1,0 +1,56 @@
+{% extends "account/base.html" %}
+
+{% block title %}Enable Authenticator - The Coalition{% endblock %}
+
+{% block card_title %}
+<h2 class="card-title justify-center text-2xl">Enable Authenticator App</h2>
+{% endblock %}
+
+{% block card_content %}
+<div class="space-y-6 mt-6">
+    <div class="text-center">
+        <p class="text-base-content/70 mb-4">
+            Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.)
+        </p>
+        <div class="flex justify-center mb-4">
+            <div class="bg-white p-4 rounded-lg">
+                {{ totp_svg|safe }}
+            </div>
+        </div>
+        <div class="collapse collapse-arrow bg-base-100">
+            <input type="checkbox">
+            <div class="collapse-title text-sm font-medium">
+                Can't scan? Enter manually
+            </div>
+            <div class="collapse-content">
+                <code class="text-sm break-all select-all">{{ secret }}</code>
+            </div>
+        </div>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="form-control">
+            <label class="label" for="id_code">
+                <span class="label-text">Enter the 6-digit code from your app</span>
+            </label>
+            <input type="text" name="code" id="id_code"
+                   class="input input-bordered w-full text-center text-2xl tracking-widest"
+                   maxlength="6" pattern="[0-9]{6}" inputmode="numeric"
+                   placeholder="000000" autofocus required>
+            {% if form.code.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.code.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+        <div class="form-control mt-6">
+            <button type="submit" class="btn btn-primary">Verify and Enable</button>
+        </div>
+    </form>
+</div>
+
+<div class="mt-4 text-center">
+    <a href="{% url 'mfa_index' %}" class="btn btn-ghost btn-sm">Cancel</a>
+</div>
+{% endblock %}

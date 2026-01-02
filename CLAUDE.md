@@ -1,0 +1,276 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Django 6.0 application for The Coalition Zwift racing team. Integrates with ZwiftPower and Zwift Racing APIs to manage
+team data and member information.
+
+## Commands
+
+```bash
+# Package management (uses uv)
+uv sync                          # Install dependencies
+uv add <package>                 # Add production dependency
+uv add --dev <package>           # Add dev dependency
+
+# Django
+uv run python manage.py runserver              # Dev server
+uv run python manage.py check                  # Validate config
+uv run python manage.py makemigrations         # Create migrations
+uv run python manage.py migrate                # Apply migrations
+uv run python manage.py createsuperuser        # Create admin user
+
+# Background Tasks (Django 6.0 built-in)
+uv run python manage.py db_worker              # Run task worker
+
+# Tailwind CSS
+uv run python manage.py tailwind install       # Install npm deps
+uv run python manage.py tailwind start         # Dev mode with watch
+uv run python manage.py tailwind build         # Production build
+
+# Testing & Linting
+uv run pytest                                  # Run tests
+uv run pytest <path>::<test>                   # Run single test
+uv run ruff check .                            # Lint
+uv run ruff check . --fix                      # Lint and fix
+uv run ruff format .                           # Format code
+
+# Production (uses Granian WSGI server)
+uv run granian gotta_bike_platform.wsgi:application --interface wsgi
+```
+
+## Architecture
+
+### Configuration
+
+- `gotta_bike_platform/config.py` - pydantic-settings for environment variables (loaded from `.env`)
+- `gotta_bike_platform/settings.py` - Django settings, imports config values from `config.py`
+- Optional env vars: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` (OAuth)
+- Runtime settings (via constance): API credentials and team settings (see Dynamic Settings below)
+
+### Apps (in `apps/`)
+
+- `accounts` - Custom User model with Discord/Zwift fields, django-allauth adapters, role-based permissions
+    - `GuildMember` model - Tracks Discord guild members synced from bot (see Guild Member Sync below)
+- `team` - Core team management:
+    - `RaceReadyRecord` - Verification records for weight/height/power (pending/verified/rejected status)
+    - `TeamLink` - Links to external resources with visibility date ranges
+    - `services.py` - `get_unified_team_roster()` merges data from ZwiftPower, Zwift Racing, and User accounts
+- `zwift` - Zwift integration (placeholder)
+- `zwiftpower` - ZwiftPower API integration:
+    - `ZPTeamRiders` - Team roster data from admin API
+    - `ZPEvent` - Event metadata
+    - `ZPRiderResults` - Individual rider results per event
+- `zwiftracing` - Zwift Racing API integration, `ZRRider` model for rider data
+- `dbot_api` - Discord bot REST API using Django Ninja
+- `data_connection` - Google Sheets data export:
+    - `DataConnection` model - Configurable exports to Google Sheets
+    - `gs_client.py` - Google Sheets/Drive API client using service account
+    - Supports field selection from User, ZwiftPower, and Zwift Racing data
+    - Configurable filters (gender, division, rating, phenotype)
+    - Manual sync clears sheet and rewrites all data
+- `magic_links` - Passwordless authentication (legacy)
+
+### Authentication (django-allauth)
+
+- Discord OAuth only (no username/password)
+- **Guild membership required**: Users must be a member of the configured Discord server (`GUILD_ID`) to sign up or log
+  in
+- Custom User model fields: `discord_id`, `discord_username`, `discord_nickname`, `zwid`
+- TOTP two-factor authentication via `allauth.mfa`
+- Custom adapter (`apps/accounts/adapters.py`):
+    - Verifies guild membership via Discord API before allowing login/signup
+    - Syncs Discord profile data on login
+    - Redirects rejected users to `DISCORD_URL` (invite link)
+- OAuth scopes: `identify`, `email`, `guilds`
+- URLs at `/accounts/` (login, logout, 2fa management)
+
+### User Roles (`apps/accounts/models.py`)
+
+Role-based permissions stored in User.roles JSONField. Available roles:
+
+- `team_captain` - Can verify/reject race ready records
+- `team_vice_captain` - Can view (but not verify) race ready records
+- `link_admin` - Can edit team links
+- `membership_admin` - Membership management
+- `racing_admin` - Racing management
+- `team_member` - Basic team member
+
+Helper properties: `is_team_captain`, `is_team_vice_captain`, `is_any_captain`, `is_link_admin`
+
+Assign roles in Django admin as JSON array: `["team_captain", "link_admin"]`
+
+### Background Tasks
+
+Uses Django 6.0's built-in `django-tasks` with database backend. Tasks are defined with `@task` decorator:
+
+```python
+from django.tasks import task
+
+@task
+def my_task() -> dict:
+    ...
+    return {"status": "complete"}
+
+# Enqueue immediately
+my_task.enqueue()
+
+# Enqueue with delay (run_after must be datetime, not timedelta)
+from django.utils import timezone
+from datetime import timedelta
+my_task.using(run_after=timezone.now() + timedelta(seconds=60)).enqueue()
+```
+
+### External API Clients
+
+- `apps/zwiftpower/zp_client.py` - ZwiftPower session-based client using httpx (requires Zwift OAuth login)
+- `apps/zwiftracing/zr_client.py` - Zwift Racing API client using httpx
+    - All methods return `(status_code, response_json)` tuple
+    - 429 rate limit errors return the response without raising (contains `retryAfter` seconds)
+    - Non-success status codes (except 429) raise `httpx.HTTPStatusError`
+
+### Discord Bot API (`apps/dbot_api`)
+
+REST API using Django Ninja for Discord bot integration:
+
+- Auth: `X-API-Key` header (matches constance `DBOT_AUTH_KEY`) + `X-Guild-Id` header (must match constance `GUILD_ID`) +
+  `X-Discord-User-Id` header
+- Key endpoints:
+    - `GET /api/dbot/zwiftpower_profile/{zwid}` - ZwiftPower rider data
+    - `GET /api/dbot/my_profile` - Combined profile for requesting Discord user
+    - `GET /api/dbot/teammate_profile/{zwid}` - Combined profile for any teammate
+    - `POST /api/dbot/sync_guild_roles` - Sync all Discord roles
+    - `POST /api/dbot/sync_guild_members` - Sync all guild members (see Guild Member Sync)
+    - `POST /api/dbot/sync_user_roles/{discord_id}` - Sync a user's roles
+
+### Cron API (`apps/dbot_api/cron_api.py`)
+
+REST API for triggering scheduled tasks via external cron service:
+
+- Auth: `X-Cron-Key` header (uses same `DBOT_AUTH_KEY` from constance)
+- Endpoints:
+    - `GET /api/cron/tasks` - List available tasks
+    - `POST /api/cron/task/{task_name}` - Trigger a task by name
+- Available tasks:
+    - `update_team_riders` - Fetch team riders from ZwiftPower
+    - `update_team_results` - Fetch team results from ZwiftPower
+    - `sync_zr_riders` - Sync riders from Zwift Racing API
+
+To add new tasks, update `TASK_REGISTRY` in `cron_api.py`:
+
+```python
+TASK_REGISTRY: dict = {
+    "task_name": {
+        "task": task_function,
+        "description": "What the task does",
+    },
+}
+```
+
+Example cron call:
+
+```bash
+curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_team_riders
+```
+
+### Frontend
+
+- `theme/` - django-tailwind app with Tailwind CSS 4.x + DaisyUI 5.x
+- `theme/templates/` - Base templates (base.html, header.html, footer.html)
+- `templates/account/` - Auth templates (login, logout) with DaisyUI styling
+- `templates/mfa/` - MFA templates (TOTP setup, recovery codes)
+- Uses HTMX for interactivity (`django-htmx` middleware enabled)
+
+### Admin Customization
+
+Custom admin buttons are added via:
+
+1. Override `get_urls()` to add custom URL path
+2. Add view method that enqueues task and redirects
+3. Create template extending `admin/change_list.html` with button in `object-tools-items` block
+
+### Dynamic Settings (django-constance)
+
+Runtime-configurable settings stored in database, editable via Django admin at `/admin/constance/config/`.
+
+Available settings:
+
+- **Team Identity**: `GUILD_NAME`, `GUILD_ID`, `DISCORD_URL` (invite link for rejected users)
+- **Zwift Credentials**: `ZWIFT_USERNAME`, `ZWIFT_PASSWORD` (password fields), `ZWIFTPOWER_TEAM_ID`
+- **API Keys**: `DBOT_AUTH_KEY` (password field - masked in admin)
+- **Zwift Racing App**: `ZRAPP_API_URL`, `ZRAPP_API_KEY` (password field - masked in admin)
+- **Discord Roles**: `RACE_READY_ROLE`, `MEMBER_ROLE`, `MEMBERSHIP_ADMIN_ROLE`, `TEAM_CAPTAIN_ROLE`
+- **Verification**: `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
+  `POWER_VERIFICATION_DAYS` (365)
+- **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)
+- **Site Settings**: `TEAM_NAME`, `SITE_ANNOUNCEMENT`, `MAINTENANCE_MODE`
+
+Usage in code:
+
+```python
+from constance import config
+
+team_id = config.ZWIFTPOWER_TEAM_ID
+guild_id = config.GUILD_ID
+if config.MAINTENANCE_MODE:
+    ...
+```
+
+Add new settings in `settings.py` under `CONSTANCE_CONFIG`.
+
+## Code Style
+
+Ruff configuration in `ruff.toml`:
+
+- Python 3.14 target
+- Line length: 120
+- Enforces: Django (DJ), security (S), docstrings (D), isort (I), bugbear (B), and more
+- Docstrings required (Google style, D212 format)
+
+New Django apps should be created in `apps/` with config name `apps.<appname>`.
+
+When handling API responses that may contain `None` values for string fields, use `value or ""` pattern (not
+`.get("key", "")` which returns `None` if key exists with `None` value).
+
+## Guild Member Sync
+
+Syncs Discord guild members with Django to track membership status.
+
+### GuildMember Model (`apps/accounts/models.py`)
+
+Stores Discord guild member data:
+
+- `discord_id` - Discord user ID (unique)
+- `username`, `display_name`, `nickname` - Discord names
+- `avatar_hash`, `roles`, `joined_at`, `is_bot` - Discord data
+- `date_created`, `date_modified`, `date_left` - Tracking timestamps
+- `user` - OneToOne link to User (if they have an account)
+
+### How It Works
+
+1. Discord bot collects all guild members via `/sync_members` slash command
+2. Bot POSTs member data to `POST /api/dbot/sync_guild_members`
+3. Django creates/updates GuildMember records
+4. Members not in payload are marked as left (`date_left` set)
+5. GuildMembers are linked to User accounts by matching `discord_id`
+
+**Important**: Only affects Discord OAuth users. Regular Django accounts (staff, admin) without `discord_id` are NOT
+modified.
+
+### Admin Views
+
+- Guild Members list: `/admin/accounts/guildmember/`
+- Comparison view: `/admin/accounts/guildmember/comparison/`
+    - Guild Only: Discord members without User accounts
+    - Linked: Discord members with User accounts
+    - Left Guild: Members who left but have User accounts
+    - Discord Users (No Guild): OAuth users without GuildMember record
+
+### Discord Bot Requirements
+
+The bot needs the **Server Members Intent** (privileged):
+
+1. Enable `intents.members = True` in bot code (`src/bot.py`)
+2. Enable "Server Members Intent" in Discord Developer Portal > Bot > Privileged Gateway Intents

@@ -1,0 +1,26 @@
+{% extends "account/base.html" %}
+
+{% block title %}Recovery Codes - The Coalition{% endblock %}
+
+{% block card_title %}
+<h2 class="card-title justify-center text-2xl">Recovery Codes</h2>
+{% endblock %}
+
+{% block card_content %}
+<div class="alert alert-info mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="h-6 w-6 shrink-0 stroke-current">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span>Save these codes in a safe place. Each code can only be used once.</span>
+</div>
+<div class="bg-base-100 p-4 rounded-lg">
+    <div class="grid grid-cols-2 gap-2 font-mono text-center">
+        {% for code in unused_codes %}
+        <div class="p-2 bg-base-200 rounded select-all">{{ code }}</div>
+        {% endfor %}
+    </div>
+</div>
+<div class="flex justify-center mt-6">
+    <a href="{% url 'mfa_index' %}" class="btn btn-ghost">Back to Security Settings</a>
+</div>
+{% endblock %}

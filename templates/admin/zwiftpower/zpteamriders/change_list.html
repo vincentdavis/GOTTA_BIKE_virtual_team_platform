@@ -1,0 +1,8 @@
+{% extends "admin/change_list.html" %}
+
+{% block object-tools-items %}
+  <li>
+    <a href="{% url 'admin:zwiftpower_zpteamriders_sync' %}" class="button">Sync from ZwiftPower</a>
+  </li>
+  {{ block.super }}
+{% endblock %}

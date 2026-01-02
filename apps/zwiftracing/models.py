@@ -1,0 +1,158 @@
+"""Models for Zwift Racing data."""
+
+from typing import ClassVar
+
+from django.db import models
+
+
+class ZRRider(models.Model):
+    """Zwift Racing rider data from the club, rider and riders APIs.
+
+    Example data: test/example_data/zwiftracing/rider_api.json
+    """
+
+    # Basic rider info
+    zwid = models.PositiveIntegerField(unique=True, help_text="Zwift ID")
+    name = models.CharField(max_length=255, help_text="Rider display name")
+    gender = models.CharField(max_length=10, blank=True, help_text="Gender (M/F)")
+    country = models.CharField(max_length=10, blank=True, help_text="Country code")
+    age = models.CharField(max_length=10, blank=True, help_text="Age category")
+    height = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Height in cm")
+    weight = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True, help_text="Weight in kg")
+
+    # ZwiftPower category
+    zp_category = models.CharField(max_length=5, blank=True, help_text="ZwiftPower category (A/B/C/D/E)")
+    zp_ftp = models.PositiveSmallIntegerField(null=True, blank=True, help_text="ZwiftPower FTP")
+
+    # Power data - watts per kg
+    power_wkg5 = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="5-sec w/kg")
+    power_wkg15 = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="15-sec w/kg")
+    power_wkg30 = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="30-sec w/kg")
+    power_wkg60 = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="60-sec w/kg")
+    power_wkg120 = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="2-min w/kg")
+    power_wkg300 = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="5-min w/kg")
+    power_wkg1200 = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True, help_text="20-min w/kg")
+
+    # Power data - watts
+    power_w5 = models.PositiveSmallIntegerField(null=True, blank=True, help_text="5-sec watts")
+    power_w15 = models.PositiveSmallIntegerField(null=True, blank=True, help_text="15-sec watts")
+    power_w30 = models.PositiveSmallIntegerField(null=True, blank=True, help_text="30-sec watts")
+    power_w60 = models.PositiveSmallIntegerField(null=True, blank=True, help_text="60-sec watts")
+    power_w120 = models.PositiveSmallIntegerField(null=True, blank=True, help_text="2-min watts")
+    power_w300 = models.PositiveSmallIntegerField(null=True, blank=True, help_text="5-min watts")
+    power_w1200 = models.PositiveSmallIntegerField(null=True, blank=True, help_text="20-min watts")
+
+    # Power metrics
+    power_cp = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True, help_text="Critical Power")
+    power_awc = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Anaerobic Work Capacity"
+    )
+    power_compound_score = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Compound score"
+    )
+
+    # Race rating - current
+    race_current_rating = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Current race rating"
+    )
+    race_current_date = models.BigIntegerField(null=True, blank=True, help_text="Current rating date (timestamp)")
+    race_current_category = models.CharField(max_length=20, blank=True, help_text="Current mixed category")
+    race_current_category_num = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Current category number"
+    )
+
+    # Race rating - last
+    race_last_rating = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Last race rating"
+    )
+    race_last_date = models.BigIntegerField(null=True, blank=True, help_text="Last rating date (timestamp)")
+    race_last_category = models.CharField(max_length=20, blank=True, help_text="Last mixed category")
+    race_last_category_num = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Last category number")
+
+    # Race rating - max30
+    race_max30_rating = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Max 30-day rating"
+    )
+    race_max30_date = models.BigIntegerField(null=True, blank=True, help_text="Max 30-day date (timestamp)")
+    race_max30_expires = models.BigIntegerField(null=True, blank=True, help_text="Max 30-day expires (timestamp)")
+    race_max30_category = models.CharField(max_length=20, blank=True, help_text="Max 30-day category")
+    race_max30_category_num = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Max 30-day category number"
+    )
+
+    # Race rating - max90
+    race_max90_rating = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True, help_text="Max 90-day rating"
+    )
+    race_max90_date = models.BigIntegerField(null=True, blank=True, help_text="Max 90-day date (timestamp)")
+    race_max90_expires = models.BigIntegerField(null=True, blank=True, help_text="Max 90-day expires (timestamp)")
+    race_max90_category = models.CharField(max_length=20, blank=True, help_text="Max 90-day category")
+    race_max90_category_num = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Max 90-day category number"
+    )
+
+    # Race stats
+    race_finishes = models.PositiveIntegerField(default=0, help_text="Total race finishes")
+    race_dnfs = models.PositiveIntegerField(default=0, help_text="Total DNFs")
+    race_wins = models.PositiveIntegerField(default=0, help_text="Total wins")
+    race_podiums = models.PositiveIntegerField(default=0, help_text="Total podiums")
+
+    # Handicaps - profile
+    handicap_flat = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True, help_text="Flat profile handicap"
+    )
+    handicap_rolling = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True, help_text="Rolling profile handicap"
+    )
+    handicap_hilly = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True, help_text="Hilly profile handicap"
+    )
+    handicap_mountainous = models.DecimalField(
+        max_digits=8, decimal_places=2, null=True, blank=True, help_text="Mountainous profile handicap"
+    )
+
+    # Phenotype
+    phenotype_value = models.CharField(max_length=50, blank=True, help_text="Phenotype classification")
+    phenotype_bias = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True, help_text="Phenotype bias"
+    )
+    phenotype_sprinter = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True, help_text="Sprinter score"
+    )
+    phenotype_puncheur = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True, help_text="Puncheur score"
+    )
+    phenotype_pursuiter = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True, help_text="Pursuiter score"
+    )
+    phenotype_climber = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True, help_text="Climber score"
+    )
+    phenotype_tt = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True, help_text="Time trial score"
+    )
+
+    # Club info
+    club_id = models.PositiveIntegerField(null=True, blank=True, help_text="Club ID")
+    club_name = models.CharField(max_length=255, blank=True, help_text="Club name")
+
+    # Timestamps
+    date_created = models.DateTimeField(auto_now_add=True, help_text="Record created date")
+    date_modified = models.DateTimeField(auto_now=True, help_text="Record last modified date")
+    date_left = models.DateTimeField(null=True, blank=True, help_text="Date rider left club")
+
+    class Meta:
+        """Meta options for ZRRider model."""
+
+        verbose_name = "ZR Rider"
+        verbose_name_plural = "ZR Riders"
+        ordering: ClassVar[list[str]] = ["name"]
+
+    def __str__(self) -> str:
+        """Return string representation of the rider.
+
+        Returns:
+            String with rider name and ID.
+
+        """
+        return f"{self.name} ({self.zwid})"

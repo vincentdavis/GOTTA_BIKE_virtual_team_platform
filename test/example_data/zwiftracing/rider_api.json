@@ -1,0 +1,93 @@
+{
+  "riderId": 87402,
+  "name": "Vincent Davis  [COALITION]",
+  "gender": "M",
+  "country": "us",
+  "age": "50+",
+  "height": 170,
+  "weight": 60.8,
+  "zpCategory": "B",
+  "zpFTP": 238,
+  "power": {
+    "wkg5": 12.6202,
+    "wkg15": 11.6584,
+    "wkg30": 9.6875,
+    "wkg60": 7.782037149767197,
+    "wkg120": 5.904605263157895,
+    "wkg300": 4.621710526315789,
+    "wkg1200": 4.046052631578948,
+    "w5": 761,
+    "w15": 703,
+    "w30": 589,
+    "w60": 473,
+    "w120": 359,
+    "w300": 281,
+    "w1200": 246,
+    "CP": 233.72888859768773,
+    "AWC": 14825.0193922551,
+    "compoundScore": 1333.1576557668652
+  },
+  "race": {
+    "last": {
+      "rating": 1516.0539503628117,
+      "date": 1766536200,
+      "mixed": {
+        "category": "Sapphire",
+        "number": 4
+      }
+    },
+    "current": {
+      "rating": 1516.0539503628117,
+      "date": 1766536200,
+      "mixed": {
+        "category": "Sapphire",
+        "number": 4
+      }
+    },
+    "max30": {
+      "rating": 1534.9230109906518,
+      "date": 1764529200,
+      "expires": 1769128200,
+      "mixed": {
+        "category": "Sapphire",
+        "number": 4
+      }
+    },
+    "max90": {
+      "rating": 1573.3835258988343,
+      "date": 1762477200,
+      "expires": 1774312200,
+      "mixed": {
+        "category": "Sapphire",
+        "number": 4
+      }
+    },
+    "finishes": 18,
+    "dnfs": 0,
+    "wins": 2,
+    "podiums": 7
+  },
+  "handicaps": {
+    "profile": {
+      "flat": 50.99328033308271,
+      "rolling": 29.996047254754657,
+      "hilly": -22.330390734094767,
+      "mountainous": -61.44523635429465
+    }
+  },
+  "phenotype": {
+    "scores": {
+      "sprinter": 89.3,
+      "puncheur": 98.6,
+      "pursuiter": 88.9,
+      "climber": 89,
+      "tt": 56.1
+    },
+    "value": "Puncheur",
+    "bias": 7.150000000000006
+  },
+  "club": {
+    "id": 11991,
+    "name": "COALITION"
+  }
+}

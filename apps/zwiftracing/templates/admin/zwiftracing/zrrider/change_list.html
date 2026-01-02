@@ -1,0 +1,11 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+    <li>
+        <a href="{% url 'admin:zwiftracing_zrrider_sync' %}" class="addlink">
+            Sync from Zwift Racing
+        </a>
+    </li>
+    {{ block.super }}
+{% endblock %}

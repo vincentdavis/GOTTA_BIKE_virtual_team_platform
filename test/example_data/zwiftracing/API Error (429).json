@@ -1,0 +1,8 @@
+{
+  "API Error (429)": {
+    "error": "Too many requests, please try again later.",
+    "retryAfter": "597",
+    "windowMinutes": 10,
+    "limit": 1
+  }
+}

@@ -1,0 +1,37 @@
+{% extends "account/base.html" %}
+
+{% block title %}Two-Factor Authentication - The Coalition{% endblock %}
+
+{% block card_title %}
+<h2 class="card-title justify-center text-2xl">Two-Factor Authentication</h2>
+<p class="text-center text-base-content/70">Enter the code from your authenticator app</p>
+{% endblock %}
+
+{% block card_content %}
+<form method="post" class="mt-6">
+    {% csrf_token %}
+    <div class="form-control">
+        <label class="label" for="id_code">
+            <span class="label-text">Authentication Code</span>
+        </label>
+        <input type="text" name="code" id="id_code"
+               class="input input-bordered w-full text-center text-2xl tracking-widest"
+               maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code"
+               placeholder="000000" autofocus required>
+        {% if form.code.errors %}
+        <label class="label">
+            <span class="label-text-alt text-error">{{ form.code.errors.0 }}</span>
+        </label>
+        {% endif %}
+    </div>
+    <div class="form-control mt-6">
+        <button type="submit" class="btn btn-primary">Verify</button>
+    </div>
+</form>
+<div class="divider">OR</div>
+<div class="text-center">
+    <a href="{% url 'mfa_authenticate' %}?method=recovery_codes" class="link link-primary">
+        Use a recovery code
+    </a>
+</div>
+{% endblock %}

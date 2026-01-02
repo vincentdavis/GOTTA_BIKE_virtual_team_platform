@@ -1,0 +1,45 @@
+[project]
+name = "GOTTA-BIKE_virtual-team-app"
+version = "0.1.0"
+description = "App and discrod bot for managing zwift virtual cycling teams."
+requires-python = ">=3.14"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "boto3>=1.42.16",
+    "dj-database-url>=3.0.1",
+    "django>=6.0.0",
+    "django-allauth[mfa,socialaccount]>=65.3.0",
+    "django-constance>=4.3.4",
+    "django-cors-headers>=4.9.0",
+    "django-htmx>=1.27.0",
+    "django-ninja>=1.5.0",
+    "django-storages>=1.14.6",
+    "django-tailwind[honcho]>=4.4.2",
+    "django-tasks>=0.10.0",
+    "google-api-python-client>=2.187.0",
+    "google-auth>=2.45.0",
+    "granian>=2.6.0",
+    "gspread>=6.2.1",
+    "honcho>=2.0.0",
+    "httpx>=0.28.1",
+    "justhtml>=0.23.0",
+    "logfire[asgi,django,psycopg]>=4.15.1",
+    "markdown>=3.10",
+    "psycopg[binary]>=3.3.1",
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.12.0",
+    "whitenoise>=6.11.0",
+]
+
+[dependency-groups]
+dev = [
+    "django-tailwind[cookiecutter,honcho,reload]",
+    "django-browser-reload>=1.21.0",
+    "django-debug-toolbar>=6.1.0",
+    "django-reset-migrations>=0.4.0",
+    "django-stubs>=5.2.8",
+    "pytest>=9.0.1",
+    "ruff>=0.14.10",
+    "ty>=0.0.8",
+    "logfire-mcp>=0.6.0"
+]

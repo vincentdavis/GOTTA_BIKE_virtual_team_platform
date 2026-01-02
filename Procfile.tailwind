@@ -1,0 +1,3 @@
+django: python manage.py runserver
+tailwind: python manage.py tailwind start
+workers: uv run manage.py db_worker

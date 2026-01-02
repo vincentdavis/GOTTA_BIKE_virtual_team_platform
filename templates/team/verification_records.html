@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Verification Records - The Coalition{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="card-title text-2xl">Verification Records</h2>
+      </div>
+
+      <!-- Filters -->
+      <form method="get" class="mb-6">
+        <div class="flex flex-wrap gap-4 items-end">
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Search</span>
+            </label>
+            <input type="text"
+                   name="q"
+                   placeholder="Search by name..."
+                   class="input input-bordered input-sm w-48"
+                   value="{{ search_query }}"
+            />
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Type</span>
+            </label>
+            <select name="type" class="select select-bordered select-sm">
+              <option value="">All Types</option>
+              {% for value, label in verify_type_choices %}
+                <option value="{{ value }}" {% if type_filter == value %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Status</span>
+            </label>
+            <select name="status" class="select select-bordered select-sm">
+              <option value="">All</option>
+              {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+          <a href="{% url 'team:verification_records' %}" class="btn btn-ghost btn-sm">Reset</a>
+        </div>
+      </form>
+
+      <!-- Records Table -->
+      <div class="overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Type</th>
+              <th>Value</th>
+              <th>Media</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for record in records %}
+            <tr>
+              <td>
+                <div class="font-medium">{{ record.user.username }}</div>
+                {% if record.user.discord_username %}
+                <div class="text-sm text-base-content/60">{{ record.user.discord_username }}</div>
+                {% endif %}
+              </td>
+              <td>{{ record.get_verify_type_display }}</td>
+              <td>
+                {% if record.weight %}
+                  <span class="font-mono">{{ record.weight }} kg</span>
+                {% elif record.height %}
+                  <span class="font-mono">{{ record.height }} cm</span>
+                {% elif record.ftp %}
+                  <span class="font-mono">{{ record.ftp }} W</span>
+                {% else %}
+                  <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              <td>{{ record.get_media_type_display }}</td>
+              <td>{{ record.date_created|date:"M d, Y" }}</td>
+              <td>
+                {% if record.is_verified %}
+                <span class="badge badge-success badge-sm">Verified</span>
+                {% elif record.is_rejected %}
+                <span class="badge badge-error badge-sm">Rejected</span>
+                {% else %}
+                <span class="badge badge-warning badge-sm">Pending</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{% url 'team:verification_record_detail' record.pk %}" class="btn btn-ghost btn-xs">
+                  View
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center py-8 text-base-content/50">
+                No verification records found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Stats -->
+      <div class="mt-6 text-sm text-base-content/50">
+        Showing {{ records|length }} record{{ records|length|pluralize }}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

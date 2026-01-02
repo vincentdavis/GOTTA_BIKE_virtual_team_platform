@@ -1,0 +1,103 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+  <h1>{{ title }}</h1>
+
+  <p style="margin-bottom: 15px; color: #666;">
+    <em>Note: This comparison only includes Discord OAuth users. Regular Django accounts (staff, admin) without Discord login are not affected.</em>
+  </p>
+
+  <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+    <strong>Total Active Guild Members:</strong> {{ total_active }} |
+    <strong>Guild Only:</strong> {{ guild_only_count }} |
+    <strong>Linked:</strong> {{ linked_count }} |
+    <strong>Left Guild:</strong> {{ left_count }} |
+    <strong>Discord Users (No Guild):</strong> {{ discord_users_no_guild_count }}
+  </div>
+
+  <div style="margin-bottom: 20px;">
+    <label>Filter: </label>
+    <select onchange="window.location.href='?status=' + this.value">
+      <option value="all" {% if filter_status == 'all' %}selected{% endif %}>All Active Members</option>
+      <option value="guild_only" {% if filter_status == 'guild_only' %}selected{% endif %}>Guild Only (No Account)</option>
+      <option value="linked" {% if filter_status == 'linked' %}selected{% endif %}>Linked (Has Account)</option>
+      <option value="left" {% if filter_status == 'left' %}selected{% endif %}>Left Guild (Has Account)</option>
+      <option value="discord_no_guild" {% if filter_status == 'discord_no_guild' %}selected{% endif %}>Discord Users (No Guild Record)</option>
+    </select>
+  </div>
+
+  {% if filter_status == 'discord_no_guild' %}
+    <h2>Discord OAuth Users Without Guild Member Record</h2>
+    <p>These users logged in via Discord OAuth but have no corresponding GuildMember record. They may have left the guild before the first sync, or need a new sync.</p>
+    <table id="result_list">
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Discord ID</th>
+          <th>Discord Username</th>
+          <th>Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in discord_users_no_guild %}
+          <tr>
+            <td>{{ user.username }}</td>
+            <td>{{ user.discord_id }}</td>
+            <td>{{ user.discord_username }}</td>
+            <td>{{ user.email }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4">No Discord users without guild record found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <table id="result_list">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Discord ID</th>
+          <th>Username</th>
+          <th>User Account</th>
+          <th>Joined</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for member in display_members %}
+          <tr>
+            <td>{{ member.nickname|default:member.display_name|default:member.username }}</td>
+            <td>{{ member.discord_id }}</td>
+            <td>{{ member.username }}</td>
+            <td>
+              {% if member.user %}
+                <span style="color: green;">{{ member.user.username }}</span>
+              {% else %}
+                <span style="color: #999;">-</span>
+              {% endif %}
+            </td>
+            <td>{{ member.joined_at|date:"Y-m-d"|default:"-" }}</td>
+            <td>
+              {% if member.date_left %}
+                <span style="color: red;">Left {{ member.date_left|date:"Y-m-d" }}</span>
+              {% else %}
+                <span style="color: green;">Active</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6">No members found.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <div style="margin-top: 20px;">
+    <a href="{% url 'admin:accounts_guildmember_changelist' %}" class="button">&laquo; Back to Guild Members</a>
+  </div>
+{% endblock %}

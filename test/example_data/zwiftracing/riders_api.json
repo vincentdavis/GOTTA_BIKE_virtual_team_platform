@@ -1,0 +1,276 @@
+[
+  {
+    "riderId": 514,
+    "name": "Jesse Bauer",
+    "gender": "M",
+    "country": "ca",
+    "age": "Mas",
+    "height": 168,
+    "weight": 59.7,
+    "zpCategory": "A",
+    "zpFTP": 282,
+    "power": {
+      "wkg5": 11.9661,
+      "wkg15": 11.1525,
+      "wkg30": 9.83249581239531,
+      "wkg60": 8.4272,
+      "wkg120": 6.5424,
+      "wkg300": 5.7797,
+      "wkg1200": 4.9492,
+      "w5": 706,
+      "w15": 658,
+      "w30": 587,
+      "w60": 509,
+      "w120": 386,
+      "w300": 341,
+      "w1200": 292,
+      "CP": 274.01075904956525,
+      "AWC": 22514.009089620886,
+      "compoundScore": 2046.452309347444
+    },
+    "race": {
+      "last": {
+        "rating": 2377.733340575707,
+        "date": 1762798500,
+        "mixed": {
+          "category": "Diamond",
+          "number": 1
+        }
+      },
+      "current": {
+        "rating": 2377.733340575707,
+        "date": 1762798500,
+        "mixed": {
+          "category": "Diamond",
+          "number": 1
+        }
+      },
+      "max30": {
+        "rating": 0,
+        "expires": 1765390500
+      },
+      "max90": {
+        "rating": 2377.733340575707,
+        "date": 1762798500,
+        "expires": 1770574500,
+        "mixed": {
+          "category": "Diamond",
+          "number": 1
+        }
+      },
+      "finishes": 3,
+      "dnfs": 0,
+      "wins": 1,
+      "podiums": 3
+    },
+    "handicaps": {
+      "profile": {
+        "flat": 9.720648469400214,
+        "rolling": 19.952910016137462,
+        "hilly": 12.79032693342138,
+        "mountainous": 1.5757682781973958
+      }
+    },
+    "phenotype": {
+      "scores": {
+        "sprinter": 86.6,
+        "puncheur": 99.5,
+        "pursuiter": 99.1,
+        "climber": 98.9,
+        "tt": 84.6
+      },
+      "value": "Puncheur",
+      "bias": 3.4749999999999943
+    },
+    "club": {
+      "id": 11991,
+      "name": "COALITION"
+    }
+  },
+  {
+    "riderId": 5228,
+    "name": "Calvin Cheung (COALITION)",
+    "gender": "M",
+    "country": "us",
+    "age": "Vet",
+    "height": 166,
+    "weight": 69.09,
+    "zpCategory": "B",
+    "zpFTP": 273,
+    "power": {
+      "wkg5": 9.9294,
+      "wkg15": 9.028169014084508,
+      "wkg30": 7.169014084507042,
+      "wkg60": 6.093501230279346,
+      "wkg120": 5.3955,
+      "wkg300": 4.848748009842234,
+      "wkg1200": 4.0819,
+      "w5": 703,
+      "w15": 641,
+      "w30": 509,
+      "w60": 421,
+      "w120": 382,
+      "w300": 335,
+      "w1200": 289,
+      "CP": 266.97271543911177,
+      "AWC": 29350.5016565754,
+      "compoundScore": 1584.4511662511952
+    },
+    "race": {
+      "last": {
+        "rating": 1700.5665754745637,
+        "date": 1764722220,
+        "mixed": {
+          "category": "Emerald",
+          "number": 3
+        }
+      },
+      "current": {
+        "rating": 1700.5665754745637,
+        "date": 1764722220,
+        "mixed": {
+          "category": "Emerald",
+          "number": 3
+        }
+      },
+      "max30": {
+        "rating": 1700.5665754745637,
+        "date": 1764722220,
+        "expires": 1767314220,
+        "mixed": {
+          "category": "Emerald",
+          "number": 3
+        }
+      },
+      "max90": {
+        "rating": 1700.5665754745637,
+        "date": 1764722220,
+        "expires": 1772498220,
+        "mixed": {
+          "category": "Emerald",
+          "number": 3
+        }
+      },
+      "finishes": 6,
+      "dnfs": 0,
+      "wins": 1,
+      "podiums": 1
+    },
+    "handicaps": {
+      "profile": {
+        "flat": -16.002956779136973,
+        "rolling": -48.72187336222413,
+        "hilly": -21.390090744391046,
+        "mountainous": -22.372450467466866
+      }
+    },
+    "phenotype": {
+      "scores": {
+        "sprinter": 83.6,
+        "puncheur": 88.3,
+        "pursuiter": 92.6,
+        "climber": 89.8,
+        "tt": 83.3
+      },
+      "value": "Pursuiter",
+      "bias": 4.0249999999999915
+    },
+    "club": {
+      "id": 11991,
+      "name": "COALITION"
+    }
+  },
+  {
+    "riderId": 6585,
+    "name": "Lee Amlicke TrashPanda",
+    "gender": "M",
+    "country": "us",
+    "age": "50+",
+    "height": 180,
+    "weight": 103,
+    "zpCategory": "B",
+    "zpFTP": 363,
+    "power": {
+      "wkg5": 10.575263662511984,
+      "wkg15": 8.4791,
+      "wkg30": 6.786407766990291,
+      "wkg60": 5.506725586364299,
+      "wkg120": 4.922330097087379,
+      "wkg300": 4.388349514563107,
+      "wkg1200": 3.7184466019417477,
+      "w5": 1103,
+      "w15": 892,
+      "w30": 699,
+      "w60": 567,
+      "w120": 507,
+      "w300": 452,
+      "w1200": 383,
+      "CP": 347.71085975993896,
+      "AWC": 48320.0128880869,
+      "compoundScore": 1607.602353339951
+    },
+    "race": {
+      "last": {
+        "rating": 1600.9464013181391,
+        "date": 1766451600,
+        "mixed": {
+          "category": "Sapphire",
+          "number": 4
+        }
+      },
+      "current": {
+        "rating": 1600.9464013181391,
+        "date": 1766451600,
+        "mixed": {
+          "category": "Sapphire",
+          "number": 4
+        }
+      },
+      "max30": {
+        "rating": 1600.9464013181391,
+        "date": 1766451600,
+        "expires": 1769043600,
+        "mixed": {
+          "category": "Sapphire",
+          "number": 4
+        }
+      },
+      "max90": {
+        "rating": 1600.9464013181391,
+        "date": 1766451600,
+        "expires": 1774227600,
+        "mixed": {
+          "category": "Sapphire",
+          "number": 4
+        }
+      },
+      "finishes": 18,
+      "dnfs": 2,
+      "wins": 2,
+      "podiums": 6
+    },
+    "handicaps": {
+      "profile": {
+        "flat": -35.608392126480105,
+        "rolling": -45.816667070188736,
+        "hilly": -6.832310001694971,
+        "mountainous": -15.706274992131581
+      }
+    },
+    "phenotype": {
+      "scores": {
+        "sprinter": 98.6,
+        "puncheur": 79.2,
+        "pursuiter": 83.8,
+        "climber": 79.1,
+        "tt": 99.5
+      },
+      "value": "Time Trialist",
+      "bias": 11.459999999999994
+    },
+    "club": {
+      "id": 11991,
+      "name": "COALITION"
+    }
+  }
+]

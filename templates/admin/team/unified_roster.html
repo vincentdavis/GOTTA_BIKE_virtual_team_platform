@@ -1,0 +1,80 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block content %}
+  <h1>{{ title }}</h1>
+
+  <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+    <strong>Total:</strong> {{ total_count }} |
+    <strong>Active:</strong> {{ active_count }} |
+    <strong>With Account:</strong> {{ with_account }}
+  </div>
+
+  <div style="margin-bottom: 20px;">
+    <label>Filter: </label>
+    <select onchange="window.location.href='?status=' + this.value">
+      <option value="all" {% if filter_status == 'all' %}selected{% endif %}>All Riders</option>
+      <option value="active" {% if filter_status == 'active' %}selected{% endif %}>Active Only</option>
+      <option value="has_account" {% if filter_status == 'has_account' %}selected{% endif %}>Has Account</option>
+      <option value="no_account" {% if filter_status == 'no_account' %}selected{% endif %}>No Account</option>
+    </select>
+  </div>
+
+  <table id="result_list">
+    <thead>
+    <tr>
+      <th>Zwid</th>
+      <th>Name</th>
+      <th>Account</th>
+      <th>ZwiftPower</th>
+      <th>Zwift Racing</th>
+      <th>Results</th>
+      <th>Status</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for rider in roster %}
+      <tr>
+        <td>{{ rider.zwid }}</td>
+        <td>{{ rider.display_name }}</td>
+        <td>
+          {% if rider.has_account %}
+            <span style="color: green;">Yes</span>
+            {% if rider.zwid_verified %}(Verified){% endif %}
+          {% else %}
+            <span style="color: #999;">No</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if rider.in_zwiftpower %}
+            Div {{ rider.zp_div }}
+            {% if rider.zp_date_left %}<span style="color: red;">(Left)</span>{% endif %}
+          {% else %}
+            <span style="color: #999;">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if rider.in_zwiftracing %}
+            {{ rider.zr_category|default:"N/A" }}
+            {% if rider.zr_date_left %}<span style="color: red;">(Left)</span>{% endif %}
+          {% else %}
+            <span style="color: #999;">-</span>
+          {% endif %}
+        </td>
+        <td>{{ rider.result_count|default:"0" }}</td>
+        <td>
+          {% if rider.is_active_member %}
+            <span style="color: green;">Active</span>
+          {% else %}
+            <span style="color: #999;">Inactive</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr>
+        <td colspan="7">No riders found.</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% if success %}
+<!-- Success State -->
+<div class="text-center py-4">
+    <div class="text-success mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+    </div>
+    <h3 class="text-lg font-bold mb-2">Zwift Account Verified!</h3>
+    <p class="text-base-content/70 mb-4">Your Zwift ID: <span class="font-mono font-bold">{{ zwift_id }}</span></p>
+    <button type="button" class="btn btn-primary" onclick="document.getElementById('zwift-verify-modal').close(); location.reload();">
+        Done
+    </button>
+</div>
+{% else %}
+<!-- Form State -->
+<form hx-post="{% url 'accounts:verify_zwift' %}"
+      hx-target="#zwift-modal-content"
+      hx-swap="innerHTML"
+      class="space-y-4">
+    {% csrf_token %}
+
+    <div class="text-center mb-4">
+        <div class="text-primary mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+        </div>
+        <p class="text-sm text-base-content/70">
+            Enter your Zwift login credentials to verify your account.
+            <br>Your password is used only to fetch your Zwift ID and is not stored.
+        </p>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="alert alert-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ form.non_field_errors.0 }}</span>
+    </div>
+    {% endif %}
+
+    <div class="form-control">
+        <label class="label" for="id_zwift_username">
+            <span class="label-text">{{ form.zwift_username.label }}</span>
+        </label>
+        {{ form.zwift_username }}
+        {% if form.zwift_username.help_text %}
+        <label class="label">
+            <span class="label-text-alt text-base-content/50">{{ form.zwift_username.help_text }}</span>
+        </label>
+        {% endif %}
+        {% if form.zwift_username.errors %}
+        <label class="label">
+            <span class="label-text-alt text-error">{{ form.zwift_username.errors.0 }}</span>
+        </label>
+        {% endif %}
+    </div>
+
+    <div class="form-control">
+        <label class="label" for="id_zwift_password">
+            <span class="label-text">{{ form.zwift_password.label }}</span>
+        </label>
+        {{ form.zwift_password }}
+        {% if form.zwift_password.help_text %}
+        <label class="label">
+            <span class="label-text-alt text-base-content/50">{{ form.zwift_password.help_text }}</span>
+        </label>
+        {% endif %}
+        {% if form.zwift_password.errors %}
+        <label class="label">
+            <span class="label-text-alt text-error">{{ form.zwift_password.errors.0 }}</span>
+        </label>
+        {% endif %}
+    </div>
+
+    <div class="modal-action">
+        <button type="button" class="btn btn-ghost" onclick="document.getElementById('zwift-verify-modal').close()">
+            Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">
+            <span class="htmx-indicator loading loading-spinner loading-sm"></span>
+            Verify Account
+        </button>
+    </div>
+</form>
+{% endif %}

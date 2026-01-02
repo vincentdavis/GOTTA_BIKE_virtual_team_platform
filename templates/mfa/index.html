@@ -1,0 +1,52 @@
+{% extends "account/base.html" %}
+
+{% block title %}Security Settings - The Coalition{% endblock %}
+
+{% block card_title %}
+<h2 class="card-title justify-center text-2xl">Security Settings</h2>
+{% endblock %}
+
+{% block card_content %}
+<div class="space-y-6 mt-6">
+    <!-- TOTP Section -->
+    <div class="flex items-center justify-between p-4 bg-base-100 rounded-lg">
+        <div>
+            <h3 class="font-semibold">Authenticator App</h3>
+            <p class="text-sm text-base-content/70">
+                {% if authenticators.totp %}
+                    <span class="badge badge-success badge-sm">Enabled</span>
+                {% else %}
+                    <span class="badge badge-warning badge-sm">Not configured</span>
+                {% endif %}
+            </p>
+        </div>
+        <div>
+            {% if authenticators.totp %}
+                <a href="{% url 'mfa_deactivate_totp' %}" class="btn btn-error btn-sm">Disable</a>
+            {% else %}
+                <a href="{% url 'mfa_activate_totp' %}" class="btn btn-primary btn-sm">Enable</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recovery Codes Section -->
+    {% if authenticators.totp %}
+    <div class="flex items-center justify-between p-4 bg-base-100 rounded-lg">
+        <div>
+            <h3 class="font-semibold">Recovery Codes</h3>
+            <p class="text-sm text-base-content/70">
+                Backup codes for account recovery
+            </p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'mfa_view_recovery_codes' %}" class="btn btn-ghost btn-sm">View</a>
+            <a href="{% url 'mfa_generate_recovery_codes' %}" class="btn btn-outline btn-sm">Regenerate</a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="mt-8 text-center">
+    <a href="/" class="btn btn-ghost">Back to Home</a>
+</div>
+{% endblock %}

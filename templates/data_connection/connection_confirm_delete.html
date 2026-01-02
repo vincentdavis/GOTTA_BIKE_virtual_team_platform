@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Data Connection{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto">
+    <div class="card bg-base-200">
+        <div class="card-body">
+            <h2 class="card-title text-error">Delete Data Connection</h2>
+            <p>Are you sure you want to delete <strong>{{ connection.title }}</strong>?</p>
+            <p class="text-base-content/70">This action cannot be undone.</p>
+
+            <div class="card-actions justify-end mt-4">
+                <a href="{% url 'data_connection:connection_list' %}" class="btn btn-ghost">Cancel</a>
+                <form method="post" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-error">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

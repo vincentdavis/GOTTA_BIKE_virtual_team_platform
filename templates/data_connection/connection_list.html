@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Data Connections{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex justify-between items-center mb-6">
+        <h1 class="text-3xl font-bold">Data Connections</h1>
+        <a href="{% url 'data_connection:connection_create' %}" class="btn btn-primary">
+            New Connection
+        </a>
+    </div>
+
+    <!-- Filter Form -->
+    <div class="card bg-base-200 mb-6">
+        <div class="card-body">
+            <form method="get" class="flex flex-wrap gap-4 items-end">
+                <div class="form-control flex-1 min-w-[200px]">
+                    <label class="label">
+                        <span class="label-text">Search</span>
+                    </label>
+                    {{ filter_form.search }}
+                </div>
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Sort by</span>
+                    </label>
+                    {{ filter_form.sort_by }}
+                </div>
+                <div class="form-control">
+                    <label class="label cursor-pointer gap-2">
+                        {{ filter_form.show_expired }}
+                        <span class="label-text">Show expired</span>
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-outline">Filter</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Connections List -->
+    {% if connections %}
+    <div class="overflow-x-auto">
+        <table class="table table-zebra">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Sheet</th>
+                    <th>Owner</th>
+                    <th>Fields</th>
+                    <th>Last Synced</th>
+                    <th>Expires</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for conn in connections %}
+                <tr class="{% if conn.is_expired %}opacity-50{% endif %}">
+                    <td>
+                        <a href="{{ conn.spreadsheet_url }}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 hover:text-primary">
+                            <span class="font-bold">{{ conn.title }}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                        </a>
+                        {% if conn.description %}
+                        <div class="text-sm text-base-content/70">{{ conn.description|truncatewords:10 }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{{ conn.data_sheet }}</td>
+                    <td>
+                        {% if conn.owner_email %}
+                        <span class="text-sm">{{ conn.owner_email }}</span>
+                        {% else %}
+                        <span class="text-base-content/50">-</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="badge badge-ghost">{{ conn.selected_fields|length }} fields</span>
+                    </td>
+                    <td>
+                        {% if conn.date_last_synced %}
+                        {{ conn.date_last_synced|date:"M d, Y H:i" }}
+                        {% else %}
+                        <span class="text-base-content/50">Never</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if conn.is_expired %}
+                        <span class="badge badge-error">Expired</span>
+                        {% else %}
+                        <span class="badge badge-success">{{ conn.days_until_expiry }} days</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="flex gap-2">
+                            {% if not conn.is_expired %}
+                            <a href="{% url 'data_connection:connection_sync' conn.pk %}" class="btn btn-sm btn-primary">
+                                Sync
+                            </a>
+                            {% endif %}
+                            <a href="{% url 'data_connection:connection_edit' conn.pk %}" class="btn btn-sm btn-ghost">
+                                Edit
+                            </a>
+                            <a href="{% url 'data_connection:connection_delete' conn.pk %}" class="btn btn-sm btn-ghost text-error">
+                                Delete
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card bg-base-200">
+        <div class="card-body text-center">
+            <p class="text-base-content/70">No data connections found.</p>
+            <div class="card-actions justify-center">
+                <a href="{% url 'data_connection:connection_create' %}" class="btn btn-primary">
+                    Create your first connection
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,339 @@
+"""Views for team app."""
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.http import HttpRequest, HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_GET, require_http_methods
+
+from apps.team.forms import TeamLinkEditForm, TeamLinkForm
+from apps.team.models import RaceReadyRecord, TeamLink
+from apps.team.services import ZP_DIV_TO_CATEGORY, get_unified_team_roster
+
+
+@login_required
+@require_GET
+def team_roster_view(request: HttpRequest) -> HttpResponse:
+    """Display unified team roster.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered team roster page.
+
+    """
+    roster = get_unified_team_roster()
+
+    # Get filter parameters
+    search_query = request.GET.get("q", "").strip()
+    zp_category_filter = request.GET.get("zp_category", "")
+    zr_category_filter = request.GET.get("zr_category", "")
+    status_filter = request.GET.get("status", "active")  # Default to showing active members
+    gender_filter = request.GET.get("gender", "")
+
+    # Get sort parameters (default: result_count descending)
+    sort_by = request.GET.get("sort", "results")
+    sort_dir = request.GET.get("dir", "desc")
+
+    # Collect unique values for filter dropdowns (before filtering)
+    # For ZP categories, use the mapping to show letters
+    zp_divs_present = sorted({r.zp_div for r in roster if r.in_zwiftpower and r.zp_div})
+    zp_categories = [(div, ZP_DIV_TO_CATEGORY.get(div, str(div))) for div in zp_divs_present]
+    zr_categories = sorted({r.zr_category for r in roster if r.in_zwiftracing and r.zr_category})
+
+    # Apply status filter
+    if status_filter == "active":
+        roster = [r for r in roster if r.is_active_member]
+    elif status_filter in ("both", "zp_only", "zr_only", "left", "none"):
+        roster = [r for r in roster if r.membership_status == status_filter]
+
+    # Apply search filter (by zwid or name)
+    if search_query:
+        search_lower = search_query.lower()
+        roster = [
+            r for r in roster
+            if search_lower in r.display_name.lower() or search_query in str(r.zwid)
+        ]
+
+    # Apply ZwiftPower category filter (filter by div number)
+    if zp_category_filter:
+        try:
+            div_value = int(zp_category_filter)
+            roster = [r for r in roster if r.in_zwiftpower and r.zp_div == div_value]
+        except ValueError:
+            pass
+
+    # Apply Zwift Racing category filter
+    if zr_category_filter:
+        roster = [r for r in roster if r.in_zwiftracing and r.zr_category == zr_category_filter]
+
+    # Apply gender filter
+    if gender_filter:
+        roster = [r for r in roster if r.gender == gender_filter]
+
+    # Apply sorting
+    reverse = sort_dir == "desc"
+    sort_keys = {
+        "name": lambda r: r.display_name.lower(),
+        "zwid": lambda r: r.zwid,
+        "gender": lambda r: r.gender or "",
+        "account": lambda r: r.has_account,
+        "verified": lambda r: r.zwid_verified,
+        "category": lambda r: r.zp_div or 0,
+        "catw": lambda r: r.zp_divw or 0,
+        "rating": lambda r: r.zr_category or "",
+        "results": lambda r: r.result_count,
+    }
+    if sort_by in sort_keys:
+        roster = sorted(roster, key=sort_keys[sort_by], reverse=reverse)
+
+    return render(
+        request,
+        "team/roster.html",
+        {
+            "roster": roster,
+            "search_query": search_query,
+            "zp_category_filter": zp_category_filter,
+            "zr_category_filter": zr_category_filter,
+            "status_filter": status_filter,
+            "gender_filter": gender_filter,
+            "zp_categories": zp_categories,
+            "zr_categories": zr_categories,
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+        },
+    )
+
+
+@login_required
+@require_GET
+def team_links_view(request: HttpRequest) -> HttpResponse:
+    """Display team links with filtering.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered team links page.
+
+    """
+    now = timezone.now()
+    # Filter links that are currently visible:
+    # - active=True
+    # - date_open is null OR date_open <= now
+    # - date_closed is null OR date_closed > now
+    links = TeamLink.objects.filter(
+        active=True,
+    ).filter(
+        Q(date_open__isnull=True) | Q(date_open__lte=now),
+    ).filter(
+        Q(date_closed__isnull=True) | Q(date_closed__gt=now),
+    )
+
+    # Get filter parameters
+    search_query = request.GET.get("q", "").strip()
+    type_filter = request.GET.get("type", "")
+
+    # Get all available types for filter dropdown
+    available_types = TeamLink.LinkType.choices
+
+    # Apply search filter
+    if search_query:
+        search_lower = search_query.lower()
+        links = links.filter(title__icontains=search_lower) | links.filter(description__icontains=search_lower)
+
+    # Apply type filter
+    if type_filter:
+        links = links.filter(link_types__contains=type_filter)
+
+    # Check if user can edit links
+    can_edit_links = request.user.is_link_admin or request.user.is_superuser
+
+    return render(
+        request,
+        "team/links.html",
+        {
+            "links": links,
+            "search_query": search_query,
+            "type_filter": type_filter,
+            "available_types": available_types,
+            "can_edit_links": can_edit_links,
+        },
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def submit_team_link_view(request: HttpRequest) -> HttpResponse:
+    """Submit a new team link.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered form or redirect on success.
+
+    """
+    if request.method == "POST":
+        form = TeamLinkForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Team link submitted successfully!")
+            return redirect("team:links")
+    else:
+        form = TeamLinkForm()
+
+    return render(
+        request,
+        "team/submit_link.html",
+        {"form": form},
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def edit_team_link_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Edit an existing team link.
+
+    Args:
+        request: The HTTP request.
+        pk: The primary key of the TeamLink to edit.
+
+    Returns:
+        Rendered form or redirect on success.
+
+    """
+    link = get_object_or_404(TeamLink, pk=pk)
+
+    # Check if user has permission to edit
+    if not request.user.is_link_admin and not request.user.is_superuser:
+        messages.error(request, "You don't have permission to edit team links.")
+        return redirect("team:links")
+
+    if request.method == "POST":
+        form = TeamLinkEditForm(request.POST, instance=link)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Team link updated successfully!")
+            return redirect("team:links")
+    else:
+        form = TeamLinkEditForm(instance=link)
+
+    return render(
+        request,
+        "team/edit_link.html",
+        {"form": form, "link": link},
+    )
+
+
+@login_required
+@require_GET
+def verification_records_view(request: HttpRequest) -> HttpResponse:
+    """Display verification records for team captains.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered verification records page.
+
+    """
+    # Check if user is a captain or vice captain
+    if not request.user.is_any_captain and not request.user.is_superuser:
+        messages.error(request, "You don't have permission to view verification records.")
+        return redirect("home")
+
+    records = RaceReadyRecord.objects.select_related("user", "reviewed_by").order_by("-date_created")
+
+    # Get filter parameters
+    search_query = request.GET.get("q", "").strip()
+    type_filter = request.GET.get("type", "")
+    status_filter = request.GET.get("status", "")
+
+    # Get verify type choices for filter dropdown
+    verify_type_choices = RaceReadyRecord._meta.get_field("verify_type").choices
+    status_choices = RaceReadyRecord.Status.choices
+
+    # Apply search filter (by username or discord_username)
+    if search_query:
+        records = records.filter(
+            Q(user__username__icontains=search_query) | Q(user__discord_username__icontains=search_query)
+        )
+
+    # Apply type filter
+    if type_filter:
+        records = records.filter(verify_type=type_filter)
+
+    # Apply status filter
+    if status_filter:
+        records = records.filter(status=status_filter)
+
+    # Check if user can verify records (only Team Captain, not Vice Captain)
+    can_verify = request.user.is_team_captain or request.user.is_superuser
+
+    return render(
+        request,
+        "team/verification_records.html",
+        {
+            "records": records,
+            "search_query": search_query,
+            "type_filter": type_filter,
+            "status_filter": status_filter,
+            "verify_type_choices": verify_type_choices,
+            "status_choices": status_choices,
+            "can_verify": can_verify,
+        },
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Display and verify or reject a verification record.
+
+    Args:
+        request: The HTTP request.
+        pk: The primary key of the RaceReadyRecord.
+
+    Returns:
+        Rendered record detail page.
+
+    """
+    # Check if user is a captain or vice captain
+    if not request.user.is_any_captain and not request.user.is_superuser:
+        messages.error(request, "You don't have permission to view verification records.")
+        return redirect("home")
+
+    record = get_object_or_404(RaceReadyRecord.objects.select_related("user", "reviewed_by"), pk=pk)
+
+    # Check if user can verify records (only Team Captain, not Vice Captain)
+    can_review = request.user.is_team_captain or request.user.is_superuser
+
+    if request.method == "POST" and can_review and record.is_pending:
+        action = request.POST.get("action")
+        if action == "verify":
+            record.status = RaceReadyRecord.Status.VERIFIED
+            record.reviewed_by = request.user
+            record.reviewed_date = timezone.now()
+            record.save()
+            messages.success(request, f"Record for {record.user.username} has been verified.")
+        elif action == "reject":
+            record.status = RaceReadyRecord.Status.REJECTED
+            record.reviewed_by = request.user
+            record.reviewed_date = timezone.now()
+            record.rejection_reason = request.POST.get("rejection_reason", "").strip()
+            record.save()
+            messages.warning(request, f"Record for {record.user.username} has been rejected.")
+        return redirect("team:verification_records")
+
+    return render(
+        request,
+        "team/verification_record_detail.html",
+        {
+            "record": record,
+            "can_review": can_review,
+        },
+    )

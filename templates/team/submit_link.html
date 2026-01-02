@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Submit Link - The Coalition{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl mb-6">Submit a Team Link</h2>
+
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        <!-- Title -->
+        <div class="form-control w-full">
+          <label class="label" for="id_title">
+            <span class="label-text">Title <span class="text-error">*</span></span>
+          </label>
+          {{ form.title }}
+          {% if form.title.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.title.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- URL -->
+        <div class="form-control w-full">
+          <label class="label" for="id_url">
+            <span class="label-text">URL <span class="text-error">*</span></span>
+          </label>
+          {{ form.url }}
+          {% if form.url.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.url.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Description -->
+        <div class="form-control w-full">
+          <label class="label" for="id_description">
+            <span class="label-text">Description</span>
+          </label>
+          {{ form.description }}
+          {% if form.description.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.description.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Link Types -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Link Types</span>
+          </label>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2 p-4 bg-base-300 rounded-lg">
+            {% for choice in form.link_types %}
+            <label class="label cursor-pointer justify-start gap-2">
+              {{ choice.tag }}
+              <span class="label-text">{{ choice.choice_label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% if form.link_types.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.link_types.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Select one or more types that describe this link</span>
+          </label>
+        </div>
+
+        <!-- Visibility Schedule -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="id_date_open">
+              <span class="label-text">Visible From</span>
+            </label>
+            {{ form.date_open }}
+            {% if form.date_open.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.date_open.errors.0 }}</span>
+            </label>
+            {% endif %}
+            <label class="label">
+              <span class="label-text-alt">Leave blank to show immediately</span>
+            </label>
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="id_date_closed">
+              <span class="label-text">Visible Until</span>
+            </label>
+            {{ form.date_closed }}
+            {% if form.date_closed.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.date_closed.errors.0 }}</span>
+            </label>
+            {% endif %}
+            <label class="label">
+              <span class="label-text-alt">Leave blank to show indefinitely</span>
+            </label>
+          </div>
+        </div>
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-error">
+          {% for error in form.non_field_errors %}
+          <span>{{ error }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="form-control mt-6">
+          <button type="submit" class="btn btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Submit Link
+          </button>
+        </div>
+      </form>
+
+      <div class="divider"></div>
+
+      <div class="text-center">
+        <a href="{% url 'team:links' %}" class="link link-primary">Back to Team Links</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

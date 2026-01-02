@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}My Profile - The Coalition{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title text-2xl mb-6">My Profile</h2>
+
+            <!-- Editable Profile Form -->
+            <div id="profile-form-container">
+                {% include "accounts/partials/profile_form.html" %}
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Discord Info (read-only) -->
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">Discord Account</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="label">
+                            <span class="label-text text-base-content/70">Discord Username</span>
+                        </label>
+                        <div class="input input-bordered w-full flex items-center bg-base-300">
+                            {{ user.discord_username|default:"Not connected" }}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label">
+                            <span class="label-text text-base-content/70">Discord Nickname</span>
+                        </label>
+                        <div class="input input-bordered w-full flex items-center bg-base-300">
+                            {{ user.discord_nickname|default:"Not set" }}
+                        </div>
+                    </div>
+                </div>
+                <p class="text-sm text-base-content/50 mt-2">Discord info is automatically synced when you log in.</p>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Zwift Account Section -->
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">Zwift Account</h3>
+                <div id="zwift-status-container">
+                    {% include "accounts/partials/zwift_status.html" %}
+                </div>
+            </div>
+
+            <!-- Zwift Verification Modal -->
+            <dialog id="zwift-verify-modal" class="modal">
+                <div class="modal-box">
+                    <form method="dialog">
+                        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">X</button>
+                    </form>
+                    <h3 class="font-bold text-lg mb-4">Verify Zwift Account</h3>
+                    <div id="zwift-modal-content">
+                        <!-- Content loaded via HTMX -->
+                        <div class="flex justify-center py-8">
+                            <span class="loading loading-spinner loading-lg"></span>
+                        </div>
+                    </div>
+                </div>
+                <form method="dialog" class="modal-backdrop">
+                    <button>close</button>
+                </form>
+            </dialog>
+
+            <div class="divider"></div>
+
+            <!-- Race Ready Records Section -->
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">Race Ready Status</h3>
+
+                <!-- Submit New Record Form -->
+                <div class="collapse collapse-arrow bg-base-300 mb-6">
+                    <input type="checkbox" />
+                    <div class="collapse-title font-medium">
+                        <span class="flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Submit New Verification Record
+                        </span>
+                    </div>
+                    <div class="collapse-content">
+                        {% include "accounts/partials/race_ready_form.html" %}
+                    </div>
+                </div>
+
+                <!-- Latest verification for each type -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <!-- Weight (Full) -->
+                    <div class="card bg-base-300 p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if latest_by_type.weight_full.is_verified and not latest_by_type.weight_full.is_expired %}text-success{% elif latest_by_type.weight_full.is_verified and latest_by_type.weight_full.is_expired %}text-error{% elif latest_by_type.weight_full %}text-warning{% else %}text-base-content/30{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                            </svg>
+                            <span class="font-semibold">Weight (Full)</span>
+                        </div>
+                        {% if latest_by_type.weight_full %}
+                        <p class="text-sm text-base-content/70">{{ latest_by_type.weight_full.media_type|title }}</p>
+                        <p class="text-xs text-base-content/50">{{ latest_by_type.weight_full.date_created|date:"M d, Y" }}</p>
+                        {% if latest_by_type.weight_full.is_verified %}
+                            {% if latest_by_type.weight_full.is_expired %}
+                            <span class="badge badge-error badge-sm mt-1">Expired</span>
+                            {% elif latest_by_type.weight_full.days_remaining != None %}
+                            <span class="badge badge-success badge-sm mt-1">{{ latest_by_type.weight_full.days_remaining }} days</span>
+                            {% else %}
+                            <span class="badge badge-success badge-sm mt-1">Never expires</span>
+                            {% endif %}
+                        {% elif latest_by_type.weight_full.is_rejected %}
+                        <span class="badge badge-error badge-sm mt-1">Rejected</span>
+                        {% else %}
+                        <span class="badge badge-warning badge-sm mt-1">Pending</span>
+                        {% endif %}
+                        {% else %}
+                        <p class="text-sm text-base-content/50">No record</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Weight (Light) -->
+                    <div class="card bg-base-300 p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if latest_by_type.weight_light.is_verified and not latest_by_type.weight_light.is_expired %}text-success{% elif latest_by_type.weight_light.is_verified and latest_by_type.weight_light.is_expired %}text-error{% elif latest_by_type.weight_light %}text-warning{% else %}text-base-content/30{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+                            </svg>
+                            <span class="font-semibold">Weight (Light)</span>
+                        </div>
+                        {% if latest_by_type.weight_light %}
+                        <p class="text-sm text-base-content/70">{{ latest_by_type.weight_light.media_type|title }}</p>
+                        <p class="text-xs text-base-content/50">{{ latest_by_type.weight_light.date_created|date:"M d, Y" }}</p>
+                        {% if latest_by_type.weight_light.is_verified %}
+                            {% if latest_by_type.weight_light.is_expired %}
+                            <span class="badge badge-error badge-sm mt-1">Expired</span>
+                            {% elif latest_by_type.weight_light.days_remaining != None %}
+                            <span class="badge badge-success badge-sm mt-1">{{ latest_by_type.weight_light.days_remaining }} days</span>
+                            {% else %}
+                            <span class="badge badge-success badge-sm mt-1">Never expires</span>
+                            {% endif %}
+                        {% elif latest_by_type.weight_light.is_rejected %}
+                        <span class="badge badge-error badge-sm mt-1">Rejected</span>
+                        {% else %}
+                        <span class="badge badge-warning badge-sm mt-1">Pending</span>
+                        {% endif %}
+                        {% else %}
+                        <p class="text-sm text-base-content/50">No record</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Height -->
+                    <div class="card bg-base-300 p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if latest_by_type.height.is_verified and not latest_by_type.height.is_expired %}text-success{% elif latest_by_type.height.is_verified and latest_by_type.height.is_expired %}text-error{% elif latest_by_type.height %}text-warning{% else %}text-base-content/30{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                            </svg>
+                            <span class="font-semibold">Height</span>
+                        </div>
+                        {% if latest_by_type.height %}
+                        <p class="text-sm text-base-content/70">{{ latest_by_type.height.media_type|title }}</p>
+                        <p class="text-xs text-base-content/50">{{ latest_by_type.height.date_created|date:"M d, Y" }}</p>
+                        {% if latest_by_type.height.is_verified %}
+                            {% if latest_by_type.height.is_expired %}
+                            <span class="badge badge-error badge-sm mt-1">Expired</span>
+                            {% elif latest_by_type.height.days_remaining != None %}
+                            <span class="badge badge-success badge-sm mt-1">{{ latest_by_type.height.days_remaining }} days</span>
+                            {% else %}
+                            <span class="badge badge-success badge-sm mt-1">Never expires</span>
+                            {% endif %}
+                        {% elif latest_by_type.height.is_rejected %}
+                        <span class="badge badge-error badge-sm mt-1">Rejected</span>
+                        {% else %}
+                        <span class="badge badge-warning badge-sm mt-1">Pending</span>
+                        {% endif %}
+                        {% else %}
+                        <p class="text-sm text-base-content/50">No record</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Power -->
+                    <div class="card bg-base-300 p-4">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 {% if latest_by_type.power.is_verified and not latest_by_type.power.is_expired %}text-success{% elif latest_by_type.power.is_verified and latest_by_type.power.is_expired %}text-error{% elif latest_by_type.power %}text-warning{% else %}text-base-content/30{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            <span class="font-semibold">Power</span>
+                        </div>
+                        {% if latest_by_type.power %}
+                        <p class="text-sm text-base-content/70">{{ latest_by_type.power.media_type|title }}</p>
+                        <p class="text-xs text-base-content/50">{{ latest_by_type.power.date_created|date:"M d, Y" }}</p>
+                        {% if latest_by_type.power.is_verified %}
+                            {% if latest_by_type.power.is_expired %}
+                            <span class="badge badge-error badge-sm mt-1">Expired</span>
+                            {% elif latest_by_type.power.days_remaining != None %}
+                            <span class="badge badge-success badge-sm mt-1">{{ latest_by_type.power.days_remaining }} days</span>
+                            {% else %}
+                            <span class="badge badge-success badge-sm mt-1">Never expires</span>
+                            {% endif %}
+                        {% elif latest_by_type.power.is_rejected %}
+                        <span class="badge badge-error badge-sm mt-1">Rejected</span>
+                        {% else %}
+                        <span class="badge badge-warning badge-sm mt-1">Pending</span>
+                        {% endif %}
+                        {% else %}
+                        <p class="text-sm text-base-content/50">No record</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Full record history -->
+                {% if race_ready_records %}
+                <div class="collapse collapse-arrow bg-base-300">
+                    <input type="checkbox" />
+                    <div class="collapse-title font-medium">
+                        View All Records ({{ race_ready_records|length }})
+                    </div>
+                    <div class="collapse-content">
+                        <div class="overflow-x-auto">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Media</th>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for record in race_ready_records %}
+                                    <tr>
+                                        <td>
+                                            <span class="badge badge-outline">{{ record.get_verify_type_display }}</span>
+                                        </td>
+                                        <td>{{ record.get_media_type_display }}</td>
+                                        <td>{{ record.date_created|date:"M d, Y" }}</td>
+                                        <td>
+                                            {% if record.is_verified %}
+                                            <span class="badge badge-success badge-sm">Verified</span>
+                                            {% elif record.is_rejected %}
+                                            <span class="badge badge-error badge-sm">Rejected</span>
+                                            {% else %}
+                                            <span class="badge badge-warning badge-sm">Pending</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="max-w-xs truncate">{{ record.notes|default:"-"|truncatechars:50 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-sm text-base-content/50">No race ready records yet.</p>
+                {% endif %}
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- Danger Zone -->
+            <div class="mt-4">
+                <h3 class="text-lg font-semibold text-error mb-3">Danger Zone</h3>
+                <a href="{% url 'accounts:profile_delete_confirm' %}" class="btn btn-error btn-outline">
+                    Delete Account
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

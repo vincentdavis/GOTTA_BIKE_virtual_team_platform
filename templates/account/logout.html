@@ -1,0 +1,18 @@
+{% extends "account/base.html" %}
+
+{% block title %}Sign Out - The Coalition{% endblock %}
+
+{% block card_title %}
+<h2 class="card-title justify-center text-2xl">Sign Out</h2>
+{% endblock %}
+
+{% block card_content %}
+<p class="text-center text-base-content/70 mb-6">Are you sure you want to sign out?</p>
+<form method="post" action="{% url 'account_logout' %}">
+    {% csrf_token %}
+    <div class="flex gap-4 justify-center">
+        <a href="/" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-error">Sign Out</button>
+    </div>
+</form>
+{% endblock %}

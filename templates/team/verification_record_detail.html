@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+
+{% block title %}Verification Record - {{ record.user.username }} - The Coalition{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="card-title text-2xl">Verification Record</h2>
+        {% if record.is_verified %}
+        <span class="badge badge-success">Verified</span>
+        {% elif record.is_rejected %}
+        <span class="badge badge-error">Rejected</span>
+        {% else %}
+        <span class="badge badge-warning">Pending</span>
+        {% endif %}
+      </div>
+
+      <!-- Record Details -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div class="bg-base-300 rounded-lg p-4">
+          <div class="text-sm text-base-content/60 mb-1">User</div>
+          <div class="font-medium">{{ record.user.username }}</div>
+          {% if record.user.discord_username %}
+          <div class="text-sm text-base-content/70">Discord: {{ record.user.discord_username }}</div>
+          {% endif %}
+        </div>
+
+        <div class="bg-base-300 rounded-lg p-4">
+          <div class="text-sm text-base-content/60 mb-1">Verification Type</div>
+          <div class="font-medium">{{ record.get_verify_type_display }}</div>
+        </div>
+
+        <div class="bg-base-300 rounded-lg p-4">
+          <div class="text-sm text-base-content/60 mb-1">Value</div>
+          <div class="font-medium font-mono text-lg">
+            {% if record.weight %}
+              {{ record.weight }} kg
+            {% elif record.height %}
+              {{ record.height }} cm
+            {% elif record.ftp %}
+              {{ record.ftp }} W
+            {% else %}
+              <span class="text-base-content/30">-</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="bg-base-300 rounded-lg p-4">
+          <div class="text-sm text-base-content/60 mb-1">Media Type</div>
+          <div class="font-medium">{{ record.get_media_type_display }}</div>
+        </div>
+
+        <div class="bg-base-300 rounded-lg p-4">
+          <div class="text-sm text-base-content/60 mb-1">Date Submitted</div>
+          <div class="font-medium">{{ record.date_created|date:"F d, Y H:i" }}</div>
+        </div>
+      </div>
+
+      {% if record.notes %}
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <div class="text-sm text-base-content/60 mb-1">Notes</div>
+        <div>{{ record.notes }}</div>
+      </div>
+      {% endif %}
+
+      <!-- Media File -->
+      {% if record.media_file %}
+      <div class="mb-6">
+        <div class="text-sm text-base-content/60 mb-2">Uploaded File</div>
+        <div class="bg-base-300 rounded-lg p-4">
+          {% if record.media_type == "photo" %}
+          <!-- Clickable image that opens in modal -->
+          <a href="{{ record.media_file.url }}" target="_blank" rel="noopener" class="block">
+            <img src="{{ record.media_file.url }}" alt="Verification photo" class="max-w-full max-h-96 h-auto rounded-lg mx-auto cursor-zoom-in hover:opacity-90 transition-opacity" />
+          </a>
+          <div class="text-center mt-2 text-sm text-base-content/60">Click image to view full size</div>
+          {% elif record.media_type == "video" %}
+          <video controls class="max-w-full max-h-96 rounded-lg mx-auto bg-black">
+            <source src="{{ record.media_file.url }}" type="video/mp4">
+            <source src="{{ record.media_file.url }}" type="video/webm">
+            <source src="{{ record.media_file.url }}" type="video/quicktime">
+            Your browser does not support the video tag.
+          </video>
+          {% else %}
+          <a href="{{ record.media_file.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Download File
+          </a>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- External URL -->
+      {% if record.url %}
+      <div class="mb-6">
+        <div class="text-sm text-base-content/60 mb-2">External Link</div>
+        <div class="bg-base-300 rounded-lg p-4">
+          <!-- YouTube/Vimeo embed -->
+          {% if record.embed_url %}
+          <div class="aspect-video mb-3">
+            <iframe
+              src="{{ record.embed_url }}"
+              class="w-full h-full rounded-lg"
+              frameborder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+              allowfullscreen>
+            </iframe>
+          </div>
+          <!-- Image URL preview -->
+          {% elif record.url_type == "image" %}
+          <a href="{{ record.url }}" target="_blank" rel="noopener" class="block mb-3">
+            <img src="{{ record.url }}" alt="External image" class="max-w-full max-h-96 h-auto rounded-lg mx-auto cursor-zoom-in hover:opacity-90 transition-opacity" onerror="this.parentElement.style.display='none'" />
+          </a>
+          {% endif %}
+          <!-- Always show the link -->
+          <a href="{{ record.url }}" target="_blank" rel="noopener" class="link link-primary break-all">
+            {{ record.url }}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if not record.media_file and not record.url %}
+      <div class="alert alert-info mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>No media file or URL attached to this record.</span>
+      </div>
+      {% endif %}
+
+      <!-- Verification Status -->
+      {% if record.is_verified %}
+      <div class="bg-success/10 border border-success rounded-lg p-4 mb-6">
+        <div class="flex items-center gap-2 text-success mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+          <span class="font-medium">Verified</span>
+        </div>
+        <div class="text-sm">
+          <span>Reviewed by: </span>
+          <span class="font-medium">{{ record.reviewed_by.username }}</span>
+        </div>
+        <div class="text-sm text-base-content/70">
+          {{ record.reviewed_date|date:"F d, Y H:i" }}
+        </div>
+      </div>
+      {% elif record.is_rejected %}
+      <div class="bg-error/10 border border-error rounded-lg p-4 mb-6">
+        <div class="flex items-center gap-2 text-error mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          <span class="font-medium">Rejected</span>
+        </div>
+        <div class="text-sm">
+          <span>Reviewed by: </span>
+          <span class="font-medium">{{ record.reviewed_by.username }}</span>
+        </div>
+        <div class="text-sm text-base-content/70 mb-2">
+          {{ record.reviewed_date|date:"F d, Y H:i" }}
+        </div>
+        {% if record.rejection_reason %}
+        <div class="text-sm mt-2">
+          <span class="font-medium">Reason: </span>
+          <span>{{ record.rejection_reason }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% elif can_review %}
+      <div class="mb-6">
+        <div class="alert alert-warning mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          <span>This record is pending review. Review the media before verifying or rejecting.</span>
+        </div>
+        <div class="flex gap-4">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="verify">
+            <button type="submit" class="btn btn-success">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Verify Record
+            </button>
+          </form>
+          <button type="button" class="btn btn-error btn-outline" onclick="document.getElementById('reject-modal').showModal()">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Reject Record
+          </button>
+        </div>
+      </div>
+      <!-- Reject Modal -->
+      <dialog id="reject-modal" class="modal">
+        <div class="modal-box">
+          <h3 class="font-bold text-lg">Reject Verification Record</h3>
+          <form method="post" class="mt-4">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reject">
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Reason for rejection (optional)</span>
+              </label>
+              <textarea name="rejection_reason" class="textarea textarea-bordered h-24" placeholder="Explain why this record is being rejected..."></textarea>
+            </div>
+            <div class="modal-action">
+              <button type="button" class="btn" onclick="document.getElementById('reject-modal').close()">Cancel</button>
+              <button type="submit" class="btn btn-error">Reject</button>
+            </div>
+          </form>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
+      {% else %}
+      <div class="alert mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>This record is pending review. Only Team Captains can verify or reject records.</span>
+      </div>
+      {% endif %}
+
+      <!-- Back Link -->
+      <div class="divider"></div>
+      <div class="text-center">
+        <a href="{% url 'team:verification_records' %}" class="link link-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Verification Records
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

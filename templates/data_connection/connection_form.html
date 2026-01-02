@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}{{ action }} Data Connection{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+        <a href="{% url 'data_connection:connection_list' %}" class="btn btn-ghost btn-sm gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to list
+        </a>
+    </div>
+
+    <h1 class="text-3xl font-bold mb-6">{{ action }} Data Connection</h1>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <!-- Basic Info -->
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <h2 class="card-title">Basic Information</h2>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Title</span>
+                    </label>
+                    {{ form.title }}
+                    {% if form.title.errors %}
+                    <label class="label">
+                        <span class="label-text-alt text-error">{{ form.title.errors.0 }}</span>
+                    </label>
+                    {% endif %}
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Description</span>
+                    </label>
+                    {{ form.description }}
+                    {% if form.description.errors %}
+                    <label class="label">
+                        <span class="label-text-alt text-error">{{ form.description.errors.0 }}</span>
+                    </label>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Google Sheets Config -->
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <h2 class="card-title">Google Sheets Configuration</h2>
+
+                {% if action == "Create" %}
+                <!-- Create new sheet option (only shown for new connections) -->
+                <div class="form-control">
+                    <label class="label cursor-pointer justify-start gap-3">
+                        {{ form.create_new_sheet }}
+                        <span class="label-text font-medium">{{ form.create_new_sheet.label }}:</span>
+                        <span id="spreadsheet-name-preview" class="label-text text-primary font-mono"></span>
+                    </label>
+                    <p class="text-sm text-base-content/70 ml-7">{{ form.create_new_sheet.help_text }}</p>
+                </div>
+
+                {% endif %}
+
+                <!-- Spreadsheet URL (hidden when creating new sheet) -->
+                <div id="spreadsheet-url-section" class="form-control">
+                    <label class="label">
+                        <span class="label-text">Spreadsheet URL</span>
+                    </label>
+                    {{ form.spreadsheet_url }}
+                    <label class="label">
+                        <span class="label-text-alt">Full URL to your Google Sheet. Make sure to share it with: <code class="text-xs">{{ config.GOOGLE_SERVICE_ACCOUNT_EMAIL }}</code></span>
+                    </label>
+                    {% if form.spreadsheet_url.errors %}
+                    <label class="label">
+                        <span class="label-text-alt text-error">{{ form.spreadsheet_url.errors.0 }}</span>
+                    </label>
+                    {% endif %}
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Sheet Name (tab)</span>
+                    </label>
+                    {{ form.data_sheet }}
+                    <label class="label">
+                        <span class="label-text-alt">Name of the sheet tab where data will be written</span>
+                    </label>
+                    {% if form.data_sheet.errors %}
+                    <label class="label">
+                        <span class="label-text-alt text-error">{{ form.data_sheet.errors.0 }}</span>
+                    </label>
+                    {% endif %}
+                </div>
+
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Expiration Date</span>
+                    </label>
+                    {{ form.date_expires }}
+                    {% if form.date_expires.errors %}
+                    <label class="label">
+                        <span class="label-text-alt text-error">{{ form.date_expires.errors.0 }}</span>
+                    </label>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <h2 class="card-title">Filters</h2>
+                <p class="text-base-content/70 mb-4">
+                    Only include riders matching these criteria. Leave empty to include all riders.
+                </p>
+
+                <div class="grid md:grid-cols-3 gap-6">
+                    <!-- Gender -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{{ form.filter_gender.label }}</span>
+                        </label>
+                        {{ form.filter_gender }}
+                    </div>
+
+                    <!-- ZP Division -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{{ form.filter_zp_div.label }}</span>
+                        </label>
+                        {{ form.filter_zp_div }}
+                    </div>
+
+                    <!-- ZP Women's Division -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{{ form.filter_zp_divw.label }}</span>
+                        </label>
+                        {{ form.filter_zp_divw }}
+                    </div>
+
+                    <!-- ZP Skill Race Min -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{{ form.filter_zp_skill_race_min.label }}</span>
+                        </label>
+                        {{ form.filter_zp_skill_race_min }}
+                    </div>
+
+                    <!-- ZR Rating Min -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{{ form.filter_zr_rating_min.label }}</span>
+                        </label>
+                        {{ form.filter_zr_rating_min }}
+                    </div>
+
+                    <!-- ZR Rating Max -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{{ form.filter_zr_rating_max.label }}</span>
+                        </label>
+                        {{ form.filter_zr_rating_max }}
+                    </div>
+
+                    <!-- ZR Phenotype -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text">{{ form.filter_zr_phenotype.label }}</span>
+                        </label>
+                        {{ form.filter_zr_phenotype }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Field Selection -->
+        <div class="card bg-base-200">
+            <div class="card-body">
+                <h2 class="card-title">Data Fields</h2>
+                <p class="text-base-content/70 mb-4">
+                    The following fields are always included: <span class="badge badge-outline">zwid</span>
+                    <span class="badge badge-outline">discord_username</span>
+                    <span class="badge badge-outline">discord_id</span>
+                </p>
+
+                <div class="grid md:grid-cols-3 gap-6">
+                    <!-- User Fields -->
+                    <div>
+                        <h3 class="font-semibold mb-3">User Profile</h3>
+                        <div class="space-y-2">
+                            {% for checkbox in form.user_fields %}
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                {{ checkbox.tag }}
+                                <span class="label-text">{{ checkbox.choice_label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- ZwiftPower Fields -->
+                    <div>
+                        <h3 class="font-semibold mb-3">ZwiftPower</h3>
+                        <div class="space-y-2">
+                            {% for checkbox in form.zwiftpower_fields %}
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                {{ checkbox.tag }}
+                                <span class="label-text">{{ checkbox.choice_label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Zwift Racing Fields -->
+                    <div>
+                        <h3 class="font-semibold mb-3">Zwift Racing</h3>
+                        <div class="space-y-2">
+                            {% for checkbox in form.zwiftracing_fields %}
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                {{ checkbox.tag }}
+                                <span class="label-text">{{ checkbox.choice_label }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Submit -->
+        <div class="flex justify-end gap-4">
+            <a href="{% url 'data_connection:connection_list' %}" class="btn btn-ghost">Cancel</a>
+            <button type="submit" class="btn btn-primary">{{ action }} Connection</button>
+        </div>
+    </form>
+</div>
+
+{% if action == "Create" %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const createNewSheetCheckbox = document.getElementById('id_create_new_sheet');
+    const spreadsheetUrlSection = document.getElementById('spreadsheet-url-section');
+    const titleInput = document.getElementById('id_title');
+    const spreadsheetNamePreview = document.getElementById('spreadsheet-name-preview');
+
+    function toggleSections() {
+        if (createNewSheetCheckbox.checked) {
+            spreadsheetUrlSection.classList.add('hidden');
+        } else {
+            spreadsheetUrlSection.classList.remove('hidden');
+        }
+    }
+
+    function updateSpreadsheetName() {
+        const title = titleInput.value.trim();
+        if (title) {
+            spreadsheetNamePreview.textContent = '"' + title + '"';
+        } else {
+            spreadsheetNamePreview.textContent = '(enter title above)';
+        }
+    }
+
+    // Initial state
+    toggleSections();
+    updateSpreadsheetName();
+
+    // Listen for changes
+    createNewSheetCheckbox.addEventListener('change', toggleSections);
+    titleInput.addEventListener('input', updateSpreadsheetName);
+});
+</script>
+{% endif %}
+{% endblock %}

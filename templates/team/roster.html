@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Team Roster - The Coalition{% endblock %}
+
+{% block content %}
+  <div class="max-w-6xl mx-auto">
+    <div class="card bg-base-200 shadow-xl">
+      <div class="card-body">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="card-title text-2xl">Team Roster</h2>
+        </div>
+
+        <form method="get" class="mb-6">
+          <div class="flex flex-wrap gap-4 items-end">
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Search</span>
+              </label>
+              <input type="text"
+                     name="q"
+                     placeholder="Name or Zwid..."
+                     class="input input-bordered input-sm w-48"
+                     value="{{ search_query }}"
+              />
+            </div>
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Category</span>
+              </label>
+              <select name="zp_category" class="select select-bordered select-sm">
+                <option value="">All</option>
+                {% for div, cat in zp_categories %}
+                  <option value="{{ div }}" {% if zp_category_filter == div|stringformat:"d" %}selected{% endif %}>
+                    {{ cat }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Rating</span>
+              </label>
+              <select name="zr_category" class="select select-bordered select-sm">
+                <option value="">All</option>
+                {% for cat in zr_categories %}
+                  <option value="{{ cat }}" {% if zr_category_filter == cat %}selected{% endif %}>
+                    {{ cat }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Status</span>
+              </label>
+              <select name="status" class="select select-bordered select-sm">
+                <option value="">All</option>
+                <option value="active" {% if status_filter == "active" %}selected{% endif %}>Active (ZP or ZR)</option>
+                <option value="both" {% if status_filter == "both" %}selected{% endif %}>ZP + ZR</option>
+                <option value="zp_only" {% if status_filter == "zp_only" %}selected{% endif %}>ZP Only</option>
+                <option value="zr_only" {% if status_filter == "zr_only" %}selected{% endif %}>ZR Only</option>
+                <option value="left" {% if status_filter == "left" %}selected{% endif %}>Left</option>
+                <option value="none" {% if status_filter == "none" %}selected{% endif %}>Account Only</option>
+              </select>
+            </div>
+
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Gender</span>
+              </label>
+              <select name="gender" class="select select-bordered select-sm">
+                <option value="">All</option>
+                <option value="M" {% if gender_filter == "M" %}selected{% endif %}>Male</option>
+                <option value="F" {% if gender_filter == "F" %}selected{% endif %}>Female</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            <a href="{% url 'team:roster' %}" class="btn btn-ghost btn-sm">Reset</a>
+          </div>
+        </form>
+
+        <div class="stats shadow mb-6">
+          <div class="stat">
+            <div class="stat-title">Showing</div>
+            <div class="stat-value">{{ roster|length }}</div>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="table table-zebra">
+            <thead>
+            <tr>
+              {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&zr_category="|add:zr_category_filter|add:"&status="|add:status_filter|add:"&gender="|add:gender_filter %}
+              <th>
+                <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Name
+                  {% if sort_by == "name" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=zwid&dir={% if sort_by == 'zwid' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Zwid
+                  {% if sort_by == "zwid" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=gender&dir={% if sort_by == 'gender' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Gender
+                  {% if sort_by == "gender" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=account&dir={% if sort_by == 'account' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Account
+                  {% if sort_by == "account" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=verified&dir={% if sort_by == 'verified' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Verified
+                  {% if sort_by == "verified" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=category&dir={% if sort_by == 'category' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Category
+                  {% if sort_by == "category" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=catw&dir={% if sort_by == 'catw' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Cat W
+                  {% if sort_by == "catw" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=rating&dir={% if sort_by == 'rating' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Rating
+                  {% if sort_by == "rating" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=results&dir={% if sort_by == 'results' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Results
+                  {% if sort_by == "results" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              {% endwith %}
+            </tr>
+            </thead>
+            <tbody>
+            {% for rider in roster %}
+              <tr>
+                <td class="font-medium">
+                  {{ rider.display_name }}
+                  {% if rider.in_zwiftpower %}
+                    <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-orange-400 bg-gray-700 rounded" title="View on ZwiftPower">ZP</a>
+                  {% endif %}
+                  {% if rider.in_zwiftracing %}
+                    <a href="https://www.zwiftracing.app/riders/{{ rider.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-white bg-sky-500 rounded" title="View on Zwift Racing">ZR</a>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="font-mono text-sm">{{ rider.zwid }}</span>
+                </td>
+                <td>
+                  {% if rider.gender == "M" %}
+                    <span class="badge badge-info badge-sm">M</span>
+                  {% elif rider.gender == "F" %}
+                    <span class="badge badge-secondary badge-sm">F</span>
+                  {% else %}
+                    <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if rider.has_account %}
+                    <span class="badge badge-success badge-sm">Yes</span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">No</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if rider.zwid_verified %}
+                    <span class="badge badge-info badge-sm">Yes</span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">No</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if rider.in_zwiftpower %}
+                    <span class="badge badge-primary badge-sm">{{ rider.zp_category|default:"-" }}</span>
+                    {% if rider.zp_date_left %}
+                      <span class="badge badge-error badge-sm ml-1">Left</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if rider.in_zwiftpower and rider.zp_category_w %}
+                    <span class="badge badge-secondary badge-sm">{{ rider.zp_category_w }}</span>
+                  {% else %}
+                    <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if rider.in_zwiftracing %}
+                    <span class="badge badge-secondary badge-sm">{{ rider.zr_category|default:"N/A" }}</span>
+                    {% if rider.zr_date_left %}
+                      <span class="badge badge-error badge-sm ml-1">Left</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if rider.result_count %}
+                    <span class="badge badge-outline badge-sm">{{ rider.result_count }}</span>
+                  {% else %}
+                    <span class="text-base-content/30">0</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="9" class="text-center text-base-content/50">
+                  No riders found.
+                </td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% if success %}
+<div class="alert alert-success mb-4">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <span>Profile updated successfully!</span>
+</div>
+{% endif %}
+
+<form hx-post="{% url 'accounts:profile_edit' %}"
+      hx-target="#profile-form-container"
+      hx-swap="innerHTML"
+      class="space-y-4">
+    {% csrf_token %}
+
+    <h3 class="text-lg font-semibold mb-3">Profile Information</h3>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_first_name">
+                <span class="label-text">{{ form.first_name.label }}</span>
+            </label>
+            {{ form.first_name }}
+            {% if form.first_name.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.first_name.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_last_name">
+                <span class="label-text">{{ form.last_name.label }}</span>
+            </label>
+            {{ form.last_name }}
+            {% if form.last_name.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.last_name.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_birth_year">
+                <span class="label-text">{{ form.birth_year.label }}</span>
+            </label>
+            {{ form.birth_year }}
+            {% if form.birth_year.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.birth_year.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_email">
+                <span class="label-text">{{ form.email.label }}</span>
+            </label>
+            {{ form.email }}
+            {% if form.email.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.email.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_gender">
+                <span class="label-text">{{ form.gender.label }}</span>
+            </label>
+            {{ form.gender }}
+            {% if form.gender.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.gender.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_timezone">
+                <span class="label-text">{{ form.timezone.label }}</span>
+            </label>
+            {{ form.timezone }}
+            {% if form.timezone.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.timezone.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_city">
+                <span class="label-text">{{ form.city.label }}</span>
+            </label>
+            {{ form.city }}
+            {% if form.city.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.city.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_country">
+                <span class="label-text">{{ form.country.label }}</span>
+            </label>
+            {{ form.country }}
+            {% if form.country.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.country.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="form-control">
+        <label class="label" for="id_youtube_channel">
+            <span class="label-text">{{ form.youtube_channel.label }}</span>
+        </label>
+        {{ form.youtube_channel }}
+        {% if form.youtube_channel.errors %}
+        <label class="label">
+            <span class="label-text-alt text-error">{{ form.youtube_channel.errors.0 }}</span>
+        </label>
+        {% endif %}
+    </div>
+
+    <div class="form-control mt-6">
+        <button type="submit" class="btn btn-primary">
+            <span class="htmx-indicator loading loading-spinner loading-sm"></span>
+            Save Changes
+        </button>
+    </div>
+</form>

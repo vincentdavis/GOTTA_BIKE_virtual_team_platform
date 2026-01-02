@@ -1,0 +1,109 @@
+{
+  "data": [
+    {
+      "div": 20,
+      "divw": 0,
+      "flag": "bw",
+      "r": "712",
+      "ftp": [
+        "215",
+        0
+      ],
+      "name": "  Marion \ud83d\ude3a",
+      "aid": "144690",
+      "age": "50+",
+      "zada": 0,
+      "w": [
+        "61.2",
+        0
+      ],
+      "rank": "439.11",
+      "skill": 5302,
+      "distance": 91372781,
+      "climbed": 710999,
+      "energy": 459046,
+      "time": 165580,
+      "skill_race": 965,
+      "skill_seg": 2361,
+      "skill_power": 1976,
+      "zwid": 652857,
+      "status": "",
+      "reg": 1,
+      "email": "",
+      "h_1200_watts": "228",
+      "h_1200_wkg": "3.7",
+      "h_15_watts": "402",
+      "h_15_wkg": "6.6"
+    },
+    {
+      "div": 30,
+      "divw": 0,
+      "flag": "us",
+      "r": "491",
+      "ftp": [
+        "235",
+        0
+      ],
+      "name": " Jon Staley \ud83e\udd2a\ud83d\udd25 (COALITION)",
+      "aid": "",
+      "age": "-",
+      "zada": 0,
+      "w": [
+        0,
+        0
+      ],
+      "rank": "146.20",
+      "skill": 7715,
+      "distance": 52363596,
+      "climbed": 427747,
+      "energy": 267639,
+      "time": 106161,
+      "skill_race": 2723,
+      "skill_seg": 2691,
+      "skill_power": 2301,
+      "zwid": 2837202,
+      "status": "",
+      "reg": 0,
+      "email": "",
+      "h_1200_watts": "258",
+      "h_1200_wkg": "3.3",
+      "h_15_watts": "884",
+      "h_15_wkg": "11.3"
+    },
+    {
+      "div": 30,
+      "divw": 0,
+      "flag": "de",
+      "r": "83",
+      "ftp": [
+        "248",
+        0
+      ],
+      "name": " Lucas Heinatsch (Coalition)",
+      "aid": "",
+      "age": "Mas",
+      "zada": 0,
+      "w": [
+        "84.0",
+        0
+      ],
+      "rank": "329.50",
+      "skill": 6018,
+      "distance": 7040980,
+      "climbed": 63898,
+      "energy": 41243,
+      "time": 14218,
+      "skill_race": 1623,
+      "skill_seg": 2338,
+      "skill_power": 2057,
+      "zwid": 4673650,
+      "status": "",
+      "reg": 1,
+      "email": "",
+      "h_1200_watts": "256",
+      "h_1200_wkg": "3.0",
+      "h_15_watts": "646",
+      "h_15_wkg": "7.5"
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:data_connection_dataconnection_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+{% if error %}
+<div class="errornote">
+    <p>{{ error }}</p>
+</div>
+{% endif %}
+
+{% if quota_info %}
+<div class="module">
+    <h2>Storage Quota</h2>
+    <table>
+        <tr>
+            <th>Limit:</th>
+            <td>{{ quota_info.limit_display }}</td>
+        </tr>
+        <tr>
+            <th>Used:</th>
+            <td>{{ quota_info.usage_display }}</td>
+        </tr>
+        <tr>
+            <th>In Trash:</th>
+            <td>{{ quota_info.trash_display }}</td>
+        </tr>
+        <tr>
+            <th>Total Files:</th>
+            <td>{{ quota_info.total_file_count }}</td>
+        </tr>
+        <tr>
+            <th>Trashed Files:</th>
+            <td>{{ quota_info.trashed_file_count }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if quota_info.trashed_file_count > 0 %}
+<div class="module" style="margin-top: 20px;">
+    <h2>Actions</h2>
+    <p>
+        <a href="{% url 'admin:data_connection_empty_trash' %}" class="button"
+           onclick="return confirm('Are you sure you want to permanently delete all {{ quota_info.trashed_file_count }} trashed files?');">
+            Empty Trash ({{ quota_info.trashed_file_count }} files)
+        </a>
+    </p>
+</div>
+{% endif %}
+
+<div class="module" style="margin-top: 20px;">
+    <h2>Files Owned by Service Account ({{ quota_info.total_file_count }})</h2>
+
+    {% if quota_info.files %}
+    <table id="result_list">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Size</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for file in quota_info.files %}
+            <tr class="{% cycle 'row1' 'row2' %}">
+                <td>{{ file.name }}</td>
+                <td>{{ file.mime_type }}</td>
+                <td>
+                    {% if file.size > 1048576 %}
+                        {{ file.size|floatformat:0|divisibleby:1048576 }} MB
+                    {% elif file.size > 1024 %}
+                        {{ file.size|floatformat:0|divisibleby:1024 }} KB
+                    {% else %}
+                        {{ file.size }} B
+                    {% endif %}
+                </td>
+                <td>
+                    {% if file.trashed %}
+                        <span style="color: red;">Trashed</span>
+                    {% else %}
+                        Active
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'admin:data_connection_delete_file' file.id %}"
+                       onclick="return confirm('Are you sure you want to permanently delete this file?');"
+                       style="color: red;">
+                        Delete
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>No files found.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<div style="margin-top: 20px;">
+    <a href="{% url 'admin:data_connection_dataconnection_changelist' %}" class="button">&laquo; Back to Data Connections</a>
+</div>
+
+{% endblock %}

@@ -1,0 +1,59 @@
+<header class="navbar bg-base-200 shadow-sm">
+    <div class="navbar-start">
+        <div class="dropdown">
+            <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h8m-8 6h16" />
+                </svg>
+            </div>
+            <ul tabindex="0" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-10 mt-3 w-52 p-2 shadow">
+                <li><a href="{% url 'home' %}">Home</a></li>
+                {% if user.is_authenticated %}
+                <li><a href="{% url 'team:roster' %}">Team Roster</a></li>
+                <li><a href="{% url 'team:links' %}">Team Links</a></li>
+                {% endif %}
+            </ul>
+        </div>
+        <a href="{% url 'home' %}" class="btn btn-ghost text-xl">{{ config.TEAM_NAME }}</a>
+    </div>
+    <div class="navbar-center hidden lg:flex">
+        <ul class="menu menu-horizontal px-1">
+            <li><a href="{% url 'home' %}">Home</a></li>
+            {% if user.is_authenticated %}
+            <li><a href="{% url 'team:roster' %}">Team Roster</a></li>
+            <li><a href="{% url 'team:links' %}">Team Links</a></li>
+            {% endif %}
+        </ul>
+    </div>
+    <div class="navbar-end">
+        {% if user.is_authenticated %}
+        <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar {% if not user.discord_avatar_url %}placeholder{% endif %}">
+                {% if user.discord_avatar_url %}
+                <div class="w-10 rounded-full">
+                    <img src="{{ user.discord_avatar_url }}" alt="{{ user.username }}" />
+                </div>
+                {% else %}
+                <div class="bg-neutral text-neutral-content w-10 rounded-full">
+                    <span class="text-sm">{{ user.username|slice:":2"|upper }}</span>
+                </div>
+                {% endif %}
+            </div>
+            <ul tabindex="0" class="menu menu-sm dropdown-content bg-base-100 rounded-box z-10 mt-3 w-52 p-2 shadow">
+                <li><a href="{% url 'accounts:profile' %}">Profile</a></li>
+                <li><a href="{% url 'mfa_index' %}">Security</a></li>
+                <li><a href="{% url 'account_logout' %}">Logout</a></li>
+                {% if user.is_any_captain %}
+                <li class="my-1"><hr class="border-base-300"></li>
+                <li class="menu-title"><span>Team Captain</span></li>
+                <li><a href="{% url 'team:verification_records' %}">Verification Records</a></li>
+                <li><a href="{% url 'team:submit_link' %}">Submit Link</a></li>
+                <li><a href="{% url 'data_connection:connection_list' %}">Data Connections</a></li>
+                {% endif %}
+            </ul>
+        </div>
+        {% else %}
+        <a href="{% url 'account_login' %}" class="btn btn-primary btn-sm">Login</a>
+        {% endif %}
+    </div>
+</header>
