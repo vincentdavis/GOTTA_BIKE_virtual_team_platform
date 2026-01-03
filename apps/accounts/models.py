@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class UserRoles:
-    """Constants for user roles."""
+    """Constants for user roles (legacy - use Permissions for new code)."""
 
     APP_ADMIN = "app_admin"
     LINK_ADMIN = "link_admin"
@@ -35,6 +35,49 @@ class UserRoles:
     ]
 
     ALL: ClassVar[list[str]] = [choice[0] for choice in CHOICES]
+
+
+class Permissions:
+    """Constants for permission names and Constance mappings.
+
+    Permissions are checked via Discord roles configured in Constance.
+    Each permission maps to a Constance setting containing a JSON array
+    of Discord role IDs that grant that permission.
+    """
+
+    APP_ADMIN = "app_admin"
+    TEAM_CAPTAIN = "team_captain"
+    VICE_CAPTAIN = "vice_captain"
+    LINK_ADMIN = "link_admin"
+    MEMBERSHIP_ADMIN = "membership_admin"
+    RACING_ADMIN = "racing_admin"
+    TEAM_MEMBER = "team_member"
+    RACE_READY = "race_ready"
+
+    # Map permission names to Constance config keys
+    CONSTANCE_MAP: ClassVar[dict[str, str]] = {
+        APP_ADMIN: "PERM_APP_ADMIN_ROLES",
+        TEAM_CAPTAIN: "PERM_TEAM_CAPTAIN_ROLES",
+        VICE_CAPTAIN: "PERM_VICE_CAPTAIN_ROLES",
+        LINK_ADMIN: "PERM_LINK_ADMIN_ROLES",
+        MEMBERSHIP_ADMIN: "PERM_MEMBERSHIP_ADMIN_ROLES",
+        RACING_ADMIN: "PERM_RACING_ADMIN_ROLES",
+        TEAM_MEMBER: "PERM_TEAM_MEMBER_ROLES",
+        RACE_READY: "PERM_RACE_READY_ROLES",
+    }
+
+    CHOICES: ClassVar[list[tuple[str, str]]] = [
+        (APP_ADMIN, "App Admin"),
+        (TEAM_CAPTAIN, "Team Captain"),
+        (VICE_CAPTAIN, "Vice Captain"),
+        (LINK_ADMIN, "Link Admin"),
+        (MEMBERSHIP_ADMIN, "Membership Admin"),
+        (RACING_ADMIN, "Racing Admin"),
+        (TEAM_MEMBER, "Team Member"),
+        (RACE_READY, "Race Ready"),
+    ]
+
+    ALL: ClassVar[list[str]] = list(CONSTANCE_MAP.keys())
 
 
 class User(AbstractUser):
@@ -126,7 +169,12 @@ class User(AbstractUser):
     roles = models.JSONField(
         default=list,
         blank=True,
-        help_text="List of user roles",
+        help_text="List of user roles (legacy - use permission_overrides for new grants)",
+    )
+    permission_overrides = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Manual permission overrides: {permission_name: True/False}. True grants, False revokes.",
     )
 
     class Meta:
@@ -190,40 +238,104 @@ class User(AbstractUser):
             return True
         return False
 
+    def _get_permission_role_ids(self, constance_key: str) -> list[int]:
+        """Get Discord role IDs for a permission from Constance config.
+
+        Args:
+            constance_key: The Constance config key (e.g., "PERM_TEAM_CAPTAIN_ROLES").
+
+        Returns:
+            List of Discord role IDs as integers.
+
+        """
+        import json
+
+        from constance import config
+
+        role_ids_json = getattr(config, constance_key, "[]")
+        try:
+            role_ids = json.loads(role_ids_json)
+            return [int(rid) for rid in role_ids]
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return []
+
+    def has_permission(self, permission_name: str) -> bool:
+        """Check if user has a specific permission.
+
+        Permission check order:
+        1. Superusers always have all permissions
+        2. Check permission_overrides for explicit grant/revoke
+        3. Check if any Discord role matches permission's configured roles
+        4. Fall back to legacy app roles check
+
+        Args:
+            permission_name: The permission to check (from Permissions class).
+
+        Returns:
+            True if user has the permission, False otherwise.
+
+        """
+        # 1. Superuser bypass
+        if self.is_superuser:
+            return True
+
+        # 2. Check explicit overrides
+        if self.permission_overrides:
+            override = self.permission_overrides.get(permission_name)
+            if override is not None:
+                return bool(override)
+
+        # 3. Check Discord roles against Constance config
+        constance_key = Permissions.CONSTANCE_MAP.get(permission_name)
+        if constance_key:
+            allowed_role_ids = self._get_permission_role_ids(constance_key)
+            if allowed_role_ids:
+                user_role_ids = self.get_discord_role_ids()
+                if any(rid in user_role_ids for rid in allowed_role_ids):
+                    return True
+
+        # 4. Backward compatibility: check legacy app roles
+        return self.has_role(permission_name)
+
     @property
     def is_app_admin(self) -> bool:
-        """Check if user is an app admin."""
-        return self.has_role(UserRoles.APP_ADMIN)
+        """Check if user has app admin permission."""
+        return self.has_permission(Permissions.APP_ADMIN)
 
     @property
     def is_link_admin(self) -> bool:
-        """Check if user is a link admin."""
-        return self.has_role(UserRoles.LINK_ADMIN)
+        """Check if user has link admin permission."""
+        return self.has_permission(Permissions.LINK_ADMIN)
 
     @property
     def is_membership_admin(self) -> bool:
-        """Check if user is a membership admin."""
-        return self.has_role(UserRoles.MEMBERSHIP_ADMIN)
+        """Check if user has membership admin permission."""
+        return self.has_permission(Permissions.MEMBERSHIP_ADMIN)
 
     @property
     def is_racing_admin(self) -> bool:
-        """Check if user is a racing admin."""
-        return self.has_role(UserRoles.RACING_ADMIN)
+        """Check if user has racing admin permission."""
+        return self.has_permission(Permissions.RACING_ADMIN)
 
     @property
     def is_team_captain(self) -> bool:
-        """Check if user is a team captain."""
-        return self.has_role(UserRoles.TEAM_CAPTAIN)
+        """Check if user has team captain permission."""
+        return self.has_permission(Permissions.TEAM_CAPTAIN)
 
     @property
     def is_team_vice_captain(self) -> bool:
-        """Check if user is a team vice captain."""
-        return self.has_role(UserRoles.TEAM_VICE_CAPTAIN)
+        """Check if user has vice captain permission."""
+        return self.has_permission(Permissions.VICE_CAPTAIN)
 
     @property
     def is_team_member(self) -> bool:
-        """Check if user is a team member."""
-        return self.has_role(UserRoles.TEAM_MEMBER)
+        """Check if user has team member permission."""
+        return self.has_permission(Permissions.TEAM_MEMBER)
+
+    @property
+    def is_race_ready(self) -> bool:
+        """Check if user has race ready permission."""
+        return self.has_permission(Permissions.RACE_READY)
 
     @property
     def is_any_admin(self) -> bool:

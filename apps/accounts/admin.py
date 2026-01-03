@@ -1,15 +1,16 @@
 """Admin configuration for accounts app."""
 
+import json
 from typing import Any, ClassVar
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import path
 
-from apps.accounts.models import GuildMember, User
+from apps.accounts.models import GuildMember, Permissions, User
 
 
 @admin.register(User)
@@ -64,9 +65,11 @@ class UserAdmin(BaseUserAdmin):
             },
         ),
         (
-            "Team Roles",
+            "Permissions",
             {
-                "fields": ("roles",),
+                "fields": ("roles", "permission_overrides"),
+                "description": "Legacy roles and manual permission overrides. "
+                "Permissions are primarily granted via Discord roles configured in Constance.",
             },
         ),
     )
@@ -85,6 +88,72 @@ class UserAdmin(BaseUserAdmin):
             },
         ),
     )
+
+    def get_urls(self) -> list:
+        """Add custom URLs for permission mappings view.
+
+        Returns:
+            List of URL patterns including custom permission mappings URL.
+
+        """
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "permission-mappings/",
+                self.admin_site.admin_view(self.permission_mappings_view),
+                name="accounts_permission_mappings",
+            ),
+        ]
+        return custom_urls + urls
+
+    def permission_mappings_view(self, request: HttpRequest) -> HttpResponse:
+        """Edit permission-to-Discord-role mappings.
+
+        Args:
+            request: The HTTP request.
+
+        Returns:
+            Rendered permission mappings template.
+
+        """
+        from constance import config
+
+        from apps.team.models import DiscordRole
+
+        # Check permissions
+        if not request.user.is_superuser and not request.user.is_app_admin:
+            messages.error(request, "You don't have permission to access this page.")
+            return redirect("admin:index")
+
+        # Get available Discord roles (exclude managed/bot roles)
+        available_roles = DiscordRole.objects.filter(managed=False).order_by("-position")
+
+        if request.method == "POST":
+            # Save each permission's selected roles to Constance
+            for perm_name, constance_key in Permissions.CONSTANCE_MAP.items():
+                selected_role_ids = request.POST.getlist(f"perm_{perm_name}")
+                setattr(config, constance_key, json.dumps(selected_role_ids))
+            messages.success(request, "Permission mappings saved successfully.")
+            return redirect(request.path)
+
+        # Load current mappings from Constance
+        current_mappings: dict[str, list[str]] = {}
+        for perm_name, constance_key in Permissions.CONSTANCE_MAP.items():
+            role_ids_json = getattr(config, constance_key, "[]")
+            try:
+                current_mappings[perm_name] = json.loads(role_ids_json)
+            except json.JSONDecodeError:
+                current_mappings[perm_name] = []
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Permission Mappings",
+            "permissions": Permissions.CHOICES,
+            "available_roles": available_roles,
+            "current_mappings": current_mappings,
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/accounts/permission_mappings.html", context)
 
 
 @admin.register(GuildMember)

@@ -1,0 +1,169 @@
+{% extends "admin/base_site.html" %}
+{% load accounts_tags %}
+
+{% block extrahead %}
+{{ block.super }}
+<!-- Tom Select CSS -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+<style>
+    .permission-section {
+        margin-bottom: 24px;
+        padding: 16px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background: #f9f9f9;
+    }
+    .permission-section h3 {
+        margin: 0 0 12px 0;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #ddd;
+        color: #333;
+    }
+    .permission-section p {
+        margin: 0 0 8px 0;
+        font-size: 12px;
+        color: #666;
+    }
+    .no-roles-message {
+        color: #666;
+        font-style: italic;
+        padding: 12px;
+        background: #fff3cd;
+        border-radius: 4px;
+        margin-bottom: 16px;
+    }
+    .submit-row {
+        margin-top: 24px;
+        padding: 12px;
+        background: #f5f5f5;
+        border-radius: 4px;
+    }
+    /* Tom Select customization */
+    .ts-wrapper {
+        max-width: 100%;
+    }
+    .ts-dropdown .option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .role-color-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .role-id {
+        font-size: 11px;
+        color: #888;
+        font-family: monospace;
+    }
+    .ts-wrapper .item {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .ts-wrapper .item .role-color-dot {
+        width: 8px;
+        height: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:accounts_user_changelist' %}">Users</a>
+    &rsaquo; Permission Mappings
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Permission Mappings</h1>
+<p>Select which Discord roles grant each permission. Users with any of the selected roles will have that permission.</p>
+
+{% if not available_roles %}
+<div class="no-roles-message">
+    <strong>No Discord roles found.</strong>
+    Make sure to sync Discord roles first using the Discord bot's <code>/sync_roles</code> command.
+</div>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+
+    {% for perm_code, perm_name in permissions %}
+    <div class="permission-section">
+        <h3>{{ perm_name }}</h3>
+        <p>Type to search roles by name or ID</p>
+        <select name="perm_{{ perm_code }}"
+                id="select_{{ perm_code }}"
+                class="role-select"
+                multiple
+                placeholder="Search and select roles...">
+            {% for role in available_roles %}
+            <option value="{{ role.role_id }}"
+                    data-color="{{ role.color_hex|default:'#99AAB5' }}"
+                    data-name="{{ role.name }}"
+                    {% if role.role_id in current_mappings|get_item:perm_code %}selected{% endif %}>
+                {{ role.name }} ({{ role.role_id }})
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endfor %}
+
+    <div class="submit-row">
+        <input type="submit" value="Save Permission Mappings" class="default">
+        <a href="{% url 'admin:accounts_user_changelist' %}" class="button" style="margin-left: 12px;">Cancel</a>
+    </div>
+</form>
+
+<!-- Tom Select JS -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Tom Select on all role selects
+    document.querySelectorAll('.role-select').forEach(function(select) {
+        new TomSelect(select, {
+            plugins: ['remove_button'],
+            maxOptions: null,
+            closeAfterSelect: false,
+            hideSelected: false,
+            render: {
+                option: function(data, escape) {
+                    const color = data.color || '#99AAB5';
+                    const parts = data.text.match(/^(.+) \((\d+)\)$/);
+                    const name = parts ? parts[1] : data.text;
+                    const id = parts ? parts[2] : '';
+                    return `<div class="option">
+                        <span class="role-color-dot" style="background-color: ${escape(color)};"></span>
+                        <span class="role-name">${escape(name)}</span>
+                        <span class="role-id">${escape(id)}</span>
+                    </div>`;
+                },
+                item: function(data, escape) {
+                    const color = data.color || '#99AAB5';
+                    const parts = data.text.match(/^(.+) \((\d+)\)$/);
+                    const name = parts ? parts[1] : data.text;
+                    return `<div class="item" style="background-color: ${escape(color)}20; border: 1px solid ${escape(color)};">
+                        <span class="role-color-dot" style="background-color: ${escape(color)};"></span>
+                        <span>${escape(name)}</span>
+                    </div>`;
+                }
+            },
+            onInitialize: function() {
+                // Add color data to options
+                const self = this;
+                Object.keys(this.options).forEach(function(key) {
+                    const opt = select.querySelector(`option[value="${key}"]`);
+                    if (opt) {
+                        self.options[key].color = opt.dataset.color;
+                    }
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

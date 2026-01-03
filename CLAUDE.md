@@ -87,21 +87,71 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 - OAuth scopes: `identify`, `email`, `guilds`
 - URLs at `/accounts/` (login, logout, 2fa management)
 
-### User Roles (`apps/accounts/models.py`)
+### Discord Role-Based Permissions (`apps/accounts/models.py`)
 
-Role-based permissions stored in User.roles JSONField. Available roles:
+Permissions are granted via Discord roles configured in Constance. The system checks permissions in this order:
+
+1. **Superusers** always have all permissions
+2. **Manual overrides** in `User.permission_overrides` (explicit grant/revoke)
+3. **Discord roles** matched against Constance permission settings
+4. **Legacy app roles** in `User.roles` (backward compatibility)
+
+#### Available Permissions
 
 - `app_admin` - Full application admin
 - `team_captain` - Can verify/reject race ready records
-- `team_vice_captain` - Can view (but not verify) race ready records
+- `vice_captain` - Can view (but not verify) race ready records
 - `link_admin` - Can edit team links
 - `membership_admin` - Membership management
 - `racing_admin` - Racing management
 - `team_member` - Basic team member
+- `race_ready` - Race ready status
 
-Helper properties: `is_app_admin`, `is_team_captain`, `is_team_vice_captain`, `is_any_captain`, `is_any_admin`, `is_link_admin`
+#### Constance Permission Settings
 
-Assign roles in Django admin as JSON array: `["team_captain", "link_admin"]`
+Configure in Django admin at `/admin/constance/config/` under "Permission Mappings":
+
+- `PERM_APP_ADMIN_ROLES` - JSON array of Discord role IDs, e.g., `["1234567890123456789"]`
+- `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`, etc.
+
+#### Usage in Views
+
+```python
+# Using decorator
+from apps.accounts.decorators import discord_permission_required
+
+@login_required
+@discord_permission_required("team_captain", raise_exception=True)
+def verify_record(request):
+    ...
+
+# Multiple permissions (OR logic - user needs ANY)
+@discord_permission_required(["team_captain", "vice_captain"])
+def view_records(request):
+    ...
+
+# Using User methods directly
+if request.user.has_permission("team_captain"):
+    ...
+
+# Property shortcuts still work
+if request.user.is_team_captain:
+    ...
+```
+
+#### Manual Permission Overrides
+
+Set in Django admin User edit page under "Permissions" fieldset:
+
+```json
+{"team_captain": true}   // Grant without Discord role
+{"team_captain": false}  // Revoke despite Discord role
+```
+
+#### Keeping Roles in Sync
+
+Discord roles are synced via `/api/dbot/sync_user_roles/{discord_id}` endpoint called by the Discord bot.
+User's `discord_roles` field stores `{role_id: role_name}` mapping from Discord.
 
 ### Background Tasks
 
@@ -215,7 +265,9 @@ Available settings:
 - **Zwift Credentials**: `ZWIFT_USERNAME`, `ZWIFT_PASSWORD` (password fields), `ZWIFTPOWER_TEAM_ID`
 - **API Keys**: `DBOT_AUTH_KEY` (password field - masked in admin)
 - **Zwift Racing App**: `ZRAPP_API_URL`, `ZRAPP_API_KEY` (password field - masked in admin)
-- **Discord Roles**: `RACE_READY_ROLE`, `MEMBER_ROLE`, `MEMBERSHIP_ADMIN_ROLE`, `TEAM_CAPTAIN_ROLE`
+- **Permission Mappings**: `PERM_APP_ADMIN_ROLES`, `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`,
+  `PERM_LINK_ADMIN_ROLES`, `PERM_MEMBERSHIP_ADMIN_ROLES`, `PERM_RACING_ADMIN_ROLES`, `PERM_TEAM_MEMBER_ROLES`,
+  `PERM_RACE_READY_ROLES` (JSON arrays of Discord role IDs)
 - **Verification**: `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
   `POWER_VERIFICATION_DAYS` (365)
 - **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)

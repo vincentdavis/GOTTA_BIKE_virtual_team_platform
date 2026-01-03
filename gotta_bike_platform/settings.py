@@ -346,6 +346,14 @@ CONSTANCE_ADDITIONAL_FIELDS = {
             "widget_kwargs": {"render_value": True},
         },
     ],
+    "json_list_field": [
+        "django.forms.fields.CharField",
+        {
+            "widget": "django.forms.Textarea",
+            "widget_kwargs": {"attrs": {"rows": 2, "placeholder": '["role_id_1", "role_id_2"]'}},
+            "required": False,
+        },
+    ],
 }
 
 CONSTANCE_CONFIG = {
@@ -365,11 +373,15 @@ CONSTANCE_CONFIG = {
         str,
     ),
     "ZRAPP_API_KEY": ("", "Zwift Racing App API key", "password_field"),
-    # Discord roles (0 = not configured)
-    "RACE_READY_ROLE": (0, "Discord role ID for race ready members", int),
-    "MEMBER_ROLE": (0, "Discord role ID for team members", int),
-    "MEMBERSHIP_ADMIN_ROLE": (0, "Discord role ID for membership admins", int),
-    "TEAM_CAPTAIN_ROLE": (0, "Discord role ID for team captains", int),
+    # Permission role mappings (JSON arrays of Discord role IDs)
+    "PERM_APP_ADMIN_ROLES": ("[]", "Discord role IDs that grant app admin permission", "json_list_field"),
+    "PERM_TEAM_CAPTAIN_ROLES": ("[]", "Discord role IDs that grant team captain permission", "json_list_field"),
+    "PERM_VICE_CAPTAIN_ROLES": ("[]", "Discord role IDs that grant vice captain permission", "json_list_field"),
+    "PERM_LINK_ADMIN_ROLES": ("[]", "Discord role IDs that grant link admin permission", "json_list_field"),
+    "PERM_MEMBERSHIP_ADMIN_ROLES": ("[]", "Discord role IDs that grant membership admin permission", "json_list_field"),
+    "PERM_RACING_ADMIN_ROLES": ("[]", "Discord role IDs that grant racing admin permission", "json_list_field"),
+    "PERM_TEAM_MEMBER_ROLES": ("[]", "Discord role IDs that grant team member permission", "json_list_field"),
+    "PERM_RACE_READY_ROLES": ("[]", "Discord role IDs for race ready status", "json_list_field"),
     # Verification validity periods (in days)
     "WEIGHT_FULL_DAYS": (180, "Days a full weight verification is valid", int),
     "WEIGHT_LIGHT_DAYS": (30, "Days a light weight verification is valid", int),
@@ -424,11 +436,15 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "ZRAPP_API_URL",
         "ZRAPP_API_KEY",
     ),
-    "Discord Roles": (
-        "RACE_READY_ROLE",
-        "MEMBER_ROLE",
-        "MEMBERSHIP_ADMIN_ROLE",
-        "TEAM_CAPTAIN_ROLE",
+    "Permission Mappings": (
+        "PERM_APP_ADMIN_ROLES",
+        "PERM_TEAM_CAPTAIN_ROLES",
+        "PERM_VICE_CAPTAIN_ROLES",
+        "PERM_LINK_ADMIN_ROLES",
+        "PERM_MEMBERSHIP_ADMIN_ROLES",
+        "PERM_RACING_ADMIN_ROLES",
+        "PERM_TEAM_MEMBER_ROLES",
+        "PERM_RACE_READY_ROLES",
     ),
     "Verification Settings": (
         "WEIGHT_FULL_DAYS",
