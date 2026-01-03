@@ -8,8 +8,8 @@ set -e
 #uv sync --frozen
 
 # Install Tailwind CSS dependencies and build
-echo "Installing Tailwind CSS dependencies..."
-uv run manage.py tailwind install
+#echo "Installing Tailwind CSS dependencies..."
+#uv run manage.py tailwind install
 
 echo "Building Tailwind CSS for production..."
 uv run manage.py tailwind build
