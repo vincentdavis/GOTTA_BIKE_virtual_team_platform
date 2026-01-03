@@ -103,6 +103,8 @@ The following settings are configured via Django admin at `/admin/constance/conf
 | `DISCORD_URL`                  | Discord invite link (users redirected here if not in guild) |
 | `ZWIFTPOWER_TEAM_ID`           | ZwiftPower team ID                                          |
 | `DBOT_AUTH_KEY`                | Discord bot API authentication key                          |
+| `RACE_READY_ROLE_ID`           | Discord role ID assigned when user is race ready (0=off)    |
+| `PERM_*_ROLES`                 | Permission mappings (JSON arrays of Discord role IDs)       |
 | `TEAM_NAME`                    | Name of the team                                            |
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Google service account email for Sheets API                 |
 | `GOOGLE_DRIVE_FOLDER_ID`       | Shared folder ID where spreadsheets are created             |
@@ -186,19 +188,61 @@ GOTTA_BIKE_virtual_team_platform/
 └── manage.py
 ```
 
-## User Roles
+## Permissions
 
-Roles are stored in the User model as a JSON array. Available roles:
+Permissions are granted via Discord roles configured in Django admin (Constance settings). The system checks:
+
+1. **Superusers** always have all permissions
+2. **Manual overrides** in `User.permission_overrides` (explicit grant/revoke)
+3. **Discord roles** matched against Constance permission settings
+4. **Legacy app roles** in `User.roles` (backward compatibility)
+
+### Available Permissions
 
 - `app_admin` - Full application admin
+- `team_captain` - Can verify/reject race ready records
+- `vice_captain` - Can view (not verify) race ready records
 - `link_admin` - Can manage team links
 - `membership_admin` - Membership management
 - `racing_admin` - Racing management
-- `team_captain` - Can verify/reject race ready records
-- `team_vice_captain` - Can view (not verify) race ready records
 - `team_member` - Basic team member
 
-Assign in Django admin: `["team_captain", "link_admin"]`
+### Configuration
+
+Configure permission mappings in Django admin at `/admin/constance/config/`:
+
+- `PERM_APP_ADMIN_ROLES` - JSON array of Discord role IDs, e.g., `["1234567890123456789"]`
+- `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`, etc.
+
+## Race Ready Verification
+
+Users achieve "Race Ready" status by completing verification requirements, which gates participation in official team
+races.
+
+### Requirements
+
+A user is race ready when they have BOTH:
+
+1. **Weight (Full) verification** - Verified and not expired
+2. **Height verification** - Verified and not expired
+
+### Verification Flow
+
+1. User submits a verification record (weight, height, or power photo)
+2. Team captains review and verify/reject records
+3. Verified records expire based on configurable timeframes
+
+### Race Ready Discord Role
+
+When a user achieves race ready status, the Discord bot automatically assigns them a configured role:
+
+1. Configure `RACE_READY_ROLE_ID` in Django admin (set to `0` to disable)
+2. Role is assigned/removed when users run `/my_profile` or `/sync_my_roles`
+3. The bot requires `Manage Roles` permission and the role must be below the bot's highest role
+
+### Team Roster
+
+View race ready status at `/team/roster/` with filtering options. Export to Google Sheets via Data Connections.
 
 ## Guild Member Sync
 

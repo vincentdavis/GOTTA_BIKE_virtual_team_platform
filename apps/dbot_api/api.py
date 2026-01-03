@@ -345,6 +345,8 @@ def sync_user_roles(request: HttpRequest, discord_id: str, payload: SyncUserRole
         "discord_id": discord_id,
         "roles_synced": len(role_map),
         "roles": role_map,
+        "is_race_ready": user.is_race_ready,
+        "race_ready_role_id": str(constance_config.RACE_READY_ROLE_ID) if constance_config.RACE_READY_ROLE_ID else None,
     }
 
 
@@ -541,6 +543,8 @@ def get_my_profile(request: HttpRequest) -> dict:
         "discord_username": user.discord_username,
         "zwid_verified": user.zwid_verified,
         "verification": _get_verification_status(user),
+        "is_race_ready": user.is_race_ready,
+        "race_ready_role_id": str(constance_config.RACE_READY_ROLE_ID) if constance_config.RACE_READY_ROLE_ID else None,
         "zwiftpower": None,
         "zwiftracing": None,
     }

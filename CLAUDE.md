@@ -268,6 +268,7 @@ Available settings:
 - **Permission Mappings**: `PERM_APP_ADMIN_ROLES`, `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`,
   `PERM_LINK_ADMIN_ROLES`, `PERM_MEMBERSHIP_ADMIN_ROLES`, `PERM_RACING_ADMIN_ROLES`, `PERM_TEAM_MEMBER_ROLES`,
   `PERM_RACE_READY_ROLES` (JSON arrays of Discord role IDs)
+- **Discord Roles**: `RACE_READY_ROLE_ID` (Discord role ID assigned when user is race ready, `0` to disable)
 - **Verification**: `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
   `POWER_VERIFICATION_DAYS` (365)
 - **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)
@@ -340,3 +341,55 @@ The bot needs the **Server Members Intent** (privileged):
 
 1. Enable `intents.members = True` in bot code (`src/bot.py`)
 2. Enable "Server Members Intent" in Discord Developer Portal > Bot > Privileged Gateway Intents
+
+## Race Ready Verification
+
+Users can achieve "Race Ready" status by completing verification requirements. This status gates participation in
+official team races.
+
+### Requirements
+
+A user is race ready (`User.is_race_ready` property) when they have BOTH:
+
+1. **Weight (Full) verification** - A verified `RaceReadyRecord` of type `weight_full` that is not expired
+2. **Height verification** - A verified `RaceReadyRecord` of type `height` that is not expired
+
+### Verification Flow
+
+1. User submits a `RaceReadyRecord` (weight, height, or power photo) via the web app
+2. Record starts in `pending` status
+3. Team captains (`team_captain` permission) review and verify/reject records
+4. Verified records expire based on Constance settings:
+   - `WEIGHT_FULL_DAYS` (default: 180 days)
+   - `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)
+   - `POWER_VERIFICATION_DAYS` (default: 365 days)
+
+### Race Ready Role Assignment
+
+When a user's `is_race_ready` status is True, the Discord bot automatically assigns them the Race Ready Discord role.
+This happens when users use:
+
+- `/my_profile` - User checks their own profile
+- `/sync_my_roles` - User manually syncs their roles
+
+**Constance Settings:**
+
+- `RACE_READY_ROLE_ID` - Discord role ID to assign (set to `0` to disable)
+
+**API Response:**
+
+The `/my_profile` and `/sync_user_roles` endpoints return:
+
+```json
+{
+  "is_race_ready": true,
+  "race_ready_role_id": "1234567890123456789"
+}
+```
+
+The Discord bot uses these fields to add/remove the role based on current verification status.
+
+### Team Roster
+
+The team roster view (`/team/roster/`) displays race ready status with a filter option. The `data_connection` module
+also supports exporting `race_ready` status to Google Sheets.
