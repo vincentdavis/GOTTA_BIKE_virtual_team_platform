@@ -3,6 +3,9 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
+# Build Tailwind CSS
+uv run python manage.py tailwind build
+
 # Collect static files (CSS is pre-built, this just gathers them)
 echo "Collecting static files..."
 uv run manage.py collectstatic --noinput
