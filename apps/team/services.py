@@ -52,6 +52,9 @@ class UnifiedRider:
     has_results: bool = False
     result_count: int = 0
 
+    # Race Ready status
+    is_race_ready: bool = False
+
     # Class variable for div mapping
     DIV_TO_CATEGORY: ClassVar[dict[int, str]] = ZP_DIV_TO_CATEGORY
 
@@ -139,6 +142,10 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     # Get result counts per rider
     result_counts = ZPRiderResults.objects.values("zwid").annotate(count=Count("id"))
 
+    # Get race ready status for users (need full objects for property access)
+    user_objects = User.objects.filter(zwid__isnull=False).prefetch_related("race_ready_records")
+    race_ready_by_zwid: dict[int, bool] = {u.zwid: u.is_race_ready for u in user_objects}
+
     # Build lookup dicts
     user_by_zwid: dict[int, dict] = {u["zwid"]: u for u in users}
     zp_by_zwid: dict[int, dict] = {r["zwid"]: r for r in zp_riders}
@@ -166,6 +173,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.discord_username = u["discord_username"] or ""
             rider.zwid_verified = u["zwid_verified"]
             rider.user_gender = u["gender"] or ""
+            rider.is_race_ready = race_ready_by_zwid.get(zwid, False)
 
         # ZwiftPower data
         if zwid in zp_by_zwid:

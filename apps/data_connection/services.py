@@ -12,7 +12,13 @@ from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
 
 
-def _get_field_value(field_key: str, user: dict | None, zp: dict | None, zr: dict | None) -> str:
+def _get_field_value(
+    field_key: str,
+    user: dict | None,
+    zp: dict | None,
+    zr: dict | None,
+    race_ready_by_zwid: dict[int, bool] | None = None,
+) -> str:
     """Get value for a field key from the appropriate source.
 
     Args:
@@ -20,6 +26,7 @@ def _get_field_value(field_key: str, user: dict | None, zp: dict | None, zr: dic
         user: User data dict (or None).
         zp: ZwiftPower data dict (or None).
         zr: Zwift Racing data dict (or None).
+        race_ready_by_zwid: Mapping of zwid to race_ready status (for computed property).
 
     Returns:
         String value for the field, or empty string if not found.
@@ -56,6 +63,12 @@ def _get_field_value(field_key: str, user: dict | None, zp: dict | None, zr: dic
         return str(user.get("gender", "") or "") if user else ""
     if field_key == "youtube_channel":
         return str(user.get("youtube_channel", "") or "") if user else ""
+    if field_key == "race_ready":
+        if user and race_ready_by_zwid:
+            zwid = user.get("zwid")
+            if zwid and zwid in race_ready_by_zwid:
+                return "Yes" if race_ready_by_zwid[zwid] else "No"
+        return ""
 
     # ZwiftPower fields (zp_ prefix)
     if field_key.startswith("zp_") and zp:
@@ -192,6 +205,12 @@ def sync_connection(connection: DataConnection) -> int:
             "gender",
             "youtube_channel",
         )
+
+        # Get race ready status (computed property requires full objects)
+        race_ready_by_zwid: dict[int, bool] = {}
+        if "race_ready" in all_fields:
+            user_objects = User.objects.filter(zwid__isnull=False).prefetch_related("race_ready_records")
+            race_ready_by_zwid = {u.zwid: u.is_race_ready for u in user_objects}
         zp_riders = ZPTeamRiders.objects.all().values(
             "zwid",
             "aid",
@@ -295,7 +314,7 @@ def sync_connection(connection: DataConnection) -> int:
             if not _passes_filters(filters, user, zp, zr):
                 continue
 
-            row = [_get_field_value(field, user, zp, zr) for field in all_fields]
+            row = [_get_field_value(field, user, zp, zr, race_ready_by_zwid) for field in all_fields]
             rows.append(row)
 
         # Write to Google Sheets

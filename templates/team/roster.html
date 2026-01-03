@@ -78,6 +78,17 @@
               </select>
             </div>
 
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Race Ready</span>
+              </label>
+              <select name="race_ready" class="select select-bordered select-sm">
+                <option value="">All</option>
+                <option value="yes" {% if race_ready_filter == "yes" %}selected{% endif %}>Yes</option>
+                <option value="no" {% if race_ready_filter == "no" %}selected{% endif %}>No</option>
+              </select>
+            </div>
+
             <button type="submit" class="btn btn-primary btn-sm">Filter</button>
             <a href="{% url 'team:roster' %}" class="btn btn-ghost btn-sm">Reset</a>
           </div>
@@ -94,7 +105,7 @@
           <table class="table table-zebra">
             <thead>
             <tr>
-              {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&zr_category="|add:zr_category_filter|add:"&status="|add:status_filter|add:"&gender="|add:gender_filter %}
+              {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&zr_category="|add:zr_category_filter|add:"&status="|add:status_filter|add:"&gender="|add:gender_filter|add:"&race_ready="|add:race_ready_filter %}
               <th>
                 <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
                   Name
@@ -131,6 +142,14 @@
                 <a href="{{ base_url }}&sort=verified&dir={% if sort_by == 'verified' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
                   Verified
                   {% if sort_by == "verified" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=race_ready&dir={% if sort_by == 'race_ready' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Race Ready
+                  {% if sort_by == "race_ready" %}
                     <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
                   {% endif %}
                 </a>
@@ -209,6 +228,13 @@
                   {% endif %}
                 </td>
                 <td>
+                  {% if rider.is_race_ready %}
+                    <span class="badge badge-success badge-sm">Yes</span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">No</span>
+                  {% endif %}
+                </td>
+                <td>
                   {% if rider.in_zwiftpower %}
                     <span class="badge badge-primary badge-sm">{{ rider.zp_category|default:"-" }}</span>
                     {% if rider.zp_date_left %}
@@ -245,7 +271,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="9" class="text-center text-base-content/50">
+                <td colspan="10" class="text-center text-base-content/50">
                   No riders found.
                 </td>
               </tr>

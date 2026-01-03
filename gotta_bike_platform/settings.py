@@ -391,6 +391,12 @@ CONSTANCE_CONFIG = {
         int,
     ),
     "POWER_VERIFICATION_DAYS": (365, "Days a power verification is valid", int),
+    # Race Ready role assignment
+    "RACE_READY_ROLE_ID": (
+        0,
+        "Discord role ID to assign when user meets verification requirements (0 = disabled)",
+        int,
+    ),
     # Verification instructions
     "WEIGHT_INSTRUCTIONS_URL": ("", "URL to weight verification instructions", str),
     "HEIGHT_INSTRUCTIONS_URL": ("", "URL to height verification instructions", str),
@@ -422,7 +428,17 @@ CONSTANCE_CONFIG = {
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
-    "Team Identity": (
+    "Site Settings": (
+        "TEAM_NAME",
+        "SUBTITLE",
+        "SITE_ANNOUNCEMENT",
+        "MAINTENANCE_MODE",
+        "ABOUT_URL",
+        "CONTACT_URL",
+        "DISCORD_URL",
+        "DBOT_AUTH_KEY",
+    ),
+    "Discord Guild": (
         "GUILD_NAME",
         "GUILD_ID",
     ),
@@ -431,7 +447,6 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "ZWIFT_PASSWORD",
         "ZWIFTPOWER_TEAM_ID",
     ),
-    "API Keys": ("DBOT_AUTH_KEY",),
     "Zwift Racing App": (
         "ZRAPP_API_URL",
         "ZRAPP_API_KEY",
@@ -451,17 +466,9 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "WEIGHT_LIGHT_DAYS",
         "HEIGHT_VERIFICATION_DAYS",
         "POWER_VERIFICATION_DAYS",
+        "RACE_READY_ROLE_ID",
         "WEIGHT_INSTRUCTIONS_URL",
         "HEIGHT_INSTRUCTIONS_URL",
-    ),
-    "Site Settings": (
-        "TEAM_NAME",
-        "SUBTITLE",
-        "SITE_ANNOUNCEMENT",
-        "MAINTENANCE_MODE",
-        "ABOUT_URL",
-        "CONTACT_URL",
-        "DISCORD_URL",
     ),
     "Legal": (
         "PRIVACY_POLICY_URL",

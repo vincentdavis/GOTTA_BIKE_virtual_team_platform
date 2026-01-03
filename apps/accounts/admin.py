@@ -17,6 +17,8 @@ from apps.accounts.models import GuildMember, Permissions, User
 class UserAdmin(BaseUserAdmin):
     """Admin for custom User model."""
 
+    change_list_template = "admin/accounts/user/change_list.html"
+
     list_display = (
         "username",
         "email",

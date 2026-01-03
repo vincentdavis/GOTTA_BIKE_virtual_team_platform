@@ -334,8 +334,31 @@ class User(AbstractUser):
 
     @property
     def is_race_ready(self) -> bool:
-        """Check if user has race ready permission."""
-        return self.has_permission(Permissions.RACE_READY)
+        """Check if user has valid weight_full AND height verifications.
+
+        Returns:
+            True if user has both valid verifications, False otherwise.
+
+        """
+        from apps.team.models import RaceReadyRecord
+
+        # Get verified records for this user
+        verified_records = self.race_ready_records.filter(
+            status=RaceReadyRecord.Status.VERIFIED
+        )
+
+        has_valid_weight = False
+        has_valid_height = False
+
+        for record in verified_records:
+            if record.is_expired:
+                continue
+            if record.verify_type == "weight_full":
+                has_valid_weight = True
+            elif record.verify_type == "height":
+                has_valid_height = True
+
+        return has_valid_weight and has_valid_height
 
     @property
     def is_any_admin(self) -> bool:

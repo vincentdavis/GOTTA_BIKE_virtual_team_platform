@@ -166,6 +166,7 @@ class DataConnection(models.Model):
         ("city", "City"),
         ("country", "Country"),
         ("gender", "Gender"),
+        ("race_ready", "Race Ready"),
         ("youtube_channel", "YouTube Channel"),
     ]
 

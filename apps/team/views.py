@@ -33,6 +33,7 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
     zr_category_filter = request.GET.get("zr_category", "")
     status_filter = request.GET.get("status", "active")  # Default to showing active members
     gender_filter = request.GET.get("gender", "")
+    race_ready_filter = request.GET.get("race_ready", "")
 
     # Get sort parameters (default: result_count descending)
     sort_by = request.GET.get("sort", "results")
@@ -74,6 +75,13 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
     if gender_filter:
         roster = [r for r in roster if r.gender == gender_filter]
 
+    # Apply race ready filter
+    if race_ready_filter:
+        if race_ready_filter == "yes":
+            roster = [r for r in roster if r.is_race_ready]
+        elif race_ready_filter == "no":
+            roster = [r for r in roster if not r.is_race_ready]
+
     # Apply sorting
     reverse = sort_dir == "desc"
     sort_keys = {
@@ -82,6 +90,7 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
         "gender": lambda r: r.gender or "",
         "account": lambda r: r.has_account,
         "verified": lambda r: r.zwid_verified,
+        "race_ready": lambda r: r.is_race_ready,
         "category": lambda r: r.zp_div or 0,
         "catw": lambda r: r.zp_divw or 0,
         "rating": lambda r: r.zr_category or "",
@@ -100,6 +109,7 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
             "zr_category_filter": zr_category_filter,
             "status_filter": status_filter,
             "gender_filter": gender_filter,
+            "race_ready_filter": race_ready_filter,
             "zp_categories": zp_categories,
             "zr_categories": zr_categories,
             "sort_by": sort_by,
