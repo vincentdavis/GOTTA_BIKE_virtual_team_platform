@@ -3,8 +3,16 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-# Build Tailwind CSS
-uv run python manage.py tailwind build
+# Install production dependencies
+#echo "Installing production dependencies..."
+#uv sync --frozen
+
+# Install Tailwind CSS dependencies and build
+echo "Installing Tailwind CSS dependencies..."
+uv run manage.py tailwind install
+
+echo "Building Tailwind CSS for production..."
+uv run manage.py tailwind build
 
 # Collect static files (CSS is pre-built, this just gathers them)
 echo "Collecting static files..."
