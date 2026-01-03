@@ -1,5 +1,8 @@
 FROM ghcr.io/astral-sh/uv:python3.14-alpine
 
+# Install Node.js for Tailwind CSS build
+RUN apk add --no-cache nodejs npm
+
 # Create and change to the app directory.
 WORKDIR /app
 
@@ -8,6 +11,9 @@ COPY . .
 
 # Install project dependencies.
 RUN uv sync --frozen
+
+# Install Tailwind CSS dependencies
+RUN uv run python manage.py tailwind install
 
 # Create staticfiles directory (required by WhiteNoise at startup)
 RUN mkdir -p /app/staticfiles
