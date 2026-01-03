@@ -91,6 +91,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 
 Role-based permissions stored in User.roles JSONField. Available roles:
 
+- `app_admin` - Full application admin
 - `team_captain` - Can verify/reject race ready records
 - `team_vice_captain` - Can view (but not verify) race ready records
 - `link_admin` - Can edit team links
@@ -98,7 +99,7 @@ Role-based permissions stored in User.roles JSONField. Available roles:
 - `racing_admin` - Racing management
 - `team_member` - Basic team member
 
-Helper properties: `is_team_captain`, `is_team_vice_captain`, `is_any_captain`, `is_link_admin`
+Helper properties: `is_app_admin`, `is_team_captain`, `is_team_vice_captain`, `is_any_captain`, `is_any_admin`, `is_link_admin`
 
 Assign roles in Django admin as JSON array: `["team_captain", "link_admin"]`
 
@@ -174,6 +175,19 @@ Example cron call:
 ```bash
 curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_team_riders
 ```
+
+### URL Routes (`gotta_bike_platform/urls.py`)
+
+- `/` - Home page
+- `/about/` - About page
+- `/admin/` - Django admin
+- `/accounts/` - allauth (login, logout, MFA)
+- `/user/` - User profile and settings (`apps.accounts.urls`)
+- `/team/` - Team management (`apps.team.urls`)
+- `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
+- `/api/dbot/` - Discord bot API
+- `/api/cron/` - Cron task API
+- `/m/` - Magic links (legacy)
 
 ### Frontend
 
