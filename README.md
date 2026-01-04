@@ -273,6 +273,45 @@ The bot requires the **Server Members Intent** (privileged intent):
 2. Select your bot > Bot > Privileged Gateway Intents
 3. Enable **Server Members Intent**
 
+## Discord Bot Cogs & Slash Commands
+
+The Discord bot is organized into cogs (modules) that provide slash commands for users.
+
+### Cogs
+
+| Cog | File | Description |
+|-----|------|-------------|
+| About | `about.py` | Informational commands |
+| Diagnostics | `diagnostics.py` | Debug commands (debug mode only) |
+| MemberSync | `member_sync.py` | Sync Discord members to Django |
+| RoleSync | `role_sync.py` | Sync Discord roles to Django |
+| TeamLinks | `team_links.py` | Team link magic URLs |
+| ZwiftPower | `zwiftpower.py` | ZwiftPower and profile commands |
+
+### Slash Commands
+
+| Command | Permission | Description |
+|---------|------------|-------------|
+| `/help` | Everyone | Get philosophical wisdom about Zwift racing |
+| `/diag` | Everyone (debug mode) | Show diagnostic information (Discord ID, roles, etc.) |
+| `/my_profile` | Everyone | View your combined ZwiftPower and Zwift Racing profile |
+| `/teammate_profile` | Everyone | View a teammate's profile (with autocomplete search) |
+| `/team_links` | Everyone | Get a magic link to the team links page |
+| `/sync_my_roles` | Everyone | Sync your Discord roles to the team database |
+| `/sync_members` | Admin | Sync all guild members to Django database |
+| `/sync_roles` | Admin | Manually sync all guild roles to the database |
+| `/update_zp_team` | Admin | Trigger ZwiftPower team roster update |
+| `/update_zp_results` | Admin | Trigger ZwiftPower team results update |
+
+### Background Tasks (RoleSync)
+
+The RoleSync cog also runs automatic background tasks:
+
+- **On ready**: Syncs all guild roles when the bot starts
+- **Periodic sync**: Syncs all guild roles every hour
+- **Role events**: Syncs when roles are created, deleted, or updated
+- **Member update**: Syncs user roles when a member's roles change
+
 ## License
 
 Private - The Coalition Zwift Racing Team
