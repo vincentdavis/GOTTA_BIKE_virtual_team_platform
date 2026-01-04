@@ -64,6 +64,7 @@ INSTALLED_APPS = [
     "django_htmx",
     "tailwind",
     "theme",
+    "reset_migrations",
     # Project apps
     "gotta_bike_platform",
     "apps.accounts.apps.AccountsConfig",
