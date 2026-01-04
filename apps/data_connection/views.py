@@ -8,6 +8,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from apps.accounts.decorators import team_member_required
 from apps.data_connection import gs_client
 from apps.data_connection.forms import DataConnectionFilterForm, DataConnectionForm
 from apps.data_connection.gs_client import GSClientError
@@ -15,6 +16,7 @@ from apps.data_connection.models import DataConnection
 
 
 @login_required
+@team_member_required()
 def connection_list(request: HttpRequest) -> HttpResponse:
     """List all data connections for the current user.
 
@@ -53,6 +55,7 @@ def connection_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@team_member_required()
 def connection_create(request: HttpRequest) -> HttpResponse:
     """Create a new data connection.
 
@@ -119,6 +122,7 @@ def connection_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@team_member_required()
 def connection_edit(request: HttpRequest, pk: int) -> HttpResponse:
     """Edit an existing data connection.
 
@@ -157,6 +161,7 @@ def connection_edit(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+@team_member_required()
 def connection_delete(request: HttpRequest, pk: int) -> HttpResponse:
     """Delete a data connection.
 
@@ -182,6 +187,7 @@ def connection_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+@team_member_required()
 def connection_sync(request: HttpRequest, pk: int) -> HttpResponse:
     """Sync data connection to Google Sheets.
 

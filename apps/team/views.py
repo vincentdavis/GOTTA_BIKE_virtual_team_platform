@@ -6,14 +6,16 @@ from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from apps.accounts.decorators import team_member_required
 from apps.team.forms import TeamLinkEditForm, TeamLinkForm
 from apps.team.models import RaceReadyRecord, TeamLink
 from apps.team.services import ZP_DIV_TO_CATEGORY, get_unified_team_roster
 
 
 @login_required
+@team_member_required()
 @require_GET
 def team_roster_view(request: HttpRequest) -> HttpResponse:
     """Display unified team roster.
@@ -119,6 +121,7 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@team_member_required()
 @require_GET
 def team_links_view(request: HttpRequest) -> HttpResponse:
     """Display team links with filtering.
@@ -176,6 +179,7 @@ def team_links_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@team_member_required()
 @require_http_methods(["GET", "POST"])
 def submit_team_link_view(request: HttpRequest) -> HttpResponse:
     """Submit a new team link.
@@ -187,6 +191,11 @@ def submit_team_link_view(request: HttpRequest) -> HttpResponse:
         Rendered form or redirect on success.
 
     """
+    # Check if user has permission to create links
+    if not request.user.is_link_admin and not request.user.is_superuser:
+        messages.error(request, "You don't have permission to create team links.")
+        return redirect("team:links")
+
     if request.method == "POST":
         form = TeamLinkForm(request.POST)
         if form.is_valid():
@@ -204,6 +213,7 @@ def submit_team_link_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@team_member_required()
 @require_http_methods(["GET", "POST"])
 def edit_team_link_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Edit an existing team link.
@@ -240,6 +250,33 @@ def edit_team_link_view(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+@team_member_required()
+@require_POST
+def delete_team_link_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete a team link.
+
+    Args:
+        request: The HTTP request.
+        pk: The primary key of the TeamLink to delete.
+
+    Returns:
+        Redirect to links list.
+
+    """
+    link = get_object_or_404(TeamLink, pk=pk)
+
+    # Check if user has permission to delete
+    if not request.user.is_link_admin and not request.user.is_superuser:
+        messages.error(request, "You don't have permission to delete team links.")
+        return redirect("team:links")
+
+    link.delete()
+    messages.success(request, "Team link deleted successfully!")
+    return redirect("team:links")
+
+
+@login_required
+@team_member_required()
 @require_GET
 def verification_records_view(request: HttpRequest) -> HttpResponse:
     """Display verification records for team captains.
@@ -300,6 +337,7 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@team_member_required()
 @require_http_methods(["GET", "POST"])
 def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Display and verify or reject a verification record.

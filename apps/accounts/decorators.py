@@ -117,3 +117,28 @@ def any_admin_required(
         login_url=login_url,
         raise_exception=raise_exception,
     )
+
+
+def team_member_required(
+    login_url: str | None = None,
+    raise_exception: bool = False,
+) -> Callable[[F], F]:
+    """Require team member permission for a view.
+
+    Without this permission, users can only access the index page and their
+    personal profile pages (including verifications). All other pages require
+    this permission.
+
+    Args:
+        login_url: URL to redirect to if not logged in.
+        raise_exception: If True, raise PermissionDenied instead of redirecting.
+
+    Returns:
+        Decorator function.
+
+    """
+    return discord_permission_required(
+        Permissions.TEAM_MEMBER,
+        login_url=login_url,
+        raise_exception=raise_exception,
+    )

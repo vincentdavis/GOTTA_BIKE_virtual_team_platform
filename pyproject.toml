@@ -5,7 +5,7 @@ description = "App and discrod bot for managing zwift virtual cycling teams."
 requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4>=4.14.3",
-    "boto3>=1.42.20",
+    "boto3>=1.42.21",
     "dj-database-url>=3.0.1",
     "django>=6.0.0",
     "django-allauth[mfa,socialaccount]>=65.3.0",
@@ -22,7 +22,7 @@ dependencies = [
     "gspread>=6.2.1",
     "honcho>=2.0.0",
     "httpx>=0.28.1",
-    "justhtml>=0.26.0",
+    "justhtml>=0.30.0",
     "logfire[asgi,django,psycopg]>=4.15.1",
     "markdown>=3.10",
     "psycopg[binary]>=3.3.1",

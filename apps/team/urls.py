@@ -11,6 +11,7 @@ urlpatterns = [
     path("links/", views.team_links_view, name="links"),
     path("links/submit/", views.submit_team_link_view, name="submit_link"),
     path("links/<int:pk>/edit/", views.edit_team_link_view, name="edit_link"),
+    path("links/<int:pk>/delete/", views.delete_team_link_view, name="delete_link"),
     path("verification/", views.verification_records_view, name="verification_records"),
     path("verification/<int:pk>/", views.verification_record_detail_view, name="verification_record_detail"),
 ]

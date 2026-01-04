@@ -378,10 +378,18 @@ CONSTANCE_CONFIG = {
     "PERM_APP_ADMIN_ROLES": ("[]", "Discord role IDs that grant app admin permission", "json_list_field"),
     "PERM_TEAM_CAPTAIN_ROLES": ("[]", "Discord role IDs that grant team captain permission", "json_list_field"),
     "PERM_VICE_CAPTAIN_ROLES": ("[]", "Discord role IDs that grant vice captain permission", "json_list_field"),
-    "PERM_LINK_ADMIN_ROLES": ("[]", "Discord role IDs that grant link admin permission", "json_list_field"),
+    "PERM_LINK_ADMIN_ROLES": (
+        "[]",
+        "Discord role IDs that allow a user to create, edit and delete links",
+        "json_list_field",
+    ),
     "PERM_MEMBERSHIP_ADMIN_ROLES": ("[]", "Discord role IDs that grant membership admin permission", "json_list_field"),
     "PERM_RACING_ADMIN_ROLES": ("[]", "Discord role IDs that grant racing admin permission", "json_list_field"),
-    "PERM_TEAM_MEMBER_ROLES": ("[]", "Discord role IDs that grant team member permission", "json_list_field"),
+    "PERM_TEAM_MEMBER_ROLES": (
+        "[]",
+        "Discord role IDs for team members. Without this role, users can only see the index page and their personal profile page (including verifications). All other pages require this permission.",
+        "json_list_field",
+    ),
     "PERM_RACE_READY_ROLES": ("[]", "Discord role IDs for race ready status", "json_list_field"),
     # Verification validity periods (in days)
     "WEIGHT_FULL_DAYS": (180, "Days a full weight verification is valid", int),

@@ -101,10 +101,10 @@ Permissions are granted via Discord roles configured in Constance. The system ch
 - `app_admin` - Full application admin
 - `team_captain` - Can verify/reject race ready records
 - `vice_captain` - Can view (but not verify) race ready records
-- `link_admin` - Can edit team links
+- `link_admin` - Can create, edit and delete team links
 - `membership_admin` - Membership management
 - `racing_admin` - Racing management
-- `team_member` - Basic team member
+- `team_member` - Required for most pages; without it users can only see index and their profile
 - `race_ready` - Race ready status
 
 #### Constance Permission Settings
