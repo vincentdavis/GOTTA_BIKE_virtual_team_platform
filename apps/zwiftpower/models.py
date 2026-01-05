@@ -210,3 +210,24 @@ class ZPRiderResults(models.Model):
     def __str__(self) -> str:
         """Return string representation of result."""
         return f"{self.name} - {self.event.title} (P{self.pos})"
+
+    @classmethod
+    def get_weight_height_history(cls, zwid: int) -> list[tuple]:
+        """Get weight and height history for a rider ordered by date (newest first).
+
+        Args:
+            zwid: The Zwift rider ID.
+
+        Returns:
+            List of tuples (event_date, weight, height) ordered newest to oldest.
+            Only includes records where weight or height is not None.
+
+        """
+        results = (
+            cls.objects.filter(zwid=zwid)
+            .exclude(weight__isnull=True, height__isnull=True)
+            .select_related("event")
+            .order_by("-event__event_date")
+            .values_list("event__event_date", "weight", "height")
+        )
+        return list(results)
