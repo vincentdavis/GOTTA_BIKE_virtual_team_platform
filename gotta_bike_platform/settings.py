@@ -24,8 +24,8 @@ logfire.configure(
     token=config.logfire_token,
     send_to_logfire="if-token-present",
 )
-# Instrument Django for automatic request/response logging
-logfire.instrument_django()
+# Note: logfire.instrument_django() is called at the end of this file
+# after Django settings are fully loaded
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -500,3 +500,10 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "GOOGLE_DRIVE_FOLDER_ID",
     ),
 }
+
+# -----------------------------------------------------------------------------
+# Logfire Instrumentation (must be at the end after Django is fully configured)
+# -----------------------------------------------------------------------------
+logfire.instrument_django()
+logfire.instrument_httpx()
+logfire.info("Django settings loaded", environment=config.logfire_environment)
