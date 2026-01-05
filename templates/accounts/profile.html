@@ -260,6 +260,54 @@
 
             <div class="divider"></div>
 
+            <!-- Discord Roles Section -->
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">Discord Roles</h3>
+                <div class="collapse collapse-arrow bg-base-300">
+                    <input type="checkbox" />
+                    <div class="collapse-title font-medium">
+                        <span class="flex items-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            </svg>
+                            View Discord Roles ({{ user.discord_roles.keys|length|default:"0" }})
+                        </span>
+                    </div>
+                    <div class="collapse-content">
+                        {% if user.discord_roles %}
+                        <div class="overflow-x-auto">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Role Name</th>
+                                        <th>Role ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for role_id, role_name in user.discord_roles.items %}
+                                    <tr>
+                                        <td>{{ role_name }}</td>
+                                        <td><code class="text-xs bg-base-200 px-1 rounded">{{ role_id }}</code></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-sm text-base-content/50">No Discord roles synced yet.</p>
+                        {% endif %}
+                        <div class="alert alert-info mt-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span>If this is out of date, run <code class="bg-base-300 px-1 rounded">/sync_my_roles</code> on the Discord server.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="divider"></div>
+
             <!-- Danger Zone -->
             <div class="mt-4">
                 <h3 class="text-lg font-semibold text-error mb-3">Danger Zone</h3>
