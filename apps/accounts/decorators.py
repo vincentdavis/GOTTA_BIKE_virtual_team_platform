@@ -24,11 +24,16 @@ def discord_permission_required(
     3. Discord role mappings from Constance
     4. Legacy app roles (backward compatibility)
 
+    Note: For authenticated users without permission, this raises PermissionDenied
+    to avoid redirect loops (user is sent to login, but already logged in, so sent
+    back to the protected page, etc.).
+
     Args:
         permission: Permission name or iterable of permission names.
             If multiple are provided, user needs ANY of them (OR logic).
         login_url: URL to redirect to if not logged in.
         raise_exception: If True, raise PermissionDenied instead of redirecting.
+            Note: This is now the default behavior for authenticated users.
 
     Returns:
         Decorator function.
@@ -57,7 +62,7 @@ def discord_permission_required(
             True if user has permission, False otherwise.
 
         Raises:
-            PermissionDenied: If raise_exception is True and user lacks permission.
+            PermissionDenied: If user is authenticated but lacks permission.
 
         """
         if not user.is_authenticated:
@@ -65,9 +70,9 @@ def discord_permission_required(
         # Check if user has ANY of the required permissions
         if any(user.has_permission(p) for p in perms):
             return True
-        if raise_exception:
-            raise PermissionDenied
-        return False
+        # Always raise PermissionDenied for authenticated users to avoid redirect loop
+        # (otherwise user_passes_test redirects to login, but user is already logged in)
+        raise PermissionDenied
 
     return user_passes_test(check_perms, login_url=login_url)
 
