@@ -288,8 +288,8 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         Rendered verification records page.
 
     """
-    # Check if user is a captain or vice captain
-    if not request.user.is_any_captain and not request.user.is_superuser:
+    # Check if user can view/approve verification records
+    if not request.user.can_approve_verification and not request.user.is_superuser:
         messages.error(request, "You don't have permission to view verification records.")
         return redirect("home")
 
@@ -350,8 +350,8 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         Rendered record detail page.
 
     """
-    # Check if user is a captain or vice captain
-    if not request.user.is_any_captain and not request.user.is_superuser:
+    # Check if user can view/approve verification records
+    if not request.user.can_approve_verification and not request.user.is_superuser:
         messages.error(request, "You don't have permission to view verification records.")
         return redirect("home")
 
