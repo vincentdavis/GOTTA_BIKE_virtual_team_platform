@@ -12,8 +12,20 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 
 import dj_database_url
+import logfire
 
 from gotta_bike_platform.config import settings as config
+
+# Configure Logfire for observability
+# LOGFIRE_TOKEN is required in production; if not set, logs are local only
+logfire.configure(
+    service_name="coalition-platform",
+    environment=config.logfire_environment,
+    token=config.logfire_token,
+    send_to_logfire="if-token-present",
+)
+# Instrument Django for automatic request/response logging
+logfire.instrument_django()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
