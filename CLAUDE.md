@@ -152,20 +152,22 @@ Permissions are granted via Discord roles configured in Constance. The system ch
 #### Available Permissions
 
 - `app_admin` - Full application admin
-- `team_captain` - Can verify/reject race ready records
-- `vice_captain` - Can view (but not verify) race ready records
+- `team_captain` - Team captain role
+- `vice_captain` - Vice captain role
 - `link_admin` - Can create, edit and delete team links
 - `membership_admin` - Membership management
 - `racing_admin` - Racing management
 - `team_member` - Required for most pages; without it users can only see index and their profile
 - `race_ready` - Race ready status
+- `approve_verification` - Can approve/reject verification records
 
 #### Constance Permission Settings
 
 Configure in Django admin at `/admin/constance/config/` under "Permission Mappings":
 
 - `PERM_APP_ADMIN_ROLES` - JSON array of Discord role IDs, e.g., `["1234567890123456789"]`
-- `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`, etc.
+- `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`, `PERM_LINK_ADMIN_ROLES`, etc.
+- `PERM_APPROVE_VERIFICATION_ROLES` - Role IDs that can approve/reject verification records
 
 #### Usage in Views
 

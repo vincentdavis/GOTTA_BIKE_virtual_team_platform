@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}YouTube Channels - {{ config.TEAM_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="card-title text-2xl">Team YouTube Channels</h2>
+      </div>
+
+      <!-- Channels List -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for user in users %}
+        <div class="card bg-base-300">
+          <div class="card-body p-4">
+            <div class="flex items-center gap-3">
+              <!-- YouTube Icon -->
+              <div class="text-error">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h3 class="font-semibold truncate">
+                  {% if user.first_name or user.last_name %}
+                    {{ user.first_name }} {{ user.last_name }}
+                  {% else %}
+                    {{ user.discord_nickname|default:user.discord_username }}
+                  {% endif %}
+                </h3>
+                <a href="{{ user.youtube_channel }}"
+                   target="_blank"
+                   rel="noopener"
+                   class="link link-primary text-sm hover:link-hover flex items-center gap-1">
+                  Visit Channel
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="col-span-full text-center py-8 text-base-content/50">
+          No YouTube channels found.
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Stats -->
+      <div class="mt-6 text-sm text-base-content/50">
+        {{ users|length }} channel{{ users|length|pluralize }}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

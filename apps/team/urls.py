@@ -14,4 +14,5 @@ urlpatterns = [
     path("links/<int:pk>/delete/", views.delete_team_link_view, name="delete_link"),
     path("verification/", views.verification_records_view, name="verification_records"),
     path("verification/<int:pk>/", views.verification_record_detail_view, name="verification_record_detail"),
+    path("youtube/", views.youtube_channels_view, name="youtube_channels"),
 ]

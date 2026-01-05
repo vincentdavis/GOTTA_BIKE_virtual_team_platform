@@ -404,6 +404,11 @@ CONSTANCE_CONFIG = {
         "json_list_field",
     ),
     "PERM_RACE_READY_ROLES": ("[]", "Discord role IDs for race ready status", "json_list_field"),
+    "PERM_APPROVE_VERIFICATION_ROLES": (
+        "[]",
+        "Discord role IDs that allow a user to approve/reject verification records",
+        "json_list_field",
+    ),
     # Verification validity periods (in days)
     "WEIGHT_FULL_DAYS": (180, "Days a full weight verification is valid", int),
     "WEIGHT_LIGHT_DAYS": (30, "Days a light weight verification is valid", int),
@@ -482,6 +487,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "PERM_RACING_ADMIN_ROLES",
         "PERM_TEAM_MEMBER_ROLES",
         "PERM_RACE_READY_ROLES",
+        "PERM_APPROVE_VERIFICATION_ROLES",
     ),
     "Verification Settings": (
         "WEIGHT_FULL_DAYS",

@@ -53,6 +53,7 @@ class Permissions:
     RACING_ADMIN = "racing_admin"
     TEAM_MEMBER = "team_member"
     RACE_READY = "race_ready"
+    APPROVE_VERIFICATION = "approve_verification"
 
     # Map permission names to Constance config keys
     CONSTANCE_MAP: ClassVar[dict[str, str]] = {
@@ -64,6 +65,7 @@ class Permissions:
         RACING_ADMIN: "PERM_RACING_ADMIN_ROLES",
         TEAM_MEMBER: "PERM_TEAM_MEMBER_ROLES",
         RACE_READY: "PERM_RACE_READY_ROLES",
+        APPROVE_VERIFICATION: "PERM_APPROVE_VERIFICATION_ROLES",
     }
 
     CHOICES: ClassVar[list[tuple[str, str]]] = [
@@ -75,6 +77,7 @@ class Permissions:
         (RACING_ADMIN, "Racing Admin"),
         (TEAM_MEMBER, "Team Member"),
         (RACE_READY, "Race Ready"),
+        (APPROVE_VERIFICATION, "Approve Verification"),
     ]
 
     ALL: ClassVar[list[str]] = list(CONSTANCE_MAP.keys())
@@ -331,6 +334,11 @@ class User(AbstractUser):
     def is_team_member(self) -> bool:
         """Check if user has team member permission."""
         return self.has_permission(Permissions.TEAM_MEMBER)
+
+    @property
+    def can_approve_verification(self) -> bool:
+        """Check if user has permission to approve verification records."""
+        return self.has_permission(Permissions.APPROVE_VERIFICATION)
 
     @property
     def is_race_ready(self) -> bool:

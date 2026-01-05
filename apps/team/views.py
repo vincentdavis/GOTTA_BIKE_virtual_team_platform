@@ -318,8 +318,8 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     if status_filter:
         records = records.filter(status=status_filter)
 
-    # Check if user can verify records (only Team Captain, not Vice Captain)
-    can_verify = request.user.is_team_captain or request.user.is_superuser
+    # Check if user can verify records
+    can_verify = request.user.can_approve_verification or request.user.is_superuser
 
     return render(
         request,
@@ -357,8 +357,8 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
 
     record = get_object_or_404(RaceReadyRecord.objects.select_related("user", "reviewed_by"), pk=pk)
 
-    # Check if user can verify records (only Team Captain, not Vice Captain)
-    can_review = request.user.is_team_captain or request.user.is_superuser
+    # Check if user can verify records
+    can_review = request.user.can_approve_verification or request.user.is_superuser
 
     if request.method == "POST" and can_review and record.is_pending:
         action = request.POST.get("action")
@@ -383,5 +383,36 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         {
             "record": record,
             "can_review": can_review,
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_GET
+def youtube_channels_view(request: HttpRequest) -> HttpResponse:
+    """Display list of team members with YouTube channels.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered YouTube channels page.
+
+    """
+    from apps.accounts.models import User
+
+    # Get users with YouTube channels, ordered by name
+    users_with_channels = (
+        User.objects.filter(youtube_channel__isnull=False)
+        .exclude(youtube_channel="")
+        .order_by("first_name", "last_name", "discord_nickname")
+    )
+
+    return render(
+        request,
+        "team/youtube_channels.html",
+        {
+            "users": users_with_channels,
         },
     )
