@@ -1,5 +1,6 @@
 """Forms for accounts app."""
 
+from datetime import date
 from typing import ClassVar
 from zoneinfo import available_timezones
 
@@ -19,6 +20,16 @@ TIMEZONE_CHOICES = [
 
 class ProfileForm(forms.ModelForm):
     """Form for editing user profile."""
+
+    # Fields that are required for profile completion
+    REQUIRED_FIELDS: ClassVar[list[str]] = [
+        "first_name",
+        "last_name",
+        "birth_year",
+        "gender",
+        "timezone",
+        "country",
+    ]
 
     class Meta:
         """Meta options for ProfileForm."""
@@ -103,6 +114,44 @@ class ProfileForm(forms.ModelForm):
             "timezone": "Timezone",
             "youtube_channel": "YouTube Channel",
         }
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize form and set required fields.
+
+        Args:
+            *args: Positional arguments passed to parent.
+            **kwargs: Keyword arguments passed to parent.
+
+        """
+        super().__init__(*args, **kwargs)
+
+        # Mark required fields
+        for field_name in self.REQUIRED_FIELDS:
+            if field_name in self.fields:
+                self.fields[field_name].required = True
+
+        # Update gender field to show placeholder when empty
+        if "gender" in self.fields:
+            self.fields["gender"].empty_label = "Select gender..."
+
+    def clean_birth_year(self) -> int | None:
+        """Validate birth year is in reasonable range.
+
+        Returns:
+            The validated birth year.
+
+        Raises:
+            forms.ValidationError: If birth year is outside valid range.
+
+        """
+        birth_year = self.cleaned_data.get("birth_year")
+        if birth_year:
+            current_year = date.today().year
+            if birth_year < 1900:
+                raise forms.ValidationError("Birth year must be 1900 or later.")
+            if birth_year > current_year - 13:
+                raise forms.ValidationError("You must be at least 13 years old.")
+        return birth_year
 
 
 class ZwiftVerificationForm(forms.Form):

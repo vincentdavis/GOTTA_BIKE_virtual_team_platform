@@ -48,12 +48,15 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 - `gotta_bike_platform/config.py` - pydantic-settings for environment variables (loaded from `.env`)
 - `gotta_bike_platform/settings.py` - Django settings, imports config values from `config.py`
 - Optional env vars: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` (OAuth)
+- Optional env vars: `LOGFIRE_TOKEN`, `LOGFIRE_ENVIRONMENT` (observability)
 - Runtime settings (via constance): API credentials and team settings (see Dynamic Settings below)
 
 ### Apps (in `apps/`)
 
 - `accounts` - Custom User model with Discord/Zwift fields, django-allauth adapters, role-based permissions
     - `GuildMember` model - Tracks Discord guild members synced from bot (see Guild Member Sync below)
+    - `middleware.py` - `ProfileCompletionMiddleware` enforces profile completion for all users
+    - `decorators.py` - `discord_permission_required` decorator for view permissions
 - `team` - Core team management:
     - `RaceReadyRecord` - Verification records for weight/height/power (pending/verified/rejected status)
     - `TeamLink` - Links to external resources with visibility date ranges
@@ -86,6 +89,56 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - Redirects rejected users to `DISCORD_URL` (invite link)
 - OAuth scopes: `identify`, `email`, `guilds`
 - URLs at `/accounts/` (login, logout, 2fa management)
+
+### Profile Completion Requirement
+
+All users must complete their profile before accessing the app. Enforced by `ProfileCompletionMiddleware`.
+
+#### Required Fields
+
+- `first_name`, `last_name` - User's real name
+- `birth_year` - Year of birth (validated: 1900 to current_year - 13)
+- `gender` - Gender (male/female/other)
+- `timezone` - User's timezone (e.g., "America/New_York")
+- `country` - Country of residence
+- `zwid_verified` - Zwift account must be verified
+
+#### User Model Properties
+
+```python
+# Check if profile is complete
+if user.is_profile_complete:
+    # All required fields filled AND Zwift verified
+    ...
+
+# Get detailed status for UI
+status = user.profile_completion_status
+# Returns: {"first_name": True, "last_name": False, "birth_year": True, ...}
+```
+
+#### Middleware Behavior
+
+- Redirects incomplete profiles to `/user/profile/edit/`
+- Exempts: superusers, profile edit page, Zwift verification, auth URLs, API endpoints, admin, static files
+- Configured in `apps/accounts/middleware.py`
+
+#### Exempt URL Patterns
+
+```python
+EXEMPT_URL_PATTERNS = [
+    r"^/user/profile/edit/$",
+    r"^/user/profile/verify-zwift/$",
+    r"^/user/profile/unverify-zwift/$",
+    r"^/accounts/",
+    r"^/api/",
+    r"^/admin/",
+    r"^/static/",
+    r"^/media/",
+    r"^/__debug__/",
+    r"^/__reload__/",
+    r"^/m/",
+]
+```
 
 ### Discord Role-Based Permissions (`apps/accounts/models.py`)
 
@@ -138,6 +191,10 @@ if request.user.has_permission("team_captain"):
 if request.user.is_team_captain:
     ...
 ```
+
+**Note**: The `discord_permission_required` decorator raises `PermissionDenied` (403) for authenticated users who lack
+permission, rather than redirecting to login. This prevents redirect loops. A custom `templates/403.html` provides a
+user-friendly error page.
 
 #### Manual Permission Overrides
 
@@ -300,6 +357,49 @@ New Django apps should be created in `apps/` with config name `apps.<appname>`.
 
 When handling API responses that may contain `None` values for string fields, use `value or ""` pattern (not
 `.get("key", "")` which returns `None` if key exists with `None` value).
+
+## Observability (Logfire)
+
+The application uses [Logfire](https://logfire.pydantic.dev/) for observability, logging, and monitoring.
+
+### Configuration
+
+Logfire is configured at the top of `settings.py`:
+
+```python
+import logfire
+
+logfire.configure(
+    service_name="coalition-platform",
+    environment=config.logfire_environment,  # from .env
+    token=config.logfire_token,              # from .env (optional)
+    send_to_logfire="if-token-present",
+)
+```
+
+Instrumentation is added at the **end** of `settings.py` (after Django is fully configured):
+
+```python
+logfire.instrument_django()
+logfire.instrument_httpx()
+logfire.info("Django settings loaded", environment=config.logfire_environment)
+```
+
+### Environment Variables
+
+- `LOGFIRE_TOKEN` - Logfire API token (optional; if not set, logs are local only)
+- `LOGFIRE_ENVIRONMENT` - Environment name (e.g., "production", "development")
+
+### Usage in Code
+
+```python
+import logfire
+
+# Structured logging
+logfire.info("User logged in", user_id=user.id, discord_id=user.discord_id)
+logfire.warning("Rate limit approaching", api="zwiftpower", remaining=5)
+logfire.error("API request failed", error=str(e), endpoint=url)
+```
 
 ## Guild Member Sync
 

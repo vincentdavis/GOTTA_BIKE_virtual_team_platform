@@ -1,17 +1,54 @@
 {% extends "base.html" %}
 
-{% block title %}Edit Profile - The Coalition{% endblock %}
+{% block title %}{% if not user.is_profile_complete %}Complete Your Profile{% else %}Edit Profile{% endif %} - The Coalition{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto">
     <div class="card bg-base-200 shadow-xl">
         <div class="card-body">
-            {% if not user.first_name %}
-            <div class="alert alert-info mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                <span>Welcome to The Coalition! Please complete your profile.</span>
+            {% if not user.is_profile_complete %}
+            <!-- Profile Incomplete Warning -->
+            <div class="alert alert-warning mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">Profile Incomplete</h3>
+                    <p class="text-sm">You must complete your profile and verify your Zwift account to access the team platform.</p>
+                </div>
             </div>
             <h2 class="card-title text-2xl mb-6">Complete Your Profile</h2>
+
+            <!-- Profile Completion Status -->
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">Required Information</h3>
+                <div class="flex flex-wrap gap-2">
+                    {% with status=user.profile_completion_status %}
+                    <div class="badge {% if status.first_name %}badge-success{% else %}badge-error{% endif %} gap-1">
+                        {% if status.first_name %}&#10003;{% else %}&#10007;{% endif %} First Name
+                    </div>
+                    <div class="badge {% if status.last_name %}badge-success{% else %}badge-error{% endif %} gap-1">
+                        {% if status.last_name %}&#10003;{% else %}&#10007;{% endif %} Last Name
+                    </div>
+                    <div class="badge {% if status.birth_year %}badge-success{% else %}badge-error{% endif %} gap-1">
+                        {% if status.birth_year %}&#10003;{% else %}&#10007;{% endif %} Birth Year
+                    </div>
+                    <div class="badge {% if status.gender %}badge-success{% else %}badge-error{% endif %} gap-1">
+                        {% if status.gender %}&#10003;{% else %}&#10007;{% endif %} Gender
+                    </div>
+                    <div class="badge {% if status.timezone %}badge-success{% else %}badge-error{% endif %} gap-1">
+                        {% if status.timezone %}&#10003;{% else %}&#10007;{% endif %} Timezone
+                    </div>
+                    <div class="badge {% if status.country %}badge-success{% else %}badge-error{% endif %} gap-1">
+                        {% if status.country %}&#10003;{% else %}&#10007;{% endif %} Country
+                    </div>
+                    <div class="badge {% if status.zwid_verified %}badge-success{% else %}badge-error{% endif %} gap-1">
+                        {% if status.zwid_verified %}&#10003;{% else %}&#10007;{% endif %} Zwift Verified
+                    </div>
+                    {% endwith %}
+                </div>
+            </div>
+            <div class="divider"></div>
             {% else %}
             <h2 class="card-title text-2xl mb-6">Edit Profile</h2>
             {% endif %}
@@ -22,7 +59,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="form-control">
                         <label class="label" for="id_first_name">
-                            <span class="label-text">{{ form.first_name.label }}</span>
+                            <span class="label-text">{{ form.first_name.label }} <span class="text-error">*</span></span>
                         </label>
                         {{ form.first_name }}
                         {% if form.first_name.errors %}
@@ -34,7 +71,7 @@
 
                     <div class="form-control">
                         <label class="label" for="id_last_name">
-                            <span class="label-text">{{ form.last_name.label }}</span>
+                            <span class="label-text">{{ form.last_name.label }} <span class="text-error">*</span></span>
                         </label>
                         {{ form.last_name }}
                         {% if form.last_name.errors %}
@@ -48,7 +85,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="form-control">
                         <label class="label" for="id_birth_year">
-                            <span class="label-text">{{ form.birth_year.label }}</span>
+                            <span class="label-text">{{ form.birth_year.label }} <span class="text-error">*</span></span>
                         </label>
                         {{ form.birth_year }}
                         {% if form.birth_year.errors %}
@@ -58,6 +95,46 @@
                         {% endif %}
                     </div>
 
+                    <div class="form-control">
+                        <label class="label" for="id_gender">
+                            <span class="label-text">{{ form.gender.label }} <span class="text-error">*</span></span>
+                        </label>
+                        {{ form.gender }}
+                        {% if form.gender.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.gender.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="id_timezone">
+                            <span class="label-text">{{ form.timezone.label }} <span class="text-error">*</span></span>
+                        </label>
+                        {{ form.timezone }}
+                        {% if form.timezone.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.timezone.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="id_country">
+                            <span class="label-text">{{ form.country.label }} <span class="text-error">*</span></span>
+                        </label>
+                        {{ form.country }}
+                        {% if form.country.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.country.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="form-control">
                         <label class="label" for="id_email">
                             <span class="label-text">{{ form.email.label }}</span>
@@ -69,15 +146,72 @@
                         </label>
                         {% endif %}
                     </div>
+
+                    <div class="form-control">
+                        <label class="label" for="id_city">
+                            <span class="label-text">{{ form.city.label }}</span>
+                        </label>
+                        {{ form.city }}
+                        {% if form.city.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.city.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="form-control">
+                    <label class="label" for="id_youtube_channel">
+                        <span class="label-text">{{ form.youtube_channel.label }}</span>
+                    </label>
+                    {{ form.youtube_channel }}
+                    {% if form.youtube_channel.errors %}
+                    <label class="label">
+                        <span class="label-text-alt text-error">{{ form.youtube_channel.errors.0 }}</span>
+                    </label>
+                    {% endif %}
                 </div>
 
                 <div class="flex gap-4 mt-6">
                     <button type="submit" class="btn btn-primary">Save Changes</button>
-                    {% if user.first_name %}
+                    {% if user.is_profile_complete %}
                     <a href="{% url 'accounts:profile' %}" class="btn btn-ghost">Cancel</a>
                     {% endif %}
                 </div>
             </form>
+
+            <!-- Zwift Verification Section -->
+            <div class="divider"></div>
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">
+                    Zwift Account Verification
+                    {% if not user.is_profile_complete %}<span class="text-error">*</span>{% endif %}
+                </h3>
+                <div id="zwift-status-container">
+                    {% include "accounts/partials/zwift_status.html" %}
+                </div>
+            </div>
+
+            <!-- Zwift Verification Modal -->
+            <dialog id="zwift-verify-modal" class="modal">
+                <div class="modal-box">
+                    <form method="dialog">
+                        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">X</button>
+                    </form>
+                    <h3 class="font-bold text-lg mb-4">Verify Zwift Account</h3>
+                    <div id="zwift-modal-content">
+                        <!-- Content loaded via HTMX -->
+                        <div class="flex justify-center py-8">
+                            <span class="loading loading-spinner loading-lg"></span>
+                        </div>
+                    </div>
+                </div>
+                <form method="dialog" class="modal-backdrop">
+                    <button>close</button>
+                </form>
+            </dialog>
+
+            <p class="text-sm text-base-content/50 mt-4"><span class="text-error">*</span> Required fields</p>
         </div>
     </div>
 </div>

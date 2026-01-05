@@ -68,6 +68,8 @@ def profile_edit(request: HttpRequest) -> HttpResponse:
         form = ProfileForm(request.POST, instance=request.user)
         if form.is_valid():
             form.save()
+            # Refresh user from database to get updated is_profile_complete
+            request.user.refresh_from_db()
             if request.headers.get("HX-Request"):
                 # Return success message partial for HTMX
                 return render(
@@ -76,7 +78,10 @@ def profile_edit(request: HttpRequest) -> HttpResponse:
                     {"form": form, "success": True},
                 )
             messages.success(request, "Profile updated successfully.")
-            return redirect("accounts:profile")
+            # Only redirect to profile if complete, otherwise stay on edit page
+            if request.user.is_profile_complete:
+                return redirect("accounts:profile")
+            return redirect("accounts:profile_edit")
     else:
         form = ProfileForm(instance=request.user)
 

@@ -6,6 +6,7 @@ Racing APIs, and provides Discord bot integration.
 ## Features
 
 - **Discord OAuth Authentication** - Login with Discord, requires guild membership
+- **Profile Completion Requirement** - Users must complete their profile and verify Zwift before accessing the app
 - **Zwift Account Verification** - Link and verify Zwift accounts
 - **Race Ready Verification** - Submit and manage weight/height/power verification records
 - **Team Management** - Unified roster combining ZwiftPower, Zwift Racing, and user data
@@ -14,6 +15,7 @@ Racing APIs, and provides Discord bot integration.
 - **Role-Based Permissions** - Team captains, admins, and members with different access levels
 - **Discord Bot API** - REST API for Discord bot integration
 - **Dynamic Settings** - Runtime-configurable settings via Django admin
+- **Observability** - Logfire integration for logging and monitoring
 
 ## Tech Stack
 
@@ -213,6 +215,45 @@ Configure permission mappings in Django admin at `/admin/constance/config/`:
 
 - `PERM_APP_ADMIN_ROLES` - JSON array of Discord role IDs, e.g., `["1234567890123456789"]`
 - `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`, etc.
+
+## Profile Completion Requirement
+
+All users must complete their profile before accessing most pages in the application. This applies to both new and
+existing users.
+
+### Required Fields
+
+- First name
+- Last name
+- Birth year
+- Gender
+- Timezone
+- Country
+- Zwift account verification (`zwid_verified = True`)
+
+### How It Works
+
+1. **New users**: After Discord OAuth login, redirected to profile edit page
+2. **Existing users**: If profile is incomplete, redirected to profile edit page on any request
+3. **Superusers**: Exempt from profile completion requirement
+4. **API endpoints**: Exempt from profile completion check
+
+### Exempt URLs
+
+The following URL patterns are exempt from the profile completion middleware:
+
+- `/user/profile/edit/` - Profile edit page itself
+- `/user/profile/verify-zwift/` - Zwift verification flow
+- `/accounts/` - Auth URLs (login, logout)
+- `/api/` - API endpoints
+- `/admin/` - Django admin
+- `/static/`, `/media/` - Static files
+- `/m/` - Magic links
+
+### User Model Properties
+
+- `User.is_profile_complete` - Returns `True` if all required fields are filled AND Zwift is verified
+- `User.profile_completion_status` - Returns dict with completion status of each field (for UI display)
 
 ## Race Ready Verification
 

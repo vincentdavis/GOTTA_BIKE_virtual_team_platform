@@ -412,6 +412,60 @@ class User(AbstractUser):
         """
         return list((self.discord_roles or {}).values())
 
+    @property
+    def is_profile_complete(self) -> bool:
+        """Check if user has completed all required profile fields.
+
+        Required fields:
+        - first_name
+        - last_name
+        - birth_year
+        - gender
+        - timezone
+        - country
+        - zwid_verified (Zwift account must be verified)
+
+        Returns:
+            True if all required fields are filled and Zwift is verified, False otherwise.
+
+        """
+        required_text_fields = [
+            self.first_name,
+            self.last_name,
+            self.gender,
+            self.timezone,
+            self.country,
+        ]
+
+        # Check all text fields are non-empty
+        if not all(field and field.strip() for field in required_text_fields):
+            return False
+
+        # Check birth_year is set (it's a nullable integer field)
+        if not self.birth_year:
+            return False
+
+        # Check Zwift account is verified
+        return self.zwid_verified
+
+    @property
+    def profile_completion_status(self) -> dict[str, bool]:
+        """Get detailed profile completion status for each required field.
+
+        Returns:
+            Dictionary mapping field names to completion status.
+
+        """
+        return {
+            "first_name": bool(self.first_name and self.first_name.strip()),
+            "last_name": bool(self.last_name and self.last_name.strip()),
+            "birth_year": bool(self.birth_year),
+            "gender": bool(self.gender and self.gender.strip()),
+            "timezone": bool(self.timezone and self.timezone.strip()),
+            "country": bool(self.country and self.country.strip()),
+            "zwid_verified": self.zwid_verified,
+        }
+
 
 class GuildMember(models.Model):
     """Discord guild member data synced from bot.

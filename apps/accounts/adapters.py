@@ -134,7 +134,7 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
     def get_login_redirect_url(self, request):
         """Return redirect URL after login.
 
-        Redirects new users (with incomplete profile) to profile edit page.
+        Redirects users with incomplete profiles to profile edit page.
 
         Args:
             request: The HTTP request.
@@ -144,7 +144,7 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         """
         user = request.user
-        # Check if profile is incomplete (new user)
-        if user.is_authenticated and not user.first_name:
+        # Check if profile is incomplete
+        if user.is_authenticated and not user.is_profile_complete:
             return reverse('accounts:profile_edit')
         return super().get_login_redirect_url(request)
