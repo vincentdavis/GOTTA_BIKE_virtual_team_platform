@@ -1,7 +1,7 @@
 """Discord Bot API endpoints."""
 
 import contextlib
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from constance import config as constance_config
 from django.http import HttpRequest
@@ -13,7 +13,7 @@ from ninja.security import APIKeyHeader
 from apps.accounts.models import GuildMember, User
 from apps.dbot_api.models import BotStats
 from apps.magic_links.models import MagicLink
-from apps.team.models import DiscordRole
+from apps.team.models import DiscordRole, RosterFilter
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.models import ZRRider
@@ -130,6 +130,13 @@ class SyncGuildMembersRequest(Schema):
     """Request schema for syncing all guild members."""
 
     members: list[GuildMemberSchema]
+
+
+class CreateRosterFilterRequest(Schema):
+    """Request schema for creating a filtered roster link."""
+
+    discord_ids: list[str]
+    channel_name: str = ""
 
 
 class DBotAuth(APIKeyHeader):
@@ -818,3 +825,44 @@ def get_teammate_profile(request: HttpRequest, zwid: int) -> dict:
         )
 
     return profile
+
+
+@api.post("/roster_filter")
+def create_roster_filter(request: HttpRequest, payload: CreateRosterFilterRequest) -> dict:
+    """Create a filtered roster link from a list of Discord IDs.
+
+    Creates a temporary RosterFilter record with 5-minute expiration.
+    Used by the Discord bot /in_channel command.
+
+    Args:
+        request: The HTTP request.
+        payload: The request body with list of Discord IDs and channel name.
+
+    Returns:
+        JSON object with filter ID, URL, and expiration info.
+
+    """
+    discord_user_id = request.auth["discord_user_id"]  # ty:ignore[unresolved-attribute]
+
+    # Create filter with 5-minute expiration
+    expires_at = timezone.now() + timedelta(minutes=5)
+
+    roster_filter = RosterFilter.objects.create(
+        discord_ids=payload.discord_ids,
+        channel_name=payload.channel_name,
+        created_by_discord_id=discord_user_id,
+        expires_at=expires_at,
+    )
+
+    # Build absolute URL for the filtered roster
+    filter_url = request.build_absolute_uri(
+        reverse("team:filtered_roster", kwargs={"filter_id": roster_filter.id})
+    )
+
+    return {
+        "filter_id": str(roster_filter.id),
+        "url": filter_url,
+        "expires_in_seconds": 300,
+        "member_count": len(payload.discord_ids),
+        "channel_name": payload.channel_name,
+    }

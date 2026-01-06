@@ -10,6 +10,18 @@
           <h2 class="card-title text-2xl">Team Roster</h2>
         </div>
 
+        {% if roster_filter %}
+        <div class="alert alert-info mb-6">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <div>
+            <h3 class="font-bold">Filtered View: #{{ roster_filter.channel_name }}</h3>
+            <div class="text-sm">Showing {{ roster|length }} of {{ roster_filter.member_count }} channel members with team accounts.</div>
+          </div>
+          <a href="{% url 'team:roster' %}" class="btn btn-sm">View Full Roster</a>
+        </div>
+        {% endif %}
+
+        {% if not roster_filter %}
         <form method="get" class="mb-6">
           <div class="flex flex-wrap gap-4 items-end">
             <div class="form-control">
@@ -93,6 +105,7 @@
             <a href="{% url 'team:roster' %}" class="btn btn-ghost btn-sm">Reset</a>
           </div>
         </form>
+        {% endif %}
 
         <div class="stats shadow mb-6">
           <div class="stat">

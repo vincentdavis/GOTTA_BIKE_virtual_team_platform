@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Link Expired - The Coalition{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto mt-8">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body text-center">
+      <div class="text-warning mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <h2 class="card-title text-2xl justify-center">Link Expired</h2>
+      <p class="text-base-content/70 mt-2">
+        This filtered roster link has expired. Filtered roster links are only valid for 5 minutes.
+      </p>
+      {% if filter.channel_name %}
+      <p class="text-sm text-base-content/50 mt-2">
+        Channel: #{{ filter.channel_name }}
+      </p>
+      {% endif %}
+      <div class="card-actions justify-center mt-6">
+        <a href="{% url 'team:roster' %}" class="btn btn-primary">View Full Roster</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

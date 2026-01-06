@@ -1,5 +1,6 @@
 """Models for team app."""
 
+import uuid
 from datetime import datetime, timedelta
 from typing import ClassVar
 
@@ -509,3 +510,84 @@ class DiscordRole(models.Model):
         if self.color == 0:
             return ""
         return f"#{self.color:06x}"
+
+
+class RosterFilter(models.Model):
+    """Temporary filtered roster view created from Discord channel members.
+
+    Created via the Discord bot /in_channel command to generate a link
+    showing only team members who have access to a specific Discord channel.
+
+    Attributes:
+        id: UUID primary key for URL-safe access.
+        discord_ids: List of Discord user IDs to filter by.
+        channel_name: Name of the Discord channel (for display).
+        created_by_discord_id: Discord ID of user who created the filter.
+        created_at: When the filter was created.
+        expires_at: When the filter expires (default: 5 minutes after creation).
+
+    """
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="UUID for URL-safe access",
+    )
+    discord_ids = models.JSONField(
+        default=list,
+        help_text="List of Discord user IDs to filter roster by",
+    )
+    channel_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Name of the Discord channel",
+    )
+    created_by_discord_id = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text="Discord ID of user who created this filter",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When this filter was created",
+    )
+    expires_at = models.DateTimeField(
+        help_text="When this filter expires",
+    )
+
+    class Meta:
+        """Meta options for RosterFilter model."""
+
+        verbose_name = "Roster Filter"
+        verbose_name_plural = "Roster Filters"
+        ordering: ClassVar[list[str]] = ["-created_at"]
+
+    def __str__(self) -> str:
+        """Return string representation of filter.
+
+        Returns:
+            Description with channel name and creation date.
+
+        """
+        return f"Filter for #{self.channel_name} ({self.created_at:%Y-%m-%d %H:%M})"
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if this filter has expired.
+
+        Returns:
+            True if expired, False otherwise.
+
+        """
+        return timezone.now() > self.expires_at
+
+    @property
+    def member_count(self) -> int:
+        """Get the number of Discord IDs in this filter.
+
+        Returns:
+            Count of Discord IDs.
+
+        """
+        return len(self.discord_ids) if self.discord_ids else 0

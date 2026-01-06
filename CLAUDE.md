@@ -60,6 +60,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 - `team` - Core team management:
     - `RaceReadyRecord` - Verification records for weight/height/power (pending/verified/rejected status)
     - `TeamLink` - Links to external resources with visibility date ranges
+    - `RosterFilter` - Temporary filtered roster views from Discord channel members (5-min expiration)
     - `services.py` - `get_unified_team_roster()` merges data from ZwiftPower, Zwift Racing, and User accounts;
       `get_user_verification_types(user)` returns allowed verification types based on ZP category
 - `zwift` - Zwift integration (placeholder)
@@ -255,6 +256,7 @@ REST API using Django Ninja for Discord bot integration:
     - `POST /api/dbot/sync_guild_roles` - Sync all Discord roles
     - `POST /api/dbot/sync_guild_members` - Sync all guild members (see Guild Member Sync)
     - `POST /api/dbot/sync_user_roles/{discord_id}` - Sync a user's roles
+    - `POST /api/dbot/roster_filter` - Create filtered roster link from Discord channel members
 
 ### Cron API (`apps/dbot_api/cron_api.py`)
 
