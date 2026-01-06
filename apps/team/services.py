@@ -1,14 +1,19 @@
 """Service layer for unified team roster operations."""
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import ClassVar
 
+from constance import config
 from django.db.models import Count
 
 from apps.accounts.models import User
 from apps.zwiftpower.models import ZPRiderResults, ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
+
+# Default verification types when no ZwiftPower category is found
+DEFAULT_VERIFICATION_TYPES: list[str] = ["weight_light", "height"]
 
 # ZwiftPower division to category letter mapping
 ZP_DIV_TO_CATEGORY: dict[int, str] = {
@@ -19,6 +24,44 @@ ZP_DIV_TO_CATEGORY: dict[int, str] = {
     40: "D",
     50: "E",
 }
+
+
+def get_user_verification_types(user: User) -> list[str]:
+    """Get allowed verification types based on user's ZwiftPower category.
+
+    Looks up the user's ZwiftPower division (div for male, divw for female)
+    and returns the verification types required for that category from
+    the CATEGORY_REQUIREMENTS Constance setting.
+
+    Args:
+        user: The user to get verification types for.
+
+    Returns:
+        List of verify_type values the user can submit.
+        Defaults to ["weight_light", "height"] if no category found.
+
+    """
+    if not user.zwid:
+        return DEFAULT_VERIFICATION_TYPES
+
+    # Look up ZwiftPower rider
+    zp_rider = ZPTeamRiders.objects.filter(zwid=user.zwid).first()
+    if not zp_rider:
+        return DEFAULT_VERIFICATION_TYPES
+
+    # Get category based on gender: female uses divw, everyone else uses div
+    category = zp_rider.divw if user.gender == "female" else zp_rider.div
+
+    if not category:
+        return DEFAULT_VERIFICATION_TYPES
+
+    # Look up requirements from Constance
+    try:
+        requirements = json.loads(config.CATEGORY_REQUIREMENTS)
+        types = requirements.get(str(category), DEFAULT_VERIFICATION_TYPES)
+        return types if types else DEFAULT_VERIFICATION_TYPES
+    except (json.JSONDecodeError, TypeError):
+        return DEFAULT_VERIFICATION_TYPES
 
 
 @dataclass

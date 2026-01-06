@@ -10,6 +10,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.accounts.forms import ProfileForm, ZwiftVerificationForm
 from apps.team.forms import RaceReadyRecordForm
+from apps.team.services import get_user_verification_types
 from apps.zwift.utils import fetch_zwift_id
 
 
@@ -26,7 +27,10 @@ def profile_view(request: HttpRequest) -> HttpResponse:
 
     """
     form = ProfileForm(instance=request.user)
-    race_ready_form = RaceReadyRecordForm()
+
+    # Get allowed verification types based on user's ZwiftPower category
+    allowed_types = get_user_verification_types(request.user)
+    race_ready_form = RaceReadyRecordForm(allowed_types=allowed_types)
 
     # Get all race ready records for the user
     race_ready_records = request.user.race_ready_records.all()
@@ -205,7 +209,10 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
         Redirect to profile or rendered partial for HTMX.
 
     """
-    form = RaceReadyRecordForm(request.POST, request.FILES)
+    # Get allowed verification types to validate and filter form choices
+    allowed_types = get_user_verification_types(request.user)
+    form = RaceReadyRecordForm(request.POST, request.FILES, allowed_types=allowed_types)
+
     if form.is_valid():
         record = form.save(commit=False)
         record.user = request.user
@@ -224,7 +231,7 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
                 request,
                 "accounts/partials/race_ready_form.html",
                 {
-                    "race_ready_form": RaceReadyRecordForm(),
+                    "race_ready_form": RaceReadyRecordForm(allowed_types=allowed_types),
                     "race_ready_records": race_ready_records,
                     "latest_by_type": latest_by_type,
                     "success": True,

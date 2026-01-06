@@ -368,6 +368,14 @@ CONSTANCE_ADDITIONAL_FIELDS = {
             "required": False,
         },
     ],
+    "json_field": [
+        "django.forms.fields.CharField",
+        {
+            "widget": "django.forms.Textarea",
+            "widget_kwargs": {"attrs": {"rows": 4, "placeholder": '{"key": "value"}'}},
+            "required": False,
+        },
+    ],
 }
 
 CONSTANCE_CONFIG = {
@@ -418,6 +426,14 @@ CONSTANCE_CONFIG = {
         int,
     ),
     "POWER_VERIFICATION_DAYS": (365, "Days a power verification is valid", int),
+    # Category-based verification requirements
+    "CATEGORY_REQUIREMENTS": (
+        '{"5": ["weight_full", "height", "power"], "10": ["weight_full", "height"], '
+        '"20": ["weight_full", "height"], "30": ["weight_full", "height"], '
+        '"40": ["weight_light", "height"], "50": ["weight_light", "height"]}',
+        "Record types required per ZwiftPower category. Keys are division numbers, values are required types.",
+        "json_field",
+    ),
     # Race Ready role assignment
     "RACE_READY_ROLE_ID": (
         0,
@@ -490,6 +506,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "PERM_APPROVE_VERIFICATION_ROLES",
     ),
     "Verification Settings": (
+        "CATEGORY_REQUIREMENTS",
         "WEIGHT_FULL_DAYS",
         "WEIGHT_LIGHT_DAYS",
         "HEIGHT_VERIFICATION_DAYS",

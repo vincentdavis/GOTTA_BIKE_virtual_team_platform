@@ -60,7 +60,8 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 - `team` - Core team management:
     - `RaceReadyRecord` - Verification records for weight/height/power (pending/verified/rejected status)
     - `TeamLink` - Links to external resources with visibility date ranges
-    - `services.py` - `get_unified_team_roster()` merges data from ZwiftPower, Zwift Racing, and User accounts
+    - `services.py` - `get_unified_team_roster()` merges data from ZwiftPower, Zwift Racing, and User accounts;
+      `get_user_verification_types(user)` returns allowed verification types based on ZP category
 - `zwift` - Zwift integration (placeholder)
 - `zwiftpower` - ZwiftPower API integration:
     - `ZPTeamRiders` - Team roster data from admin API
@@ -328,7 +329,8 @@ Available settings:
   `PERM_LINK_ADMIN_ROLES`, `PERM_MEMBERSHIP_ADMIN_ROLES`, `PERM_RACING_ADMIN_ROLES`, `PERM_TEAM_MEMBER_ROLES`,
   `PERM_RACE_READY_ROLES` (JSON arrays of Discord role IDs)
 - **Discord Roles**: `RACE_READY_ROLE_ID` (Discord role ID assigned when user is race ready, `0` to disable)
-- **Verification**: `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
+- **Verification**: `CATEGORY_REQUIREMENTS` (JSON mapping ZP divisions to required verification types),
+  `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
   `POWER_VERIFICATION_DAYS` (365)
 - **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)
 - **Site Settings**: `TEAM_NAME`, `SITE_ANNOUNCEMENT`, `MAINTENANCE_MODE`
@@ -456,11 +458,29 @@ A user is race ready (`User.is_race_ready` property) when they have BOTH:
 1. **Weight (Full) verification** - A verified `RaceReadyRecord` of type `weight_full` that is not expired
 2. **Height verification** - A verified `RaceReadyRecord` of type `height` that is not expired
 
+### Category-Based Verification Types
+
+The verification types available to a user depend on their ZwiftPower category (`div` for male, `divw` for female).
+Configured via `CATEGORY_REQUIREMENTS` Constance setting:
+
+```json
+{"5": ["weight_full", "height", "power"], "10": ["weight_full", "height"], ...}
+```
+
+| ZP Div | Category | Available Types                |
+|--------|----------|--------------------------------|
+| 5      | A+       | weight_full, height, power     |
+| 10-30  | A-C      | weight_full, height            |
+| 40-50  | D-E      | weight_light, height           |
+| (none) | -        | weight_light, height (default) |
+
+The `get_user_verification_types(user)` function in `apps/team/services.py` returns allowed types for a user.
+
 ### Verification Flow
 
 1. User submits a `RaceReadyRecord` (weight, height, or power photo) via the web app
 2. Record starts in `pending` status
-3. Team captains (`team_captain` permission) review and verify/reject records
+3. Users with `approve_verification` permission review and verify/reject records
 4. Verified records expire based on Constance settings:
    - `WEIGHT_FULL_DAYS` (default: 180 days)
    - `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)

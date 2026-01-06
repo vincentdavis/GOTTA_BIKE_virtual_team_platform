@@ -1,8 +1,9 @@
 # Race Ready Verification
 
-Users can achieve "Race Ready" status by completing verification requirements. This status gates participation in official team races.
+Users can achieve "Race Ready" status by completing verification requirements. This status gates participation in
+official team races.
 
-## Requirements
+## Race Ready Requirements
 
 A user is race ready (`User.is_race_ready` property) when they have BOTH:
 
@@ -11,47 +12,212 @@ A user is race ready (`User.is_race_ready` property) when they have BOTH:
 
 ## Verification Types
 
-| Type | Description | Default Validity |
-|------|-------------|------------------|
-| `weight_full` | Full weight verification with scale photo | 180 days |
-| `weight_light` | Light weight verification | 30 days |
-| `height` | Height verification | Forever (0 days) |
-| `power` | Power verification | 365 days |
+| Type           | Description                               | Default Validity |
+|----------------|-------------------------------------------|------------------|
+| `weight_full`  | Full weight verification with scale photo | 180 days         |
+| `weight_light` | Light weight verification                 | 30 days          |
+| `height`       | Height verification                       | Forever (0 days) |
+| `power`        | Power verification                        | 365 days         |
 
 Validity periods are configurable via Constance settings:
-- `WEIGHT_FULL_DAYS`
-- `WEIGHT_LIGHT_DAYS`
-- `HEIGHT_VERIFICATION_DAYS` (0 = never expires)
-- `POWER_VERIFICATION_DAYS`
+
+- `WEIGHT_FULL_DAYS` (default: 180)
+- `WEIGHT_LIGHT_DAYS` (default: 30)
+- `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)
+- `POWER_VERIFICATION_DAYS` (default: 365)
+
+## Category-Based Requirements
+
+The verification types available to a user depend on their ZwiftPower category. This is configured via the
+`CATEGORY_REQUIREMENTS` Constance setting.
+
+### How It Works
+
+1. User's ZwiftPower record is looked up by their `zwid`
+2. Category is determined: `divw` for female users, `div` for everyone else
+3. Available verification types are filtered based on `CATEGORY_REQUIREMENTS[category]`
+4. If no ZwiftPower record exists, defaults to `["weight_light", "height"]`
+
+### Default Configuration
+
+```json
+{
+  "5": ["weight_full", "height", "power"],
+  "10": ["weight_full", "height"],
+  "20": ["weight_full", "height"],
+  "30": ["weight_full", "height"],
+  "40": ["weight_light", "height"],
+  "50": ["weight_light", "height"]
+}
+```
+
+| ZP Division | Category | Available Verification Types      |
+|-------------|----------|-----------------------------------|
+| 5           | A+       | weight_full, height, power        |
+| 10          | A        | weight_full, height               |
+| 20          | B        | weight_full, height               |
+| 30          | C        | weight_full, height               |
+| 40          | D        | weight_light, height              |
+| 50          | E        | weight_light, height              |
+| (none)      | -        | weight_light, height (default)    |
+
+### Implementation
+
+The `get_user_verification_types(user)` function in `apps/team/services.py` returns the allowed types.
+The `RaceReadyRecordForm` accepts an `allowed_types` parameter to filter the dropdown choices.
+
+## Record Status
+
+Each verification record has one of three statuses:
+
+| Status     | Description                           |
+|------------|---------------------------------------|
+| `pending`  | Awaiting review by an approver        |
+| `verified` | Approved and valid (until expiration) |
+| `rejected` | Rejected with a reason                |
 
 ## Verification Flow
 
-1. **User submits record**: User uploads a verification photo (weight, height, or power) via the web app
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  User submits   │────▶│    Pending      │────▶│    Verified     │
+│  verification   │     │  (awaiting      │     │  (valid until   │
+│  record         │     │   review)       │     │   expiration)   │
+└─────────────────┘     └────────┬────────┘     └────────┬────────┘
+                                 │                       │
+                                 ▼                       ▼
+                        ┌─────────────────┐     ┌─────────────────┐
+                        │    Rejected     │     │    Expired      │
+                        │  (with reason)  │     │  (re-verify)    │
+                        └─────────────────┘     └─────────────────┘
+```
+
+1. **User submits record**: User uploads verification evidence (photo, video, or URL) via `/user/verification/submit/`
 2. **Pending status**: Record starts in `pending` status
-3. **Captain review**: Team captains (`team_captain` permission) review and verify/reject records
-4. **Expiration**: Verified records expire based on configurable timeframes
+3. **Approver review**: Users with `approve_verification` permission review at `/team/verification/`
+4. **Verification or Rejection**: Approver verifies (with optional notes) or rejects (with required reason)
+5. **Media cleanup**: On verification, uploaded media files are deleted for privacy
+6. **Expiration**: Verified records expire based on validity period; user must re-verify
 
-## RaceReadyRecord Model
+## Permissions
 
-| Field | Description |
-|-------|-------------|
-| `user` | The user this record belongs to |
-| `verify_type` | Type of verification (weight_full, weight_light, height, power) |
-| `status` | pending, verified, or rejected |
-| `image` | Uploaded verification photo |
-| `value` | Optional numeric value (weight in kg, height in cm, etc.) |
-| `verified_by` | User who verified/rejected the record |
-| `verified_at` | When the record was verified |
-| `notes` | Optional notes from verifier |
-| `date_created` | When the record was submitted |
+| Action                         | Required Permission           | Constance Setting                 |
+|--------------------------------|-------------------------------|-----------------------------------|
+| Submit verification record     | Any authenticated team member | -                                 |
+| View verification records list | `approve_verification`        | `PERM_APPROVE_VERIFICATION_ROLES` |
+| View individual record details | `approve_verification`        | `PERM_APPROVE_VERIFICATION_ROLES` |
+| Verify/reject records          | `approve_verification`        | `PERM_APPROVE_VERIFICATION_ROLES` |
 
-## Race Ready Discord Role
-
-When a user's `is_race_ready` status is True, the Discord bot automatically assigns them a configured role.
+**Note**: Superusers always have all permissions.
 
 ### Configuration
 
-Set `RACE_READY_ROLE_ID` in Django admin (set to `0` to disable).
+Set `PERM_APPROVE_VERIFICATION_ROLES` in Django admin (`/admin/constance/config/`) with a JSON array of Discord role
+IDs:
+
+```json
+[
+  "1234567890123456789",
+  "9876543210987654321"
+]
+```
+
+## RaceReadyRecord Model
+
+| Field              | Type                 | Description                                            |
+|--------------------|----------------------|--------------------------------------------------------|
+| `user`             | ForeignKey           | The user this record belongs to                        |
+| `verify_type`      | CharField            | Type: `weight_full`, `weight_light`, `height`, `power` |
+| `media_type`       | CharField            | Evidence type: `video`, `photo`, `link`, `other`       |
+| `media_file`       | FileField            | Uploaded photo/video (deleted on verification)         |
+| `url`              | URLField             | External URL (YouTube, Vimeo, image link)              |
+| `weight`           | DecimalField         | Weight in kg (for weight verifications)                |
+| `height`           | PositiveIntegerField | Height in cm (for height verification)                 |
+| `ftp`              | PositiveIntegerField | FTP in watts (for power verification)                  |
+| `status`           | CharField            | `pending`, `verified`, `rejected`                      |
+| `reviewed_by`      | ForeignKey           | User who reviewed the record                           |
+| `reviewed_date`    | DateTimeField        | When the record was reviewed                           |
+| `rejection_reason` | TextField            | Explanation if rejected                                |
+| `notes`            | TextField            | Optional notes from user                               |
+| `date_created`     | DateTimeField        | When the record was submitted                          |
+
+### Model Properties
+
+| Property          | Returns  | Description                                 |
+|-------------------|----------|---------------------------------------------|
+| `is_verified`     | bool     | True if status is verified                  |
+| `is_rejected`     | bool     | True if status is rejected                  |
+| `is_pending`      | bool     | True if status is pending                   |
+| `validity_days`   | int      | Days until expiration (0 = never)           |
+| `expires_date`    | datetime | Expiration date (None if never expires)     |
+| `is_expired`      | bool     | True if verification has expired            |
+| `days_remaining`  | int      | Days until expiration (negative if expired) |
+| `validity_status` | str      | Human-readable status string                |
+
+## API Verification Status
+
+The `/api/dbot/my_profile` and `/api/dbot/teammate_profile/{zwid}` endpoints return verification status for each type.
+
+### Status Logic
+
+| Scenario                   | `verified` | `status`                            | `has_pending`  |
+|----------------------------|------------|-------------------------------------|----------------|
+| Valid verified record      | `true`     | "Valid (X days)" or "Never expires" | `true`/`false` |
+| Expired, no pending record | `true`     | "Expired"                           | `false`        |
+| Expired + pending record   | `false`    | "Pending (expired)"                 | `true`         |
+| No verified, has pending   | `false`    | "Pending"                           | `true`         |
+| No records                 | `false`    | "No record"                         | `false`        |
+
+### Example Response
+
+```json
+{
+  "verification": {
+    "weight_full": {
+      "verified": true,
+      "verified_date": "2024-01-15T10:30:00+00:00",
+      "days_remaining": 120,
+      "is_expired": false,
+      "status": "Valid (120 days)",
+      "has_pending": false
+    },
+    "height": {
+      "verified": true,
+      "verified_date": "2024-01-10T08:00:00+00:00",
+      "days_remaining": null,
+      "is_expired": false,
+      "status": "Never expires",
+      "has_pending": false
+    },
+    "weight_light": {
+      "verified": false,
+      "verified_date": null,
+      "days_remaining": null,
+      "is_expired": false,
+      "status": "No record",
+      "has_pending": false
+    },
+    "power": {
+      "verified": false,
+      "verified_date": "2023-06-01T12:00:00+00:00",
+      "days_remaining": -30,
+      "is_expired": true,
+      "status": "Pending (expired)",
+      "has_pending": true,
+      "pending_date": "2024-01-20T14:00:00+00:00"
+    }
+  },
+  "is_race_ready": true
+}
+```
+
+## Race Ready Discord Role
+
+When a user's `is_race_ready` status is True, the Discord bot can automatically assign them a configured role.
+
+### Configuration
+
+Set `RACE_READY_ROLE_ID` in Django admin with the Discord role ID (set to `0` to disable).
 
 ### How It Works
 
@@ -64,34 +230,23 @@ Set `RACE_READY_ROLE_ID` in Django admin (set to `0` to disable).
 - Bot needs `Manage Roles` permission
 - The race ready role must be below the bot's highest role in the hierarchy
 
-## API Response
+## Web App URLs
 
-The `/my_profile` and `/sync_user_roles` endpoints return:
-
-```json
-{
-  "is_race_ready": true,
-  "race_ready_role_id": "1234567890123456789"
-}
-```
+| URL                          | Description                                    |
+|------------------------------|------------------------------------------------|
+| `/user/verification/submit/` | Submit a new verification record               |
+| `/team/verification/`        | List all verification records (approvers only) |
+| `/team/verification/{id}/`   | View/approve/reject a record (approvers only)  |
+| `/team/roster/`              | Team roster with race ready filter             |
 
 ## Team Roster
 
 The team roster view (`/team/roster/`) displays:
-- Race ready status for each team member
+
+- Race ready status badge for each team member
 - Filter option to show only race ready members
-- Links to verification records
+- Sortable by race ready status
 
 ## Data Export
 
 The `data_connection` module supports exporting `race_ready` status to Google Sheets along with other user data.
-
-## Permissions
-
-| Action | Required Permission |
-|--------|---------------------|
-| Submit verification record | Any authenticated user |
-| View pending records | `team_captain` or `vice_captain` |
-| Verify/reject records | `approve_verification` |
-
-**Configuration**: Set `PERM_APPROVE_VERIFICATION_ROLES` in Django admin with Discord role IDs that can approve/reject records.

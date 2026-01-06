@@ -77,6 +77,14 @@ class TeamLinkEditForm(forms.ModelForm):
 class RaceReadyRecordForm(forms.ModelForm):
     """Form for submitting race ready verification records."""
 
+    # All possible verify_type choices
+    ALL_VERIFY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("weight_full", "Weight Full"),
+        ("weight_light", "Weight Light"),
+        ("height", "Height"),
+        ("power", "Power"),
+    ]
+
     class Meta:
         """Meta options for RaceReadyRecordForm."""
 
@@ -110,6 +118,23 @@ class RaceReadyRecordForm(forms.ModelForm):
             "url": forms.URLInput(attrs={"class": "input input-bordered w-full", "placeholder": "https://..."}),
             "notes": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 3}),
         }
+
+    def __init__(self, *args, allowed_types: list[str] | None = None, **kwargs) -> None:
+        """Initialize form with optional allowed_types filter.
+
+        Args:
+            *args: Positional arguments passed to parent.
+            allowed_types: List of verify_type values to allow. If provided, filters choices.
+            **kwargs: Keyword arguments passed to parent.
+
+        """
+        super().__init__(*args, **kwargs)
+
+        if allowed_types:
+            # Filter choices to only allowed types
+            self.fields["verify_type"].choices = [
+                (value, label) for value, label in self.ALL_VERIFY_TYPE_CHOICES if value in allowed_types
+            ]
 
     def clean_media_file(self):
         """Validate media file size and type.

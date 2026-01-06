@@ -31,22 +31,61 @@ def _get_verification_status(user: User) -> dict:
     """
     result = {}
     for verify_type in ["weight_full", "weight_light", "height", "power"]:
-        record = user.race_ready_records.filter(verify_type=verify_type, status="verified").first()
-        if record:
+        # Get the most recent verified record
+        verified_record = user.race_ready_records.filter(
+            verify_type=verify_type, status="verified"
+        ).first()
+
+        # Check if there's a pending record
+        pending_record = user.race_ready_records.filter(
+            verify_type=verify_type, status="pending"
+        ).first()
+
+        if verified_record:
+            verified_date = (
+                verified_record.reviewed_date.isoformat() if verified_record.reviewed_date else None
+            )
+            # If verified record is expired AND there's a pending record, show pending
+            if verified_record.is_expired and pending_record:
+                result[verify_type] = {
+                    "verified": False,
+                    "verified_date": verified_date,
+                    "days_remaining": verified_record.days_remaining,
+                    "is_expired": True,
+                    "status": "Pending (expired)",
+                    "has_pending": True,
+                    "pending_date": pending_record.date_created.isoformat(),
+                }
+            else:
+                # Normal verified record (valid or expired without pending)
+                result[verify_type] = {
+                    "verified": True,
+                    "verified_date": verified_date,
+                    "days_remaining": verified_record.days_remaining,
+                    "is_expired": verified_record.is_expired,
+                    "status": verified_record.validity_status,
+                    "has_pending": pending_record is not None,
+                }
+        elif pending_record:
+            # No verified record but has pending
             result[verify_type] = {
-                "verified": True,
-                "verified_date": record.reviewed_date.isoformat() if record.reviewed_date else None,
-                "days_remaining": record.days_remaining,
-                "is_expired": record.is_expired,
-                "status": record.validity_status,
+                "verified": False,
+                "verified_date": None,
+                "days_remaining": None,
+                "is_expired": False,
+                "status": "Pending",
+                "has_pending": True,
+                "pending_date": pending_record.date_created.isoformat(),
             }
         else:
+            # No records at all
             result[verify_type] = {
                 "verified": False,
                 "verified_date": None,
                 "days_remaining": None,
                 "is_expired": False,
                 "status": "No record",
+                "has_pending": False,
             }
     return result
 
