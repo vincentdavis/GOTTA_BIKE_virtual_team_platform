@@ -5,14 +5,15 @@ from typing import Any, ClassVar
 from django.contrib import admin, messages
 from django.http import HttpRequest, HttpResponseRedirect
 from django.urls import path, reverse
+from simple_history.admin import SimpleHistoryAdmin
 
 from apps.zwiftpower.models import ZPEvent, ZPRiderResults, ZPTeamRiders
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 
 
 @admin.register(ZPTeamRiders)
-class ZPTeamRidersAdmin(admin.ModelAdmin):
-    """Admin configuration for ZPTeamRiders model."""
+class ZPTeamRidersAdmin(SimpleHistoryAdmin):
+    """Admin configuration for ZPTeamRiders model with history tracking."""
 
     change_list_template = "admin/zwiftpower/zpteamriders/change_list.html"
 
@@ -26,7 +27,7 @@ class ZPTeamRidersAdmin(admin.ModelAdmin):
         "skill",
         "date_left",
     ]
-    list_filter: ClassVar[list[str]] = ["flag", "div", "date_left"]
+    list_filter: ClassVar[list[str]] = ["div", "date_left"]
     search_fields: ClassVar[list[str]] = ["name", "zwid", "aid"]
     ordering: ClassVar[list[str]] = ["name"]
     readonly_fields: ClassVar[list[str]] = ["date_created", "date_modified"]
@@ -110,7 +111,15 @@ class ZPEventAdmin(admin.ModelAdmin):
     ]
 
     def results_count(self, obj: ZPEvent) -> int:
-        """Return the number of results for this event."""
+        """Return the number of results for this event.
+
+        Args:
+            obj: The ZPEvent instance.
+
+        Returns:
+            Number of results for this event.
+
+        """
         return obj.results.count()
 
     results_count.short_description = "Results"  # type: ignore[attr-defined]

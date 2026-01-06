@@ -1,11 +1,18 @@
+"""Models for ZwiftPower data."""
+
+from typing import ClassVar
+
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 
 class ZPTeamRiders(models.Model):
-    """Data from the team admin API. Must be a team admin to fetch.
+    """ZwiftPower team member data from the team admin API.
+
     Each row is a team member.
     Fetch from: https://zwiftpower.com/api3.php?do=team_riders&id={team_id}
     Example data: test/example_data/zwiftpower/team_admin_api.json
+
     """
 
     # Zwift/ZwiftPower identifiers
@@ -60,13 +67,113 @@ class ZPTeamRiders(models.Model):
     date_modified = models.DateTimeField(auto_now=True)
     date_left = models.DateTimeField(null=True, blank=True, help_text="Date member left team")
 
+    # History tracking
+    history = HistoricalRecords()
+
+    # Fields that trigger a new history record when changed
+    TRACKED_FIELDS: ClassVar[list[str]] = [
+        "weight",
+        "ftp",
+        "div",
+        "divw",
+        "rank",
+        "skill",
+        "skill_race",
+        "skill_seg",
+        "skill_power",
+        "h_1200_watts",
+        "h_1200_wkg",
+        "h_15_watts",
+        "h_15_wkg",
+    ]
+
     class Meta:
+        """Meta options for ZPTeamRiders model."""
+
         verbose_name = "ZP Team Member"
         verbose_name_plural = "ZP Team Members"
-        ordering = ["name"]
+        ordering: ClassVar[list[str]] = ["name"]
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """Return string representation of rider.
+
+        Returns:
+            Name and Zwift ID.
+
+        """
         return f"{self.name} ({self.zwid})"
+
+    def save(self, *args, **kwargs) -> None:
+        """Save with conditional history creation.
+
+        Only creates a history record if tracked fields changed.
+
+        Args:
+            *args: Positional arguments passed to parent save.
+            **kwargs: Keyword arguments passed to parent save.
+
+        """
+        if self.pk:
+            # Existing record - check if tracked fields changed
+            try:
+                old = ZPTeamRiders.objects.get(pk=self.pk)
+                tracked_changed = any(getattr(self, f) != getattr(old, f) for f in self.TRACKED_FIELDS)
+                if not tracked_changed:
+                    # Skip history for this save
+                    self.skip_history_when_saving = True
+            except ZPTeamRiders.DoesNotExist:
+                pass
+
+        super().save(*args, **kwargs)
+
+        # Reset flag
+        if hasattr(self, "skip_history_when_saving"):
+            del self.skip_history_when_saving
+
+    @classmethod
+    def get_field_history(cls, zwid: int, field: str) -> list[tuple]:
+        """Get history of a specific field for a rider.
+
+        Args:
+            zwid: Zwift rider ID.
+            field: Field name to get history for.
+
+        Returns:
+            List of (date, value) tuples, newest first.
+
+        """
+        return list(
+            cls.history.filter(zwid=zwid)
+            .exclude(**{f"{field}__isnull": True})
+            .order_by("-history_date")
+            .values_list("history_date", field)
+        )
+
+    @classmethod
+    def get_weight_history(cls, zwid: int) -> list[tuple]:
+        """Get weight history for a rider.
+
+        Args:
+            zwid: Zwift rider ID.
+
+        Returns:
+            List of (date, weight) tuples, newest first.
+
+        """
+        return cls.get_field_history(zwid, "weight")
+
+    @classmethod
+    def get_ftp_history(cls, zwid: int) -> list[tuple]:
+        """Get FTP history for a rider.
+
+        Args:
+            zwid: Zwift rider ID.
+
+        Returns:
+            List of (date, ftp) tuples, newest first.
+
+        """
+        return cls.get_field_history(zwid, "ftp")
 
 
 class ZPEvent(models.Model):
@@ -89,10 +196,15 @@ class ZPEvent(models.Model):
 
         verbose_name = "ZP Event"
         verbose_name_plural = "ZP Events"
-        ordering = ["-event_date"]
+        ordering: ClassVar[list[str]] = ["-event_date"]
 
     def __str__(self) -> str:
-        """Return string representation of event."""
+        """Return string representation of event.
+
+        Returns:
+            Title and ZP event ID.
+
+        """
         return f"{self.title} ({self.zid})"
 
 
@@ -202,13 +314,18 @@ class ZPRiderResults(models.Model):
 
         verbose_name = "ZP Rider Result"
         verbose_name_plural = "ZP Rider Results"
-        ordering = ["-event__event_date", "pos"]
-        constraints = [
+        ordering: ClassVar[list[str]] = ["-event__event_date", "pos"]
+        constraints: ClassVar[list] = [
             models.UniqueConstraint(fields=["zid", "zwid"], name="unique_zid_zwid"),
         ]
 
     def __str__(self) -> str:
-        """Return string representation of result."""
+        """Return string representation of result.
+
+        Returns:
+            Rider name, event title, and position.
+
+        """
         return f"{self.name} - {self.event.title} (P{self.pos})"
 
     @classmethod

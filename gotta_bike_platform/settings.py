@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     "tailwind",
     "theme",
     "reset_migrations",
+    "simple_history",
     # Project apps
     "gotta_bike_platform",
     "apps.accounts.apps.AccountsConfig",
@@ -103,6 +104,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "apps.accounts.middleware.ProfileCompletionMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
@@ -383,6 +385,7 @@ CONSTANCE_CONFIG = {
     "TEAM_NAME": ("The Coalition", "Name of the team", str),
     "GUILD_NAME": ("The Coalition", "Name of the Discord guild/server", str),
     "GUILD_ID": (1317875072089981021, "Discord guild/server ID", int),
+    "UPGRADE_CHANNEL": (0, "Discord channel ID for upgrade notifications", int),
     "ZWIFTPOWER_TEAM_ID": (0, "ZwiftPower team ID for fetching team data", int),
     # Zwift credentials (for ZwiftPower API access)
     "ZWIFT_USERNAME": ("", "Zwift account username/email for API access", str),
@@ -484,6 +487,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
     "Discord Guild": (
         "GUILD_NAME",
         "GUILD_ID",
+        "UPGRADE_CHANNEL",
     ),
     "Zwift Credentials": (
         "ZWIFT_USERNAME",

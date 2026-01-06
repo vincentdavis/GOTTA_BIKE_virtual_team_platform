@@ -5,14 +5,15 @@ from typing import Any, ClassVar
 from django.contrib import admin, messages
 from django.http import HttpRequest, HttpResponseRedirect
 from django.urls import path, reverse
+from simple_history.admin import SimpleHistoryAdmin
 
 from apps.zwiftracing.models import ZRRider
 from apps.zwiftracing.tasks import sync_zr_riders
 
 
 @admin.register(ZRRider)
-class ZRRiderAdmin(admin.ModelAdmin):
-    """Admin configuration for ZRRider model."""
+class ZRRiderAdmin(SimpleHistoryAdmin):
+    """Admin configuration for ZRRider model with history tracking."""
 
     change_list_template = "admin/zwiftracing/zrrider/change_list.html"
 

@@ -3,6 +3,7 @@
 from typing import ClassVar
 
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 
 class ZRRider(models.Model):
@@ -141,6 +142,35 @@ class ZRRider(models.Model):
     date_modified = models.DateTimeField(auto_now=True, help_text="Record last modified date")
     date_left = models.DateTimeField(null=True, blank=True, help_text="Date rider left club")
 
+    # History tracking
+    history = HistoricalRecords()
+
+    # Fields that trigger a new history record when changed
+    TRACKED_FIELDS: ClassVar[list[str]] = [
+        # Physical
+        "weight",
+        "height",
+        # ZwiftPower
+        "zp_ftp",
+        "zp_category",
+        # Power metrics
+        "power_cp",
+        "power_wkg5",
+        "power_wkg15",
+        "power_wkg60",
+        "power_wkg300",
+        "power_wkg1200",
+        # Race ratings
+        "race_current_rating",
+        "race_current_category",
+        "race_max30_rating",
+        "race_max30_category",
+        "race_max90_rating",
+        "race_max90_category",
+        # Phenotype
+        "phenotype_value",
+    ]
+
     class Meta:
         """Meta options for ZRRider model."""
 
@@ -156,3 +186,80 @@ class ZRRider(models.Model):
 
         """
         return f"{self.name} ({self.zwid})"
+
+    def save(self, *args, **kwargs) -> None:
+        """Save with conditional history creation.
+
+        Only creates a history record if tracked fields changed.
+
+        Args:
+            *args: Positional arguments passed to parent save.
+            **kwargs: Keyword arguments passed to parent save.
+
+        """
+        if self.pk:
+            # Existing record - check if tracked fields changed
+            try:
+                old = ZRRider.objects.get(pk=self.pk)
+                tracked_changed = any(getattr(self, f) != getattr(old, f) for f in self.TRACKED_FIELDS)
+                if not tracked_changed:
+                    # Skip history for this save
+                    self.skip_history_when_saving = True
+            except ZRRider.DoesNotExist:
+                pass
+
+        super().save(*args, **kwargs)
+
+        # Reset flag
+        if hasattr(self, "skip_history_when_saving"):
+            del self.skip_history_when_saving
+
+    @classmethod
+    def get_field_history(cls, zwid: int, field: str) -> list[tuple]:
+        """Get history of a specific field for a rider.
+
+        Args:
+            zwid: Zwift rider ID.
+            field: Field name to get history for.
+
+        Returns:
+            List of (date, value) tuples, newest first.
+
+        """
+        return list(
+            cls.history.filter(zwid=zwid)
+            .exclude(**{f"{field}__isnull": True})
+            .order_by("-history_date")
+            .values_list("history_date", field)
+        )
+
+    @classmethod
+    def get_rating_history(cls, zwid: int) -> list[tuple]:
+        """Get race rating history for a rider.
+
+        Args:
+            zwid: Zwift rider ID.
+
+        Returns:
+            List of (date, rating, category) tuples, newest first.
+
+        """
+        return list(
+            cls.history.filter(zwid=zwid)
+            .exclude(race_current_rating__isnull=True)
+            .order_by("-history_date")
+            .values_list("history_date", "race_current_rating", "race_current_category")
+        )
+
+    @classmethod
+    def get_weight_history(cls, zwid: int) -> list[tuple]:
+        """Get weight history for a rider.
+
+        Args:
+            zwid: Zwift rider ID.
+
+        Returns:
+            List of (date, weight) tuples, newest first.
+
+        """
+        return cls.get_field_history(zwid, "weight")

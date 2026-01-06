@@ -5,14 +5,15 @@ description = "App and discrod bot for managing zwift virtual cycling teams."
 requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4>=4.14.3",
-    "boto3>=1.42.21",
-    "dj-database-url>=3.0.1",
+    "boto3>=1.42.22",
+    "dj-database-url>=3.1.0",
     "django>=6.0.0",
     "django-allauth[mfa,socialaccount]>=65.3.0",
     "django-constance>=4.3.4",
     "django-cors-headers>=4.9.0",
     "django-htmx>=1.27.0",
-    "django-ninja>=1.5.0",
+    "django-ninja>=1.5.2",
+    "django-simple-history>=3.11.0",
     "django-storages>=1.14.6",
     "django-tailwind[honcho]>=4.4.2",
     "django-tasks>=0.10.0",
@@ -40,6 +41,6 @@ dev = [
     "django-stubs>=5.2.8",
     "pytest>=9.0.1",
     "ruff>=0.14.10",
-    "ty>=0.0.8",
+    "ty>=0.0.9",
     "logfire-mcp>=0.6.0"
 ]
