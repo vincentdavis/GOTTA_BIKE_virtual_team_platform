@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import team_member_required
+from apps.accounts.discord_service import send_verification_notification
 from apps.team.forms import TeamLinkEditForm, TeamLinkForm
 from apps.team.models import RaceReadyRecord, RosterFilter, TeamLink
 from apps.team.services import ZP_DIV_TO_CATEGORY, get_unified_team_roster
@@ -494,13 +495,29 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             record.reviewed_by = request.user
             record.reviewed_date = timezone.now()
             record.save()
+            # Send Discord DM notification
+            if record.user.discord_id:
+                send_verification_notification(
+                    discord_id=record.user.discord_id,
+                    is_verified=True,
+                    verify_type=record.verify_type,
+                )
             messages.success(request, f"Record for {record.user.username} has been verified.")
         elif action == "reject":
             record.status = RaceReadyRecord.Status.REJECTED
             record.reviewed_by = request.user
             record.reviewed_date = timezone.now()
-            record.rejection_reason = request.POST.get("rejection_reason", "").strip()
+            rejection_reason = request.POST.get("rejection_reason", "").strip()
+            record.rejection_reason = rejection_reason
             record.save()
+            # Send Discord DM notification
+            if record.user.discord_id:
+                send_verification_notification(
+                    discord_id=record.user.discord_id,
+                    is_verified=False,
+                    verify_type=record.verify_type,
+                    rejection_reason=rejection_reason or None,
+                )
             messages.warning(request, f"Record for {record.user.username} has been rejected.")
         return redirect("team:verification_records")
 

@@ -392,6 +392,7 @@ CONSTANCE_CONFIG = {
     "ZWIFT_PASSWORD": ("", "Zwift account password for API access", "password_field"),
     # API Keys
     "DBOT_AUTH_KEY": ("", "Discord bot API authentication key", "password_field"),
+    "DISCORD_BOT_TOKEN": ("", "Discord bot token for sending DMs", "password_field"),
     "ZRAPP_API_URL": (
         "https://api.zwiftracing.app/api/public/",
         "Zwift Racing App API base URL",
@@ -488,6 +489,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "GUILD_NAME",
         "GUILD_ID",
         "UPGRADE_CHANNEL",
+        "DISCORD_BOT_TOKEN",
     ),
     "Zwift Credentials": (
         "ZWIFT_USERNAME",

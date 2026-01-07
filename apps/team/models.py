@@ -153,20 +153,23 @@ class RaceReadyRecord(models.Model):
         return f"{self.user.username} - {self.verify_type} ({self.date_created:%Y-%m-%d})"
 
     def save(self, *args, **kwargs) -> None:
-        """Save the record and delete media file if verified.
+        """Save the record and delete media/url if verified or rejected.
 
         Args:
             *args: Positional arguments passed to parent save.
             **kwargs: Keyword arguments passed to parent save.
 
         """
-        # Check if this is an update and status changed to verified
+        # Check if this is an update and status changed to verified or rejected
         if self.pk:
             try:
                 old_instance = RaceReadyRecord.objects.get(pk=self.pk)
-                if self.status == self.Status.VERIFIED and old_instance.status != self.Status.VERIFIED:
-                    # Record was just verified, delete the media file
+                status_changed = self.status != old_instance.status
+                is_reviewed = self.status in (self.Status.VERIFIED, self.Status.REJECTED)
+                if status_changed and is_reviewed:
+                    # Record was just verified or rejected, delete media for privacy
                     self.delete_media_file()
+                    self.url = ""
             except RaceReadyRecord.DoesNotExist:
                 pass
         super().save(*args, **kwargs)
