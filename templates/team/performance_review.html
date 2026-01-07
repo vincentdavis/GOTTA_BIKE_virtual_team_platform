@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% load accounts_tags %}
+
+{% block title %}Performance Review - The Coalition{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="card-title text-2xl">Performance Review</h2>
+      </div>
+
+      <!-- Filters -->
+      <form method="get" class="mb-6">
+        <div class="flex flex-wrap gap-4 items-end">
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Search</span>
+            </label>
+            <input type="text"
+                   name="q"
+                   placeholder="Search by name or ZWID..."
+                   class="input input-bordered input-sm w-48"
+                   value="{{ search_query }}"
+            />
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Category</span>
+            </label>
+            <select name="zp_category" class="select select-bordered select-sm">
+              <option value="">All Categories</option>
+              {% for div, label in zp_categories %}
+                <option value="{{ div }}" {% if zp_category_filter == div|stringformat:"s" %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Gender</span>
+            </label>
+            <select name="gender" class="select select-bordered select-sm">
+              <option value="">All</option>
+              <option value="M" {% if gender_filter == "M" %}selected{% endif %}>Male</option>
+              <option value="F" {% if gender_filter == "F" %}selected{% endif %}>Female</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+          <a href="{% url 'team:performance_review' %}" class="btn btn-ghost btn-sm">Reset</a>
+        </div>
+      </form>
+
+      <!-- Legend -->
+      <div class="flex gap-4 mb-4 text-sm">
+        <span class="flex items-center gap-1">
+          <span class="w-3 h-3 rounded bg-warning/30"></span>
+          Weight diff &gt; 2kg
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="w-3 h-3 rounded bg-error/30"></span>
+          Weight diff &gt; 5kg
+        </span>
+      </div>
+
+      <!-- Table -->
+      <div class="overflow-x-auto">
+        {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&gender="|add:gender_filter %}
+        <table class="table table-zebra table-sm">
+          <thead>
+            <tr>
+              <th>
+                <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Name
+                  {% if sort_by == "name" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=weight_light_date&dir={% if sort_by == 'weight_light_date' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Wt Light
+                  {% if sort_by == "weight_light_date" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=weight_full_date&dir={% if sort_by == 'weight_full_date' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Wt Full
+                  {% if sort_by == "weight_full_date" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=zp_result_date&dir={% if sort_by == 'zp_result_date' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  ZP Weight
+                  {% if sort_by == "zp_result_date" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=weight_diff&dir={% if sort_by == 'weight_diff' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Diff
+                  {% if sort_by == "weight_diff" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=height_date&dir={% if sort_by == 'height_date' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Height
+                  {% if sort_by == "height_date" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=zp_height_date&dir={% if sort_by == 'zp_height_date' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  ZP Height
+                  {% if sort_by == "zp_height_date" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rider in riders %}
+            <tr class="{% if rider.has_severe_weight_concern %}bg-error/20{% elif rider.has_weight_concern %}bg-warning/20{% endif %}">
+              <!-- Name with links -->
+              <td>
+                <div class="font-medium">{{ rider.display_name }}</div>
+                <div class="flex gap-2 mt-1">
+                  <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener" class="text-xs text-base-content/60 hover:text-primary">ZP</a>
+                  <a href="https://www.zwiftracing.app/riders/{{ rider.zwid }}" target="_blank" rel="noopener" class="text-xs text-base-content/60 hover:text-primary">ZR</a>
+                  {% if rider.zp_category %}
+                  <span class="badge badge-xs">{{ rider.zp_category }}</span>
+                  {% endif %}
+                  {% if rider.gender %}
+                  <span class="text-xs text-base-content/60">{{ rider.gender }}</span>
+                  {% endif %}
+                </div>
+              </td>
+
+              <!-- Weight Light -->
+              <td>
+                {% if rider.weight_light_value %}
+                <div class="font-mono text-sm">{{ rider.weight_light_value }} kg</div>
+                <div class="text-xs text-base-content/60">{{ rider.weight_light_date|timesince }} ago</div>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+
+              <!-- Weight Full -->
+              <td>
+                {% if rider.weight_full_value %}
+                <div class="font-mono text-sm">{{ rider.weight_full_value }} kg</div>
+                <div class="text-xs text-base-content/60">{{ rider.weight_full_date|timesince }} ago</div>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+
+              <!-- ZP Result Weight -->
+              <td>
+                {% if rider.zp_result_weight %}
+                <div class="font-mono text-sm">{{ rider.zp_result_weight }} kg</div>
+                <div class="text-xs text-base-content/60">{{ rider.zp_result_date|timesince }} ago</div>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+
+              <!-- Weight Diff -->
+              <td>
+                {% if rider.weight_diff is not None %}
+                <div class="font-mono text-sm {% if rider.has_severe_weight_concern %}text-error font-bold{% elif rider.has_weight_concern %}text-warning font-bold{% endif %}">
+                  {% if rider.weight_diff > 0 %}+{% endif %}{{ rider.weight_diff|floatformat:1 }} kg
+                </div>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+
+              <!-- Height -->
+              <td>
+                {% if rider.height_value %}
+                <div class="font-mono text-sm">{{ rider.height_value }} cm</div>
+                <div class="text-xs text-base-content/60">{{ rider.height_date|timesince }} ago</div>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+
+              <!-- ZP Height -->
+              <td>
+                {% if rider.zp_height_value %}
+                <div class="font-mono text-sm">{{ rider.zp_height_value }} cm</div>
+                <div class="text-xs text-base-content/60">{{ rider.zp_height_date|timesince }} ago</div>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center py-8 text-base-content/50">
+                No riders found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endwith %}
+      </div>
+
+      <!-- Stats -->
+      <div class="mt-6 text-sm text-base-content/50">
+        Showing {{ riders|length }} rider{{ riders|length|pluralize }}
+        {% with concerns=riders|length %}
+        {% for rider in riders %}{% if rider.has_weight_concern %}{% with total=1 %}{% endwith %}{% endif %}{% endfor %}
+        {% endwith %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

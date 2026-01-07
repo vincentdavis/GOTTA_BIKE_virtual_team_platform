@@ -58,6 +58,26 @@
         </div>
       </form>
 
+      <!-- Media Cleanup Actions -->
+      {% if can_verify %}
+      <div class="flex flex-wrap gap-4 mb-6">
+        <form method="post" action="{% url 'team:delete_expired_media' %}" class="inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('Delete media from all expired records?')">
+            Delete Expired Media
+          </button>
+          <span class="text-sm text-base-content/60 ml-2">Removes videos/photos/links from expired records</span>
+        </form>
+        <form method="post" action="{% url 'team:delete_rejected_media' %}" class="inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline btn-sm" onclick="return confirm('Delete media from rejected records older than 30 days?')">
+            Delete Rejected Media
+          </button>
+          <span class="text-sm text-base-content/60 ml-2">Removes videos/photos/links from rejected records older than 30 days</span>
+        </form>
+      </div>
+      {% endif %}
+
       <!-- Records Table -->
       <div class="overflow-x-auto">
         <table class="table table-zebra">

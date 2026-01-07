@@ -14,7 +14,7 @@ from apps.accounts.decorators import team_member_required
 from apps.accounts.discord_service import send_verification_notification
 from apps.team.forms import TeamLinkEditForm, TeamLinkForm
 from apps.team.models import RaceReadyRecord, RosterFilter, TeamLink
-from apps.team.services import ZP_DIV_TO_CATEGORY, get_unified_team_roster
+from apps.team.services import ZP_DIV_TO_CATEGORY, get_performance_review_data, get_unified_team_roster
 from apps.zwiftpower.models import ZPTeamRiders
 
 
@@ -539,6 +539,87 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
 
 @login_required
 @team_member_required()
+@require_POST
+def delete_expired_media_view(request: HttpRequest) -> HttpResponse:
+    """Delete media files and URLs from expired verification records.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Redirect to verification records list.
+
+    """
+    if not request.user.can_approve_verification and not request.user.is_superuser:
+        messages.error(request, "You don't have permission to perform this action.")
+        return redirect("team:verification_records")
+
+    # Get all verified records and filter to expired ones
+    records = RaceReadyRecord.objects.filter(status=RaceReadyRecord.Status.VERIFIED)
+    expired_records = [r for r in records if r.is_expired]
+
+    deleted_count = 0
+    for record in expired_records:
+        has_media = record.media_file or record.url
+        if has_media:
+            record.delete_media_file()
+            record.url = ""
+            record.save(update_fields=["url"])
+            deleted_count += 1
+
+    if deleted_count:
+        messages.success(request, f"Deleted media from {deleted_count} expired record(s).")
+    else:
+        messages.info(request, "No expired records with media found.")
+
+    return redirect("team:verification_records")
+
+
+@login_required
+@team_member_required()
+@require_POST
+def delete_rejected_media_view(request: HttpRequest) -> HttpResponse:
+    """Delete media files and URLs from rejected records older than 30 days.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Redirect to verification records list.
+
+    """
+    from datetime import timedelta
+
+    if not request.user.can_approve_verification and not request.user.is_superuser:
+        messages.error(request, "You don't have permission to perform this action.")
+        return redirect("team:verification_records")
+
+    # Get rejected records older than 30 days
+    cutoff_date = timezone.now() - timedelta(days=30)
+    records = RaceReadyRecord.objects.filter(
+        status=RaceReadyRecord.Status.REJECTED,
+        reviewed_date__lt=cutoff_date,
+    )
+
+    deleted_count = 0
+    for record in records:
+        has_media = record.media_file or record.url
+        if has_media:
+            record.delete_media_file()
+            record.url = ""
+            record.save(update_fields=["url"])
+            deleted_count += 1
+
+    if deleted_count:
+        messages.success(request, f"Deleted media from {deleted_count} rejected record(s).")
+    else:
+        messages.info(request, "No rejected records older than 30 days with media found.")
+
+    return redirect("team:verification_records")
+
+
+@login_required
+@team_member_required()
 @require_GET
 def youtube_channels_view(request: HttpRequest) -> HttpResponse:
     """Display list of team members with YouTube channels.
@@ -564,5 +645,88 @@ def youtube_channels_view(request: HttpRequest) -> HttpResponse:
         "team/youtube_channels.html",
         {
             "users": users_with_channels,
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_GET
+def performance_review_view(request: HttpRequest) -> HttpResponse:
+    """Display performance review comparing verification records with ZwiftPower data.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered performance review page.
+
+    """
+    # Check permission - only verification reviewers can access
+    if not request.user.can_approve_verification and not request.user.is_superuser:
+        messages.error(request, "You don't have permission to view performance review.")
+        return redirect("home")
+
+    # Get performance data
+    riders = get_performance_review_data()
+
+    # Get filter parameters
+    search_query = request.GET.get("q", "").strip()
+    zp_category_filter = request.GET.get("zp_category", "")
+    gender_filter = request.GET.get("gender", "")
+
+    # Get sort parameters (default: weight_diff descending - largest concerns first)
+    sort_by = request.GET.get("sort", "weight_diff")
+    sort_dir = request.GET.get("dir", "desc")
+
+    # Collect unique values for filter dropdowns (before filtering)
+    zp_divs_present = sorted({r.zp_div for r in riders if r.zp_div})
+    zp_categories = [(div, ZP_DIV_TO_CATEGORY.get(div, str(div))) for div in zp_divs_present]
+
+    # Apply search filter (by name or zwid)
+    if search_query:
+        search_lower = search_query.lower()
+        riders = [
+            r for r in riders
+            if search_lower in r.display_name.lower() or search_query in str(r.zwid)
+        ]
+
+    # Apply ZwiftPower category filter
+    if zp_category_filter:
+        try:
+            div_value = int(zp_category_filter)
+            riders = [r for r in riders if r.zp_div == div_value]
+        except ValueError:
+            pass
+
+    # Apply gender filter
+    if gender_filter:
+        riders = [r for r in riders if r.gender == gender_filter]
+
+    # Apply sorting
+    reverse = sort_dir == "desc"
+    sort_keys = {
+        "name": lambda r: r.display_name.lower(),
+        "weight_diff": lambda r: r.weight_diff_abs if r.weight_diff_abs is not None else -1,
+        "weight_light_date": lambda r: r.weight_light_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
+        "weight_full_date": lambda r: r.weight_full_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
+        "height_date": lambda r: r.height_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
+        "zp_result_date": lambda r: r.zp_result_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
+        "zp_height_date": lambda r: r.zp_height_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
+    }
+    if sort_by in sort_keys:
+        riders = sorted(riders, key=sort_keys[sort_by], reverse=reverse)
+
+    return render(
+        request,
+        "team/performance_review.html",
+        {
+            "riders": riders,
+            "search_query": search_query,
+            "zp_category_filter": zp_category_filter,
+            "gender_filter": gender_filter,
+            "zp_categories": zp_categories,
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
         },
     )
