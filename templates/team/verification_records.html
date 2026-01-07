@@ -73,8 +73,8 @@
             </tr>
           </thead>
           <tbody>
-            {% for record in records %}
-            <tr>
+            {% for record, can_review in records_with_review_status %}
+            <tr class="{% if not can_review %}opacity-50{% endif %}">
               <td>
                 <div class="font-medium">{{ record.user.username }}</div>
                 {% if record.user.discord_username %}
@@ -103,14 +103,27 @@
                 {% else %}
                 <span class="badge badge-warning badge-sm">Pending</span>
                 {% endif %}
+                {% if record.same_gender %}
+                <span class="badge badge-info badge-sm ml-1" title="Requires same-gender reviewer">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                </span>
+                {% endif %}
               </td>
               <td>
+                {% if can_review %}
                 <a href="{% url 'team:verification_record_detail' record.pk %}" class="btn btn-ghost btn-xs">
                   View
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </a>
+                {% else %}
+                <span class="btn btn-ghost btn-xs btn-disabled cursor-not-allowed" title="Same-gender reviewer required">
+                  Restricted
+                </span>
+                {% endif %}
               </td>
             </tr>
             {% empty %}
@@ -126,7 +139,7 @@
 
       <!-- Stats -->
       <div class="mt-6 text-sm text-base-content/50">
-        Showing {{ records|length }} record{{ records|length|pluralize }}
+        Showing {{ records_with_review_status|length }} record{{ records_with_review_status|length|pluralize }}
       </div>
     </div>
   </div>

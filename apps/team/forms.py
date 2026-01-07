@@ -90,7 +90,7 @@ class RaceReadyRecordForm(forms.ModelForm):
 
         model = RaceReadyRecord
         fields: ClassVar[list[str]] = [
-            "verify_type", "media_type", "weight", "height", "ftp", "media_file", "url", "notes",
+            "verify_type", "media_type", "weight", "height", "ftp", "media_file", "url", "notes", "same_gender",
         ]
         widgets: ClassVar[dict] = {
             "verify_type": forms.Select(attrs={"class": "select select-bordered w-full", "id": "id_verify_type"}),
@@ -117,6 +117,7 @@ class RaceReadyRecordForm(forms.ModelForm):
             "media_file": forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"}),
             "url": forms.URLInput(attrs={"class": "input input-bordered w-full", "placeholder": "https://..."}),
             "notes": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 3}),
+            "same_gender": forms.CheckboxInput(attrs={"class": "checkbox checkbox-primary"}),
         }
 
     def __init__(self, *args, allowed_types: list[str] | None = None, **kwargs) -> None:

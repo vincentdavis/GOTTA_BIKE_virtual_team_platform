@@ -127,6 +127,10 @@ class RaceReadyRecord(models.Model):
     reviewed_date = models.DateTimeField(null=True, blank=True, help_text="When this record was reviewed")
     rejection_reason = models.TextField(blank=True, help_text="Reason for rejection (if rejected)")
     notes = models.TextField(blank=True, help_text="Notes about the measurement")
+    same_gender = models.BooleanField(
+        default=False,
+        help_text="Same gender as user should review record",
+    )
     date_created = models.DateTimeField(
         default=timezone.now,
         help_text="When this record was created",

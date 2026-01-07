@@ -157,6 +157,19 @@
             {% endif %}
         </div>
 
+        <!-- Same Gender Review Preference (only shown if user has gender set) -->
+        {% if request.user.gender %}
+        <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-3">
+                {{ race_ready_form.same_gender }}
+                <span class="label-text">Request same-gender reviewer</span>
+            </label>
+            <label class="label pt-0">
+                <span class="label-text-alt text-base-content/70">If checked, only reviewers of the same gender can approve this record</span>
+            </label>
+        </div>
+        {% endif %}
+
         {% if race_ready_form.non_field_errors %}
         <div class="alert alert-error">
             {% for error in race_ready_form.non_field_errors %}

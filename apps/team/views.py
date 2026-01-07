@@ -411,14 +411,35 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     if status_filter:
         records = records.filter(status=status_filter)
 
-    # Check if user can verify records
+    # Check if user can verify records (has permission)
     can_verify = request.user.can_approve_verification or request.user.is_superuser
+
+    # Add can_review flag to each record based on same_gender preference
+    def user_can_review_record(record: RaceReadyRecord) -> bool:
+        """Check if the current user can review a specific record.
+
+        Superusers can always review. If same_gender is False, anyone with
+        permission can review. If same_gender is True, only same-gender
+        reviewers can review.
+
+        Returns:
+            True if the user can review this record, False otherwise.
+
+        """
+        if request.user.is_superuser:
+            return True
+        if not record.same_gender:
+            return True
+        return record.user.gender == request.user.gender
+
+    # Create list of (record, can_review) tuples for template
+    records_with_review_status = [(record, user_can_review_record(record)) for record in records]
 
     return render(
         request,
         "team/verification_records.html",
         {
-            "records": records,
+            "records_with_review_status": records_with_review_status,
             "search_query": search_query,
             "type_filter": type_filter,
             "status_filter": status_filter,
@@ -450,8 +471,16 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
 
     record = get_object_or_404(RaceReadyRecord.objects.select_related("user", "reviewed_by"), pk=pk)
 
-    # Check if user can verify records
-    can_review = request.user.can_approve_verification or request.user.is_superuser
+    # Check if user can verify records (has permission)
+    has_permission = request.user.can_approve_verification or request.user.is_superuser
+
+    # Check same_gender restriction: if set, only same-gender reviewers can access (superusers bypass)
+    if record.same_gender and not request.user.is_superuser and record.user.gender != request.user.gender:
+        messages.warning(request, "This record requires a same-gender reviewer.")
+        return redirect("team:verification_records")
+
+    # User can review if they have permission and pass same_gender check (already checked above)
+    can_review = has_permission
 
     if request.method == "POST" and can_review and record.is_pending:
         action = request.POST.get("action")
