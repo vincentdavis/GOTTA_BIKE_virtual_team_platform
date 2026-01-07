@@ -9,6 +9,8 @@
     </div>
     {% endif %}
 
+    <p class="text-sm text-base-content/70 mb-4">Your video/photo/link will be deleted after review.</p>
+
     <form hx-post="{% url 'accounts:submit_race_ready' %}"
           hx-target="#race-ready-form-container"
           hx-swap="outerHTML"
