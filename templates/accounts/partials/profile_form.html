@@ -119,16 +119,33 @@
         </div>
     </div>
 
-    <div class="form-control">
-        <label class="label" for="id_youtube_channel">
-            <span class="label-text">{{ form.youtube_channel.label }}</span>
-        </label>
-        {{ form.youtube_channel }}
-        {% if form.youtube_channel.errors %}
-        <label class="label">
-            <span class="label-text-alt text-error">{{ form.youtube_channel.errors.0 }}</span>
-        </label>
-        {% endif %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_unit_preference">
+                <span class="label-text">{{ form.unit_preference.label }}</span>
+            </label>
+            {{ form.unit_preference }}
+            {% if form.unit_preference.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.unit_preference.errors.0 }}</span>
+            </label>
+            {% endif %}
+            <label class="label">
+                <span class="label-text-alt">Used for weight/height verification records</span>
+            </label>
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_youtube_channel">
+                <span class="label-text">{{ form.youtube_channel.label }}</span>
+            </label>
+            {{ form.youtube_channel }}
+            {% if form.youtube_channel.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.youtube_channel.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
     </div>
 
     <div class="form-control mt-6">

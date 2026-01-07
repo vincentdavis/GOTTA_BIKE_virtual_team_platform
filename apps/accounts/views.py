@@ -30,7 +30,10 @@ def profile_view(request: HttpRequest) -> HttpResponse:
 
     # Get allowed verification types based on user's ZwiftPower category
     allowed_types = get_user_verification_types(request.user)
-    race_ready_form = RaceReadyRecordForm(allowed_types=allowed_types)
+    race_ready_form = RaceReadyRecordForm(
+        allowed_types=allowed_types,
+        unit_preference=request.user.unit_preference,
+    )
 
     # Get all race ready records for the user
     race_ready_records = request.user.race_ready_records.all()
@@ -52,6 +55,7 @@ def profile_view(request: HttpRequest) -> HttpResponse:
             "latest_by_type": latest_by_type,
             "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
             "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
+            "unit_preference": request.user.unit_preference,
         },
     )
 
@@ -211,7 +215,12 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
     """
     # Get allowed verification types to validate and filter form choices
     allowed_types = get_user_verification_types(request.user)
-    form = RaceReadyRecordForm(request.POST, request.FILES, allowed_types=allowed_types)
+    form = RaceReadyRecordForm(
+        request.POST,
+        request.FILES,
+        allowed_types=allowed_types,
+        unit_preference=request.user.unit_preference,
+    )
 
     if form.is_valid():
         record = form.save(commit=False)
@@ -231,12 +240,16 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
                 request,
                 "accounts/partials/race_ready_form.html",
                 {
-                    "race_ready_form": RaceReadyRecordForm(allowed_types=allowed_types),
+                    "race_ready_form": RaceReadyRecordForm(
+                        allowed_types=allowed_types,
+                        unit_preference=request.user.unit_preference,
+                    ),
                     "race_ready_records": race_ready_records,
                     "latest_by_type": latest_by_type,
                     "success": True,
                     "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
                     "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
+                    "unit_preference": request.user.unit_preference,
                 },
             )
         return redirect("accounts:profile")
@@ -249,6 +262,7 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
                     "race_ready_form": form,
                     "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
                     "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
+                    "unit_preference": request.user.unit_preference,
                 },
             )
         messages.error(request, "Please correct the errors below.")

@@ -97,6 +97,12 @@ class User(AbstractUser):
         FEMALE = "female", "Female"
         OTHER = "other", "Other"
 
+    class UnitPreference(models.TextChoices):
+        """Unit preference choices for weight and height."""
+
+        METRIC = "metric", "Metric (kg, cm)"
+        IMPERIAL = "imperial", "Imperial (lbs, in)"
+
     # Discord integration
     discord_id = models.CharField(
         max_length=20,
@@ -166,6 +172,12 @@ class User(AbstractUser):
         max_length=200,
         blank=True,
         help_text="YouTube channel URL",
+    )
+    unit_preference = models.CharField(
+        max_length=10,
+        choices=UnitPreference.choices,
+        default=UnitPreference.METRIC,
+        help_text="Preferred unit system for weight and height",
     )
 
     # Roles

@@ -4,6 +4,7 @@ from typing import ClassVar
 
 from django import forms
 
+from apps.team.converters import inches_to_cm, lbs_to_kg
 from apps.team.models import RaceReadyRecord, TeamLink
 
 
@@ -120,22 +121,53 @@ class RaceReadyRecordForm(forms.ModelForm):
             "same_gender": forms.CheckboxInput(attrs={"class": "checkbox checkbox-primary"}),
         }
 
-    def __init__(self, *args, allowed_types: list[str] | None = None, **kwargs) -> None:
-        """Initialize form with optional allowed_types filter.
+    def __init__(
+        self,
+        *args,
+        allowed_types: list[str] | None = None,
+        unit_preference: str = "metric",
+        **kwargs,
+    ) -> None:
+        """Initialize form with optional allowed_types filter and unit preference.
 
         Args:
             *args: Positional arguments passed to parent.
             allowed_types: List of verify_type values to allow. If provided, filters choices.
+            unit_preference: User's unit preference ('metric' or 'imperial').
             **kwargs: Keyword arguments passed to parent.
 
         """
         super().__init__(*args, **kwargs)
+        self.unit_preference = unit_preference
 
         if allowed_types:
             # Filter choices to only allowed types
             self.fields["verify_type"].choices = [
                 (value, label) for value, label in self.ALL_VERIFY_TYPE_CHOICES if value in allowed_types
             ]
+
+        # Update field attributes based on unit preference
+        if unit_preference == "imperial":
+            # Update weight field for lbs
+            self.fields["weight"].widget.attrs.update({
+                "placeholder": "e.g., 160",
+                "min": "44",   # ~20 kg
+                "max": "441",  # ~200 kg
+                "step": "0.1",
+            })
+            self.fields["weight"].label = "Weight (lbs)"
+
+            # Update height field for inches
+            self.fields["height"].widget.attrs.update({
+                "placeholder": "e.g., 69",
+                "min": "39",   # ~100 cm
+                "max": "98",   # ~250 cm
+            })
+            self.fields["height"].label = "Height (inches)"
+        else:
+            # Ensure metric labels are set
+            self.fields["weight"].label = "Weight (kg)"
+            self.fields["height"].label = "Height (cm)"
 
     def clean_media_file(self):
         """Validate media file size and type.
@@ -161,6 +193,32 @@ class RaceReadyRecordForm(forms.ModelForm):
                     f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
                 )
         return media_file
+
+    def clean_weight(self):
+        """Validate and convert weight to kg if needed.
+
+        Returns:
+            Weight in kg (Decimal).
+
+        """
+        weight = self.cleaned_data.get("weight")
+        if weight and self.unit_preference == "imperial":
+            # Convert from lbs to kg
+            weight = lbs_to_kg(weight)
+        return weight
+
+    def clean_height(self):
+        """Validate and convert height to cm if needed.
+
+        Returns:
+            Height in cm (int).
+
+        """
+        height = self.cleaned_data.get("height")
+        if height and self.unit_preference == "imperial":
+            # Convert from inches to cm
+            height = inches_to_cm(height)
+        return height
 
     def clean(self):
         """Validate form data.

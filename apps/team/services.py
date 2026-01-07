@@ -126,9 +126,13 @@ class UnifiedRider:
             'M' for male, 'F' for female, or '' if unknown.
 
         """
-        # First check user profile gender
+        # First check user profile gender (normalize from 'male'/'female' to 'M'/'F')
         if self.user_gender:
-            return self.user_gender
+            if self.user_gender == "male":
+                return "M"
+            if self.user_gender == "female":
+                return "F"
+            return ""  # 'other' or unknown
         # Fall back to ZwiftPower: if divw > 0, they are female
         if self.in_zwiftpower:
             return "F" if self.zp_divw > 0 else "M"

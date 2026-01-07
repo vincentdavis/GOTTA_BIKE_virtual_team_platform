@@ -16,6 +16,19 @@
           class="space-y-4">
         {% csrf_token %}
 
+        <!-- Same Gender Review Preference (only shown if user has gender set) -->
+        {% if request.user.gender %}
+        <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-3">
+                {{ race_ready_form.same_gender }}
+                <span class="label-text">Request same-gender reviewer</span>
+            </label>
+            <label class="label pt-0">
+                <span class="label-text-alt text-base-content/70">If checked, only reviewers of the same gender can approve this record</span>
+            </label>
+        </div>
+        {% endif %}
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <!-- Verification Type -->
             <div class="form-control w-full">
@@ -76,9 +89,12 @@
         <!-- Weight Field (shown for weight_full/weight_light) -->
         <div id="weight-field" class="form-control w-full hidden">
             <label class="label" for="id_weight">
-                <span class="label-text">Weight (kg)</span>
+                <span class="label-text">{{ race_ready_form.weight.label }}</span>
             </label>
             {{ race_ready_form.weight }}
+            <div id="weight-preview" class="text-sm text-base-content/70 mt-1 hidden">
+                <span class="font-medium">Saved as:</span> <span id="weight-preview-value"></span>
+            </div>
             {% if race_ready_form.weight.errors %}
             <label class="label">
                 <span class="label-text-alt text-error">{{ race_ready_form.weight.errors.0 }}</span>
@@ -89,9 +105,12 @@
         <!-- Height Field (shown for height) -->
         <div id="height-field" class="form-control w-full hidden">
             <label class="label" for="id_height">
-                <span class="label-text">Height (cm)</span>
+                <span class="label-text">{{ race_ready_form.height.label }}</span>
             </label>
             {{ race_ready_form.height }}
+            <div id="height-preview" class="text-sm text-base-content/70 mt-1 hidden">
+                <span class="font-medium">Saved as:</span> <span id="height-preview-value"></span>
+            </div>
             {% if race_ready_form.height.errors %}
             <label class="label">
                 <span class="label-text-alt text-error">{{ race_ready_form.height.errors.0 }}</span>
@@ -157,19 +176,6 @@
             {% endif %}
         </div>
 
-        <!-- Same Gender Review Preference (only shown if user has gender set) -->
-        {% if request.user.gender %}
-        <div class="form-control">
-            <label class="label cursor-pointer justify-start gap-3">
-                {{ race_ready_form.same_gender }}
-                <span class="label-text">Request same-gender reviewer</span>
-            </label>
-            <label class="label pt-0">
-                <span class="label-text-alt text-base-content/70">If checked, only reviewers of the same gender can approve this record</span>
-            </label>
-        </div>
-        {% endif %}
-
         {% if race_ready_form.non_field_errors %}
         <div class="alert alert-error">
             {% for error in race_ready_form.non_field_errors %}
@@ -190,12 +196,27 @@
 
     <script>
     (function() {
+        const unitPreference = '{{ unit_preference|default:"metric" }}';
         const verifyTypeSelect = document.getElementById('id_verify_type');
         const weightField = document.getElementById('weight-field');
         const heightField = document.getElementById('height-field');
         const ftpField = document.getElementById('ftp-field');
         const weightInstructions = document.getElementById('weight-instructions');
         const heightInstructions = document.getElementById('height-instructions');
+
+        // Preview elements
+        const weightPreview = document.getElementById('weight-preview');
+        const weightPreviewValue = document.getElementById('weight-preview-value');
+        const heightPreview = document.getElementById('height-preview');
+        const heightPreviewValue = document.getElementById('height-preview-value');
+
+        // Input elements
+        const weightInput = document.getElementById('id_weight');
+        const heightInput = document.getElementById('id_height');
+
+        // Conversion constants
+        const LBS_TO_KG = 0.453592;
+        const INCHES_TO_CM = 2.54;
 
         function toggleFields() {
             const value = verifyTypeSelect.value;
@@ -219,9 +240,53 @@
             }
         }
 
+        function updateWeightPreview() {
+            const value = parseFloat(weightInput.value);
+            if (!isNaN(value) && value > 0) {
+                if (unitPreference === 'imperial') {
+                    // Convert lbs to kg for preview
+                    const kg = (value * LBS_TO_KG).toFixed(2);
+                    weightPreviewValue.textContent = kg + ' kg';
+                } else {
+                    // Already metric, just show kg
+                    weightPreviewValue.textContent = value + ' kg';
+                }
+                weightPreview.classList.remove('hidden');
+            } else {
+                weightPreview.classList.add('hidden');
+            }
+        }
+
+        function updateHeightPreview() {
+            const value = parseFloat(heightInput.value);
+            if (!isNaN(value) && value > 0) {
+                if (unitPreference === 'imperial') {
+                    // Convert inches to cm for preview
+                    const cm = Math.round(value * INCHES_TO_CM);
+                    heightPreviewValue.textContent = cm + ' cm';
+                } else {
+                    // Already metric, just show cm
+                    heightPreviewValue.textContent = value + ' cm';
+                }
+                heightPreview.classList.remove('hidden');
+            } else {
+                heightPreview.classList.add('hidden');
+            }
+        }
+
         // Run on page load and on change
         toggleFields();
         verifyTypeSelect.addEventListener('change', toggleFields);
+
+        // Add input listeners for preview
+        if (weightInput) {
+            weightInput.addEventListener('input', updateWeightPreview);
+            if (weightInput.value) updateWeightPreview();
+        }
+        if (heightInput) {
+            heightInput.addEventListener('input', updateHeightPreview);
+            if (heightInput.value) updateHeightPreview();
+        }
     })();
     </script>
 </div>

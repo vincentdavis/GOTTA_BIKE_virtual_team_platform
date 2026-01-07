@@ -14,6 +14,7 @@ from apps.accounts.decorators import team_member_required
 from apps.team.forms import TeamLinkEditForm, TeamLinkForm
 from apps.team.models import RaceReadyRecord, RosterFilter, TeamLink
 from apps.team.services import ZP_DIV_TO_CATEGORY, get_unified_team_roster
+from apps.zwiftpower.models import ZPTeamRiders
 
 
 @login_required
@@ -485,6 +486,10 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     if request.method == "POST" and can_review and record.is_pending:
         action = request.POST.get("action")
         if action == "verify":
+            # Prevent self-approval
+            if record.user == request.user:
+                messages.error(request, "You cannot approve your own verification record.")
+                return redirect("team:verification_record_detail", pk=pk)
             record.status = RaceReadyRecord.Status.VERIFIED
             record.reviewed_by = request.user
             record.reviewed_date = timezone.now()
@@ -499,12 +504,18 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             messages.warning(request, f"Record for {record.user.username} has been rejected.")
         return redirect("team:verification_records")
 
+    # Get ZwiftPower data for the user if they have a zwid
+    zp_rider = None
+    if record.user.zwid:
+        zp_rider = ZPTeamRiders.objects.filter(zwid=record.user.zwid).first()
+
     return render(
         request,
         "team/verification_record_detail.html",
         {
             "record": record,
             "can_review": can_review,
+            "zp_rider": zp_rider,
         },
     )
 

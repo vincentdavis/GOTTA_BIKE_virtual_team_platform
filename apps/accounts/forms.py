@@ -44,6 +44,7 @@ class ProfileForm(forms.ModelForm):
             "city",
             "country",
             "timezone",
+            "unit_preference",
             "youtube_channel",
         ]
         widgets: ClassVar[dict] = {
@@ -96,6 +97,11 @@ class ProfileForm(forms.ModelForm):
                     "class": "select select-bordered w-full",
                 }
             ),
+            "unit_preference": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
             "youtube_channel": forms.URLInput(
                 attrs={
                     "class": "input input-bordered w-full",
@@ -112,6 +118,7 @@ class ProfileForm(forms.ModelForm):
             "city": "City",
             "country": "Country",
             "timezone": "Timezone",
+            "unit_preference": "Unit Preference",
             "youtube_channel": "YouTube Channel",
         }
 

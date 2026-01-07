@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load accounts_tags %}
 
 {% block title %}Verification Record - {{ record.user.username }} - The Coalition{% endblock %}
 
@@ -25,6 +26,19 @@
           {% if record.user.discord_username %}
           <div class="text-sm text-base-content/70">Discord: {{ record.user.discord_username }}</div>
           {% endif %}
+          {% if record.user.zwid %}
+          <div class="text-sm text-base-content/70 mt-1">ZWID: {{ record.user.zwid }}</div>
+          <div class="flex gap-2 mt-2">
+            <a href="https://zwiftpower.com/profile.php?z={{ record.user.zwid }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">
+              ZwiftPower
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+            </a>
+            <a href="https://www.zwiftracing.app/riders/{{ record.user.zwid }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">
+              ZwiftRacing
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+            </a>
+          </div>
+          {% endif %}
         </div>
 
         <div class="bg-base-300 rounded-lg p-4">
@@ -36,15 +50,29 @@
           <div class="text-sm text-base-content/60 mb-1">Value</div>
           <div class="font-medium font-mono text-lg">
             {% if record.weight %}
-              {{ record.weight }} kg
+              {{ record.weight|weight_dual }}
             {% elif record.height %}
-              {{ record.height }} cm
+              {{ record.height|height_dual }}
             {% elif record.ftp %}
               {{ record.ftp }} W
             {% else %}
               <span class="text-base-content/30">-</span>
             {% endif %}
           </div>
+          {% if record.weight and zp_rider and zp_rider.weight %}
+          <div class="mt-2 pt-2 border-t border-base-content/10">
+            <div class="text-sm text-base-content/60">ZwiftPower Weight</div>
+            <div class="font-medium font-mono">{{ zp_rider.weight|weight_dual }}</div>
+            <div class="text-sm mt-1">
+              <span class="text-base-content/60">Difference:</span>
+              {% with diff=record.weight|weight_diff:zp_rider.weight %}
+              <span class="font-medium {% if '+' in diff %}text-error{% elif '-' in diff %}text-success{% endif %}">
+                {{ diff }}
+              </span>
+              {% endwith %}
+            </div>
+          </div>
+          {% endif %}
         </div>
 
         <div class="bg-base-300 rounded-lg p-4">
@@ -181,6 +209,16 @@
           <span>This record is pending review. Review the media before verifying or rejecting.</span>
         </div>
         <div class="flex gap-4">
+          {% if record.user == user %}
+          <div class="tooltip" data-tip="You cannot approve your own record">
+            <button type="button" class="btn btn-success btn-disabled" disabled>
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Verify Record
+            </button>
+          </div>
+          {% else %}
           <form method="post">
             {% csrf_token %}
             <input type="hidden" name="action" value="verify">
@@ -191,6 +229,7 @@
               Verify Record
             </button>
           </form>
+          {% endif %}
           <button type="button" class="btn btn-error btn-outline" onclick="document.getElementById('reject-modal').showModal()">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
