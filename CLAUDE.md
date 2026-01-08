@@ -102,7 +102,7 @@ All users must complete their profile before accessing the app. Enforced by `Pro
 - `birth_year` - Year of birth (validated: 1900 to current_year - 13)
 - `gender` - Gender (male/female/other)
 - `timezone` - User's timezone (e.g., "America/New_York")
-- `country` - Country of residence
+- `country` - Country of residence (uses `django-countries` CountryField with ISO 2-letter codes, rendered as dropdown)
 - `zwid_verified` - Zwift account must be verified
 
 #### User Model Properties
@@ -305,6 +305,7 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
 
 - `theme/` - django-tailwind app with Tailwind CSS 4.x + DaisyUI 5.x
 - `theme/templates/` - Base templates (base.html, header.html, footer.html)
+    - `base.html` includes site announcement banner (yellow, top of page) when `config.SITE_ANNOUNCEMENT` is set
 - `templates/account/` - Auth templates (login, logout) with DaisyUI styling
 - `templates/mfa/` - MFA templates (TOTP setup, recovery codes)
 - Uses HTMX for interactivity (`django-htmx` middleware enabled)
@@ -335,7 +336,7 @@ Available settings:
   `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
   `POWER_VERIFICATION_DAYS` (365)
 - **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)
-- **Site Settings**: `TEAM_NAME`, `SITE_ANNOUNCEMENT`, `MAINTENANCE_MODE`
+- **Site Settings**: `TEAM_NAME`, `SITE_ANNOUNCEMENT` (displays as yellow banner at top of all pages), `MAINTENANCE_MODE`
 
 Usage in code:
 
