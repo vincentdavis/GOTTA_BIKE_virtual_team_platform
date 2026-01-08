@@ -5,6 +5,7 @@ from typing import ClassVar
 from zoneinfo import available_timezones
 
 from django import forms
+from django_countries.widgets import CountrySelectWidget
 
 from apps.accounts.models import User
 
@@ -85,10 +86,9 @@ class ProfileForm(forms.ModelForm):
                     "placeholder": "City",
                 }
             ),
-            "country": forms.TextInput(
+            "country": CountrySelectWidget(
                 attrs={
-                    "class": "input input-bordered w-full",
-                    "placeholder": "Country",
+                    "class": "select select-bordered w-full",
                 }
             ),
             "timezone": forms.Select(

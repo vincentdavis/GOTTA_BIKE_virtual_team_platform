@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "theme",
     "reset_migrations",
     "simple_history",
+    "django_countries",
     # Project apps
     "gotta_bike_platform",
     "apps.accounts.apps.AccountsConfig",
