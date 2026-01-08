@@ -454,11 +454,14 @@ class User(AbstractUser):
             self.last_name,
             self.gender,
             self.timezone,
-            self.country,
         ]
 
         # Check all text fields are non-empty
         if not all(field and field.strip() for field in required_text_fields):
+            return False
+
+        # Check country is set (CountryField returns a Country object, not a string)
+        if not self.country:
             return False
 
         # Check birth_year is set (it's a nullable integer field)
@@ -482,7 +485,7 @@ class User(AbstractUser):
             "birth_year": bool(self.birth_year),
             "gender": bool(self.gender and self.gender.strip()),
             "timezone": bool(self.timezone and self.timezone.strip()),
-            "country": bool(self.country and self.country.strip()),
+            "country": bool(self.country),  # CountryField returns a Country object, not a string
             "zwid_verified": self.zwid_verified,
         }
 
