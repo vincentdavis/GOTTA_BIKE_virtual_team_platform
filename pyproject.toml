@@ -1,7 +1,7 @@
 [project]
 name = "GOTTA-BIKE_virtual-team-app"
 version = "0.1.0"
-description = "App and discrod bot for managing zwift virtual cycling teams."
+description = "App and discord bot for managing zwift virtual cycling teams."
 requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4>=4.14.3",
