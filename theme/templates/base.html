@@ -2,10 +2,17 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
-    <title>{% block title %}The Coalition Team{% endblock %}</title>
+    <title>{% block title %}{{ config.TEAM_NAME }}{% endblock %}</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    {% block meta_description %}<meta name="description" content="{{ config.META_DESCRIPTION }}">{% endblock %}
+    {% if config.META_KEYWORDS %}<meta name="keywords" content="{{ config.META_KEYWORDS }}">{% endif %}
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    {% block og_title %}<meta property="og:title" content="{{ config.TEAM_NAME }}">{% endblock %}
+    {% block og_description %}<meta property="og:description" content="{{ config.META_DESCRIPTION }}">{% endblock %}
+    {% if config.OG_IMAGE_URL %}<meta property="og:image" content="{{ config.OG_IMAGE_URL }}">{% endif %}
     <link rel="icon" type="image/png" href="{% static 'images/favicon.png' %}">
     {% tailwind_css %}
     <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>

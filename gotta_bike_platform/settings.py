@@ -459,6 +459,22 @@ CONSTANCE_CONFIG = {
     "ABOUT_URL": ("#", "URL to About page", str),
     "CONTACT_URL": ("#", "URL to Contact page", str),
     "DISCORD_URL": ("#", "Discord server invite link", str),
+    # SEO Settings
+    "META_DESCRIPTION": (
+        "The Coalition is a competitive Zwift racing team bringing together cyclists from around the world.",
+        "Meta description for search engines (150-160 characters recommended)",
+        str,
+    ),
+    "META_KEYWORDS": (
+        "zwift, cycling, esports, racing, virtual cycling, zwift racing, coalition",
+        "Meta keywords for search engines (comma-separated)",
+        str,
+    ),
+    "OG_IMAGE_URL": (
+        "",
+        "Open Graph image URL for social media sharing (1200x630 recommended)",
+        str,
+    ),
     # Legal
     "PRIVACY_POLICY_URL": ("", "URL to Privacy Policy page", str),
     "TERMS_OF_SERVICE_URL": ("", "URL to Terms of Service page", str),
@@ -521,6 +537,11 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "RACE_READY_ROLE_ID",
         "WEIGHT_INSTRUCTIONS_URL",
         "HEIGHT_INSTRUCTIONS_URL",
+    ),
+    "SEO Settings": (
+        "META_DESCRIPTION",
+        "META_KEYWORDS",
+        "OG_IMAGE_URL",
     ),
     "Legal": (
         "PRIVACY_POLICY_URL",
