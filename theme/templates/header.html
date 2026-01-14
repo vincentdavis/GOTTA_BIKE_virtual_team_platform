@@ -64,6 +64,9 @@
                 <li><a href="{% url 'team:performance_review' %}">Performance Review</a></li>
                 <li><a href="{% url 'team:submit_link' %}">Submit Link</a></li>
                 <li><a href="{% url 'data_connection:connection_list' %}">Data Connections</a></li>
+                {% if user.is_app_admin or user.is_superuser %}
+                <li><a href="{% url 'accounts:config_settings' %}">Configuration</a></li>
+                {% endif %}
                 {% endif %}
             </ul>
         </div>

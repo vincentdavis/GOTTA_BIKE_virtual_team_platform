@@ -1,0 +1,137 @@
+{% load accounts_tags %}
+
+{% if success %}
+<div class="alert alert-success mb-4">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <span>Settings saved successfully!</span>
+</div>
+{% endif %}
+
+{% if errors %}
+<div class="alert alert-error mb-4">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div>
+        <span>Some settings could not be saved:</span>
+        <ul class="list-disc list-inside text-sm mt-1">
+            {% for error in errors %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endif %}
+
+<form hx-post="{% url 'accounts:config_section_update' section.key %}"
+      hx-target="#section-{{ section.key }} .collapse-content"
+      hx-swap="innerHTML"
+      class="space-y-4 pt-2">
+    {% csrf_token %}
+
+    {% for setting in section.settings %}
+    <div class="form-control">
+        <label class="label" for="id_{{ setting.key }}">
+            <span class="label-text font-medium">{{ setting.key }}</span>
+        </label>
+
+        {% if setting.input_type == "boolean" %}
+        <!-- Boolean Toggle -->
+        <div class="flex items-center gap-3">
+            <input type="checkbox"
+                   name="{{ setting.key }}"
+                   id="id_{{ setting.key }}"
+                   class="toggle toggle-primary"
+                   {% if setting.current_value %}checked{% endif %}>
+            <span class="label-text-alt">{{ setting.description }}</span>
+        </div>
+
+        {% elif setting.input_type == "number" %}
+        <!-- Number Input -->
+        <input type="number"
+               name="{{ setting.key }}"
+               id="id_{{ setting.key }}"
+               value="{{ setting.current_value }}"
+               class="input input-bordered w-full">
+        <label class="label">
+            <span class="label-text-alt">{{ setting.description }}</span>
+        </label>
+
+        {% elif setting.input_type == "password" %}
+        <!-- Password Input with Toggle -->
+        <div class="relative">
+            <input type="password"
+                   name="{{ setting.key }}"
+                   id="id_{{ setting.key }}"
+                   value="{{ setting.current_value }}"
+                   class="input input-bordered w-full pr-12"
+                   autocomplete="off">
+            <button type="button"
+                    class="password-toggle"
+                    onclick="togglePassword('id_{{ setting.key }}')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" id="id_{{ setting.key }}-icon">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+            </button>
+        </div>
+        <label class="label">
+            <span class="label-text-alt">{{ setting.description }}</span>
+        </label>
+
+        {% elif setting.input_type == "json_list" %}
+        <!-- Multi-select for Role IDs using Tom Select -->
+        <select name="{{ setting.key }}"
+                id="id_{{ setting.key }}"
+                class="role-select"
+                multiple
+                placeholder="Search and select roles...">
+            {% with selected_roles=setting.current_value|parse_json_list %}
+            {% for role in available_roles %}
+            <option value="{{ role.role_id }}"
+                    data-color="{{ role.color_hex|default:'#99AAB5' }}"
+                    data-name="{{ role.name }}"
+                    {% if role.role_id in selected_roles %}selected{% endif %}>
+                {{ role.name }} ({{ role.role_id }})
+            </option>
+            {% endfor %}
+            {% endwith %}
+        </select>
+        <label class="label">
+            <span class="label-text-alt">{{ setting.description }}</span>
+        </label>
+
+        {% elif setting.input_type == "json" %}
+        <!-- JSON Textarea -->
+        <textarea name="{{ setting.key }}"
+                  id="id_{{ setting.key }}"
+                  class="textarea textarea-bordered w-full font-mono text-sm"
+                  rows="4"
+                  placeholder='{"key": "value"}'>{{ setting.current_value }}</textarea>
+        <label class="label">
+            <span class="label-text-alt">{{ setting.description }} (Must be valid JSON)</span>
+        </label>
+
+        {% else %}
+        <!-- Text Input -->
+        <input type="text"
+               name="{{ setting.key }}"
+               id="id_{{ setting.key }}"
+               value="{{ setting.current_value }}"
+               class="input input-bordered w-full">
+        <label class="label">
+            <span class="label-text-alt">{{ setting.description }}</span>
+        </label>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    <div class="form-control mt-6">
+        <button type="submit" class="btn btn-primary">
+            <span class="htmx-indicator loading loading-spinner loading-sm"></span>
+            Save {{ section.name }}
+        </button>
+    </div>
+</form>

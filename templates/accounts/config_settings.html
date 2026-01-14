@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% load accounts_tags %}
+
+{% block title %}Configuration Settings - {{ config.TEAM_NAME }}{% endblock %}
+
+{% block extra_css %}
+<!-- Tom Select CSS -->
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+<style>
+    /* Tom Select customization for DaisyUI */
+    .ts-wrapper {
+        max-width: 100%;
+    }
+    .ts-wrapper .ts-control {
+        background-color: oklch(var(--b1));
+        border-color: oklch(var(--bc) / 0.2);
+        border-radius: var(--rounded-btn, 0.5rem);
+        padding: 0.5rem 1rem;
+        min-height: 3rem;
+    }
+    .ts-dropdown {
+        background-color: oklch(var(--b1));
+        border-color: oklch(var(--bc) / 0.2);
+        border-radius: var(--rounded-btn, 0.5rem);
+    }
+    .ts-dropdown .option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0.5rem 1rem;
+    }
+    .ts-dropdown .option.active {
+        background-color: oklch(var(--p) / 0.1);
+    }
+    .role-color-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .role-id {
+        font-size: 11px;
+        color: oklch(var(--bc) / 0.5);
+        font-family: monospace;
+    }
+    .ts-wrapper .item {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 0.25rem;
+        padding: 2px 8px;
+        margin: 2px;
+    }
+    .ts-wrapper .item .role-color-dot {
+        width: 8px;
+        height: 8px;
+    }
+    /* Password toggle button */
+    .password-toggle {
+        position: absolute;
+        right: 0.75rem;
+        top: 50%;
+        transform: translateY(-50%);
+        cursor: pointer;
+        color: oklch(var(--bc) / 0.5);
+    }
+    .password-toggle:hover {
+        color: oklch(var(--bc) / 0.8);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="card bg-base-200 shadow-xl">
+        <div class="card-body">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="card-title text-2xl">Configuration Settings</h2>
+                <a href="{% url 'accounts:profile' %}" class="btn btn-ghost btn-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                    </svg>
+                    Back to Profile
+                </a>
+            </div>
+
+            <p class="text-base-content/70 mb-6">
+                Configure application settings. Changes are saved per section.
+            </p>
+
+            <!-- Sections Accordion -->
+            <div class="space-y-4">
+                {% for section_key, section in sections.items %}
+                <div id="section-{{ section.key }}" class="collapse collapse-arrow bg-base-300 rounded-lg">
+                    <input type="checkbox" {% if forloop.first %}checked{% endif %} />
+                    <div class="collapse-title text-lg font-medium">
+                        {{ section.name }}
+                        <span class="badge badge-ghost ml-2">{{ section.settings|length }} settings</span>
+                    </div>
+                    <div class="collapse-content">
+                        {% include "accounts/partials/config_section.html" with section=section %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tom Select JS -->
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    initTomSelects();
+});
+
+// Re-initialize Tom Select after HTMX swaps
+document.body.addEventListener('htmx:afterSwap', function(event) {
+    initTomSelects();
+});
+
+function initTomSelects() {
+    document.querySelectorAll('.role-select:not(.tomselected)').forEach(function(select) {
+        new TomSelect(select, {
+            plugins: ['remove_button'],
+            maxOptions: null,
+            closeAfterSelect: false,
+            hideSelected: false,
+            render: {
+                option: function(data, escape) {
+                    const color = data.color || '#99AAB5';
+                    const parts = data.text.match(/^(.+) \((\d+)\)$/);
+                    const name = parts ? parts[1] : data.text;
+                    const id = parts ? parts[2] : '';
+                    return `<div class="option">
+                        <span class="role-color-dot" style="background-color: ${escape(color)};"></span>
+                        <span class="role-name">${escape(name)}</span>
+                        <span class="role-id">${escape(id)}</span>
+                    </div>`;
+                },
+                item: function(data, escape) {
+                    const color = data.color || '#99AAB5';
+                    const parts = data.text.match(/^(.+) \((\d+)\)$/);
+                    const name = parts ? parts[1] : data.text;
+                    return `<div class="item" style="background-color: ${escape(color)}20; border: 1px solid ${escape(color)};">
+                        <span class="role-color-dot" style="background-color: ${escape(color)};"></span>
+                        <span>${escape(name)}</span>
+                    </div>`;
+                }
+            },
+            onInitialize: function() {
+                const self = this;
+                Object.keys(this.options).forEach(function(key) {
+                    const opt = select.querySelector(`option[value="${key}"]`);
+                    if (opt) {
+                        self.options[key].color = opt.dataset.color;
+                    }
+                });
+            }
+        });
+    });
+}
+
+// Password visibility toggle
+function togglePassword(inputId) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(inputId + '-icon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />`;
+    } else {
+        input.type = 'password';
+        icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />`;
+    }
+}
+</script>
+{% endblock %}

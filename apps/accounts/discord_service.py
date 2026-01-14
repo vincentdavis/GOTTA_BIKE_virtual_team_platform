@@ -1,8 +1,15 @@
-"""Discord API service for sending direct messages."""
+"""Discord API service for sending direct messages and syncing roles."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import httpx
 import logfire
 from constance import config
+
+if TYPE_CHECKING:
+    from apps.accounts.models import User
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
 
@@ -104,3 +111,98 @@ def send_verification_notification(
         message += "\n\nPlease submit a new verification record with the required corrections."
 
     return send_discord_dm(discord_id, message)
+
+
+def sync_user_discord_roles(user: User) -> bool:
+    """Fetch and sync Discord guild roles for a user.
+
+    Uses the bot token to fetch the user's guild member data from Discord API
+    and updates the user's discord_roles field.
+
+    Args:
+        user: The User object with discord_id set.
+
+    Returns:
+        True if roles were synced successfully, False otherwise.
+
+    """
+    if not user.discord_id:
+        logfire.warning("Cannot sync roles: user has no discord_id", user_id=user.id)
+        return False
+
+    bot_token = config.DISCORD_BOT_TOKEN
+    if not bot_token:
+        logfire.warning("DISCORD_BOT_TOKEN not configured, skipping role sync")
+        return False
+
+    guild_id = config.GUILD_ID
+    if not guild_id:
+        logfire.warning("GUILD_ID not configured, skipping role sync")
+        return False
+
+    headers = {
+        "Authorization": f"Bot {bot_token}",
+    }
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            # Fetch guild member data
+            response = client.get(
+                f"{DISCORD_API_BASE}/guilds/{guild_id}/members/{user.discord_id}",
+                headers=headers,
+            )
+            response.raise_for_status()
+            member_data = response.json()
+
+        # Extract role IDs from member data
+        role_ids = member_data.get("roles", [])
+
+        # Look up role names from our DiscordRole model
+        from apps.team.models import DiscordRole
+
+        role_map: dict[str, str] = {}
+        for role_id in role_ids:
+            try:
+                role = DiscordRole.objects.get(role_id=role_id)
+                role_map[role_id] = role.name
+            except DiscordRole.DoesNotExist:
+                # Role not synced yet, use placeholder
+                role_map[role_id] = f"Unknown Role ({role_id})"
+
+        # Update user's discord_roles
+        user.discord_roles = role_map
+        user.save(update_fields=["discord_roles"])
+
+        logfire.info(
+            "Discord roles synced for user",
+            user_id=user.id,
+            discord_id=user.discord_id,
+            roles_count=len(role_map),
+        )
+        return True
+
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            logfire.warning(
+                "User not found in guild",
+                user_id=user.id,
+                discord_id=user.discord_id,
+                guild_id=guild_id,
+            )
+        else:
+            logfire.error(
+                "Failed to fetch guild member data",
+                user_id=user.id,
+                discord_id=user.discord_id,
+                status_code=e.response.status_code,
+                error=str(e),
+            )
+        return False
+    except httpx.RequestError as e:
+        logfire.error(
+            "Discord API request failed",
+            user_id=user.id,
+            discord_id=user.discord_id,
+            error=str(e),
+        )
+        return False

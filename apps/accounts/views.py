@@ -1,9 +1,13 @@
 """Views for accounts app."""
 
+import json
+
 from constance import config
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -267,3 +271,179 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
             )
         messages.error(request, "Please correct the errors below.")
         return redirect("accounts:profile")
+
+
+def _get_config_sections() -> dict:
+    """Build configuration sections from CONSTANCE_CONFIG_FIELDSETS.
+
+    Returns:
+        Dictionary with section keys, names, and setting details.
+
+    """
+    constance_config = settings.CONSTANCE_CONFIG
+    fieldsets = settings.CONSTANCE_CONFIG_FIELDSETS
+
+    sections = {}
+    for section_name, setting_keys in fieldsets.items():
+        section_key = section_name.lower().replace(" ", "_")
+        section_settings = []
+
+        for key in setting_keys:
+            if key in constance_config:
+                setting_def = constance_config[key]
+                default_value, description, field_type = setting_def[0], setting_def[1], setting_def[2]
+
+                # Determine the input type
+                if field_type == "password_field":
+                    input_type = "password"
+                elif field_type == "json_list_field":
+                    input_type = "json_list"
+                elif field_type == "json_field":
+                    input_type = "json"
+                elif field_type is bool:
+                    input_type = "boolean"
+                elif field_type is int:
+                    input_type = "number"
+                else:
+                    input_type = "text"
+
+                # Get current value from constance
+                current_value = getattr(config, key, default_value)
+
+                section_settings.append({
+                    "key": key,
+                    "description": description,
+                    "input_type": input_type,
+                    "default_value": default_value,
+                    "current_value": current_value,
+                })
+
+        sections[section_key] = {
+            "name": section_name,
+            "key": section_key,
+            "settings": section_settings,
+        }
+
+    return sections
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def config_settings(request: HttpRequest) -> HttpResponse:
+    """Display configuration settings page for app admins.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered configuration settings page.
+
+    Raises:
+        PermissionDenied: If user lacks app_admin permission and is not superuser.
+
+    """
+    # Check permissions: app_admin OR superuser
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    sections = _get_config_sections()
+
+    # Get Discord roles for permission mapping selects
+    from apps.team.models import DiscordRole
+
+    available_roles = DiscordRole.objects.filter(managed=False).order_by("-position")
+
+    return render(
+        request,
+        "accounts/config_settings.html",
+        {
+            "sections": sections,
+            "available_roles": available_roles,
+        },
+    )
+
+
+@login_required
+@require_POST
+def config_section_update(request: HttpRequest, section_key: str) -> HttpResponse:
+    """Update configuration settings for a specific section via HTMX.
+
+    Args:
+        request: The HTTP request.
+        section_key: The section key to update.
+
+    Returns:
+        Rendered section partial with updated values and success message.
+
+    Raises:
+        PermissionDenied: If user lacks app_admin permission and is not superuser.
+
+    """
+    # Check permissions: app_admin OR superuser
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    sections = _get_config_sections()
+
+    if section_key not in sections:
+        return HttpResponse("Section not found", status=404)
+
+    section = sections[section_key]
+    errors = []
+
+    # Process each setting in the section
+    for setting in section["settings"]:
+        key = setting["key"]
+        input_type = setting["input_type"]
+
+        if input_type == "boolean":
+            # Checkbox - if present, True; if absent, False
+            value = key in request.POST
+        elif input_type == "number":
+            try:
+                value = int(request.POST.get(key, 0))
+            except ValueError:
+                errors.append(f"{key}: Invalid number")
+                continue
+        elif input_type == "json_list":
+            # Multi-select returns list of values
+            selected_values = request.POST.getlist(key)
+            value = json.dumps(selected_values)
+        elif input_type == "json":
+            raw_value = request.POST.get(key, "")
+            if raw_value:
+                try:
+                    # Validate JSON
+                    json.loads(raw_value)
+                    value = raw_value
+                except json.JSONDecodeError:
+                    errors.append(f"{key}: Invalid JSON format")
+                    continue
+            else:
+                value = "{}"
+        else:
+            # Text and password fields
+            value = request.POST.get(key, "")
+
+        # Save to constance
+        setattr(config, key, value)
+
+    # Refresh sections to get updated values
+    sections = _get_config_sections()
+    section = sections[section_key]
+
+    # Get Discord roles for permission mapping selects
+    from apps.team.models import DiscordRole
+
+    available_roles = DiscordRole.objects.filter(managed=False).order_by("-position")
+
+    return render(
+        request,
+        "accounts/partials/config_section.html",
+        {
+            "section": section,
+            "available_roles": available_roles,
+            "success": not errors,
+            "errors": errors,
+        },
+    )

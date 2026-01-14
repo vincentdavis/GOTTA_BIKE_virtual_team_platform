@@ -1,10 +1,33 @@
 """Template tags and filters for accounts app."""
 
+import json
 from decimal import Decimal
 
 from django import template
 
 register = template.Library()
+
+
+@register.filter
+def parse_json_list(value: str) -> list:
+    """Parse a JSON string to a list.
+
+    Args:
+        value: JSON string representing a list.
+
+    Returns:
+        Parsed list, or empty list if parsing fails.
+
+    """
+    if not value:
+        return []
+    try:
+        result = json.loads(value)
+        if isinstance(result, list):
+            return result
+        return []
+    except (json.JSONDecodeError, TypeError):
+        return []
 
 
 @register.filter

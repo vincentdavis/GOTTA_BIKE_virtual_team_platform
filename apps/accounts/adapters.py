@@ -9,6 +9,8 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
 
+from apps.accounts.discord_service import sync_user_discord_roles
+
 
 class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
     """Adapter to populate Discord fields from OAuth data.
@@ -101,9 +103,34 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
         if not user.username:
             user.username = extra_data.get('username', '')
 
-        # Clear first_name/last_name - we use discord_nickname for display
-        user.first_name = ''
-        user.last_name = ''
+        # Note: We do NOT clear first_name/last_name as they are required for profile completion
+        # Users will fill these in on the profile page after signup
+
+        return user
+
+    def save_user(self, request, sociallogin, form=None):
+        """Save a new user and sync their Discord roles.
+
+        Args:
+            request: The HTTP request.
+            sociallogin: The social login object.
+            form: Optional signup form.
+
+        Returns:
+            The saved user object.
+
+        """
+        user = super().save_user(request, sociallogin, form)
+
+        # Sync Discord guild roles for newly registered user
+        sync_user_discord_roles(user)
+
+        logfire.info(
+            "New user registered via Discord OAuth",
+            user_id=user.id,
+            discord_id=user.discord_id,
+            discord_username=user.discord_username,
+        )
 
         return user
 
@@ -130,6 +157,9 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             user.discord_nickname = extra_data.get('global_name') or extra_data.get('username', '')
             user.discord_avatar = extra_data.get('avatar', '') or ''
             user.save(update_fields=['discord_id', 'discord_username', 'discord_nickname', 'discord_avatar'])
+
+            # Sync Discord guild roles for existing user on login
+            sync_user_discord_roles(user)
 
     def get_login_redirect_url(self, request):
         """Return redirect URL after login.
