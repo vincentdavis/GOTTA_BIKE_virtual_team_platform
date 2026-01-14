@@ -1,5 +1,7 @@
 """Custom allauth adapters for Discord integration."""
 
+import contextlib
+
 import httpx
 import logfire
 from allauth.core.exceptions import ImmediateHttpResponse
@@ -103,8 +105,11 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
         if not user.username:
             user.username = extra_data.get('username', '')
 
-        # Note: We do NOT clear first_name/last_name as they are required for profile completion
-        # Users will fill these in on the profile page after signup
+        # IMPORTANT: Clear first_name/last_name that allauth's default populate_user sets
+        # from Discord data. These are required profile fields that users must fill in
+        # themselves on the profile page. We don't want Discord's global_name here.
+        user.first_name = ''
+        user.last_name = ''
 
         return user
 
@@ -120,16 +125,52 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             The saved user object.
 
         """
+        # Check if user already exists (reconnecting social account)
+        # In this case, preserve their existing profile data
+        from apps.accounts.models import User
+
+        existing_user = None
+        if sociallogin.user.pk:
+            # User already has a primary key, so they exist
+            existing_user = sociallogin.user
+        elif sociallogin.account.extra_data.get('id'):
+            # Try to find existing user by discord_id
+            discord_id = sociallogin.account.extra_data.get('id')
+            with contextlib.suppress(User.DoesNotExist):
+                existing_user = User.objects.get(discord_id=discord_id)
+
+        # Store existing profile data before save
+        preserved_first_name = existing_user.first_name if existing_user else None
+        preserved_last_name = existing_user.last_name if existing_user else None
+
         user = super().save_user(request, sociallogin, form)
+
+        # Restore preserved profile data if it existed
+        if preserved_first_name or preserved_last_name:
+            updated_fields = []
+            if preserved_first_name and not user.first_name:
+                user.first_name = preserved_first_name
+                updated_fields.append('first_name')
+            if preserved_last_name and not user.last_name:
+                user.last_name = preserved_last_name
+                updated_fields.append('last_name')
+            if updated_fields:
+                user.save(update_fields=updated_fields)
+                logfire.info(
+                    "Preserved existing profile data during social account reconnect",
+                    user_id=user.id,
+                    preserved_fields=updated_fields,
+                )
 
         # Sync Discord guild roles for newly registered user
         sync_user_discord_roles(user)
 
         logfire.info(
-            "New user registered via Discord OAuth",
+            "User registered/connected via Discord OAuth",
             user_id=user.id,
             discord_id=user.discord_id,
             discord_username=user.discord_username,
+            is_reconnect=existing_user is not None,
         )
 
         return user
