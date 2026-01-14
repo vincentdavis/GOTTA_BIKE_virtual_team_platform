@@ -131,6 +131,55 @@ WhiteNoise features:
 - OAuth scopes: `identify`, `email`, `guilds`
 - URLs at `/accounts/` (login, logout, 2fa management)
 
+#### Discord OAuth Adapter (`apps/accounts/adapters.py`)
+
+The custom `DiscordSocialAccountAdapter` handles Discord OAuth login with careful data preservation:
+
+**Key Methods:**
+
+1. **`pre_social_login`** - Called on every login attempt
+   - Checks guild membership before allowing access
+   - **Critical**: Reconnects existing users by `discord_id` if their SocialAccount was lost
+   - Only updates Discord-specific fields (`discord_id`, `discord_username`, `discord_nickname`, `discord_avatar`)
+   - **Never** overwrites profile fields (`first_name`, `last_name`, `birth_year`, `gender`, `timezone`, `country`)
+
+2. **`populate_user`** - Called only for NEW users
+   - Sets Discord fields and email from OAuth data
+   - Leaves profile fields empty (user must complete profile manually)
+
+3. **`save_user`** - Called only for NEW users
+   - Creates User and SocialAccount records
+   - Syncs Discord roles
+
+**User Reconnection Logic:**
+
+If allauth can't find a SocialAccount (e.g., it was deleted), the adapter checks if a User with matching `discord_id`
+exists and reconnects them:
+
+```python
+# In pre_social_login:
+if not sociallogin.is_existing and discord_id:
+    try:
+        existing_user = User.objects.get(discord_id=discord_id)
+        sociallogin.connect(request, existing_user)
+        sociallogin.is_existing = True
+    except User.DoesNotExist:
+        pass  # Truly a new user
+```
+
+This prevents profile data loss when SocialAccount records are missing.
+
+**Important:** When modifying OAuth adapter code, always use `update_fields` when saving User objects to prevent
+accidentally overwriting profile data:
+
+```python
+# Correct - only updates specified fields
+user.save(update_fields=['discord_id', 'discord_username', 'discord_nickname', 'discord_avatar'])
+
+# Wrong - overwrites entire model including profile fields
+user.save()
+```
+
 ### Profile Completion Requirement
 
 All users must complete their profile before accessing the app. Enforced by `ProfileCompletionMiddleware`.
