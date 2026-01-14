@@ -1,8 +1,5 @@
 """Custom allauth adapters for Discord integration."""
 
-import contextlib
-import traceback
-
 import httpx
 import logfire
 from allauth.core.exceptions import ImmediateHttpResponse
@@ -106,7 +103,6 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             user_has_pk=bool(user.pk),
             sociallogin_is_existing=sociallogin.is_existing,
             request_path=request.path if request else None,
-            stack_trace=traceback.format_stack()[-5:],
         )
 
         # Set email from Discord (if provided)
@@ -129,6 +125,10 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
     def save_user(self, request, sociallogin, form=None):
         """Save a new user and sync their Discord roles.
 
+        This method is called ONLY for NEW users (not existing logins).
+        We handle user creation directly instead of calling super().save_user()
+        to prevent any accidental data overwrites.
+
         Args:
             request: The HTTP request.
             sociallogin: The social login object.
@@ -138,114 +138,43 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             The saved user object.
 
         """
-        # Check if user already exists (reconnecting social account)
-        # In this case, preserve their existing profile data
-        from apps.accounts.models import User
-
         extra_data = sociallogin.account.extra_data
+        discord_id = extra_data.get('id')
 
         # Log that save_user was called
-        logfire.warning(
-            "save_user called - this should only happen for NEW users or reconnects",
-            discord_id=extra_data.get('id'),
+        logfire.info(
+            "save_user called for NEW user",
+            discord_id=discord_id,
             discord_username=extra_data.get('username'),
-            sociallogin_user_pk=sociallogin.user.pk,
-            sociallogin_is_existing=sociallogin.is_existing,
             request_path=request.path if request else None,
-            stack_trace=traceback.format_stack()[-5:],
         )
 
-        existing_user = None
-        if sociallogin.user.pk:
-            # User already has a primary key, so they exist
-            existing_user = sociallogin.user
-            logfire.info(
-                "save_user: Found existing user by pk",
-                user_id=existing_user.id,
-                first_name=existing_user.first_name,
-                last_name=existing_user.last_name,
-            )
-        elif sociallogin.account.extra_data.get('id'):
-            # Try to find existing user by discord_id
-            discord_id = sociallogin.account.extra_data.get('id')
-            with contextlib.suppress(User.DoesNotExist):
-                existing_user = User.objects.get(discord_id=discord_id)
-                logfire.info(
-                    "save_user: Found existing user by discord_id",
-                    user_id=existing_user.id,
-                    first_name=existing_user.first_name,
-                    last_name=existing_user.last_name,
-                )
+        # Get the user object from sociallogin (created by populate_user)
+        user = sociallogin.user
 
-        # Store existing profile data before save
-        preserved_first_name = existing_user.first_name if existing_user else None
-        preserved_last_name = existing_user.last_name if existing_user else None
-        preserved_birth_year = existing_user.birth_year if existing_user else None
-        preserved_gender = existing_user.gender if existing_user else None
-        preserved_timezone = existing_user.timezone if existing_user else None
-        preserved_country = str(existing_user.country) if existing_user and existing_user.country else None
+        # Set unusable password (users authenticate via Discord)
+        user.set_unusable_password()
 
-        logfire.info(
-            "save_user: Preserved data before super().save_user()",
-            preserved_first_name=preserved_first_name,
-            preserved_last_name=preserved_last_name,
-            preserved_birth_year=preserved_birth_year,
-            preserved_gender=preserved_gender,
-            preserved_timezone=preserved_timezone,
-            preserved_country=preserved_country,
-        )
+        # Save the user to the database
+        user.save()
 
-        user = super().save_user(request, sociallogin, form)
+        # Now save the social account and link it to the user
+        sociallogin.account.user = user
+        sociallogin.account.save()
 
-        logfire.info(
-            "save_user: After super().save_user()",
-            user_id=user.id,
-            first_name=user.first_name,
-            last_name=user.last_name,
-            birth_year=user.birth_year,
-            gender=user.gender,
-            timezone=user.timezone,
-            country=str(user.country) if user.country else None,
-        )
-
-        # Restore preserved profile data if it existed
-        updated_fields = []
-        if preserved_first_name and not user.first_name:
-            user.first_name = preserved_first_name
-            updated_fields.append('first_name')
-        if preserved_last_name and not user.last_name:
-            user.last_name = preserved_last_name
-            updated_fields.append('last_name')
-        if preserved_birth_year and not user.birth_year:
-            user.birth_year = preserved_birth_year
-            updated_fields.append('birth_year')
-        if preserved_gender and not user.gender:
-            user.gender = preserved_gender
-            updated_fields.append('gender')
-        if preserved_timezone and not user.timezone:
-            user.timezone = preserved_timezone
-            updated_fields.append('timezone')
-        if preserved_country and not user.country:
-            user.country = preserved_country
-            updated_fields.append('country')
-
-        if updated_fields:
-            user.save(update_fields=updated_fields)
-            logfire.info(
-                "save_user: Restored preserved profile data",
-                user_id=user.id,
-                preserved_fields=updated_fields,
-            )
+        # Save the token if present
+        if sociallogin.token:
+            sociallogin.token.account = sociallogin.account
+            sociallogin.token.save()
 
         # Sync Discord guild roles for newly registered user
         sync_user_discord_roles(user)
 
         logfire.info(
-            "User registered/connected via Discord OAuth",
+            "New user created via Discord OAuth",
             user_id=user.id,
             discord_id=user.discord_id,
             discord_username=user.discord_username,
-            is_reconnect=existing_user is not None,
         )
 
         return user
@@ -253,17 +182,14 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
     def pre_social_login(self, request, sociallogin):
         """Verify guild membership and update Discord fields on every login.
 
-        This method also handles reconnecting existing users who may have lost
-        their SocialAccount link (e.g., if they deleted their account and re-signed up,
-        or if there was a database issue).
+        IMPORTANT: This method should NOT modify user profile data (first_name,
+        last_name, etc.). It only updates Discord-specific fields.
 
         Args:
             request: The HTTP request.
             sociallogin: The social login object.
 
         """
-        from apps.accounts.models import User
-
         extra_data = sociallogin.account.extra_data
         discord_id = extra_data.get('id')
 
@@ -277,43 +203,15 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             request_path=request.path if request else None,
         )
 
-        # CRITICAL FIX: If sociallogin is NOT existing but we have a user with this discord_id,
-        # connect the social account to that existing user instead of creating a new one.
-        # This prevents data loss when SocialAccount links are broken.
-        if not sociallogin.is_existing and discord_id:
-            try:
-                existing_user = User.objects.get(discord_id=discord_id)
-                logfire.warning(
-                    "pre_social_login: Found existing user by discord_id, connecting social account",
-                    user_id=existing_user.id,
-                    discord_id=discord_id,
-                    first_name=existing_user.first_name,
-                    last_name=existing_user.last_name,
-                    birth_year=existing_user.birth_year,
-                )
-                # Connect this social login to the existing user
-                sociallogin.connect(request, existing_user)
-                # Now sociallogin.is_existing should be True and sociallogin.user is existing_user
-                logfire.info(
-                    "pre_social_login: Social account connected to existing user",
-                    user_id=existing_user.id,
-                    sociallogin_is_existing=sociallogin.is_existing,
-                )
-            except User.DoesNotExist:
-                # No existing user with this discord_id, proceed with normal signup
-                logfire.info(
-                    "pre_social_login: No existing user found, will create new user",
-                    discord_id=discord_id,
-                )
-
+        # Call parent implementation
         super().pre_social_login(request, sociallogin)
 
         # Check guild membership before allowing login
         self._check_guild_membership(request, sociallogin)
 
+        # For EXISTING users, only update Discord fields (never profile fields)
         if sociallogin.is_existing:
             user = sociallogin.user
-            extra_data = sociallogin.account.extra_data
 
             logfire.info(
                 "pre_social_login: Updating existing user Discord fields only",
@@ -323,8 +221,7 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
                 birth_year=user.birth_year,
             )
 
-            # Update Discord fields in case they changed
-            # IMPORTANT: Only update Discord-related fields, never profile fields
+            # Update ONLY Discord-related fields, never profile fields
             user.discord_id = extra_data.get('id', '')
             user.discord_username = extra_data.get('username', '')
             user.discord_nickname = extra_data.get('global_name') or extra_data.get('username', '')

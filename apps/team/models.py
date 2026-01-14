@@ -223,9 +223,15 @@ class RaceReadyRecord(models.Model):
             return ""
 
         # YouTube: youtube.com/watch?v=VIDEO_ID or youtu.be/VIDEO_ID
-        youtube_match = re.search(r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})", self.url)
+        # Also handle youtube.com/shorts/VIDEO_ID
+        youtube_match = re.search(
+            r"(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)([a-zA-Z0-9_-]{11})", self.url
+        )
         if youtube_match:
-            return f"https://www.youtube.com/embed/{youtube_match.group(1)}"
+            video_id = youtube_match.group(1)
+            # Use youtube-nocookie.com for better privacy/compatibility
+            # rel=0 prevents showing related videos at the end
+            return f"https://www.youtube-nocookie.com/embed/{video_id}?rel=0"
 
         # Vimeo: vimeo.com/VIDEO_ID
         vimeo_match = re.search(r"vimeo\.com/(\d+)", self.url)

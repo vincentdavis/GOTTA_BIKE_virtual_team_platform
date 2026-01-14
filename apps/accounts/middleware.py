@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, ClassVar
 
+import logfire
 from django.shortcuts import redirect
 from django.urls import reverse
 
@@ -79,6 +80,20 @@ class ProfileCompletionMiddleware:
 
         # Check if profile is complete
         if not request.user.is_profile_complete:
+            # Log detailed info to debug profile data reset issue
+            logfire.warning(
+                "ProfileCompletionMiddleware: redirecting incomplete profile",
+                user_id=request.user.id,
+                path=request.path,
+                first_name=request.user.first_name,
+                last_name=request.user.last_name,
+                birth_year=request.user.birth_year,
+                gender=request.user.gender,
+                timezone=request.user.timezone,
+                country=str(request.user.country) if request.user.country else None,
+                zwid_verified=request.user.zwid_verified,
+                completion_status=request.user.profile_completion_status,
+            )
             return redirect(reverse("accounts:profile_edit"))
 
         return self.get_response(request)
