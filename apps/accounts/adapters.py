@@ -185,11 +185,16 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
         IMPORTANT: This method should NOT modify user profile data (first_name,
         last_name, etc.). It only updates Discord-specific fields.
 
+        This method also handles reconnecting existing users whose SocialAccount
+        was deleted or not found - we look up by discord_id on our User model.
+
         Args:
             request: The HTTP request.
             sociallogin: The social login object.
 
         """
+        from apps.accounts.models import User
+
         extra_data = sociallogin.account.extra_data
         discord_id = extra_data.get('id')
 
@@ -202,6 +207,30 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             sociallogin_user_pk=sociallogin.user.pk if sociallogin.user else None,
             request_path=request.path if request else None,
         )
+
+        # CRITICAL: If allauth doesn't recognize this as an existing user,
+        # check if we have a User with this discord_id. This handles cases where
+        # the SocialAccount was deleted but the User still exists.
+        if not sociallogin.is_existing and discord_id:
+            try:
+                existing_user = User.objects.get(discord_id=discord_id)
+                logfire.warning(
+                    "Found existing user by discord_id - reconnecting SocialAccount",
+                    user_id=existing_user.id,
+                    discord_id=discord_id,
+                    discord_username=extra_data.get('username'),
+                    first_name=existing_user.first_name,
+                    last_name=existing_user.last_name,
+                )
+                # Connect the social account to the existing user
+                sociallogin.connect(request, existing_user)
+                # Mark as existing so we don't create a new user
+                sociallogin.is_existing = True
+            except User.DoesNotExist:
+                logfire.info(
+                    "No existing user found by discord_id - will create new user",
+                    discord_id=discord_id,
+                )
 
         # Call parent implementation
         super().pre_social_login(request, sociallogin)
