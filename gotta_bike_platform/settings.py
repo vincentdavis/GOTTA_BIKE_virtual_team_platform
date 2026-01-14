@@ -111,9 +111,9 @@ MIDDLEWARE = [
     "django_htmx.middleware.HtmxMiddleware",
 ]
 
-# Add WhiteNoise only when NOT using S3 (local development)
-if not config.use_s3_storage:
-    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
+# WhiteNoise serves static files directly from the app server
+# (S3 is only used for media/user uploads)
+MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 
 if DEBUG:
     INSTALLED_APPS += [
@@ -206,47 +206,33 @@ MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 # Storage configuration
+# Static files: Always use WhiteNoise (fast deploys, served from app server)
+# Media files: Use S3 when configured (user uploads), otherwise local filesystem
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
 if config.use_s3_storage:
-    # Production: S3-compatible storage (Railway.app)
-    STORAGES = {
-        "default": {
-            "BACKEND": "storages.backends.s3.S3Storage",
-            "OPTIONS": {
-                "bucket_name": config.aws_storage_bucket_name,
-                "endpoint_url": config.aws_s3_endpoint_url,
-                "region_name": config.aws_s3_region_name,
-                "access_key": config.aws_access_key_id,
-                "secret_key": config.aws_secret_access_key,
-                "location": "media",
-                "file_overwrite": False,
-            },
-        },
-        "staticfiles": {
-            "BACKEND": "storages.backends.s3.S3Storage",
-            "OPTIONS": {
-                "bucket_name": config.aws_storage_bucket_name,
-                "endpoint_url": config.aws_s3_endpoint_url,
-                "region_name": config.aws_s3_region_name,
-                "access_key": config.aws_access_key_id,
-                "secret_key": config.aws_secret_access_key,
-                "location": "static",
-            },
+    # Production: S3-compatible storage for media/user uploads only
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {
+            "bucket_name": config.aws_storage_bucket_name,
+            "endpoint_url": config.aws_s3_endpoint_url,
+            "region_name": config.aws_s3_region_name,
+            "access_key": config.aws_access_key_id,
+            "secret_key": config.aws_secret_access_key,
+            "location": "media",
+            "file_overwrite": False,
         },
     }
-    # Update URLs for S3
-    STATIC_URL = (
-        f"{config.aws_s3_endpoint_url}/{config.aws_storage_bucket_name}/static/"
-    )
     MEDIA_URL = f"{config.aws_s3_endpoint_url}/{config.aws_storage_bucket_name}/media/"
 else:
-    # Local development: WhiteNoise for static files
-    STORAGES = {
-        "default": {
-            "BACKEND": "django.core.files.storage.FileSystemStorage",
-        },
-        "staticfiles": {
-            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-        },
+    # Local development: filesystem storage for media
+    STORAGES["default"] = {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
     }
 
 

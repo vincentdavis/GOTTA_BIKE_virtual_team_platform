@@ -51,6 +51,45 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 - Optional env vars: `LOGFIRE_TOKEN`, `LOGFIRE_ENVIRONMENT` (observability)
 - Runtime settings (via constance): API credentials and team settings (see Dynamic Settings below)
 
+### Static Files & Storage
+
+Static files and media (user uploads) are handled separately for optimal performance:
+
+- **Static files** (CSS, JS, images): Served via [WhiteNoise](https://whitenoise.readthedocs.io/) directly from the app
+  server. `collectstatic` writes to local `staticfiles/` directory (fast deploys, no S3 upload).
+- **Media files** (user uploads): Stored on S3-compatible storage when configured (Railway object storage).
+
+Configuration in `settings.py`:
+
+```python
+# Static files: Always WhiteNoise (fast, compressed, cached)
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+# Media files: S3 when configured, otherwise local filesystem
+if config.use_s3_storage:
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3.S3Storage",
+        "OPTIONS": {...},
+    }
+```
+
+Environment variables for S3 (optional):
+
+- `AWS_S3_ENDPOINT_URL` - S3 endpoint (e.g., `https://storage.railway.app`)
+- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - S3 credentials
+- `AWS_STORAGE_BUCKET_NAME` - Bucket name
+- `AWS_S3_REGION_NAME` - Region (default: `auto`)
+
+WhiteNoise features:
+
+- Automatic gzip/brotli compression
+- Far-future cache headers (hashed filenames)
+- Serves files directly from memory in production
+
 ### Apps (in `apps/`)
 
 - `accounts` - Custom User model with Discord/Zwift fields, django-allauth adapters, role-based permissions
