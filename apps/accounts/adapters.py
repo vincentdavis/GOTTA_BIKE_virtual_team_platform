@@ -80,6 +80,10 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
     def populate_user(self, request, sociallogin, data):
         """Populate user with Discord-specific data on signup.
 
+        We intentionally do NOT call super().populate_user() because it sets
+        first_name/last_name from Discord data. We want those fields empty
+        so users must fill them in on the profile page.
+
         Args:
             request: The HTTP request.
             sociallogin: The social login object.
@@ -89,27 +93,23 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             The populated user object.
 
         """
-        user = super().populate_user(request, sociallogin, data)
-
-        # Extract Discord data from extra_data
+        user = sociallogin.user
         extra_data = sociallogin.account.extra_data
+
+        # Set email from Discord (if provided)
+        user.email = data.get('email', '')
+
+        # Set username from Discord username
+        user.username = extra_data.get('username', '')
 
         # Set Discord-specific fields
         user.discord_id = extra_data.get('id', '')
         user.discord_username = extra_data.get('username', '')
-        # Discord global_name is the display name, fallback to username
         user.discord_nickname = extra_data.get('global_name') or extra_data.get('username', '')
         user.discord_avatar = extra_data.get('avatar', '') or ''
 
-        # Set username from Discord username if not set
-        if not user.username:
-            user.username = extra_data.get('username', '')
-
-        # IMPORTANT: Clear first_name/last_name that allauth's default populate_user sets
-        # from Discord data. These are required profile fields that users must fill in
-        # themselves on the profile page. We don't want Discord's global_name here.
-        user.first_name = ''
-        user.last_name = ''
+        # first_name, last_name, birth_year, gender, timezone, country
+        # are intentionally left empty - user must fill these in on profile page
 
         return user
 
