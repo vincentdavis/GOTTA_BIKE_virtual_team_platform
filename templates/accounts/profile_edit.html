@@ -56,6 +56,32 @@
             <form method="post" class="space-y-4">
                 {% csrf_token %}
 
+                <!-- Discord Account Section -->
+                <div class="bg-base-300 rounded-lg p-4 mb-4">
+                    <div class="flex items-center gap-4">
+                        {% if user.discord_avatar %}
+                        <div class="avatar">
+                            <div class="w-16 rounded-full">
+                                <img src="https://cdn.discordapp.com/avatars/{{ user.discord_id }}/{{ user.discord_avatar }}.png" alt="Discord Avatar" />
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="avatar placeholder">
+                            <div class="bg-neutral text-neutral-content rounded-full w-16">
+                                <span class="text-xl">{{ user.discord_username|slice:":2"|upper }}</span>
+                            </div>
+                        </div>
+                        {% endif %}
+                        <div>
+                            <h3 class="font-semibold text-lg">Discord Account</h3>
+                            <p class="text-base-content/70">{{ user.discord_username }}</p>
+                            {% if user.discord_nickname and user.discord_nickname != user.discord_username %}
+                            <p class="text-sm text-base-content/50">Nickname: {{ user.discord_nickname }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="form-control">
                         <label class="label" for="id_first_name">
@@ -160,16 +186,166 @@
                     </div>
                 </div>
 
-                <div class="form-control">
-                    <label class="label" for="id_youtube_channel">
-                        <span class="label-text">{{ form.youtube_channel.label }}</span>
-                    </label>
-                    {{ form.youtube_channel }}
-                    {% if form.youtube_channel.errors %}
-                    <label class="label">
-                        <span class="label-text-alt text-error">{{ form.youtube_channel.errors.0 }}</span>
-                    </label>
-                    {% endif %}
+                <!-- Emergency Contact Section -->
+                <div class="divider">Emergency Contact (Optional)</div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="id_emergency_contact_name">
+                            <span class="label-text">{{ form.emergency_contact_name.label }}</span>
+                        </label>
+                        {{ form.emergency_contact_name }}
+                        {% if form.emergency_contact_name.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.emergency_contact_name.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="id_emergency_contact_relation">
+                            <span class="label-text">{{ form.emergency_contact_relation.label }}</span>
+                        </label>
+                        {{ form.emergency_contact_relation }}
+                        {% if form.emergency_contact_relation.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.emergency_contact_relation.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="id_emergency_contact_email">
+                            <span class="label-text">{{ form.emergency_contact_email.label }}</span>
+                        </label>
+                        {{ form.emergency_contact_email }}
+                        {% if form.emergency_contact_email.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.emergency_contact_email.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="id_emergency_contact_phone">
+                            <span class="label-text">{{ form.emergency_contact_phone.label }}</span>
+                        </label>
+                        {{ form.emergency_contact_phone }}
+                        {% if form.emergency_contact_phone.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.emergency_contact_phone.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Social Accounts Section -->
+                <div class="divider">Social Accounts (Optional)</div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="id_youtube_channel">
+                            <span class="label-text">{{ form.youtube_channel.label }}</span>
+                        </label>
+                        {{ form.youtube_channel }}
+                        {% if form.youtube_channel.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.youtube_channel.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="id_twitch_channel">
+                            <span class="label-text">{{ form.twitch_channel.label }}</span>
+                        </label>
+                        {{ form.twitch_channel }}
+                        {% if form.twitch_channel.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.twitch_channel.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="id_instagram_url">
+                            <span class="label-text">{{ form.instagram_url.label }}</span>
+                        </label>
+                        {{ form.instagram_url }}
+                        {% if form.instagram_url.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.instagram_url.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="id_facebook_url">
+                            <span class="label-text">{{ form.facebook_url.label }}</span>
+                        </label>
+                        {{ form.facebook_url }}
+                        {% if form.facebook_url.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.facebook_url.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="id_twitter_url">
+                            <span class="label-text">{{ form.twitter_url.label }}</span>
+                        </label>
+                        {{ form.twitter_url }}
+                        {% if form.twitter_url.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.twitter_url.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="id_tiktok_url">
+                            <span class="label-text">{{ form.tiktok_url.label }}</span>
+                        </label>
+                        {{ form.tiktok_url }}
+                        {% if form.tiktok_url.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.tiktok_url.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="id_bluesky_url">
+                            <span class="label-text">{{ form.bluesky_url.label }}</span>
+                        </label>
+                        {{ form.bluesky_url }}
+                        {% if form.bluesky_url.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.bluesky_url.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="id_mastodon_url">
+                            <span class="label-text">{{ form.mastodon_url.label }}</span>
+                        </label>
+                        {{ form.mastodon_url }}
+                        {% if form.mastodon_url.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.mastodon_url.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
                 </div>
 
                 <div class="flex gap-4 mt-6">

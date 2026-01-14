@@ -168,16 +168,78 @@ class User(AbstractUser):
         blank=True,
         help_text="User's timezone (e.g., America/New_York)",
     )
-    youtube_channel = models.URLField(
-        max_length=200,
-        blank=True,
-        help_text="YouTube channel URL",
-    )
     unit_preference = models.CharField(
         max_length=10,
         choices=UnitPreference.choices,
         default=UnitPreference.METRIC,
         help_text="Preferred unit system for weight and height",
+    )
+
+    # Social Accounts
+    youtube_channel = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="YouTube channel URL",
+    )
+    twitch_channel = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="Twitch channel URL",
+    )
+    instagram_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="Instagram profile URL",
+    )
+    facebook_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="Facebook profile URL",
+    )
+    twitter_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="Twitter/X profile URL",
+    )
+    tiktok_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="TikTok profile URL",
+    )
+    bluesky_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="BlueSky profile URL",
+    )
+    mastodon_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="Mastodon profile URL",
+    )
+
+    # Emergency Contact
+    emergency_contact_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Emergency contact full name",
+    )
+    emergency_contact_relation = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Relationship to emergency contact (e.g., spouse, parent, friend)",
+    )
+    emergency_contact_email = models.EmailField(
+        blank=True,
+        default="",
+        help_text="Emergency contact email address",
+    )
+    emergency_contact_phone = models.CharField(
+        max_length=50,
+        blank=True,
+        default="",
+        help_text="Emergency contact phone number",
     )
 
     # Roles

@@ -46,7 +46,20 @@ class ProfileForm(forms.ModelForm):
             "country",
             "timezone",
             "unit_preference",
+            # Social Accounts
             "youtube_channel",
+            "twitch_channel",
+            "instagram_url",
+            "facebook_url",
+            "twitter_url",
+            "tiktok_url",
+            "bluesky_url",
+            "mastodon_url",
+            # Emergency Contact
+            "emergency_contact_name",
+            "emergency_contact_relation",
+            "emergency_contact_email",
+            "emergency_contact_phone",
         ]
         widgets: ClassVar[dict] = {
             "first_name": forms.TextInput(
@@ -108,6 +121,72 @@ class ProfileForm(forms.ModelForm):
                     "placeholder": "https://youtube.com/@yourchannel",
                 }
             ),
+            "twitch_channel": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://twitch.tv/yourchannel",
+                }
+            ),
+            "instagram_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://instagram.com/yourprofile",
+                }
+            ),
+            "facebook_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://facebook.com/yourprofile",
+                }
+            ),
+            "twitter_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://x.com/yourhandle",
+                }
+            ),
+            "tiktok_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://tiktok.com/@yourhandle",
+                }
+            ),
+            "bluesky_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://bsky.app/profile/yourhandle",
+                }
+            ),
+            "mastodon_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://mastodon.social/@yourhandle",
+                }
+            ),
+            "emergency_contact_name": forms.TextInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "Full name",
+                }
+            ),
+            "emergency_contact_relation": forms.TextInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "e.g., spouse, parent, friend",
+                }
+            ),
+            "emergency_contact_email": forms.EmailInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "email@example.com",
+                }
+            ),
+            "emergency_contact_phone": forms.TextInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "+1 555-123-4567",
+                }
+            ),
         }
         labels: ClassVar[dict[str, str]] = {
             "first_name": "First Name",
@@ -119,7 +198,20 @@ class ProfileForm(forms.ModelForm):
             "country": "Country",
             "timezone": "Timezone",
             "unit_preference": "Unit Preference",
-            "youtube_channel": "YouTube Channel",
+            # Social Accounts
+            "youtube_channel": "YouTube",
+            "twitch_channel": "Twitch",
+            "instagram_url": "Instagram",
+            "facebook_url": "Facebook",
+            "twitter_url": "Twitter/X",
+            "tiktok_url": "TikTok",
+            "bluesky_url": "BlueSky",
+            "mastodon_url": "Mastodon",
+            # Emergency Contact
+            "emergency_contact_name": "Contact Name",
+            "emergency_contact_relation": "Relationship",
+            "emergency_contact_email": "Contact Email",
+            "emergency_contact_phone": "Contact Phone",
         }
 
     def __init__(self, *args, **kwargs) -> None:
