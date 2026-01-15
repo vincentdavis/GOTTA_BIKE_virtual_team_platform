@@ -66,13 +66,19 @@
                 </li>
                 <li><a href="{% url 'mfa_index' %}">Security</a></li>
                 <li><a href="{% url 'account_logout' %}">Logout</a></li>
-                {% if user.is_any_captain %}
+                {% if user.is_any_captain or user.can_approve_verification or user.is_link_admin %}
                 <li class="my-1"><hr class="border-base-300"></li>
                 <li class="menu-title"><span>Admin</span></li>
+                {% if user.can_approve_verification or user.is_any_captain %}
                 <li><a href="{% url 'team:verification_records' %}">Verification Records</a></li>
                 <li><a href="{% url 'team:performance_review' %}">Performance Review</a></li>
+                {% endif %}
+                {% if user.is_link_admin or user.is_any_captain %}
                 <li><a href="{% url 'team:submit_link' %}">Submit Link</a></li>
+                {% endif %}
+                {% if user.is_any_captain %}
                 <li><a href="{% url 'data_connection:connection_list' %}">Data Connections</a></li>
+                {% endif %}
                 {% if user.is_app_admin or user.is_superuser %}
                 <li><a href="{% url 'config_settings' %}">Configuration</a></li>
                 {% endif %}
