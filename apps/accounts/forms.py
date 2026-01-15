@@ -1,9 +1,11 @@
 """Forms for accounts app."""
 
+import json
 from datetime import date
 from typing import ClassVar
 from zoneinfo import available_timezones
 
+from constance import config
 from django import forms
 from django_countries.widgets import CountrySelectWidget
 
@@ -55,6 +57,10 @@ class ProfileForm(forms.ModelForm):
             "tiktok_url",
             "bluesky_url",
             "mastodon_url",
+            # Training Equipment
+            "trainer",
+            "powermeter",
+            "dual_recording",
             # Emergency Contact
             "emergency_contact_name",
             "emergency_contact_relation",
@@ -163,6 +169,22 @@ class ProfileForm(forms.ModelForm):
                     "placeholder": "https://mastodon.social/@yourhandle",
                 }
             ),
+            "trainer": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
+            "powermeter": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
+            "dual_recording": forms.Select(
+                choices=[("", "Select..."), ("True", "Yes"), ("False", "No")],
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
             "emergency_contact_name": forms.TextInput(
                 attrs={
                     "class": "input input-bordered w-full",
@@ -207,6 +229,10 @@ class ProfileForm(forms.ModelForm):
             "tiktok_url": "TikTok",
             "bluesky_url": "BlueSky",
             "mastodon_url": "Mastodon",
+            # Training Equipment
+            "trainer": "Trainer",
+            "powermeter": "Powermeter",
+            "dual_recording": "Dual Recording",
             # Emergency Contact
             "emergency_contact_name": "Contact Name",
             "emergency_contact_relation": "Relationship",
@@ -233,6 +259,27 @@ class ProfileForm(forms.ModelForm):
         if "gender" in self.fields:
             self.fields["gender"].empty_label = "Select gender..."
 
+        # Populate trainer choices from Constance
+        if "trainer" in self.fields:
+            trainer_options = json.loads(config.TRAINER_OPTIONS)
+            trainer_choices = [("", "Select trainer...")] + [(opt, opt) for opt in trainer_options]
+            self.fields["trainer"].widget.choices = trainer_choices
+
+        # Populate powermeter choices from Constance
+        if "powermeter" in self.fields:
+            powermeter_options = json.loads(config.POWERMETER_OPTIONS)
+            powermeter_choices = [("", "None")] + [(opt, opt) for opt in powermeter_options]
+            self.fields["powermeter"].widget.choices = powermeter_choices
+
+        # Set dual_recording initial value for Select widget
+        if "dual_recording" in self.fields and self.instance:
+            if self.instance.dual_recording is True:
+                self.initial["dual_recording"] = "True"
+            elif self.instance.dual_recording is False:
+                self.initial["dual_recording"] = "False"
+            else:
+                self.initial["dual_recording"] = ""
+
     def clean_birth_year(self) -> int | None:
         """Validate birth year is in reasonable range.
 
@@ -251,6 +298,20 @@ class ProfileForm(forms.ModelForm):
             if birth_year > current_year - 13:
                 raise forms.ValidationError("You must be at least 13 years old.")
         return birth_year
+
+    def clean_dual_recording(self) -> bool | None:
+        """Convert string value to boolean for dual_recording field.
+
+        Returns:
+            True, False, or None based on the selected value.
+
+        """
+        value = self.cleaned_data.get("dual_recording")
+        if value == "True":
+            return True
+        if value == "False":
+            return False
+        return None
 
 
 class ZwiftVerificationForm(forms.Form):

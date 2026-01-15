@@ -434,6 +434,23 @@ CONSTANCE_CONFIG = {
     # Verification instructions
     "WEIGHT_INSTRUCTIONS_URL": ("", "URL to weight verification instructions", str),
     "HEIGHT_INSTRUCTIONS_URL": ("", "URL to height verification instructions", str),
+    # Trainer options for power verification
+    "TRAINER_OPTIONS": (
+        '["Wahoo Kickr Core", "Wahoo Kickr Move", "Wahoo Kickr", "Wahoo Kickr Bike", '
+        '"Saris H3", "Elite Justo 2", "Tacx Neo", "D100", "Wattbike", '
+        '"Wattbike Atom Next Gen", "Tacx Neo Bike", "Technogym Ride", "Stages Bike", '
+        '"Zwift Hub", "Zwift Bike, Wahoo Kickr", "Other wheel trainer (Wheel on bike)", '
+        '"Other Direct drive trainer (wheel off)"]',
+        "List of trainer options for power verification submissions",
+        "json_field",
+    ),
+    # Powermeter options for power verification
+    "POWERMETER_OPTIONS": (
+        '["Quarq", "Stages", "Sram", "Shimano", "4ii", "Garmin pedals", '
+        '"Favero Assioma pedals", "Other power pedals", "Other power cranks", "Other"]',
+        "List of powermeter options for power verification submissions",
+        "json_field",
+    ),
     # Site settings
     "SITE_ANNOUNCEMENT": ("", "Announcement banner on all pages. Supports Markdown: **bold**, *italic*, [links](url)", str),
     "MAINTENANCE_MODE": (False, "Enable maintenance mode (restricts access)", bool),
@@ -529,6 +546,8 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "RACE_READY_ROLE_ID",
         "WEIGHT_INSTRUCTIONS_URL",
         "HEIGHT_INSTRUCTIONS_URL",
+        "TRAINER_OPTIONS",
+        "POWERMETER_OPTIONS",
     ),
     "SEO Settings": (
         "META_DESCRIPTION",

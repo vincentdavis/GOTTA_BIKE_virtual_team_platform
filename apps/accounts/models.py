@@ -217,6 +217,26 @@ class User(AbstractUser):
         help_text="Mastodon profile URL",
     )
 
+    # Training Equipment
+    trainer = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Indoor trainer model (options from TRAINER_OPTIONS)",
+    )
+    powermeter = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Powermeter on trainer bike, if any (options from POWERMETER_OPTIONS)",
+    )
+    dual_recording = models.BooleanField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text="Do you dual record data?",
+    )
+
     # Emergency Contact
     emergency_contact_name = models.CharField(
         max_length=255,

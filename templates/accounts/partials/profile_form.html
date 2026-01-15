@@ -160,6 +160,53 @@
         </label>
     </div>
 
+    <!-- Training Equipment Section -->
+    <div class="divider">Training Equipment (Optional)</div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_trainer">
+                <span class="label-text">{{ form.trainer.label }}</span>
+            </label>
+            {{ form.trainer }}
+            {% if form.trainer.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.trainer.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_powermeter">
+                <span class="label-text">{{ form.powermeter.label }}</span>
+            </label>
+            {{ form.powermeter }}
+            <label class="label">
+                <span class="label-text-alt">Powermeter on your trainer bike, if any</span>
+            </label>
+            {% if form.powermeter.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.powermeter.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="form-control max-w-xs">
+        <label class="label" for="id_dual_recording">
+            <span class="label-text">{{ form.dual_recording.label }}</span>
+        </label>
+        {{ form.dual_recording }}
+        <label class="label">
+            <span class="label-text-alt">Do you dual record data?</span>
+        </label>
+        {% if form.dual_recording.errors %}
+        <label class="label">
+            <span class="label-text-alt text-error">{{ form.dual_recording.errors.0 }}</span>
+        </label>
+        {% endif %}
+    </div>
+
     <!-- Emergency Contact Section -->
     <div class="divider">Emergency Contact (Optional)</div>
 
