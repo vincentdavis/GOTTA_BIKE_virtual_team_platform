@@ -26,7 +26,7 @@
 {% endif %}
 
 <form hx-post="{% url 'config_section_update' section.key %}"
-      hx-target="#section-{{ section.key }} .collapse-content"
+      hx-target="#section-{{ section.key }} .section-content"
       hx-swap="innerHTML"
       class="space-y-4 pt-2">
     {% csrf_token %}

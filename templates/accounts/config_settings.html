@@ -116,7 +116,9 @@
                         {{ section.name }}
                         <span class="badge badge-ghost ml-2">{{ section.settings|length }} settings</span>
                     </div>
-                    {% include "accounts/partials/config_section.html" with section=section %}
+                    <div class="section-content">
+                        {% include "accounts/partials/config_section.html" with section=section %}
+                    </div>
                 </div>
                 {% endfor %}
             </div>
