@@ -18,19 +18,39 @@
         padding: 0.5rem 1rem;
         min-height: 3rem;
     }
+    /* Tom Select dropdown - use inherit to get background from page context */
     .ts-dropdown {
-        background-color: oklch(var(--b1));
-        border-color: oklch(var(--bc) / 0.2);
-        border-radius: var(--rounded-btn, 0.5rem);
+        background-color: #1d232a !important; /* DaisyUI dark theme base-100 fallback */
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 0.5rem !important;
+        z-index: 9999 !important;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+        position: absolute !important;
     }
-    .ts-dropdown .option {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 0.5rem 1rem;
+    .ts-dropdown-content {
+        background-color: #1d232a !important;
     }
-    .ts-dropdown .option.active {
-        background-color: oklch(var(--p) / 0.1);
+    /* Ensure dropdown wrapper has proper z-index and positioning */
+    .ts-wrapper.dropdown-active {
+        z-index: 9999 !important;
+        position: relative !important;
+    }
+    .ts-dropdown .option,
+    .ts-dropdown-content .option {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        padding: 0.5rem 1rem !important;
+        background-color: #1d232a !important;
+        color: #a6adba !important;
+    }
+    .ts-dropdown .option:hover,
+    .ts-dropdown-content .option:hover {
+        background-color: #2a323c !important;
+    }
+    .ts-dropdown .option.active,
+    .ts-dropdown-content .option.active {
+        background-color: #3d4451 !important;
     }
     .role-color-dot {
         width: 12px;
@@ -88,18 +108,15 @@
                 Configure application settings. Changes are saved per section.
             </p>
 
-            <!-- Sections Accordion -->
-            <div class="space-y-4">
+            <!-- Sections -->
+            <div class="space-y-6">
                 {% for section_key, section in sections.items %}
-                <div id="section-{{ section.key }}" class="collapse collapse-arrow bg-base-300 rounded-lg">
-                    <input type="checkbox" />
-                    <div class="collapse-title text-lg font-medium">
+                <div id="section-{{ section.key }}">
+                    <div class="divider text-lg font-medium">
                         {{ section.name }}
                         <span class="badge badge-ghost ml-2">{{ section.settings|length }} settings</span>
                     </div>
-                    <div class="collapse-content">
-                        {% include "accounts/partials/config_section.html" with section=section %}
-                    </div>
+                    {% include "accounts/partials/config_section.html" with section=section %}
                 </div>
                 {% endfor %}
             </div>
