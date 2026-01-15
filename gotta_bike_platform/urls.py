@@ -20,6 +20,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
+from apps.accounts.views import config_section_update, config_settings, config_site_images_update
 from apps.dbot_api.api import api as dbot_api
 from apps.dbot_api.cron_api import cron_api
 from gotta_bike_platform.views import about, home
@@ -35,10 +36,18 @@ urlpatterns = [
     path("team/", include("apps.team.urls")),
     path("data-connections/", include("apps.data_connection.urls")),
     path("m/", include("apps.magic_links.urls")),
+    # Site-level configuration
+    path("site/config/", config_settings, name="config_settings"),
+    path("site/config/section/<str:section_key>/", config_section_update, name="config_section_update"),
+    path("site/config/images/", config_site_images_update, name="config_site_images_update"),
 ]
 
 if settings.DEBUG:
+    from django.conf.urls.static import static
+
     urlpatterns += [
         path("__debug__/", include("debug_toolbar.urls")),
         path("__reload__/", include("django_browser_reload.urls")),
     ]
+    # Serve media files in development
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

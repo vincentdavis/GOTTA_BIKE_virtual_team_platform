@@ -3,9 +3,32 @@
 import json
 from decimal import Decimal
 
+import markdown
 from django import template
+from django.utils.safestring import mark_safe
 
 register = template.Library()
+
+
+@register.filter
+def render_markdown(value: str) -> str:
+    """Render markdown text as HTML.
+
+    Args:
+        value: Markdown text to render.
+
+    Returns:
+        Rendered HTML marked as safe.
+
+    """
+    if not value:
+        return ""
+    # Convert markdown to HTML, enabling safe extensions
+    html = markdown.markdown(
+        value,
+        extensions=["nl2br"],  # Convert newlines to <br>
+    )
+    return mark_safe(html)
 
 
 @register.filter

@@ -25,8 +25,8 @@ echo "Running migrations..."
 uv run manage.py migrate
 
 # Create superuser if not exists
-echo "Creating superuser if not exists..."
-uv run manage.py ensuresuperuser
+#echo "Creating superuser if not exists..."
+#uv run manage.py ensuresuperuser
 
 # Start the background task worker
 echo "Starting background task worker..."

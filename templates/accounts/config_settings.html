@@ -92,7 +92,7 @@
             <div class="space-y-4">
                 {% for section_key, section in sections.items %}
                 <div id="section-{{ section.key }}" class="collapse collapse-arrow bg-base-300 rounded-lg">
-                    <input type="checkbox" {% if forloop.first %}checked{% endif %} />
+                    <input type="checkbox" />
                     <div class="collapse-title text-lg font-medium">
                         {{ section.name }}
                         <span class="badge badge-ghost ml-2">{{ section.settings|length }} settings</span>

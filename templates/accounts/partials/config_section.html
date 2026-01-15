@@ -25,7 +25,7 @@
 </div>
 {% endif %}
 
-<form hx-post="{% url 'accounts:config_section_update' section.key %}"
+<form hx-post="{% url 'config_section_update' section.key %}"
       hx-target="#section-{{ section.key }} .collapse-content"
       hx-swap="innerHTML"
       class="space-y-4 pt-2">
@@ -135,3 +135,11 @@
         </button>
     </div>
 </form>
+
+{% if section.key == "site_settings" %}
+<!-- Site Images (separate form for file uploads) -->
+<div class="divider my-6">Site Images</div>
+<div id="site-images-form">
+    {% include "accounts/partials/config_site_images.html" %}
+</div>
+{% endif %}

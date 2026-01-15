@@ -180,18 +180,18 @@ user.save(update_fields=['discord_id', 'discord_username', 'discord_nickname', '
 user.save()
 ```
 
-### Profile Completion Requirement
+### Profile Completion
 
-All users must complete their profile before accessing the app. Enforced by `ProfileCompletionMiddleware`.
+Users are encouraged to complete their profile but are **not blocked** from accessing the app.
 
-#### Required Fields
+#### Profile Fields
 
 - `first_name`, `last_name` - User's real name
 - `birth_year` - Year of birth (validated: 1900 to current_year - 13)
 - `gender` - Gender (male/female/other)
 - `timezone` - User's timezone (e.g., "America/New_York")
 - `country` - Country of residence (uses `django-countries` CountryField with ISO 2-letter codes, rendered as dropdown)
-- `zwid_verified` - Zwift account must be verified
+- `zwid_verified` - Zwift account verification status
 
 #### User Model Properties
 
@@ -206,29 +206,13 @@ status = user.profile_completion_status
 # Returns: {"first_name": True, "last_name": False, "birth_year": True, ...}
 ```
 
-#### Middleware Behavior
+#### Warning Banner
 
-- Redirects incomplete profiles to `/user/profile/edit/`
-- Exempts: superusers, profile edit page, Zwift verification, auth URLs, API endpoints, admin, static files
-- Configured in `apps/accounts/middleware.py`
+Instead of blocking access, a red warning banner is displayed at the top of every page for users with incomplete
+profiles. The banner is defined in `theme/templates/base.html` and links to the profile edit page.
 
-#### Exempt URL Patterns
-
-```python
-EXEMPT_URL_PATTERNS = [
-    r"^/user/profile/edit/$",
-    r"^/user/profile/verify-zwift/$",
-    r"^/user/profile/unverify-zwift/$",
-    r"^/accounts/",
-    r"^/api/",
-    r"^/admin/",
-    r"^/static/",
-    r"^/media/",
-    r"^/__debug__/",
-    r"^/__reload__/",
-    r"^/m/",
-]
-```
+**Note:** The `ProfileCompletionMiddleware` in `apps/accounts/middleware.py` is no longer active (removed from
+`MIDDLEWARE` in settings.py). It's kept for reference but not used.
 
 ### Discord Role-Based Permissions (`apps/accounts/models.py`)
 
@@ -384,6 +368,7 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
 - `/accounts/` - allauth (login, logout, MFA)
 - `/user/` - User profile and settings (`apps.accounts.urls`)
 - `/team/` - Team management (`apps.team.urls`)
+- `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
 - `/api/dbot/` - Discord bot API
 - `/api/cron/` - Cron task API
@@ -393,7 +378,10 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
 
 - `theme/` - django-tailwind app with Tailwind CSS 4.x + DaisyUI 5.x
 - `theme/templates/` - Base templates (base.html, header.html, footer.html)
-    - `base.html` includes site announcement banner (yellow, top of page) when `config.SITE_ANNOUNCEMENT` is set
+    - `base.html` includes site announcement banner (yellow) when `config.SITE_ANNOUNCEMENT` is set (supports Markdown)
+    - `base.html` includes profile incomplete warning (red) for users with incomplete profiles
+    - `header.html` displays logo/team name based on `LOGO_DISPLAY_MODE` setting (see Site Image Settings)
+- `templates/index.html` - Home page with hero section (supports background image via `site_settings.hero_image`)
 - `templates/account/` - Auth templates (login, logout) with DaisyUI styling
 - `templates/mfa/` - MFA templates (TOTP setup, recovery codes)
 - Uses HTMX for interactivity (`django-htmx` middleware enabled)
@@ -424,7 +412,8 @@ Available settings:
   `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
   `POWER_VERIFICATION_DAYS` (365)
 - **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)
-- **Site Settings**: `TEAM_NAME`, `SITE_ANNOUNCEMENT` (displays as yellow banner at top of all pages), `MAINTENANCE_MODE`
+- **Site Settings**: `TEAM_NAME`, `SUBTITLE`, `SITE_ANNOUNCEMENT` (yellow banner at top of all pages, supports Markdown),
+  `MAINTENANCE_MODE`, `LOGO_DISPLAY_MODE` (header display: `logo_only`, `logo_and_name`, or `name_only`)
 
 Usage in code:
 
@@ -438,6 +427,65 @@ if config.MAINTENANCE_MODE:
 ```
 
 Add new settings in `settings.py` under `CONSTANCE_CONFIG`.
+
+### Site Image Settings
+
+Site images (logo and hero image) are stored in the `SiteSettings` singleton model (`gotta_bike_platform/models.py`),
+separate from Constance because they require file uploads.
+
+**SiteSettings Model:**
+
+```python
+from gotta_bike_platform.models import SiteSettings
+
+settings = SiteSettings.get_settings()  # Returns singleton instance
+settings.site_logo    # ImageField - Logo displayed in header
+settings.favicon      # ImageField - Favicon for browser tabs
+settings.hero_image   # ImageField - Background image for home page hero
+```
+
+**Context Processor:**
+
+The `site_settings` context processor (`gotta_bike_platform/context_processors.py`) makes the settings available in all
+templates as `site_settings`:
+
+```html
+{% if site_settings.site_logo %}
+<img src="{{ site_settings.site_logo.url }}" alt="Logo">
+{% endif %}
+```
+
+**Logo Display Mode:**
+
+The `LOGO_DISPLAY_MODE` Constance setting controls how the header displays the team identity:
+
+| Value           | Behavior                                    |
+|-----------------|---------------------------------------------|
+| `name_only`     | Show only `TEAM_NAME` text (default)        |
+| `logo_only`     | Show only the uploaded logo                 |
+| `logo_and_name` | Show both logo and team name                |
+
+If `logo_only` or `logo_and_name` is set but no logo is uploaded, the team name is shown as fallback.
+
+**Hero Image:**
+
+When a hero image is uploaded, the home page (`templates/index.html`) displays it as a background with a dark overlay
+for text readability. Without a hero image, the section uses a solid `bg-base-200` background.
+
+**Configuration UI:**
+
+Site images can be managed at `/site/config/` in the "Site Images" section. The form supports:
+- Uploading new logo/hero images
+- Deleting existing images (red X button)
+- Preview of current images
+
+**Files:**
+
+- `gotta_bike_platform/models.py` - `SiteSettings` singleton model
+- `gotta_bike_platform/context_processors.py` - Makes `site_settings` available in templates
+- `gotta_bike_platform/admin.py` - Admin registration
+- `apps/accounts/views.py` - `config_site_images_update` view
+- `templates/accounts/partials/config_site_images.html` - Upload form partial
 
 ## Code Style
 
@@ -573,7 +621,7 @@ The `get_user_verification_types(user)` function in `apps/team/services.py` retu
 2. Record starts in `pending` status
 3. Users with `approve_verification` permission review and verify/reject records
 4. Verified records expire based on Constance settings:
-   - `WEIGHT_FULL_DAYS` (default: 180 days)
+   - `WEIGHT_FULL_DAYS` (default: 120 days)
    - `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)
    - `POWER_VERIFICATION_DAYS` (default: 365 days)
 

@@ -14,6 +14,4 @@ urlpatterns = [
     path("profile/verify-zwift/", views.verify_zwift, name="verify_zwift"),
     path("profile/unverify-zwift/", views.unverify_zwift, name="unverify_zwift"),
     path("profile/race-ready/", views.submit_race_ready, name="submit_race_ready"),
-    path("config/", views.config_settings, name="config_settings"),
-    path("config/section/<str:section_key>/", views.config_section_update, name="config_section_update"),
 ]

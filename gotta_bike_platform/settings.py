@@ -104,7 +104,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "allauth.account.middleware.AccountMiddleware",
-    "apps.accounts.middleware.ProfileCompletionMiddleware",
+    # ProfileCompletionMiddleware removed - now using warning banner instead of redirect
     "simple_history.middleware.HistoryRequestMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -144,6 +144,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "constance.context_processors.config",
+                "gotta_bike_platform.context_processors.site_settings",
             ],
         },
     },
@@ -409,7 +410,7 @@ CONSTANCE_CONFIG = {
         "json_list_field",
     ),
     # Verification validity periods (in days)
-    "WEIGHT_FULL_DAYS": (180, "Days a full weight verification is valid", int),
+    "WEIGHT_FULL_DAYS": (120, "Days a full weight verification is valid", int),
     "WEIGHT_LIGHT_DAYS": (30, "Days a light weight verification is valid", int),
     "HEIGHT_VERIFICATION_DAYS": (
         0,
@@ -435,8 +436,13 @@ CONSTANCE_CONFIG = {
     "WEIGHT_INSTRUCTIONS_URL": ("", "URL to weight verification instructions", str),
     "HEIGHT_INSTRUCTIONS_URL": ("", "URL to height verification instructions", str),
     # Site settings
-    "SITE_ANNOUNCEMENT": ("", "Announcement message displayed on all pages", str),
+    "SITE_ANNOUNCEMENT": ("", "Announcement banner on all pages. Supports Markdown: **bold**, *italic*, [links](url)", str),
     "MAINTENANCE_MODE": (False, "Enable maintenance mode (restricts access)", bool),
+    "LOGO_DISPLAY_MODE": (
+        "name_only",
+        "Header display mode: 'logo_only', 'logo_and_name', or 'name_only'",
+        str,
+    ),
     "SUBTITLE": (
         "A competitive Zwift racing team bringing together cyclists from around the world.",
         "Subtitle displayed on the home page",
@@ -480,6 +486,7 @@ CONSTANCE_CONFIG = {
 CONSTANCE_CONFIG_FIELDSETS = {
     "Site Settings": (
         "TEAM_NAME",
+        "LOGO_DISPLAY_MODE",
         "SUBTITLE",
         "SITE_ANNOUNCEMENT",
         "MAINTENANCE_MODE",

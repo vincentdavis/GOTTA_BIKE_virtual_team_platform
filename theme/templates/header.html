@@ -14,7 +14,16 @@
                 {% endif %}
             </ul>
         </div>
-        <a href="{% url 'home' %}" class="btn btn-ghost text-xl">{{ config.TEAM_NAME }}</a>
+        <a href="{% url 'home' %}" class="btn btn-ghost text-xl flex items-center gap-2">
+            {% if config.LOGO_DISPLAY_MODE == 'logo_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' %}
+                {% if site_settings.site_logo %}
+                <img src="{{ site_settings.site_logo.url }}" alt="{{ config.TEAM_NAME }}" class="h-8 max-w-32 object-contain">
+                {% endif %}
+            {% endif %}
+            {% if config.LOGO_DISPLAY_MODE == 'name_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' or not site_settings.site_logo %}
+                <span>{{ config.TEAM_NAME }}</span>
+            {% endif %}
+        </a>
     </div>
     <div class="navbar-center hidden lg:flex">
         <ul class="menu menu-horizontal px-1">
@@ -65,7 +74,7 @@
                 <li><a href="{% url 'team:submit_link' %}">Submit Link</a></li>
                 <li><a href="{% url 'data_connection:connection_list' %}">Data Connections</a></li>
                 {% if user.is_app_admin or user.is_superuser %}
-                <li><a href="{% url 'accounts:config_settings' %}">Configuration</a></li>
+                <li><a href="{% url 'config_settings' %}">Configuration</a></li>
                 {% endif %}
                 {% endif %}
             </ul>

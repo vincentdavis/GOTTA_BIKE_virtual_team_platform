@@ -351,7 +351,10 @@ def config_settings(request: HttpRequest) -> HttpResponse:
     # Get Discord roles for permission mapping selects
     from apps.team.models import DiscordRole
 
+    from gotta_bike_platform.models import SiteSettings
+
     available_roles = DiscordRole.objects.filter(managed=False).order_by("-position")
+    site_settings_obj = SiteSettings.get_settings()
 
     return render(
         request,
@@ -359,6 +362,7 @@ def config_settings(request: HttpRequest) -> HttpResponse:
         {
             "sections": sections,
             "available_roles": available_roles,
+            "site_settings_obj": site_settings_obj,
         },
     )
 
@@ -444,6 +448,105 @@ def config_section_update(request: HttpRequest, section_key: str) -> HttpRespons
             "section": section,
             "available_roles": available_roles,
             "success": not errors,
+            "errors": errors,
+        },
+    )
+
+
+@login_required
+@require_POST
+def config_site_images_update(request: HttpRequest) -> HttpResponse:
+    """Update site images (logo and hero) via HTMX.
+
+    Args:
+        request: The HTTP request with uploaded files.
+
+    Returns:
+        Rendered site images partial with updated values.
+
+    Raises:
+        PermissionDenied: If user lacks app_admin permission and is not superuser.
+
+    """
+    from gotta_bike_platform.models import SiteSettings
+
+    # Check permissions: app_admin OR superuser
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    site_settings_obj = SiteSettings.get_settings()
+    success = False
+    errors = []
+
+    # Handle logo upload
+    if "site_logo" in request.FILES:
+        site_settings_obj.site_logo = request.FILES["site_logo"]
+        success = True
+
+    # Handle logo deletion
+    if request.POST.get("delete_logo") == "true":
+        if site_settings_obj.site_logo:
+            site_settings_obj.site_logo.delete(save=False)
+            site_settings_obj.site_logo = None
+            success = True
+
+    # Handle favicon upload - convert to PNG and resize to 64x64
+    if "favicon" in request.FILES:
+        from io import BytesIO
+
+        from django.core.files.base import ContentFile
+        from PIL import Image
+
+        try:
+            uploaded_file = request.FILES["favicon"]
+            img = Image.open(uploaded_file)
+
+            # Convert to RGBA if necessary (for transparency support)
+            if img.mode not in ("RGBA", "RGB"):
+                img = img.convert("RGBA")
+
+            # Resize to fit within 64x64, maintaining aspect ratio
+            img.thumbnail((64, 64), Image.Resampling.LANCZOS)
+
+            # Save as PNG to a BytesIO buffer
+            buffer = BytesIO()
+            img.save(buffer, format="PNG", optimize=True)
+            buffer.seek(0)
+
+            # Create a new file with .png extension
+            site_settings_obj.favicon.save("favicon.png", ContentFile(buffer.read()), save=False)
+            success = True
+        except Exception as e:
+            errors.append(f"Favicon: {e!s}")
+
+    # Handle favicon deletion
+    if request.POST.get("delete_favicon") == "true":
+        if site_settings_obj.favicon:
+            site_settings_obj.favicon.delete(save=False)
+            site_settings_obj.favicon = None
+            success = True
+
+    # Handle hero image upload
+    if "hero_image" in request.FILES:
+        site_settings_obj.hero_image = request.FILES["hero_image"]
+        success = True
+
+    # Handle hero image deletion
+    if request.POST.get("delete_hero") == "true":
+        if site_settings_obj.hero_image:
+            site_settings_obj.hero_image.delete(save=False)
+            site_settings_obj.hero_image = None
+            success = True
+
+    if success:
+        site_settings_obj.save()
+
+    return render(
+        request,
+        "accounts/partials/config_site_images.html",
+        {
+            "site_settings_obj": site_settings_obj,
+            "success": success,
             "errors": errors,
         },
     )

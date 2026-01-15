@@ -4,11 +4,15 @@
 
 {% block content %}
 <!-- Hero Section -->
-<div class="hero min-h-[50vh] bg-base-200 rounded-box mb-8">
+<div class="hero min-h-[50vh] rounded-box mb-8 {% if site_settings.hero_image %}bg-cover bg-center{% else %}bg-base-200{% endif %}"
+     {% if site_settings.hero_image %}style="background-image: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('{{ site_settings.hero_image.url }}');"{% endif %}>
     <div class="hero-content text-center">
         <div class="max-w-2xl">
-            <h1 class="text-5xl font-bold">{{ config.TEAM_NAME }}</h1>
-            <p class="py-6 text-lg text-base-content/70">
+            {% if site_settings.site_logo and config.LOGO_DISPLAY_MODE != 'name_only' %}
+            <img src="{{ site_settings.site_logo.url }}" alt="{{ config.TEAM_NAME }}" class="max-h-24 mx-auto mb-4">
+            {% endif %}
+            <h1 class="text-5xl font-bold {% if site_settings.hero_image %}text-white{% endif %}">{{ config.TEAM_NAME }}</h1>
+            <p class="py-6 text-lg {% if site_settings.hero_image %}text-white/90{% else %}text-base-content/70{% endif %}">
                 {{ config.SUBTITLE }}
             </p>
             {% if not user.is_authenticated %}
