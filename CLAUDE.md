@@ -94,7 +94,6 @@ WhiteNoise features:
 
 - `accounts` - Custom User model with Discord/Zwift fields, django-allauth adapters, role-based permissions
     - `GuildMember` model - Tracks Discord guild members synced from bot (see Guild Member Sync below)
-    - `middleware.py` - `ProfileCompletionMiddleware` enforces profile completion for all users
     - `decorators.py` - `discord_permission_required` decorator for view permissions
 - `team` - Core team management:
     - `RaceReadyRecord` - Verification records for weight/height/power (pending/verified/rejected status)
@@ -210,9 +209,6 @@ status = user.profile_completion_status
 
 Instead of blocking access, a red warning banner is displayed at the top of every page for users with incomplete
 profiles. The banner is defined in `theme/templates/base.html` and links to the profile edit page.
-
-**Note:** The `ProfileCompletionMiddleware` in `apps/accounts/middleware.py` is no longer active (removed from
-`MIDDLEWARE` in settings.py). It's kept for reference but not used.
 
 ### Discord Role-Based Permissions (`apps/accounts/models.py`)
 
