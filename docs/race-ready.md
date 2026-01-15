@@ -5,10 +5,12 @@ official team races.
 
 ## Race Ready Requirements
 
-A user is race ready (`User.is_race_ready` property) when they have BOTH:
+A user is race ready (`User.is_race_ready` property) when they have **ALL** verification types required for their
+ZwiftPower category (see Category-Based Requirements below). The `is_race_ready` property dynamically checks:
 
-1. **Weight (Full) verification** - A verified `RaceReadyRecord` of type `weight_full` that is not expired
-2. **Height verification** - A verified `RaceReadyRecord` of type `height` that is not expired
+1. Looks up the user's required verification types based on their ZwiftPower division
+2. Checks that the user has a verified, non-expired `RaceReadyRecord` for **each** required type
+3. Returns `True` only if all required types are satisfied
 
 ## Verification Types
 
@@ -28,15 +30,16 @@ Validity periods are configurable via Constance settings:
 
 ## Category-Based Requirements
 
-The verification types available to a user depend on their ZwiftPower category. This is configured via the
-`CATEGORY_REQUIREMENTS` Constance setting.
+The verification types **required** for race ready status depend on the user's ZwiftPower category. This is configured
+via the `CATEGORY_REQUIREMENTS` Constance setting.
 
 ### How It Works
 
 1. User's ZwiftPower record is looked up by their `zwid`
 2. Category is determined: `divw` for female users, `div` for everyone else
-3. Available verification types are filtered based on `CATEGORY_REQUIREMENTS[category]`
+3. Required verification types are determined from `CATEGORY_REQUIREMENTS[category]`
 4. If no ZwiftPower record exists, defaults to `["weight_light", "height"]`
+5. User must have **ALL** required types verified (non-expired) to be race ready
 
 ### Default Configuration
 
@@ -51,7 +54,7 @@ The verification types available to a user depend on their ZwiftPower category. 
 }
 ```
 
-| ZP Division | Category | Available Verification Types      |
+| ZP Division | Category | Required Verification Types       |
 |-------------|----------|-----------------------------------|
 | 5           | A+       | weight_full, height, power        |
 | 10          | A        | weight_full, height               |
@@ -63,8 +66,10 @@ The verification types available to a user depend on their ZwiftPower category. 
 
 ### Implementation
 
-The `get_user_verification_types(user)` function in `apps/team/services.py` returns the allowed types.
-The `RaceReadyRecordForm` accepts an `allowed_types` parameter to filter the dropdown choices.
+The `get_user_verification_types(user)` function in `apps/team/services.py` returns the required types.
+This function is used by:
+- `User.is_race_ready` property to check if user meets all requirements
+- `RaceReadyRecordForm` to filter the dropdown choices when submitting
 
 ## Record Status
 

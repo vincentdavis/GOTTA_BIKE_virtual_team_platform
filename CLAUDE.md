@@ -588,28 +588,27 @@ official team races.
 
 ### Requirements
 
-A user is race ready (`User.is_race_ready` property) when they have BOTH:
-
-1. **Weight (Full) verification** - A verified `RaceReadyRecord` of type `weight_full` that is not expired
-2. **Height verification** - A verified `RaceReadyRecord` of type `height` that is not expired
+A user is race ready (`User.is_race_ready` property) when they have **ALL** verification types required for their
+ZwiftPower category. The property dynamically checks requirements based on `CATEGORY_REQUIREMENTS`.
 
 ### Category-Based Verification Types
 
-The verification types available to a user depend on their ZwiftPower category (`div` for male, `divw` for female).
-Configured via `CATEGORY_REQUIREMENTS` Constance setting:
+The verification types **required** for race ready depend on the user's ZwiftPower category (`div` for male, `divw` for
+female). Configured via `CATEGORY_REQUIREMENTS` Constance setting:
 
 ```json
 {"5": ["weight_full", "height", "power"], "10": ["weight_full", "height"], ...}
 ```
 
-| ZP Div | Category | Available Types                |
+| ZP Div | Category | Required Types                 |
 |--------|----------|--------------------------------|
 | 5      | A+       | weight_full, height, power     |
 | 10-30  | A-C      | weight_full, height            |
 | 40-50  | D-E      | weight_light, height           |
 | (none) | -        | weight_light, height (default) |
 
-The `get_user_verification_types(user)` function in `apps/team/services.py` returns allowed types for a user.
+The `get_user_verification_types(user)` function in `apps/team/services.py` returns required types for a user. This is
+used by both the `is_race_ready` property and the verification submission form.
 
 ### Verification Flow
 

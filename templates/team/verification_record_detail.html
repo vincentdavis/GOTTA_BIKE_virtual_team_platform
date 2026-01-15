@@ -20,11 +20,12 @@
 
       <!-- Record Details -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <!-- Top Left: User Info -->
         <div class="bg-base-300 rounded-lg p-4">
           <div class="text-sm text-base-content/60 mb-1">User</div>
-          <div class="font-medium">{{ record.user.username }}</div>
-          {% if record.user.discord_username %}
-          <div class="text-sm text-base-content/70">Discord: {{ record.user.discord_username }}</div>
+          <div class="font-medium">{{ record.user.first_name }} {{ record.user.last_name }}</div>
+          {% if record.user.discord_nickname %}
+          <div class="text-sm text-base-content/70">{{ record.user.discord_nickname }}</div>
           {% endif %}
           {% if record.user.zwid %}
           <div class="text-sm text-base-content/70 mt-1">ZWID: {{ record.user.zwid }}</div>
@@ -41,13 +42,27 @@
           {% endif %}
         </div>
 
+        <!-- Top Right: Submission Details -->
         <div class="bg-base-300 rounded-lg p-4">
-          <div class="text-sm text-base-content/60 mb-1">Verification Type</div>
-          <div class="font-medium">{{ record.get_verify_type_display }}</div>
+          <div class="grid grid-cols-1 gap-3">
+            <div>
+              <div class="text-sm text-base-content/60 mb-1">Verification Type</div>
+              <div class="font-medium">{{ record.get_verify_type_display }}</div>
+            </div>
+            <div>
+              <div class="text-sm text-base-content/60 mb-1">Media Type</div>
+              <div class="font-medium">{{ record.get_media_type_display }}</div>
+            </div>
+            <div>
+              <div class="text-sm text-base-content/60 mb-1">Date Submitted</div>
+              <div class="font-medium">{{ record.date_created|date:"F d, Y H:i" }}</div>
+            </div>
+          </div>
         </div>
 
+        <!-- Bottom Left: Submitted Value -->
         <div class="bg-base-300 rounded-lg p-4">
-          <div class="text-sm text-base-content/60 mb-1">Value</div>
+          <div class="text-sm text-base-content/60 mb-1">Submitted Value</div>
           <div class="font-medium font-mono text-lg">
             {% if record.weight %}
               {{ record.weight|weight_dual }}
@@ -59,31 +74,23 @@
               <span class="text-base-content/30">-</span>
             {% endif %}
           </div>
-          {% if record.weight and zp_rider and zp_rider.weight %}
-          <div class="mt-2 pt-2 border-t border-base-content/10">
-            <div class="text-sm text-base-content/60">ZwiftPower Weight</div>
-            <div class="font-medium font-mono">{{ zp_rider.weight|weight_dual }}</div>
-            <div class="text-sm mt-1">
-              <span class="text-base-content/60">Difference:</span>
-              {% with diff=record.weight|weight_diff:zp_rider.weight %}
-              <span class="font-medium {% if '+' in diff %}text-error{% elif '-' in diff %}text-success{% endif %}">
-                {{ diff }}
-              </span>
-              {% endwith %}
-            </div>
+        </div>
+
+        <!-- Bottom Right: ZwiftPower Weight (if applicable) -->
+        {% if record.weight and zp_rider and zp_rider.weight %}
+        <div class="bg-base-300 rounded-lg p-4">
+          <div class="text-sm text-base-content/60 mb-1">ZwiftPower Weight</div>
+          <div class="font-medium font-mono text-lg">{{ zp_rider.weight|weight_dual }}</div>
+          <div class="text-sm mt-2">
+            <span class="text-base-content/60">Difference:</span>
+            {% with diff=record.weight|weight_diff:zp_rider.weight %}
+            <span class="font-medium {% if '+' in diff %}text-error{% elif '-' in diff %}text-success{% endif %}">
+              {{ diff }}
+            </span>
+            {% endwith %}
           </div>
-          {% endif %}
         </div>
-
-        <div class="bg-base-300 rounded-lg p-4">
-          <div class="text-sm text-base-content/60 mb-1">Media Type</div>
-          <div class="font-medium">{{ record.get_media_type_display }}</div>
-        </div>
-
-        <div class="bg-base-300 rounded-lg p-4">
-          <div class="text-sm text-base-content/60 mb-1">Date Submitted</div>
-          <div class="font-medium">{{ record.date_created|date:"F d, Y H:i" }}</div>
-        </div>
+        {% endif %}
       </div>
 
       {% if record.notes %}
@@ -128,46 +135,6 @@
       <div class="mb-6">
         <div class="text-sm text-base-content/60 mb-2">External Link</div>
         <div class="bg-base-300 rounded-lg p-4">
-          <!-- YouTube/Vimeo embed -->
-          {% if record.embed_url %}
-          <div class="aspect-video mb-3 relative" id="video-container">
-            <iframe
-              id="video-embed"
-              src="{{ record.embed_url }}"
-              class="w-full h-full rounded-lg"
-              frameborder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-              allowfullscreen>
-            </iframe>
-            <!-- Fallback shown if embed fails -->
-            <div id="video-fallback" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-base-300 rounded-lg">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-base-content/40 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p class="text-base-content/60 mb-4">This video cannot be embedded</p>
-              <a href="{{ record.url }}" target="_blank" rel="noopener" class="btn btn-primary">
-                Watch on {% if record.url_type == "youtube" %}YouTube{% elif record.url_type == "vimeo" %}Vimeo{% else %}Original Site{% endif %}
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-            </div>
-          </div>
-          <script>
-            // Show fallback if iframe fails to load
-            document.getElementById('video-embed').addEventListener('error', function() {
-              document.getElementById('video-embed').classList.add('hidden');
-              document.getElementById('video-fallback').classList.remove('hidden');
-            });
-          </script>
-          <!-- Image URL preview -->
-          {% elif record.url_type == "image" %}
-          <a href="{{ record.url }}" target="_blank" rel="noopener" class="block mb-3">
-            <img src="{{ record.url }}" alt="External image" class="max-w-full max-h-96 h-auto rounded-lg mx-auto cursor-zoom-in hover:opacity-90 transition-opacity" onerror="this.parentElement.style.display='none'" />
-          </a>
-          {% endif %}
-          <!-- Always show the link -->
           <a href="{{ record.url }}" target="_blank" rel="noopener" class="link link-primary break-all">
             {{ record.url }}
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">

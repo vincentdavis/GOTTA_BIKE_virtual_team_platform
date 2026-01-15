@@ -12,6 +12,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.accounts.decorators import team_member_required
 from apps.accounts.discord_service import send_verification_notification
+from apps.accounts.models import User
 from apps.team.forms import TeamLinkEditForm, TeamLinkForm
 from apps.team.models import RaceReadyRecord, RosterFilter, TeamLink
 from apps.team.services import ZP_DIV_TO_CATEGORY, get_performance_review_data, get_unified_team_roster
@@ -394,10 +395,12 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     search_query = request.GET.get("q", "").strip()
     type_filter = request.GET.get("type", "")
     status_filter = request.GET.get("status", "")
+    gender_filter = request.GET.get("gender", "")
 
-    # Get verify type choices for filter dropdown
+    # Get choices for filter dropdowns
     verify_type_choices = RaceReadyRecord._meta.get_field("verify_type").choices
     status_choices = RaceReadyRecord.Status.choices
+    gender_choices = User.Gender.choices
 
     # Apply search filter (by username or discord_username)
     if search_query:
@@ -412,6 +415,10 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     # Apply status filter
     if status_filter:
         records = records.filter(status=status_filter)
+
+    # Apply gender filter
+    if gender_filter:
+        records = records.filter(user__gender=gender_filter)
 
     # Check if user can verify records (has permission)
     can_verify = request.user.can_approve_verification or request.user.is_superuser
@@ -445,8 +452,10 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
             "search_query": search_query,
             "type_filter": type_filter,
             "status_filter": status_filter,
+            "gender_filter": gender_filter,
             "verify_type_choices": verify_type_choices,
             "status_choices": status_choices,
+            "gender_choices": gender_choices,
             "can_verify": can_verify,
         },
     )
