@@ -150,6 +150,38 @@
             <span class="label-text-alt">{{ setting.description }} (Must be valid JSON)</span>
         </label>
 
+        {% elif setting.input_type == "textarea" %}
+        <!-- Large Textarea (Markdown) with Preview -->
+        <div class="flex gap-2 mb-2">
+            <button type="button"
+                    class="btn btn-xs btn-ghost"
+                    id="btn_edit_{{ setting.key }}"
+                    onclick="showTextareaEdit('{{ setting.key }}')"
+                    disabled>
+                Edit
+            </button>
+            <button type="button"
+                    class="btn btn-xs btn-outline"
+                    id="btn_preview_{{ setting.key }}"
+                    onclick="showTextareaPreview('{{ setting.key }}')">
+                Preview
+            </button>
+        </div>
+        <div id="edit_{{ setting.key }}">
+            <textarea name="{{ setting.key }}"
+                      id="id_{{ setting.key }}"
+                      class="textarea textarea-bordered w-full"
+                      rows="8"
+                      maxlength="4096"
+                      placeholder="Enter text here. Markdown is supported.">{{ setting.current_value }}</textarea>
+        </div>
+        <div id="preview_{{ setting.key }}" class="hidden bg-base-100 border border-base-300 rounded-lg p-4 min-h-[12rem] prose prose-sm max-w-none">
+            <!-- Preview content loaded via HTMX -->
+        </div>
+        <label class="label">
+            <span class="label-text-alt">{{ setting.description }}</span>
+        </label>
+
         {% else %}
         <!-- Text Input -->
         <input type="text"

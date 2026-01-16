@@ -255,5 +255,65 @@ function togglePassword(inputId) {
         icon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />`;
     }
 }
+
+// Textarea markdown preview functions
+function showTextareaPreview(key) {
+    const editDiv = document.getElementById('edit_' + key);
+    const previewDiv = document.getElementById('preview_' + key);
+    const editBtn = document.getElementById('btn_edit_' + key);
+    const previewBtn = document.getElementById('btn_preview_' + key);
+    const textarea = document.getElementById('id_' + key);
+
+    // Hide edit, show preview
+    editDiv.classList.add('hidden');
+    previewDiv.classList.remove('hidden');
+
+    // Update button states
+    editBtn.disabled = false;
+    editBtn.classList.remove('btn-ghost');
+    editBtn.classList.add('btn-outline');
+    previewBtn.disabled = true;
+    previewBtn.classList.remove('btn-outline');
+    previewBtn.classList.add('btn-ghost');
+
+    // Fetch rendered markdown via HTMX/fetch
+    const text = textarea.value;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    fetch('{% url "markdown_preview" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken
+        },
+        body: 'text=' + encodeURIComponent(text)
+    })
+    .then(response => response.text())
+    .then(html => {
+        previewDiv.innerHTML = html;
+    })
+    .catch(error => {
+        previewDiv.innerHTML = '<p class="text-error">Error loading preview</p>';
+    });
+}
+
+function showTextareaEdit(key) {
+    const editDiv = document.getElementById('edit_' + key);
+    const previewDiv = document.getElementById('preview_' + key);
+    const editBtn = document.getElementById('btn_edit_' + key);
+    const previewBtn = document.getElementById('btn_preview_' + key);
+
+    // Show edit, hide preview
+    editDiv.classList.remove('hidden');
+    previewDiv.classList.add('hidden');
+
+    // Update button states
+    editBtn.disabled = true;
+    editBtn.classList.remove('btn-outline');
+    editBtn.classList.add('btn-ghost');
+    previewBtn.disabled = false;
+    previewBtn.classList.remove('btn-ghost');
+    previewBtn.classList.add('btn-outline');
+}
 </script>
 {% endblock %}

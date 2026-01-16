@@ -20,7 +20,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
 
-from apps.accounts.views import config_section_update, config_settings, config_site_images_update
+from apps.accounts.views import config_section_update, config_settings, config_site_images_update, markdown_preview
 from apps.dbot_api.api import api as dbot_api
 from apps.dbot_api.cron_api import cron_api
 from gotta_bike_platform.views import about, home
@@ -40,6 +40,7 @@ urlpatterns = [
     path("site/config/", config_settings, name="config_settings"),
     path("site/config/section/<str:section_key>/", config_section_update, name="config_section_update"),
     path("site/config/images/", config_site_images_update, name="config_site_images_update"),
+    path("site/config/markdown-preview/", markdown_preview, name="markdown_preview"),
 ]
 
 if settings.DEBUG:

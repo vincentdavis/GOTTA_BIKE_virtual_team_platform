@@ -835,6 +835,8 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
         Rendered membership application admin page.
 
     """
+    from constance import config
+
     application = get_object_or_404(
         MembershipApplication.objects.select_related("modified_by"),
         pk=pk,
@@ -857,6 +859,7 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
         {
             "application": application,
             "form": form,
+            "application_form_instructions": config.APPLICATION_FORM_INSTRUCTIONS,
         },
     )
 
@@ -891,6 +894,7 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
                 "form": None,
                 "privacy_policy_url": config.PRIVACY_POLICY_URL,
                 "terms_of_service_url": config.TERMS_OF_SERVICE_URL,
+                "application_form_instructions": config.APPLICATION_FORM_INSTRUCTIONS,
             },
         )
 
@@ -911,5 +915,6 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
             "form": form,
             "privacy_policy_url": config.PRIVACY_POLICY_URL,
             "terms_of_service_url": config.TERMS_OF_SERVICE_URL,
+            "application_form_instructions": config.APPLICATION_FORM_INSTRUCTIONS,
         },
     )

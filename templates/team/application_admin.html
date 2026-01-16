@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load accounts_tags %}
 
 {% block title %}Application - {{ application.display_name }} - The Coalition{% endblock %}
 
@@ -40,6 +41,15 @@
         <span class="badge badge-error badge-lg">Rejected</span>
         {% endif %}
       </div>
+
+      <!-- Application Form Instructions -->
+      {% if application_form_instructions %}
+      <div class="bg-info/10 border border-info rounded-lg p-4 mb-6">
+        <div class="prose prose-sm max-w-none">
+          {{ application_form_instructions|render_markdown }}
+        </div>
+      </div>
+      {% endif %}
 
       <!-- Application Questions (from Discord Modal) -->
       {% if application.modal_form_data %}

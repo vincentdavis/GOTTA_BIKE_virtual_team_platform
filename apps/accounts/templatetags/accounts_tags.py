@@ -23,10 +23,14 @@ def render_markdown(value: str) -> str:
     """
     if not value:
         return ""
-    # Convert markdown to HTML, enabling safe extensions
+    # Convert markdown to HTML, enabling useful extensions
     html = markdown.markdown(
         value,
-        extensions=["nl2br"],  # Convert newlines to <br>
+        extensions=[
+            "nl2br",       # Convert newlines to <br>
+            "sane_lists",  # Better list handling
+            "tables",      # Support tables
+        ],
     )
     return mark_safe(html)
 

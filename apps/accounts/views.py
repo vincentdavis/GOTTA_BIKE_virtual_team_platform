@@ -302,6 +302,8 @@ def _get_config_sections() -> dict:
                     input_type = "string_list"
                 elif field_type == "json_field":
                     input_type = "json"
+                elif field_type == "textarea_field":
+                    input_type = "textarea"
                 elif field_type is bool:
                     input_type = "boolean"
                 elif field_type is int:
@@ -558,3 +560,40 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
             "errors": errors,
         },
     )
+
+
+@login_required
+@require_POST
+def markdown_preview(request: HttpRequest) -> HttpResponse:
+    """Render markdown text as HTML for preview.
+
+    Args:
+        request: The HTTP request with 'text' in POST data.
+
+    Returns:
+        Rendered HTML content.
+
+    Raises:
+        PermissionDenied: If user lacks app_admin permission and is not superuser.
+
+    """
+    import markdown
+
+    # Check permissions: app_admin OR superuser
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    text = request.POST.get("text", "")
+    if not text:
+        return HttpResponse('<p class="text-base-content/50 italic">No content to preview</p>')
+
+    # Render markdown with same extensions as render_markdown template filter
+    html = markdown.markdown(
+        text,
+        extensions=[
+            "nl2br",       # Convert newlines to <br>
+            "sane_lists",  # Better list handling
+            "tables",      # Support tables
+        ],
+    )
+    return HttpResponse(html)

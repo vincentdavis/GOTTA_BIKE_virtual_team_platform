@@ -452,6 +452,12 @@ CONSTANCE_CONFIG = {
         "List of powermeter options for power verification submissions",
         "string_list_field",
     ),
+    # Membership Applications
+    "APPLICATION_FORM_INSTRUCTIONS": (
+        "",
+        "Instructions displayed at the top of the membership application form. Supports Markdown.",
+        "textarea_field",
+    ),
     # Site settings
     "SITE_ANNOUNCEMENT": ("", "Announcement banner on all pages. Supports Markdown: **bold**, *italic*, [links](url)", str),
     "MAINTENANCE_MODE": (False, "Enable maintenance mode (restricts access)", bool),
@@ -550,6 +556,9 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "HEIGHT_INSTRUCTIONS_URL",
         "TRAINER_OPTIONS",
         "POWERMETER_OPTIONS",
+    ),
+    "Membership Applications": (
+        "APPLICATION_FORM_INSTRUCTIONS",
     ),
     "SEO Settings": (
         "META_DESCRIPTION",
