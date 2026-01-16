@@ -3307,6 +3307,9 @@
   .w-52 {
     width: calc(var(--spacing) * 52);
   }
+  .w-56 {
+    width: calc(var(--spacing) * 56);
+  }
   .w-full {
     width: 100%;
   }
@@ -3552,6 +3555,9 @@
   .border-error-content {
     border-color: var(--color-error-content);
   }
+  .border-info {
+    border-color: var(--color-info);
+  }
   .border-success {
     border-color: var(--color-success);
   }
@@ -3617,6 +3623,14 @@
   }
   .bg-gray-700 {
     background-color: var(--color-gray-700);
+  }
+  .bg-info\/10 {
+    background-color: var(--color-info);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-info\/10 {
+      background-color: color-mix(in oklab, var(--color-info) 10%, transparent);
+    }
   }
   .bg-neutral {
     background-color: var(--color-neutral);
@@ -3697,6 +3711,9 @@
   }
   .p-2 {
     padding: calc(var(--spacing) * 2);
+  }
+  .p-3 {
+    padding: calc(var(--spacing) * 3);
   }
   .p-4 {
     padding: calc(var(--spacing) * 4);
@@ -3811,6 +3828,12 @@
   .text-xs {
     font-size: var(--text-xs);
     line-height: var(--tw-leading, var(--text-xs--line-height));
+  }
+  @layer daisyui.l1.l2 {
+    .badge-lg {
+      --size: calc(var(--size-selector, 0.25rem) * 7);
+      font-size: 1rem;
+    }
   }
   @layer daisyui.l1.l2 {
     .badge-sm {
@@ -4012,6 +4035,20 @@
     --tw-shadow: 0 20px 25px -5px var(--tw-shadow-color, rgb(0 0 0 / 0.1)), 0 8px 10px -6px var(--tw-shadow-color, rgb(0 0 0 / 0.1));
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
+  .ring {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  .ring-primary {
+    --tw-ring-color: var(--color-primary);
+  }
+  .ring-offset-2 {
+    --tw-ring-offset-width: 2px;
+    --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  }
+  .ring-offset-base-100 {
+    --tw-ring-offset-color: var(--color-base-100);
+  }
   @layer daisyui.l1 {
     .btn-ghost:not(.btn-active, :hover, :active:focus, :focus-visible, input:checked:not(.filter .btn)) {
       --btn-shadow: "";
@@ -4146,6 +4183,12 @@
     .btn-primary {
       --btn-color: var(--color-primary);
       --btn-fg: var(--color-primary-content);
+    }
+  }
+  @layer daisyui.l1.l2.l3 {
+    .btn-secondary {
+      --btn-color: var(--color-secondary);
+      --btn-fg: var(--color-secondary-content);
     }
   }
   @layer daisyui.l1.l2.l3 {

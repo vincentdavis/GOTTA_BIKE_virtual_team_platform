@@ -19,4 +19,8 @@ urlpatterns = [
     path("verification/delete-rejected-media/", views.delete_rejected_media_view, name="delete_rejected_media"),
     path("performance-review/", views.performance_review_view, name="performance_review"),
     path("youtube/", views.youtube_channels_view, name="youtube_channels"),
+    # Membership Applications
+    path("applications/", views.membership_application_list_view, name="application_list"),
+    path("applications/<uuid:pk>/", views.membership_application_admin_view, name="application_admin"),
+    path("apply/<uuid:pk>/", views.membership_application_public_view, name="application_public"),
 ]

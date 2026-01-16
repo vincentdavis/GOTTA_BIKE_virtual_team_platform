@@ -13,7 +13,7 @@ from ninja.security import APIKeyHeader
 from apps.accounts.models import GuildMember, User
 from apps.dbot_api.models import BotStats
 from apps.magic_links.models import MagicLink
-from apps.team.models import DiscordRole, RosterFilter
+from apps.team.models import DiscordRole, MembershipApplication, RosterFilter
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.models import ZRRider
@@ -137,6 +137,22 @@ class CreateRosterFilterRequest(Schema):
 
     discord_ids: list[str]
     channel_name: str = ""
+
+
+class MembershipApplicationCreateSchema(Schema):
+    """Schema for creating a membership application."""
+
+    discord_id: str
+    discord_username: str
+    server_nickname: str = ""
+    avatar_url: str = ""
+    guild_avatar_url: str = ""
+    discord_user_data: dict = {}  # noqa: RUF012
+    discord_member_data: dict = {}  # noqa: RUF012
+    modal_form_data: dict = {}  # noqa: RUF012
+    first_name: str = ""
+    last_name: str = ""
+    applicant_notes: str = ""
 
 
 class DBotAuth(APIKeyHeader):
@@ -866,3 +882,113 @@ def create_roster_filter(request: HttpRequest, payload: CreateRosterFilterReques
         "member_count": len(payload.discord_ids),
         "channel_name": payload.channel_name,
     }
+
+
+@api.post("/membership_application")
+def create_membership_application(request: HttpRequest, payload: MembershipApplicationCreateSchema) -> dict:
+    """Create a new membership application from Discord modal.
+
+    Called by the Discord bot when a user submits the join_the_coalition modal.
+    If an application already exists for the Discord ID, returns the existing one.
+
+    Args:
+        request: The HTTP request.
+        payload: The application data from the Discord modal.
+
+    Returns:
+        JSON object with application ID, URL, and status.
+
+    """
+    # Check if application already exists for this discord_id
+    existing = MembershipApplication.objects.filter(discord_id=payload.discord_id).first()
+    if existing:
+        # Build absolute URL for the application
+        application_url = request.build_absolute_uri(
+            reverse("team:application_public", kwargs={"pk": existing.id})
+        )
+        return {
+            "id": str(existing.id),
+            "discord_id": existing.discord_id,
+            "discord_username": existing.discord_username,
+            "status": existing.status,
+            "application_url": application_url,
+            "is_complete": existing.is_complete,
+            "date_created": existing.date_created.isoformat(),
+            "already_exists": True,
+        }
+
+    # Create new application
+    application = MembershipApplication.objects.create(
+        discord_id=payload.discord_id,
+        discord_username=payload.discord_username,
+        server_nickname=payload.server_nickname,
+        avatar_url=payload.avatar_url,
+        guild_avatar_url=payload.guild_avatar_url,
+        discord_user_data=payload.discord_user_data,
+        discord_member_data=payload.discord_member_data,
+        modal_form_data=payload.modal_form_data,
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        applicant_notes=payload.applicant_notes,
+    )
+
+    # Build absolute URL for the application
+    application_url = request.build_absolute_uri(
+        reverse("team:application_public", kwargs={"pk": application.id})
+    )
+
+    return {
+        "id": str(application.id),
+        "discord_id": application.discord_id,
+        "discord_username": application.discord_username,
+        "status": application.status,
+        "application_url": application_url,
+        "is_complete": application.is_complete,
+        "date_created": application.date_created.isoformat(),
+        "already_exists": False,
+    }
+
+
+@api.get("/membership_application/{discord_id}")
+def get_membership_application(request: HttpRequest, discord_id: str) -> dict:
+    """Get membership application by Discord ID.
+
+    Args:
+        request: The HTTP request.
+        discord_id: The Discord user ID to look up.
+
+    Returns:
+        JSON object with application data or error if not found.
+
+    """
+    try:
+        application = MembershipApplication.objects.get(discord_id=discord_id)
+
+        # Build absolute URL for the application
+        application_url = request.build_absolute_uri(
+            reverse("team:application_public", kwargs={"pk": application.id})
+        )
+
+        return {
+            "id": str(application.id),
+            "discord_id": application.discord_id,
+            "discord_username": application.discord_username,
+            "server_nickname": application.server_nickname,
+            "first_name": application.first_name,
+            "last_name": application.last_name,
+            "status": application.status,
+            "status_display": application.get_status_display(),
+            "application_url": application_url,
+            "is_complete": application.is_complete,
+            "is_editable": application.is_editable,
+            "agree_privacy": application.agree_privacy,
+            "agree_tos": application.agree_tos,
+            "date_created": application.date_created.isoformat(),
+            "date_modified": application.date_modified.isoformat(),
+        }
+    except MembershipApplication.DoesNotExist:
+        return api.create_response(  # ty:ignore[invalid-return-type]
+            request,
+            {"error": "Application not found", "discord_id": discord_id},
+            status=404,
+        )

@@ -5,7 +5,7 @@ from typing import ClassVar
 from django import forms
 
 from apps.team.converters import inches_to_cm, lbs_to_kg
-from apps.team.models import RaceReadyRecord, TeamLink
+from apps.team.models import MembershipApplication, RaceReadyRecord, TeamLink
 
 
 class TeamLinkForm(forms.ModelForm):
@@ -251,3 +251,95 @@ class RaceReadyRecordForm(forms.ModelForm):
             self.add_error("ftp", "FTP is required for power verification.")
 
         return cleaned_data
+
+
+class MembershipApplicationApplicantForm(forms.ModelForm):
+    """Form for applicants to complete their membership application.
+
+    This form is used on the public application page accessed via UUID link.
+    Applicants can fill in their name, agree to policies, and add notes.
+    """
+
+    class Meta:
+        """Meta options for MembershipApplicationApplicantForm."""
+
+        model = MembershipApplication
+        fields: ClassVar[list[str]] = [
+            "first_name",
+            "last_name",
+            "agree_privacy",
+            "agree_tos",
+            "applicant_notes",
+        ]
+        widgets: ClassVar[dict] = {
+            "first_name": forms.TextInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "First name",
+                }
+            ),
+            "last_name": forms.TextInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "Last name",
+                }
+            ),
+            "agree_privacy": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary"}
+            ),
+            "agree_tos": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary"}
+            ),
+            "applicant_notes": forms.Textarea(
+                attrs={
+                    "class": "textarea textarea-bordered w-full",
+                    "rows": 4,
+                    "placeholder": "Optional notes for the team",
+                }
+            ),
+        }
+
+    def clean(self):
+        """Validate that required agreements are checked.
+
+        Returns:
+            The cleaned data.
+
+        Raises:
+            ValidationError: If agreements are not checked.
+
+        """
+        cleaned_data = super().clean()
+
+        if not cleaned_data.get("agree_privacy"):
+            self.add_error("agree_privacy", "You must agree to the privacy policy.")
+        if not cleaned_data.get("agree_tos"):
+            self.add_error("agree_tos", "You must agree to the terms of service.")
+
+        return cleaned_data
+
+
+class MembershipApplicationAdminForm(forms.ModelForm):
+    """Form for admins to update application status and notes.
+
+    This form is used on the admin detail page to update status
+    and add internal notes about the application.
+    """
+
+    class Meta:
+        """Meta options for MembershipApplicationAdminForm."""
+
+        model = MembershipApplication
+        fields: ClassVar[list[str]] = ["status", "admin_notes"]
+        widgets: ClassVar[dict] = {
+            "status": forms.Select(
+                attrs={"class": "select select-bordered w-full"}
+            ),
+            "admin_notes": forms.Textarea(
+                attrs={
+                    "class": "textarea textarea-bordered w-full",
+                    "rows": 4,
+                    "placeholder": "Internal notes (not visible to applicant)",
+                }
+            ),
+        }

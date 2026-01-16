@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}Complete Your Application - The Coalition{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-6">
+        <div class="flex items-center gap-4">
+          {% if application.avatar_url %}
+          <div class="avatar">
+            <div class="w-16 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
+              <img src="{{ application.avatar_url }}" alt="{{ application.display_name }}" />
+            </div>
+          </div>
+          {% else %}
+          <div class="avatar placeholder">
+            <div class="bg-neutral text-neutral-content w-16 rounded-full">
+              <span class="text-xl">{{ application.discord_username|slice:":2"|upper }}</span>
+            </div>
+          </div>
+          {% endif %}
+          <div>
+            <h2 class="card-title text-2xl">Complete Your Application</h2>
+            <div class="text-base-content/60">{{ application.display_name }}</div>
+          </div>
+        </div>
+        <!-- Status Badge -->
+        {% if application.status == "pending" %}
+        <span class="badge badge-warning badge-lg">Pending Review</span>
+        {% elif application.status == "in_progress" %}
+        <span class="badge badge-info badge-lg">In Progress</span>
+        {% elif application.status == "waiting_response" %}
+        <span class="badge badge-secondary badge-lg">Info Requested</span>
+        {% elif application.status == "approved" %}
+        <span class="badge badge-success badge-lg">Approved</span>
+        {% elif application.status == "rejected" %}
+        <span class="badge badge-error badge-lg">Rejected</span>
+        {% endif %}
+      </div>
+
+      {% if application.status == "approved" %}
+      <!-- Approved Message -->
+      <div class="alert alert-success mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <div>
+          <h3 class="font-bold">Your application has been approved!</h3>
+          <p class="text-sm">You can now log in to the team platform using your Discord account.</p>
+        </div>
+      </div>
+      <div class="text-center">
+        <a href="{% url 'account_login' %}" class="btn btn-primary btn-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+          </svg>
+          Log in with Discord
+        </a>
+      </div>
+
+      {% elif application.status == "rejected" %}
+      <!-- Rejected Message -->
+      <div class="alert alert-error mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <div>
+          <h3 class="font-bold">Your application has been declined.</h3>
+          <p class="text-sm">If you have questions, please reach out to the team via Discord.</p>
+        </div>
+      </div>
+
+      {% else %}
+      <!-- Editable Form -->
+      {% if application.status == "waiting_response" %}
+      <div class="alert alert-info mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        <span>The team has requested additional information. Please update your application below.</span>
+      </div>
+      {% endif %}
+
+      <!-- Server Nickname (read-only) -->
+      <div class="form-control mb-6">
+        <label class="label">
+          <span class="label-text">Discord / Server Nickname</span>
+        </label>
+        <input type="text"
+               value="{{ application.display_name }}"
+               class="input input-bordered w-full bg-base-300"
+               readonly
+               disabled />
+        <label class="label">
+          <span class="label-text-alt text-base-content/50">This is your Discord identity and cannot be changed here</span>
+        </label>
+      </div>
+
+      <form method="post">
+        {% csrf_token %}
+
+        <!-- First Name -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">First Name <span class="text-error">*</span></span>
+          </label>
+          {{ form.first_name }}
+          {% if form.first_name.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.first_name.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Last Name -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">Last Name <span class="text-error">*</span></span>
+          </label>
+          {{ form.last_name }}
+          {% if form.last_name.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.last_name.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Privacy Policy -->
+        <div class="form-control mb-4">
+          <label class="label cursor-pointer justify-start gap-4">
+            {{ form.agree_privacy }}
+            <span class="label-text">
+              I agree to the
+              {% if privacy_policy_url %}
+              <a href="{{ privacy_policy_url }}" target="_blank" rel="noopener" class="link link-primary">Privacy Policy</a>
+              {% else %}
+              Privacy Policy
+              {% endif %}
+              <span class="text-error">*</span>
+            </span>
+          </label>
+          {% if form.agree_privacy.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.agree_privacy.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Terms of Service -->
+        <div class="form-control mb-4">
+          <label class="label cursor-pointer justify-start gap-4">
+            {{ form.agree_tos }}
+            <span class="label-text">
+              I agree to the
+              {% if terms_of_service_url %}
+              <a href="{{ terms_of_service_url }}" target="_blank" rel="noopener" class="link link-primary">Terms of Service</a>
+              {% else %}
+              Terms of Service
+              {% endif %}
+              <span class="text-error">*</span>
+            </span>
+          </label>
+          {% if form.agree_tos.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.agree_tos.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Applicant Notes -->
+        <div class="form-control mb-6">
+          <label class="label">
+            <span class="label-text">Additional Notes</span>
+            <span class="label-text-alt text-base-content/50">Optional</span>
+          </label>
+          {{ form.applicant_notes }}
+          <label class="label">
+            <span class="label-text-alt text-base-content/50">Anything you'd like the team to know about your application</span>
+          </label>
+        </div>
+
+        <!-- Form Errors -->
+        {% if form.non_field_errors %}
+        <div class="alert alert-error mb-6">
+          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span>{{ form.non_field_errors.0 }}</span>
+        </div>
+        {% endif %}
+
+        <!-- Submit Button -->
+        <div class="form-control mt-6">
+          <button type="submit" class="btn btn-primary btn-lg">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Save Application
+          </button>
+        </div>
+      </form>
+      {% endif %}
+
+      <!-- Application Status Info -->
+      <div class="divider"></div>
+      <div class="text-center text-sm text-base-content/50">
+        <p>Application submitted on {{ application.date_created|date:"F d, Y" }}</p>
+        {% if application.date_modified != application.date_created %}
+        <p>Last updated: {{ application.date_modified|date:"F d, Y H:i" }}</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

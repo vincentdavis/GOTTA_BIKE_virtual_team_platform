@@ -373,6 +373,7 @@ CONSTANCE_CONFIG = {
     "GUILD_NAME": ("The Coalition", "Name of the Discord guild/server", str),
     "GUILD_ID": (1317875072089981021, "Discord guild/server ID", int),
     "UPGRADE_CHANNEL": (0, "Discord channel ID for upgrade notifications", int),
+    "WELCOME_TEAM_CHANNEL_ID": (0, "Discord channel ID for welcome/application messages", int),
     "ZWIFTPOWER_TEAM_ID": (0, "ZwiftPower team ID for fetching team data", int),
     # Zwift credentials (for ZwiftPower API access)
     "ZWIFT_USERNAME": ("", "Zwift account username/email for API access", str),
@@ -515,6 +516,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "GUILD_NAME",
         "GUILD_ID",
         "UPGRADE_CHANNEL",
+        "WELCOME_TEAM_CHANNEL_ID",
         "DISCORD_BOT_TOKEN",
     ),
     "Zwift Credentials": (

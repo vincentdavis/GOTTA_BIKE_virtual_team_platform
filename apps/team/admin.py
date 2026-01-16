@@ -5,7 +5,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.urls import path
 
-from apps.team.models import DiscordRole, RaceReadyRecord, TeamLink
+from apps.team.models import DiscordRole, MembershipApplication, RaceReadyRecord, TeamLink
 from apps.team.services import get_unified_team_roster
 
 
@@ -159,3 +159,97 @@ class DiscordRoleAdmin(admin.ModelAdmin):
             hex_color,
             hex_color,
         )
+
+
+@admin.register(MembershipApplication)
+class MembershipApplicationAdmin(admin.ModelAdmin):
+    """Admin for MembershipApplication model."""
+
+    list_display = (
+        "discord_username",
+        "server_nickname",
+        "full_name_display",
+        "status",
+        "is_complete_display",
+        "date_created",
+        "date_modified",
+    )
+    list_filter = ("status", "agree_privacy", "agree_tos")
+    search_fields = ("discord_id", "discord_username", "server_nickname", "first_name", "last_name")
+    readonly_fields = (
+        "id",
+        "discord_id",
+        "discord_username",
+        "discord_user_data",
+        "discord_member_data",
+        "modal_form_data",
+        "date_created",
+        "date_modified",
+    )
+    raw_id_fields = ("modified_by",)
+    fieldsets = (
+        ("Application ID", {"fields": ("id",)}),
+        (
+            "Discord Identity",
+            {
+                "fields": (
+                    "discord_id",
+                    "discord_username",
+                    "server_nickname",
+                    "avatar_url",
+                    "guild_avatar_url",
+                )
+            },
+        ),
+        (
+            "Applicant Information",
+            {
+                "fields": (
+                    "first_name",
+                    "last_name",
+                    "agree_privacy",
+                    "agree_tos",
+                    "applicant_notes",
+                )
+            },
+        ),
+        ("Admin", {"fields": ("status", "admin_notes", "modified_by")}),
+        (
+            "Raw Data",
+            {
+                "fields": (
+                    "discord_user_data",
+                    "discord_member_data",
+                    "modal_form_data",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        ("Timestamps", {"fields": ("date_created", "date_modified")}),
+    )
+
+    @admin.display(description="Full Name")
+    def full_name_display(self, obj: MembershipApplication) -> str:
+        """Display full name or dash if not set.
+
+        Args:
+            obj: The MembershipApplication instance.
+
+        Returns:
+            Full name or dash.
+
+        """
+        return obj.full_name or "-"
+
+    @admin.display(description="Complete", boolean=True)
+    def is_complete_display(self, obj: MembershipApplication) -> bool:
+        """Display whether application is complete.
+
+        Args:
+            obj: The MembershipApplication instance.
+
+        Returns:
+            True if complete, False otherwise.
+
+        """
+        return obj.is_complete

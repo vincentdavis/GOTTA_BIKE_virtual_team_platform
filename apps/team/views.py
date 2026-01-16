@@ -10,11 +10,16 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from apps.accounts.decorators import team_member_required
+from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
-from apps.team.forms import TeamLinkEditForm, TeamLinkForm
-from apps.team.models import RaceReadyRecord, RosterFilter, TeamLink
+from apps.team.forms import (
+    MembershipApplicationAdminForm,
+    MembershipApplicationApplicantForm,
+    TeamLinkEditForm,
+    TeamLinkForm,
+)
+from apps.team.models import MembershipApplication, RaceReadyRecord, RosterFilter, TeamLink
 from apps.team.services import ZP_DIV_TO_CATEGORY, get_performance_review_data, get_unified_team_roster
 from apps.zwiftpower.models import ZPTeamRiders
 
@@ -737,5 +742,174 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
             "zp_categories": zp_categories,
             "sort_by": sort_by,
             "sort_dir": sort_dir,
+        },
+    )
+
+
+# =============================================================================
+# Membership Application Views
+# =============================================================================
+
+
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_GET
+def membership_application_list_view(request: HttpRequest) -> HttpResponse:
+    """Display list of membership applications for admin review.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered membership application list page.
+
+    """
+    applications = MembershipApplication.objects.select_related("modified_by").order_by("-date_created")
+
+    # Get filter parameters
+    search_query = request.GET.get("q", "").strip()
+    status_filter = request.GET.get("status", "")
+
+    # Get sort parameters
+    sort_by = request.GET.get("sort", "date_created")
+    sort_dir = request.GET.get("dir", "desc")
+
+    # Count applications by status (before filtering)
+    status_counts = {}
+    for status_choice in MembershipApplication.Status:
+        status_counts[status_choice.value] = applications.filter(status=status_choice.value).count()
+
+    # Apply search filter
+    if search_query:
+        applications = applications.filter(
+            Q(discord_username__icontains=search_query)
+            | Q(server_nickname__icontains=search_query)
+            | Q(first_name__icontains=search_query)
+            | Q(last_name__icontains=search_query)
+            | Q(discord_id__icontains=search_query)
+        )
+
+    # Apply status filter
+    if status_filter:
+        applications = applications.filter(status=status_filter)
+
+    # Apply sorting
+    sort_mapping = {
+        "date_created": "date_created",
+        "date_modified": "date_modified",
+        "status": "status",
+        "discord_username": "discord_username",
+    }
+    if sort_by in sort_mapping:
+        order_field = sort_mapping[sort_by]
+        if sort_dir == "desc":
+            order_field = f"-{order_field}"
+        applications = applications.order_by(order_field)
+
+    return render(
+        request,
+        "team/application_list.html",
+        {
+            "applications": applications,
+            "search_query": search_query,
+            "status_filter": status_filter,
+            "status_choices": MembershipApplication.Status.choices,
+            "status_counts": status_counts,
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+        },
+    )
+
+
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_http_methods(["GET", "POST"])
+def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
+    """Display and edit a membership application (admin view).
+
+    Args:
+        request: The HTTP request.
+        pk: UUID of the MembershipApplication.
+
+    Returns:
+        Rendered membership application admin page.
+
+    """
+    application = get_object_or_404(
+        MembershipApplication.objects.select_related("modified_by"),
+        pk=pk,
+    )
+
+    if request.method == "POST":
+        form = MembershipApplicationAdminForm(request.POST, instance=application)
+        if form.is_valid():
+            app = form.save(commit=False)
+            app.modified_by = request.user
+            app.save()
+            messages.success(request, f"Application for {application.display_name} updated.")
+            return redirect("team:application_list")
+    else:
+        form = MembershipApplicationAdminForm(instance=application)
+
+    return render(
+        request,
+        "team/application_admin.html",
+        {
+            "application": application,
+            "form": form,
+        },
+    )
+
+
+@require_http_methods(["GET", "POST"])
+def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
+    """Display and edit a membership application (public applicant view).
+
+    This view does not require login - it's accessed via UUID link sent to
+    the applicant by the Discord bot.
+
+    Args:
+        request: The HTTP request.
+        pk: UUID of the MembershipApplication.
+
+    Returns:
+        Rendered membership application public form page.
+
+    """
+    from constance import config
+
+    application = get_object_or_404(MembershipApplication, pk=pk)
+
+    # Check if application is still editable
+    if not application.is_editable:
+        # Show read-only view for approved/rejected applications
+        return render(
+            request,
+            "team/application_public.html",
+            {
+                "application": application,
+                "form": None,
+                "privacy_policy_url": config.PRIVACY_POLICY_URL,
+                "terms_of_service_url": config.TERMS_OF_SERVICE_URL,
+            },
+        )
+
+    if request.method == "POST":
+        form = MembershipApplicationApplicantForm(request.POST, instance=application)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Your application has been updated. Thank you!")
+            return redirect("team:application_public", pk=pk)
+    else:
+        form = MembershipApplicationApplicantForm(instance=application)
+
+    return render(
+        request,
+        "team/application_public.html",
+        {
+            "application": application,
+            "form": form,
+            "privacy_policy_url": config.PRIVACY_POLICY_URL,
+            "terms_of_service_url": config.TERMS_OF_SERVICE_URL,
         },
     )

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Membership Applications - The Coalition{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="card-title text-2xl">Membership Applications</h2>
+      </div>
+
+      <!-- Status Count Badges -->
+      <div class="flex flex-wrap gap-2 mb-6">
+        {% for value, label in status_choices %}
+        <a href="?status={{ value }}" class="badge {% if status_filter == value %}badge-primary{% else %}badge-outline{% endif %} badge-lg gap-2">
+          {{ label }}
+          <span class="badge badge-sm {% if value == 'pending' %}badge-warning{% elif value == 'approved' %}badge-success{% elif value == 'rejected' %}badge-error{% else %}badge-ghost{% endif %}">
+            {% for k, v in status_counts.items %}{% if k == value %}{{ v }}{% endif %}{% endfor %}
+          </span>
+        </a>
+        {% endfor %}
+      </div>
+
+      <!-- Filters -->
+      <form method="get" class="mb-6">
+        <div class="flex flex-wrap gap-4 items-end">
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Search</span>
+            </label>
+            <input type="text"
+                   name="q"
+                   placeholder="Search by name or Discord..."
+                   class="input input-bordered input-sm w-56"
+                   value="{{ search_query }}"
+            />
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Status</span>
+            </label>
+            <select name="status" class="select select-bordered select-sm">
+              <option value="">All Status</option>
+              {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Sort By</span>
+            </label>
+            <select name="sort" class="select select-bordered select-sm">
+              <option value="date_created" {% if sort_by == "date_created" %}selected{% endif %}>Date Created</option>
+              <option value="date_modified" {% if sort_by == "date_modified" %}selected{% endif %}>Date Modified</option>
+              <option value="status" {% if sort_by == "status" %}selected{% endif %}>Status</option>
+              <option value="discord_username" {% if sort_by == "discord_username" %}selected{% endif %}>Discord Username</option>
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Direction</span>
+            </label>
+            <select name="dir" class="select select-bordered select-sm">
+              <option value="desc" {% if sort_dir == "desc" %}selected{% endif %}>Newest First</option>
+              <option value="asc" {% if sort_dir == "asc" %}selected{% endif %}>Oldest First</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+          <a href="{% url 'team:application_list' %}" class="btn btn-ghost btn-sm">Reset</a>
+        </div>
+      </form>
+
+      <!-- Applications Table -->
+      <div class="overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr>
+              <th>Avatar</th>
+              <th>Discord</th>
+              <th>Name</th>
+              <th>Status</th>
+              <th>Complete</th>
+              <th>Date Created</th>
+              <th>Date Modified</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for app in applications %}
+            <tr>
+              <td>
+                {% if app.avatar_url %}
+                <div class="avatar">
+                  <div class="w-10 rounded-full">
+                    <img src="{{ app.avatar_url }}" alt="{{ app.discord_username }}" />
+                  </div>
+                </div>
+                {% else %}
+                <div class="avatar placeholder">
+                  <div class="bg-neutral text-neutral-content w-10 rounded-full">
+                    <span class="text-sm">{{ app.discord_username|slice:":2"|upper }}</span>
+                  </div>
+                </div>
+                {% endif %}
+              </td>
+              <td>
+                <div class="font-medium">{{ app.discord_username }}</div>
+                {% if app.server_nickname %}
+                <div class="text-sm text-base-content/60">{{ app.server_nickname }}</div>
+                {% endif %}
+              </td>
+              <td>
+                {% if app.full_name %}
+                <span class="font-medium">{{ app.full_name }}</span>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if app.status == "pending" %}
+                <span class="badge badge-warning badge-sm">Pending</span>
+                {% elif app.status == "in_progress" %}
+                <span class="badge badge-info badge-sm">In Progress</span>
+                {% elif app.status == "waiting_response" %}
+                <span class="badge badge-secondary badge-sm">Waiting</span>
+                {% elif app.status == "approved" %}
+                <span class="badge badge-success badge-sm">Approved</span>
+                {% elif app.status == "rejected" %}
+                <span class="badge badge-error badge-sm">Rejected</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if app.is_complete %}
+                <span class="badge badge-success badge-sm">Yes</span>
+                {% else %}
+                <span class="badge badge-warning badge-sm">No</span>
+                {% endif %}
+              </td>
+              <td>{{ app.date_created|date:"M d, Y" }}</td>
+              <td>{{ app.date_modified|date:"M d, Y" }}</td>
+              <td>
+                <a href="{% url 'team:application_admin' app.pk %}" class="btn btn-ghost btn-xs">
+                  View
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </a>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" class="text-center py-8 text-base-content/50">
+                No membership applications found.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Stats -->
+      <div class="mt-6 text-sm text-base-content/50">
+        Showing {{ applications|length }} application{{ applications|length|pluralize }}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

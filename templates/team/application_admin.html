@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Application - {{ application.display_name }} - The Coalition{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-6">
+        <div class="flex items-center gap-4">
+          {% if application.avatar_url %}
+          <div class="avatar">
+            <div class="w-16 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
+              <img src="{{ application.avatar_url }}" alt="{{ application.display_name }}" />
+            </div>
+          </div>
+          {% else %}
+          <div class="avatar placeholder">
+            <div class="bg-neutral text-neutral-content w-16 rounded-full">
+              <span class="text-xl">{{ application.discord_username|slice:":2"|upper }}</span>
+            </div>
+          </div>
+          {% endif %}
+          <div>
+            <h2 class="card-title text-2xl">{{ application.display_name }}</h2>
+            <div class="text-base-content/60">Membership Application</div>
+          </div>
+        </div>
+        <!-- Status Badge -->
+        {% if application.status == "pending" %}
+        <span class="badge badge-warning badge-lg">Pending Review</span>
+        {% elif application.status == "in_progress" %}
+        <span class="badge badge-info badge-lg">In Progress</span>
+        {% elif application.status == "waiting_response" %}
+        <span class="badge badge-secondary badge-lg">Waiting for Response</span>
+        {% elif application.status == "approved" %}
+        <span class="badge badge-success badge-lg">Approved</span>
+        {% elif application.status == "rejected" %}
+        <span class="badge badge-error badge-lg">Rejected</span>
+        {% endif %}
+      </div>
+
+      <!-- Discord Information -->
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-bold text-lg mb-4">Discord Information</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div class="text-sm text-base-content/60">Discord ID</div>
+            <div class="font-mono">{{ application.discord_id }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Username</div>
+            <div class="font-medium">{{ application.discord_username }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Server Nickname</div>
+            <div class="font-medium">{{ application.server_nickname|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Avatar URL</div>
+            {% if application.avatar_url %}
+            <a href="{{ application.avatar_url }}" target="_blank" rel="noopener" class="link link-primary text-sm break-all">View Avatar</a>
+            {% else %}
+            <span class="text-base-content/30">-</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Collapsible Raw Data -->
+        <div class="collapse collapse-arrow bg-base-200 mt-4">
+          <input type="checkbox" />
+          <div class="collapse-title font-medium">
+            Raw Discord Data
+          </div>
+          <div class="collapse-content">
+            <div class="mb-4">
+              <div class="text-sm text-base-content/60 mb-1">discord.User Data</div>
+              <pre class="bg-base-100 p-2 rounded text-xs overflow-x-auto">{{ application.discord_user_data|pprint }}</pre>
+            </div>
+            <div class="mb-4">
+              <div class="text-sm text-base-content/60 mb-1">discord.Member Data</div>
+              <pre class="bg-base-100 p-2 rounded text-xs overflow-x-auto">{{ application.discord_member_data|pprint }}</pre>
+            </div>
+            <div>
+              <div class="text-sm text-base-content/60 mb-1">Modal Form Data</div>
+              <pre class="bg-base-100 p-2 rounded text-xs overflow-x-auto">{{ application.modal_form_data|pprint }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Applicant Information -->
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-bold text-lg mb-4">Applicant Information</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div class="text-sm text-base-content/60">First Name</div>
+            <div class="font-medium">{{ application.first_name|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Last Name</div>
+            <div class="font-medium">{{ application.last_name|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Privacy Policy</div>
+            {% if application.agree_privacy %}
+            <span class="badge badge-success badge-sm">Agreed</span>
+            {% else %}
+            <span class="badge badge-warning badge-sm">Not Agreed</span>
+            {% endif %}
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Terms of Service</div>
+            {% if application.agree_tos %}
+            <span class="badge badge-success badge-sm">Agreed</span>
+            {% else %}
+            <span class="badge badge-warning badge-sm">Not Agreed</span>
+            {% endif %}
+          </div>
+        </div>
+        {% if application.applicant_notes %}
+        <div class="mt-4">
+          <div class="text-sm text-base-content/60 mb-1">Applicant Notes</div>
+          <div class="bg-base-100 p-3 rounded">{{ application.applicant_notes }}</div>
+        </div>
+        {% endif %}
+
+        <div class="mt-4">
+          <div class="text-sm text-base-content/60 mb-1">Application Complete</div>
+          {% if application.is_complete %}
+          <span class="badge badge-success">Yes - All required fields filled</span>
+          {% else %}
+          <span class="badge badge-warning">No - Missing required fields</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Admin Form -->
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-bold text-lg mb-4">Admin Actions</h3>
+        <form method="post">
+          {% csrf_token %}
+          <div class="grid grid-cols-1 gap-4">
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Status</span>
+              </label>
+              {{ form.status }}
+            </div>
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Admin Notes</span>
+                <span class="label-text-alt text-base-content/50">Not visible to applicant</span>
+              </label>
+              {{ form.admin_notes }}
+            </div>
+          </div>
+          <div class="flex gap-4 mt-6">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <!-- Quick Action Buttons -->
+            <button type="submit" name="status" value="approved" class="btn btn-success btn-outline">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              Approve
+            </button>
+            <button type="submit" name="status" value="rejected" class="btn btn-error btn-outline">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Reject
+            </button>
+            <button type="submit" name="status" value="waiting_response" class="btn btn-secondary btn-outline">
+              Request Info
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- History -->
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-bold text-lg mb-4">History</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <div class="text-sm text-base-content/60">Date Created</div>
+            <div class="font-medium">{{ application.date_created|date:"F d, Y H:i" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Date Modified</div>
+            <div class="font-medium">{{ application.date_modified|date:"F d, Y H:i" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Modified By</div>
+            <div class="font-medium">{{ application.modified_by.username|default:"-" }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Public Link -->
+      <div class="bg-info/10 border border-info rounded-lg p-4 mb-6">
+        <h3 class="font-bold text-lg mb-2">Public Application Link</h3>
+        <p class="text-sm text-base-content/70 mb-2">Share this link with the applicant to complete their application:</p>
+        <div class="flex items-center gap-2">
+          <input type="text"
+                 value="{{ request.scheme }}://{{ request.get_host }}{% url 'team:application_public' application.pk %}"
+                 class="input input-bordered input-sm flex-1 font-mono text-xs"
+                 readonly
+                 id="public-link" />
+          <button type="button" class="btn btn-sm btn-outline" onclick="navigator.clipboard.writeText(document.getElementById('public-link').value); this.textContent='Copied!'">
+            Copy
+          </button>
+        </div>
+      </div>
+
+      <!-- Back Link -->
+      <div class="divider"></div>
+      <div class="text-center">
+        <a href="{% url 'team:application_list' %}" class="link link-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to Applications
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

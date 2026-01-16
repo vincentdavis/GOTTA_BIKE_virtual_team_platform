@@ -582,3 +582,243 @@ class RosterFilter(models.Model):
 
         """
         return len(self.discord_ids) if self.discord_ids else 0
+
+
+class MembershipApplication(models.Model):
+    """Membership application submitted via Discord modal.
+
+    Processes new member applications and onboarding. When approved, users can
+    login to the app with Discord OAuth2. Applications are created via the
+    Discord bot's join_the_coalition cog and accessed via UUID-based URLs.
+
+    Workflow:
+        1. User submits modal in Discord (join_the_coalition cog)
+        2. Bot POSTs to API, creates MembershipApplication
+        3. User receives DM with UUID link to complete application
+        4. User fills out required fields (name, agreements)
+        5. Membership admin reviews and approves/rejects
+        6. If approved, user can login via Discord OAuth
+
+    Attributes:
+        id: UUID primary key for secure, unguessable URLs.
+        discord_id: Discord user ID (unique per application).
+        discord_username: Discord username at time of application.
+        server_nickname: Server nickname at time of application.
+        avatar_url: Discord avatar URL.
+        guild_avatar_url: Server-specific avatar URL.
+        discord_user_data: Raw discord.User data for reference.
+        discord_member_data: Raw discord.Member data for reference.
+        modal_form_data: Data from join_the_coalition modal.
+        first_name: Applicant's first name.
+        last_name: Applicant's last name.
+        agree_privacy: Whether applicant agreed to privacy policy.
+        agree_tos: Whether applicant agreed to terms of service.
+        applicant_notes: Notes from the applicant.
+        admin_notes: Internal notes from membership admins.
+        status: Application status (pending, in_progress, etc.).
+        date_created: When application was created.
+        date_modified: When application was last modified.
+        modified_by: Admin who last modified the application.
+
+    """
+
+    class Status(models.TextChoices):
+        """Application status choices."""
+
+        PENDING = "pending", "Pending Review"
+        IN_PROGRESS = "in_progress", "In Progress"
+        WAITING_RESPONSE = "waiting_response", "Waiting for User Response"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    # Primary key - UUID for secure anonymous access
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        help_text="UUID for secure URL access",
+    )
+
+    # Discord identity fields
+    discord_id = models.CharField(
+        max_length=20,
+        unique=True,
+        db_index=True,
+        help_text="Discord user ID",
+    )
+    discord_username = models.CharField(
+        max_length=100,
+        help_text="Discord username at time of application",
+    )
+    server_nickname = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Server nickname at time of application",
+    )
+    avatar_url = models.URLField(
+        max_length=500,
+        blank=True,
+        help_text="Discord avatar URL",
+    )
+    guild_avatar_url = models.URLField(
+        max_length=500,
+        blank=True,
+        help_text="Server-specific avatar URL",
+    )
+
+    # Raw Discord data (for reference/debugging)
+    discord_user_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Raw discord.User data",
+    )
+    discord_member_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Raw discord.Member data",
+    )
+    modal_form_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Data from join_the_coalition modal",
+    )
+
+    # Applicant-editable fields
+    first_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Applicant's first name",
+    )
+    last_name = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Applicant's last name",
+    )
+    agree_privacy = models.BooleanField(
+        default=False,
+        help_text="Whether applicant agreed to privacy policy",
+    )
+    agree_tos = models.BooleanField(
+        default=False,
+        help_text="Whether applicant agreed to terms of service",
+    )
+    applicant_notes = models.TextField(
+        blank=True,
+        help_text="Notes from the applicant",
+    )
+
+    # Admin-only fields
+    admin_notes = models.TextField(
+        blank=True,
+        help_text="Internal notes from membership admins",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+        help_text="Application status",
+    )
+
+    # Timestamps
+    date_created = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When application was created",
+    )
+    date_modified = models.DateTimeField(
+        auto_now=True,
+        help_text="When application was last modified",
+    )
+
+    # Modified by tracking
+    modified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="modified_applications",
+        help_text="Admin who last modified this application",
+    )
+
+    class Meta:
+        """Meta options for MembershipApplication model."""
+
+        ordering: ClassVar[list[str]] = ["-date_created"]
+        verbose_name = "Membership Application"
+        verbose_name_plural = "Membership Applications"
+
+    def __str__(self) -> str:
+        """Return string representation.
+
+        Returns:
+            Discord username and status display.
+
+        """
+        return f"{self.discord_username} - {self.get_status_display()}"
+
+    @property
+    def display_name(self) -> str:
+        """Return the best display name available.
+
+        Returns:
+            Server nickname if set, otherwise Discord username.
+
+        """
+        return self.server_nickname or self.discord_username
+
+    @property
+    def full_name(self) -> str:
+        """Return full name if available.
+
+        Returns:
+            Combined first and last name, or partial if only one set.
+
+        """
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return self.first_name or self.last_name or ""
+
+    @property
+    def is_complete(self) -> bool:
+        """Check if applicant has completed required fields.
+
+        Returns:
+            True if all required fields are filled.
+
+        """
+        return bool(
+            self.first_name
+            and self.last_name
+            and self.agree_privacy
+            and self.agree_tos
+        )
+
+    @property
+    def is_pending(self) -> bool:
+        """Check if application is pending review.
+
+        Returns:
+            True if status is PENDING.
+
+        """
+        return self.status == self.Status.PENDING
+
+    @property
+    def is_actionable(self) -> bool:
+        """Check if application can be approved/rejected.
+
+        Returns:
+            True if status is not already APPROVED or REJECTED.
+
+        """
+        return self.status not in [self.Status.APPROVED, self.Status.REJECTED]
+
+    @property
+    def is_editable(self) -> bool:
+        """Check if applicant can still edit their application.
+
+        Returns:
+            True if status allows editing (not approved or rejected).
+
+        """
+        return self.status not in [self.Status.APPROVED, self.Status.REJECTED]
