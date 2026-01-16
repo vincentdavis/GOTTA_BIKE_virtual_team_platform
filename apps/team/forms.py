@@ -1,11 +1,25 @@
 """Forms for team app."""
 
+import json
+from datetime import date
 from typing import ClassVar
+from zoneinfo import available_timezones
 
+from constance import config
 from django import forms
+from django_countries.widgets import CountrySelectWidget
 
 from apps.team.converters import inches_to_cm, lbs_to_kg
 from apps.team.models import MembershipApplication, RaceReadyRecord, TeamLink
+
+# Common timezones sorted by region
+TIMEZONE_CHOICES = [
+    ("", "Select timezone..."),
+    *sorted(
+        [(tz, tz.replace("_", " ")) for tz in available_timezones() if "/" in tz],
+        key=lambda x: x[0],
+    ),
+]
 
 
 class TeamLinkForm(forms.ModelForm):
@@ -257,7 +271,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
     """Form for applicants to complete their membership application.
 
     This form is used on the public application page accessed via UUID link.
-    Applicants can fill in their name, agree to policies, and add notes.
+    Applicants can fill in their profile info, agree to policies, and add notes.
     """
 
     class Meta:
@@ -267,6 +281,16 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
         fields: ClassVar[list[str]] = [
             "first_name",
             "last_name",
+            "zwift_id",
+            "country",
+            "timezone",
+            "birth_year",
+            "gender",
+            "unit_preference",
+            "trainer",
+            "power_meter",
+            "dual_recording",
+            "strava_profile",
             "agree_privacy",
             "agree_tos",
             "applicant_notes",
@@ -284,6 +308,62 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                     "placeholder": "Last name",
                 }
             ),
+            "zwift_id": forms.TextInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "e.g., 123456",
+                }
+            ),
+            "country": CountrySelectWidget(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
+            "timezone": forms.Select(
+                choices=TIMEZONE_CHOICES,
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
+            "birth_year": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "e.g., 1990",
+                    "min": 1900,
+                    "max": 2020,
+                }
+            ),
+            "gender": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
+            "unit_preference": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
+            "trainer": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
+            "power_meter": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
+            "dual_recording": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
+            "strava_profile": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://www.strava.com/athletes/1234",
+                }
+            ),
             "agree_privacy": forms.CheckboxInput(
                 attrs={"class": "checkbox checkbox-primary"}
             ),
@@ -298,6 +378,76 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                 }
             ),
         }
+        labels: ClassVar[dict[str, str]] = {
+            "first_name": "First Name",
+            "last_name": "Last Name",
+            "zwift_id": "Zwift ID",
+            "country": "Country",
+            "timezone": "Timezone",
+            "birth_year": "Year of Birth",
+            "gender": "Gender",
+            "unit_preference": "Unit Preference",
+            "trainer": "Trainer",
+            "power_meter": "Power Meter",
+            "dual_recording": "Dual Recording",
+            "strava_profile": "Strava Profile",
+            "agree_privacy": "Privacy Policy",
+            "agree_tos": "Terms of Service",
+            "applicant_notes": "Additional Notes",
+        }
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize form and populate dynamic choices.
+
+        Args:
+            *args: Positional arguments passed to parent.
+            **kwargs: Keyword arguments passed to parent.
+
+        """
+        super().__init__(*args, **kwargs)
+
+        # Update gender field to show placeholder when empty
+        if "gender" in self.fields:
+            self.fields["gender"].empty_label = "Select gender..."
+
+        # Update unit_preference field to show placeholder when empty
+        if "unit_preference" in self.fields:
+            self.fields["unit_preference"].empty_label = "Select preference..."
+
+        # Update dual_recording field to show placeholder when empty
+        if "dual_recording" in self.fields:
+            self.fields["dual_recording"].empty_label = "Select option..."
+
+        # Populate trainer choices from Constance
+        if "trainer" in self.fields:
+            trainer_options = json.loads(config.TRAINER_OPTIONS)
+            trainer_choices = [("", "Select trainer...")] + [(opt, opt) for opt in trainer_options]
+            self.fields["trainer"].widget.choices = trainer_choices
+
+        # Populate powermeter choices from Constance
+        if "power_meter" in self.fields:
+            powermeter_options = json.loads(config.POWERMETER_OPTIONS)
+            powermeter_choices = [("", "None")] + [(opt, opt) for opt in powermeter_options]
+            self.fields["power_meter"].widget.choices = powermeter_choices
+
+    def clean_birth_year(self) -> int | None:
+        """Validate birth year is in reasonable range.
+
+        Returns:
+            The validated birth year.
+
+        Raises:
+            forms.ValidationError: If birth year is outside valid range.
+
+        """
+        birth_year = self.cleaned_data.get("birth_year")
+        if birth_year:
+            current_year = date.today().year
+            if birth_year < 1900:
+                raise forms.ValidationError("Birth year must be 1900 or later.")
+            if birth_year > current_year - 13:
+                raise forms.ValidationError("You must be at least 13 years old.")
+        return birth_year
 
     def clean(self):
         """Validate that required agreements are checked.

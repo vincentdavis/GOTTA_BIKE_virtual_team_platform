@@ -41,6 +41,59 @@
         {% endif %}
       </div>
 
+      <!-- Application Questions (from Discord Modal) -->
+      {% if application.modal_form_data %}
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-bold text-lg mb-4">Application Questions</h3>
+        <div class="grid grid-cols-1 gap-4">
+          <div>
+            <div class="text-sm text-base-content/60">How did you hear about The Coalition?</div>
+            <div class="font-medium">{{ application.modal_form_data.how_heard|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Reasons for Joining</div>
+            <div class="font-medium">
+              {% if application.modal_form_data.reasons %}
+              {% for reason in application.modal_form_data.reasons %}
+              <span class="badge badge-primary badge-sm mr-1">{{ reason }}</span>
+              {% endfor %}
+              {% else %}
+              -
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Knows Someone on the Team</div>
+            <div class="font-medium">{{ application.modal_form_data.know_someone|default:"No" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Virtual Cycling Platforms</div>
+            <div class="font-medium">
+              {% if application.modal_form_data.platforms %}
+              {% for platform in application.modal_form_data.platforms %}
+              <span class="badge badge-secondary badge-sm mr-1">{{ platform }}</span>
+              {% endfor %}
+              {% else %}
+              -
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Zwift Race Series Interest</div>
+            <div class="font-medium">
+              {% if application.modal_form_data.race_series %}
+              {% for series in application.modal_form_data.race_series %}
+              <span class="badge badge-accent badge-sm mr-1">{{ series }}</span>
+              {% endfor %}
+              {% else %}
+              None selected
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Discord Information -->
       <div class="bg-base-300 rounded-lg p-4 mb-6">
         <h3 class="font-bold text-lg mb-4">Discord Information</h3>
@@ -83,7 +136,7 @@
               <pre class="bg-base-100 p-2 rounded text-xs overflow-x-auto">{{ application.discord_member_data|pprint }}</pre>
             </div>
             <div>
-              <div class="text-sm text-base-content/60 mb-1">Modal Form Data</div>
+              <div class="text-sm text-base-content/60 mb-1">Modal Form Data (Raw)</div>
               <pre class="bg-base-100 p-2 rounded text-xs overflow-x-auto">{{ application.modal_form_data|pprint }}</pre>
             </div>
           </div>
@@ -133,6 +186,71 @@
           {% else %}
           <span class="badge badge-warning">No - Missing required fields</span>
           {% endif %}
+        </div>
+      </div>
+
+      <!-- Profile Information -->
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-bold text-lg mb-4">Profile Information</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <div class="text-sm text-base-content/60">Zwift ID</div>
+            <div class="font-medium">{{ application.zwift_id|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Country</div>
+            <div class="font-medium">{{ application.country.name|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Timezone</div>
+            <div class="font-medium">{{ application.timezone|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Year of Birth</div>
+            <div class="font-medium">{{ application.birth_year|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Gender</div>
+            <div class="font-medium">{{ application.get_gender_display|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Unit Preference</div>
+            <div class="font-medium">{{ application.get_unit_preference_display|default:"-" }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Equipment -->
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-bold text-lg mb-4">Equipment</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <div class="text-sm text-base-content/60">Trainer</div>
+            <div class="font-medium">{{ application.trainer|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Power Meter</div>
+            <div class="font-medium">{{ application.power_meter|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-sm text-base-content/60">Dual Recording</div>
+            <div class="font-medium">{{ application.get_dual_recording_display|default:"-" }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Social Links -->
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-bold text-lg mb-4">Social Links</h3>
+        <div class="grid grid-cols-1 gap-4">
+          <div>
+            <div class="text-sm text-base-content/60">Strava Profile</div>
+            {% if application.strava_profile %}
+            <a href="{{ application.strava_profile }}" target="_blank" rel="noopener" class="link link-primary">{{ application.strava_profile }}</a>
+            {% else %}
+            <span class="text-base-content/30">-</span>
+            {% endif %}
+          </div>
         </div>
       </div>
 

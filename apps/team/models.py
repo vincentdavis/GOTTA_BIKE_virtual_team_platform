@@ -8,6 +8,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from django_countries.fields import CountryField
 
 
 class RaceReadyRecord(models.Model):
@@ -631,6 +632,26 @@ class MembershipApplication(models.Model):
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
 
+    class Gender(models.TextChoices):
+        """Gender choices."""
+
+        MALE = "male", "Male"
+        FEMALE = "female", "Female"
+        OTHER = "other", "Other"
+
+    class UnitPreference(models.TextChoices):
+        """Unit preference choices for weight and height."""
+
+        METRIC = "metric", "Metric (kg, cm)"
+        IMPERIAL = "imperial", "Imperial (lbs, in)"
+
+    class DualRecording(models.TextChoices):
+        """Dual recording options for power data."""
+
+        NONE = "none", "No dual recording"
+        TRAINER = "trainer", "Trainer as primary"
+        POWERMETER = "powermeter", "Power meter as primary"
+
     # Primary key - UUID for secure anonymous access
     id = models.UUIDField(
         primary_key=True,
@@ -705,6 +726,64 @@ class MembershipApplication(models.Model):
     applicant_notes = models.TextField(
         blank=True,
         help_text="Notes from the applicant",
+    )
+
+    # Profile fields (editable by applicant)
+    zwift_id = models.CharField(
+        max_length=20,
+        blank=True,
+        help_text="Zwift account ID",
+    )
+    country = CountryField(
+        blank=True,
+        help_text="Country of residence",
+    )
+    timezone = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="User's timezone (e.g., America/New_York)",
+    )
+    birth_year = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Year of birth",
+    )
+    gender = models.CharField(
+        max_length=10,
+        choices=Gender.choices,
+        blank=True,
+        help_text="Gender",
+    )
+    unit_preference = models.CharField(
+        max_length=10,
+        choices=UnitPreference.choices,
+        blank=True,
+        help_text="Preferred units for weight and height",
+    )
+
+    # Equipment fields
+    trainer = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Primary trainer (from TRAINER_OPTIONS)",
+    )
+    power_meter = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Power meter (from POWERMETER_OPTIONS)",
+    )
+    dual_recording = models.CharField(
+        max_length=20,
+        choices=DualRecording.choices,
+        blank=True,
+        help_text="Dual recording preference",
+    )
+
+    # Social links
+    strava_profile = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="Strava profile URL",
     )
 
     # Admin-only fields

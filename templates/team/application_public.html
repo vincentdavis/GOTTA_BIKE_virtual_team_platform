@@ -93,6 +93,60 @@
         </label>
       </div>
 
+      <!-- Application Questions (from Discord Modal) - Read Only -->
+      {% if application.modal_form_data %}
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-semibold text-base mb-3">Your Application Responses</h3>
+        <div class="grid grid-cols-1 gap-3 text-sm">
+          <div>
+            <div class="text-base-content/60">How did you hear about The Coalition?</div>
+            <div class="font-medium">{{ application.modal_form_data.how_heard|default:"-" }}</div>
+          </div>
+          <div>
+            <div class="text-base-content/60">Reasons for Joining</div>
+            <div>
+              {% if application.modal_form_data.reasons %}
+              {% for reason in application.modal_form_data.reasons %}
+              <span class="badge badge-primary badge-sm mr-1">{{ reason }}</span>
+              {% endfor %}
+              {% else %}
+              -
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <div class="text-base-content/60">Knows Someone on the Team</div>
+            <div class="font-medium">{{ application.modal_form_data.know_someone|default:"No" }}</div>
+          </div>
+          <div>
+            <div class="text-base-content/60">Virtual Cycling Platforms</div>
+            <div>
+              {% if application.modal_form_data.platforms %}
+              {% for platform in application.modal_form_data.platforms %}
+              <span class="badge badge-secondary badge-sm mr-1">{{ platform }}</span>
+              {% endfor %}
+              {% else %}
+              -
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <div class="text-base-content/60">Zwift Race Series Interest</div>
+            <div>
+              {% if application.modal_form_data.race_series %}
+              {% for series in application.modal_form_data.race_series %}
+              <span class="badge badge-accent badge-sm mr-1">{{ series }}</span>
+              {% endfor %}
+              {% else %}
+              None selected
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="text-xs text-base-content/40 mt-3">These responses were submitted via Discord and cannot be changed here.</div>
+      </div>
+      {% endif %}
+
       <form method="post">
         {% csrf_token %}
 
@@ -121,6 +175,160 @@
           </label>
           {% endif %}
         </div>
+
+        <!-- Profile Information Section -->
+        <div class="divider">Profile Information</div>
+
+        <!-- Zwift ID -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">Zwift ID</span>
+            <span class="label-text-alt text-base-content/50">Your Zwift account ID</span>
+          </label>
+          {{ form.zwift_id }}
+          {% if form.zwift_id.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.zwift_id.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Country and Timezone in grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <!-- Country -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Country</span>
+            </label>
+            {{ form.country }}
+            {% if form.country.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.country.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <!-- Timezone -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Timezone</span>
+            </label>
+            {{ form.timezone }}
+            {% if form.timezone.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.timezone.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Birth Year, Gender, Unit Preference in grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <!-- Birth Year -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Year of Birth</span>
+            </label>
+            {{ form.birth_year }}
+            {% if form.birth_year.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.birth_year.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <!-- Gender -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Gender</span>
+            </label>
+            {{ form.gender }}
+            {% if form.gender.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.gender.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <!-- Unit Preference -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Unit Preference</span>
+            </label>
+            {{ form.unit_preference }}
+            {% if form.unit_preference.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.unit_preference.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Equipment Section -->
+        <div class="divider">Equipment</div>
+
+        <!-- Trainer and Power Meter in grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <!-- Trainer -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Trainer</span>
+            </label>
+            {{ form.trainer }}
+            {% if form.trainer.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.trainer.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <!-- Power Meter -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Power Meter</span>
+            </label>
+            {{ form.power_meter }}
+            {% if form.power_meter.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.power_meter.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Dual Recording -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">Dual Recording</span>
+            <span class="label-text-alt text-base-content/50">If you use both trainer and power meter</span>
+          </label>
+          {{ form.dual_recording }}
+          {% if form.dual_recording.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.dual_recording.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Social Links Section -->
+        <div class="divider">Social Links</div>
+
+        <!-- Strava Profile -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">Strava Profile</span>
+            <span class="label-text-alt text-base-content/50">Optional</span>
+          </label>
+          {{ form.strava_profile }}
+          {% if form.strava_profile.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.strava_profile.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Agreements Section -->
+        <div class="divider">Agreements</div>
 
         <!-- Privacy Policy -->
         <div class="form-control mb-4">
