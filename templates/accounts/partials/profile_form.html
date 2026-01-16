@@ -267,6 +267,32 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="form-control">
+            <label class="label" for="id_strava_url">
+                <span class="label-text">{{ form.strava_url.label }}</span>
+            </label>
+            {{ form.strava_url }}
+            {% if form.strava_url.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.strava_url.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_garmin_url">
+                <span class="label-text">{{ form.garmin_url.label }}</span>
+            </label>
+            {{ form.garmin_url }}
+            {% if form.garmin_url.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.garmin_url.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
             <label class="label" for="id_youtube_channel">
                 <span class="label-text">{{ form.youtube_channel.label }}</span>
             </label>
@@ -319,13 +345,13 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="form-control">
-            <label class="label" for="id_twitter_url">
-                <span class="label-text">{{ form.twitter_url.label }}</span>
+            <label class="label" for="id_bluesky_url">
+                <span class="label-text">{{ form.bluesky_url.label }}</span>
             </label>
-            {{ form.twitter_url }}
-            {% if form.twitter_url.errors %}
+            {{ form.bluesky_url }}
+            {% if form.bluesky_url.errors %}
             <label class="label">
-                <span class="label-text-alt text-error">{{ form.twitter_url.errors.0 }}</span>
+                <span class="label-text-alt text-error">{{ form.bluesky_url.errors.0 }}</span>
             </label>
             {% endif %}
         </div>
@@ -345,13 +371,13 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="form-control">
-            <label class="label" for="id_bluesky_url">
-                <span class="label-text">{{ form.bluesky_url.label }}</span>
+            <label class="label" for="id_twitter_url">
+                <span class="label-text">{{ form.twitter_url.label }}</span>
             </label>
-            {{ form.bluesky_url }}
-            {% if form.bluesky_url.errors %}
+            {{ form.twitter_url }}
+            {% if form.twitter_url.errors %}
             <label class="label">
-                <span class="label-text-alt text-error">{{ form.bluesky_url.errors.0 }}</span>
+                <span class="label-text-alt text-error">{{ form.twitter_url.errors.0 }}</span>
             </label>
             {% endif %}
         </div>

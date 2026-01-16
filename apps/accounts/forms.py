@@ -49,13 +49,15 @@ class ProfileForm(forms.ModelForm):
             "timezone",
             "unit_preference",
             # Social Accounts
+            "strava_url",
+            "garmin_url",
             "youtube_channel",
             "twitch_channel",
             "instagram_url",
             "facebook_url",
-            "twitter_url",
-            "tiktok_url",
             "bluesky_url",
+            "tiktok_url",
+            "twitter_url",
             "mastodon_url",
             # Training Equipment
             "trainer",
@@ -169,6 +171,18 @@ class ProfileForm(forms.ModelForm):
                     "placeholder": "https://mastodon.social/@yourhandle",
                 }
             ),
+            "strava_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://www.strava.com/athletes/1234",
+                }
+            ),
+            "garmin_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://connect.garmin.com/modern/profile/username",
+                }
+            ),
             "trainer": forms.Select(
                 attrs={
                     "class": "select select-bordered w-full",
@@ -221,13 +235,15 @@ class ProfileForm(forms.ModelForm):
             "timezone": "Timezone",
             "unit_preference": "Unit Preference",
             # Social Accounts
+            "strava_url": "Strava",
+            "garmin_url": "Garmin Connect",
             "youtube_channel": "YouTube",
             "twitch_channel": "Twitch",
             "instagram_url": "Instagram",
             "facebook_url": "Facebook",
-            "twitter_url": "Twitter/X",
-            "tiktok_url": "TikTok",
             "bluesky_url": "BlueSky",
+            "tiktok_url": "TikTok",
+            "twitter_url": "Twitter/X",
             "mastodon_url": "Mastodon",
             # Training Equipment
             "trainer": "Trainer",

@@ -216,6 +216,16 @@ class User(AbstractUser):
         blank=True,
         help_text="Mastodon profile URL",
     )
+    strava_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="Strava profile URL (e.g., https://www.strava.com/athletes/1234)",
+    )
+    garmin_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="Garmin Connect profile URL (e.g., https://connect.garmin.com/modern/profile/username)",
+    )
 
     # Training Equipment
     trainer = models.CharField(
