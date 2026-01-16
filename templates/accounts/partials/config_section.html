@@ -103,6 +103,42 @@
             <span class="label-text-alt">{{ setting.description }}</span>
         </label>
 
+        {% elif setting.input_type == "string_list" %}
+        <!-- Sortable String List -->
+        <div class="string-list-container" data-key="{{ setting.key }}">
+            <div class="string-list-items space-y-2">
+                {% with items=setting.current_value|parse_json_list %}
+                {% for item in items %}
+                <div class="string-list-item flex items-center gap-2">
+                    <span class="cursor-move text-base-content/40 hover:text-base-content/70">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
+                        </svg>
+                    </span>
+                    <input type="text"
+                           name="{{ setting.key }}"
+                           value="{{ item }}"
+                           class="input input-bordered input-sm flex-1">
+                    <button type="button" class="btn btn-ghost btn-sm btn-square text-error" onclick="this.closest('.string-list-item').remove()">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                {% endfor %}
+                {% endwith %}
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm mt-2" onclick="addStringListItem(this, '{{ setting.key }}')">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Add Item
+            </button>
+        </div>
+        <label class="label">
+            <span class="label-text-alt">{{ setting.description }}</span>
+        </label>
+
         {% elif setting.input_type == "json" %}
         <!-- JSON Textarea -->
         <textarea name="{{ setting.key }}"

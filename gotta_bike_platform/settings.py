@@ -442,14 +442,14 @@ CONSTANCE_CONFIG = {
         '"Zwift Hub", "Zwift Bike, Wahoo Kickr", "Other wheel trainer (Wheel on bike)", '
         '"Other Direct drive trainer (wheel off)"]',
         "List of trainer options for power verification submissions",
-        "json_field",
+        "string_list_field",
     ),
     # Powermeter options for power verification
     "POWERMETER_OPTIONS": (
         '["Quarq", "Stages", "Sram", "Shimano", "4ii", "Garmin pedals", '
         '"Favero Assioma pedals", "Other power pedals", "Other power cranks", "Other"]',
         "List of powermeter options for power verification submissions",
-        "json_field",
+        "string_list_field",
     ),
     # Site settings
     "SITE_ANNOUNCEMENT": ("", "Announcement banner on all pages. Supports Markdown: **bold**, *italic*, [links](url)", str),

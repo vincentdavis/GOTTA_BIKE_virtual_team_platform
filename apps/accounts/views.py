@@ -298,6 +298,8 @@ def _get_config_sections() -> dict:
                     input_type = "password"
                 elif field_type == "json_list_field":
                     input_type = "json_list"
+                elif field_type == "string_list_field":
+                    input_type = "string_list"
                 elif field_type == "json_field":
                     input_type = "json"
                 elif field_type is bool:
@@ -413,6 +415,12 @@ def config_section_update(request: HttpRequest, section_key: str) -> HttpRespons
             # Multi-select returns list of values
             selected_values = request.POST.getlist(key)
             value = json.dumps(selected_values)
+        elif input_type == "string_list":
+            # Sortable list returns multiple values with same name
+            list_values = request.POST.getlist(key)
+            # Filter out empty strings
+            list_values = [v.strip() for v in list_values if v.strip()]
+            value = json.dumps(list_values)
         elif input_type == "json":
             raw_value = request.POST.get(key, "")
             if raw_value:

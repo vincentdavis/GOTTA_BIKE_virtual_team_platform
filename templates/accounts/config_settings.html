@@ -7,6 +7,17 @@
 <!-- Tom Select CSS -->
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
 <style>
+    /* HTMX indicator - hidden by default, shown during request */
+    .htmx-indicator {
+        display: none;
+    }
+    .htmx-request .htmx-indicator {
+        display: inline-block;
+    }
+    .htmx-request.htmx-indicator {
+        display: inline-block;
+    }
+
     /* Tom Select customization for DaisyUI */
     .ts-wrapper {
         max-width: 100%;
@@ -128,18 +139,67 @@
 
 <!-- Tom Select JS -->
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<!-- SortableJS for drag-and-drop -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     initTomSelects();
+    initSortableLists();
 });
 
-// Re-initialize Tom Select after HTMX swaps
+// Re-initialize after HTMX swaps
 document.body.addEventListener('htmx:afterSwap', function(event) {
     initTomSelects();
+    initSortableLists();
 });
+
+// Initialize sortable lists
+function initSortableLists() {
+    document.querySelectorAll('.string-list-items').forEach(function(list) {
+        if (!list.dataset.sortableInit) {
+            new Sortable(list, {
+                animation: 150,
+                handle: '.cursor-move',
+                ghostClass: 'opacity-50'
+            });
+            list.dataset.sortableInit = 'true';
+        }
+    });
+}
+
+// Add new item to string list
+function addStringListItem(button, key) {
+    const container = button.closest('.string-list-container');
+    const itemsContainer = container.querySelector('.string-list-items');
+
+    const newItem = document.createElement('div');
+    newItem.className = 'string-list-item flex items-center gap-2';
+    newItem.innerHTML = `
+        <span class="cursor-move text-base-content/40 hover:text-base-content/70">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
+            </svg>
+        </span>
+        <input type="text"
+               name="${key}"
+               value=""
+               class="input input-bordered input-sm flex-1"
+               placeholder="Enter new item...">
+        <button type="button" class="btn btn-ghost btn-sm btn-square text-error" onclick="this.closest('.string-list-item').remove()">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </button>
+    `;
+
+    itemsContainer.appendChild(newItem);
+
+    // Focus the new input
+    newItem.querySelector('input').focus();
+}
 
 function initTomSelects() {
     document.querySelectorAll('.role-select:not(.tomselected)').forEach(function(select) {
