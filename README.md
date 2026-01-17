@@ -5,9 +5,10 @@ A Django web application for The Coalition Zwift racing team. Manages team membe
 ## Features
 
 - **Discord OAuth Authentication** - Login with Discord, requires guild membership
-- **Profile Completion** - Users must complete profile and verify Zwift before accessing the app
+- **Profile Completion** - Warning banner encourages users to complete profile and verify Zwift
 - **Zwift Account Verification** - Link and verify Zwift accounts
 - **Race Ready Verification** - Weight/height/power verification for race eligibility
+- **Membership Applications** - Discord-integrated application workflow for new members
 - **Team Management** - Unified roster from ZwiftPower, Zwift Racing, and user data
 - **Guild Member Sync** - Sync Discord members with Django
 - **Data Connections** - Export team data to Google Sheets
@@ -42,9 +43,10 @@ Full documentation is available in the [docs/](docs/) folder:
 
 - [Getting Started](docs/getting-started.md) - Setup, installation, environment variables, and commands
 - [Authentication](docs/authentication.md) - Discord OAuth and guild membership
-- [Profile Completion](docs/profile-completion.md) - Required user profile fields
+- [Profile Completion](docs/profile-completion.md) - User profile fields and warning banner
 - [Permissions](docs/permissions.md) - Role-based access control via Discord roles
 - [Race Ready Verification](docs/race-ready.md) - Weight/height/power verification system
+- [Membership Applications](docs/membership-applications.md) - New member application workflow
 - [Guild Member Sync](docs/guild-sync.md) - Discord member synchronization
 - [Discord Bot](docs/discord-bot.md) - Slash commands and cogs
 - [API Reference](docs/api.md) - Discord Bot API and Cron API

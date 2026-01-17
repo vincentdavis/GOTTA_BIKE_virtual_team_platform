@@ -1,6 +1,6 @@
-# Profile Completion Requirement
+# Profile Completion
 
-All users must complete their profile before accessing most pages in the application. This applies to both new and existing users.
+Users are encouraged to complete their profile but are **not blocked** from accessing the application. Instead, a warning banner is displayed at the top of every page for users with incomplete profiles.
 
 ## Required Fields
 
@@ -14,33 +14,14 @@ All users must complete their profile before accessing most pages in the applica
 | `country` | Country of residence |
 | `zwid_verified` | Zwift account must be verified |
 
-## How It Works
+## Warning Banner
 
-1. **New users**: After Discord OAuth login, redirected to profile edit page
-2. **Existing users**: If profile is incomplete, redirected to profile edit page on any request
-3. **Superusers**: Always exempt from profile completion requirement
-4. **API endpoints**: Always exempt from profile completion check
+When a user's profile is incomplete, a red warning banner is displayed at the top of every page (defined in `theme/templates/base.html`). The banner shows:
 
-## Middleware
+- Which specific fields are missing (as badges)
+- A link to the profile edit page
 
-The `ProfileCompletionMiddleware` (`apps/accounts/middleware.py`) enforces profile completion:
-
-```python
-# Exempt URL patterns
-EXEMPT_URL_PATTERNS = [
-    r"^/user/profile/edit/$",        # Profile edit page
-    r"^/user/profile/verify-zwift/$", # Zwift verification
-    r"^/user/profile/unverify-zwift/$",
-    r"^/accounts/",                   # Auth URLs
-    r"^/api/",                        # API endpoints
-    r"^/admin/",                      # Django admin
-    r"^/static/",                     # Static files
-    r"^/media/",                      # Media files
-    r"^/__debug__/",                  # Debug toolbar
-    r"^/__reload__/",                 # Browser reload
-    r"^/m/",                          # Magic links
-]
-```
+This approach allows users to explore the app while being reminded to complete their profile.
 
 ## User Model Properties
 
@@ -50,7 +31,7 @@ Returns `True` if all required fields are filled AND Zwift is verified:
 
 ```python
 if user.is_profile_complete:
-    # User can access the full application
+    # User has completed all required fields
     ...
 ```
 
@@ -72,16 +53,15 @@ status = user.profile_completion_status
 # }
 ```
 
-This is used by the profile edit template to show which fields are missing.
+This is used by the base template to show which fields are missing in the warning banner.
 
 ## Profile Edit Page
 
 The profile edit page (`/user/profile/edit/`) shows:
 
-1. **Warning banner** when profile is incomplete
-2. **Status badges** showing which fields are complete/missing
-3. **All required fields** with required indicators (`*`)
-4. **Zwift verification section** for linking and verifying Zwift account
+1. **Status badges** showing which fields are complete/missing
+2. **All required fields** with required indicators (`*`)
+3. **Zwift verification section** for linking and verifying Zwift account
 
 ## Zwift Verification
 

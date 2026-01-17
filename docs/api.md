@@ -55,7 +55,40 @@ Get the combined profile for any teammate by Zwift ID.
 **Parameters:**
 - `zwid` (path) - Zwift user ID
 
-**Response:** Same as `/my_profile`
+**Response:** Same as `/my_profile` (but includes `account` object instead of `discord_username`)
+
+#### GET /api/dbot/search_teammates
+
+Search for teammates by name (for Discord autocomplete).
+
+**Parameters:**
+- `q` (query) - Search query (minimum 2 characters)
+
+**Response:**
+```json
+{
+  "results": [
+    {
+      "zwid": 12345,
+      "name": "John Doe",
+      "flag": "us"
+    }
+  ]
+}
+```
+
+#### GET /api/dbot/team_links
+
+Generate a magic link to the team links page for the requesting Discord user.
+
+**Response:**
+```json
+{
+  "magic_link_url": "https://domain.com/m/abc123/",
+  "expires_in_seconds": 300,
+  "redirect_to": "/team/links/"
+}
+```
 
 #### GET /api/dbot/zwiftpower_profile/{zwid}
 
@@ -144,6 +177,103 @@ Sync a single user's Discord roles.
   "updated": true,
   "is_race_ready": true,
   "race_ready_role_id": "1234567890123456789"
+}
+```
+
+#### POST /api/dbot/roster_filter
+
+Create a filtered roster link from Discord channel members.
+
+**Body:**
+```json
+{
+  "discord_ids": ["123456789", "987654321"],
+  "channel_name": "race-team-a"
+}
+```
+
+**Response:**
+```json
+{
+  "filter_id": "uuid",
+  "url": "https://domain.com/team/roster/f/uuid/",
+  "expires_in_seconds": 300,
+  "member_count": 2,
+  "channel_name": "race-team-a"
+}
+```
+
+#### POST /api/dbot/membership_application
+
+Create a new membership application from Discord modal.
+
+**Body:**
+```json
+{
+  "discord_id": "123456789",
+  "discord_username": "user#1234",
+  "server_nickname": "Nickname",
+  "avatar_url": "https://cdn.discordapp.com/...",
+  "modal_form_data": {"interest": "Racing"}
+}
+```
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "discord_id": "123456789",
+  "discord_username": "user#1234",
+  "status": "pending",
+  "application_url": "https://domain.com/team/apply/uuid/",
+  "is_complete": false,
+  "date_created": "2024-01-15T10:30:00+00:00",
+  "already_exists": false
+}
+```
+
+#### GET /api/dbot/membership_application/{discord_id}
+
+Get membership application by Discord ID.
+
+**Parameters:**
+- `discord_id` (path) - Discord user ID
+
+**Response:**
+```json
+{
+  "id": "uuid",
+  "discord_id": "123456789",
+  "discord_username": "user#1234",
+  "status": "pending",
+  "status_display": "Pending Review",
+  "application_url": "https://domain.com/team/apply/uuid/",
+  "is_complete": true,
+  "is_editable": true
+}
+```
+
+#### POST /api/dbot/update_zp_team
+
+Trigger the ZwiftPower team riders update task.
+
+**Response:**
+```json
+{
+  "status": "queued",
+  "message": "ZwiftPower team update task has been queued."
+}
+```
+
+#### POST /api/dbot/update_zp_results
+
+Trigger the ZwiftPower team results update task.
+
+**Response:**
+```json
+{
+  "status": "queued",
+  "message": "ZwiftPower team results update task has been queued."
 }
 ```
 
@@ -245,7 +375,16 @@ TASK_REGISTRY: dict = {
 | `/accounts/` | allauth (login, logout, MFA) |
 | `/user/` | User profile and settings |
 | `/team/` | Team management |
+| `/team/roster/` | Team roster |
+| `/team/roster/f/{uuid}/` | Filtered roster view |
+| `/team/links/` | Team links |
+| `/team/verification/` | Verification records (approvers only) |
+| `/team/applications/` | Membership applications (admins only) |
+| `/team/apply/{uuid}/` | Public membership application form |
+| `/team/performance-review/` | Performance review |
+| `/team/youtube/` | YouTube channels |
 | `/data-connections/` | Google Sheets exports |
+| `/site/config/` | Site configuration (admin) |
 | `/api/dbot/` | Discord bot API |
 | `/api/cron/` | Cron task API |
 | `/m/` | Magic links (legacy) |

@@ -6,9 +6,10 @@ Welcome to the documentation for The Coalition Team Platform, a Django web appli
 
 - [Getting Started](getting-started.md) - Setup, installation, and commands
 - [Authentication](authentication.md) - Discord OAuth and guild membership
-- [Profile Completion](profile-completion.md) - Required user profile fields
+- [Profile Completion](profile-completion.md) - User profile fields and warning banner
 - [Permissions](permissions.md) - Role-based access control
 - [Race Ready Verification](race-ready.md) - Weight/height/power verification
+- [Membership Applications](membership-applications.md) - New member application workflow
 - [Guild Member Sync](guild-sync.md) - Discord member synchronization
 - [Discord Bot](discord-bot.md) - Slash commands and cogs
 - [API Reference](api.md) - Discord Bot API and Cron API
@@ -16,9 +17,10 @@ Welcome to the documentation for The Coalition Team Platform, a Django web appli
 ## Features
 
 - **Discord OAuth Authentication** - Login with Discord, requires guild membership
-- **Profile Completion Requirement** - Users must complete their profile and verify Zwift before accessing the app
+- **Profile Completion** - Warning banner encourages users to complete their profile
 - **Zwift Account Verification** - Link and verify Zwift accounts
 - **Race Ready Verification** - Submit and manage weight/height/power verification records
+- **Membership Applications** - Discord-integrated application workflow for new members
 - **Team Management** - Unified roster combining ZwiftPower, Zwift Racing, and user data
 - **Guild Member Sync** - Sync Discord guild members with Django to compare membership vs accounts
 - **Data Connections** - Export team data to Google Sheets with configurable fields and filters

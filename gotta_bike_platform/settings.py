@@ -365,6 +365,22 @@ CONSTANCE_ADDITIONAL_FIELDS = {
             "required": False,
         },
     ],
+    "string_list_field": [
+        "django.forms.fields.CharField",
+        {
+            "widget": "django.forms.Textarea",
+            "widget_kwargs": {"attrs": {"rows": 4, "placeholder": '["item1", "item2", "item3"]'}},
+            "required": False,
+        },
+    ],
+    "textarea_field": [
+        "django.forms.fields.CharField",
+        {
+            "widget": "django.forms.Textarea",
+            "widget_kwargs": {"attrs": {"rows": 6}},
+            "required": False,
+        },
+    ],
 }
 
 CONSTANCE_CONFIG = {
