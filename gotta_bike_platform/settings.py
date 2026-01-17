@@ -474,6 +474,11 @@ CONSTANCE_CONFIG = {
     "ABOUT_URL": ("#", "URL to About page", str),
     "CONTACT_URL": ("#", "URL to Contact page", str),
     "DISCORD_URL": ("#", "Discord server invite link", str),
+    # Social Links
+    "SOCIAL_LINKEDIN_URL": ("", "LinkedIn page URL", str),
+    "SOCIAL_FACEBOOK_URL": ("", "Facebook page URL", str),
+    "SOCIAL_INSTAGRAM_URL": ("", "Instagram profile URL", str),
+    "SOCIAL_TWITTER_URL": ("", "Twitter/X profile URL", str),
     # SEO Settings
     "META_DESCRIPTION": (
         "The Coalition is a competitive Zwift racing team bringing together cyclists from around the world.",
@@ -517,6 +522,12 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "CONTACT_URL",
         "DISCORD_URL",
         "DBOT_AUTH_KEY",
+    ),
+    "Social Links": (
+        "SOCIAL_LINKEDIN_URL",
+        "SOCIAL_FACEBOOK_URL",
+        "SOCIAL_INSTAGRAM_URL",
+        "SOCIAL_TWITTER_URL",
     ),
     "Discord Guild": (
         "GUILD_NAME",
