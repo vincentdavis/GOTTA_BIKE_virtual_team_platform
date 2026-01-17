@@ -63,6 +63,7 @@ class ProfileForm(forms.ModelForm):
             "trainer",
             "powermeter",
             "dual_recording",
+            "heartrate_monitor",
             # Emergency Contact
             "emergency_contact_name",
             "emergency_contact_relation",
@@ -199,6 +200,11 @@ class ProfileForm(forms.ModelForm):
                     "class": "select select-bordered w-full",
                 }
             ),
+            "heartrate_monitor": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
             "emergency_contact_name": forms.TextInput(
                 attrs={
                     "class": "input input-bordered w-full",
@@ -249,6 +255,7 @@ class ProfileForm(forms.ModelForm):
             "trainer": "Trainer",
             "powermeter": "Powermeter",
             "dual_recording": "Dual Recording",
+            "heartrate_monitor": "Heart Rate Monitor",
             # Emergency Contact
             "emergency_contact_name": "Contact Name",
             "emergency_contact_relation": "Relationship",
@@ -286,6 +293,12 @@ class ProfileForm(forms.ModelForm):
             powermeter_options = json.loads(config.POWERMETER_OPTIONS)
             powermeter_choices = [("", "None")] + [(opt, opt) for opt in powermeter_options]
             self.fields["powermeter"].widget.choices = powermeter_choices
+
+        # Populate heartrate_monitor choices from Constance
+        if "heartrate_monitor" in self.fields:
+            hrm_options = json.loads(config.HEARTRATE_MONITOR_OPTIONS)
+            hrm_choices = [("", "None")] + [(opt, opt) for opt in hrm_options]
+            self.fields["heartrate_monitor"].widget.choices = hrm_choices
 
         # Set dual_recording initial value for Select widget
         if "dual_recording" in self.fields and self.instance:

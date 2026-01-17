@@ -778,6 +778,11 @@ class MembershipApplication(models.Model):
         blank=True,
         help_text="Dual recording preference",
     )
+    heartrate_monitor = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Heart rate monitor brand (from HEARTRATE_MONITOR_OPTIONS)",
+    )
 
     # Social links
     strava_profile = models.URLField(

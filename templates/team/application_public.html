@@ -306,18 +306,36 @@
           </div>
         </div>
 
-        <!-- Dual Recording -->
-        <div class="form-control mb-4">
-          <label class="label">
-            <span class="label-text">Dual Recording</span>
-            <span class="label-text-alt text-base-content/50">If you use both trainer and power meter</span>
-          </label>
-          {{ form.dual_recording }}
-          {% if form.dual_recording.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.dual_recording.errors.0 }}</span>
-          </label>
-          {% endif %}
+        <!-- Dual Recording and Heart Rate Monitor in grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <!-- Dual Recording -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Dual Recording</span>
+            </label>
+            {{ form.dual_recording }}
+            <label class="label">
+              <span class="label-text-alt text-base-content/50">If you use both trainer and power meter</span>
+            </label>
+            {% if form.dual_recording.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.dual_recording.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <!-- Heart Rate Monitor -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Heart Rate Monitor</span>
+            </label>
+            {{ form.heartrate_monitor }}
+            {% if form.heartrate_monitor.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.heartrate_monitor.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
         </div>
 
         <!-- Social Links Section -->

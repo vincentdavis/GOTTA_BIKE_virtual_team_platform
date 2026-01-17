@@ -290,6 +290,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
             "trainer",
             "power_meter",
             "dual_recording",
+            "heartrate_monitor",
             "strava_profile",
             "agree_privacy",
             "agree_tos",
@@ -358,6 +359,11 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                     "class": "select select-bordered w-full",
                 }
             ),
+            "heartrate_monitor": forms.Select(
+                attrs={
+                    "class": "select select-bordered w-full",
+                }
+            ),
             "strava_profile": forms.URLInput(
                 attrs={
                     "class": "input input-bordered w-full",
@@ -390,6 +396,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
             "trainer": "Trainer",
             "power_meter": "Power Meter",
             "dual_recording": "Dual Recording",
+            "heartrate_monitor": "Heart Rate Monitor",
             "strava_profile": "Strava Profile",
             "agree_privacy": "Privacy Policy",
             "agree_tos": "Terms of Service",
@@ -429,6 +436,12 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
             powermeter_options = json.loads(config.POWERMETER_OPTIONS)
             powermeter_choices = [("", "None")] + [(opt, opt) for opt in powermeter_options]
             self.fields["power_meter"].widget.choices = powermeter_choices
+
+        # Populate heartrate_monitor choices from Constance
+        if "heartrate_monitor" in self.fields:
+            hrm_options = json.loads(config.HEARTRATE_MONITOR_OPTIONS)
+            hrm_choices = [("", "None")] + [(opt, opt) for opt in hrm_options]
+            self.fields["heartrate_monitor"].widget.choices = hrm_choices
 
     def clean_birth_year(self) -> int | None:
         """Validate birth year is in reasonable range.

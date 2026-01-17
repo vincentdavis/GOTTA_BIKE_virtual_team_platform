@@ -246,6 +246,12 @@ class User(AbstractUser):
         default=None,
         help_text="Do you dual record data?",
     )
+    heartrate_monitor = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Heart rate monitor brand (options from HEARTRATE_MONITOR_OPTIONS)",
+    )
 
     # Emergency Contact
     emergency_contact_name = models.CharField(

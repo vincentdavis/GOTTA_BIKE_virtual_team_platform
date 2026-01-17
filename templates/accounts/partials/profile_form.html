@@ -192,19 +192,33 @@
         </div>
     </div>
 
-    <div class="form-control max-w-xs">
-        <label class="label" for="id_dual_recording">
-            <span class="label-text">{{ form.dual_recording.label }}</span>
-        </label>
-        {{ form.dual_recording }}
-        <label class="label">
-            <span class="label-text-alt">Do you dual record data?</span>
-        </label>
-        {% if form.dual_recording.errors %}
-        <label class="label">
-            <span class="label-text-alt text-error">{{ form.dual_recording.errors.0 }}</span>
-        </label>
-        {% endif %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_dual_recording">
+                <span class="label-text">{{ form.dual_recording.label }}</span>
+            </label>
+            {{ form.dual_recording }}
+            <label class="label">
+                <span class="label-text-alt">Do you dual record data?</span>
+            </label>
+            {% if form.dual_recording.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.dual_recording.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_heartrate_monitor">
+                <span class="label-text">{{ form.heartrate_monitor.label }}</span>
+            </label>
+            {{ form.heartrate_monitor }}
+            {% if form.heartrate_monitor.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.heartrate_monitor.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
     </div>
 
     <!-- Emergency Contact Section -->
