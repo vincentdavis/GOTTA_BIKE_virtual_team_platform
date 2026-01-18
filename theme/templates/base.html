@@ -1,6 +1,6 @@
 {% load static tailwind_tags django_htmx accounts_tags %}
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <title>{% block title %}{{ config.TEAM_NAME }}{% endblock %}</title>
     <meta charset="UTF-8">
@@ -59,36 +59,112 @@
     </div>
     {% endif %}
 
-    <div class="drawer lg:drawer-open">
+    <!-- Site Header (full width, always visible) -->
+    <header class="navbar bg-base-200 border-b border-base-300 sticky top-0 z-50">
+        <div class="flex-none lg:hidden">
+            <label for="main-drawer" class="btn btn-square btn-ghost drawer-button">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </label>
+        </div>
+        <div class="flex-1">
+            <a href="{% url 'home' %}" class="btn btn-ghost text-xl">
+                {% if config.LOGO_DISPLAY_MODE == 'logo_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' %}
+                    {% if site_settings.site_logo %}
+                    <img src="{{ site_settings.site_logo.url }}" alt="{{ config.TEAM_NAME }}" class="h-8 max-w-32 object-contain">
+                    {% endif %}
+                {% endif %}
+                {% if config.LOGO_DISPLAY_MODE == 'name_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' or not site_settings.site_logo %}
+                    <span>{{ config.TEAM_NAME }}</span>
+                {% endif %}
+            </a>
+        </div>
+        <div class="flex-none gap-2 px-4">
+            {% block header_actions %}{% endblock %}
+            {% if not user.is_authenticated %}
+            <a href="{% url 'account_login' %}" class="btn btn-primary">Login</a>
+            {% endif %}
+            {% if user.is_authenticated %}
+            <div class="flex items-center gap-3">
+                <div class="text-right hidden sm:block">
+                    <p class="text-sm font-medium">{{ user.first_name|default:user.discord_nickname|default:user.username }}</p>
+                    <p class="text-xs text-base-content/60 flex items-center justify-end gap-1">
+                        Race Ready
+                        {% if user.is_race_ready %}
+                        <span class="badge badge-success badge-xs"></span>
+                        {% else %}
+                        <span class="badge badge-error badge-xs"></span>
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="dropdown dropdown-end">
+                    <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar {% if not user.discord_avatar_url %}placeholder{% endif %}">
+                        {% if user.discord_avatar_url %}
+                        <div class="w-10 rounded-full">
+                            <img src="{{ user.discord_avatar_url }}" alt="{{ user.username }}" />
+                        </div>
+                        {% else %}
+                        <div class="bg-neutral text-neutral-content w-10 rounded-full">
+                            <span class="text-sm">{{ user.username|slice:":2"|upper }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-52 p-2 shadow-lg border border-base-300 mt-2">
+                        <li>
+                            <a href="{% url 'accounts:profile' %}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                Profile
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'accounts:profile' %}#race-ready" class="flex items-center justify-between">
+                                <span class="flex items-center gap-2">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                    </svg>
+                                    Race Ready
+                                </span>
+                                {% if user.is_race_ready %}
+                                <span class="badge badge-success badge-xs"></span>
+                                {% else %}
+                                <span class="badge badge-error badge-xs"></span>
+                                {% endif %}
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{% url 'mfa_index' %}">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                                Security
+                            </a>
+                        </li>
+                        <li class="my-1"><hr class="border-base-300"></li>
+                        <li>
+                            <a href="{% url 'account_logout' %}" class="text-error">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                                Logout
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <div class="drawer lg:drawer-open h-[calc(100vh-64px)]">
         <input id="main-drawer" type="checkbox" class="drawer-toggle" />
 
         <!-- Main Content Area -->
-        <div class="drawer-content flex flex-col min-h-screen bg-base-100">
-            <!-- Mobile Header (visible only on small screens) -->
-            <header class="navbar bg-base-200 lg:hidden">
-                <div class="flex-none">
-                    <label for="main-drawer" class="btn btn-square btn-ghost drawer-button">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                        </svg>
-                    </label>
-                </div>
-                <div class="flex-1">
-                    <a href="{% url 'home' %}" class="btn btn-ghost text-xl">
-                        {% if config.LOGO_DISPLAY_MODE == 'logo_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' %}
-                            {% if site_settings.site_logo %}
-                            <img src="{{ site_settings.site_logo.url }}" alt="{{ config.TEAM_NAME }}" class="h-8 max-w-32 object-contain">
-                            {% endif %}
-                        {% endif %}
-                        {% if config.LOGO_DISPLAY_MODE == 'name_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' or not site_settings.site_logo %}
-                            <span>{{ config.TEAM_NAME }}</span>
-                        {% endif %}
-                    </a>
-                </div>
-            </header>
-
+        <div class="drawer-content flex flex-col bg-base-100 overflow-y-auto h-full">
             <!-- Main Content -->
-            <main class="flex-grow container mx-auto px-4 py-8">
+            <main class="flex-1 container mx-auto px-4 py-8">
                 {% if messages %}
                 <div class="toast toast-top toast-end z-50" id="messages-toast">
                     {% for message in messages %}

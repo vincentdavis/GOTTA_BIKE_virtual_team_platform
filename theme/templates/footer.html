@@ -1,8 +1,4 @@
 <footer class="footer footer-center bg-base-200 text-base-content p-10">
-    <nav class="grid grid-flow-col gap-4">
-        <a class="link link-hover" href="{{ config.ABOUT_URL }}">About</a>
-        <a class="link link-hover" href="{{ config.CONTACT_URL }}">Contact</a>
-    </nav>
     <nav>
         <div class="grid grid-flow-col gap-4">
             <a href="{{ config.DISCORD_URL }}" aria-label="Discord">
@@ -45,7 +41,5 @@
             </a>
         </div>
     </nav>
-    <aside>
-        <p>Copyright &copy; {% now "Y" %} {{ config.TEAM_NAME }}. All rights reserved.</p>
-    </aside>
+    <p>Copyright &copy; {% now "Y" %} {{ config.TEAM_NAME }}. All rights reserved.</p>
 </footer>

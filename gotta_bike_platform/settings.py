@@ -395,7 +395,7 @@ CONSTANCE_CONFIG = {
     "ZWIFT_USERNAME": ("", "Zwift account username/email for API access", str),
     "ZWIFT_PASSWORD": ("", "Zwift account password for API access", "password_field"),
     # API Keys
-    "DBOT_AUTH_KEY": ("", "Discord bot API authentication key", "password_field"),
+    "DBOT_AUTH_KEY": ("", "This is the auth key the bot uses to communicate with this apps API.", "password_field"),
     "DISCORD_BOT_TOKEN": ("", "Discord bot token for sending DMs", "password_field"),
     "ZRAPP_API_URL": (
         "https://api.zwiftracing.app/api/public/",
@@ -472,8 +472,8 @@ CONSTANCE_CONFIG = {
         "List of heart rate monitor options for equipment selection",
         "string_list_field",
     ),
-    # Membership Applications
-    "APPLICATION_FORM_INSTRUCTIONS": (
+    # Registration
+    "REGISTRATION_FORM_INSTRUCTIONS": (
         "",
         "Instructions displayed at the top of the membership application form. Supports Markdown.",
         "textarea_field",
@@ -540,8 +540,8 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "MAINTENANCE_MODE",
         "ABOUT_URL",
         "CONTACT_URL",
-        "DISCORD_URL",
-        "DBOT_AUTH_KEY",
+        "PRIVACY_POLICY_URL",
+        "TERMS_OF_SERVICE_URL",
     ),
     "Social Links": (
         "SOCIAL_LINKEDIN_URL",
@@ -552,9 +552,12 @@ CONSTANCE_CONFIG_FIELDSETS = {
     "Discord Guild": (
         "GUILD_NAME",
         "GUILD_ID",
+        "DISCORD_URL",
         "UPGRADE_CHANNEL",
         "WELCOME_TEAM_CHANNEL_ID",
         "DISCORD_BOT_TOKEN",
+        "DBOT_AUTH_KEY",
+        "RACE_READY_ROLE_ID",
     ),
     "Zwift Credentials": (
         "ZWIFT_USERNAME",
@@ -582,7 +585,6 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "WEIGHT_LIGHT_DAYS",
         "HEIGHT_VERIFICATION_DAYS",
         "POWER_VERIFICATION_DAYS",
-        "RACE_READY_ROLE_ID",
         "WEIGHT_INSTRUCTIONS_URL",
         "HEIGHT_INSTRUCTIONS_URL",
     ),
@@ -591,17 +593,13 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "POWERMETER_OPTIONS",
         "HEARTRATE_MONITOR_OPTIONS",
     ),
-    "Membership Applications": (
-        "APPLICATION_FORM_INSTRUCTIONS",
+    "Registration": (
+        "REGISTRATION_FORM_INSTRUCTIONS",
     ),
     "SEO Settings": (
         "META_DESCRIPTION",
         "META_KEYWORDS",
         "OG_IMAGE_URL",
-    ),
-    "Legal": (
-        "PRIVACY_POLICY_URL",
-        "TERMS_OF_SERVICE_URL",
     ),
     "Google Settings": (
         "GOOGLE_SERVICE_ACCOUNT_EMAIL",

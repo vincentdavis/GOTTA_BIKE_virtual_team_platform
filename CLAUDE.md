@@ -390,14 +390,38 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
 ### Frontend
 
 - `theme/` - django-tailwind app with Tailwind CSS 4.x + DaisyUI 5.x
-- `theme/templates/` - Base templates (base.html, header.html, footer.html)
+- `theme/templates/` - Base templates (base.html, sidebar.html, footer.html)
     - `base.html` includes site announcement banner (yellow) when `config.SITE_ANNOUNCEMENT` is set (supports Markdown)
     - `base.html` includes profile incomplete warning (red) for users with incomplete profiles
-    - `header.html` displays logo/team name based on `LOGO_DISPLAY_MODE` setting (see Site Image Settings)
+    - `base.html` has sticky header with logo/team name and user menu (avatar, dropdown)
+    - `sidebar.html` contains navigation menu with conditional sections based on user permissions
 - `templates/index.html` - Home page with hero section (supports background image via `site_settings.hero_image`)
 - `templates/account/` - Auth templates (login, logout) with DaisyUI styling
 - `templates/mfa/` - MFA templates (TOTP setup, recovery codes)
 - Uses HTMX for interactivity (`django-htmx` middleware enabled)
+
+#### daisyUI Blueprint MCP
+
+This project has the **daisyUI Blueprint MCP** configured for generating UI components. When creating or modifying
+templates that use DaisyUI components:
+
+1. **Use the MCP tools** to get accurate, up-to-date DaisyUI component code
+2. **Available tools:**
+   - `generate_page` - Generate complete page layouts
+   - `generate_section` - Generate page sections (hero, features, pricing, etc.)
+   - `generate_component` - Generate individual components (cards, modals, forms, etc.)
+
+3. **When to use:**
+   - Creating new pages or templates
+   - Adding new UI sections to existing pages
+   - Need reference for DaisyUI 5.x component syntax
+   - Building responsive layouts with Tailwind CSS 4.x
+
+4. **Integration notes:**
+   - Generated code uses DaisyUI 5.x classes (compatible with this project)
+   - Adapt generated code to use Django template tags (`{% url %}`, `{% if %}`, etc.)
+   - Replace placeholder content with actual template variables
+   - Follow existing patterns in `theme/templates/` for consistency
 
 ### Admin Customization
 

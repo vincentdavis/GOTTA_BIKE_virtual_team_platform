@@ -211,10 +211,10 @@
                 <td class="font-medium">
                   {{ rider.display_name }}
                   {% if rider.in_zwiftpower %}
-                    <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-orange-400 bg-gray-700 rounded" title="View on ZwiftPower">ZP</a>
+                    <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded" title="View on ZwiftPower">ZP</a>
                   {% endif %}
                   {% if rider.in_zwiftracing %}
-                    <a href="https://www.zwiftracing.app/riders/{{ rider.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-white bg-sky-500 rounded" title="View on Zwift Racing">ZR</a>
+                    <a href="https://www.zwiftracing.app/riders/{{ rider.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded" title="View on Zwift Racing">ZR</a>
                   {% endif %}
                 </td>
                 <td>

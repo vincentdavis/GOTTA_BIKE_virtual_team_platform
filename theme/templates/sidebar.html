@@ -1,91 +1,4 @@
-<aside class="bg-base-200 w-64 min-h-screen flex flex-col">
-    <!-- Logo/Brand -->
-    <div class="p-4 border-b border-base-300">
-        <a href="{% url 'home' %}" class="flex items-center gap-2">
-            {% if config.LOGO_DISPLAY_MODE == 'logo_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' %}
-                {% if site_settings.site_logo %}
-                <img src="{{ site_settings.site_logo.url }}" alt="{{ config.TEAM_NAME }}" class="h-8 max-w-32 object-contain">
-                {% endif %}
-            {% endif %}
-            {% if config.LOGO_DISPLAY_MODE == 'name_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' or not site_settings.site_logo %}
-                <span class="text-xl font-bold">{{ config.TEAM_NAME }}</span>
-            {% endif %}
-        </a>
-    </div>
-
-    <!-- User Header (authenticated) -->
-    {% if user.is_authenticated %}
-    <div class="p-4 border-b border-base-300">
-        <div class="flex items-center gap-3">
-            <div class="avatar {% if not user.discord_avatar_url %}placeholder{% endif %}">
-                {% if user.discord_avatar_url %}
-                <div class="w-10 rounded-full">
-                    <img src="{{ user.discord_avatar_url }}" alt="{{ user.username }}" />
-                </div>
-                {% else %}
-                <div class="bg-neutral text-neutral-content w-10 rounded-full">
-                    <span class="text-sm">{{ user.username|slice:":2"|upper }}</span>
-                </div>
-                {% endif %}
-            </div>
-            <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium truncate">{{ user.display_name|default:user.username }}</p>
-                <p class="text-xs text-base-content/60 truncate">{{ user.email }}</p>
-            </div>
-            <div class="dropdown dropdown-end">
-                <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-square" title="Account settings">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                </div>
-                <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-52 p-2 shadow-lg border border-base-300">
-                    <li>
-                        <a href="{% url 'accounts:profile' %}">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                            Profile
-                        </a>
-                    </li>
-                    <li>
-                        <a href="{% url 'accounts:profile' %}#race-ready" class="flex items-center justify-between">
-                            <span class="flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                                </svg>
-                                Race Ready
-                            </span>
-                            {% if user.is_race_ready %}
-                            <span class="badge badge-success badge-xs"></span>
-                            {% else %}
-                            <span class="badge badge-error badge-xs"></span>
-                            {% endif %}
-                        </a>
-                    </li>
-                    <li>
-                        <a href="{% url 'mfa_index' %}">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                            </svg>
-                            Security
-                        </a>
-                    </li>
-                    <li class="my-1"><hr class="border-base-300"></li>
-                    <li>
-                        <a href="{% url 'account_logout' %}" class="text-error">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                            </svg>
-                            Logout
-                        </a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
+<aside class="bg-base-200 w-64 h-full flex flex-col overflow-y-auto">
     <!-- Navigation Menu -->
     <ul class="menu p-4 flex-1">
         <!-- Main Navigation -->
@@ -98,6 +11,28 @@
                 Home
             </a>
         </li>
+        {% if not user.is_authenticated %}
+        {% if config.ABOUT_URL %}
+        <li>
+            <a href="{{ config.ABOUT_URL }}" class="{% if request.path == config.ABOUT_URL %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                About
+            </a>
+        </li>
+        {% endif %}
+        {% if config.CONTACT_URL %}
+        <li>
+            <a href="{{ config.CONTACT_URL }}" class="{% if request.path == config.CONTACT_URL %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Contact
+            </a>
+        </li>
+        {% endif %}
+        {% endif %}
         {% if user.is_authenticated %}
         <li>
             <a href="{% url 'team:roster' %}" class="{% if 'roster' in request.path %}active{% endif %}">
@@ -197,9 +132,8 @@
                     <li><a href="{% url 'config_section_page' 'permission_mappings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'permission_mappings' in request.path %}active{% endif %}">Permissions</a></li>
                     <li><a href="{% url 'config_section_page' 'verification_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'verification_settings' in request.path %}active{% endif %}">Verification</a></li>
                     <li><a href="{% url 'config_section_page' 'equipment' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'equipment' in request.path %}active{% endif %}">Equipment</a></li>
-                    <li><a href="{% url 'config_section_page' 'membership_applications' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'membership_applications' in request.path %}active{% endif %}">Applications</a></li>
+                    <li><a href="{% url 'config_section_page' 'registration' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'registration' in request.path %}active{% endif %}">Registration</a></li>
                     <li><a href="{% url 'config_section_page' 'seo_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'seo_settings' in request.path %}active{% endif %}">SEO Settings</a></li>
-                    <li><a href="{% url 'config_section_page' 'legal' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'legal' in request.path %}active{% endif %}">Legal</a></li>
                     <li><a href="{% url 'config_section_page' 'google_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'google_settings' in request.path %}active{% endif %}">Google Settings</a></li>
                     <li><a href="{% url 'config_section_page' 'site_images' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'site_images' in request.path %}active{% endif %}">Site Images</a></li>
                 </ul>
@@ -208,11 +142,4 @@
         {% endif %}
         {% endif %}
     </ul>
-
-    <!-- Login Button (unauthenticated only) -->
-    {% if not user.is_authenticated %}
-    <div class="p-4 border-t border-base-300">
-        <a href="{% url 'account_login' %}" class="btn btn-primary btn-block">Login</a>
-    </div>
-    {% endif %}
 </aside>
