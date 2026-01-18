@@ -1,0 +1,218 @@
+<aside class="bg-base-200 w-64 min-h-screen flex flex-col">
+    <!-- Logo/Brand -->
+    <div class="p-4 border-b border-base-300">
+        <a href="{% url 'home' %}" class="flex items-center gap-2">
+            {% if config.LOGO_DISPLAY_MODE == 'logo_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' %}
+                {% if site_settings.site_logo %}
+                <img src="{{ site_settings.site_logo.url }}" alt="{{ config.TEAM_NAME }}" class="h-8 max-w-32 object-contain">
+                {% endif %}
+            {% endif %}
+            {% if config.LOGO_DISPLAY_MODE == 'name_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' or not site_settings.site_logo %}
+                <span class="text-xl font-bold">{{ config.TEAM_NAME }}</span>
+            {% endif %}
+        </a>
+    </div>
+
+    <!-- User Header (authenticated) -->
+    {% if user.is_authenticated %}
+    <div class="p-4 border-b border-base-300">
+        <div class="flex items-center gap-3">
+            <div class="avatar {% if not user.discord_avatar_url %}placeholder{% endif %}">
+                {% if user.discord_avatar_url %}
+                <div class="w-10 rounded-full">
+                    <img src="{{ user.discord_avatar_url }}" alt="{{ user.username }}" />
+                </div>
+                {% else %}
+                <div class="bg-neutral text-neutral-content w-10 rounded-full">
+                    <span class="text-sm">{{ user.username|slice:":2"|upper }}</span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate">{{ user.display_name|default:user.username }}</p>
+                <p class="text-xs text-base-content/60 truncate">{{ user.email }}</p>
+            </div>
+            <div class="dropdown dropdown-end">
+                <div tabindex="0" role="button" class="btn btn-ghost btn-sm btn-square" title="Account settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </div>
+                <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-50 w-52 p-2 shadow-lg border border-base-300">
+                    <li>
+                        <a href="{% url 'accounts:profile' %}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            Profile
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'accounts:profile' %}#race-ready" class="flex items-center justify-between">
+                            <span class="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                                </svg>
+                                Race Ready
+                            </span>
+                            {% if user.is_race_ready %}
+                            <span class="badge badge-success badge-xs"></span>
+                            {% else %}
+                            <span class="badge badge-error badge-xs"></span>
+                            {% endif %}
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% url 'mfa_index' %}">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                            Security
+                        </a>
+                    </li>
+                    <li class="my-1"><hr class="border-base-300"></li>
+                    <li>
+                        <a href="{% url 'account_logout' %}" class="text-error">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                            Logout
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Navigation Menu -->
+    <ul class="menu p-4 flex-1">
+        <!-- Main Navigation -->
+        <li class="menu-title">Navigation</li>
+        <li>
+            <a href="{% url 'home' %}" class="{% if request.resolver_match.url_name == 'home' %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                Home
+            </a>
+        </li>
+        {% if user.is_authenticated %}
+        <li>
+            <a href="{% url 'team:roster' %}" class="{% if 'roster' in request.path %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                Team Roster
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'team:links' %}" class="{% if request.resolver_match.url_name == 'links' %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                Team Links
+            </a>
+        </li>
+
+        <!-- Captains Section (conditional) -->
+        {% if user.is_any_captain or user.is_link_admin %}
+        <li class="menu-title mt-4">Captains</li>
+        {% if user.is_link_admin or user.is_any_captain %}
+        <li>
+            <a href="{% url 'team:submit_link' %}" class="{% if request.resolver_match.url_name == 'submit_link' %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                Submit Link
+            </a>
+        </li>
+        {% endif %}
+        {% if user.is_any_captain %}
+        <li>
+            <a href="{% url 'data_connection:connection_list' %}" class="{% if 'data-connections' in request.path %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                </svg>
+                Spreadsheets
+            </a>
+        </li>
+        {% endif %}
+        {% endif %}
+
+        <!-- Membership Section (conditional) -->
+        {% if user.is_membership_admin or user.is_any_captain %}
+        <li class="menu-title mt-4">Membership</li>
+        <li>
+            <a href="{% url 'team:application_list' %}" class="{% if request.resolver_match.url_name == 'application_list' %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Applications
+            </a>
+        </li>
+        {% endif %}
+
+        <!-- Team Performance Section (conditional) -->
+        {% if user.can_approve_verification or user.is_any_captain %}
+        <li class="menu-title mt-4">Team Performance</li>
+        <li>
+            <a href="{% url 'team:verification_records' %}" class="{% if request.resolver_match.url_name == 'verification_records' %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Verification Records
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'team:performance_review' %}" class="{% if request.resolver_match.url_name == 'performance_review' %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Performance Review
+            </a>
+        </li>
+        {% endif %}
+
+        <!-- Admin Section (conditional) -->
+        {% if user.is_app_admin or user.is_superuser %}
+        <li class="menu-title mt-4">Admin</li>
+        <!-- Configuration Submenu -->
+        <li>
+            <details {% if 'config' in request.path %}open{% endif %}>
+                <summary>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Configuration
+                </summary>
+                <ul>
+                    <li><a href="{% url 'config_section_page' 'site_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'site_settings' in request.path %}active{% endif %}">Site Settings</a></li>
+                    <li><a href="{% url 'config_section_page' 'social_links' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'social_links' in request.path %}active{% endif %}">Social Links</a></li>
+                    <li><a href="{% url 'config_section_page' 'discord_guild' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'discord_guild' in request.path %}active{% endif %}">Discord Guild</a></li>
+                    <li><a href="{% url 'config_section_page' 'zwift_credentials' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'zwift_credentials' in request.path %}active{% endif %}">Zwift Credentials</a></li>
+                    <li><a href="{% url 'config_section_page' 'zwift_racing_app' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'zwift_racing_app' in request.path %}active{% endif %}">Zwift Racing App</a></li>
+                    <li><a href="{% url 'config_section_page' 'permission_mappings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'permission_mappings' in request.path %}active{% endif %}">Permissions</a></li>
+                    <li><a href="{% url 'config_section_page' 'verification_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'verification_settings' in request.path %}active{% endif %}">Verification</a></li>
+                    <li><a href="{% url 'config_section_page' 'equipment' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'equipment' in request.path %}active{% endif %}">Equipment</a></li>
+                    <li><a href="{% url 'config_section_page' 'membership_applications' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'membership_applications' in request.path %}active{% endif %}">Applications</a></li>
+                    <li><a href="{% url 'config_section_page' 'seo_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'seo_settings' in request.path %}active{% endif %}">SEO Settings</a></li>
+                    <li><a href="{% url 'config_section_page' 'legal' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'legal' in request.path %}active{% endif %}">Legal</a></li>
+                    <li><a href="{% url 'config_section_page' 'google_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'google_settings' in request.path %}active{% endif %}">Google Settings</a></li>
+                    <li><a href="{% url 'config_section_page' 'site_images' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'site_images' in request.path %}active{% endif %}">Site Images</a></li>
+                </ul>
+            </details>
+        </li>
+        {% endif %}
+        {% endif %}
+    </ul>
+
+    <!-- Login Button (unauthenticated only) -->
+    {% if not user.is_authenticated %}
+    <div class="p-4 border-t border-base-300">
+        <a href="{% url 'account_login' %}" class="btn btn-primary btn-block">Login</a>
+    </div>
+    {% endif %}
+</aside>

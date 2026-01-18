@@ -332,15 +332,40 @@ def _get_config_sections() -> dict:
 
 
 @login_required
-@require_http_methods(["GET", "POST"])
+@require_GET
 def config_settings(request: HttpRequest) -> HttpResponse:
-    """Display configuration settings page for app admins.
+    """Redirect to first configuration section.
 
     Args:
         request: The HTTP request.
 
     Returns:
-        Rendered configuration settings page.
+        Redirect to first section page.
+
+    Raises:
+        PermissionDenied: If user lacks app_admin permission and is not superuser.
+
+    """
+    # Check permissions: app_admin OR superuser
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    sections = _get_config_sections()
+    first_section_key = next(iter(sections.keys()))
+    return redirect("config_section_page", section_key=first_section_key)
+
+
+@login_required
+@require_GET
+def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
+    """Display a single configuration section with sidebar navigation.
+
+    Args:
+        request: The HTTP request.
+        section_key: The section key to display.
+
+    Returns:
+        Rendered configuration section page.
 
     Raises:
         PermissionDenied: If user lacks app_admin permission and is not superuser.
@@ -352,21 +377,43 @@ def config_settings(request: HttpRequest) -> HttpResponse:
 
     sections = _get_config_sections()
 
+    # Handle special "site_images" section
+    if section_key == "site_images":
+        from gotta_bike_platform.models import SiteSettings
+
+        site_settings_obj = SiteSettings.get_settings()
+        return render(
+            request,
+            "accounts/config_section_page.html",
+            {
+                "sections": sections,
+                "current_section_key": section_key,
+                "current_section": {"name": "Site Images", "key": "site_images"},
+                "is_site_images": True,
+                "site_settings_obj": site_settings_obj,
+                "available_roles": [],
+            },
+        )
+
+    if section_key not in sections:
+        return redirect("config_settings")
+
+    section = sections[section_key]
+
     # Get Discord roles for permission mapping selects
     from apps.team.models import DiscordRole
 
-    from gotta_bike_platform.models import SiteSettings
-
     available_roles = DiscordRole.objects.filter(managed=False).order_by("-position")
-    site_settings_obj = SiteSettings.get_settings()
 
     return render(
         request,
-        "accounts/config_settings.html",
+        "accounts/config_section_page.html",
         {
             "sections": sections,
+            "current_section_key": section_key,
+            "current_section": section,
+            "is_site_images": False,
             "available_roles": available_roles,
-            "site_settings_obj": site_settings_obj,
         },
     )
 

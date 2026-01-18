@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load accounts_tags %}
 
-{% block title %}Configuration Settings - {{ config.TEAM_NAME }}{% endblock %}
+{% block title %}{{ current_section.name }} - Configuration - {{ config.TEAM_NAME }}{% endblock %}
 
 {% block extra_css %}
 <!-- Tom Select CSS -->
@@ -98,29 +98,6 @@
     .password-toggle:hover {
         color: oklch(var(--bc) / 0.8);
     }
-    /* Tabs customization for config page */
-    .tabs-lift {
-        flex-wrap: wrap;
-    }
-    .tabs-lift .tab {
-        font-size: 0.875rem;
-    }
-    /* Make tabs scrollable on mobile */
-    @media (max-width: 768px) {
-        .tabs-lift {
-            flex-wrap: nowrap;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: thin;
-        }
-        .tabs-lift .tab {
-            flex-shrink: 0;
-        }
-    }
-    /* Tab content styling */
-    .tab-content {
-        margin-top: -1px; /* Connect to tab border */
-    }
 </style>
 {% endblock %}
 
@@ -128,48 +105,21 @@
 <div class="max-w-4xl mx-auto">
     <div class="card bg-base-200 shadow-xl">
         <div class="card-body">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="card-title text-2xl">Configuration Settings</h2>
-                <a href="{% url 'accounts:profile' %}" class="btn btn-ghost btn-sm">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                    Back to Profile
-                </a>
+            <h2 class="card-title text-2xl mb-4">{{ current_section.name }}</h2>
+
+            {% if is_site_images %}
+            <!-- Site Images Form -->
+            <div id="site-images-form">
+                {% include "accounts/partials/config_site_images.html" %}
             </div>
-
-            <p class="text-base-content/70 mb-6">
-                Configure application settings. Changes are saved per section.
-            </p>
-
-            <!-- Tabbed Sections -->
-            <div role="tablist" class="tabs tabs-lift">
-                {% for section_key, section in sections.items %}
-                <input type="radio" name="config_tabs" role="tab" class="tab whitespace-nowrap"
-                       aria-label="{% if section.name == 'Permission Mappings' %}Permissions{% elif section.name == 'Verification Settings' %}Verification{% elif section.name == 'Membership Applications' %}Applications{% elif section.name == 'Google Settings' %}Google{% else %}{{ section.name }}{% endif %}"
-                       {% if forloop.first %}checked="checked"{% endif %} />
-                <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
-                    <div id="section-{{ section.key }}">
-                        <h3 class="text-lg font-semibold mb-4">{{ section.name }}</h3>
-                        <div class="section-content">
-                            {% include "accounts/partials/config_section.html" with section=section %}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-
-                <!-- Site Images Tab -->
-                <input type="radio" name="config_tabs" role="tab" class="tab whitespace-nowrap"
-                       aria-label="Site Images" />
-                <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
-                    <div id="section-site_images">
-                        <h3 class="text-lg font-semibold mb-4">Site Images</h3>
-                        <div id="site-images-form">
-                            {% include "accounts/partials/config_site_images.html" %}
-                        </div>
-                    </div>
+            {% else %}
+            <!-- Section Form -->
+            <div id="section-{{ current_section.key }}">
+                <div class="section-content">
+                    {% include "accounts/partials/config_section.html" with section=current_section %}
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
