@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load accounts_tags %}
 
-{% block title %}Complete Your Application - The Coalition{% endblock %}
+{% block title %}Complete Your Registration - The Coalition{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto">
@@ -24,7 +24,7 @@
           </div>
           {% endif %}
           <div>
-            <h2 class="card-title text-2xl">Complete Your Application</h2>
+            <h2 class="card-title text-2xl">Complete Your Registration</h2>
             <div class="text-base-content/60">{{ application.display_name }}</div>
           </div>
         </div>
@@ -42,7 +42,7 @@
         {% endif %}
       </div>
 
-      <!-- Application Form Instructions -->
+      <!-- Registration Form Instructions -->
       {% if application_form_instructions %}
       <div class="bg-info/10 border border-info rounded-lg p-4 mb-6">
         <div class="prose prose-sm max-w-none">
@@ -56,7 +56,7 @@
       <div class="alert alert-success mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         <div>
-          <h3 class="font-bold">Your application has been approved!</h3>
+          <h3 class="font-bold">Your registration has been approved!</h3>
           <p class="text-sm">You can now log in to the team platform using your Discord account.</p>
         </div>
       </div>
@@ -74,7 +74,7 @@
       <div class="alert alert-error mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         <div>
-          <h3 class="font-bold">Your application has been declined.</h3>
+          <h3 class="font-bold">Your registration has been declined.</h3>
           <p class="text-sm">If you have questions, please reach out to the team via Discord.</p>
         </div>
       </div>
@@ -84,7 +84,7 @@
       {% if application.status == "waiting_response" %}
       <div class="alert alert-info mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        <span>The team has requested additional information. Please update your application below.</span>
+        <span>The team has requested additional information. Please update your registration below.</span>
       </div>
       {% endif %}
 
@@ -103,10 +103,10 @@
         </label>
       </div>
 
-      <!-- Application Questions (from Discord Modal) - Read Only -->
+      <!-- Registration Questions (from Discord Modal) - Read Only -->
       {% if application.modal_form_data %}
       <div class="bg-base-300 rounded-lg p-4 mb-6">
-        <h3 class="font-semibold text-base mb-3">Your Application Responses</h3>
+        <h3 class="font-semibold text-base mb-3">Your Registration Responses</h3>
         <div class="grid grid-cols-1 gap-3 text-sm">
           <div>
             <div class="text-base-content/60">How did you hear about The Coalition?</div>
@@ -400,7 +400,7 @@
           {% endif %}
         </div>
 
-        <!-- Applicant Notes -->
+        <!-- Registrant Notes -->
         <div class="form-control mb-6">
           <label class="label">
             <span class="label-text">Additional Notes</span>
@@ -408,7 +408,7 @@
           </label>
           {{ form.applicant_notes }}
           <label class="label">
-            <span class="label-text-alt text-base-content/50">Anything you'd like the team to know about your application</span>
+            <span class="label-text-alt text-base-content/50">Anything you'd like the team to know about your registration</span>
           </label>
         </div>
 
@@ -426,16 +426,16 @@
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>
-            Save Application
+            Save Registration
           </button>
         </div>
       </form>
       {% endif %}
 
-      <!-- Application Status Info -->
+      <!-- Registration Status Info -->
       <div class="divider"></div>
       <div class="text-center text-sm text-base-content/50">
-        <p>Application submitted on {{ application.date_created|date:"F d, Y" }}</p>
+        <p>Registration submitted on {{ application.date_created|date:"F d, Y" }}</p>
         {% if application.date_modified != application.date_created %}
         <p>Last updated: {{ application.date_modified|date:"F d, Y H:i" }}</p>
         {% endif %}

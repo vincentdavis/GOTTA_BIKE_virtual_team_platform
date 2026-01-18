@@ -146,7 +146,7 @@
             <div role="tablist" class="tabs tabs-lift">
                 {% for section_key, section in sections.items %}
                 <input type="radio" name="config_tabs" role="tab" class="tab whitespace-nowrap"
-                       aria-label="{% if section.name == 'Permission Mappings' %}Permissions{% elif section.name == 'Verification Settings' %}Verification{% elif section.name == 'Membership Applications' %}Applications{% elif section.name == 'Google Settings' %}Google{% else %}{{ section.name }}{% endif %}"
+                       aria-label="{% if section.name == 'Permission Mappings' %}Permissions{% elif section.name == 'Verification Settings' %}Verification{% elif section.name == 'Membership Applications' %}Registration{% elif section.name == 'Google Settings' %}Google{% else %}{{ section.name }}{% endif %}"
                        {% if forloop.first %}checked="checked"{% endif %} />
                 <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-6">
                     <div id="section-{{ section.key }}">

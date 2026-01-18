@@ -99,7 +99,7 @@ WhiteNoise features:
     - `RaceReadyRecord` - Verification records for weight/height/power (pending/verified/rejected status)
     - `TeamLink` - Links to external resources with visibility date ranges
     - `RosterFilter` - Temporary filtered roster views from Discord channel members (5-min expiration)
-    - `MembershipApplication` - New member applications submitted via Discord modal (see Membership Applications below)
+    - `MembershipApplication` - New member registrations submitted via Discord modal (see Membership Registration below)
     - `DiscordRole` - Discord roles synced from server for permission checking
     - `services.py` - `get_unified_team_roster()` merges data from ZwiftPower, Zwift Racing, and User accounts;
       `get_user_verification_types(user)` returns allowed verification types based on ZP category
@@ -329,8 +329,8 @@ REST API using Django Ninja for Discord bot integration:
     - `POST /api/dbot/sync_guild_members` - Sync all guild members (see Guild Member Sync)
     - `POST /api/dbot/sync_user_roles/{discord_id}` - Sync a user's roles
     - `POST /api/dbot/roster_filter` - Create filtered roster link from Discord channel members
-    - `POST /api/dbot/membership_application` - Create new membership application from Discord
-    - `GET /api/dbot/membership_application/{discord_id}` - Get membership application by Discord ID
+    - `POST /api/dbot/membership_application` - Create new membership registration from Discord
+    - `GET /api/dbot/membership_application/{discord_id}` - Get membership registration by Discord ID
     - `POST /api/dbot/update_zp_team` - Trigger ZwiftPower team update task
     - `POST /api/dbot/update_zp_results` - Trigger ZwiftPower results update task
 
@@ -376,9 +376,9 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
     - `/team/roster/f/{uuid}/` - Filtered roster view (temporary, 5-min expiration)
     - `/team/links/` - Team links
     - `/team/verification/` - Verification records (approvers only)
-    - `/team/applications/` - Membership applications list (admins only)
-    - `/team/applications/{uuid}/` - Admin membership application view
-    - `/team/apply/{uuid}/` - Public membership application form
+    - `/team/applications/` - Membership registrations list (admins only)
+    - `/team/applications/{uuid}/` - Admin membership registration view
+    - `/team/apply/{uuid}/` - Public membership registration form
     - `/team/performance-review/` - Performance review
     - `/team/youtube/` - YouTube channels
 - `/site/config/` - Site configuration (Constance settings UI)
@@ -691,15 +691,23 @@ The Discord bot uses these fields to add/remove the role based on current verifi
 The team roster view (`/team/roster/`) displays race ready status with a filter option. The `data_connection` module
 also supports exporting `race_ready` status to Google Sheets.
 
-## Membership Applications
+## Membership Registration
 
-New member application workflow integrated with Discord.
+New member registration workflow integrated with Discord.
+
+### Terminology
+
+The codebase uses "Application" in model/URL names (e.g., `MembershipApplication`, `/team/applications/`) but the
+user-facing terminology should be "Registration" or "Membership Registration". This applies to:
+- UI labels and headings
+- Documentation
+- User communications
 
 ### Workflow
 
 1. User submits modal in Discord (`join_the_coalition` cog)
-2. Bot POSTs to API, creates `MembershipApplication`
-3. User receives DM with UUID link to complete application
+2. Bot POSTs to API, creates `MembershipApplication` record
+3. User receives DM with UUID link to complete registration
 4. User fills out required fields (name, agreements, profile info)
 5. Membership admin reviews and approves/rejects
 6. If approved, user can login via Discord OAuth
@@ -713,15 +721,15 @@ New member application workflow integrated with Discord.
 | `pending` | Awaiting review |
 | `in_progress` | Admin is reviewing |
 | `waiting_response` | Waiting for user to provide additional info |
-| `approved` | Application approved |
-| `rejected` | Application rejected |
+| `approved` | Registration approved |
+| `rejected` | Registration rejected |
 
 **Key Fields:**
 
 - `id` - UUID primary key for secure, unguessable URLs
 - `discord_id` - Discord user ID (unique)
 - `discord_username`, `server_nickname` - Discord names
-- `first_name`, `last_name` - Applicant's name
+- `first_name`, `last_name` - Registrant's name
 - `agree_privacy`, `agree_tos` - Agreement flags
 - `zwift_id`, `country`, `timezone`, `birth_year`, `gender` - Profile fields
 - `trainer`, `power_meter`, `dual_recording` - Equipment fields
@@ -730,19 +738,19 @@ New member application workflow integrated with Discord.
 **Properties:**
 
 - `is_complete` - True if required fields are filled
-- `is_editable` - True if applicant can still edit (not approved/rejected)
+- `is_editable` - True if registrant can still edit (not approved/rejected)
 - `is_actionable` - True if admin can approve/reject
 
 ### API Endpoints
 
-- `POST /api/dbot/membership_application` - Create application (returns existing if discord_id exists)
-- `GET /api/dbot/membership_application/{discord_id}` - Get application by Discord ID
+- `POST /api/dbot/membership_application` - Create registration (returns existing if discord_id exists)
+- `GET /api/dbot/membership_application/{discord_id}` - Get registration by Discord ID
 
 ### Permissions
 
 Users with `membership_admin` permission can:
-- View all applications at `/team/applications/`
-- Review and update application status
+- View all registrations at `/team/applications/`
+- Review and update registration status
 - Add admin notes
 
 Configure `PERM_MEMBERSHIP_ADMIN_ROLES` in Constance with Discord role IDs.

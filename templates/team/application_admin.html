@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load accounts_tags %}
 
-{% block title %}Application - {{ application.display_name }} - The Coalition{% endblock %}
+{% block title %}Registration - {{ application.display_name }} - The Coalition{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
@@ -25,7 +25,7 @@
           {% endif %}
           <div>
             <h2 class="card-title text-2xl">{{ application.display_name }}</h2>
-            <div class="text-base-content/60">Membership Application</div>
+            <div class="text-base-content/60">Membership Registration</div>
           </div>
         </div>
         <!-- Status Badge -->
@@ -42,7 +42,7 @@
         {% endif %}
       </div>
 
-      <!-- Application Form Instructions -->
+      <!-- Registration Form Instructions -->
       {% if application_form_instructions %}
       <div class="bg-info/10 border border-info rounded-lg p-4 mb-6">
         <div class="prose prose-sm max-w-none">
@@ -51,10 +51,10 @@
       </div>
       {% endif %}
 
-      <!-- Application Questions (from Discord Modal) -->
+      <!-- Registration Questions (from Discord Modal) -->
       {% if application.modal_form_data %}
       <div class="bg-base-300 rounded-lg p-4 mb-6">
-        <h3 class="font-bold text-lg mb-4">Application Questions</h3>
+        <h3 class="font-bold text-lg mb-4">Registration Questions</h3>
         <div class="grid grid-cols-1 gap-4">
           <div>
             <div class="text-sm text-base-content/60">How did you hear about The Coalition?</div>
@@ -153,9 +153,9 @@
         </div>
       </div>
 
-      <!-- Applicant Information -->
+      <!-- Registrant Information -->
       <div class="bg-base-300 rounded-lg p-4 mb-6">
-        <h3 class="font-bold text-lg mb-4">Applicant Information</h3>
+        <h3 class="font-bold text-lg mb-4">Registrant Information</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <div class="text-sm text-base-content/60">First Name</div>
@@ -184,13 +184,13 @@
         </div>
         {% if application.applicant_notes %}
         <div class="mt-4">
-          <div class="text-sm text-base-content/60 mb-1">Applicant Notes</div>
+          <div class="text-sm text-base-content/60 mb-1">Registrant Notes</div>
           <div class="bg-base-100 p-3 rounded">{{ application.applicant_notes }}</div>
         </div>
         {% endif %}
 
         <div class="mt-4">
-          <div class="text-sm text-base-content/60 mb-1">Application Complete</div>
+          <div class="text-sm text-base-content/60 mb-1">Registration Complete</div>
           {% if application.is_complete %}
           <span class="badge badge-success">Yes - All required fields filled</span>
           {% else %}
@@ -283,7 +283,7 @@
             <div class="form-control">
               <label class="label">
                 <span class="label-text">Admin Notes</span>
-                <span class="label-text-alt text-base-content/50">Not visible to applicant</span>
+                <span class="label-text-alt text-base-content/50">Not visible to registrant</span>
               </label>
               {{ form.admin_notes }}
             </div>
@@ -331,8 +331,8 @@
 
       <!-- Public Link -->
       <div class="bg-info/10 border border-info rounded-lg p-4 mb-6">
-        <h3 class="font-bold text-lg mb-2">Public Application Link</h3>
-        <p class="text-sm text-base-content/70 mb-2">Share this link with the applicant to complete their application:</p>
+        <h3 class="font-bold text-lg mb-2">Public Registration Link</h3>
+        <p class="text-sm text-base-content/70 mb-2">Share this link with the registrant to complete their registration:</p>
         <div class="flex items-center gap-2">
           <input type="text"
                  value="{{ request.scheme }}://{{ request.get_host }}{% url 'team:application_public' application.pk %}"
@@ -352,7 +352,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
-          Back to Applications
+          Back to Registrations
         </a>
       </div>
     </div>

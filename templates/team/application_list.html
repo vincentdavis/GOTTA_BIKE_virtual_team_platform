@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}Membership Applications - The Coalition{% endblock %}
+{% block title %}Membership Registrations - The Coalition{% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="card-title text-2xl">Membership Applications</h2>
+        <h2 class="card-title text-2xl">Membership Registrations</h2>
       </div>
 
       <!-- Status Count Badges -->
@@ -78,7 +78,7 @@
         </div>
       </form>
 
-      <!-- Applications Table -->
+      <!-- Registrations Table -->
       <div class="overflow-x-auto">
         <table class="table table-zebra">
           <thead>
@@ -158,7 +158,7 @@
             {% empty %}
             <tr>
               <td colspan="8" class="text-center py-8 text-base-content/50">
-                No membership applications found.
+                No membership registrations found.
               </td>
             </tr>
             {% endfor %}
@@ -168,7 +168,7 @@
 
       <!-- Stats -->
       <div class="mt-6 text-sm text-base-content/50">
-        Showing {{ applications|length }} application{{ applications|length|pluralize }}
+        Showing {{ applications|length }} registration{{ applications|length|pluralize }}
       </div>
     </div>
   </div>
