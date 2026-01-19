@@ -445,6 +445,8 @@ Available settings:
   `PERM_LINK_ADMIN_ROLES`, `PERM_MEMBERSHIP_ADMIN_ROLES`, `PERM_RACING_ADMIN_ROLES`, `PERM_TEAM_MEMBER_ROLES`,
   `PERM_RACE_READY_ROLES` (JSON arrays of Discord role IDs)
 - **Discord Roles**: `RACE_READY_ROLE_ID` (Discord role ID assigned when user is race ready, `0` to disable)
+- **New Arrival Messages**: `NEW_ARRIVAL_MESSAGE_PUBLIC` (public welcome message for welcome channel, supports Markdown),
+  `NEW_ARRIVAL_MESSAGE_PRIVATE` (private DM sent to new members, supports Markdown)
 - **Verification**: `CATEGORY_REQUIREMENTS` (JSON mapping ZP divisions to required verification types),
   `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
   `POWER_VERIFICATION_DAYS` (365)

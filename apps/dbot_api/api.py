@@ -223,6 +223,37 @@ class DBotAuth(APIKeyHeader):
 api = NinjaAPI(auth=DBotAuth(), urls_namespace="dbot_api")
 
 
+@api.get("/bot_config")
+def get_bot_config(request: HttpRequest) -> dict:
+    """Get bot configuration settings from constance.
+
+    Returns configuration values the Discord bot needs to operate.
+    The bot should fetch this on startup and periodically (every hour).
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        JSON object with bot configuration settings.
+
+    """
+    return {
+        "upgrade_channel": str(constance_config.UPGRADE_CHANNEL) if constance_config.UPGRADE_CHANNEL else None,
+        "new_arrivals_channel_id": (
+            str(constance_config.NEW_ARRIVALS_CHANNEL_ID) if constance_config.NEW_ARRIVALS_CHANNEL_ID else None
+        ),
+        "team_member_role_id": (
+            str(constance_config.TEAM_MEMBER_ROLE_ID) if constance_config.TEAM_MEMBER_ROLE_ID else None
+        ),
+        "race_ready_role_id": (
+            str(constance_config.RACE_READY_ROLE_ID) if constance_config.RACE_READY_ROLE_ID else None
+        ),
+        "new_arrival_message_public": constance_config.NEW_ARRIVAL_MESSAGE_PUBLIC or None,
+        "new_arrival_message_private": constance_config.NEW_ARRIVAL_MESSAGE_PRIVATE or None,
+        "send_new_arrival_dm": constance_config.SEND_NEW_ARRIVAL_DM,
+    }
+
+
 @api.get("/zwiftpower_profile/{zwid}")
 def get_zwiftpower_profile(request: HttpRequest, zwid: int) -> dict:
     """Get ZwiftPower profile for a rider by zwid.

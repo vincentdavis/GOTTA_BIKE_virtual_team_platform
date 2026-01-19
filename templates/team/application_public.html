@@ -103,62 +103,130 @@
         </label>
       </div>
 
-      <!-- Registration Questions (from Discord Modal) - Read Only -->
-      {% if application.modal_form_data %}
-      <div class="bg-base-300 rounded-lg p-4 mb-6">
-        <h3 class="font-semibold text-base mb-3">Your Registration Responses</h3>
-        <div class="grid grid-cols-1 gap-3 text-sm">
-          <div>
-            <div class="text-base-content/60">How did you hear about The Coalition?</div>
-            <div class="font-medium">{{ application.modal_form_data.how_heard|default:"-" }}</div>
-          </div>
-          <div>
-            <div class="text-base-content/60">Reasons for Joining</div>
-            <div>
-              {% if application.modal_form_data.reasons %}
-              {% for reason in application.modal_form_data.reasons %}
-              <span class="badge badge-primary badge-sm mr-1">{{ reason }}</span>
-              {% endfor %}
-              {% else %}
-              -
-              {% endif %}
-            </div>
-          </div>
-          <div>
-            <div class="text-base-content/60">Knows Someone on the Team</div>
-            <div class="font-medium">{{ application.modal_form_data.know_someone|default:"No" }}</div>
-          </div>
-          <div>
-            <div class="text-base-content/60">Virtual Cycling Platforms</div>
-            <div>
-              {% if application.modal_form_data.platforms %}
-              {% for platform in application.modal_form_data.platforms %}
-              <span class="badge badge-secondary badge-sm mr-1">{{ platform }}</span>
-              {% endfor %}
-              {% else %}
-              -
-              {% endif %}
-            </div>
-          </div>
-          <div>
-            <div class="text-base-content/60">Zwift Race Series Interest</div>
-            <div>
-              {% if application.modal_form_data.race_series %}
-              {% for series in application.modal_form_data.race_series %}
-              <span class="badge badge-accent badge-sm mr-1">{{ series }}</span>
-              {% endfor %}
-              {% else %}
-              None selected
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        <div class="text-xs text-base-content/40 mt-3">These responses were submitted via Discord and cannot be changed here.</div>
-      </div>
-      {% endif %}
-
       <form method="post">
         {% csrf_token %}
+
+        <!-- About You Section -->
+        <div class="divider">About You</div>
+
+        <!-- How did you hear about us? -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">{{ form.how_heard.label }} <span class="text-error">*</span></span>
+          </label>
+          {{ form.how_heard }}
+          {% if form.how_heard.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.how_heard.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Why do you want to join? -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">{{ form.reasons.label }} <span class="text-error">*</span></span>
+          </label>
+          <div class="flex flex-wrap gap-4">
+            {% for checkbox in form.reasons %}
+            <label class="label cursor-pointer gap-2">
+              {{ checkbox.tag }}
+              <span class="label-text">{{ checkbox.choice_label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% if form.reasons.help_text %}
+          <label class="label">
+            <span class="label-text-alt text-base-content/50">{{ form.reasons.help_text }}</span>
+          </label>
+          {% endif %}
+          {% if form.reasons.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.reasons.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Do you know someone? -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">{{ form.know_someone.label }}</span>
+          </label>
+          {{ form.know_someone }}
+          {% if form.know_someone.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.know_someone.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Which platforms do you use? -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">{{ form.platforms.label }} <span class="text-error">*</span></span>
+          </label>
+          <div class="flex flex-wrap gap-4">
+            {% for checkbox in form.platforms %}
+            <label class="label cursor-pointer gap-2">
+              {{ checkbox.tag }}
+              <span class="label-text">{{ checkbox.choice_label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% if form.platforms.help_text %}
+          <label class="label">
+            <span class="label-text-alt text-base-content/50">{{ form.platforms.help_text }}</span>
+          </label>
+          {% endif %}
+          {% if form.platforms.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.platforms.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Race series interest -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">{{ form.race_series.label }}</span>
+            <span class="label-text-alt text-base-content/50">Optional</span>
+          </label>
+          <div class="flex flex-wrap gap-4">
+            {% for checkbox in form.race_series %}
+            <label class="label cursor-pointer gap-2">
+              {{ checkbox.tag }}
+              <span class="label-text">{{ checkbox.choice_label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% if form.race_series.help_text %}
+          <label class="label">
+            <span class="label-text-alt text-base-content/50">{{ form.race_series.help_text }}</span>
+          </label>
+          {% endif %}
+          {% if form.race_series.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.race_series.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Other race series -->
+        <div class="form-control mb-4">
+          <label class="label">
+            <span class="label-text">{{ form.other_race_series.label }}</span>
+            <span class="label-text-alt text-base-content/50">Optional</span>
+          </label>
+          {{ form.other_race_series }}
+          {% if form.other_race_series.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.other_race_series.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Personal Information Section -->
+        <div class="divider">Personal Information</div>
 
         <!-- First Name -->
         <div class="form-control mb-4">

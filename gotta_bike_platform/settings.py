@@ -389,7 +389,8 @@ CONSTANCE_CONFIG = {
     "GUILD_NAME": ("The Coalition", "Name of the Discord guild/server", str),
     "GUILD_ID": (1317875072089981021, "Discord guild/server ID", int),
     "UPGRADE_CHANNEL": (0, "Discord channel ID for upgrade notifications", int),
-    "WELCOME_TEAM_CHANNEL_ID": (0, "Discord channel ID for welcome/application messages", int),
+    "NEW_ARRIVALS_CHANNEL_ID": (0, "Discord channel ID for new arrival welcome messages", int),
+    "USER_CHANGE_LOG": (0, "Member status changes posted to this channel", int),
     "ZWIFTPOWER_TEAM_ID": (0, "ZwiftPower team ID for fetching team data", int),
     # Zwift credentials (for ZwiftPower API access)
     "ZWIFT_USERNAME": ("", "Zwift account username/email for API access", str),
@@ -442,11 +443,32 @@ CONSTANCE_CONFIG = {
         "Record types required per ZwiftPower category. Keys are division numbers, values are required types.",
         "json_field",
     ),
-    # Race Ready role assignment
+    # Discord role assignments
+    "TEAM_MEMBER_ROLE_ID": (
+        0,
+        "Discord role ID that identifies team members (0 = disabled)",
+        int,
+    ),
     "RACE_READY_ROLE_ID": (
         0,
         "Discord role ID to assign when user meets verification requirements (0 = disabled)",
         int,
+    ),
+    # New arrival messages (sent by Discord bot)
+    "NEW_ARRIVAL_MESSAGE_PUBLIC": (
+        "",
+        "Public welcome message posted in the welcome channel when a new member joins. Supports Markdown.",
+        "textarea_field",
+    ),
+    "NEW_ARRIVAL_MESSAGE_PRIVATE": (
+        "",
+        "Private welcome message sent as a DM to new members when they join. Supports Markdown.",
+        "textarea_field",
+    ),
+    "SEND_NEW_ARRIVAL_DM": (
+        True,
+        "Send new arrivals a DM with NEW_ARRIVAL_MESSAGE_PRIVATE and application link",
+        bool,
     ),
     # Verification instructions
     "WEIGHT_INSTRUCTIONS_URL": ("", "URL to weight verification instructions", str),
@@ -554,10 +576,15 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "GUILD_ID",
         "DISCORD_URL",
         "UPGRADE_CHANNEL",
-        "WELCOME_TEAM_CHANNEL_ID",
+        "NEW_ARRIVALS_CHANNEL_ID",
+        "USER_CHANGE_LOG",
         "DISCORD_BOT_TOKEN",
         "DBOT_AUTH_KEY",
+        "TEAM_MEMBER_ROLE_ID",
         "RACE_READY_ROLE_ID",
+        "NEW_ARRIVAL_MESSAGE_PUBLIC",
+        "NEW_ARRIVAL_MESSAGE_PRIVATE",
+        "SEND_NEW_ARRIVAL_DM",
     ),
     "Zwift Credentials": (
         "ZWIFT_USERNAME",

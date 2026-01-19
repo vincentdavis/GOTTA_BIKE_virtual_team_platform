@@ -21,6 +21,30 @@ TIMEZONE_CHOICES = [
     ),
 ]
 
+# Modal form choices (from join_coalition cog)
+REASON_CHOICES = [
+    ("Virtual Racing", "Virtual Racing"),
+    ("Fitness and Training", "Fitness and Training"),
+    ("Community", "Community"),
+]
+
+PLATFORM_CHOICES = [
+    ("Zwift", "Zwift"),
+    ("Rouvy", "Rouvy"),
+    ("MyWhoosh", "MyWhoosh"),
+    ("TrainingPeaks Virtual", "TrainingPeaks Virtual"),
+    ("Other", "Other"),
+]
+
+RACE_SERIES_CHOICES = [
+    ("ZRL", "ZRL"),
+    ("TTT", "TTT"),
+    ("ClubLadder", "ClubLadder"),
+    ("FRR", "FRR"),
+    ("Women's Racing", "Women's Racing"),
+    ("Other", "Other"),
+]
+
 
 class TeamLinkForm(forms.ModelForm):
     """Form for submitting team links."""
@@ -274,6 +298,67 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
     Applicants can fill in their profile info, agree to policies, and add notes.
     """
 
+    # Modal form fields (stored in modal_form_data JSONField)
+    how_heard = forms.CharField(
+        label="How did you hear about THE COALITION?",
+        max_length=500,
+        required=True,
+        widget=forms.TextInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "placeholder": "e.g., Zwift race, friend, social media, etc.",
+            }
+        ),
+    )
+
+    reasons = forms.MultipleChoiceField(
+        label="Why would you like to join The Coalition?",
+        choices=REASON_CHOICES,
+        required=True,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-primary"}),
+        help_text="Select 1-3 options",
+    )
+
+    know_someone = forms.CharField(
+        label="Do you know someone on the team?",
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "placeholder": "Who? (leave blank if no)",
+            }
+        ),
+    )
+
+    platforms = forms.MultipleChoiceField(
+        label="Which virtual cycling platforms do you use?",
+        choices=PLATFORM_CHOICES,
+        required=True,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-primary"}),
+        help_text="Select 1-5 options",
+    )
+
+    race_series = forms.MultipleChoiceField(
+        label="Zwift race series interest",
+        choices=RACE_SERIES_CHOICES,
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-primary"}),
+        help_text="Optional - select any that interest you",
+    )
+
+    other_race_series = forms.CharField(
+        label="Other race series",
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "placeholder": "Other race series you're interested in",
+            }
+        ),
+    )
+
     class Meta:
         """Meta options for MembershipApplicationApplicantForm."""
 
@@ -413,6 +498,16 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
         """
         super().__init__(*args, **kwargs)
 
+        # Populate modal form fields from existing modal_form_data
+        if self.instance and self.instance.pk and self.instance.modal_form_data:
+            modal_data = self.instance.modal_form_data
+            self.fields["how_heard"].initial = modal_data.get("how_heard", "")
+            self.fields["reasons"].initial = modal_data.get("reasons", [])
+            self.fields["know_someone"].initial = modal_data.get("know_someone", "")
+            self.fields["platforms"].initial = modal_data.get("platforms", [])
+            self.fields["race_series"].initial = modal_data.get("race_series", [])
+            self.fields["other_race_series"].initial = modal_data.get("other_race_series", "")
+
         # Update gender field to show placeholder when empty
         if "gender" in self.fields:
             self.fields["gender"].empty_label = "Select gender..."
@@ -468,9 +563,6 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
         Returns:
             The cleaned data.
 
-        Raises:
-            ValidationError: If agreements are not checked.
-
         """
         cleaned_data = super().clean()
 
@@ -480,6 +572,32 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
             self.add_error("agree_tos", "You must agree to the terms of service.")
 
         return cleaned_data
+
+    def save(self, commit: bool = True):
+        """Save form and store modal form fields in modal_form_data.
+
+        Args:
+            commit: Whether to save the instance to the database.
+
+        Returns:
+            The saved MembershipApplication instance.
+
+        """
+        instance = super().save(commit=False)
+
+        # Update modal_form_data with the form field values
+        modal_data = instance.modal_form_data or {}
+        modal_data["how_heard"] = self.cleaned_data.get("how_heard", "")
+        modal_data["reasons"] = self.cleaned_data.get("reasons", [])
+        modal_data["know_someone"] = self.cleaned_data.get("know_someone", "")
+        modal_data["platforms"] = self.cleaned_data.get("platforms", [])
+        modal_data["race_series"] = self.cleaned_data.get("race_series", [])
+        modal_data["other_race_series"] = self.cleaned_data.get("other_race_series", "")
+        instance.modal_form_data = modal_data
+
+        if commit:
+            instance.save()
+        return instance
 
 
 class MembershipApplicationAdminForm(forms.ModelForm):
