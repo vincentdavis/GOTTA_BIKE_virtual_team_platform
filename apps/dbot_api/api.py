@@ -251,6 +251,7 @@ def get_bot_config(request: HttpRequest) -> dict:
         "new_arrival_message_public": constance_config.NEW_ARRIVAL_MESSAGE_PUBLIC or None,
         "new_arrival_message_private": constance_config.NEW_ARRIVAL_MESSAGE_PRIVATE or None,
         "send_new_arrival_dm": constance_config.SEND_NEW_ARRIVAL_DM,
+        "help_message": constance_config.HELP_MESSAGE or None,
     }
 
 

@@ -455,20 +455,31 @@ CONSTANCE_CONFIG = {
         int,
     ),
     # New arrival messages (sent by Discord bot)
+    # Use {member} for member mention/name, {server} for server name
     "NEW_ARRIVAL_MESSAGE_PUBLIC": (
-        "",
-        "Public welcome message posted in the welcome channel when a new member joins. Supports Markdown.",
+        "Hello {member}, welcome to THE COALITION! Our membership team is here to help.\n"
+        "Please complete your membership registration by clicking the button below "
+        "or typing `/join_the_coalition`.",
+        "Public welcome message posted in the welcome channel. Use {member} for mention, {server} for server name.",
         "textarea_field",
     ),
     "NEW_ARRIVAL_MESSAGE_PRIVATE": (
-        "",
-        "Private welcome message sent as a DM to new members when they join. Supports Markdown.",
+        "Welcome to The Coalition! Please complete your team registration using the button below.",
+        "Private DM sent to new members. Use {member} for name, {server} for server name.",
         "textarea_field",
     ),
     "SEND_NEW_ARRIVAL_DM": (
         True,
         "Send new arrivals a DM with NEW_ARRIVAL_MESSAGE_PRIVATE and application link",
         bool,
+    ),
+    # Help message for Discord bot
+    "HELP_MESSAGE": (
+        "Racing on Zwift transcends mere exercise; it's a metaphysical confrontation "
+        "between ego and algorithm — where watts become wisdom, suffering becomes synergy, "
+        "and every virtual climb mirrors the uphill struggles of our digitized humanity.",
+        "Message displayed by the Discord bot /help command. Supports Markdown.",
+        "textarea_field",
     ),
     # Verification instructions
     "WEIGHT_INSTRUCTIONS_URL": ("", "URL to weight verification instructions", str),
@@ -585,6 +596,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "NEW_ARRIVAL_MESSAGE_PUBLIC",
         "NEW_ARRIVAL_MESSAGE_PRIVATE",
         "SEND_NEW_ARRIVAL_DM",
+        "HELP_MESSAGE",
     ),
     "Zwift Credentials": (
         "ZWIFT_USERNAME",

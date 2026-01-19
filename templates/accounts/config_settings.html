@@ -6,6 +6,8 @@
 {% block extra_css %}
 <!-- Tom Select CSS -->
 <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">
+<!-- Marked.js for client-side markdown preview -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
     /* HTMX indicator - hidden by default, shown during request */
     .htmx-indicator {
@@ -313,25 +315,26 @@ function showTextareaPreview(key) {
     previewBtn.classList.remove('btn-outline');
     previewBtn.classList.add('btn-ghost');
 
-    // Fetch rendered markdown via HTMX/fetch
+    // Render markdown client-side using marked.js
     const text = textarea.value;
-    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
-    fetch('{% url "markdown_preview" %}', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'X-CSRFToken': csrfToken
-        },
-        body: 'text=' + encodeURIComponent(text)
-    })
-    .then(response => response.text())
-    .then(html => {
+    if (!text || text.trim() === '') {
+        previewDiv.innerHTML = '<p class="text-base-content/50 italic">No content to preview</p>';
+        return;
+    }
+
+    try {
+        // Configure marked for similar output to server-side
+        marked.setOptions({
+            breaks: true,  // Convert \n to <br> (like nl2br)
+            gfm: true,     // GitHub Flavored Markdown
+        });
+        const html = marked.parse(text);
         previewDiv.innerHTML = html;
-    })
-    .catch(error => {
-        previewDiv.innerHTML = '<p class="text-error">Error loading preview</p>';
-    });
+    } catch (error) {
+        console.error('Markdown preview error:', error);
+        previewDiv.innerHTML = '<p class="text-error">Error rendering preview: ' + error.message + '</p>';
+    }
 }
 
 function showTextareaEdit(key) {

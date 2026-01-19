@@ -444,9 +444,12 @@ Available settings:
 - **Permission Mappings**: `PERM_APP_ADMIN_ROLES`, `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`,
   `PERM_LINK_ADMIN_ROLES`, `PERM_MEMBERSHIP_ADMIN_ROLES`, `PERM_RACING_ADMIN_ROLES`, `PERM_TEAM_MEMBER_ROLES`,
   `PERM_RACE_READY_ROLES` (JSON arrays of Discord role IDs)
-- **Discord Roles**: `RACE_READY_ROLE_ID` (Discord role ID assigned when user is race ready, `0` to disable)
-- **New Arrival Messages**: `NEW_ARRIVAL_MESSAGE_PUBLIC` (public welcome message for welcome channel, supports Markdown),
-  `NEW_ARRIVAL_MESSAGE_PRIVATE` (private DM sent to new members, supports Markdown)
+- **Discord Roles**: `RACE_READY_ROLE_ID` (Discord role ID assigned when user is race ready, `0` to disable),
+  `NEW_ARRIVALS_CHANNEL_ID` (Discord channel ID for new member welcome messages)
+- **New Arrival Messages**: `NEW_ARRIVAL_MESSAGE_PUBLIC` (public welcome message for welcome channel),
+  `NEW_ARRIVAL_MESSAGE_PRIVATE` (private DM sent to new members), `SEND_NEW_ARRIVAL_DM` (toggle to enable/disable DMs).
+  Messages support Markdown and placeholders: `{member}` for member name/mention, `{server}` for server name
+- **Discord Bot Messages**: `HELP_MESSAGE` (message displayed by the Discord bot `/help` command, supports Markdown)
 - **Verification**: `CATEGORY_REQUIREMENTS` (JSON mapping ZP divisions to required verification types),
   `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
   `POWER_VERIFICATION_DAYS` (365)
