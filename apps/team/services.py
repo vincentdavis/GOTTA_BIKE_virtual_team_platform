@@ -86,6 +86,9 @@ class UnifiedRider:
     zp_div: int = 0
     zp_divw: int = 0
     zp_date_left: datetime | None = None
+    zp_rank: Decimal | None = None
+    zp_ftp: int | None = None
+    zp_weight: Decimal | None = None
 
     # Zwift Racing data
     in_zwiftracing: bool = False
@@ -173,6 +176,18 @@ class UnifiedRider:
             return "left"
         return "none"
 
+    @property
+    def wkg(self) -> Decimal | None:
+        """Calculate watts per kilogram from FTP and weight.
+
+        Returns:
+            FTP divided by weight, rounded to 2 decimal places, or None if either is missing.
+
+        """
+        if self.zp_ftp is not None and self.zp_weight is not None and self.zp_weight > 0:
+            return round(Decimal(self.zp_ftp) / self.zp_weight, 2)
+        return None
+
 
 def get_unified_team_roster() -> list[UnifiedRider]:
     """Get unified team roster from all data sources.
@@ -185,7 +200,9 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     users = User.objects.filter(zwid__isnull=False).values(
         "id", "zwid", "username", "discord_username", "zwid_verified", "gender"
     )
-    zp_riders = ZPTeamRiders.objects.all().values("zwid", "name", "div", "divw", "date_left")
+    zp_riders = ZPTeamRiders.objects.all().values(
+        "zwid", "name", "div", "divw", "date_left", "rank", "ftp", "weight"
+    )
     zr_riders = ZRRider.objects.all().values("zwid", "name", "race_current_category", "date_left")
 
     # Get result counts per rider
@@ -232,6 +249,9 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.zp_div = zp["div"]
             rider.zp_divw = zp["divw"]
             rider.zp_date_left = zp["date_left"]
+            rider.zp_rank = zp["rank"]
+            rider.zp_ftp = zp["ftp"]
+            rider.zp_weight = zp["weight"]
 
         # Zwift Racing data
         if zwid in zr_by_zwid:
@@ -277,6 +297,7 @@ class PerformanceRider:
     display_name: str = ""
     zp_div: int = 0
     gender: str = ""
+    has_account: bool = False
 
     # Verification data - weight light
     weight_light_date: datetime | None = None
@@ -295,6 +316,14 @@ class PerformanceRider:
     zp_result_weight: Decimal | None = None
     zp_height_date: datetime | None = None
     zp_height_value: int | None = None
+
+    # FTP data (from ZPTeamRiders and history)
+    ftp_current: int | None = None
+    ftp_min: int | None = None
+    ftp_max: int | None = None
+
+    # ZwiftPower current weight (for WKG calculation)
+    zp_weight: Decimal | None = None
 
     # Class variable for div mapping
     DIV_TO_CATEGORY: ClassVar[dict[int, str]] = ZP_DIV_TO_CATEGORY
@@ -347,26 +376,44 @@ class PerformanceRider:
         diff = self.weight_diff_abs
         return diff is not None and diff > 5
 
+    @property
+    def wkg(self) -> Decimal | None:
+        """Calculate watts per kilogram from FTP and weight.
+
+        Returns:
+            FTP divided by weight, rounded to 2 decimal places, or None if either is missing.
+
+        """
+        if self.ftp_current is not None and self.zp_weight is not None and self.zp_weight > 0:
+            return round(Decimal(self.ftp_current) / self.zp_weight, 2)
+        return None
+
 
 def get_performance_review_data() -> list[PerformanceRider]:
-    """Get performance review data for all riders with accounts.
+    """Get performance review data for all riders (outer join of ZP, ZR, Users).
+
+    Includes all riders from ZwiftPower, Zwift Racing, and Users,
+    excluding those who have left (zp_date_left is set).
 
     Returns:
         List of PerformanceRider objects sorted by display name.
 
     """
-    # Get unified roster for basic rider info
+    # Get unified roster for basic rider info (outer join of all sources)
     roster = get_unified_team_roster()
+
+    # Filter out riders who have left ZwiftPower
+    roster = [r for r in roster if not r.zp_date_left]
 
     # Build lookup of rider info by zwid
     rider_info: dict[int, dict] = {}
     for r in roster:
-        if r.has_account:  # Only include riders with accounts
-            rider_info[r.zwid] = {
-                "display_name": r.display_name,
-                "zp_div": r.zp_div,
-                "gender": r.gender,
-            }
+        rider_info[r.zwid] = {
+            "display_name": r.display_name,
+            "zp_div": r.zp_div,
+            "gender": r.gender,
+            "has_account": r.has_account,
+        }
 
     if not rider_info:
         return []
@@ -428,6 +475,23 @@ def get_performance_review_data() -> list[PerformanceRider]:
                     if "zp_result_date" in zp_info and "zp_height_date" in zp_info:
                         break
 
+    # Get current FTP and weight from ZPTeamRiders
+    zp_riders = ZPTeamRiders.objects.filter(zwid__in=rider_info.keys()).values("zwid", "ftp", "weight")
+    ftp_current_by_zwid: dict[int, int | None] = {r["zwid"]: r["ftp"] for r in zp_riders}
+    weight_by_zwid: dict[int, Decimal | None] = {r["zwid"]: r["weight"] for r in zp_riders}
+
+    # Get FTP history (min/max) for each rider
+    ftp_stats_by_zwid: dict[int, dict] = {}
+    for zwid in rider_info:
+        ftp_history = ZPTeamRiders.get_ftp_history(zwid)
+        if ftp_history:
+            ftp_values = [ftp for _, ftp in ftp_history if ftp is not None]
+            if ftp_values:
+                ftp_stats_by_zwid[zwid] = {
+                    "ftp_min": min(ftp_values),
+                    "ftp_max": max(ftp_values),
+                }
+
     # Build PerformanceRider objects
     performance_riders: list[PerformanceRider] = []
     for zwid, info in rider_info.items():
@@ -436,6 +500,7 @@ def get_performance_review_data() -> list[PerformanceRider]:
             display_name=info["display_name"],
             zp_div=info["zp_div"],
             gender=info["gender"],
+            has_account=info["has_account"],
         )
 
         # Add verification data
@@ -456,7 +521,208 @@ def get_performance_review_data() -> list[PerformanceRider]:
             rider.zp_height_date = zp.get("zp_height_date")
             rider.zp_height_value = zp.get("zp_height_value")
 
+        # Add FTP and weight data
+        rider.ftp_current = ftp_current_by_zwid.get(zwid)
+        rider.zp_weight = weight_by_zwid.get(zwid)
+        if zwid in ftp_stats_by_zwid:
+            ftp_stats = ftp_stats_by_zwid[zwid]
+            rider.ftp_min = ftp_stats.get("ftp_min")
+            rider.ftp_max = ftp_stats.get("ftp_max")
+
         performance_riders.append(rider)
 
     # Sort by display name
     return sorted(performance_riders, key=lambda r: r.display_name.lower())
+
+
+@dataclass
+class MembershipReviewRider:
+    """Member data for membership review view."""
+
+    zwid: int
+    user_id: int | None = None
+
+    # User data
+    full_name: str = ""
+    discord_id: str = ""
+    discord_nickname: str = ""
+
+    # ZP/ZR names
+    zp_name: str = ""
+    zr_name: str = ""
+
+    # Status
+    gender: str = ""
+    has_account: bool = True
+    zwid_verified: bool = False
+
+    # Category
+    zp_div: int = 0
+
+    # ZP/ZR membership status
+    in_zwiftpower: bool = False
+    in_zwiftracing: bool = False
+    zp_date_left: datetime | None = None
+    zr_date_left: datetime | None = None
+
+    # Results data
+    result_count: int = 0
+    last_result_date: datetime | None = None
+
+    # Class variable for div mapping
+    DIV_TO_CATEGORY: ClassVar[dict[int, str]] = ZP_DIV_TO_CATEGORY
+
+    @property
+    def zp_category(self) -> str:
+        """Return ZwiftPower category letter from division number."""
+        return ZP_DIV_TO_CATEGORY.get(self.zp_div, "")
+
+    @property
+    def days_since_result(self) -> int | None:
+        """Return days since last result, or None if no results."""
+        if not self.last_result_date:
+            return None
+        from django.utils import timezone
+        delta = timezone.now() - self.last_result_date
+        return delta.days
+
+    @property
+    def discord_profile_url(self) -> str:
+        """Return Discord profile URL for this user."""
+        if self.discord_id:
+            return f"https://discord.com/users/{self.discord_id}"
+        return ""
+
+    @property
+    def zp_active(self) -> bool:
+        """Check if rider is active in ZwiftPower."""
+        return self.in_zwiftpower and not self.zp_date_left
+
+    @property
+    def zr_active(self) -> bool:
+        """Check if rider is active in Zwift Racing."""
+        return self.in_zwiftracing and not self.zr_date_left
+
+    @property
+    def is_active_member(self) -> bool:
+        """Check if rider is active in at least one source."""
+        return self.zp_active or self.zr_active
+
+    @property
+    def membership_status(self) -> str:
+        """Return detailed membership status.
+
+        Returns:
+            One of: 'both', 'zp_only', 'zr_only', 'left', 'none'
+
+        """
+        if self.zp_active and self.zr_active:
+            return "both"
+        if self.zp_active:
+            return "zp_only"
+        if self.zr_active:
+            return "zr_only"
+        if self.in_zwiftpower or self.in_zwiftracing:
+            return "left"
+        return "none"
+
+
+def get_membership_review_data() -> list[MembershipReviewRider]:
+    """Get membership review data with outer join across all sources.
+
+    Performs an outer join across Users, ZwiftPower, and Zwift Racing to show
+    all riders from any source, not just those with user accounts.
+
+    Returns:
+        List of MembershipReviewRider objects sorted by display name.
+
+    """
+    from django.db.models import Max
+
+    # Query each source independently
+    users = User.objects.filter(zwid__isnull=False).values(
+        "id", "zwid", "first_name", "last_name", "discord_id", "discord_nickname", "discord_username",
+        "gender", "zwid_verified"
+    )
+    zp_riders = ZPTeamRiders.objects.all().values("zwid", "name", "div", "divw", "date_left")
+    zr_riders = ZRRider.objects.all().values("zwid", "name", "date_left")
+
+    # Build lookup dicts
+    user_by_zwid: dict[int, dict] = {u["zwid"]: u for u in users}
+    zp_by_zwid: dict[int, dict] = {r["zwid"]: r for r in zp_riders}
+    zr_by_zwid: dict[int, dict] = {r["zwid"]: r for r in zr_riders}
+
+    # Get result counts and last result date per rider
+    result_stats = (
+        ZPRiderResults.objects
+        .values("zwid")
+        .annotate(
+            count=Count("id"),
+            last_result=Max("event__event_date")
+        )
+    )
+    results_by_zwid: dict[int, dict] = {
+        r["zwid"]: {"count": r["count"], "last_result": r["last_result"]}
+        for r in result_stats
+    }
+
+    # Collect ALL unique zwids (outer join)
+    zwid_set: set[int] = set()
+    zwid_set.update(user_by_zwid.keys())
+    zwid_set.update(zp_by_zwid.keys())
+    zwid_set.update(zr_by_zwid.keys())
+
+    # Build MembershipReviewRider objects for each unique zwid
+    riders: list[MembershipReviewRider] = []
+    for zwid in zwid_set:
+        rider = MembershipReviewRider(zwid=zwid, has_account=False)
+
+        # Add user data if exists
+        if zwid in user_by_zwid:
+            u = user_by_zwid[zwid]
+            rider.user_id = u["id"]
+            rider.has_account = True
+            rider.zwid_verified = u["zwid_verified"]
+            rider.discord_id = u["discord_id"] or ""
+            rider.discord_nickname = u["discord_nickname"] or u["discord_username"] or ""
+
+            # Build full name
+            first = u["first_name"] or ""
+            last = u["last_name"] or ""
+            rider.full_name = f"{first} {last}".strip()
+
+            # Normalize gender
+            if u["gender"] == "male":
+                rider.gender = "M"
+            elif u["gender"] == "female":
+                rider.gender = "F"
+
+        # Add ZP data
+        if zwid in zp_by_zwid:
+            zp = zp_by_zwid[zwid]
+            rider.in_zwiftpower = True
+            rider.zp_name = zp["name"]
+            rider.zp_div = zp["div"]
+            rider.zp_date_left = zp["date_left"]
+
+            # Fall back to ZP gender if user gender not set
+            if not rider.gender:
+                rider.gender = "F" if zp["divw"] and zp["divw"] > 0 else "M"
+
+        # Add ZR data
+        if zwid in zr_by_zwid:
+            zr = zr_by_zwid[zwid]
+            rider.in_zwiftracing = True
+            rider.zr_name = zr["name"]
+            rider.zr_date_left = zr["date_left"]
+
+        # Add results data
+        if zwid in results_by_zwid:
+            stats = results_by_zwid[zwid]
+            rider.result_count = stats["count"]
+            rider.last_result_date = stats["last_result"]
+
+        riders.append(rider)
+
+    # Sort by best available name
+    return sorted(riders, key=lambda r: (r.full_name or r.zp_name or r.zr_name or "").lower())

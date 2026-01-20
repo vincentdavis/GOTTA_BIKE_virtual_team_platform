@@ -66,21 +66,6 @@
 
             <div class="form-control">
               <label class="label">
-                <span class="label-text">Status</span>
-              </label>
-              <select name="status" class="select select-bordered select-sm">
-                <option value="">All</option>
-                <option value="active" {% if status_filter == "active" %}selected{% endif %}>Active (ZP or ZR)</option>
-                <option value="both" {% if status_filter == "both" %}selected{% endif %}>ZP + ZR</option>
-                <option value="zp_only" {% if status_filter == "zp_only" %}selected{% endif %}>ZP Only</option>
-                <option value="zr_only" {% if status_filter == "zr_only" %}selected{% endif %}>ZR Only</option>
-                <option value="left" {% if status_filter == "left" %}selected{% endif %}>Left</option>
-                <option value="none" {% if status_filter == "none" %}selected{% endif %}>Account Only</option>
-              </select>
-            </div>
-
-            <div class="form-control">
-              <label class="label">
                 <span class="label-text">Gender</span>
               </label>
               <select name="gender" class="select select-bordered select-sm">
@@ -118,7 +103,7 @@
           <table class="table table-zebra">
             <thead>
             <tr>
-              {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&zr_category="|add:zr_category_filter|add:"&status="|add:status_filter|add:"&gender="|add:gender_filter|add:"&race_ready="|add:race_ready_filter %}
+              {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&zr_category="|add:zr_category_filter|add:"&gender="|add:gender_filter|add:"&race_ready="|add:race_ready_filter %}
               <th>
                 <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
                   Name
@@ -144,25 +129,6 @@
                 </a>
               </th>
               <th>
-                <a href="{{ base_url }}&sort=account&dir={% if sort_by == 'account' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Account
-                  {% if sort_by == "account" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=verified&dir={% if sort_by == 'verified' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Zwift
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                  </svg>
-                  {% if sort_by == "verified" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
                 <a href="{{ base_url }}&sort=race_ready&dir={% if sort_by == 'race_ready' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
                   Race Ready
                   {% if sort_by == "race_ready" %}
@@ -179,17 +145,33 @@
                 </a>
               </th>
               <th>
-                <a href="{{ base_url }}&sort=catw&dir={% if sort_by == 'catw' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Cat W
-                  {% if sort_by == "catw" %}
+                <a href="{{ base_url }}&sort=rating&dir={% if sort_by == 'rating' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Rating
+                  {% if sort_by == "rating" %}
                     <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
                   {% endif %}
                 </a>
               </th>
               <th>
-                <a href="{{ base_url }}&sort=rating&dir={% if sort_by == 'rating' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Rating
-                  {% if sort_by == "rating" %}
+                <a href="{{ base_url }}&sort=rank&dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  Rank
+                  {% if sort_by == "rank" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=ftp&dir={% if sort_by == 'ftp' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  FTP
+                  {% if sort_by == "ftp" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=wkg&dir={% if sort_by == 'wkg' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  WKG
+                  {% if sort_by == "wkg" %}
                     <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
                   {% endif %}
                 </a>
@@ -230,20 +212,6 @@
                   {% endif %}
                 </td>
                 <td>
-                  {% if rider.has_account %}
-                    <span class="badge badge-success badge-sm">Yes</span>
-                  {% else %}
-                    <span class="badge badge-ghost badge-sm">No</span>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if rider.zwid_verified %}
-                    <span class="badge badge-info badge-sm">Yes</span>
-                  {% else %}
-                    <span class="badge badge-ghost badge-sm">No</span>
-                  {% endif %}
-                </td>
-                <td>
                   {% if rider.is_race_ready %}
                     <span class="badge badge-success badge-sm">Yes</span>
                   {% else %}
@@ -252,17 +220,11 @@
                 </td>
                 <td>
                   {% if rider.in_zwiftpower %}
-                    <span class="badge badge-primary badge-sm">{{ rider.zp_category|default:"-" }}</span>
-                    {% if rider.zp_date_left %}
-                      <span class="badge badge-error badge-sm ml-1">Left</span>
+                    {% if rider.zp_category_w %}
+                      <span class="badge badge-secondary badge-sm">{{ rider.zp_category_w }}</span>
+                    {% else %}
+                      <span class="badge badge-primary badge-sm">{{ rider.zp_category|default:"-" }}</span>
                     {% endif %}
-                  {% else %}
-                    <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if rider.in_zwiftpower and rider.zp_category_w %}
-                    <span class="badge badge-secondary badge-sm">{{ rider.zp_category_w }}</span>
                   {% else %}
                     <span class="text-base-content/30">-</span>
                   {% endif %}
@@ -273,6 +235,27 @@
                     {% if rider.zr_date_left %}
                       <span class="badge badge-error badge-sm ml-1">Left</span>
                     {% endif %}
+                  {% else %}
+                    <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if rider.zp_rank %}
+                    <span class="font-mono text-sm">{{ rider.zp_rank }}</span>
+                  {% else %}
+                    <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if rider.zp_ftp %}
+                    <span class="font-mono text-sm">{{ rider.zp_ftp }}</span>
+                  {% else %}
+                    <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if rider.wkg %}
+                    <span class="font-mono text-sm">{{ rider.wkg }}</span>
                   {% else %}
                     <span class="text-base-content/30">-</span>
                   {% endif %}

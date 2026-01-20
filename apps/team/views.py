@@ -21,7 +21,12 @@ from apps.team.forms import (
     TeamLinkForm,
 )
 from apps.team.models import MembershipApplication, RaceReadyRecord, RosterFilter, TeamLink
-from apps.team.services import ZP_DIV_TO_CATEGORY, get_performance_review_data, get_unified_team_roster
+from apps.team.services import (
+    ZP_DIV_TO_CATEGORY,
+    get_membership_review_data,
+    get_performance_review_data,
+    get_unified_team_roster,
+)
 from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
 
@@ -41,11 +46,13 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
     """
     roster = get_unified_team_roster()
 
+    # Exclude riders who have left (have zp_date_left set)
+    roster = [r for r in roster if not r.zp_date_left]
+
     # Get filter parameters
     search_query = request.GET.get("q", "").strip()
     zp_category_filter = request.GET.get("zp_category", "")
     zr_category_filter = request.GET.get("zr_category", "")
-    status_filter = request.GET.get("status", "active")  # Default to showing active members
     gender_filter = request.GET.get("gender", "")
     race_ready_filter = request.GET.get("race_ready", "")
 
@@ -58,12 +65,6 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
     zp_divs_present = sorted({r.zp_div for r in roster if r.in_zwiftpower and r.zp_div})
     zp_categories = [(div, ZP_DIV_TO_CATEGORY.get(div, str(div))) for div in zp_divs_present]
     zr_categories = sorted({r.zr_category for r in roster if r.in_zwiftracing and r.zr_category})
-
-    # Apply status filter
-    if status_filter == "active":
-        roster = [r for r in roster if r.is_active_member]
-    elif status_filter in ("both", "zp_only", "zr_only", "left", "none"):
-        roster = [r for r in roster if r.membership_status == status_filter]
 
     # Apply search filter (by zwid or name)
     if search_query:
@@ -109,6 +110,9 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
         "catw": lambda r: r.zp_divw or 0,
         "rating": lambda r: r.zr_category or "",
         "results": lambda r: r.result_count,
+        "rank": lambda r: r.zp_rank or 0,
+        "ftp": lambda r: r.zp_ftp or 0,
+        "wkg": lambda r: r.wkg or 0,
     }
     if sort_by in sort_keys:
         roster = sorted(roster, key=sort_keys[sort_by], reverse=reverse)
@@ -121,7 +125,6 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
             "search_query": search_query,
             "zp_category_filter": zp_category_filter,
             "zr_category_filter": zr_category_filter,
-            "status_filter": status_filter,
             "gender_filter": gender_filter,
             "race_ready_filter": race_ready_filter,
             "zp_categories": zp_categories,
@@ -194,6 +197,9 @@ def filtered_roster_view(request: HttpRequest, filter_id: uuid.UUID) -> HttpResp
         "catw": lambda r: r.zp_divw or 0,
         "rating": lambda r: r.zr_category or "",
         "results": lambda r: r.result_count,
+        "rank": lambda r: r.zp_rank or 0,
+        "ftp": lambda r: r.zp_ftp or 0,
+        "wkg": lambda r: r.wkg or 0,
     }
     if sort_by in sort_keys:
         roster = sorted(roster, key=sort_keys[sort_by], reverse=reverse)
@@ -729,6 +735,8 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
         "height_date": lambda r: r.height_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
         "zp_result_date": lambda r: r.zp_result_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
         "zp_height_date": lambda r: r.zp_height_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
+        "ftp": lambda r: r.ftp_current or 0,
+        "wkg": lambda r: r.wkg or 0,
     }
     if sort_by in sort_keys:
         riders = sorted(riders, key=sort_keys[sort_by], reverse=reverse)
@@ -751,6 +759,98 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
 # =============================================================================
 # Membership Application Views
 # =============================================================================
+
+
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_GET
+def membership_review_view(request: HttpRequest) -> HttpResponse:
+    """Display membership review showing all users with their ZP/ZR data.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered membership review page.
+
+    """
+    riders = get_membership_review_data()
+
+    # Get filter parameters
+    search_query = request.GET.get("q", "").strip()
+    gender_filter = request.GET.get("gender", "")
+    zp_category_filter = request.GET.get("zp_category", "")
+    status_filter = request.GET.get("status", "active")  # Default to showing active members
+
+    # Get sort parameters (default: name ascending)
+    sort_by = request.GET.get("sort", "name")
+    sort_dir = request.GET.get("dir", "asc")
+
+    # Collect unique values for filter dropdowns (before filtering)
+    zp_divs_present = sorted({r.zp_div for r in riders if r.zp_div})
+    zp_categories = [(div, ZP_DIV_TO_CATEGORY.get(div, str(div))) for div in zp_divs_present]
+
+    # Apply search filter (by name, discord nickname, or zwid)
+    if search_query:
+        search_lower = search_query.lower()
+        riders = [
+            r for r in riders
+            if search_lower in r.full_name.lower()
+            or search_lower in r.discord_nickname.lower()
+            or search_lower in r.zp_name.lower()
+            or search_lower in r.zr_name.lower()
+            or search_query in str(r.zwid)
+        ]
+
+    # Apply gender filter
+    if gender_filter:
+        riders = [r for r in riders if r.gender == gender_filter]
+
+    # Apply ZwiftPower category filter
+    if zp_category_filter:
+        try:
+            div_value = int(zp_category_filter)
+            riders = [r for r in riders if r.zp_div == div_value]
+        except ValueError:
+            pass
+
+    # Apply status filter
+    if status_filter == "active":
+        riders = [r for r in riders if r.is_active_member]
+    elif status_filter in ("both", "zp_only", "zr_only", "left", "none"):
+        riders = [r for r in riders if r.membership_status == status_filter]
+
+    # Apply sorting
+    reverse = sort_dir == "desc"
+    sort_keys = {
+        "name": lambda r: (r.full_name or r.discord_nickname).lower(),
+        "discord": lambda r: r.discord_nickname.lower(),
+        "zp_name": lambda r: r.zp_name.lower(),
+        "zr_name": lambda r: r.zr_name.lower(),
+        "zwid": lambda r: r.zwid,
+        "gender": lambda r: r.gender or "",
+        "verified": lambda r: r.zwid_verified,
+        "category": lambda r: r.zp_div or 0,
+        "results": lambda r: r.result_count,
+        "days": lambda r: r.days_since_result if r.days_since_result is not None else 9999,
+    }
+    if sort_by in sort_keys:
+        riders = sorted(riders, key=sort_keys[sort_by], reverse=reverse)
+
+    return render(
+        request,
+        "team/membership_review.html",
+        {
+            "riders": riders,
+            "search_query": search_query,
+            "gender_filter": gender_filter,
+            "zp_category_filter": zp_category_filter,
+            "status_filter": status_filter,
+            "zp_categories": zp_categories,
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+        },
+    )
 
 
 @login_required

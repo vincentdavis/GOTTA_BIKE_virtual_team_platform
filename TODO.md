@@ -12,14 +12,13 @@
 
 **Tasks**
 
-- [] update zr records bot command should return the last time it was run and not allow running more than 1 time per
-  hour.
-- [] update zp records bot command should return the last time it was run and not allow running more than 1 time per
-  hour.
+- [] update zr records bot command Remove this command
+- [] update zp records bot command, remove this command.
 
 **Discord**
 
-- [] post message the use change when a rider leaves the zp team or zr team.
+- [] post message the use change when a rider leaves the zp team or zr team. This can be a task triggered by sync task.
+- [] Check ZP team pending.
 
 **USER REGISTRATION**
 

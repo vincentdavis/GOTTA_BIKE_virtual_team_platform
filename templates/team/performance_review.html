@@ -130,6 +130,22 @@
                   {% endif %}
                 </a>
               </th>
+              <th>
+                <a href="{{ base_url }}&sort=ftp&dir={% if sort_by == 'ftp' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  FTP
+                  {% if sort_by == "ftp" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+              <th>
+                <a href="{{ base_url }}&sort=wkg&dir={% if sort_by == 'wkg' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+                  WKG
+                  {% if sort_by == "wkg" %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -212,10 +228,30 @@
                 <span class="text-base-content/30">-</span>
                 {% endif %}
               </td>
+
+              <!-- FTP (min, current, max) -->
+              <td>
+                {% if rider.ftp_current %}
+                <div class="font-mono text-sm">
+                  ({{ rider.ftp_min|default:"-" }}, {{ rider.ftp_current }}, {{ rider.ftp_max|default:"-" }})
+                </div>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+
+              <!-- WKG -->
+              <td>
+                {% if rider.wkg %}
+                <span class="font-mono text-sm">{{ rider.wkg }}</span>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
             </tr>
             {% empty %}
             <tr>
-              <td colspan="7" class="text-center py-8 text-base-content/50">
+              <td colspan="9" class="text-center py-8 text-base-content/50">
                 No riders found.
               </td>
             </tr>
