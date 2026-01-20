@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import ClassVar
 
 from constance import config
-from django.db.models import Count, OuterRef, Subquery
+from django.db.models import Count, Max, Min, OuterRef, Subquery
 
 from apps.accounts.models import User
 from apps.team.models import RaceReadyRecord
@@ -452,45 +452,56 @@ def get_performance_review_data() -> list[PerformanceRider]:
             verification_by_zwid[zwid]["height_date"] = record["reviewed_date"]
             verification_by_zwid[zwid]["height_value"] = record["height"]
 
-    # Get most recent ZP result with weight/height for each rider
+    # Get most recent ZP result with weight/height for each rider (batch query)
+    # Fetch all results at once instead of one query per rider
     zp_data_by_zwid: dict[int, dict] = {}
-    for zwid in rider_info:
-        history = ZPRiderResults.get_weight_height_history(zwid)
-        if history:
-            # Find most recent with weight
-            for event_date, weight, height in history:
-                if weight is not None and "zp_result_date" not in zp_data_by_zwid.get(zwid, {}):
-                    if zwid not in zp_data_by_zwid:
-                        zp_data_by_zwid[zwid] = {}
-                    zp_data_by_zwid[zwid]["zp_result_date"] = event_date
-                    zp_data_by_zwid[zwid]["zp_result_weight"] = weight
-                if height is not None and "zp_height_date" not in zp_data_by_zwid.get(zwid, {}):
-                    if zwid not in zp_data_by_zwid:
-                        zp_data_by_zwid[zwid] = {}
-                    zp_data_by_zwid[zwid]["zp_height_date"] = event_date
-                    zp_data_by_zwid[zwid]["zp_height_value"] = height
-                # Stop if we have both
-                if zwid in zp_data_by_zwid:
-                    zp_info = zp_data_by_zwid[zwid]
-                    if "zp_result_date" in zp_info and "zp_height_date" in zp_info:
-                        break
+    all_results = (
+        ZPRiderResults.objects.filter(zwid__in=rider_info.keys())
+        .exclude(weight__isnull=True, height__isnull=True)
+        .select_related("event")
+        .order_by("zwid", "-event__event_date")
+        .values("zwid", "event__event_date", "weight", "height")
+    )
+
+    # Group results by zwid and find most recent weight/height
+    for result in all_results:
+        zwid = result["zwid"]
+        event_date = result["event__event_date"]
+        weight = result["weight"]
+        height = result["height"]
+
+        if zwid not in zp_data_by_zwid:
+            zp_data_by_zwid[zwid] = {}
+
+        # Store most recent weight (first one we see due to ordering)
+        if weight is not None and "zp_result_date" not in zp_data_by_zwid[zwid]:
+            zp_data_by_zwid[zwid]["zp_result_date"] = event_date
+            zp_data_by_zwid[zwid]["zp_result_weight"] = weight
+
+        # Store most recent height (first one we see due to ordering)
+        if height is not None and "zp_height_date" not in zp_data_by_zwid[zwid]:
+            zp_data_by_zwid[zwid]["zp_height_date"] = event_date
+            zp_data_by_zwid[zwid]["zp_height_value"] = height
 
     # Get current FTP and weight from ZPTeamRiders
     zp_riders = ZPTeamRiders.objects.filter(zwid__in=rider_info.keys()).values("zwid", "ftp", "weight")
     ftp_current_by_zwid: dict[int, int | None] = {r["zwid"]: r["ftp"] for r in zp_riders}
     weight_by_zwid: dict[int, Decimal | None] = {r["zwid"]: r["weight"] for r in zp_riders}
 
-    # Get FTP history (min/max) for each rider
+    # Get FTP history (min/max) for each rider (batch query)
+    # Query historical records directly with aggregation instead of one query per rider
     ftp_stats_by_zwid: dict[int, dict] = {}
-    for zwid in rider_info:
-        ftp_history = ZPTeamRiders.get_ftp_history(zwid)
-        if ftp_history:
-            ftp_values = [ftp for _, ftp in ftp_history if ftp is not None]
-            if ftp_values:
-                ftp_stats_by_zwid[zwid] = {
-                    "ftp_min": min(ftp_values),
-                    "ftp_max": max(ftp_values),
-                }
+    ftp_agg = (
+        ZPTeamRiders.history.filter(zwid__in=rider_info.keys())
+        .exclude(ftp__isnull=True)
+        .values("zwid")
+        .annotate(ftp_min=Min("ftp"), ftp_max=Max("ftp"))
+    )
+    for stat in ftp_agg:
+        ftp_stats_by_zwid[stat["zwid"]] = {
+            "ftp_min": stat["ftp_min"],
+            "ftp_max": stat["ftp_max"],
+        }
 
     # Build PerformanceRider objects
     performance_riders: list[PerformanceRider] = []

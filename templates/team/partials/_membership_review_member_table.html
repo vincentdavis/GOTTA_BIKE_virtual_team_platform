@@ -21,6 +21,14 @@
         </a>
       </th>
       <th>
+        <a href="{{ base_url }}&sort=zp_name&dir={% if sort_by == 'zp_name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+          ZP Name
+          {% if sort_by == "zp_name" %}
+            <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+          {% endif %}
+        </a>
+      </th>
+      <th>
         <a href="{{ base_url }}&sort=country&dir={% if sort_by == 'country' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
           Country
           {% if sort_by == "country" %}
@@ -71,7 +79,11 @@
     {% for rider in riders %}
       <tr>
         <td class="font-medium">
+          {% if rider.user_id %}
+          <a href="{% url 'accounts:public_profile' rider.user_id %}" class="link link-hover">{{ rider.full_name|default:"-" }}</a>
+          {% else %}
           {{ rider.full_name|default:"-" }}
+          {% endif %}
         </td>
         <td>
           {% if rider.discord_profile_url %}
@@ -83,6 +95,18 @@
             </a>
           {% elif rider.discord_nickname %}
             {{ rider.discord_nickname }}
+          {% else %}
+            <span class="text-base-content/30">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if rider.zp_name %}
+            <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener" class="link link-hover inline-flex items-center gap-1">
+              {{ rider.zp_name }}
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </a>
           {% else %}
             <span class="text-base-content/30">-</span>
           {% endif %}
@@ -162,7 +186,7 @@
       </tr>
     {% empty %}
       <tr>
-        <td colspan="11" class="text-center text-base-content/50">
+        <td colspan="12" class="text-center text-base-content/50">
           No members found.
         </td>
       </tr>

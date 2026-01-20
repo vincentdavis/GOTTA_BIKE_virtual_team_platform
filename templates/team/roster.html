@@ -191,7 +191,11 @@
             {% for rider in roster %}
               <tr>
                 <td class="font-medium">
+                  {% if rider.user_id %}
+                  <a href="{% url 'accounts:public_profile' rider.user_id %}" class="link link-hover">{{ rider.display_name }}</a>
+                  {% else %}
                   {{ rider.display_name }}
+                  {% endif %}
                   {% if rider.in_zwiftpower %}
                     <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded" title="View on ZwiftPower">ZP</a>
                   {% endif %}

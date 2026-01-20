@@ -13,25 +13,9 @@
         </a>
       </th>
       <th>
-        <a href="{{ base_url }}&sort=discord&dir={% if sort_by == 'discord' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-          Discord
-          {% if sort_by == "discord" %}
-            <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-          {% endif %}
-        </a>
-      </th>
-      <th>
         <a href="{{ base_url }}&sort=zp_name&dir={% if sort_by == 'zp_name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
           ZP Name
           {% if sort_by == "zp_name" %}
-            <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-          {% endif %}
-        </a>
-      </th>
-      <th>
-        <a href="{{ base_url }}&sort=zr_name&dir={% if sort_by == 'zr_name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-          ZR Name
-          {% if sort_by == "zr_name" %}
             <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
           {% endif %}
         </a>
@@ -71,6 +55,15 @@
           {% endif %}
         </a>
       </th>
+      <th>
+        <a href="{{ base_url }}&sort=trainer&dir={% if sort_by == 'trainer' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+          Trainer
+          {% if sort_by == "trainer" %}
+            <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+          {% endif %}
+        </a>
+      </th>
+      <th>HR Monitor</th>
       <th>ZP Left</th>
       <th>
         <a href="{{ base_url }}&sort=results&dir={% if sort_by == 'results' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
@@ -95,38 +88,16 @@
     {% for rider in riders %}
       <tr>
         <td class="font-medium">
-          {{ rider.full_name|default:"-" }}
-        </td>
-        <td>
-          {% if rider.discord_profile_url %}
-            <a href="{{ rider.discord_profile_url }}" target="_blank" rel="noopener" class="link link-hover inline-flex items-center gap-1">
-              {{ rider.discord_nickname }}
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </a>
-          {% elif rider.discord_nickname %}
-            {{ rider.discord_nickname }}
+          {% if rider.user_id %}
+          <a href="{% url 'accounts:public_profile' rider.user_id %}" class="link link-hover">{{ rider.full_name|default:"-" }}</a>
           {% else %}
-            <span class="text-base-content/30">-</span>
+          {{ rider.full_name|default:"-" }}
           {% endif %}
         </td>
         <td>
           {% if rider.zp_name %}
             <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener" class="link link-hover inline-flex items-center gap-1">
               {{ rider.zp_name }}
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </a>
-          {% else %}
-            <span class="text-base-content/30">-</span>
-          {% endif %}
-        </td>
-        <td>
-          {% if rider.zr_name %}
-            <a href="https://www.zwiftracing.app/riders/{{ rider.zwid }}" target="_blank" rel="noopener" class="link link-hover inline-flex items-center gap-1">
-              {{ rider.zr_name }}
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
@@ -157,6 +128,20 @@
         <td>
           {% if rider.zp_category %}
             <span class="badge badge-primary badge-sm">{{ rider.zp_category }}</span>
+          {% else %}
+            <span class="text-base-content/30">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if rider.trainer %}
+            <span class="text-sm">{{ rider.trainer }}</span>
+          {% else %}
+            <span class="text-base-content/30">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if rider.heartrate_monitor %}
+            <span class="text-sm">{{ rider.heartrate_monitor }}</span>
           {% else %}
             <span class="text-base-content/30">-</span>
           {% endif %}

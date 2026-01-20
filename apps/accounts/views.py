@@ -13,7 +13,9 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm, ZwiftVerificationForm
+from apps.accounts.models import User
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import get_user_verification_types
 from apps.zwift.utils import fetch_zwift_id
@@ -63,6 +65,36 @@ def profile_view(request: HttpRequest) -> HttpResponse:
             "unit_preference": request.user.unit_preference,
         },
     )
+
+
+@login_required
+@team_member_required()
+@require_GET
+def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
+    """Display a user's public profile for team members.
+
+    Shows public information only (no birth_year, email, or emergency contact).
+    Requires team_member permission to view.
+
+    Args:
+        request: The HTTP request.
+        user_id: The ID of the user whose profile to display.
+
+    Returns:
+        Rendered public profile page.
+
+    """
+    from django.shortcuts import get_object_or_404
+
+    profile_user = get_object_or_404(User, id=user_id)
+
+    # Don't allow viewing own profile via public URL (redirect to private profile)
+    if profile_user == request.user:
+        return redirect("accounts:profile")
+
+    return render(request, "accounts/public_profile.html", {
+        "profile_user": profile_user,
+    })
 
 
 @login_required
