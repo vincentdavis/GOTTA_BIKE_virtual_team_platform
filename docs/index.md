@@ -18,6 +18,7 @@ Welcome to the documentation for The Coalition Team Platform, a Django web appli
 
 - **Discord OAuth Authentication** - Login with Discord, requires guild membership
 - **Profile Completion** - Warning banner encourages users to complete their profile
+- **Public User Profiles** - Team members can view each other's profiles (privacy-aware)
 - **Zwift Account Verification** - Link and verify Zwift accounts
 - **Race Ready Verification** - Submit and manage weight/height/power verification records
 - **Membership Applications** - Discord-integrated application workflow for new members

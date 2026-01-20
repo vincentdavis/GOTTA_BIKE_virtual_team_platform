@@ -212,6 +212,51 @@ status = user.profile_completion_status
 Instead of blocking access, a red warning banner is displayed at the top of every page for users with incomplete
 profiles. The banner is defined in `theme/templates/base.html` and links to the profile edit page.
 
+### Public User Profiles
+
+Team members can view each other's profiles at `/user/profile/<user_id>/`. This allows teammates to see relevant
+information about each other without exposing sensitive data.
+
+#### Access Control
+
+- Requires `@login_required` - must be logged in
+- Requires `@team_member_required()` - must have `team_member` permission
+- Viewing your own profile redirects to the private profile page (`/user/profile/`)
+
+#### Privacy - Fields Displayed
+
+| Category | Fields Shown |
+|----------|--------------|
+| Identity | Name (first_name, last_name) |
+| Discord | Username, nickname, avatar |
+| Location | City, country, timezone |
+| Zwift | Verification status, ZwiftPower link (if verified) |
+| Racing | Race ready status, gender |
+| Equipment | Trainer, power meter, dual recording, heart rate monitor |
+| Social | All social media URL fields (YouTube, Strava, Instagram, etc.) |
+| Team | Discord roles |
+
+#### Privacy - Fields Excluded (Private)
+
+These fields are **never** shown on public profiles:
+
+- `birth_year`
+- `email`
+- Emergency contact fields (`emergency_contact_name`, `emergency_contact_relation`, `emergency_contact_email`, `emergency_contact_phone`)
+
+#### Profile Links
+
+User names are clickable to view public profiles in:
+- Team roster (`/team/roster/`)
+- Membership review tables (race view and member view)
+
+**Files:**
+
+- `apps/accounts/views.py` - `public_profile_view` function
+- `templates/accounts/public_profile.html` - Public profile template
+- `templates/team/roster.html` - Profile links on names
+- `templates/team/partials/_membership_review_*.html` - Profile links on names
+
 ### Discord Role-Based Permissions (`apps/accounts/models.py`)
 
 Permissions are granted via Discord roles configured in Constance. The system checks permissions in this order:
@@ -370,7 +415,10 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
 - `/about/` - About page
 - `/admin/` - Django admin
 - `/accounts/` - allauth (login, logout, MFA)
-- `/user/` - User profile and settings (`apps.accounts.urls`)
+- `/user/` - User profile and settings (`apps.accounts.urls`):
+    - `/user/profile/` - User's own profile (private)
+    - `/user/profile/edit/` - Edit profile
+    - `/user/profile/<int:user_id>/` - Public profile (team members only)
 - `/team/` - Team management (`apps.team.urls`):
     - `/team/roster/` - Team roster view
     - `/team/roster/f/{uuid}/` - Filtered roster view (temporary, 5-min expiration)

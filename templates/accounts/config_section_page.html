@@ -139,10 +139,13 @@ document.addEventListener('DOMContentLoaded', function() {
     initSortableLists();
 });
 
-// Re-initialize after HTMX swaps
-document.body.addEventListener('htmx:afterSwap', function(event) {
-    initTomSelects();
-    initSortableLists();
+// Re-initialize after HTMX settles (DOM is fully ready)
+document.body.addEventListener('htmx:afterSettle', function(event) {
+    // Use setTimeout to ensure DOM is fully ready
+    setTimeout(function() {
+        initTomSelects();
+        initSortableLists();
+    }, 10);
 });
 
 // Initialize sortable lists
@@ -191,44 +194,50 @@ function addStringListItem(button, key) {
 }
 
 function initTomSelects() {
-    document.querySelectorAll('.role-select:not(.tomselected)').forEach(function(select) {
-        new TomSelect(select, {
-            plugins: ['remove_button'],
-            maxOptions: null,
-            closeAfterSelect: false,
-            hideSelected: false,
-            render: {
-                option: function(data, escape) {
-                    const color = data.color || '#99AAB5';
-                    const parts = data.text.match(/^(.+) \((\d+)\)$/);
-                    const name = parts ? parts[1] : data.text;
-                    const id = parts ? parts[2] : '';
-                    return `<div class="option">
-                        <span class="role-color-dot" style="background-color: ${escape(color)};"></span>
-                        <span class="role-name">${escape(name)}</span>
-                        <span class="role-id">${escape(id)}</span>
-                    </div>`;
-                },
-                item: function(data, escape) {
-                    const color = data.color || '#99AAB5';
-                    const parts = data.text.match(/^(.+) \((\d+)\)$/);
-                    const name = parts ? parts[1] : data.text;
-                    return `<div class="item" style="background-color: ${escape(color)}20; border: 1px solid ${escape(color)};">
-                        <span class="role-color-dot" style="background-color: ${escape(color)};"></span>
-                        <span>${escape(name)}</span>
-                    </div>`;
-                }
-            },
-            onInitialize: function() {
-                const self = this;
-                Object.keys(this.options).forEach(function(key) {
-                    const opt = select.querySelector(`option[value="${key}"]`);
-                    if (opt) {
-                        self.options[key].color = opt.dataset.color;
+    // Tom Select adds 'ts-hidden-accessible' class when initialized
+    const selects = document.querySelectorAll('.role-select:not(.ts-hidden-accessible)');
+    selects.forEach(function(select) {
+        try {
+            new TomSelect(select, {
+                plugins: ['remove_button'],
+                maxOptions: null,
+                closeAfterSelect: false,
+                hideSelected: false,
+                render: {
+                    option: function(data, escape) {
+                        const color = data.color || '#99AAB5';
+                        const parts = data.text.match(/^(.+) \((\d+)\)$/);
+                        const name = parts ? parts[1] : data.text;
+                        const id = parts ? parts[2] : '';
+                        return `<div class="option">
+                            <span class="role-color-dot" style="background-color: ${escape(color)};"></span>
+                            <span class="role-name">${escape(name)}</span>
+                            <span class="role-id">${escape(id)}</span>
+                        </div>`;
+                    },
+                    item: function(data, escape) {
+                        const color = data.color || '#99AAB5';
+                        const parts = data.text.match(/^(.+) \((\d+)\)$/);
+                        const name = parts ? parts[1] : data.text;
+                        return `<div class="item" style="background-color: ${escape(color)}20; border: 1px solid ${escape(color)};">
+                            <span class="role-color-dot" style="background-color: ${escape(color)};"></span>
+                            <span>${escape(name)}</span>
+                        </div>`;
                     }
-                });
-            }
-        });
+                },
+                onInitialize: function() {
+                    const self = this;
+                    Object.keys(this.options).forEach(function(key) {
+                        const opt = select.querySelector(`option[value="${key}"]`);
+                        if (opt) {
+                            self.options[key].color = opt.dataset.color;
+                        }
+                    });
+                }
+            });
+        } catch (e) {
+            console.error('Error initializing Tom Select:', e, select);
+        }
     });
 }
 

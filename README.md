@@ -6,6 +6,7 @@ A Django web application for The Coalition Zwift racing team. Manages team membe
 
 - **Discord OAuth Authentication** - Login with Discord, requires guild membership
 - **Profile Completion** - Warning banner encourages users to complete profile and verify Zwift
+- **Public User Profiles** - Team members can view each other's profiles (privacy-aware)
 - **Zwift Account Verification** - Link and verify Zwift accounts
 - **Race Ready Verification** - Weight/height/power verification for race eligibility
 - **Membership Applications** - Discord-integrated application workflow for new members

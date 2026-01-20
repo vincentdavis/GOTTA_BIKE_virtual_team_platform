@@ -80,3 +80,43 @@ The `ProfileForm` enforces:
 - All required fields must be filled
 - Birth year must be between 1900 and (current year - 13)
 - Gender must be one of: male, female, other
+
+## Public User Profiles
+
+Team members can view each other's profiles at `/user/profile/<user_id>/`. This feature allows teammates to learn about each other while respecting privacy boundaries.
+
+### Access Requirements
+
+- User must be logged in (`@login_required`)
+- User must have `team_member` permission (`@team_member_required()`)
+- Viewing your own profile redirects to the private profile page
+
+### Privacy Settings
+
+**Displayed on public profiles:**
+
+| Category | Fields |
+|----------|--------|
+| Identity | First name, last name |
+| Discord | Username, nickname, avatar |
+| Location | City, country, timezone |
+| Zwift | Verification status, ZwiftPower link |
+| Racing | Race ready status, gender |
+| Equipment | Trainer, power meter, dual recording, HR monitor |
+| Social | All social media links |
+| Team | Discord roles |
+
+**Never displayed on public profiles:**
+
+- Birth year
+- Email address
+- Emergency contact information
+
+### Profile Links
+
+User names are clickable links to public profiles in:
+
+- Team roster page (`/team/roster/`)
+- Membership review tables (both race and member views)
+
+This allows team members to quickly look up information about their teammates from the roster.

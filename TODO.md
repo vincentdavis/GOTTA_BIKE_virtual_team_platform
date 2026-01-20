@@ -20,7 +20,8 @@
 
 **Discord**
 
-- [] post message the use change when a rider leaves the zp team or zr team. This can be a task triggered by sync task.
+- [] post message the use change when a rider leaves the zp team or zr team. This can be a second task triggered by sync
+  task.
 
 **USER REGISTRATION**
 
@@ -36,7 +37,7 @@
 - [] Number of ZP events and ZP races in the last 120 days
 - [] wkg min/max 120 days min/max wkg.
 - [] plot the data
-- [] /team/performance-review/ is very sloe, maybe because of history
+- [X] /team/performance-review/ is very sloe, maybe because of history
 
 **Membership**
 
@@ -45,6 +46,6 @@
 
 **User Profile**
 
-- [] create a public user profile page
+- [X] create a public user profile page
 - [] show zp and zr stats on profile page
 - 
