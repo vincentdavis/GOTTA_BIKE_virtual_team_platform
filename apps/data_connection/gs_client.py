@@ -26,6 +26,10 @@ class GSSheetError(GSClientError):
     """Sheet operation error."""
 
 
+class GSSpreadsheetNotFoundError(GSClientError):
+    """Spreadsheet not found or inaccessible error."""
+
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -203,6 +207,7 @@ def clear_and_write_data(
         Number of rows written (excluding header).
 
     Raises:
+        GSSpreadsheetNotFoundError: If spreadsheet doesn't exist or is inaccessible.
         GSSheetError: If operation fails.
 
     """
@@ -238,6 +243,9 @@ def clear_and_write_data(
             )
             return len(rows)
 
+        except gspread.exceptions.SpreadsheetNotFound as e:
+            logfire.error(f"Spreadsheet not found: {spreadsheet_url}")
+            raise GSSpreadsheetNotFoundError(f"Spreadsheet not found or deleted: {e}") from e
         except gspread.exceptions.APIError as e:
             logfire.error(f"Failed to write data: {e}")
             raise GSSheetError(f"Failed to write data: {e}") from e

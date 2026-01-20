@@ -1,6 +1,6 @@
 """Models for data_connection app."""
 
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import ClassVar
 
 from django.conf import settings
@@ -20,7 +20,7 @@ class DataConnection(models.Model):
         2. Optionally, a new Google Sheet can be created automatically
         3. Sync task exports data to the specified sheet tab
         4. Headers are set based on selected fields
-        5. Connection expires after date_expires (default: 1 year)
+        5. Connection expires after date_expires (default: 120 days)
 
     Field Categories:
         - BASE_FIELDS: Always included (zwid, discord_username, discord_id)
@@ -42,7 +42,7 @@ class DataConnection(models.Model):
         date_created: Auto-set when connection is created.
         date_updated: Auto-updated on each save.
         date_last_synced: Timestamp of last successful data sync.
-        date_expires: When connection becomes inactive (default: 1 year from creation).
+        date_expires: When connection becomes inactive (default: 120 days from creation).
         created_by: User who created the connection.
 
     Properties:
@@ -53,6 +53,7 @@ class DataConnection(models.Model):
 
     title = models.CharField(
         max_length=255,
+        unique=True,
         help_text="Title for this data connection",
     )
     description = models.TextField(
@@ -92,12 +93,16 @@ class DataConnection(models.Model):
         blank=True,
         help_text="When data was last synced to the spreadsheet",
     )
-    date_expires = models.DateTimeField(
+    date_expires = models.DateField(
         help_text="When this connection expires",
     )
     owner_email = models.EmailField(
         blank=True,
         help_text="Email of the Google Sheet owner",
+    )
+    is_broken = models.BooleanField(
+        default=False,
+        help_text="True if the linked spreadsheet no longer exists or is inaccessible",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -131,28 +136,48 @@ class DataConnection(models.Model):
 
         """
         if not self.date_expires:
-            self.date_expires = timezone.now() + timedelta(days=365)
+            self.date_expires = (timezone.now() + timedelta(days=120)).date()
         super().save(*args, **kwargs)
+
+    def _get_expiry_date(self) -> date | None:
+        """Get expiry as a date object (handles both date and datetime).
+
+        Returns:
+            date object for expiry, or None if not set.
+
+        """
+        if self.date_expires is None:
+            return None
+        if hasattr(self.date_expires, "date"):
+            # It's a datetime, convert to date
+            return self.date_expires.date()
+        return self.date_expires
 
     @property
     def is_expired(self) -> bool:
         """Check if connection has expired.
 
         Returns:
-            True if expired, False otherwise.
+            True if expired, False otherwise. Returns False if no expiry date set.
 
         """
-        return timezone.now() > self.date_expires
+        expiry = self._get_expiry_date()
+        if expiry is None:
+            return False
+        return timezone.now().date() > expiry
 
     @property
-    def days_until_expiry(self) -> int:
+    def days_until_expiry(self) -> int | None:
         """Get days until expiry.
 
         Returns:
-            Number of days until expiry (negative if expired).
+            Number of days until expiry (negative if expired), or None if no expiry set.
 
         """
-        delta = self.date_expires - timezone.now()
+        expiry = self._get_expiry_date()
+        if expiry is None:
+            return None
+        delta = expiry - timezone.now().date()
         return delta.days
 
     # Base fields always included in exports

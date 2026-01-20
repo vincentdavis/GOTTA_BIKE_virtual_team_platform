@@ -91,8 +91,8 @@ class DataConnectionForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 3}),
             "spreadsheet_url": forms.URLInput(attrs={"class": "input input-bordered w-full"}),
             "data_sheet": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
-            "date_expires": forms.DateTimeInput(
-                attrs={"class": "input input-bordered w-full", "type": "datetime-local"}
+            "date_expires": forms.DateInput(
+                attrs={"class": "input input-bordered w-full", "type": "date"}
             ),
         }
 
@@ -109,9 +109,9 @@ class DataConnectionForm(forms.ModelForm):
         # Make spreadsheet_url not required (will be validated in clean())
         self.fields["spreadsheet_url"].required = False
 
-        # Set default expiry to 1 year from now for new records
+        # Set default expiry to 120 days from now for new records
         if not self.instance.pk:
-            self.fields["date_expires"].initial = timezone.now() + timedelta(days=365)
+            self.fields["date_expires"].initial = (timezone.now() + timedelta(days=120)).date()
 
         # Populate field selections from existing data
         if self.instance.pk and self.instance.selected_fields:

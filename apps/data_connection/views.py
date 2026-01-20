@@ -1,5 +1,7 @@
 """Views for data_connection app."""
 
+import contextlib
+
 import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -8,15 +10,16 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from apps.accounts.decorators import team_member_required
+from apps.accounts.decorators import discord_permission_required
+from apps.accounts.models import Permissions
 from apps.data_connection import gs_client
 from apps.data_connection.forms import DataConnectionFilterForm, DataConnectionForm
-from apps.data_connection.gs_client import GSClientError
+from apps.data_connection.gs_client import GSClientError, GSSpreadsheetNotFoundError
 from apps.data_connection.models import DataConnection
 
 
 @login_required
-@team_member_required()
+@discord_permission_required(Permissions.DATA_CONNECTION)
 def connection_list(request: HttpRequest) -> HttpResponse:
     """List all data connections for the current user.
 
@@ -28,7 +31,7 @@ def connection_list(request: HttpRequest) -> HttpResponse:
 
     """
     form = DataConnectionFilterForm(request.GET)
-    connections = DataConnection.objects.filter(created_by=request.user)
+    connections = DataConnection.objects.all()
 
     if form.is_valid():
         # Search filter
@@ -41,21 +44,29 @@ def connection_list(request: HttpRequest) -> HttpResponse:
         # Expired filter
         show_expired = form.cleaned_data.get("show_expired")
         if not show_expired:
-            connections = connections.filter(date_expires__gt=timezone.now())
+            connections = connections.filter(date_expires__gte=timezone.now().date())
 
         # Sorting
         sort_by = form.cleaned_data.get("sort_by")
         if sort_by:
             connections = connections.order_by(sort_by)
 
+    # Check for new_sheet parameter (shows popup after creating new sheet)
+    new_sheet_connection = None
+    new_sheet_id = request.GET.get("new_sheet")
+    if new_sheet_id:
+        with contextlib.suppress(ValueError, DataConnection.DoesNotExist):
+            new_sheet_connection = DataConnection.objects.get(pk=int(new_sheet_id), created_by=request.user)
+
     return render(request, "data_connection/connection_list.html", {
         "connections": connections,
         "filter_form": form,
+        "new_sheet_connection": new_sheet_connection,
     })
 
 
 @login_required
-@team_member_required()
+@discord_permission_required(Permissions.DATA_CONNECTION)
 def connection_create(request: HttpRequest) -> HttpResponse:
     """Create a new data connection.
 
@@ -91,10 +102,6 @@ def connection_create(request: HttpRequest) -> HttpResponse:
                     header_names = [field_display_map.get(h, h) for h in headers]
                     gs_client.set_headers(spreadsheet_url, connection.data_sheet, header_names)
 
-                    messages.success(
-                        request,
-                        f"Created new Google Sheet and data connection '{connection.title}'.",
-                    )
                 except GSClientError as e:
                     logfire.error(f"Failed to create Google Sheet: {e}")
                     messages.error(request, f"Failed to create Google Sheet: {e}")
@@ -102,6 +109,15 @@ def connection_create(request: HttpRequest) -> HttpResponse:
                         "form": form,
                         "action": "Create",
                     })
+
+                # Fetch and store the sheet owner
+                owner_email = gs_client.get_spreadsheet_owner(connection.spreadsheet_url)
+                if owner_email:
+                    connection.owner_email = owner_email
+
+                connection.save()
+                # Redirect with new_sheet param to trigger the popup modal
+                return redirect(f"{request.build_absolute_uri('/data-connections/')}?new_sheet={connection.pk}")
             else:
                 messages.success(request, f"Data connection '{connection.title}' created successfully.")
 
@@ -122,7 +138,7 @@ def connection_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@team_member_required()
+@discord_permission_required(Permissions.DATA_CONNECTION)
 def connection_edit(request: HttpRequest, pk: int) -> HttpResponse:
     """Edit an existing data connection.
 
@@ -161,7 +177,7 @@ def connection_edit(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
-@team_member_required()
+@discord_permission_required(Permissions.DATA_CONNECTION)
 def connection_delete(request: HttpRequest, pk: int) -> HttpResponse:
     """Delete a data connection.
 
@@ -187,7 +203,7 @@ def connection_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
-@team_member_required()
+@discord_permission_required(Permissions.DATA_CONNECTION)
 def connection_sync(request: HttpRequest, pk: int) -> HttpResponse:
     """Sync data connection to Google Sheets.
 
@@ -201,15 +217,29 @@ def connection_sync(request: HttpRequest, pk: int) -> HttpResponse:
     """
     from apps.data_connection.services import sync_connection
 
-    connection = get_object_or_404(DataConnection, pk=pk, created_by=request.user)
+    connection = get_object_or_404(DataConnection, pk=pk)
 
     if connection.is_expired:
         messages.error(request, f"Cannot sync '{connection.title}' - connection has expired.")
         return redirect("data_connection:connection_list")
 
+    if connection.is_broken:
+        messages.error(request, f"Cannot sync '{connection.title}' - spreadsheet is broken/deleted.")
+        return redirect("data_connection:connection_list")
+
     try:
         row_count = sync_connection(connection)
+        # Clear broken flag on successful sync
+        if connection.is_broken:
+            connection.is_broken = False
+            connection.save(update_fields=["is_broken"])
         messages.success(request, f"Synced {row_count} rows to '{connection.title}'.")
+    except GSSpreadsheetNotFoundError:
+        # Mark connection as broken when spreadsheet is not found
+        connection.is_broken = True
+        connection.save(update_fields=["is_broken"])
+        logfire.error(f"Spreadsheet not found for connection: {connection.title}", connection_id=pk)
+        messages.error(request, f"Spreadsheet for '{connection.title}' was deleted or is inaccessible.")
     except GSClientError as e:
         logfire.error(f"Failed to sync connection: {e}", connection_id=pk)
         messages.error(request, f"Failed to sync: {e}")

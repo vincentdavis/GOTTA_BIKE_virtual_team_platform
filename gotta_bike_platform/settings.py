@@ -426,6 +426,11 @@ CONSTANCE_CONFIG = {
         "Discord role IDs that allow a user to approve/reject verification records",
         "json_list_field",
     ),
+    "PERM_DATA_CONNECTION_ROLES": (
+        "[]",
+        "Discord role IDs that grant access to Data Connections (Google Sheets exports)",
+        "json_list_field",
+    ),
     # Verification validity periods (in days)
     "WEIGHT_FULL_DAYS": (120, "Days a full weight verification is valid", int),
     "WEIGHT_LIGHT_DAYS": (30, "Days a light weight verification is valid", int),
@@ -627,6 +632,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "PERM_TEAM_MEMBER_ROLES",
         "PERM_RACE_READY_ROLES",
         "PERM_APPROVE_VERIFICATION_ROLES",
+        "PERM_DATA_CONNECTION_ROLES",
     ),
     "Verification Settings": (
         "CATEGORY_REQUIREMENTS",
