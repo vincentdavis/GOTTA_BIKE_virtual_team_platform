@@ -44,10 +44,11 @@ urlpatterns = [
     path("m/", include("apps.magic_links.urls")),
     # Site-level configuration
     path("site/config/", config_settings, name="config_settings"),
-    path("site/config/<str:section_key>/", config_section_page, name="config_section_page"),
-    path("site/config/section/<str:section_key>/update/", config_section_update, name="config_section_update"),
+    # Note: specific routes must come before the generic <str:section_key> pattern
     path("site/config/images/", config_site_images_update, name="config_site_images_update"),
     path("site/config/markdown-preview/", markdown_preview, name="markdown_preview"),
+    path("site/config/section/<str:section_key>/update/", config_section_update, name="config_section_update"),
+    path("site/config/<str:section_key>/", config_section_page, name="config_section_page"),
 ]
 
 if settings.DEBUG:

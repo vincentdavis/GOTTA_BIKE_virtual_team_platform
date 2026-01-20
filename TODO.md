@@ -29,5 +29,10 @@
 - [] wkg min/max 120 days min/max wkg.
 - [] plot the data
 
+**SEO**
+
+- [] no robots
+- 
+
 
 

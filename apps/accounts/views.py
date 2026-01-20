@@ -2,6 +2,7 @@
 
 import json
 
+import logfire
 from constance import config
 from django.conf import settings
 from django.contrib import messages
@@ -124,13 +125,20 @@ def profile_delete_confirm(request: HttpRequest) -> HttpResponse:
 def profile_delete(request: HttpRequest) -> HttpResponse:
     """Delete user account.
 
+    Requires user to type "Delete" (case-insensitive) to confirm.
+
     Args:
         request: The HTTP request.
 
     Returns:
-        Redirect to home page after deletion.
+        Redirect to home page after deletion, or back to confirmation if invalid.
 
     """
+    confirmation = request.POST.get("confirmation", "").strip()
+    if confirmation.lower() != "delete":
+        messages.error(request, "Please type 'Delete' to confirm account deletion.")
+        return redirect("accounts:profile_delete_confirm")
+
     user = request.user
     logout(request)
     user.delete()
@@ -534,18 +542,34 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
     site_settings_obj = SiteSettings.get_settings()
     success = False
     errors = []
+    user_id = request.user.id
+    username = request.user.username
 
     # Handle logo upload
     if "site_logo" in request.FILES:
-        site_settings_obj.site_logo = request.FILES["site_logo"]
+        uploaded_file = request.FILES["site_logo"]
+        site_settings_obj.site_logo = uploaded_file
         success = True
+        logfire.info(
+            "Site logo uploaded",
+            user_id=user_id,
+            username=username,
+            filename=uploaded_file.name,
+            file_size=uploaded_file.size,
+        )
 
     # Handle logo deletion
-    if request.POST.get("delete_logo") == "true":
-        if site_settings_obj.site_logo:
-            site_settings_obj.site_logo.delete(save=False)
-            site_settings_obj.site_logo = None
-            success = True
+    if request.POST.get("delete_logo") == "true" and site_settings_obj.site_logo:
+        old_logo_name = site_settings_obj.site_logo.name
+        site_settings_obj.site_logo.delete(save=False)
+        site_settings_obj.site_logo = None
+        success = True
+        logfire.info(
+            "Site logo deleted",
+            user_id=user_id,
+            username=username,
+            deleted_file=old_logo_name,
+        )
 
     # Handle favicon upload - convert to PNG and resize to 64x64
     if "favicon" in request.FILES:
@@ -573,27 +597,60 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
             # Create a new file with .png extension
             site_settings_obj.favicon.save("favicon.png", ContentFile(buffer.read()), save=False)
             success = True
+            logfire.info(
+                "Favicon uploaded",
+                user_id=user_id,
+                username=username,
+                original_filename=uploaded_file.name,
+                original_size=uploaded_file.size,
+            )
         except Exception as e:
             errors.append(f"Favicon: {e!s}")
+            logfire.error(
+                "Favicon upload failed",
+                user_id=user_id,
+                username=username,
+                error=str(e),
+            )
 
     # Handle favicon deletion
-    if request.POST.get("delete_favicon") == "true":
-        if site_settings_obj.favicon:
-            site_settings_obj.favicon.delete(save=False)
-            site_settings_obj.favicon = None
-            success = True
+    if request.POST.get("delete_favicon") == "true" and site_settings_obj.favicon:
+        old_favicon_name = site_settings_obj.favicon.name
+        site_settings_obj.favicon.delete(save=False)
+        site_settings_obj.favicon = None
+        success = True
+        logfire.info(
+            "Favicon deleted",
+            user_id=user_id,
+            username=username,
+            deleted_file=old_favicon_name,
+        )
 
     # Handle hero image upload
     if "hero_image" in request.FILES:
-        site_settings_obj.hero_image = request.FILES["hero_image"]
+        uploaded_file = request.FILES["hero_image"]
+        site_settings_obj.hero_image = uploaded_file
         success = True
+        logfire.info(
+            "Hero image uploaded",
+            user_id=user_id,
+            username=username,
+            filename=uploaded_file.name,
+            file_size=uploaded_file.size,
+        )
 
     # Handle hero image deletion
-    if request.POST.get("delete_hero") == "true":
-        if site_settings_obj.hero_image:
-            site_settings_obj.hero_image.delete(save=False)
-            site_settings_obj.hero_image = None
-            success = True
+    if request.POST.get("delete_hero") == "true" and site_settings_obj.hero_image:
+        old_hero_name = site_settings_obj.hero_image.name
+        site_settings_obj.hero_image.delete(save=False)
+        site_settings_obj.hero_image = None
+        success = True
+        logfire.info(
+            "Hero image deleted",
+            user_id=user_id,
+            username=username,
+            deleted_file=old_hero_name,
+        )
 
     if success:
         site_settings_obj.save()

@@ -776,10 +776,16 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     """
     riders = get_membership_review_data()
 
+    # Get view toggle parameter (race or member)
+    current_view = request.GET.get("view", "race")
+    if current_view not in ("race", "member"):
+        current_view = "race"
+
     # Get filter parameters
     search_query = request.GET.get("q", "").strip()
     gender_filter = request.GET.get("gender", "")
     zp_category_filter = request.GET.get("zp_category", "")
+    country_filter = request.GET.get("country", "")
     status_filter = request.GET.get("status", "active")  # Default to showing active members
 
     # Get sort parameters (default: name ascending)
@@ -789,6 +795,12 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     # Collect unique values for filter dropdowns (before filtering)
     zp_divs_present = sorted({r.zp_div for r in riders if r.zp_div})
     zp_categories = [(div, ZP_DIV_TO_CATEGORY.get(div, str(div))) for div in zp_divs_present]
+
+    # Collect unique countries (code, name) tuples sorted by name
+    countries_present = sorted(
+        {(r.country, r.country_name) for r in riders if r.country and r.country_name},
+        key=lambda x: x[1],  # Sort by country name
+    )
 
     # Apply search filter (by name, discord nickname, or zwid)
     if search_query:
@@ -805,6 +817,10 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     # Apply gender filter
     if gender_filter:
         riders = [r for r in riders if r.gender == gender_filter]
+
+    # Apply country filter
+    if country_filter:
+        riders = [r for r in riders if r.country == country_filter]
 
     # Apply ZwiftPower category filter
     if zp_category_filter:
@@ -823,6 +839,7 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     # Apply sorting
     reverse = sort_dir == "desc"
     sort_keys = {
+        # Race profile sort keys
         "name": lambda r: (r.full_name or r.discord_nickname).lower(),
         "discord": lambda r: r.discord_nickname.lower(),
         "zp_name": lambda r: r.zp_name.lower(),
@@ -833,6 +850,12 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
         "category": lambda r: r.zp_div or 0,
         "results": lambda r: r.result_count,
         "days": lambda r: r.days_since_result if r.days_since_result is not None else 9999,
+        # Member profile sort keys
+        "country": lambda r: r.country_name.lower(),
+        "city": lambda r: r.city.lower(),
+        "timezone": lambda r: r.timezone.lower(),
+        "birth_year": lambda r: r.birth_year or 0,
+        "trainer": lambda r: r.trainer.lower(),
     }
     if sort_by in sort_keys:
         riders = sorted(riders, key=sort_keys[sort_by], reverse=reverse)
@@ -845,10 +868,13 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
             "search_query": search_query,
             "gender_filter": gender_filter,
             "zp_category_filter": zp_category_filter,
+            "country_filter": country_filter,
             "status_filter": status_filter,
             "zp_categories": zp_categories,
+            "countries": countries_present,
             "sort_by": sort_by,
             "sort_dir": sort_dir,
+            "current_view": current_view,
         },
     )
 

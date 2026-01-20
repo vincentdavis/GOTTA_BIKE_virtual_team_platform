@@ -23,14 +23,26 @@
             </p>
 
             <ul class="list-disc list-inside mb-6 text-base-content/70">
-                <li>Your profile information</li>
-                <li>Your magic links</li>
-                <li>Your Discord connection</li>
-                <li>All associated data</li>
+                <li>Your profile information and settings</li>
+                <li>Your Discord OAuth connection</li>
+                <li>Your Zwift verification status</li>
+                <li>Your race ready verification records</li>
+                <li>Any data connections (Google Sheets exports) you created</li>
             </ul>
 
             <form method="post" action="{% url 'accounts:profile_delete' %}">
                 {% csrf_token %}
+                <div class="form-control mb-6">
+                    <label class="label">
+                        <span class="label-text">Type <strong>Delete</strong> to confirm:</span>
+                    </label>
+                    <input type="text"
+                           name="confirmation"
+                           class="input input-bordered input-error"
+                           placeholder="Delete"
+                           autocomplete="off"
+                           required />
+                </div>
                 <div class="flex gap-4">
                     <button type="submit" class="btn btn-error">
                         Yes, Delete My Account

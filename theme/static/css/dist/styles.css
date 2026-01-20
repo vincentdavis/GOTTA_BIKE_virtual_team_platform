@@ -2999,6 +2999,13 @@
       }
     }
   }
+  .join-item:where(*:not(:first-child, :disabled, [disabled], .btn-disabled)) {
+    margin-inline-start: calc(var(--border, 1px) * -1);
+    margin-block-start: 0;
+  }
+  .join-item:where(*:is(:disabled, [disabled], .btn-disabled)) {
+    border-width: var(--border, 1px) 0 var(--border, 1px) var(--border, 1px);
+  }
   .prose {
     color: var(--tw-prose-body);
     max-width: 65ch;
@@ -5046,6 +5053,11 @@
   .select-all {
     -webkit-user-select: all;
     user-select: all;
+  }
+  @layer daisyui.l1.l2 {
+    .input-error, .input-error:focus, .input-error:focus-within {
+      --input-color: var(--color-error);
+    }
   }
   @layer daisyui.l1.l2 {
     .toggle-primary:checked, .toggle-primary[aria-checked="true"] {

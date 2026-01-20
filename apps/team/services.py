@@ -569,6 +569,23 @@ class MembershipReviewRider:
     result_count: int = 0
     last_result_date: datetime | None = None
 
+    # Member profile fields
+    birth_year: int | None = None
+    city: str = ""
+    country: str = ""
+    country_name: str = ""  # Full name for display
+    timezone: str = ""
+
+    # Equipment
+    trainer: str = ""
+    powermeter: str = ""
+    dual_recording: bool | None = None
+    heartrate_monitor: str = ""
+
+    # Emergency contact
+    emergency_contact_name: str = ""
+    emergency_contact_phone: str = ""
+
     # Class variable for div mapping
     DIV_TO_CATEGORY: ClassVar[dict[int, str]] = ZP_DIV_TO_CATEGORY
 
@@ -638,11 +655,18 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
 
     """
     from django.db.models import Max
+    from django_countries import countries
 
     # Query each source independently
     users = User.objects.filter(zwid__isnull=False).values(
         "id", "zwid", "first_name", "last_name", "discord_id", "discord_nickname", "discord_username",
-        "gender", "zwid_verified"
+        "gender", "zwid_verified",
+        # Member profile fields
+        "birth_year", "city", "country", "timezone",
+        # Equipment
+        "trainer", "powermeter", "dual_recording", "heartrate_monitor",
+        # Emergency contact
+        "emergency_contact_name", "emergency_contact_phone",
     )
     zp_riders = ZPTeamRiders.objects.all().values("zwid", "name", "div", "divw", "date_left")
     zr_riders = ZRRider.objects.all().values("zwid", "name", "date_left")
@@ -696,6 +720,23 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
                 rider.gender = "M"
             elif u["gender"] == "female":
                 rider.gender = "F"
+
+            # Member profile fields
+            rider.birth_year = u["birth_year"]
+            rider.city = u["city"] or ""
+            rider.country = str(u["country"]) if u["country"] else ""
+            rider.country_name = countries.name(u["country"]) if u["country"] else ""
+            rider.timezone = u["timezone"] or ""
+
+            # Equipment
+            rider.trainer = u["trainer"] or ""
+            rider.powermeter = u["powermeter"] or ""
+            rider.dual_recording = u["dual_recording"]
+            rider.heartrate_monitor = u["heartrate_monitor"] or ""
+
+            # Emergency contact
+            rider.emergency_contact_name = u["emergency_contact_name"] or ""
+            rider.emergency_contact_phone = u["emergency_contact_phone"] or ""
 
         # Add ZP data
         if zwid in zp_by_zwid:
