@@ -29,11 +29,12 @@ from apps.accounts.views import (
 )
 from apps.dbot_api.api import api as dbot_api
 from apps.dbot_api.cron_api import cron_api
-from gotta_bike_platform.views import about, home
+from gotta_bike_platform.views import about, home, robots_txt
 
 urlpatterns = [
     path("", home, name="home"),
     path("about/", about, name="about"),
+    path("robots.txt", robots_txt, name="robots_txt"),
     path("admin/", admin.site.urls),
     path("api/dbot/", dbot_api.urls),
     path("api/cron/", cron_api.urls),

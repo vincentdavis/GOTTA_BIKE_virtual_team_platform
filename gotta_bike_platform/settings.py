@@ -548,6 +548,16 @@ CONSTANCE_CONFIG = {
         "Open Graph image URL for social media sharing (1200x630 recommended)",
         str,
     ),
+    "ROBOTS_DISALLOW_ALL": (
+        False,
+        "Block all search engine crawlers from indexing the site (robots.txt Disallow: /)",
+        bool,
+    ),
+    "ROBOTS_DISALLOW_AI": (
+        False,
+        "Block AI crawlers (GPTBot, ChatGPT-User, Claude-Web, Google-Extended, etc.) from the site",
+        bool,
+    ),
     # Legal
     "PRIVACY_POLICY_URL": ("", "URL to Privacy Policy page", str),
     "TERMS_OF_SERVICE_URL": ("", "URL to Terms of Service page", str),
@@ -639,6 +649,8 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "META_DESCRIPTION",
         "META_KEYWORDS",
         "OG_IMAGE_URL",
+        "ROBOTS_DISALLOW_ALL",
+        "ROBOTS_DISALLOW_AI",
     ),
     "Google Settings": (
         "GOOGLE_SERVICE_ACCOUNT_EMAIL",
