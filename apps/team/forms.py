@@ -366,7 +366,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
         fields: ClassVar[list[str]] = [
             "first_name",
             "last_name",
-            "zwift_id",
+            "email",
             "country",
             "timezone",
             "birth_year",
@@ -394,10 +394,10 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                     "placeholder": "Last name",
                 }
             ),
-            "zwift_id": forms.TextInput(
+            "email": forms.EmailInput(
                 attrs={
                     "class": "input input-bordered w-full",
-                    "placeholder": "e.g., 123456",
+                    "placeholder": "your.email@example.com",
                 }
             ),
             "country": CountrySelectWidget(
@@ -472,7 +472,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
         labels: ClassVar[dict[str, str]] = {
             "first_name": "First Name",
             "last_name": "Last Name",
-            "zwift_id": "Zwift ID",
+            "email": "Email Address",
             "country": "Country",
             "timezone": "Timezone",
             "birth_year": "Year of Birth",
@@ -537,6 +537,10 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
             hrm_options = json.loads(config.HEARTRATE_MONITOR_OPTIONS)
             hrm_choices = [("", "None")] + [(opt, opt) for opt in hrm_options]
             self.fields["heartrate_monitor"].widget.choices = hrm_choices
+
+        # Make email field required
+        if "email" in self.fields:
+            self.fields["email"].required = True
 
     def clean_birth_year(self) -> int | None:
         """Validate birth year is in reasonable range.
@@ -624,3 +628,30 @@ class MembershipApplicationAdminForm(forms.ModelForm):
                 }
             ),
         }
+
+
+class ApplicationZwiftVerificationForm(forms.Form):
+    """Form for verifying Zwift account credentials in membership applications."""
+
+    zwift_username = forms.EmailField(
+        label="Zwift Email",
+        widget=forms.EmailInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "placeholder": "your.email@example.com",
+                "autocomplete": "email",
+            }
+        ),
+        help_text="The email you use to log into Zwift",
+    )
+    zwift_password = forms.CharField(
+        label="Zwift Password",
+        widget=forms.PasswordInput(
+            attrs={
+                "class": "input input-bordered w-full",
+                "placeholder": "••••••••",
+                "autocomplete": "current-password",
+            }
+        ),
+        help_text="Your Zwift account password (not stored)",
+    )

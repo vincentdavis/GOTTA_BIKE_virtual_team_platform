@@ -7,8 +7,25 @@
 <div class="max-w-2xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <!-- Header -->
-      <div class="flex justify-between items-center mb-6">
+      <!-- Header with Status Badge -->
+      <div class="flex justify-between items-start mb-6">
+        <h2 class="card-title text-2xl">Complete Your Registration</h2>
+        <!-- Status Badge -->
+        {% if application.status == "pending" %}
+        <span class="badge badge-warning badge-lg">Pending Review</span>
+        {% elif application.status == "in_progress" %}
+        <span class="badge badge-info badge-lg">In Progress</span>
+        {% elif application.status == "waiting_response" %}
+        <span class="badge badge-secondary badge-lg">Info Requested</span>
+        {% elif application.status == "approved" %}
+        <span class="badge badge-success badge-lg">Approved</span>
+        {% elif application.status == "rejected" %}
+        <span class="badge badge-error badge-lg">Rejected</span>
+        {% endif %}
+      </div>
+
+      <!-- Discord Account Section (like profile) -->
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
         <div class="flex items-center gap-4">
           {% if application.avatar_url %}
           <div class="avatar">
@@ -24,22 +41,13 @@
           </div>
           {% endif %}
           <div>
-            <h2 class="card-title text-2xl">Complete Your Registration</h2>
-            <div class="text-base-content/60">{{ application.display_name }}</div>
+            <h3 class="font-semibold text-lg">Discord Account</h3>
+            <p class="text-base-content/70">{{ application.discord_username }}</p>
+            {% if application.server_nickname and application.server_nickname != application.discord_username %}
+            <p class="text-sm text-base-content/50">Server Nickname: {{ application.server_nickname }}</p>
+            {% endif %}
           </div>
         </div>
-        <!-- Status Badge -->
-        {% if application.status == "pending" %}
-        <span class="badge badge-warning badge-lg">Pending Review</span>
-        {% elif application.status == "in_progress" %}
-        <span class="badge badge-info badge-lg">In Progress</span>
-        {% elif application.status == "waiting_response" %}
-        <span class="badge badge-secondary badge-lg">Info Requested</span>
-        {% elif application.status == "approved" %}
-        <span class="badge badge-success badge-lg">Approved</span>
-        {% elif application.status == "rejected" %}
-        <span class="badge badge-error badge-lg">Rejected</span>
-        {% endif %}
       </div>
 
       <!-- Registration Form Instructions -->
@@ -88,29 +96,38 @@
       </div>
       {% endif %}
 
-      <!-- Server Nickname (read-only) -->
-      <div class="form-control mb-6">
-        <label class="label">
-          <span class="label-text">Discord / Server Nickname</span>
-        </label>
-        <input type="text"
-               value="{{ application.display_name }}"
-               class="input input-bordered w-full bg-base-300"
-               readonly
-               disabled />
-        <label class="label">
-          <span class="label-text-alt text-base-content/50">This is your Discord identity and cannot be changed here</span>
-        </label>
+      {% if application.has_incomplete_profile_fields %}
+      <div class="alert alert-warning mb-6">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <div>
+          <h3 class="font-bold">Incomplete Profile</h3>
+          <p class="text-sm">Please complete these recommended fields:</p>
+          <div class="flex flex-wrap gap-2 mt-2">
+            {% with status=application.profile_completion_status %}
+            {% if not status.email %}<span class="badge badge-outline badge-sm">Email</span>{% endif %}
+            {% if not status.country %}<span class="badge badge-outline badge-sm">Country</span>{% endif %}
+            {% if not status.timezone %}<span class="badge badge-outline badge-sm">Timezone</span>{% endif %}
+            {% if not status.birth_year %}<span class="badge badge-outline badge-sm">Birth Year</span>{% endif %}
+            {% if not status.gender %}<span class="badge badge-outline badge-sm">Gender</span>{% endif %}
+            {% if not status.unit_preference %}<span class="badge badge-outline badge-sm">Unit Preference</span>{% endif %}
+            {% if not status.trainer %}<span class="badge badge-outline badge-sm">Trainer</span>{% endif %}
+            {% if not status.heartrate_monitor %}<span class="badge badge-outline badge-sm">Heart Rate Monitor</span>{% endif %}
+            {% endwith %}
+          </div>
+        </div>
       </div>
+      {% endif %}
 
-      <form method="post">
+      <form method="post" class="space-y-4">
         {% csrf_token %}
 
         <!-- About You Section -->
         <div class="divider">About You</div>
 
         <!-- How did you hear about us? -->
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label">
             <span class="label-text">{{ form.how_heard.label }} <span class="text-error">*</span></span>
           </label>
@@ -123,7 +140,7 @@
         </div>
 
         <!-- Why do you want to join? -->
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label">
             <span class="label-text">{{ form.reasons.label }} <span class="text-error">*</span></span>
           </label>
@@ -148,7 +165,7 @@
         </div>
 
         <!-- Do you know someone? -->
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label">
             <span class="label-text">{{ form.know_someone.label }}</span>
           </label>
@@ -161,7 +178,7 @@
         </div>
 
         <!-- Which platforms do you use? -->
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label">
             <span class="label-text">{{ form.platforms.label }} <span class="text-error">*</span></span>
           </label>
@@ -186,7 +203,7 @@
         </div>
 
         <!-- Race series interest -->
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label">
             <span class="label-text">{{ form.race_series.label }}</span>
             <span class="label-text-alt text-base-content/50">Optional</span>
@@ -212,7 +229,7 @@
         </div>
 
         <!-- Other race series -->
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label">
             <span class="label-text">{{ form.other_race_series.label }}</span>
             <span class="label-text-alt text-base-content/50">Optional</span>
@@ -225,54 +242,79 @@
           {% endif %}
         </div>
 
-        <!-- Personal Information Section -->
-        <div class="divider">Personal Information</div>
+        <!-- Profile Section -->
+        <div class="divider">Profile</div>
 
-        <!-- First Name -->
-        <div class="form-control mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- First Name -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">First Name <span class="text-error">*</span></span>
+            </label>
+            {{ form.first_name }}
+            {% if form.first_name.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.first_name.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <!-- Last Name -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Last Name <span class="text-error">*</span></span>
+            </label>
+            {{ form.last_name }}
+            {% if form.last_name.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.last_name.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Email -->
+        <div class="form-control">
           <label class="label">
-            <span class="label-text">First Name <span class="text-error">*</span></span>
+            <span class="label-text">Email Address <span class="text-error">*</span></span>
           </label>
-          {{ form.first_name }}
-          {% if form.first_name.errors %}
+          {{ form.email }}
+          {% if form.email.errors %}
           <label class="label">
-            <span class="label-text-alt text-error">{{ form.first_name.errors.0 }}</span>
+            <span class="label-text-alt text-error">{{ form.email.errors.0 }}</span>
           </label>
           {% endif %}
         </div>
 
-        <!-- Last Name -->
-        <div class="form-control mb-4">
-          <label class="label">
-            <span class="label-text">Last Name <span class="text-error">*</span></span>
-          </label>
-          {{ form.last_name }}
-          {% if form.last_name.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.last_name.errors.0 }}</span>
-          </label>
-          {% endif %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Birth Year -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Year of Birth</span>
+            </label>
+            {{ form.birth_year }}
+            {% if form.birth_year.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.birth_year.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <!-- Gender -->
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Gender</span>
+            </label>
+            {{ form.gender }}
+            {% if form.gender.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.gender.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
         </div>
 
-        <!-- Profile Information Section -->
-        <div class="divider">Profile Information</div>
-
-        <!-- Zwift ID -->
-        <div class="form-control mb-4">
-          <label class="label">
-            <span class="label-text">Zwift ID</span>
-            <span class="label-text-alt text-base-content/50">Your Zwift account ID</span>
-          </label>
-          {{ form.zwift_id }}
-          {% if form.zwift_id.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.zwift_id.errors.0 }}</span>
-          </label>
-          {% endif %}
-        </div>
-
-        <!-- Country and Timezone in grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Country -->
           <div class="form-control">
             <label class="label">
@@ -300,53 +342,23 @@
           </div>
         </div>
 
-        <!-- Birth Year, Gender, Unit Preference in grid -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-          <!-- Birth Year -->
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Year of Birth</span>
-            </label>
-            {{ form.birth_year }}
-            {% if form.birth_year.errors %}
-            <label class="label">
-              <span class="label-text-alt text-error">{{ form.birth_year.errors.0 }}</span>
-            </label>
-            {% endif %}
-          </div>
-
-          <!-- Gender -->
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Gender</span>
-            </label>
-            {{ form.gender }}
-            {% if form.gender.errors %}
-            <label class="label">
-              <span class="label-text-alt text-error">{{ form.gender.errors.0 }}</span>
-            </label>
-            {% endif %}
-          </div>
-
-          <!-- Unit Preference -->
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Unit Preference</span>
-            </label>
-            {{ form.unit_preference }}
-            {% if form.unit_preference.errors %}
-            <label class="label">
-              <span class="label-text-alt text-error">{{ form.unit_preference.errors.0 }}</span>
-            </label>
-            {% endif %}
-          </div>
+        <!-- Unit Preference -->
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Unit Preference</span>
+          </label>
+          {{ form.unit_preference }}
+          {% if form.unit_preference.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.unit_preference.errors.0 }}</span>
+          </label>
+          {% endif %}
         </div>
 
-        <!-- Equipment Section -->
-        <div class="divider">Equipment</div>
+        <!-- Training Equipment Section (Optional) -->
+        <div class="divider">Training Equipment (Optional)</div>
 
-        <!-- Trainer and Power Meter in grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Trainer -->
           <div class="form-control">
             <label class="label">
@@ -374,8 +386,7 @@
           </div>
         </div>
 
-        <!-- Dual Recording and Heart Rate Monitor in grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Dual Recording -->
           <div class="form-control">
             <label class="label">
@@ -406,14 +417,13 @@
           </div>
         </div>
 
-        <!-- Social Links Section -->
-        <div class="divider">Social Links</div>
+        <!-- Social Links Section (Optional) -->
+        <div class="divider">Social Links (Optional)</div>
 
         <!-- Strava Profile -->
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label">
             <span class="label-text">Strava Profile</span>
-            <span class="label-text-alt text-base-content/50">Optional</span>
           </label>
           {{ form.strava_profile }}
           {% if form.strava_profile.errors %}
@@ -427,7 +437,7 @@
         <div class="divider">Agreements</div>
 
         <!-- Privacy Policy -->
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label cursor-pointer justify-start gap-4">
             {{ form.agree_privacy }}
             <span class="label-text">
@@ -448,7 +458,7 @@
         </div>
 
         <!-- Terms of Service -->
-        <div class="form-control mb-4">
+        <div class="form-control">
           <label class="label cursor-pointer justify-start gap-4">
             {{ form.agree_tos }}
             <span class="label-text">
@@ -468,8 +478,8 @@
           {% endif %}
         </div>
 
-        <!-- Registrant Notes -->
-        <div class="form-control mb-6">
+        <!-- Applicant Notes -->
+        <div class="form-control">
           <label class="label">
             <span class="label-text">Additional Notes</span>
             <span class="label-text-alt text-base-content/50">Optional</span>
@@ -482,7 +492,7 @@
 
         <!-- Form Errors -->
         {% if form.non_field_errors %}
-        <div class="alert alert-error mb-6">
+        <div class="alert alert-error">
           <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           <span>{{ form.non_field_errors.0 }}</span>
         </div>
@@ -498,6 +508,36 @@
           </button>
         </div>
       </form>
+
+      <!-- Zwift Account Verification Section (OUTSIDE form) -->
+      <div class="divider"></div>
+      <div class="mb-6">
+        <h3 class="text-lg font-semibold mb-3">Zwift Account Verification</h3>
+        <div id="zwift-status-container">
+          {% include "team/partials/application_zwift_status.html" %}
+        </div>
+      </div>
+
+      <!-- Zwift Verification Modal -->
+      <dialog id="zwift-verify-modal" class="modal">
+        <div class="modal-box">
+          <form method="dialog">
+            <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">X</button>
+          </form>
+          <h3 class="font-bold text-lg mb-4">Verify Zwift Account</h3>
+          <div id="zwift-modal-content">
+            <!-- Content loaded via HTMX -->
+            <div class="flex justify-center py-8">
+              <span class="loading loading-spinner loading-lg"></span>
+            </div>
+          </div>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
+
+      <p class="text-sm text-base-content/50"><span class="text-error">*</span> Required fields</p>
       {% endif %}
 
       <!-- Registration Status Info -->

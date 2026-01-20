@@ -734,6 +734,14 @@ class MembershipApplication(models.Model):
         blank=True,
         help_text="Zwift account ID",
     )
+    zwift_verified = models.BooleanField(
+        default=False,
+        help_text="Whether Zwift account has been verified via login",
+    )
+    email = models.EmailField(
+        blank=True,
+        help_text="Contact email address",
+    )
     country = CountryField(
         blank=True,
         help_text="Country of residence",
@@ -906,3 +914,32 @@ class MembershipApplication(models.Model):
 
         """
         return self.status not in [self.Status.APPROVED, self.Status.REJECTED]
+
+    @property
+    def profile_completion_status(self) -> dict[str, bool]:
+        """Get detailed profile completion status for recommended fields.
+
+        Returns:
+            Dictionary mapping field names to completion status.
+
+        """
+        return {
+            "email": bool(self.email and self.email.strip()),
+            "country": bool(self.country),
+            "timezone": bool(self.timezone and self.timezone.strip()),
+            "birth_year": bool(self.birth_year),
+            "gender": bool(self.gender and self.gender.strip()),
+            "unit_preference": bool(self.unit_preference and self.unit_preference.strip()),
+            "trainer": bool(self.trainer and self.trainer.strip()),
+            "heartrate_monitor": bool(self.heartrate_monitor and self.heartrate_monitor.strip()),
+        }
+
+    @property
+    def has_incomplete_profile_fields(self) -> bool:
+        """Check if any recommended profile fields are incomplete.
+
+        Returns:
+            True if any recommended fields are missing.
+
+        """
+        return not all(self.profile_completion_status.values())

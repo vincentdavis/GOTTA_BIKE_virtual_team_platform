@@ -23,4 +23,6 @@ urlpatterns = [
     path("applications/", views.membership_application_list_view, name="application_list"),
     path("applications/<uuid:pk>/", views.membership_application_admin_view, name="application_admin"),
     path("apply/<uuid:pk>/", views.membership_application_public_view, name="application_public"),
+    path("apply/<uuid:pk>/verify-zwift/", views.application_verify_zwift, name="application_verify_zwift"),
+    path("apply/<uuid:pk>/unverify-zwift/", views.application_unverify_zwift, name="application_unverify_zwift"),
 ]

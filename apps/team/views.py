@@ -14,6 +14,7 @@ from apps.accounts.decorators import discord_permission_required, team_member_re
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
 from apps.team.forms import (
+    ApplicationZwiftVerificationForm,
     MembershipApplicationAdminForm,
     MembershipApplicationApplicantForm,
     TeamLinkEditForm,
@@ -21,6 +22,7 @@ from apps.team.forms import (
 )
 from apps.team.models import MembershipApplication, RaceReadyRecord, RosterFilter, TeamLink
 from apps.team.services import ZP_DIV_TO_CATEGORY, get_performance_review_data, get_unified_team_roster
+from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
 
 
@@ -917,4 +919,94 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
             "terms_of_service_url": config.TERMS_OF_SERVICE_URL,
             "application_form_instructions": config.REGISTRATION_FORM_INSTRUCTIONS,
         },
+    )
+
+
+@require_http_methods(["GET", "POST"])
+def application_verify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
+    """Verify Zwift account for a membership application.
+
+    This view handles Zwift account verification without requiring login.
+    Auth is based on knowing the application UUID.
+
+    Args:
+        request: The HTTP request.
+        pk: UUID of the MembershipApplication.
+
+    Returns:
+        Rendered verification modal partial for HTMX requests.
+
+    """
+    application = get_object_or_404(MembershipApplication, pk=pk)
+
+    # Only allow verification if application is editable
+    if not application.is_editable:
+        return render(
+            request,
+            "team/partials/application_zwift_verify_modal.html",
+            {"application": application, "error": "Application is no longer editable."},
+        )
+
+    if request.method == "POST":
+        form = ApplicationZwiftVerificationForm(request.POST)
+        if form.is_valid():
+            zwift_username = form.cleaned_data["zwift_username"]
+            zwift_password = form.cleaned_data["zwift_password"]
+
+            # Fetch Zwift ID using the credentials
+            zwift_id = fetch_zwift_id(zwift_username, zwift_password)
+
+            if zwift_id:
+                # Update application's Zwift ID and mark as verified
+                application.zwift_id = zwift_id
+                application.zwift_verified = True
+                application.save(update_fields=["zwift_id", "zwift_verified"])
+
+                return render(
+                    request,
+                    "team/partials/application_zwift_verify_modal.html",
+                    {"application": application, "success": True, "zwift_id": zwift_id},
+                )
+            else:
+                form.add_error(None, "Could not verify Zwift account. Please check your credentials.")
+    else:
+        form = ApplicationZwiftVerificationForm()
+
+    return render(
+        request,
+        "team/partials/application_zwift_verify_modal.html",
+        {"application": application, "form": form},
+    )
+
+
+@require_POST
+def application_unverify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
+    """Remove Zwift verification from a membership application.
+
+    Args:
+        request: The HTTP request.
+        pk: UUID of the MembershipApplication.
+
+    Returns:
+        Rendered Zwift status partial for HTMX requests.
+
+    """
+    application = get_object_or_404(MembershipApplication, pk=pk)
+
+    # Only allow modification if application is editable
+    if not application.is_editable:
+        return render(
+            request,
+            "team/partials/application_zwift_status.html",
+            {"application": application},
+        )
+
+    application.zwift_id = ""
+    application.zwift_verified = False
+    application.save(update_fields=["zwift_id", "zwift_verified"])
+
+    return render(
+        request,
+        "team/partials/application_zwift_status.html",
+        {"application": application},
     )
