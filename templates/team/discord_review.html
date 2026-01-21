@@ -147,6 +147,10 @@
         </div>
       </form>
 
+      <div class="mb-4 text-sm text-base-content/70">
+        Showing {{ members|length }} member{{ members|length|pluralize }}
+      </div>
+
       <!-- Table -->
       <div class="overflow-x-auto">
         {% with base_url=request.path %}
@@ -310,11 +314,6 @@
           </tbody>
         </table>
         {% endwith %}
-      </div>
-
-      <!-- Stats -->
-      <div class="mt-6 text-sm text-base-content/50">
-        Showing {{ members|length }} member{{ members|length|pluralize }}
       </div>
     </div>
   </div>
