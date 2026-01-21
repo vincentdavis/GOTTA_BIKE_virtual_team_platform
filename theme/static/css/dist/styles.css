@@ -2379,6 +2379,18 @@
     }
   }
   @layer daisyui.l1.l2 {
+    .dropdown-right {
+      --anchor-h: right;
+      --anchor-v: span-bottom;
+    }
+    .dropdown-right .dropdown-content {
+      inset-inline-start: 100%;
+      top: calc(0.25rem * 0);
+      bottom: auto;
+      transform-origin: 0;
+    }
+  }
+  @layer daisyui.l1.l2 {
     .dropdown-end {
       --anchor-h: span-left;
     }
@@ -4151,6 +4163,9 @@
   .w-64 {
     width: calc(var(--spacing) * 64);
   }
+  .w-80 {
+    width: calc(var(--spacing) * 80);
+  }
   .w-full {
     width: 100%;
   }
@@ -4240,6 +4255,9 @@
       outline-offset: 2px;
     }
   }
+  .cursor-help {
+    cursor: help;
+  }
   .cursor-move {
     cursor: move;
   }
@@ -4311,6 +4329,11 @@
   }
   .gap-6 {
     gap: calc(var(--spacing) * 6);
+  }
+  :where(.space-y-0\.5 > :not(:last-child)) {
+    --tw-space-y-reverse: 0;
+    margin-block-start: calc(calc(var(--spacing) * 0.5) * var(--tw-space-y-reverse));
+    margin-block-end: calc(calc(var(--spacing) * 0.5) * calc(1 - var(--tw-space-y-reverse)));
   }
   :where(.space-y-2 > :not(:last-child)) {
     --tw-space-y-reverse: 0;
@@ -4815,6 +4838,9 @@
   }
   .text-error-content {
     color: var(--color-error-content);
+  }
+  .text-info {
+    color: var(--color-info);
   }
   .text-info-content {
     color: var(--color-info-content);

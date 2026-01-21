@@ -26,7 +26,7 @@ def _parse_decimal(value: float | int | str | None) -> Decimal | None:
         return None
     try:
         return Decimal(str(value))
-    except InvalidOperation, ValueError:
+    except (InvalidOperation, ValueError):
         return None
 
 
@@ -41,7 +41,7 @@ def _parse_int(value: int | str | None) -> int | None:
         return None
     try:
         return int(value)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 

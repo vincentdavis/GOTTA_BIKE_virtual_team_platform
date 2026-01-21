@@ -2,6 +2,7 @@
 
 import uuid
 
+import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -155,6 +156,11 @@ def filtered_roster_view(request: HttpRequest, filter_id: uuid.UUID) -> HttpResp
 
     # Check if filter has expired
     if roster_filter.is_expired:
+        logfire.debug(
+            "Expired roster filter accessed",
+            filter_id=str(filter_id),
+            channel_name=roster_filter.channel_name,
+        )
         return render(
             request,
             "team/roster_filter_expired.html",
@@ -302,13 +308,25 @@ def submit_team_link_view(request: HttpRequest) -> HttpResponse:
     """
     # Check if user has permission to create links
     if not request.user.is_link_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized team link creation attempt",
+            user_id=request.user.id,
+            username=request.user.username,
+        )
         messages.error(request, "You don't have permission to create team links.")
         return redirect("team:links")
 
     if request.method == "POST":
         form = TeamLinkForm(request.POST)
         if form.is_valid():
-            form.save()
+            link = form.save()
+            logfire.info(
+                "Team link created",
+                link_id=link.pk,
+                link_title=link.title,
+                user_id=request.user.id,
+                username=request.user.username,
+            )
             messages.success(request, "Team link submitted successfully!")
             return redirect("team:links")
     else:
@@ -339,6 +357,12 @@ def edit_team_link_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     # Check if user has permission to edit
     if not request.user.is_link_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized team link edit attempt",
+            link_id=pk,
+            user_id=request.user.id,
+            username=request.user.username,
+        )
         messages.error(request, "You don't have permission to edit team links.")
         return redirect("team:links")
 
@@ -346,6 +370,13 @@ def edit_team_link_view(request: HttpRequest, pk: int) -> HttpResponse:
         form = TeamLinkEditForm(request.POST, instance=link)
         if form.is_valid():
             form.save()
+            logfire.info(
+                "Team link updated",
+                link_id=pk,
+                link_title=link.title,
+                user_id=request.user.id,
+                username=request.user.username,
+            )
             messages.success(request, "Team link updated successfully!")
             return redirect("team:links")
     else:
@@ -376,10 +407,24 @@ def delete_team_link_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     # Check if user has permission to delete
     if not request.user.is_link_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized team link delete attempt",
+            link_id=pk,
+            user_id=request.user.id,
+            username=request.user.username,
+        )
         messages.error(request, "You don't have permission to delete team links.")
         return redirect("team:links")
 
+    link_title = link.title
     link.delete()
+    logfire.info(
+        "Team link deleted",
+        link_id=pk,
+        link_title=link_title,
+        user_id=request.user.id,
+        username=request.user.username,
+    )
     messages.success(request, "Team link deleted successfully!")
     return redirect("team:links")
 
@@ -399,6 +444,11 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     """
     # Check if user can view/approve verification records
     if not request.user.can_approve_verification and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized verification records access attempt",
+            user_id=request.user.id,
+            username=request.user.username,
+        )
         messages.error(request, "You don't have permission to view verification records.")
         return redirect("home")
 
@@ -490,6 +540,12 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     """
     # Check if user can view/approve verification records
     if not request.user.can_approve_verification and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized verification record detail access attempt",
+            record_id=pk,
+            user_id=request.user.id,
+            username=request.user.username,
+        )
         messages.error(request, "You don't have permission to view verification records.")
         return redirect("home")
 
@@ -500,6 +556,13 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
 
     # Check same_gender restriction: if set, only same-gender reviewers can access (superusers bypass)
     if record.same_gender and not request.user.is_superuser and record.user.gender != request.user.gender:
+        logfire.info(
+            "Same-gender restriction blocked verification review",
+            record_id=pk,
+            user_id=request.user.id,
+            user_gender=request.user.gender,
+            record_user_gender=record.user.gender,
+        )
         messages.warning(request, "This record requires a same-gender reviewer.")
         return redirect("team:verification_records")
 
@@ -511,12 +574,27 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         if action == "verify":
             # Prevent self-approval
             if record.user == request.user:
+                logfire.warning(
+                    "Self-approval attempt blocked",
+                    user_id=request.user.id,
+                    record_id=pk,
+                    verify_type=record.verify_type,
+                )
                 messages.error(request, "You cannot approve your own verification record.")
                 return redirect("team:verification_record_detail", pk=pk)
             record.status = RaceReadyRecord.Status.VERIFIED
             record.reviewed_by = request.user
             record.reviewed_date = timezone.now()
             record.save()
+            logfire.info(
+                "Verification record approved",
+                record_id=pk,
+                verify_type=record.verify_type,
+                target_user_id=record.user.id,
+                target_username=record.user.username,
+                reviewer_id=request.user.id,
+                reviewer_username=request.user.username,
+            )
             # Send Discord DM notification
             if record.user.discord_id:
                 send_verification_notification(
@@ -532,6 +610,16 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             rejection_reason = request.POST.get("rejection_reason", "").strip()
             record.rejection_reason = rejection_reason
             record.save()
+            logfire.info(
+                "Verification record rejected",
+                record_id=pk,
+                verify_type=record.verify_type,
+                target_user_id=record.user.id,
+                target_username=record.user.username,
+                reviewer_id=request.user.id,
+                reviewer_username=request.user.username,
+                rejection_reason=rejection_reason or None,
+            )
             # Send Discord DM notification
             if record.user.discord_id:
                 send_verification_notification(
@@ -573,6 +661,11 @@ def delete_expired_media_view(request: HttpRequest) -> HttpResponse:
 
     """
     if not request.user.can_approve_verification and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized bulk delete expired media attempt",
+            user_id=request.user.id,
+            username=request.user.username,
+        )
         messages.error(request, "You don't have permission to perform this action.")
         return redirect("team:verification_records")
 
@@ -588,6 +681,14 @@ def delete_expired_media_view(request: HttpRequest) -> HttpResponse:
             record.url = ""
             record.save(update_fields=["url"])
             deleted_count += 1
+
+    logfire.info(
+        "Bulk delete expired verification media",
+        user_id=request.user.id,
+        username=request.user.username,
+        expired_records_found=len(expired_records),
+        media_deleted_count=deleted_count,
+    )
 
     if deleted_count:
         messages.success(request, f"Deleted media from {deleted_count} expired record(s).")
@@ -613,6 +714,11 @@ def delete_rejected_media_view(request: HttpRequest) -> HttpResponse:
     from datetime import timedelta
 
     if not request.user.can_approve_verification and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized bulk delete rejected media attempt",
+            user_id=request.user.id,
+            username=request.user.username,
+        )
         messages.error(request, "You don't have permission to perform this action.")
         return redirect("team:verification_records")
 
@@ -624,6 +730,7 @@ def delete_rejected_media_view(request: HttpRequest) -> HttpResponse:
     )
 
     deleted_count = 0
+    total_records = records.count()
     for record in records:
         has_media = record.media_file or record.url
         if has_media:
@@ -631,6 +738,15 @@ def delete_rejected_media_view(request: HttpRequest) -> HttpResponse:
             record.url = ""
             record.save(update_fields=["url"])
             deleted_count += 1
+
+    logfire.info(
+        "Bulk delete rejected verification media",
+        user_id=request.user.id,
+        username=request.user.username,
+        rejected_records_found=total_records,
+        media_deleted_count=deleted_count,
+        cutoff_days=30,
+    )
 
     if deleted_count:
         messages.success(request, f"Deleted media from {deleted_count} rejected record(s).")
@@ -686,6 +802,11 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
     """
     # Check permission - only verification reviewers can access
     if not request.user.can_approve_verification and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized performance review access attempt",
+            user_id=request.user.id,
+            username=request.user.username,
+        )
         messages.error(request, "You don't have permission to view performance review.")
         return redirect("home")
 
@@ -971,11 +1092,22 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
     )
 
     if request.method == "POST":
+        old_status = application.status
         form = MembershipApplicationAdminForm(request.POST, instance=application)
         if form.is_valid():
             app = form.save(commit=False)
             app.modified_by = request.user
             app.save()
+            logfire.info(
+                "Membership application updated by admin",
+                application_id=str(pk),
+                applicant_discord_id=application.discord_id,
+                applicant_name=application.display_name,
+                old_status=old_status,
+                new_status=app.status,
+                admin_id=request.user.id,
+                admin_username=request.user.username,
+            )
             messages.success(request, f"Application for {application.display_name} updated.")
             return redirect("team:application_list")
     else:
@@ -1030,6 +1162,13 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
         form = MembershipApplicationApplicantForm(request.POST, instance=application)
         if form.is_valid():
             form.save()
+            logfire.info(
+                "Membership application updated by applicant",
+                application_id=str(pk),
+                applicant_discord_id=application.discord_id,
+                applicant_name=application.display_name,
+                is_complete=application.is_complete,
+            )
             messages.success(request, "Your application has been updated. Thank you!")
             return redirect("team:application_public", pk=pk)
     else:
@@ -1087,6 +1226,12 @@ def application_verify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpRespons
                 application.zwift_id = zwift_id
                 application.zwift_verified = True
                 application.save(update_fields=["zwift_id", "zwift_verified"])
+                logfire.info(
+                    "Zwift account verified for application",
+                    application_id=str(pk),
+                    applicant_discord_id=application.discord_id,
+                    zwift_id=zwift_id,
+                )
 
                 return render(
                     request,
@@ -1094,6 +1239,11 @@ def application_verify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpRespons
                     {"application": application, "success": True, "zwift_id": zwift_id},
                 )
             else:
+                logfire.warning(
+                    "Zwift verification failed for application",
+                    application_id=str(pk),
+                    applicant_discord_id=application.discord_id,
+                )
                 form.add_error(None, "Could not verify Zwift account. Please check your credentials.")
     else:
         form = ApplicationZwiftVerificationForm()
@@ -1127,9 +1277,16 @@ def application_unverify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpRespo
             {"application": application},
         )
 
+    old_zwift_id = application.zwift_id
     application.zwift_id = ""
     application.zwift_verified = False
     application.save(update_fields=["zwift_id", "zwift_verified"])
+    logfire.info(
+        "Zwift verification removed from application",
+        application_id=str(pk),
+        applicant_discord_id=application.discord_id,
+        old_zwift_id=old_zwift_id,
+    )
 
     return render(
         request,

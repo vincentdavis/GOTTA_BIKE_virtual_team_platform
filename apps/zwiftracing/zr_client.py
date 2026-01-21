@@ -6,6 +6,7 @@ All methods return a tuple of (status_code, response_json).
 """
 
 import httpx
+import logfire
 from constance import config
 
 
@@ -29,11 +30,12 @@ def _get_headers() -> dict[str, str]:
     return {"Authorization": config.ZRAPP_API_KEY}
 
 
-def _handle_response(response: httpx.Response) -> tuple[int, dict]:
+def _handle_response(response: httpx.Response, endpoint: str) -> tuple[int, dict]:
     """Handle API response, allowing 429 through without raising.
 
     Args:
         response: The httpx Response object.
+        endpoint: The API endpoint for logging context.
 
     Returns:
         Tuple of (status_code, response_json).
@@ -41,7 +43,14 @@ def _handle_response(response: httpx.Response) -> tuple[int, dict]:
 
     """
     if response.status_code == 429:
-        return response.status_code, response.json()
+        data = response.json()
+        retry_after = data.get("retryAfter", "unknown")
+        logfire.warning(
+            "ZR API rate limited",
+            endpoint=endpoint,
+            retry_after=retry_after,
+        )
+        return response.status_code, data
     response.raise_for_status()
     return response.status_code, response.json()
 
@@ -61,8 +70,10 @@ def get_club(club_id: int, from_id: int | None = None) -> tuple[int, dict]:
         Tuple of (status_code, response_json). On 429, returns the rate limit info.
 
     """
+    endpoint = f"clubs/{club_id}"
+    logfire.debug("ZR API request: get_club", club_id=club_id, from_id=from_id)
     response = httpx.get(url=f"{_get_api_url()}clubs/{club_id}/{from_id if from_id else ''}", headers=_get_headers())
-    return _handle_response(response)
+    return _handle_response(response, endpoint)
 
 
 # EVENT ===========================================================================================
@@ -78,8 +89,10 @@ def get_event(event_id: int) -> tuple[int, dict]:
         Tuple of (status_code, response_json). On 429, returns the rate limit info.
 
     """
+    endpoint = f"results/{event_id}"
+    logfire.debug("ZR API request: get_event", event_id=event_id)
     response = httpx.get(url=f"{_get_api_url()}results/{event_id}", headers=_get_headers())
-    return _handle_response(response)
+    return _handle_response(response, endpoint)
 
 
 # Returns a dictionary with a zwiftpower set of riders in finishing order.
@@ -95,8 +108,10 @@ def get_zp_results(event_id: int) -> tuple[int, dict]:
         Tuple of (status_code, response_json). On 429, returns the rate limit info.
 
     """
+    endpoint = f"zp/{event_id}/results"
+    logfire.debug("ZR API request: get_zp_results", event_id=event_id)
     response = httpx.get(url=f"{_get_api_url()}zp/{event_id}/results", headers=_get_headers())
-    return _handle_response(response)
+    return _handle_response(response, endpoint)
 
 
 # RIDER(S) ========================================================================================
@@ -114,8 +129,10 @@ def get_rider(rider_id: int, epoch: int | None = None) -> tuple[int, dict]:
         Tuple of (status_code, response_json). On 429, returns the rate limit info.
 
     """
+    endpoint = f"riders/{rider_id}"
+    logfire.debug("ZR API request: get_rider", rider_id=rider_id, epoch=epoch)
     response = httpx.get(url=f"{_get_api_url()}riders/{rider_id}/{epoch if epoch else ''}", headers=_get_headers())
-    return _handle_response(response)
+    return _handle_response(response, endpoint)
 
 
 # Returns a list of rider-dictionaries
@@ -132,8 +149,10 @@ def get_riders(ids: list[int], epoch: int | None = None) -> tuple[int, list | di
         Tuple of (status_code, response_json). On 429, returns the rate limit info (dict).
 
     """
+    endpoint = "riders (batch)"
+    logfire.debug("ZR API request: get_riders", rider_count=len(ids), epoch=epoch)
     response = httpx.post(url=f"{_get_api_url()}riders/{epoch if epoch else ''}", headers=_get_headers(), json=ids)
-    return _handle_response(response)
+    return _handle_response(response, endpoint)
 
 
 # if __name__ == "__main__":

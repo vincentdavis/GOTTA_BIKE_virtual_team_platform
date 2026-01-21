@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import ClassVar
 
+import logfire
 from constance import config
 from django.db.models import Count, Max, Min, OuterRef, Subquery
 
@@ -62,7 +63,13 @@ def get_user_verification_types(user: User) -> list[str]:
         requirements = json.loads(config.CATEGORY_REQUIREMENTS)
         types = requirements.get(str(category), DEFAULT_VERIFICATION_TYPES)
         return types if types else DEFAULT_VERIFICATION_TYPES
-    except (json.JSONDecodeError, TypeError):
+    except (json.JSONDecodeError, TypeError) as e:
+        logfire.error(
+            "Failed to parse CATEGORY_REQUIREMENTS config",
+            error=str(e),
+            user_id=user.id,
+            zwid=user.zwid,
+        )
         return DEFAULT_VERIFICATION_TYPES
 
 
@@ -269,7 +276,17 @@ def get_unified_team_roster() -> list[UnifiedRider]:
         unified.append(rider)
 
     # Sort by display name
-    return sorted(unified, key=lambda r: r.display_name.lower())
+    sorted_roster = sorted(unified, key=lambda r: r.display_name.lower())
+
+    logfire.debug(
+        "Unified team roster loaded",
+        total_riders=len(sorted_roster),
+        users_with_zwid=len(user_by_zwid),
+        zp_riders=len(zp_by_zwid),
+        zr_riders=len(zr_by_zwid),
+    )
+
+    return sorted_roster
 
 
 def get_unified_rider(zwid: int) -> UnifiedRider | None:
@@ -416,6 +433,7 @@ def get_performance_review_data() -> list[PerformanceRider]:
         }
 
     if not rider_info:
+        logfire.debug("Performance review data: no active riders found")
         return []
 
     # Get most recent verified records per user per type using subquery
@@ -543,7 +561,16 @@ def get_performance_review_data() -> list[PerformanceRider]:
         performance_riders.append(rider)
 
     # Sort by display name
-    return sorted(performance_riders, key=lambda r: r.display_name.lower())
+    sorted_riders = sorted(performance_riders, key=lambda r: r.display_name.lower())
+
+    logfire.debug(
+        "Performance review data loaded",
+        total_riders=len(sorted_riders),
+        riders_with_verifications=len(verification_by_zwid),
+        riders_with_results=len(zp_data_by_zwid),
+    )
+
+    return sorted_riders
 
 
 @dataclass
@@ -777,4 +804,14 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
         riders.append(rider)
 
     # Sort by best available name
-    return sorted(riders, key=lambda r: (r.full_name or r.zp_name or r.zr_name or "").lower())
+    sorted_riders = sorted(riders, key=lambda r: (r.full_name or r.zp_name or r.zr_name or "").lower())
+
+    logfire.debug(
+        "Membership review data loaded",
+        total_riders=len(sorted_riders),
+        users_with_zwid=len(user_by_zwid),
+        zp_riders=len(zp_by_zwid),
+        zr_riders=len(zr_by_zwid),
+    )
+
+    return sorted_riders

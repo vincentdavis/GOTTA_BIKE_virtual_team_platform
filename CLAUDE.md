@@ -329,6 +329,43 @@ Set in Django admin User edit page under "Permissions" fieldset:
 Discord roles are synced via `/api/dbot/sync_user_roles/{discord_id}` endpoint called by the Discord bot.
 User's `discord_roles` field stores `{role_id: role_name}` mapping from Discord.
 
+#### Updating Permission Registry
+
+The permission registry (`apps/accounts/permission_registry.py`) maps each permission to the views it controls.
+This registry powers the help icons (?) shown on the `/site/config/` Permissions page.
+
+**When to update:**
+
+When adding a view with `@discord_permission_required` or `@team_member_required`, update the registry:
+
+```python
+# In apps/accounts/permission_registry.py
+PERMISSION_REGISTRY: dict[str, dict] = {
+    Permissions.TEAM_MEMBER: {
+        "name": "Team Member",
+        "description": "Required for most pages - basic team access",
+        "views": [
+            "/team/roster/ - Team roster",
+            "/team/new-page/ - Your new page description",  # Add new views here
+        ],
+    },
+    ...
+}
+```
+
+**Registry structure:**
+
+Each permission maps to:
+- `name` - Human-readable display name
+- `description` - What the permission allows
+- `views` - List of URL paths with descriptions (format: `/path/ - Description`)
+
+**Files:**
+
+- `apps/accounts/permission_registry.py` - Central registry (source of truth)
+- `apps/accounts/templatetags/accounts_tags.py` - `permission_help` template filter
+- `templates/accounts/partials/config_section.html` - Renders help icons in config UI
+
 ### Background Tasks
 
 Uses Django 6.0's built-in `django-tasks` with database backend. Tasks are defined with `@task` decorator:
@@ -633,6 +670,33 @@ logfire.info("User logged in", user_id=user.id, discord_id=user.discord_id)
 logfire.warning("Rate limit approaching", api="zwiftpower", remaining=5)
 logfire.error("API request failed", error=str(e), endpoint=url)
 ```
+
+### Logging Requirements for New Code
+
+When writing or modifying code, add logfire logging for:
+
+- **API calls and external services** - Log requests and responses (especially errors, rate limits)
+- **Error handlers** - Never silently catch exceptions; always log with `logfire.error()`
+- **Authentication/permission checks** - Log failures with user context
+- **Data operations** - Log counts and timing for debugging performance
+- **Background tasks** - Log start, completion, and errors
+- **Form submissions and user actions** - Log significant state changes
+
+**Logging Levels:**
+
+| Level | Use For |
+|-------|---------|
+| `logfire.error()` | Failures, permission denials, exceptions, API errors |
+| `logfire.warning()` | Rate limits, config fallbacks, degraded operation, validation issues |
+| `logfire.info()` | Successful operations, user actions, state changes, admin actions |
+| `logfire.debug()` | Data counts, query details, internal state, diagnostic info |
+
+**Best Practices:**
+
+- Include context: `user_id`, `discord_id`, `zwid`, `operation_type`, `affected_records`
+- For try/except blocks, always log: `logfire.error("message", error=str(e))`
+- Use `with logfire.span("operation_name"):` for multi-step operations
+- Log at entry AND exit of critical functions (helps debug slow operations)
 
 ## Guild Member Sync
 

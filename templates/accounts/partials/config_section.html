@@ -34,7 +34,30 @@
     {% for setting in section.settings %}
     <div class="form-control">
         <label class="label" for="id_{{ setting.key }}">
-            <span class="label-text font-medium">{{ setting.key }}</span>
+            <span class="label-text font-medium flex items-center gap-1">
+                {{ setting.key }}
+                {% with help=setting.key|permission_help %}
+                {% if help %}
+                <div class="dropdown dropdown-hover dropdown-right">
+                    <div tabindex="0" role="button" class="text-info cursor-help">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                    <div tabindex="0" class="dropdown-content bg-base-200 border border-base-300 rounded-lg p-3 shadow-lg z-50 w-80">
+                        <p class="font-semibold text-sm mb-1">{{ help.name }}</p>
+                        <p class="text-xs text-base-content/70 mb-2">{{ help.description }}</p>
+                        <p class="text-xs font-medium mb-1">Controls access to:</p>
+                        <ul class="text-xs space-y-0.5">
+                            {% for view in help.views %}
+                            <li class="text-base-content/70">{{ view }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+                {% endwith %}
+            </span>
         </label>
 
         {% if setting.input_type == "boolean" %}

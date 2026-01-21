@@ -7,7 +7,23 @@ import markdown
 from django import template
 from django.utils.safestring import mark_safe
 
+from apps.accounts.permission_registry import get_permission_help
+
 register = template.Library()
+
+
+@register.filter
+def permission_help(constance_key: str) -> dict | None:
+    """Get permission help data for a Constance key.
+
+    Args:
+        constance_key: The Constance setting key (e.g., "PERM_APP_ADMIN_ROLES")
+
+    Returns:
+        Dict with name, description, views or None if not found.
+
+    """
+    return get_permission_help(constance_key)
 
 
 @register.filter

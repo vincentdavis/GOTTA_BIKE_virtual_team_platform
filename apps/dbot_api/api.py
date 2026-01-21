@@ -3,6 +3,7 @@
 import contextlib
 from datetime import datetime, timedelta
 
+import logfire
 from constance import config as constance_config
 from django.http import HttpRequest
 from django.urls import reverse
@@ -187,21 +188,38 @@ class DBotAuth(APIKeyHeader):
         """
         # Verify API key
         if not constance_config.DBOT_AUTH_KEY or key != constance_config.DBOT_AUTH_KEY:
+            logfire.warning(
+                "Discord bot API auth failed: invalid API key",
+                path=request.path,
+            )
             return None
 
         # Verify guild_id header matches configured GUILD_ID
         guild_id = request.headers.get("X-Guild-Id")
         if not guild_id:
+            logfire.warning(
+                "Discord bot API auth failed: missing guild ID",
+                path=request.path,
+            )
             return None
 
         # Get Discord user ID (required for logging)
         discord_user_id = request.headers.get("X-Discord-User-Id")
         if not discord_user_id:
+            logfire.warning(
+                "Discord bot API auth failed: missing Discord user ID",
+                path=request.path,
+            )
             return None
 
         try:
             # Verify guild_id matches the configured guild
             if int(guild_id) != constance_config.GUILD_ID:
+                logfire.warning(
+                    "Discord bot API auth failed: guild ID mismatch",
+                    path=request.path,
+                    provided_guild_id=guild_id,
+                )
                 return None
 
             # Log the API request
@@ -217,6 +235,11 @@ class DBotAuth(APIKeyHeader):
                 "discord_user_id": discord_user_id,
             }
         except ValueError:
+            logfire.warning(
+                "Discord bot API auth failed: invalid guild ID format",
+                path=request.path,
+                guild_id=guild_id,
+            )
             return None
 
 
@@ -390,6 +413,15 @@ def sync_guild_roles(request: HttpRequest, payload: SyncGuildRolesRequest) -> di
     if roles_to_delete:
         deleted, _ = DiscordRole.objects.filter(role_id__in=roles_to_delete).delete()
 
+    logfire.info(
+        "Guild roles synced",
+        created=created,
+        updated=updated,
+        deleted=deleted,
+        total_received=len(payload.roles),
+        discord_user_id=request.auth["discord_user_id"],  # ty:ignore[unresolved-attribute]
+    )
+
     return {
         "created": created,
         "updated": updated,
@@ -416,6 +448,10 @@ def sync_user_roles(request: HttpRequest, discord_id: str, payload: SyncUserRole
     try:
         user = User.objects.get(discord_id=discord_id)
     except User.DoesNotExist:
+        logfire.debug(
+            "User roles sync failed: user not found",
+            target_discord_id=discord_id,
+        )
         return api.create_response(  # ty:ignore[invalid-return-type]
             request,
             {"error": "User not found", "discord_id": discord_id},
@@ -434,6 +470,14 @@ def sync_user_roles(request: HttpRequest, discord_id: str, payload: SyncUserRole
 
     user.discord_roles = role_map
     user.save(update_fields=["discord_roles"])
+
+    logfire.info(
+        "User roles synced",
+        target_discord_id=discord_id,
+        user_id=user.id,
+        roles_synced=len(role_map),
+        is_race_ready=user.is_race_ready,
+    )
 
     return {
         "discord_id": discord_id,
@@ -538,6 +582,20 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
             date_left__isnull=True,
         ).update(date_left=timezone.now())
 
+    total_active = GuildMember.objects.filter(date_left__isnull=True).count()
+
+    logfire.info(
+        "Guild members synced",
+        created=created,
+        updated=updated,
+        rejoined=rejoined,
+        left=left,
+        linked=linked,
+        total_received=len(payload.members),
+        total_active=total_active,
+        discord_user_id=request.auth["discord_user_id"],  # ty:ignore[unresolved-attribute]
+    )
+
     return {
         "created": created,
         "updated": updated,
@@ -545,7 +603,7 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
         "left": left,
         "linked": linked,
         "total_received": len(payload.members),
-        "total_active": GuildMember.objects.filter(date_left__isnull=True).count(),
+        "total_active": total_active,
     }
 
 
@@ -563,6 +621,10 @@ def trigger_update_zp_team(request: HttpRequest) -> dict:
 
     """
     update_team_riders.enqueue()
+    logfire.info(
+        "ZwiftPower team update task queued",
+        discord_user_id=request.auth["discord_user_id"],  # ty:ignore[unresolved-attribute]
+    )
     return {
         "status": "queued",
         "message": "ZwiftPower team update task has been queued.",
@@ -583,6 +645,10 @@ def trigger_update_zp_results(request: HttpRequest) -> dict:
 
     """
     update_team_results.enqueue()
+    logfire.info(
+        "ZwiftPower results update task queued",
+        discord_user_id=request.auth["discord_user_id"],  # ty:ignore[unresolved-attribute]
+    )
     return {
         "status": "queued",
         "message": "ZwiftPower team results update task has been queued.",
@@ -907,6 +973,14 @@ def create_roster_filter(request: HttpRequest, payload: CreateRosterFilterReques
         reverse("team:filtered_roster", kwargs={"filter_id": roster_filter.id})
     )
 
+    logfire.info(
+        "Roster filter created",
+        filter_id=str(roster_filter.id),
+        channel_name=payload.channel_name,
+        member_count=len(payload.discord_ids),
+        created_by_discord_id=discord_user_id,
+    )
+
     return {
         "filter_id": str(roster_filter.id),
         "url": filter_url,
@@ -934,6 +1008,12 @@ def create_membership_application(request: HttpRequest, payload: MembershipAppli
     # Check if application already exists for this discord_id
     existing = MembershipApplication.objects.filter(discord_id=payload.discord_id).first()
     if existing:
+        logfire.info(
+            "Membership application lookup: existing found",
+            application_id=str(existing.id),
+            applicant_discord_id=existing.discord_id,
+            status=existing.status,
+        )
         # Build absolute URL for the application
         application_url = request.build_absolute_uri(
             reverse("team:application_public", kwargs={"pk": existing.id})
@@ -962,6 +1042,13 @@ def create_membership_application(request: HttpRequest, payload: MembershipAppli
         first_name=payload.first_name,
         last_name=payload.last_name,
         applicant_notes=payload.applicant_notes,
+    )
+
+    logfire.info(
+        "Membership application created",
+        application_id=str(application.id),
+        applicant_discord_id=application.discord_id,
+        applicant_discord_username=application.discord_username,
     )
 
     # Build absolute URL for the application
