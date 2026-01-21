@@ -28,6 +28,7 @@ from apps.team.services import (
     get_performance_review_data,
     get_unified_team_roster,
 )
+from apps.team.tasks import notify_application_update
 from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
 
@@ -1093,6 +1094,7 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
 
     if request.method == "POST":
         old_status = application.status
+        old_admin_notes = application.admin_notes
         form = MembershipApplicationAdminForm(request.POST, instance=application)
         if form.is_valid():
             app = form.save(commit=False)
@@ -1108,6 +1110,27 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
                 admin_id=request.user.id,
                 admin_username=request.user.username,
             )
+
+            # Send Discord notification based on what changed
+            admin_display = request.user.discord_nickname or request.user.first_name or request.user.username
+            status_changed = old_status != app.status
+            notes_changed = old_admin_notes != app.admin_notes
+
+            if status_changed:
+                notify_application_update.enqueue(
+                    application_id=str(pk),
+                    update_type="status_changed",
+                    admin_name=admin_display,
+                    old_status=old_status,
+                    new_status=app.status,
+                )
+            elif notes_changed:
+                notify_application_update.enqueue(
+                    application_id=str(pk),
+                    update_type="admin_notes",
+                    admin_name=admin_display,
+                )
+
             messages.success(request, f"Application for {application.display_name} updated.")
             return redirect("team:application_list")
     else:
@@ -1169,6 +1192,13 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
                 applicant_name=application.display_name,
                 is_complete=application.is_complete,
             )
+
+            # Send Discord notification for applicant update
+            notify_application_update.enqueue(
+                application_id=str(pk),
+                update_type="applicant_updated",
+            )
+
             messages.success(request, "Your application has been updated. Thank you!")
             return redirect("team:application_public", pk=pk)
     else:

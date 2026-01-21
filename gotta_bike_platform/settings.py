@@ -391,6 +391,7 @@ CONSTANCE_CONFIG = {
     "UPGRADE_CHANNEL": (0, "Discord channel ID for upgrade notifications", int),
     "NEW_ARRIVALS_CHANNEL_ID": (0, "Discord channel ID for new arrival welcome messages", int),
     "USER_CHANGE_LOG": (0, "Member status changes posted to this channel", int),
+    "REGISTRATION_UPDATES_CHANNEL_ID": (0, "Discord channel for membership registration updates", int),
     "ZWIFTPOWER_TEAM_ID": (0, "ZwiftPower team ID for fetching team data", int),
     # Zwift credentials (for ZwiftPower API access)
     "ZWIFT_USERNAME": ("", "Zwift account username/email for API access", str),
@@ -604,6 +605,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "UPGRADE_CHANNEL",
         "NEW_ARRIVALS_CHANNEL_ID",
         "USER_CHANGE_LOG",
+        "REGISTRATION_UPDATES_CHANNEL_ID",
         "DISCORD_BOT_TOKEN",
         "DBOT_AUTH_KEY",
         "TEAM_MEMBER_ROLE_ID",
