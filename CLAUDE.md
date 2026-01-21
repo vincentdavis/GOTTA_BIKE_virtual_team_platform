@@ -428,6 +428,7 @@ REST API for triggering scheduled tasks via external cron service:
     - `update_team_riders` - Fetch team riders from ZwiftPower
     - `update_team_results` - Fetch team results from ZwiftPower
     - `sync_zr_riders` - Sync riders from Zwift Racing API
+    - `guild_member_sync_status` - Report guild member sync health (actual sync done by Discord bot)
 
 To add new tasks, update `TASK_REGISTRY` in `cron_api.py`:
 
@@ -465,6 +466,7 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
     - `/team/applications/{uuid}/` - Admin membership registration view
     - `/team/apply/{uuid}/` - Public membership registration form
     - `/team/performance-review/` - Performance review
+    - `/team/discord-review/` - Discord guild member audit (membership admins only)
     - `/team/youtube/` - YouTube channels
 - `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
@@ -530,7 +532,8 @@ Available settings:
   `PERM_LINK_ADMIN_ROLES`, `PERM_MEMBERSHIP_ADMIN_ROLES`, `PERM_RACING_ADMIN_ROLES`, `PERM_TEAM_MEMBER_ROLES`,
   `PERM_RACE_READY_ROLES` (JSON arrays of Discord role IDs)
 - **Discord Roles**: `RACE_READY_ROLE_ID` (Discord role ID assigned when user is race ready, `0` to disable),
-  `NEW_ARRIVALS_CHANNEL_ID` (Discord channel ID for new member welcome messages)
+  `NEW_ARRIVALS_CHANNEL_ID` (Discord channel ID for new member welcome messages),
+  `WELCOME_TEAM_CHANNEL_ID` (Discord channel for membership registration updates, `0` to disable)
 - **New Arrival Messages**: `NEW_ARRIVAL_MESSAGE_PUBLIC` (public welcome message for welcome channel),
   `NEW_ARRIVAL_MESSAGE_PRIVATE` (private DM sent to new members), `SEND_NEW_ARRIVAL_DM` (toggle to enable/disable DMs).
   Messages support Markdown and placeholders: `{member}` for member name/mention, `{server}` for server name
@@ -739,6 +742,57 @@ The bot needs the **Server Members Intent** (privileged):
 1. Enable `intents.members = True` in bot code (`src/bot.py`)
 2. Enable "Server Members Intent" in Discord Developer Portal > Bot > Privileged Gateway Intents
 
+### Automatic Sync Schedule
+
+The Discord bot automatically syncs guild members every 6 hours (configurable via `MEMBER_SYNC_INTERVAL_HOURS` env var).
+The cron API includes a `guild_member_sync_status` task that reports on sync health without performing the actual sync.
+
+### Discord Review Page
+
+Admin page at `/team/discord-review/` for auditing Discord guild members. Requires `membership_admin` permission.
+
+**Features:**
+
+- Lists all `GuildMember` records with avatar, username, nickname, join date, left date, bot status, role count
+- Search by username, display name, or nickname
+- Multi-select filters for Discord roles (include/exclude)
+- Filter by join date range, left status (active/left), bot status, account link status
+- Sortable columns
+- Username links to Discord profile (external)
+- "Linked" badge links to user's public profile (if account exists)
+- Shows match count below filters
+
+**Table Columns:**
+
+| Column | Description | Sortable |
+|--------|-------------|----------|
+| Avatar | Discord avatar or initials fallback | No |
+| Username | Discord username with link to profile | Yes |
+| Nickname | Server nickname or "-" | Yes |
+| Join Date | When member joined Discord server | Yes |
+| Left Date | Date left or "Active" badge | Yes |
+| Is Bot | "Bot" or "User" badge | Yes |
+| Role Count | Number badge with tooltip showing role names | Yes |
+| Account | "Linked" (links to profile) or "—" | No |
+
+**Filter Parameters (GET):**
+
+- `q` - Search text (username, nickname, display_name)
+- `join_from` / `join_to` - Join date range
+- `left_status` - "active" | "left" | "" (all)
+- `is_bot` - "yes" | "no" | "" (all)
+- `role` - Multi-select Discord role IDs (OR logic)
+- `exclude_role` - Multi-select Discord role IDs to exclude (AND logic)
+- `account_status` - "linked" | "unlinked" | "" (all)
+- `sort` / `dir` - Sort column and direction
+
+**Files:**
+
+- `apps/team/views.py` - `discord_review_view` function
+- `apps/team/urls.py` - URL pattern at `discord-review/`
+- `templates/team/discord_review.html` - Template
+- `theme/templates/sidebar.html` - Sidebar link in Membership section
+
 ## Race Ready Verification
 
 Users can achieve "Race Ready" status by completing verification requirements. This status gates participation in
@@ -871,3 +925,33 @@ Users with `membership_admin` permission can:
 - Add admin notes
 
 Configure `PERM_MEMBERSHIP_ADMIN_ROLES` in Constance with Discord role IDs.
+
+### Discord Notifications
+
+Registration updates are posted to a Discord channel for team visibility.
+
+**Constance Setting:**
+
+- `WELCOME_TEAM_CHANNEL_ID` - Discord channel ID for registration updates (set to `0` to disable)
+
+**Notification Events:**
+
+| Event | Trigger | Message Format |
+|-------|---------|----------------|
+| New Registration | Discord bot creates application via API | `📝 **New Registration**\n{name} (<@discord_id>) submitted a membership registration.` |
+| Applicant Update | Applicant saves changes on public form | `📝 **Registration Updated**\n{name} (<@discord_id>) updated their registration.` |
+| Status Change | Admin changes status | `👤 **Status Changed**\n{admin} changed {name}'s status: {old} → {new}` |
+| Admin Notes | Admin updates notes (without status change) | `💬 **Admin Notes**\n{admin} updated notes for {name}'s registration.` |
+
+**Implementation:**
+
+- Background task: `apps/team/tasks.py` - `notify_application_update()`
+- Uses `send_discord_channel_message()` from `apps/accounts/discord_service.py`
+- Task is enqueued asynchronously (doesn't block request)
+- Gracefully skips if channel ID is 0 or not configured
+
+**Files:**
+
+- `apps/team/tasks.py` - `notify_application_update` task
+- `apps/dbot_api/api.py` - Calls task on application creation
+- `apps/team/views.py` - Calls task in admin and public views
