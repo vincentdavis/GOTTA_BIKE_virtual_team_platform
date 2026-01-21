@@ -42,6 +42,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/team/membership-review/ - Membership review dashboard",
             "/team/applications/ - Membership application list",
             "/team/applications/{uuid}/ - Individual application review",
+            "/team/discord-review/ - Discord guild member review",
         ],
     },
     Permissions.RACING_ADMIN: {

@@ -1255,6 +1255,169 @@ def application_verify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpRespons
     )
 
 
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_GET
+def discord_review_view(request: HttpRequest) -> HttpResponse:
+    """Review and audit Discord guild members.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered Discord review page.
+
+    """
+    from datetime import datetime
+
+    from apps.accounts.models import GuildMember
+    from apps.team.models import DiscordRole
+
+    # Get all guild members
+    members = GuildMember.objects.select_related("user").all()
+
+    # Build role lookup dict: {role_id: role}
+    all_roles = DiscordRole.objects.all()
+    role_lookup = {role.role_id: role for role in all_roles}
+
+    # Get filter parameters
+    search_query = request.GET.get("q", "").strip()
+    join_from = request.GET.get("join_from", "").strip()
+    join_to = request.GET.get("join_to", "").strip()
+    left_status = request.GET.get("left_status", "")
+    is_bot_filter = request.GET.get("is_bot", "")
+    role_filters = request.GET.getlist("role")  # Multiple values for Roles filter (OR logic)
+    exclude_roles = request.GET.getlist("exclude_roles")  # Multiple values for ~Roles filter
+    account_status = request.GET.get("account_status", "")
+
+    # Get sort parameters
+    sort_by = request.GET.get("sort", "joined_at")
+    sort_dir = request.GET.get("dir", "desc")
+
+    # Apply search filter (by username, display_name, or nickname)
+    if search_query:
+        members = members.filter(
+            Q(username__icontains=search_query)
+            | Q(display_name__icontains=search_query)
+            | Q(nickname__icontains=search_query)
+        )
+
+    # Apply join date range filters
+    if join_from:
+        try:
+            from_date = datetime.strptime(join_from, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            members = members.filter(joined_at__gte=from_date)
+        except ValueError:
+            pass
+
+    if join_to:
+        try:
+            to_date = datetime.strptime(join_to, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            # Include the entire day by adding 1 day
+            to_date = to_date.replace(hour=23, minute=59, second=59)
+            members = members.filter(joined_at__lte=to_date)
+        except ValueError:
+            pass
+
+    # Apply left status filter
+    if left_status == "active":
+        members = members.filter(date_left__isnull=True)
+    elif left_status == "left":
+        members = members.filter(date_left__isnull=False)
+
+    # Apply is_bot filter
+    if is_bot_filter == "yes":
+        members = members.filter(is_bot=True)
+    elif is_bot_filter == "no":
+        members = members.filter(is_bot=False)
+
+    # Apply account status filter (linked/unlinked)
+    if account_status == "linked":
+        members = members.filter(user__isnull=False)
+    elif account_status == "unlinked":
+        members = members.filter(user__isnull=True)
+
+    # Apply role filter (members must have ANY of the selected roles - OR logic)
+    if role_filters:
+        role_q = Q()
+        for role_id in role_filters:
+            role_q |= Q(roles__contains=role_id)
+        members = members.filter(role_q)
+
+    # Apply exclude roles filter (~Roles) - exclude members who have ANY of the selected roles
+    # This is NOT(role1 OR role2 OR role3) logic
+    if exclude_roles:
+        for excluded_role_id in exclude_roles:
+            members = members.exclude(roles__contains=excluded_role_id)
+
+    # Apply sorting
+    sort_mapping = {
+        "username": "username",
+        "nickname": "nickname",
+        "joined_at": "joined_at",
+        "date_left": "date_left",
+        "is_bot": "is_bot",
+    }
+    if sort_by in sort_mapping:
+        order_field = sort_mapping[sort_by]
+        if sort_dir == "desc":
+            order_field = f"-{order_field}"
+        members = members.order_by(order_field)
+
+    # Convert to list and add role_names_display for each member
+    members_list = list(members)
+    for member in members_list:
+        role_names = []
+        for role_id in member.roles or []:
+            role = role_lookup.get(str(role_id))
+            if role:
+                role_names.append(role.name)
+            else:
+                role_names.append(f"Unknown ({role_id})")
+        member.role_names_display = ", ".join(role_names) if role_names else "No roles"
+        member.role_count = len(member.roles or [])
+
+    # Handle role_count sorting in Python (since it's computed)
+    if sort_by == "role_count":
+        reverse = sort_dir == "desc"
+        members_list = sorted(members_list, key=lambda m: m.role_count, reverse=reverse)
+
+    logfire.debug(
+        "Discord review page loaded",
+        user_id=request.user.id,
+        total_members=len(members_list),
+        filters={
+            "search": search_query,
+            "join_from": join_from,
+            "join_to": join_to,
+            "left_status": left_status,
+            "is_bot": is_bot_filter,
+            "account_status": account_status,
+            "roles": role_filters,
+            "exclude_roles": exclude_roles,
+        },
+    )
+
+    return render(
+        request,
+        "team/discord_review.html",
+        {
+            "members": members_list,
+            "search_query": search_query,
+            "join_from": join_from,
+            "join_to": join_to,
+            "left_status": left_status,
+            "is_bot_filter": is_bot_filter,
+            "account_status": account_status,
+            "role_filters": role_filters,
+            "exclude_roles": exclude_roles,
+            "all_roles": all_roles.order_by("position"),
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+        },
+    )
+
+
 @require_POST
 def application_unverify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
     """Remove Zwift verification from a membership application.

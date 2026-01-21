@@ -20,6 +20,7 @@ urlpatterns = [
     path("performance-review/", views.performance_review_view, name="performance_review"),
     path("youtube/", views.youtube_channels_view, name="youtube_channels"),
     # Membership
+    path("discord-review/", views.discord_review_view, name="discord_review"),
     path("membership-review/", views.membership_review_view, name="membership_review"),
     path("applications/", views.membership_application_list_view, name="application_list"),
     path("applications/<uuid:pk>/", views.membership_application_admin_view, name="application_admin"),
