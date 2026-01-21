@@ -74,6 +74,59 @@ def send_discord_dm(discord_id: str, message: str) -> bool:
         return False
 
 
+def send_discord_channel_message(channel_id: str | int, message: str) -> bool:
+    """Send a message to a Discord channel.
+
+    Args:
+        channel_id: The Discord channel ID to send the message to.
+        message: The message content to send.
+
+    Returns:
+        True if the message was sent successfully, False otherwise.
+
+    """
+    if not channel_id or channel_id == 0:
+        logfire.debug("Channel ID is 0 or not set, skipping channel message")
+        return False
+
+    bot_token = config.DISCORD_BOT_TOKEN
+    if not bot_token:
+        logfire.warning("DISCORD_BOT_TOKEN not configured, skipping channel message")
+        return False
+
+    headers = {
+        "Authorization": f"Bot {bot_token}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(
+                f"{DISCORD_API_BASE}/channels/{channel_id}/messages",
+                headers=headers,
+                json={"content": message},
+            )
+            response.raise_for_status()
+            logfire.info("Discord channel message sent", channel_id=str(channel_id))
+            return True
+
+    except httpx.HTTPStatusError as e:
+        logfire.error(
+            "Failed to send Discord channel message",
+            channel_id=str(channel_id),
+            status_code=e.response.status_code,
+            error=str(e),
+        )
+        return False
+    except httpx.RequestError as e:
+        logfire.error(
+            "Discord API request failed for channel message",
+            channel_id=str(channel_id),
+            error=str(e),
+        )
+        return False
+
+
 def send_verification_notification(
     discord_id: str,
     is_verified: bool,

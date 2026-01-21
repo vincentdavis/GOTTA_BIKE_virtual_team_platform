@@ -148,6 +148,15 @@ def update_team_riders() -> dict:
             left_count += 1
             logfire.info(f"Rider left team: {rider.name} ({rider.zwid})")
 
+            # Enqueue notification task
+            from apps.accounts.tasks import notify_rider_left_team
+
+            notify_rider_left_team.enqueue(
+                zwid=rider.zwid,
+                rider_name=rider.name,
+                source="ZwiftPower",
+            )
+
         logfire.info(
             f"Team riders update complete: {created_count} created, {updated_count} updated, {left_count} left"
         )

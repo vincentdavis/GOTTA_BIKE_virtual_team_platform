@@ -239,6 +239,15 @@ def sync_zr_riders(from_id: int | None = None) -> dict:
                 left_count += 1
                 logfire.info(f"ZR Rider left team: {rider.name} ({rider.zwid})")
 
+                # Enqueue notification task
+                from apps.accounts.tasks import notify_rider_left_team
+
+                notify_rider_left_team.enqueue(
+                    zwid=rider.zwid,
+                    rider_name=rider.name,
+                    source="Zwift Racing",
+                )
+
             logfire.info(
                 f"ZR Riders sync complete: {created_count} created, {updated_count} updated, {left_count} left"
             )

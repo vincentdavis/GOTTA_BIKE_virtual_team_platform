@@ -25,11 +25,23 @@
         max-width: 100%;
     }
     .ts-wrapper .ts-control {
-        background-color: oklch(var(--b1));
-        border-color: oklch(var(--bc) / 0.2);
+        background-color: #1d232a !important;
+        border-color: rgba(255, 255, 255, 0.2) !important;
         border-radius: var(--rounded-btn, 0.5rem);
         padding: 0.5rem 1rem;
         min-height: 3rem;
+        color: #a6adba !important;
+    }
+    .ts-wrapper .ts-control > input,
+    .ts-wrapper .ts-control > input[type="text"] {
+        color: #a6adba !important;
+        background: transparent !important;
+    }
+    .ts-wrapper .ts-control > input::placeholder {
+        color: #6b7280 !important;
+    }
+    .ts-wrapper .ts-control .item span {
+        color: #a6adba !important;
     }
     /* Tom Select dropdown - use inherit to get background from page context */
     .ts-dropdown {
