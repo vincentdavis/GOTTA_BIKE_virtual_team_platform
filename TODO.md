@@ -4,11 +4,7 @@
 
 **Data Connections**
 
-- [X] pop up after creating the spreadsheet "Your spreadsheet is created, click Sync to get started."
-- [X] If a user deletes the spreadsheet and then click sync, we get a server error, we need to handle this case.
-- [X] Users with access to data connections can see all data connections. Not just the ones they created.
-- [X] Spreadsheet must be in the GOOGLE_DRIVE_FOLDER_ID Verify this is using an exciting sheet.
-- [] verify spreadsheet in owned by organization
+- [] verify spreadsheet in owned by how the organization
 
 **verifications**
 
@@ -19,10 +15,6 @@
 **Tasks**
 
 **Discord**
-
-- [X] post message the use change when a rider leaves the zp team or zr team. This can be a second task triggered by
-  sync
-  task.
 
 **USER REGISTRATION**
 
@@ -42,7 +34,7 @@
 
 **Membership**
 
-- [] Show is a user has "member role" or "guest role"
+- [] Show if a user has "member role" or "guest role"
 - [X] List trainer and heartrate value on /team/membership-review/ Race Profile
 
 **User Profile**
