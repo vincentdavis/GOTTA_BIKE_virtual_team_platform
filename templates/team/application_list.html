@@ -10,12 +10,15 @@
         <h2 class="card-title text-2xl">Membership Registrations</h2>
       </div>
 
-      <!-- Status Count Badges -->
+      <!-- Status Filter Buttons -->
       <div class="flex flex-wrap gap-2 mb-6">
+        <a href="{% url 'team:application_list' %}" class="btn btn-sm {% if not status_filter %}btn-primary{% else %}btn-outline{% endif %}">
+          All
+        </a>
         {% for value, label in status_choices %}
-        <a href="?status={{ value }}" class="badge {% if status_filter == value %}badge-primary{% else %}badge-outline{% endif %} badge-lg gap-2">
+        <a href="?status={{ value }}" class="btn btn-sm {% if status_filter == value %}{% if value == 'pending' %}btn-warning{% elif value == 'approved' %}btn-success{% elif value == 'rejected' %}btn-error{% elif value == 'in_progress' %}btn-info{% else %}btn-primary{% endif %}{% else %}btn-outline{% endif %} gap-2">
           {{ label }}
-          <span class="badge badge-sm {% if value == 'pending' %}badge-warning{% elif value == 'approved' %}badge-success{% elif value == 'rejected' %}badge-error{% else %}badge-ghost{% endif %}">
+          <span class="badge badge-sm {% if value == 'pending' %}badge-warning{% elif value == 'approved' %}badge-success{% elif value == 'rejected' %}badge-error{% elif value == 'in_progress' %}badge-info{% else %}badge-ghost{% endif %} {% if status_filter == value %}badge-outline{% endif %}">
             {% for k, v in status_counts.items %}{% if k == value %}{{ v }}{% endif %}{% endfor %}
           </span>
         </a>
@@ -136,8 +139,6 @@
                 <span class="badge badge-warning badge-sm">Pending</span>
                 {% elif app.status == "in_progress" %}
                 <span class="badge badge-info badge-sm">In Progress</span>
-                {% elif app.status == "waiting_response" %}
-                <span class="badge badge-secondary badge-sm">Waiting</span>
                 {% elif app.status == "approved" %}
                 <span class="badge badge-success badge-sm">Approved</span>
                 {% elif app.status == "rejected" %}

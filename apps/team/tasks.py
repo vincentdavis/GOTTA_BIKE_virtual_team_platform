@@ -121,7 +121,6 @@ def _get_status_display(status: str) -> str:
     status_map = {
         "pending": "Pending Review",
         "in_progress": "In Progress",
-        "waiting_response": "Waiting for User Response",
         "approved": "Approved",
         "rejected": "Rejected",
     }

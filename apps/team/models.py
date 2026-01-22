@@ -628,7 +628,6 @@ class MembershipApplication(models.Model):
 
         PENDING = "pending", "Pending Review"
         IN_PROGRESS = "in_progress", "In Progress"
-        WAITING_RESPONSE = "waiting_response", "Waiting for User Response"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
 

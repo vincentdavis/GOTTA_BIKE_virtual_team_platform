@@ -33,8 +33,6 @@
         <span class="badge badge-warning badge-lg">Pending Review</span>
         {% elif application.status == "in_progress" %}
         <span class="badge badge-info badge-lg">In Progress</span>
-        {% elif application.status == "waiting_response" %}
-        <span class="badge badge-secondary badge-lg">Waiting for Response</span>
         {% elif application.status == "approved" %}
         <span class="badge badge-success badge-lg">Approved</span>
         {% elif application.status == "rejected" %}
@@ -309,9 +307,6 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
               Reject
-            </button>
-            <button type="submit" name="status" value="waiting_response" class="btn btn-secondary btn-outline">
-              Request Info
             </button>
           </div>
         </form>
