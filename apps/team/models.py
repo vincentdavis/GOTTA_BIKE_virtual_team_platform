@@ -831,6 +831,13 @@ class MembershipApplication(models.Model):
         help_text="Admin who last modified this application",
     )
 
+    # Messages from admins to applicant
+    messages = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Messages from admins to applicant",
+    )
+
     class Meta:
         """Meta options for MembershipApplication model."""
 
@@ -942,3 +949,26 @@ class MembershipApplication(models.Model):
 
         """
         return not all(self.profile_completion_status.values())
+
+    def add_message(self, user: settings.AUTH_USER_MODEL, message: str) -> dict:
+        """Add a message from an admin to the applicant.
+
+        Args:
+            user: The admin user adding the message.
+            message: The message content (supports Markdown).
+
+        Returns:
+            The created message dict.
+
+        """
+        new_message = {
+            "id": str(uuid.uuid4()),
+            "message": message,
+            "author_id": user.id,
+            "author_name": user.discord_nickname or user.first_name or user.username,
+            "created_at": timezone.now().isoformat(),
+        }
+        if self.messages is None:
+            self.messages = []
+        self.messages.append(new_message)
+        return new_message

@@ -4091,6 +4091,9 @@
   .h-24 {
     height: calc(var(--spacing) * 24);
   }
+  .h-32 {
+    height: calc(var(--spacing) * 32);
+  }
   .h-\[calc\(100vh-64px\)\] {
     height: calc(100vh - 64px);
   }
@@ -5079,6 +5082,12 @@
     }
   }
   @layer daisyui.l1.l2.l3 {
+    .btn-info {
+      --btn-color: var(--color-info);
+      --btn-fg: var(--color-info-content);
+    }
+  }
+  @layer daisyui.l1.l2.l3 {
     .btn-primary {
       --btn-color: var(--color-primary);
       --btn-fg: var(--color-primary-content);
@@ -5094,6 +5103,12 @@
     .btn-success {
       --btn-color: var(--color-success);
       --btn-fg: var(--color-success-content);
+    }
+  }
+  @layer daisyui.l1.l2.l3 {
+    .btn-warning {
+      --btn-color: var(--color-warning);
+      --btn-fg: var(--color-warning-content);
     }
   }
   .select-all {
@@ -5119,6 +5134,9 @@
     .group-hover\:text-primary:is(:where(.group):hover *) {
       color: var(--color-primary);
     }
+  }
+  .last\:mb-0:last-child {
+    margin-bottom: calc(var(--spacing) * 0);
   }
   @media (hover: hover) {
     .hover\:bg-base-100:hover {

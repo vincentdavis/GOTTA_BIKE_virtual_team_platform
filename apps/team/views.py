@@ -1094,6 +1094,29 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
     )
 
     if request.method == "POST":
+        action = request.POST.get("action")
+
+        # Handle add_message action separately
+        if action == "add_message":
+            message_content = request.POST.get("message", "").strip()
+            if message_content:
+                application.add_message(request.user, message_content)
+                application.modified_by = request.user
+                application.save(update_fields=["messages", "modified_by"])
+                logfire.info(
+                    "Admin message added to application",
+                    application_id=str(pk),
+                    applicant_discord_id=application.discord_id,
+                    applicant_name=application.display_name,
+                    admin_id=request.user.id,
+                    admin_username=request.user.username,
+                )
+                messages.success(request, "Message sent to applicant.")
+            else:
+                messages.warning(request, "Message cannot be empty.")
+            return redirect("team:application_admin", pk=pk)
+
+        # Handle regular form submission
         old_status = application.status
         old_admin_notes = application.admin_notes
         form = MembershipApplicationAdminForm(request.POST, instance=application)
