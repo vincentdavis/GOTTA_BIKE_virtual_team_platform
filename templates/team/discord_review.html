@@ -95,16 +95,16 @@
                   {% endif %}
                 </span>
               </div>
-              <div tabindex="0" class="dropdown-content z-[100] menu p-2 shadow bg-base-100 rounded-box w-64 max-h-60 overflow-y-auto">
+              <div tabindex="0" class="dropdown-content z-[100] p-2 shadow bg-base-100 rounded-box w-64 max-h-60 overflow-y-auto overflow-x-hidden flex flex-col">
                 {% for role in all_roles %}
-                <label class="label cursor-pointer justify-start gap-3 py-1">
+                <label class="label cursor-pointer justify-start gap-3 py-1 flex-shrink-0">
                   <input type="checkbox"
                          name="role"
                          value="{{ role.role_id }}"
                          class="checkbox checkbox-sm"
                          {% if role.role_id in role_filters %}checked{% endif %}
                   />
-                  <span class="label-text">{{ role.name }}</span>
+                  <span class="label-text truncate">{{ role.name }}</span>
                 </label>
                 {% endfor %}
               </div>
@@ -126,16 +126,16 @@
                   {% endif %}
                 </span>
               </div>
-              <div tabindex="0" class="dropdown-content z-[100] menu p-2 shadow bg-base-100 rounded-box w-64 max-h-60 overflow-y-auto">
+              <div tabindex="0" class="dropdown-content z-[100] p-2 shadow bg-base-100 rounded-box w-64 max-h-60 overflow-y-auto overflow-x-hidden flex flex-col">
                 {% for role in all_roles %}
-                <label class="label cursor-pointer justify-start gap-3 py-1">
+                <label class="label cursor-pointer justify-start gap-3 py-1 flex-shrink-0">
                   <input type="checkbox"
                          name="exclude_roles"
                          value="{{ role.role_id }}"
                          class="checkbox checkbox-sm"
                          {% if role.role_id in exclude_roles %}checked{% endif %}
                   />
-                  <span class="label-text">{{ role.name }}</span>
+                  <span class="label-text truncate">{{ role.name }}</span>
                 </label>
                 {% endfor %}
               </div>
