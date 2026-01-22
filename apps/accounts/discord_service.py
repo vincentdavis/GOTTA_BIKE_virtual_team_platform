@@ -74,12 +74,13 @@ def send_discord_dm(discord_id: str, message: str) -> bool:
         return False
 
 
-def send_discord_channel_message(channel_id: str | int, message: str) -> bool:
+def send_discord_channel_message(channel_id: str | int, message: str, *, silent: bool = False) -> bool:
     """Send a message to a Discord channel.
 
     Args:
         channel_id: The Discord channel ID to send the message to.
         message: The message content to send.
+        silent: If True, suppress push/desktop notifications for this message.
 
     Returns:
         True if the message was sent successfully, False otherwise.
@@ -99,15 +100,21 @@ def send_discord_channel_message(channel_id: str | int, message: str) -> bool:
         "Content-Type": "application/json",
     }
 
+    # Build message payload
+    payload: dict = {"content": message}
+    if silent:
+        # Flag 4096 (1 << 12) = SUPPRESS_NOTIFICATIONS
+        payload["flags"] = 4096
+
     try:
         with httpx.Client(timeout=10.0) as client:
             response = client.post(
                 f"{DISCORD_API_BASE}/channels/{channel_id}/messages",
                 headers=headers,
-                json={"content": message},
+                json=payload,
             )
             response.raise_for_status()
-            logfire.info("Discord channel message sent", channel_id=str(channel_id))
+            logfire.info("Discord channel message sent", channel_id=str(channel_id), silent=silent)
             return True
 
     except httpx.HTTPStatusError as e:

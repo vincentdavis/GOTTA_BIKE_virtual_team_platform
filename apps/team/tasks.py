@@ -91,8 +91,9 @@ def notify_application_update(
             logfire.warning("Unknown update type for notification", update_type=update_type)
             return {"status": "error", "reason": "unknown_update_type"}
 
-        # Send the message
-        success = send_discord_channel_message(channel_id, message)
+        # Send the message (silent for new registrations to avoid notification spam)
+        silent = update_type == "created"
+        success = send_discord_channel_message(channel_id, message, silent=silent)
 
         logfire.info(
             "Application notification sent",
