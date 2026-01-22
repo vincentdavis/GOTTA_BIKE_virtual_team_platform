@@ -348,6 +348,44 @@
                     </div>
                 </div>
 
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-control">
+                        <label class="label" for="id_strava_url">
+                            <span class="label-text">{{ form.strava_url.label }}</span>
+                        </label>
+                        {{ form.strava_url }}
+                        {% if form.strava_url.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.strava_url.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-control">
+                        <label class="label" for="id_garmin_url">
+                            <span class="label-text">{{ form.garmin_url.label }}</span>
+                        </label>
+                        {{ form.garmin_url }}
+                        {% if form.garmin_url.errors %}
+                        <label class="label">
+                            <span class="label-text-alt text-error">{{ form.garmin_url.errors.0 }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="form-control">
+                    <label class="label" for="id_tpv_profile_url">
+                        <span class="label-text">{{ form.tpv_profile_url.label }}</span>
+                    </label>
+                    {{ form.tpv_profile_url }}
+                    {% if form.tpv_profile_url.errors %}
+                    <label class="label">
+                        <span class="label-text-alt text-error">{{ form.tpv_profile_url.errors.0 }}</span>
+                    </label>
+                    {% endif %}
+                </div>
+
                 <div class="flex gap-4 mt-6">
                     <button type="submit" class="btn btn-primary">Save Changes</button>
                     {% if user.is_profile_complete %}

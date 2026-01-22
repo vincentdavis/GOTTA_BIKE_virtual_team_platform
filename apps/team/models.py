@@ -797,6 +797,11 @@ class MembershipApplication(models.Model):
         blank=True,
         help_text="Strava profile URL",
     )
+    tpv_profile_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="TrainingPeaks Virtual profile URL (e.g., https://tpvirtualhub.com/profile/GGGTTTRRRDDD123)",
+    )
 
     # Admin-only fields
     admin_notes = models.TextField(

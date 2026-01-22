@@ -229,6 +229,11 @@ class User(AbstractUser):
         blank=True,
         help_text="Garmin Connect profile URL (e.g., https://connect.garmin.com/modern/profile/username)",
     )
+    tpv_profile_url = models.URLField(
+        max_length=200,
+        blank=True,
+        help_text="TrainingPeaks Virtual profile URL (e.g., https://tpvirtualhub.com/profile/GGGTTTRRRDDD123)",
+    )
 
     # Training Equipment
     trainer = models.CharField(

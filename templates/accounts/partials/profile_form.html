@@ -305,6 +305,18 @@
         </div>
     </div>
 
+    <div class="form-control">
+        <label class="label" for="id_tpv_profile_url">
+            <span class="label-text">{{ form.tpv_profile_url.label }}</span>
+        </label>
+        {{ form.tpv_profile_url }}
+        {% if form.tpv_profile_url.errors %}
+        <label class="label">
+            <span class="label-text-alt text-error">{{ form.tpv_profile_url.errors.0 }}</span>
+        </label>
+        {% endif %}
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="form-control">
             <label class="label" for="id_youtube_channel">

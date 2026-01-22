@@ -51,6 +51,7 @@ class ProfileForm(forms.ModelForm):
             # Social Accounts
             "strava_url",
             "garmin_url",
+            "tpv_profile_url",
             "youtube_channel",
             "twitch_channel",
             "instagram_url",
@@ -184,6 +185,12 @@ class ProfileForm(forms.ModelForm):
                     "placeholder": "https://connect.garmin.com/modern/profile/username",
                 }
             ),
+            "tpv_profile_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://tpvirtualhub.com/profile/...",
+                }
+            ),
             "trainer": forms.Select(
                 attrs={
                     "class": "select select-bordered w-full",
@@ -243,6 +250,7 @@ class ProfileForm(forms.ModelForm):
             # Social Accounts
             "strava_url": "Strava",
             "garmin_url": "Garmin Connect",
+            "tpv_profile_url": "TrainingPeaks Virtual",
             "youtube_channel": "YouTube",
             "twitch_channel": "Twitch",
             "instagram_url": "Instagram",

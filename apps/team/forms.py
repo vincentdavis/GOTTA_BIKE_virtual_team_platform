@@ -377,6 +377,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
             "dual_recording",
             "heartrate_monitor",
             "strava_profile",
+            "tpv_profile_url",
             "agree_privacy",
             "agree_tos",
             "applicant_notes",
@@ -455,6 +456,12 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                     "placeholder": "https://www.strava.com/athletes/1234",
                 }
             ),
+            "tpv_profile_url": forms.URLInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "https://tpvirtualhub.com/profile/...",
+                }
+            ),
             "agree_privacy": forms.CheckboxInput(
                 attrs={"class": "checkbox checkbox-primary"}
             ),
@@ -483,6 +490,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
             "dual_recording": "Dual Recording",
             "heartrate_monitor": "Heart Rate Monitor",
             "strava_profile": "Strava Profile",
+            "tpv_profile_url": "TrainingPeaks Virtual",
             "agree_privacy": "Privacy Policy",
             "agree_tos": "Terms of Service",
             "applicant_notes": "Additional Notes",

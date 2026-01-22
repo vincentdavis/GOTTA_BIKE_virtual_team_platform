@@ -424,6 +424,19 @@
           {% endif %}
         </div>
 
+        <!-- TrainingPeaks Virtual Profile -->
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">{{ form.tpv_profile_url.label }}</span>
+          </label>
+          {{ form.tpv_profile_url }}
+          {% if form.tpv_profile_url.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.tpv_profile_url.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
         <!-- Agreements Section -->
         <div class="divider">Agreements</div>
 

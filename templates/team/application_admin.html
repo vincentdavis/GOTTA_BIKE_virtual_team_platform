@@ -270,6 +270,14 @@
             <span class="text-base-content/30">-</span>
             {% endif %}
           </div>
+          <div>
+            <div class="text-sm text-base-content/60">TrainingPeaks Virtual</div>
+            {% if application.tpv_profile_url %}
+            <a href="{{ application.tpv_profile_url }}" target="_blank" rel="noopener" class="link link-primary">{{ application.tpv_profile_url }}</a>
+            {% else %}
+            <span class="text-base-content/30">-</span>
+            {% endif %}
+          </div>
         </div>
       </div>
 
