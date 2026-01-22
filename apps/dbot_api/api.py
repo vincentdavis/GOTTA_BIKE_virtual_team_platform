@@ -1052,15 +1052,19 @@ def create_membership_application(request: HttpRequest, payload: MembershipAppli
         applicant_discord_username=application.discord_username,
     )
 
+    # Build absolute URLs for the application
+    admin_url = request.build_absolute_uri(
+        reverse("team:application_admin", kwargs={"pk": application.id})
+    )
+    application_url = request.build_absolute_uri(
+        reverse("team:application_public", kwargs={"pk": application.id})
+    )
+
     # Send Discord notification for new application
     notify_application_update.enqueue(
         application_id=str(application.id),
         update_type="created",
-    )
-
-    # Build absolute URL for the application
-    application_url = request.build_absolute_uri(
-        reverse("team:application_public", kwargs={"pk": application.id})
+        application_url=admin_url,
     )
 
     return {

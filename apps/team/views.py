@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
@@ -1115,6 +1116,9 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
             admin_display = request.user.discord_nickname or request.user.first_name or request.user.username
             status_changed = old_status != app.status
             notes_changed = old_admin_notes != app.admin_notes
+            admin_url = request.build_absolute_uri(
+                reverse("team:application_admin", kwargs={"pk": pk})
+            )
 
             if status_changed:
                 notify_application_update.enqueue(
@@ -1123,12 +1127,14 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
                     admin_name=admin_display,
                     old_status=old_status,
                     new_status=app.status,
+                    application_url=admin_url,
                 )
             elif notes_changed:
                 notify_application_update.enqueue(
                     application_id=str(pk),
                     update_type="admin_notes",
                     admin_name=admin_display,
+                    application_url=admin_url,
                 )
 
             messages.success(request, f"Application for {application.display_name} updated.")
@@ -1194,9 +1200,13 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
             )
 
             # Send Discord notification for applicant update
+            admin_url = request.build_absolute_uri(
+                reverse("team:application_admin", kwargs={"pk": pk})
+            )
             notify_application_update.enqueue(
                 application_id=str(pk),
                 update_type="applicant_updated",
+                application_url=admin_url,
             )
 
             messages.success(request, "Your application has been updated. Thank you!")

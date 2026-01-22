@@ -15,6 +15,7 @@ def notify_application_update(
     admin_name: str | None = None,
     old_status: str | None = None,
     new_status: str | None = None,
+    application_url: str | None = None,
 ) -> dict:
     """Send Discord notification for membership application updates.
 
@@ -28,6 +29,7 @@ def notify_application_update(
         admin_name: Name of the admin who made the change (for admin actions).
         old_status: Previous status (for status changes).
         new_status: New status (for status changes).
+        application_url: Full URL to the application admin page.
 
     Returns:
         dict with notification status.
@@ -57,29 +59,33 @@ def notify_application_update(
 
         # Build message based on update type
         if update_type == "created":
+            link = f"<{application_url}>" if application_url else ""
             message = (
-                f"📝 **New Registration**\n"
-                f"{name} ({discord_mention}) submitted a membership registration."
+                f"📝 **New Registration record**\n"
+                f"{name} ({discord_mention}) joined the server. {link}"
             )
         elif update_type == "applicant_updated":
+            link = f"<{application_url}>" if application_url else ""
             message = (
                 f"📝 **Registration Updated**\n"
-                f"{name} ({discord_mention}) updated their registration."
+                f"{name} ({discord_mention}) updated their registration. {link}"
             )
         elif update_type == "status_changed":
             # Get human-readable status names
             old_display = _get_status_display(old_status) if old_status else "Unknown"
             new_display = _get_status_display(new_status) if new_status else "Unknown"
             admin = admin_name or "Unknown admin"
+            link = f"<{application_url}>" if application_url else ""
             message = (
                 f"👤 **Status Changed**\n"
-                f"{admin} changed {name}'s status: {old_display} → {new_display}"
+                f"{admin} changed {name}'s status: {old_display} → {new_display} {link}"
             )
         elif update_type == "admin_notes":
             admin = admin_name or "Unknown admin"
+            link = f"<{application_url}>" if application_url else ""
             message = (
                 f"💬 **Admin Notes**\n"
-                f"{admin} updated notes for {name}'s registration."
+                f"{admin} updated notes for {name}'s registration. {link}"
             )
         else:
             logfire.warning("Unknown update type for notification", update_type=update_type)
