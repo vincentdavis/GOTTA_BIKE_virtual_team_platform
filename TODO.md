@@ -18,9 +18,6 @@
 
 **USER REGISTRATION**
 
-- [] send a message to WELCOM_TEAM_CAHNNEL_ID when a MembershipApplication is created or modified. "{discord nickname}
-  Registration record was just updated. Status, "
-- [] WELCOME_TEAM_CHANNEL_ID = 1463214498335817958
 - [] Send a message to user from app
 - [] Click name to open discord user profile
 
