@@ -15,7 +15,6 @@ from apps.accounts.models import GuildMember, User
 from apps.dbot_api.models import BotStats
 from apps.magic_links.models import MagicLink
 from apps.team.models import DiscordRole, MembershipApplication, RosterFilter
-from apps.team.tasks import notify_application_update
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.models import ZRRider
@@ -1052,19 +1051,9 @@ def create_membership_application(request: HttpRequest, payload: MembershipAppli
         applicant_discord_username=application.discord_username,
     )
 
-    # Build absolute URLs for the application
-    admin_url = request.build_absolute_uri(
-        reverse("team:application_admin", kwargs={"pk": application.id})
-    )
+    # Build absolute URL for the application (public form for applicant)
     application_url = request.build_absolute_uri(
         reverse("team:application_public", kwargs={"pk": application.id})
-    )
-
-    # Send Discord notification for new application
-    notify_application_update.enqueue(
-        application_id=str(application.id),
-        update_type="created",
-        application_url=admin_url,
     )
 
     return {
