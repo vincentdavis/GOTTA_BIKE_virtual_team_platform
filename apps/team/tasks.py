@@ -57,15 +57,16 @@ def notify_application_update(
         name = application.display_name
         discord_mention = f"<@{application.discord_id}>"
 
+        # Build markdown link for application URL
+        link = f"[View Record]({application_url})" if application_url else ""
+
         # Build message based on update type
         if update_type == "created":
-            link = f"<{application_url}>" if application_url else ""
             message = (
                 f"📝 **New Registration record**\n"
                 f"{name} ({discord_mention}) joined the server. {link}"
             )
         elif update_type == "applicant_updated":
-            link = f"<{application_url}>" if application_url else ""
             message = (
                 f"📝 **Registration Updated**\n"
                 f"{name} ({discord_mention}) updated their registration. {link}"
@@ -75,14 +76,12 @@ def notify_application_update(
             old_display = _get_status_display(old_status) if old_status else "Unknown"
             new_display = _get_status_display(new_status) if new_status else "Unknown"
             admin = admin_name or "Unknown admin"
-            link = f"<{application_url}>" if application_url else ""
             message = (
                 f"👤 **Status Changed**\n"
                 f"{admin} changed {name}'s status: {old_display} → {new_display} {link}"
             )
         elif update_type == "admin_notes":
             admin = admin_name or "Unknown admin"
-            link = f"<{application_url}>" if application_url else ""
             message = (
                 f"💬 **Admin Notes**\n"
                 f"{admin} updated notes for {name}'s registration. {link}"
