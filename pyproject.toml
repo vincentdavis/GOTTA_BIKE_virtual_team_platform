@@ -5,7 +5,7 @@ description = "App and discord bot for managing zwift virtual cycling teams."
 requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4>=4.14.3",
-    "boto3>=1.42.24",
+    "boto3>=1.42.33",
     "dj-database-url>=3.1.0",
     "django>=6.0.1",
     "django-allauth[mfa,socialaccount]>=65.14.0",
@@ -42,7 +42,7 @@ dev = [
     "django-reset-migrations>=0.4.0",
     "django-stubs>=5.2.8",
     "pytest>=9.0.1",
-    "ruff>=0.14.13",
-    "ty>=0.0.12",
+    "ruff>=0.14.14",
+    "ty>=0.0.13",
     "logfire-mcp>=0.6.0"
 ]

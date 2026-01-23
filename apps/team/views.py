@@ -34,6 +34,29 @@ from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
 
 
+def _format_field_value_for_notification(field_name: str, value) -> str:
+    """Format field value for display in Discord notifications.
+
+    Args:
+        field_name: The name of the field.
+        value: The value to format.
+
+    Returns:
+        A human-readable string representation of the value.
+
+    """
+    if value is None or value == "":
+        return "(cleared)"
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value)
+    # Handle django-countries Country object
+    if hasattr(value, "name"):
+        return value.name
+    return str(value)
+
+
 @login_required
 @team_member_required()
 @require_GET
@@ -1213,6 +1236,17 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
     if request.method == "POST":
         form = MembershipApplicationApplicantForm(request.POST, instance=application)
         if form.is_valid():
+            # Capture changed fields BEFORE save
+            changed_fields = {}
+            for field_name in form.changed_data:
+                # Get the new value from cleaned_data
+                value = form.cleaned_data.get(field_name)
+                # Get human-readable label from the form field
+                label = form.fields[field_name].label or field_name.replace("_", " ").title()
+                # Format the value for display
+                display_value = _format_field_value_for_notification(field_name, value)
+                changed_fields[label] = display_value
+
             form.save()
             logfire.info(
                 "Membership application updated by applicant",
@@ -1220,17 +1254,20 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
                 applicant_discord_id=application.discord_id,
                 applicant_name=application.display_name,
                 is_complete=application.is_complete,
+                changed_field_count=len(changed_fields),
             )
 
-            # Send Discord notification for applicant update
-            admin_url = request.build_absolute_uri(
-                reverse("team:application_admin", kwargs={"pk": pk})
-            )
-            notify_application_update.enqueue(
-                application_id=str(pk),
-                update_type="applicant_updated",
-                application_url=admin_url,
-            )
+            # Send Discord notification for applicant update (only if something changed)
+            if changed_fields:
+                admin_url = request.build_absolute_uri(
+                    reverse("team:application_admin", kwargs={"pk": pk})
+                )
+                notify_application_update.enqueue(
+                    application_id=str(pk),
+                    update_type="applicant_updated",
+                    application_url=admin_url,
+                    changed_fields=changed_fields,
+                )
 
             messages.success(request, "Your application has been updated. Thank you!")
             return redirect("team:application_public", pk=pk)

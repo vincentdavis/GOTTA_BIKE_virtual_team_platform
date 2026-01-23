@@ -16,6 +16,7 @@ def notify_application_update(
     old_status: str | None = None,
     new_status: str | None = None,
     application_url: str | None = None,
+    changed_fields: dict | None = None,
 ) -> dict:
     """Send Discord notification for membership application updates.
 
@@ -30,6 +31,7 @@ def notify_application_update(
         old_status: Previous status (for status changes).
         new_status: New status (for status changes).
         application_url: Full URL to the application admin page.
+        changed_fields: Dict of {field_label: display_value} for fields that changed.
 
     Returns:
         dict with notification status.
@@ -69,8 +71,21 @@ def notify_application_update(
         elif update_type == "applicant_updated":
             message = (
                 f"📝 **Registration Updated**\n"
-                f"{name} ({discord_mention}) updated their registration. {link}"
+                f"{name} ({discord_mention}) updated their registration."
             )
+
+            # Add changed fields if provided
+            if changed_fields:
+                message += "\n\n**Changed fields:**"
+                for label, value in changed_fields.items():
+                    # Truncate long values to keep message concise
+                    display = str(value)
+                    if len(display) > 100:
+                        display = display[:100] + "..."
+                    message += f"\n• {label}: {display}"
+
+            if link:
+                message += f"\n\n{link}"
         elif update_type == "status_changed":
             # Get human-readable status names
             old_display = _get_status_display(old_status) if old_status else "Unknown"
