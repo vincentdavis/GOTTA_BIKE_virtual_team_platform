@@ -1236,16 +1236,25 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
     if request.method == "POST":
         form = MembershipApplicationApplicantForm(request.POST, instance=application)
         if form.is_valid():
-            # Capture changed fields BEFORE save
+            # Capture all fields and identify which changed BEFORE save
             changed_fields = {}
-            for field_name in form.changed_data:
-                # Get the new value from cleaned_data
+            unchanged_fields = {}
+            changed_field_names = set(form.changed_data)
+
+            for field_name in form.fields:
+                # Get the value from cleaned_data
                 value = form.cleaned_data.get(field_name)
                 # Get human-readable label from the form field
                 label = form.fields[field_name].label or field_name.replace("_", " ").title()
                 # Format the value for display
                 display_value = _format_field_value_for_notification(field_name, value)
-                changed_fields[label] = display_value
+
+                if field_name in changed_field_names:
+                    changed_fields[label] = display_value
+                else:
+                    # Only include non-empty unchanged fields
+                    if value not in (None, "", [], False):
+                        unchanged_fields[label] = display_value
 
             form.save()
             logfire.info(
@@ -1267,6 +1276,7 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
                     update_type="applicant_updated",
                     application_url=admin_url,
                     changed_fields=changed_fields,
+                    unchanged_fields=unchanged_fields,
                 )
 
             messages.success(request, "Your application has been updated. Thank you!")

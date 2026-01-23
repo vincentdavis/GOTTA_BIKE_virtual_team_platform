@@ -17,6 +17,7 @@ def notify_application_update(
     new_status: str | None = None,
     application_url: str | None = None,
     changed_fields: dict | None = None,
+    unchanged_fields: dict | None = None,
 ) -> dict:
     """Send Discord notification for membership application updates.
 
@@ -32,6 +33,7 @@ def notify_application_update(
         new_status: New status (for status changes).
         application_url: Full URL to the application admin page.
         changed_fields: Dict of {field_label: display_value} for fields that changed.
+        unchanged_fields: Dict of {field_label: display_value} for fields that didn't change.
 
     Returns:
         dict with notification status.
@@ -74,10 +76,20 @@ def notify_application_update(
                 f"{name} ({discord_mention}) updated their registration."
             )
 
-            # Add changed fields if provided
+            # Add changed fields section (marked with ✏️)
             if changed_fields:
-                message += "\n\n**Changed fields:**"
+                message += "\n\n**✏️ Changed:**"
                 for label, value in changed_fields.items():
+                    # Truncate long values to keep message concise
+                    display = str(value)
+                    if len(display) > 100:
+                        display = display[:100] + "..."
+                    message += f"\n• {label}: {display}"
+
+            # Add unchanged fields section (for reference)
+            if unchanged_fields:
+                message += "\n\n**Unchanged:**"
+                for label, value in unchanged_fields.items():
                     # Truncate long values to keep message concise
                     display = str(value)
                     if len(display) > 100:
