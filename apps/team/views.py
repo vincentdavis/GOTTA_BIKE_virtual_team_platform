@@ -1256,6 +1256,15 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
                     if value not in (None, "", [], False):
                         unchanged_fields[label] = display_value
 
+            # Add Zwift verification status (not part of form, handled via HTMX)
+            if application.zwift_verified and application.zwift_id:
+                zp_link = f"https://zwiftpower.com/profile.php?z={application.zwift_id}"
+                unchanged_fields["Zwift Account"] = f"Verified ([ZwiftPower]({zp_link}))"
+            elif application.zwift_id:
+                unchanged_fields["Zwift Account"] = f"ID: {application.zwift_id} (not verified)"
+            else:
+                unchanged_fields["Zwift Account"] = "Not linked"
+
             form.save()
             logfire.info(
                 "Membership application updated by applicant",

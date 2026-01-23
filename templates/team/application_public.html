@@ -408,6 +408,14 @@
           </div>
         </div>
 
+        <!-- Zwift Account Verification Section -->
+        <div class="divider">Zwift Account Verification</div>
+        <div class="mb-2">
+          <div id="zwift-status-container">
+            {% include "team/partials/application_zwift_status.html" %}
+          </div>
+        </div>
+
         <!-- Social Links Section (Optional) -->
         <div class="divider">Social Links (Optional)</div>
 
@@ -532,15 +540,6 @@
           </button>
         </div>
       </form>
-
-      <!-- Zwift Account Verification Section (OUTSIDE form) -->
-      <div class="divider"></div>
-      <div class="mb-6">
-        <h3 class="text-lg font-semibold mb-3">Zwift Account Verification</h3>
-        <div id="zwift-status-container">
-          {% include "team/partials/application_zwift_status.html" %}
-        </div>
-      </div>
 
       <!-- Zwift Verification Modal -->
       <dialog id="zwift-verify-modal" class="modal">
