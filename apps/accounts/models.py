@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
+import logfire
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django_countries.fields import CountryField
@@ -336,12 +337,31 @@ class User(AbstractUser):
 
         """
         if role not in UserRoles.ALL:
+            logfire.warning(
+                "Invalid role addition attempted",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                role=role,
+                valid_roles=UserRoles.ALL,
+            )
             return False
         if self.roles is None:
             self.roles = []
         if role not in self.roles:
             self.roles.append(role)
+            logfire.info(
+                "Role added to user",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                role=role,
+            )
             return True
+        logfire.debug(
+            "Role already present, not added",
+            user_id=self.id,
+            discord_id=self.discord_id,
+            role=role,
+        )
         return False
 
     def remove_role(self, role: str) -> bool:
@@ -356,7 +376,19 @@ class User(AbstractUser):
         """
         if self.roles and role in self.roles:
             self.roles.remove(role)
+            logfire.info(
+                "Role removed from user",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                role=role,
+            )
             return True
+        logfire.debug(
+            "Role not present, not removed",
+            user_id=self.id,
+            discord_id=self.discord_id,
+            role=role,
+        )
         return False
 
     def _get_permission_role_ids(self, constance_key: str) -> list[int]:
@@ -398,12 +430,35 @@ class User(AbstractUser):
         """
         # 1. Superuser bypass
         if self.is_superuser:
+            logfire.debug(
+                "Permission granted via superuser",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                permission=permission_name,
+                grant_reason="superuser",
+            )
             return True
 
         # 2. Check explicit overrides
         if self.permission_overrides:
             override = self.permission_overrides.get(permission_name)
             if override is not None:
+                if override:
+                    logfire.debug(
+                        "Permission granted via override",
+                        user_id=self.id,
+                        discord_id=self.discord_id,
+                        permission=permission_name,
+                        grant_reason="permission_override",
+                    )
+                else:
+                    logfire.debug(
+                        "Permission denied via override",
+                        user_id=self.id,
+                        discord_id=self.discord_id,
+                        permission=permission_name,
+                        denial_reason="permission_override_revoked",
+                    )
                 return bool(override)
 
         # 3. Check Discord roles against Constance config
@@ -413,10 +468,34 @@ class User(AbstractUser):
             if allowed_role_ids:
                 user_role_ids = self.get_discord_role_ids()
                 if any(rid in user_role_ids for rid in allowed_role_ids):
+                    logfire.debug(
+                        "Permission granted via Discord role",
+                        user_id=self.id,
+                        discord_id=self.discord_id,
+                        permission=permission_name,
+                        grant_reason="discord_role",
+                    )
                     return True
 
         # 4. Backward compatibility: check legacy app roles
-        return self.has_role(permission_name)
+        has_legacy_role = self.has_role(permission_name)
+        if has_legacy_role:
+            logfire.debug(
+                "Permission granted via legacy role",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                permission=permission_name,
+                grant_reason="legacy_role",
+            )
+        else:
+            logfire.debug(
+                "Permission denied - no matching role",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                permission=permission_name,
+                denial_reason="no_matching_role",
+            )
+        return has_legacy_role
 
     @property
     def is_app_admin(self) -> bool:
@@ -483,12 +562,37 @@ class User(AbstractUser):
 
         # Build set of valid (non-expired) verification types
         valid_types = set()
+        expired_types = []
         for record in verified_records:
             if not record.is_expired:
                 valid_types.add(record.verify_type)
+            else:
+                expired_types.append(record.verify_type)
 
         # Check that ALL required types are present
-        return all(req_type in valid_types for req_type in required_types)
+        is_ready = all(req_type in valid_types for req_type in required_types)
+        missing_types = [t for t in required_types if t not in valid_types]
+
+        if is_ready:
+            logfire.debug(
+                "User is race ready",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                required_types=list(required_types),
+                valid_types=list(valid_types),
+            )
+        else:
+            logfire.debug(
+                "User is not race ready",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                required_types=list(required_types),
+                valid_types=list(valid_types),
+                missing_types=missing_types,
+                expired_types=expired_types,
+            )
+
+        return is_ready
 
     @property
     def is_any_admin(self) -> bool:
@@ -559,27 +663,44 @@ class User(AbstractUser):
             True if all required fields are filled and Zwift is verified, False otherwise.
 
         """
+        # Collect missing fields for logging
+        missing_fields = []
+
         required_text_fields = [
-            self.first_name,
-            self.last_name,
-            self.gender,
-            self.timezone,
+            ("first_name", self.first_name),
+            ("last_name", self.last_name),
+            ("gender", self.gender),
+            ("timezone", self.timezone),
         ]
 
         # Check all text fields are non-empty
-        if not all(field and field.strip() for field in required_text_fields):
-            return False
+        for field_name, field_value in required_text_fields:
+            if not (field_value and field_value.strip()):
+                missing_fields.append(field_name)
 
         # Check country is set (CountryField returns a Country object, not a string)
         if not self.country:
-            return False
+            missing_fields.append("country")
 
         # Check birth_year is set (it's a nullable integer field)
         if not self.birth_year:
-            return False
+            missing_fields.append("birth_year")
 
         # Check Zwift account is verified
-        return self.zwid_verified
+        if not self.zwid_verified:
+            missing_fields.append("zwid_verified")
+
+        is_complete = len(missing_fields) == 0
+
+        if not is_complete:
+            logfire.debug(
+                "Profile is incomplete",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                missing_fields=missing_fields,
+            )
+
+        return is_complete
 
     @property
     def profile_completion_status(self) -> dict[str, bool]:

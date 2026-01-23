@@ -3,6 +3,7 @@
 from collections.abc import Callable, Iterable
 from typing import TypeVar
 
+import logfire
 from django.contrib.auth.decorators import user_passes_test
 from django.core.exceptions import PermissionDenied
 
@@ -66,12 +67,29 @@ def discord_permission_required(
 
         """
         if not user.is_authenticated:
+            logfire.debug(
+                "Permission check skipped - user not authenticated",
+                required_permissions=perms,
+            )
             return False
         # Check if user has ANY of the required permissions
         if any(user.has_permission(p) for p in perms):
+            logfire.debug(
+                "Permission check passed",
+                user_id=user.id,
+                discord_id=user.discord_id,
+                required_permissions=perms,
+            )
             return True
         # Always raise PermissionDenied for authenticated users to avoid redirect loop
         # (otherwise user_passes_test redirects to login, but user is already logged in)
+        logfire.warning(
+            "Permission denied via decorator",
+            user_id=user.id,
+            discord_id=user.discord_id,
+            required_permissions=perms,
+            user_discord_roles=list(user.discord_roles.keys()) if user.discord_roles else [],
+        )
         raise PermissionDenied
 
     return user_passes_test(check_perms, login_url=login_url)

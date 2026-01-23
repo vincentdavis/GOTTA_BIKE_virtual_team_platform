@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import ClassVar
 
+import logfire
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -172,8 +173,31 @@ class RaceReadyRecord(models.Model):
 
         """
         if self.media_file:
-            self.media_file.delete(save=False)
-            return True
+            file_name = self.media_file.name
+            try:
+                self.media_file.delete(save=False)
+                logfire.info(
+                    "Media file deleted from RaceReadyRecord",
+                    record_id=self.id,
+                    user_id=self.user_id,
+                    verify_type=self.verify_type,
+                    file_name=file_name,
+                )
+                return True
+            except Exception as e:
+                logfire.error(
+                    "Failed to delete media file from RaceReadyRecord",
+                    record_id=self.id,
+                    user_id=self.user_id,
+                    file_name=file_name,
+                    error=str(e),
+                )
+                raise
+        logfire.debug(
+            "No media file to delete from RaceReadyRecord",
+            record_id=self.id,
+            user_id=self.user_id,
+        )
         return False
 
     @property
@@ -287,7 +311,17 @@ class RaceReadyRecord(models.Model):
         expires = self.expires_date
         if expires is None:
             return False
-        return timezone.now() > expires
+        is_expired = timezone.now() > expires
+        if is_expired:
+            logfire.debug(
+                "RaceReadyRecord is expired",
+                record_id=self.id,
+                user_id=self.user_id,
+                verify_type=self.verify_type,
+                expires_date=expires.isoformat(),
+                reviewed_date=self.reviewed_date.isoformat() if self.reviewed_date else None,
+            )
+        return is_expired
 
     @property
     def days_remaining(self) -> int | None:
@@ -858,6 +892,39 @@ class MembershipApplication(models.Model):
 
         """
         return f"{self.discord_username} - {self.get_status_display()}"
+
+    def save(self, *args, **kwargs) -> None:
+        """Save the model and log status transitions.
+
+        Logs status changes with before/after values and the admin who made the change.
+        """
+        # Check for status transition
+        if self.pk:
+            try:
+                old_instance = MembershipApplication.objects.get(pk=self.pk)
+                old_status = old_instance.status
+                if old_status != self.status:
+                    logfire.info(
+                        "MembershipApplication status changed",
+                        application_id=str(self.pk),
+                        discord_id=self.discord_id,
+                        discord_username=self.discord_username,
+                        old_status=old_status,
+                        new_status=self.status,
+                        modified_by_id=self.modified_by_id,
+                    )
+            except MembershipApplication.DoesNotExist:
+                # New instance, will be logged below
+                pass
+        else:
+            logfire.info(
+                "MembershipApplication created",
+                discord_id=self.discord_id,
+                discord_username=self.discord_username,
+                initial_status=self.status,
+            )
+
+        super().save(*args, **kwargs)
 
     @property
     def display_name(self) -> str:

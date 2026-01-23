@@ -405,6 +405,12 @@ CONSTANCE_CONFIG = {
         str,
     ),
     "ZRAPP_API_KEY": ("", "Zwift Racing App API key", "password_field"),
+    # TrainingPeaks Virtual
+    "TPV_CLUB_URL": (
+        "",
+        "TrainingPeaks Virtual club URL (e.g., https://tpvirtualhub.com/teams/CLTN)",
+        str,
+    ),
     # Permission role mappings (JSON arrays of Discord role IDs)
     "PERM_APP_ADMIN_ROLES": ("[]", "Discord role IDs that grant app admin permission", "json_list_field"),
     "PERM_TEAM_CAPTAIN_ROLES": ("[]", "Discord role IDs that grant team captain permission", "json_list_field"),
@@ -623,6 +629,9 @@ CONSTANCE_CONFIG_FIELDSETS = {
     "Zwift Racing App": (
         "ZRAPP_API_URL",
         "ZRAPP_API_KEY",
+    ),
+    "TrainingPeaks Virtual": (
+        "TPV_CLUB_URL",
     ),
     "Permission Mappings": (
         "PERM_APP_ADMIN_ROLES",

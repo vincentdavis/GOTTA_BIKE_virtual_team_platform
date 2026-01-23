@@ -43,7 +43,7 @@
 
 # Logging Audit - Areas Needing Improvement
 
-**Overall Status**: 26% coverage (11 of 42 core files have logging)
+**Overall Status**: 33% coverage (14 of 42 core files have logging)
 
 ## CRITICAL - Fix First
 
@@ -76,16 +76,16 @@
 
 ### Models - Permission & Status Checks
 
-- [] `apps/accounts/models.py` (717 lines) - NO LOGGING
-    - [] Add logging to `User.has_permission()` - log permission denials with reason
-    - [] Add logging to `User.is_race_ready` property - log status changes
-    - [] Add logging to `User.is_profile_complete` property
-    - [] Add logging to role management methods
+- [X] `apps/accounts/models.py` (717 lines) - LOGGING ADDED
+    - [X] Add logging to `User.has_permission()` - log permission denials with reason
+    - [X] Add logging to `User.is_race_ready` property - log status changes
+    - [X] Add logging to `User.is_profile_complete` property
+    - [X] Add logging to role management methods (`add_role`, `remove_role`)
 
-- [] `apps/team/models.py` (945 lines) - NO LOGGING
-    - [] Add logging to `RaceReadyRecord.is_expired` - expiration checks
-    - [] Add logging to `RaceReadyRecord.delete_media_file()` - file deletion operations
-    - [] Add logging to `MembershipApplication` status transitions
+- [X] `apps/team/models.py` (945 lines) - LOGGING ADDED
+    - [X] Add logging to `RaceReadyRecord.is_expired` - expiration checks
+    - [X] Add logging to `RaceReadyRecord.delete_media_file()` - file deletion operations
+    - [X] Add logging to `MembershipApplication` status transitions (via save method)
 
 ### Services - Data Operations
 
@@ -105,8 +105,8 @@
 
 ### Decorators
 
-- [] `apps/accounts/decorators.py` (149 lines) - NO LOGGING
-    - [] Add logging to `discord_permission_required` - log permission check failures with user context
+- [X] `apps/accounts/decorators.py` (149 lines) - LOGGING ADDED
+    - [X] Add logging to `discord_permission_required` - log permission check failures with user context
 
 ## MEDIUM Priority
 
