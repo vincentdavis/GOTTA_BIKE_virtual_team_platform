@@ -5,6 +5,7 @@ from datetime import date
 from typing import ClassVar
 from zoneinfo import available_timezones
 
+import logfire
 from constance import config
 from django import forms
 from django_countries.widgets import CountrySelectWidget
@@ -221,12 +222,24 @@ class RaceReadyRecordForm(forms.ModelForm):
         if media_file:
             # Limit file size to 50MB
             if media_file.size > 50 * 1024 * 1024:
+                logfire.warning(
+                    "RaceReadyRecordForm media file validation failed",
+                    file_name=media_file.name,
+                    file_size=media_file.size,
+                    error_reason="file_too_large",
+                )
                 raise forms.ValidationError("File size must be under 50MB.")
 
             # Check file extension
             allowed_extensions = [".jpg", ".jpeg", ".png", ".gif", ".mp4", ".mov", ".avi", ".webm"]
             ext = media_file.name.lower().split(".")[-1]
             if f".{ext}" not in allowed_extensions:
+                logfire.warning(
+                    "RaceReadyRecordForm media file validation failed",
+                    file_name=media_file.name,
+                    file_size=media_file.size,
+                    error_reason="invalid_file_type",
+                )
                 raise forms.ValidationError(
                     f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
                 )
@@ -281,12 +294,23 @@ class RaceReadyRecordForm(forms.ModelForm):
             raise forms.ValidationError("You must provide either a file upload or a URL (or both).")
 
         # Require appropriate measurement field based on verify_type
+        missing_fields = []
         if verify_type in ("weight_full", "weight_light") and not weight:
             self.add_error("weight", "Weight is required for weight verification.")
+            missing_fields.append("weight")
         if verify_type == "height" and not height:
             self.add_error("height", "Height is required for height verification.")
+            missing_fields.append("height")
         if verify_type == "power" and not ftp:
             self.add_error("ftp", "FTP is required for power verification.")
+            missing_fields.append("ftp")
+
+        if missing_fields:
+            logfire.warning(
+                "RaceReadyRecordForm required fields missing",
+                verify_type=verify_type,
+                missing_fields=missing_fields,
+            )
 
         return cleaned_data
 
@@ -564,8 +588,20 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
         if birth_year:
             current_year = date.today().year
             if birth_year < 1900:
+                logfire.warning(
+                    "MembershipApplicationApplicantForm birth year validation failed",
+                    application_id=str(self.instance.pk) if self.instance and self.instance.pk else None,
+                    submitted_value=birth_year,
+                    error_reason="too_old",
+                )
                 raise forms.ValidationError("Birth year must be 1900 or later.")
             if birth_year > current_year - 13:
+                logfire.warning(
+                    "MembershipApplicationApplicantForm birth year validation failed",
+                    application_id=str(self.instance.pk) if self.instance and self.instance.pk else None,
+                    submitted_value=birth_year,
+                    error_reason="too_young",
+                )
                 raise forms.ValidationError("You must be at least 13 years old.")
         return birth_year
 
@@ -578,10 +614,20 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
         """
         cleaned_data = super().clean()
 
+        missing_agreements = []
         if not cleaned_data.get("agree_privacy"):
             self.add_error("agree_privacy", "You must agree to the privacy policy.")
+            missing_agreements.append("privacy_policy")
         if not cleaned_data.get("agree_tos"):
             self.add_error("agree_tos", "You must agree to the terms of service.")
+            missing_agreements.append("terms_of_service")
+
+        if missing_agreements:
+            logfire.warning(
+                "MembershipApplicationApplicantForm agreement validation failed",
+                application_id=str(self.instance.pk) if self.instance and self.instance.pk else None,
+                missing_agreements=missing_agreements,
+            )
 
         return cleaned_data
 

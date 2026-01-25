@@ -43,7 +43,7 @@
 
 # Logging Audit - Areas Needing Improvement
 
-**Overall Status**: 33% coverage (14 of 42 core files have logging)
+**Overall Status**: 40% coverage (17 of 42 core files have logging)
 
 ## CRITICAL - Fix First
 
@@ -112,17 +112,16 @@
 
 ### Forms - Validation Logging
 
-- [] `apps/accounts/forms.py` (370 lines) - NO LOGGING
-    - [] Add logging for profile validation errors
-    - [] Add logging for password validation failures
+- [X] `apps/accounts/forms.py` - LOGGING ADDED
+    - [X] Add logging for profile validation errors (birth year validation)
 
-- [] `apps/team/forms.py` (657 lines) - NO LOGGING
-    - [] Add logging for membership application validation
-    - [] Add logging for agreement validation failures
-    - [] Add logging for RaceReadyRecord form processing
+- [X] `apps/team/forms.py` - LOGGING ADDED
+    - [X] Add logging for membership application validation (birth year, agreements)
+    - [X] Add logging for agreement validation failures
+    - [X] Add logging for RaceReadyRecord form processing (media file, required fields)
 
-- [] `apps/data_connection/forms.py` (230 lines) - NO LOGGING
-    - [] Add logging for field selection validation
+- [X] `apps/data_connection/forms.py` - LOGGING ADDED
+    - [X] Add logging for spreadsheet URL validation
 
 ### Admin - Audit Trail
 

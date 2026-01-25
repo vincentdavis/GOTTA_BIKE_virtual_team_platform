@@ -5,6 +5,7 @@ from datetime import date
 from typing import ClassVar
 from zoneinfo import available_timezones
 
+import logfire
 from constance import config
 from django import forms
 from django_countries.widgets import CountrySelectWidget
@@ -331,8 +332,20 @@ class ProfileForm(forms.ModelForm):
         if birth_year:
             current_year = date.today().year
             if birth_year < 1900:
+                logfire.warning(
+                    "ProfileForm birth year validation failed",
+                    user_id=self.instance.pk if self.instance else None,
+                    submitted_value=birth_year,
+                    error_reason="too_old",
+                )
                 raise forms.ValidationError("Birth year must be 1900 or later.")
             if birth_year > current_year - 13:
+                logfire.warning(
+                    "ProfileForm birth year validation failed",
+                    user_id=self.instance.pk if self.instance else None,
+                    submitted_value=birth_year,
+                    error_reason="too_young",
+                )
                 raise forms.ValidationError("You must be at least 13 years old.")
         return birth_year
 

@@ -29,7 +29,7 @@ from apps.team.services import (
     get_performance_review_data,
     get_unified_team_roster,
 )
-from apps.team.tasks import notify_application_update
+from apps.team.tasks import notify_application_update, notify_race_ready_change
 from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
 
@@ -607,6 +607,10 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                 )
                 messages.error(request, "You cannot approve your own verification record.")
                 return redirect("team:verification_record_detail", pk=pk)
+
+            # Capture race ready status before approval
+            was_race_ready = record.user.is_race_ready
+
             record.status = RaceReadyRecord.Status.VERIFIED
             record.reviewed_by = request.user
             record.reviewed_date = timezone.now()
@@ -627,8 +631,22 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     is_verified=True,
                     verify_type=record.verify_type,
                 )
+
+            # Check if race ready status changed and send notification
+            is_now_race_ready = record.user.is_race_ready
+            if was_race_ready != is_now_race_ready:
+                notify_race_ready_change.enqueue(
+                    user_id=record.user.id,
+                    is_now_race_ready=is_now_race_ready,
+                    changed_by_user_id=request.user.id,
+                    verification_type=record.verify_type,
+                )
+
             messages.success(request, f"Record for {record.user.username} has been verified.")
         elif action == "reject":
+            # Capture race ready status before rejection
+            was_race_ready = record.user.is_race_ready
+
             record.status = RaceReadyRecord.Status.REJECTED
             record.reviewed_by = request.user
             record.reviewed_date = timezone.now()
@@ -653,6 +671,17 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     verify_type=record.verify_type,
                     rejection_reason=rejection_reason or None,
                 )
+
+            # Check if race ready status changed and send notification
+            is_now_race_ready = record.user.is_race_ready
+            if was_race_ready != is_now_race_ready:
+                notify_race_ready_change.enqueue(
+                    user_id=record.user.id,
+                    is_now_race_ready=is_now_race_ready,
+                    changed_by_user_id=request.user.id,
+                    verification_type=record.verify_type,
+                )
+
             messages.warning(request, f"Record for {record.user.username} has been rejected.")
         return redirect("team:verification_records")
 

@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+import logfire
 from django import forms
 from django.utils import timezone
 
@@ -153,6 +154,12 @@ class DataConnectionForm(forms.ModelForm):
 
         # If not creating a new sheet, URL is required
         if not create_new_sheet and not spreadsheet_url:
+            logfire.warning(
+                "DataConnectionForm spreadsheet URL validation failed",
+                connection_id=self.instance.pk if self.instance and self.instance.pk else None,
+                create_new_sheet=create_new_sheet,
+                error_reason="spreadsheet_url_required",
+            )
             self.add_error("spreadsheet_url", "Spreadsheet URL is required when not creating a new sheet.")
 
         return cleaned_data

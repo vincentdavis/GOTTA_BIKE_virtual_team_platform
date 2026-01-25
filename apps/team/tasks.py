@@ -152,3 +152,104 @@ def _get_status_display(status: str) -> str:
         "rejected": "Rejected",
     }
     return status_map.get(status, status.replace("_", " ").title())
+
+
+@task
+def notify_race_ready_change(
+    user_id: int,
+    is_now_race_ready: bool,
+    changed_by_user_id: int | None = None,
+    verification_type: str | None = None,
+) -> dict:
+    """Send notification to USER_CHANGE_LOG when user's race ready status changes.
+
+    Args:
+        user_id: ID of the user whose status changed.
+        is_now_race_ready: True if user gained race ready status, False if lost.
+        changed_by_user_id: ID of the admin who approved/rejected the verification.
+        verification_type: Type of verification that triggered the change.
+
+    Returns:
+        dict with notification status.
+
+    """
+    from apps.accounts.models import User
+
+    with logfire.span(
+        "notify_race_ready_change",
+        user_id=user_id,
+        is_now_race_ready=is_now_race_ready,
+    ):
+        channel_id = config.USER_CHANGE_LOG
+
+        if not channel_id or channel_id == 0:
+            logfire.debug("USER_CHANGE_LOG not configured, skipping notification")
+            return {"status": "skipped", "reason": "channel_not_configured"}
+
+        # Get the user
+        try:
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            logfire.error("User not found for race ready notification", user_id=user_id)
+            return {"status": "error", "reason": "user_not_found"}
+
+        # Get admin who made the change
+        admin_name = None
+        if changed_by_user_id:
+            try:
+                admin = User.objects.get(pk=changed_by_user_id)
+                admin_name = _get_user_display_name(admin)
+            except User.DoesNotExist:
+                pass
+
+        # Build display name and Discord mention
+        name = _get_user_display_name(user)
+        mention = f"<@{user.discord_id}>" if user.discord_id else name
+
+        # Build message based on status change
+        if is_now_race_ready:
+            emoji = "🏁"
+            title = "Race Ready Status Gained"
+            status_text = "is now race ready"
+        else:
+            emoji = "⚠️"
+            title = "Race Ready Status Lost"
+            status_text = "is no longer race ready"
+
+        message = f"{emoji} **{title}**\n{name} ({mention}) {status_text}."
+
+        if verification_type:
+            message += f"\nVerification: {verification_type}"
+        if admin_name:
+            action = "Approved" if is_now_race_ready else "Rejected"
+            message += f"\n{action} by: {admin_name}"
+
+        success = send_discord_channel_message(channel_id, message)
+
+        logfire.info(
+            "Race ready status change notification sent",
+            user_id=user_id,
+            is_now_race_ready=is_now_race_ready,
+            changed_by_user_id=changed_by_user_id,
+            channel_id=channel_id,
+            success=success,
+        )
+
+        return {"status": "sent" if success else "failed", "user_id": user_id}
+
+
+def _get_user_display_name(user) -> str:
+    """Get display name for a user.
+
+    Args:
+        user: User instance.
+
+    Returns:
+        Best available display name for the user.
+
+    """
+    if user.first_name and user.last_name:
+        return f"{user.first_name} {user.last_name}"
+    if user.first_name:
+        return user.first_name
+    return user.discord_nickname or user.discord_username or f"User {user.id}"
