@@ -92,9 +92,13 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
     if profile_user == request.user:
         return redirect("accounts:profile")
 
-    return render(request, "accounts/public_profile.html", {
-        "profile_user": profile_user,
-    })
+    return render(
+        request,
+        "accounts/public_profile.html",
+        {
+            "profile_user": profile_user,
+        },
+    )
 
 
 @login_required
@@ -109,6 +113,8 @@ def profile_edit(request: HttpRequest) -> HttpResponse:
         Rendered profile form (partial for HTMX, full page otherwise).
 
     """
+    from apps.accounts.services import get_approved_application, get_importable_fields
+
     if request.method == "POST":
         form = ProfileForm(request.POST, instance=request.user)
         if form.is_valid():
@@ -130,11 +136,28 @@ def profile_edit(request: HttpRequest) -> HttpResponse:
     else:
         form = ProfileForm(instance=request.user)
 
+    # Check for approved MembershipApplication to import
+    pending_application = None
+    importable_fields = None
+    if request.user.discord_id:
+        pending_application = get_approved_application(request.user.discord_id)
+        if pending_application:
+            importable_fields = get_importable_fields(pending_application)
+            # Only show import banner if there are fields to import
+            if not importable_fields:
+                pending_application = None
+
+    context = {
+        "form": form,
+        "pending_application": pending_application,
+        "importable_fields": importable_fields,
+    }
+
     if request.headers.get("HX-Request"):
         template = "accounts/partials/profile_form.html"
     else:
         template = "accounts/profile_edit.html"
-    return render(request, template, {"form": form})
+    return render(request, template, context)
 
 
 @login_required
@@ -176,6 +199,99 @@ def profile_delete(request: HttpRequest) -> HttpResponse:
     user.delete()
     messages.success(request, "Your account has been deleted.")
     return redirect("/")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def import_application_view(request: HttpRequest, application_id: str) -> HttpResponse:
+    """Import data from approved MembershipApplication to user profile.
+
+    GET: Show confirmation page with fields to import.
+    POST: Perform import and redirect to profile_edit.
+
+    Args:
+        request: The HTTP request.
+        application_id: UUID of the MembershipApplication.
+
+    Returns:
+        Rendered confirmation page or redirect after import.
+
+    Raises:
+        PermissionDenied: If application doesn't belong to this user.
+
+    """
+    import uuid
+
+    from django.shortcuts import get_object_or_404
+
+    from apps.accounts.services import get_importable_fields, import_application_to_user
+    from apps.team.models import MembershipApplication
+
+    # Parse UUID
+    try:
+        app_uuid = uuid.UUID(str(application_id))
+    except ValueError:
+        logfire.warning(
+            "Invalid application UUID in import request",
+            user_id=request.user.id,
+            application_id=str(application_id),
+        )
+        messages.error(request, "Invalid application ID.")
+        return redirect("accounts:profile_edit")
+
+    # Get the application
+    application = get_object_or_404(MembershipApplication, pk=app_uuid)
+
+    # Security check: verify application belongs to this user
+    if application.discord_id != request.user.discord_id:
+        logfire.warning(
+            "User attempted to import application belonging to another user",
+            user_id=request.user.id,
+            user_discord_id=request.user.discord_id,
+            application_discord_id=application.discord_id,
+            application_id=str(application_id),
+        )
+        raise PermissionDenied("You don't have permission to import this application.")
+
+    # Verify application is approved
+    if application.status != MembershipApplication.Status.APPROVED:
+        logfire.warning(
+            "User attempted to import non-approved application",
+            user_id=request.user.id,
+            application_id=str(application_id),
+            application_status=application.status,
+        )
+        messages.error(request, "Only approved registrations can be imported.")
+        return redirect("accounts:profile_edit")
+
+    # Get importable fields
+    importable_fields = get_importable_fields(application)
+
+    if not importable_fields:
+        messages.info(request, "No new data to import from your registration.")
+        return redirect("accounts:profile_edit")
+
+    if request.method == "POST":
+        # Perform the import
+        imported_fields = import_application_to_user(request.user, application)
+
+        if imported_fields:
+            field_list = ", ".join(imported_fields)
+            messages.success(request, f"Successfully imported: {field_list}")
+        else:
+            messages.info(request, "No new data was imported (fields already filled).")
+
+        return redirect("accounts:profile_edit")
+
+    # GET: Show confirmation page
+    return render(
+        request,
+        "accounts/import_application.html",
+        {
+            "application": application,
+            "importable_fields": importable_fields,
+        },
+    )
 
 
 @login_required
@@ -727,9 +843,9 @@ def markdown_preview(request: HttpRequest) -> HttpResponse:
     html = markdown.markdown(
         text,
         extensions=[
-            "nl2br",       # Convert newlines to <br>
+            "nl2br",  # Convert newlines to <br>
             "sane_lists",  # Better list handling
-            "tables",      # Support tables
+            "tables",  # Support tables
         ],
     )
     return HttpResponse(html)

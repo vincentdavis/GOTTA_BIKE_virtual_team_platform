@@ -4,6 +4,22 @@
 
 {% block content %}
 <div class="max-w-2xl mx-auto">
+    {% if pending_application %}
+    <!-- Import Registration Data Banner -->
+    <div class="alert alert-info mb-6 shadow-lg">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <div>
+            <h3 class="font-bold">Import Registration Data</h3>
+            <p class="text-sm">We found your approved membership registration. Import this data to auto-fill your profile.</p>
+        </div>
+        <a href="{% url 'accounts:import_application' pending_application.pk %}" class="btn btn-sm btn-primary">
+            Review & Import
+        </a>
+    </div>
+    {% endif %}
+
     <div class="card bg-base-200 shadow-xl">
         <div class="card-body">
             {% if not user.is_profile_complete %}
