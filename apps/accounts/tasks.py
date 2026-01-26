@@ -1,13 +1,18 @@
 """Background tasks for accounts app."""
 
+import time
+
 import logfire
 from constance import config
 from django.tasks import task  # ty:ignore[unresolved-import]
 from django.utils import timezone
 
-from apps.accounts.discord_service import send_discord_channel_message
+from apps.accounts.discord_service import (
+    add_discord_role,
+    remove_discord_role,
+    send_discord_channel_message,
+)
 from apps.accounts.models import GuildMember, User
-from apps.team.models import DiscordRole
 
 
 @task
@@ -99,3 +104,136 @@ def guild_member_sync_status() -> dict:
         logfire.info("Guild member sync status", **status)
 
         return status
+
+
+@task
+def sync_race_ready_roles() -> dict:
+    """Sync race ready Discord roles for all users.
+
+    Checks each user's is_race_ready status and ensures their Discord
+    role matches. Adds the role if they should have it, removes if not.
+
+    Returns:
+        dict with sync results summary.
+
+    """
+    with logfire.span("sync_race_ready_roles"):
+        # Get race ready role ID from constance
+        race_ready_role_id = config.RACE_READY_ROLE_ID
+        if not race_ready_role_id or race_ready_role_id == 0:
+            logfire.info("RACE_READY_ROLE_ID not configured, skipping sync")
+            return {"status": "skipped", "reason": "role_not_configured"}
+
+        role_id_str = str(race_ready_role_id)
+
+        # Get all users with Discord IDs
+        users_with_discord = User.objects.exclude(discord_id="").exclude(discord_id__isnull=True)
+        total_users = users_with_discord.count()
+
+        logfire.info("Starting race ready role sync", total_users=total_users)
+
+        # Track results
+        added = 0
+        removed = 0
+        unchanged = 0
+        errors = 0
+        users_added = []
+        users_removed = []
+
+        for user in users_with_discord.iterator():
+            # Check if user is race ready
+            is_race_ready = user.is_race_ready
+
+            # Check if user currently has the role
+            has_role = role_id_str in (user.discord_roles or {})
+
+            # Determine action needed
+            if is_race_ready and not has_role:
+                # User should have the role but doesn't - add it
+                success = add_discord_role(user.discord_id, role_id_str)
+                if success:
+                    added += 1
+                    users_added.append(user)
+                    # Update local discord_roles to reflect the change
+                    if user.discord_roles is None:
+                        user.discord_roles = {}
+                    user.discord_roles[role_id_str] = "Race Ready"
+                    user.save(update_fields=["discord_roles"])
+                else:
+                    errors += 1
+                # Rate limit: 0.5s delay between API calls
+                time.sleep(0.5)
+
+            elif not is_race_ready and has_role:
+                # User has the role but shouldn't - remove it
+                success = remove_discord_role(user.discord_id, role_id_str)
+                if success:
+                    removed += 1
+                    users_removed.append(user)
+                    # Update local discord_roles to reflect the change
+                    if user.discord_roles and role_id_str in user.discord_roles:
+                        del user.discord_roles[role_id_str]
+                        user.save(update_fields=["discord_roles"])
+                else:
+                    errors += 1
+                # Rate limit: 0.5s delay between API calls
+                time.sleep(0.5)
+
+            else:
+                # No change needed
+                unchanged += 1
+
+        # Send notifications for role changes
+        channel_id = config.USER_CHANGE_LOG
+        if channel_id and channel_id != 0:
+            # Notify about users who gained the role
+            for user in users_added:
+                name = _get_user_display_name(user)
+                mention = f"<@{user.discord_id}>"
+                message = (
+                    f"🏁 **Race Ready Role Added** (scheduled sync)\n"
+                    f"{name} ({mention}) gained the race ready role."
+                )
+                send_discord_channel_message(channel_id, message, silent=True)
+                time.sleep(0.2)  # Rate limit notifications
+
+            # Notify about users who lost the role
+            for user in users_removed:
+                name = _get_user_display_name(user)
+                mention = f"<@{user.discord_id}>"
+                message = (
+                    f"⚠️ **Race Ready Role Removed** (scheduled sync)\n"
+                    f"{name} ({mention}) lost the race ready role due to expired/missing verifications."
+                )
+                send_discord_channel_message(channel_id, message, silent=True)
+                time.sleep(0.2)  # Rate limit notifications
+
+        result = {
+            "status": "completed",
+            "total_users": total_users,
+            "added": added,
+            "removed": removed,
+            "unchanged": unchanged,
+            "errors": errors,
+        }
+
+        logfire.info("Race ready role sync completed", **result)
+
+        return result
+
+
+def _get_user_display_name(user: User) -> str:
+    """Get display name for a user.
+
+    Args:
+        user: User instance.
+
+    Returns:
+        Best available display name for the user.
+
+    """
+    if user.first_name and user.last_name:
+        return f"{user.first_name} {user.last_name}"
+    if user.first_name:
+        return user.first_name
+    return user.discord_nickname or user.discord_username or f"User {user.id}"

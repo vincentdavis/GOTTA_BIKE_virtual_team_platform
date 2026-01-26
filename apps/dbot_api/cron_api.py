@@ -5,7 +5,7 @@ from django.http import HttpRequest
 from ninja import NinjaAPI
 from ninja.security import APIKeyHeader
 
-from apps.accounts.tasks import guild_member_sync_status
+from apps.accounts.tasks import guild_member_sync_status, sync_race_ready_roles
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.tasks import sync_zr_riders
 
@@ -63,6 +63,10 @@ TASK_REGISTRY: dict = {
     "guild_member_sync_status": {
         "task": guild_member_sync_status,
         "description": "Check guild member sync health (actual sync done by Discord bot)",
+    },
+    "sync_race_ready_roles": {
+        "task": sync_race_ready_roles,
+        "description": "Sync race ready Discord roles for all users based on verification status",
     },
 }
 

@@ -173,6 +173,126 @@ def send_verification_notification(
     return send_discord_dm(discord_id, message)
 
 
+def add_discord_role(discord_id: str, role_id: str) -> bool:
+    """Add a role to a Discord guild member.
+
+    Args:
+        discord_id: The Discord user ID.
+        role_id: The Discord role ID to add.
+
+    Returns:
+        True if the role was added successfully, False otherwise.
+
+    """
+    bot_token = config.DISCORD_BOT_TOKEN
+    if not bot_token:
+        logfire.warning("DISCORD_BOT_TOKEN not configured, skipping role add")
+        return False
+
+    guild_id = config.GUILD_ID
+    if not guild_id:
+        logfire.warning("GUILD_ID not configured, skipping role add")
+        return False
+
+    headers = {
+        "Authorization": f"Bot {bot_token}",
+    }
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.put(
+                f"{DISCORD_API_BASE}/guilds/{guild_id}/members/{discord_id}/roles/{role_id}",
+                headers=headers,
+            )
+            response.raise_for_status()
+
+            logfire.info(
+                "Discord role added",
+                discord_id=discord_id,
+                role_id=role_id,
+                guild_id=guild_id,
+            )
+            return True
+
+    except httpx.HTTPStatusError as e:
+        logfire.error(
+            "Failed to add Discord role",
+            discord_id=discord_id,
+            role_id=role_id,
+            status_code=e.response.status_code,
+            error=str(e),
+        )
+        return False
+    except httpx.RequestError as e:
+        logfire.error(
+            "Discord API request failed for role add",
+            discord_id=discord_id,
+            role_id=role_id,
+            error=str(e),
+        )
+        return False
+
+
+def remove_discord_role(discord_id: str, role_id: str) -> bool:
+    """Remove a role from a Discord guild member.
+
+    Args:
+        discord_id: The Discord user ID.
+        role_id: The Discord role ID to remove.
+
+    Returns:
+        True if the role was removed successfully, False otherwise.
+
+    """
+    bot_token = config.DISCORD_BOT_TOKEN
+    if not bot_token:
+        logfire.warning("DISCORD_BOT_TOKEN not configured, skipping role remove")
+        return False
+
+    guild_id = config.GUILD_ID
+    if not guild_id:
+        logfire.warning("GUILD_ID not configured, skipping role remove")
+        return False
+
+    headers = {
+        "Authorization": f"Bot {bot_token}",
+    }
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.delete(
+                f"{DISCORD_API_BASE}/guilds/{guild_id}/members/{discord_id}/roles/{role_id}",
+                headers=headers,
+            )
+            response.raise_for_status()
+
+            logfire.info(
+                "Discord role removed",
+                discord_id=discord_id,
+                role_id=role_id,
+                guild_id=guild_id,
+            )
+            return True
+
+    except httpx.HTTPStatusError as e:
+        logfire.error(
+            "Failed to remove Discord role",
+            discord_id=discord_id,
+            role_id=role_id,
+            status_code=e.response.status_code,
+            error=str(e),
+        )
+        return False
+    except httpx.RequestError as e:
+        logfire.error(
+            "Discord API request failed for role remove",
+            discord_id=discord_id,
+            role_id=role_id,
+            error=str(e),
+        )
+        return False
+
+
 def sync_user_discord_roles(user: User) -> bool:
     """Fetch and sync Discord guild roles for a user.
 
