@@ -43,6 +43,7 @@ urlpatterns = [
     path("team/", include("apps.team.urls")),
     path("data-connections/", include("apps.data_connection.urls")),
     path("m/", include("apps.magic_links.urls")),
+    path("page/", include("apps.cms.urls")),
     # Site-level configuration
     path("site/config/", config_settings, name="config_settings"),
     # Note: specific routes must come before the generic <str:section_key> pattern

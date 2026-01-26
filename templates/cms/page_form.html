@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit{% else %}Create{% endif %} Page - {{ config.TEAM_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="card-title text-2xl">{% if is_edit %}Edit Page{% else %}Create New Page{% endif %}</h2>
+        {% if is_edit %}
+        <a href="{{ page.get_absolute_url }}" target="_blank" class="btn btn-ghost btn-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+          Preview
+        </a>
+        {% endif %}
+      </div>
+
+      <form method="post" enctype="multipart/form-data" class="space-y-6">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-error">
+          {% for error in form.non_field_errors %}
+          <span>{{ error }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Basic Info Section -->
+        <div class="bg-base-300 rounded-lg p-4">
+          <h3 class="font-semibold text-lg mb-4">Basic Information</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Title -->
+            <div class="form-control w-full">
+              <label class="label" for="id_title">
+                <span class="label-text">Title <span class="text-error">*</span></span>
+              </label>
+              {{ form.title }}
+              {% if form.title.errors %}
+              <label class="label">
+                <span class="label-text-alt text-error">{{ form.title.errors.0 }}</span>
+              </label>
+              {% endif %}
+            </div>
+
+            <!-- Slug -->
+            <div class="form-control w-full">
+              <label class="label" for="id_slug">
+                <span class="label-text">URL Slug <span class="text-error">*</span></span>
+              </label>
+              {{ form.slug }}
+              {% if form.slug.errors %}
+              <label class="label">
+                <span class="label-text-alt text-error">{{ form.slug.errors.0 }}</span>
+              </label>
+              {% else %}
+              <label class="label">
+                <span class="label-text-alt">URL will be: /page/your-slug/</span>
+              </label>
+              {% endif %}
+            </div>
+
+            <!-- Status -->
+            <div class="form-control w-full">
+              <label class="label" for="id_status">
+                <span class="label-text">Status</span>
+              </label>
+              {{ form.status }}
+              {% if form.status.errors %}
+              <label class="label">
+                <span class="label-text-alt text-error">{{ form.status.errors.0 }}</span>
+              </label>
+              {% else %}
+              <label class="label">
+                <span class="label-text-alt">Draft pages are only visible to admins</span>
+              </label>
+              {% endif %}
+            </div>
+
+            <!-- Meta Description -->
+            <div class="form-control w-full">
+              <label class="label" for="id_meta_description">
+                <span class="label-text">Meta Description</span>
+              </label>
+              {{ form.meta_description }}
+              {% if form.meta_description.errors %}
+              <label class="label">
+                <span class="label-text-alt text-error">{{ form.meta_description.errors.0 }}</span>
+              </label>
+              {% else %}
+              <label class="label">
+                <span class="label-text-alt">For search engines (max 160 characters)</span>
+              </label>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Content Section -->
+        <div class="bg-base-300 rounded-lg p-4">
+          <h3 class="font-semibold text-lg mb-4">Content</h3>
+          <div class="form-control w-full">
+            <label class="label" for="id_content">
+              <span class="label-text">Page Content (Markdown)</span>
+            </label>
+            {{ form.content }}
+            {% if form.content.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.content.errors.0 }}</span>
+            </label>
+            {% else %}
+            <label class="label">
+              <span class="label-text-alt">Supports Markdown formatting, tables, code blocks, and more</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Hero Section -->
+        <div class="collapse collapse-arrow bg-base-300 rounded-lg">
+          <input type="checkbox" {% if form.hero_enabled.value %}checked{% endif %} />
+          <div class="collapse-title font-semibold text-lg">
+            Hero Section
+            {% if form.hero_enabled.value %}
+            <span class="badge badge-success badge-sm ml-2">Enabled</span>
+            {% endif %}
+          </div>
+          <div class="collapse-content">
+            <div class="space-y-4 pt-2">
+              <!-- Hero Enabled -->
+              <div class="form-control">
+                <label class="label cursor-pointer justify-start gap-3">
+                  {{ form.hero_enabled }}
+                  <span class="label-text">Enable hero section</span>
+                </label>
+              </div>
+
+              <!-- Hero Image -->
+              <div class="form-control w-full">
+                <label class="label" for="id_hero_image">
+                  <span class="label-text">Hero Background Image</span>
+                </label>
+                {{ form.hero_image }}
+                {% if page.hero_image %}
+                <label class="label">
+                  <span class="label-text-alt">Current: {{ page.hero_image.name }}</span>
+                </label>
+                {% endif %}
+                {% if form.hero_image.errors %}
+                <label class="label">
+                  <span class="label-text-alt text-error">{{ form.hero_image.errors.0 }}</span>
+                </label>
+                {% endif %}
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Hero Title -->
+                <div class="form-control w-full">
+                  <label class="label" for="id_hero_title">
+                    <span class="label-text">Hero Title</span>
+                  </label>
+                  {{ form.hero_title }}
+                  {% if form.hero_title.errors %}
+                  <label class="label">
+                    <span class="label-text-alt text-error">{{ form.hero_title.errors.0 }}</span>
+                  </label>
+                  {% else %}
+                  <label class="label">
+                    <span class="label-text-alt">Leave empty to use page title</span>
+                  </label>
+                  {% endif %}
+                </div>
+              </div>
+
+              <!-- Hero Subtitle -->
+              <div class="form-control w-full">
+                <label class="label" for="id_hero_subtitle">
+                  <span class="label-text">Hero Subtitle</span>
+                </label>
+                {{ form.hero_subtitle }}
+                {% if form.hero_subtitle.errors %}
+                <label class="label">
+                  <span class="label-text-alt text-error">{{ form.hero_subtitle.errors.0 }}</span>
+                </label>
+                {% else %}
+                <label class="label">
+                  <span class="label-text-alt">Supports Markdown</span>
+                </label>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cards Sections -->
+        <div class="collapse collapse-arrow bg-base-300 rounded-lg">
+          <input type="checkbox" {% if form.cards_above.value or form.cards_below.value %}checked{% endif %} />
+          <div class="collapse-title font-semibold text-lg">
+            Card Sections
+            {% if form.cards_above.value or form.cards_below.value %}
+            <span class="badge badge-info badge-sm ml-2">Configured</span>
+            {% endif %}
+          </div>
+          <div class="collapse-content">
+            <div class="space-y-4 pt-2">
+              <!-- Cards Above -->
+              <div class="form-control w-full">
+                <label class="label" for="id_cards_above">
+                  <span class="label-text">Cards Above Content (JSON)</span>
+                </label>
+                {{ form.cards_above }}
+                {% if form.cards_above.errors %}
+                <label class="label">
+                  <span class="label-text-alt text-error">{{ form.cards_above.errors.0 }}</span>
+                </label>
+                {% else %}
+                <label class="label">
+                  <span class="label-text-alt">[{"icon": "...", "title": "...", "description": "...", "link_url": "...", "link_text": "..."}]</span>
+                </label>
+                {% endif %}
+              </div>
+
+              <!-- Cards Below -->
+              <div class="form-control w-full">
+                <label class="label" for="id_cards_below">
+                  <span class="label-text">Cards Below Content (JSON)</span>
+                </label>
+                {{ form.cards_below }}
+                {% if form.cards_below.errors %}
+                <label class="label">
+                  <span class="label-text-alt text-error">{{ form.cards_below.errors.0 }}</span>
+                </label>
+                {% else %}
+                <label class="label">
+                  <span class="label-text-alt">[{"icon": "...", "title": "...", "description": "...", "link_url": "...", "link_text": "..."}]</span>
+                </label>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation Section -->
+        <div class="bg-base-300 rounded-lg p-4">
+          <h3 class="font-semibold text-lg mb-4">Navigation</h3>
+          <div class="space-y-4">
+            <!-- Show in Nav -->
+            <div class="form-control">
+              <label class="label cursor-pointer justify-start gap-3">
+                {{ form.show_in_nav }}
+                <span class="label-text">Show in sidebar navigation</span>
+              </label>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- Nav Title -->
+              <div class="form-control w-full">
+                <label class="label" for="id_nav_title">
+                  <span class="label-text">Navigation Title</span>
+                </label>
+                {{ form.nav_title }}
+                {% if form.nav_title.errors %}
+                <label class="label">
+                  <span class="label-text-alt text-error">{{ form.nav_title.errors.0 }}</span>
+                </label>
+                {% else %}
+                <label class="label">
+                  <span class="label-text-alt">Override title shown in navigation</span>
+                </label>
+                {% endif %}
+              </div>
+
+              <!-- Nav Order -->
+              <div class="form-control w-full">
+                <label class="label" for="id_nav_order">
+                  <span class="label-text">Navigation Order</span>
+                </label>
+                {{ form.nav_order }}
+                {% if form.nav_order.errors %}
+                <label class="label">
+                  <span class="label-text-alt text-error">{{ form.nav_order.errors.0 }}</span>
+                </label>
+                {% else %}
+                <label class="label">
+                  <span class="label-text-alt">Lower numbers appear first</span>
+                </label>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Access Control Section -->
+        <div class="bg-base-300 rounded-lg p-4">
+          <h3 class="font-semibold text-lg mb-4">Access Control</h3>
+          <div class="space-y-2">
+            <!-- Require Login -->
+            <div class="form-control">
+              <label class="label cursor-pointer justify-start gap-3">
+                {{ form.require_login }}
+                <div>
+                  <span class="label-text">Require login</span>
+                  <p class="text-xs text-base-content/60">Users must be logged in to view this page</p>
+                </div>
+              </label>
+            </div>
+
+            <!-- Require Team Member -->
+            <div class="form-control">
+              <label class="label cursor-pointer justify-start gap-3">
+                {{ form.require_team_member }}
+                <div>
+                  <span class="label-text">Require team member</span>
+                  <p class="text-xs text-base-content/60">Users must have team_member permission to view</p>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex flex-col sm:flex-row gap-3 justify-between items-center pt-4">
+          <a href="{% url 'cms:page_list' %}" class="link link-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Back to Pages
+          </a>
+          <div class="flex gap-3">
+            {% if is_edit %}
+            <a href="{% url 'cms:page_delete' page.pk %}" class="btn btn-outline btn-error">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Delete
+            </a>
+            {% endif %}
+            <button type="submit" class="btn btn-primary">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              {% if is_edit %}Save Changes{% else %}Create Page{% endif %}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

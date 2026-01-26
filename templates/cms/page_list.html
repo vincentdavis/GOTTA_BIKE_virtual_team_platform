@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Pages - {{ config.TEAM_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <h2 class="card-title text-2xl">Manage Pages</h2>
+        <a href="{% url 'cms:page_create' %}" class="btn btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          New Page
+        </a>
+      </div>
+
+      <!-- Filters -->
+      <form method="get" class="mb-6">
+        <div class="flex flex-wrap gap-4 items-end">
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Search</span>
+            </label>
+            <input type="text"
+                   name="q"
+                   placeholder="Search by title or slug..."
+                   class="input input-bordered input-sm w-48"
+                   value="{{ search_query }}"
+            />
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Status</span>
+            </label>
+            <select name="status" class="select select-bordered select-sm">
+              <option value="">All Status</option>
+              {% for value, label in status_choices %}
+                <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">In Navigation</span>
+            </label>
+            <select name="nav" class="select select-bordered select-sm">
+              <option value="">All</option>
+              <option value="yes" {% if nav_filter == "yes" %}selected{% endif %}>Yes</option>
+              <option value="no" {% if nav_filter == "no" %}selected{% endif %}>No</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+          <a href="{% url 'cms:page_list' %}" class="btn btn-ghost btn-sm">Reset</a>
+        </div>
+      </form>
+
+      <!-- Pages Table -->
+      <div class="overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Slug</th>
+              <th>Status</th>
+              <th>Nav</th>
+              <th>Access</th>
+              <th>Updated</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for page in pages %}
+            <tr>
+              <td>
+                <div class="font-medium">{{ page.title }}</div>
+                {% if page.hero_enabled %}
+                <span class="badge badge-xs badge-ghost">Hero</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{{ page.get_absolute_url }}" class="link link-primary text-sm" target="_blank">
+                  /page/{{ page.slug }}/
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </td>
+              <td>
+                {% if page.status == 'published' %}
+                <span class="badge badge-success badge-sm">Published</span>
+                {% else %}
+                <span class="badge badge-warning badge-sm">Draft</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if page.show_in_nav %}
+                <span class="badge badge-info badge-sm" title="Order: {{ page.nav_order }}">
+                  {{ page.display_nav_title|truncatechars:15 }}
+                </span>
+                {% else %}
+                <span class="text-base-content/50">-</span>
+                {% endif %}
+              </td>
+              <td>
+                <div class="flex flex-wrap gap-1">
+                  {% if page.require_login %}
+                  <span class="badge badge-outline badge-xs">Login</span>
+                  {% endif %}
+                  {% if page.require_team_member %}
+                  <span class="badge badge-outline badge-xs">Team</span>
+                  {% endif %}
+                  {% if not page.require_login and not page.require_team_member %}
+                  <span class="text-base-content/50 text-xs">Public</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td class="text-sm text-base-content/70">
+                {{ page.updated_at|date:"M d, Y" }}
+              </td>
+              <td>
+                <div class="flex justify-end gap-1">
+                  <a href="{% url 'cms:page_edit' page.pk %}" class="btn btn-ghost btn-xs" title="Edit">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </a>
+                  <a href="{% url 'cms:page_delete' page.pk %}" class="btn btn-ghost btn-xs text-error" title="Delete">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </a>
+                </div>
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center py-8 text-base-content/50">
+                No pages found. <a href="{% url 'cms:page_create' %}" class="link link-primary">Create your first page</a>.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Stats -->
+      <div class="mt-6 text-sm text-base-content/50">
+        Showing {{ pages|length }} page{{ pages|length|pluralize }}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

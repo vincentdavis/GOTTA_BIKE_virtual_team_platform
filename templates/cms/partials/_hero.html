@@ -1,0 +1,28 @@
+{% if page.hero_image %}
+<div class="hero min-h-64 mb-8 rounded-lg overflow-hidden" style="background-image: url('{{ page.hero_image.url }}');">
+    <div class="hero-overlay bg-opacity-60"></div>
+    <div class="hero-content text-center text-neutral-content">
+        <div class="max-w-xl">
+            <h1 class="text-4xl font-bold mb-4">{{ page.display_hero_title }}</h1>
+            {% if hero_subtitle_html %}
+            <div class="prose prose-lg prose-invert max-w-none">
+                {{ hero_subtitle_html|safe }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="hero min-h-48 mb-8 bg-base-200 rounded-lg">
+    <div class="hero-content text-center">
+        <div class="max-w-xl">
+            <h1 class="text-4xl font-bold mb-4">{{ page.display_hero_title }}</h1>
+            {% if hero_subtitle_html %}
+            <div class="prose prose-lg max-w-none">
+                {{ hero_subtitle_html|safe }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}

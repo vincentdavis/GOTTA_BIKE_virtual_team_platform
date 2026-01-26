@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "apps.magic_links.apps.MagicLinksConfig",
     "apps.dbot_api.apps.DbotApiConfig",
     "apps.data_connection.apps.DataConnectionConfig",
+    "apps.cms.apps.CmsConfig",
     "django_tasks",
     "django_tasks.backends.database",
 ]
@@ -144,6 +145,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "constance.context_processors.config",
                 "gotta_bike_platform.context_processors.site_settings",
+                "apps.cms.context_processors.cms_nav_pages",
             ],
         },
     },

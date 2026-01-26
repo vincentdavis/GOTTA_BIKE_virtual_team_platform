@@ -51,6 +51,21 @@
             </a>
         </li>
 
+        <!-- CMS Pages (dynamic) -->
+        {% if cms_nav_pages %}
+        <li class="menu-title mt-4">Pages</li>
+        {% for cms_page in cms_nav_pages %}
+        <li>
+            <a href="{{ cms_page.get_absolute_url }}" class="{% if request.path == cms_page.get_absolute_url %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {{ cms_page.display_nav_title }}
+            </a>
+        </li>
+        {% endfor %}
+        {% endif %}
+
         <!-- Captains Section (conditional) -->
         {% if user.is_any_captain or user.is_link_admin %}
         <li class="menu-title mt-4">Captains</li>
@@ -154,6 +169,14 @@
                     <li><a href="{% url 'config_section_page' 'site_images' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'site_images' in request.path %}active{% endif %}">Site Images</a></li>
                 </ul>
             </details>
+        </li>
+        <li>
+            <a href="{% url 'cms:page_list' %}" class="{% if 'page/manage' in request.path %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Manage Pages
+            </a>
         </li>
         {% endif %}
         {% endif %}
