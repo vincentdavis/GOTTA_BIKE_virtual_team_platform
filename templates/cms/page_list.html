@@ -80,6 +80,9 @@
             <tr>
               <td>
                 <div class="font-medium">{{ page.title }}</div>
+                {% if page.slug == config.HOME_PAGE_SLUG %}
+                <span class="badge badge-xs badge-primary">Home</span>
+                {% endif %}
                 {% if page.hero_enabled %}
                 <span class="badge badge-xs badge-ghost">Hero</span>
                 {% endif %}

@@ -1,9 +1,13 @@
 """Views for GOTTA_BIKE_virtual_team_platform project."""
 
+import logfire
+import markdown
 from constance import config
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
+
+from apps.cms.models import Page
 
 # AI crawlers to block when ROBOTS_DISALLOW_AI is enabled
 AI_CRAWLERS = [
@@ -30,6 +34,9 @@ AI_CRAWLERS = [
 def home(request):
     """Render the home page.
 
+    If HOME_PAGE_SLUG is configured and a matching published CMS page exists,
+    renders that page. Otherwise falls back to the default index.html template.
+
     Args:
         request: The HTTP request.
 
@@ -37,6 +44,36 @@ def home(request):
         Rendered home page template.
 
     """
+    slug = config.HOME_PAGE_SLUG
+    if slug:
+        try:
+            page = Page.objects.get(slug=slug, status=Page.Status.PUBLISHED)
+        except Page.DoesNotExist:
+            logfire.warning("HOME_PAGE_SLUG configured but page not found or not published", slug=slug)
+            return render(request, "index.html")
+
+        content_html = ""
+        if page.content:
+            content_html = markdown.markdown(
+                page.content,
+                extensions=["extra", "codehilite", "toc", "nl2br", "tables"],
+            )
+
+        hero_subtitle_html = ""
+        if page.hero_subtitle:
+            hero_subtitle_html = markdown.markdown(
+                page.hero_subtitle,
+                extensions=["nl2br"],
+            )
+
+        logfire.info("Home page served from CMS", slug=slug, page_id=page.id)
+        context = {
+            "page": page,
+            "content_html": content_html,
+            "hero_subtitle_html": hero_subtitle_html,
+        }
+        return render(request, "cms/page_detail.html", context)
+
     return render(request, "index.html")
 
 

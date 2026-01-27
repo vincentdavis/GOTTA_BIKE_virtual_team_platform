@@ -92,6 +92,16 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/data-connections/{id}/sync/ - Sync data to sheet",
         ],
     },
+    Permissions.PAGES_ADMIN: {
+        "name": "Pages Admin",
+        "description": "Create, edit, and delete CMS pages",
+        "views": [
+            "/page/manage/ - Page list and management",
+            "/page/create/ - Create new page",
+            "/page/{id}/edit/ - Edit page",
+            "/page/{id}/delete/ - Delete page",
+        ],
+    },
 }
 
 

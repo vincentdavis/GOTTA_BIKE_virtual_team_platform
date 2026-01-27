@@ -4286,6 +4286,9 @@
   .h-3 {
     height: calc(var(--spacing) * 3);
   }
+  .h-3\.5 {
+    height: calc(var(--spacing) * 3.5);
+  }
   .h-4 {
     height: calc(var(--spacing) * 4);
   }
@@ -4347,6 +4350,11 @@
     min-height: 60vh;
   }
   @layer daisyui.l1.l2 {
+    .btn-block {
+      width: 100%;
+    }
+  }
+  @layer daisyui.l1.l2 {
     .loading-lg {
       width: calc(var(--size-selector, 0.25rem) * 7);
     }
@@ -4358,6 +4366,9 @@
   }
   .w-3 {
     width: calc(var(--spacing) * 3);
+  }
+  .w-3\.5 {
+    width: calc(var(--spacing) * 3.5);
   }
   .w-4 {
     width: calc(var(--spacing) * 4);
@@ -4965,6 +4976,11 @@
       font-size: 0.625rem;
     }
   }
+  @layer daisyui.l1.l2 {
+    .textarea-sm {
+      font-size: max(var(--font-size, 0.75rem), 0.75rem);
+    }
+  }
   .leading-relaxed {
     --tw-leading: var(--leading-relaxed);
     line-height: var(--leading-relaxed);
@@ -5460,8 +5476,28 @@
     }
   }
   @media (width >= 40rem) {
+    .sm\:col-span-2 {
+      grid-column: span 2 / span 2;
+    }
+  }
+  @media (width >= 40rem) {
+    .sm\:col-span-10 {
+      grid-column: span 10 / span 10;
+    }
+  }
+  @media (width >= 40rem) {
     .sm\:block {
       display: block;
+    }
+  }
+  @media (width >= 40rem) {
+    .sm\:grid-cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+  @media (width >= 40rem) {
+    .sm\:grid-cols-12 {
+      grid-template-columns: repeat(12, minmax(0, 1fr));
     }
   }
   @media (width >= 40rem) {

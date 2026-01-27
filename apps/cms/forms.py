@@ -8,8 +8,6 @@ from django.core.exceptions import ValidationError
 
 from apps.cms.models import Page
 
-CARDS_PLACEHOLDER = '[{"icon": "...", "title": "...", "description": "..."}]'
-
 
 class PageForm(forms.ModelForm):
     """Form for creating and editing CMS pages."""
@@ -61,20 +59,8 @@ class PageForm(forms.ModelForm):
                     "placeholder": "Hero subtitle (supports Markdown)",
                 }
             ),
-            "cards_above": forms.Textarea(
-                attrs={
-                    "class": "textarea textarea-bordered w-full font-mono text-sm",
-                    "rows": 4,
-                    "placeholder": CARDS_PLACEHOLDER,
-                }
-            ),
-            "cards_below": forms.Textarea(
-                attrs={
-                    "class": "textarea textarea-bordered w-full font-mono text-sm",
-                    "rows": 4,
-                    "placeholder": CARDS_PLACEHOLDER,
-                }
-            ),
+            "cards_above": forms.HiddenInput(attrs={"id": "id_cards_above"}),
+            "cards_below": forms.HiddenInput(attrs={"id": "id_cards_below"}),
             "show_in_nav": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "nav_title": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "Nav Title (optional)"}

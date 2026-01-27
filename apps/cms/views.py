@@ -114,7 +114,7 @@ def _check_cms_admin(user) -> bool:
         True if user can manage CMS pages.
 
     """
-    return user.is_superuser or getattr(user, "is_app_admin", False)
+    return user.is_superuser or getattr(user, "is_app_admin", False) or getattr(user, "is_pages_admin", False)
 
 
 @login_required

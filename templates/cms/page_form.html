@@ -19,6 +19,15 @@
         {% endif %}
       </div>
 
+      {% if is_edit and page.slug == config.HOME_PAGE_SLUG %}
+      <div class="alert alert-info mb-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4" />
+        </svg>
+        <span>This page is currently set as the <strong>Home Page</strong>.</span>
+      </div>
+      {% endif %}
+
       <form method="post" enctype="multipart/form-data" class="space-y-6">
         {% csrf_token %}
 
@@ -196,50 +205,46 @@
           </div>
         </div>
 
-        <!-- Cards Sections -->
+        <!-- Cards Above Content -->
         <div class="collapse collapse-arrow bg-base-300 rounded-lg">
-          <input type="checkbox" {% if form.cards_above.value or form.cards_below.value %}checked{% endif %} />
+          <input type="checkbox" id="cards-above-toggle" />
           <div class="collapse-title font-semibold text-lg">
-            Card Sections
-            {% if form.cards_above.value or form.cards_below.value %}
-            <span class="badge badge-info badge-sm ml-2">Configured</span>
-            {% endif %}
+            Cards Above Content
+            <span id="cards_above-count" class="badge badge-info badge-sm ml-2 hidden"></span>
           </div>
           <div class="collapse-content">
-            <div class="space-y-4 pt-2">
-              <!-- Cards Above -->
-              <div class="form-control w-full">
-                <label class="label" for="id_cards_above">
-                  <span class="label-text">Cards Above Content (JSON)</span>
-                </label>
-                {{ form.cards_above }}
-                {% if form.cards_above.errors %}
-                <label class="label">
-                  <span class="label-text-alt text-error">{{ form.cards_above.errors.0 }}</span>
-                </label>
-                {% else %}
-                <label class="label">
-                  <span class="label-text-alt">[{"icon": "...", "title": "...", "description": "...", "link_url": "...", "link_text": "..."}]</span>
-                </label>
-                {% endif %}
+            <div class="pt-2">
+              {{ form.cards_above }}
+              {% if form.cards_above.errors %}
+              <div class="alert alert-error mb-3">
+                <span>{{ form.cards_above.errors.0 }}</span>
               </div>
+              {% endif %}
+              {% with field_name="cards_above" %}
+              {% include "cms/partials/_card_editor.html" %}
+              {% endwith %}
+            </div>
+          </div>
+        </div>
 
-              <!-- Cards Below -->
-              <div class="form-control w-full">
-                <label class="label" for="id_cards_below">
-                  <span class="label-text">Cards Below Content (JSON)</span>
-                </label>
-                {{ form.cards_below }}
-                {% if form.cards_below.errors %}
-                <label class="label">
-                  <span class="label-text-alt text-error">{{ form.cards_below.errors.0 }}</span>
-                </label>
-                {% else %}
-                <label class="label">
-                  <span class="label-text-alt">[{"icon": "...", "title": "...", "description": "...", "link_url": "...", "link_text": "..."}]</span>
-                </label>
-                {% endif %}
+        <!-- Cards Below Content -->
+        <div class="collapse collapse-arrow bg-base-300 rounded-lg">
+          <input type="checkbox" id="cards-below-toggle" />
+          <div class="collapse-title font-semibold text-lg">
+            Cards Below Content
+            <span id="cards_below-count" class="badge badge-info badge-sm ml-2 hidden"></span>
+          </div>
+          <div class="collapse-content">
+            <div class="pt-2">
+              {{ form.cards_below }}
+              {% if form.cards_below.errors %}
+              <div class="alert alert-error mb-3">
+                <span>{{ form.cards_below.errors.0 }}</span>
               </div>
+              {% endif %}
+              {% with field_name="cards_below" %}
+              {% include "cms/partials/_card_editor.html" %}
+              {% endwith %}
             </div>
           </div>
         </div>
@@ -351,4 +356,230 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const cardEditor = {
+  // In-memory card data keyed by field name
+  data: {
+    cards_above: [],
+    cards_below: [],
+  },
+
+  init() {
+    // Load existing data from hidden inputs
+    for (const field of ['cards_above', 'cards_below']) {
+      const input = document.getElementById('id_' + field);
+      if (input && input.value) {
+        try {
+          const parsed = JSON.parse(input.value);
+          if (Array.isArray(parsed)) {
+            this.data[field] = parsed;
+          }
+        } catch (e) {
+          // Leave empty if invalid JSON
+        }
+      }
+      this.render(field);
+    }
+  },
+
+  render(field) {
+    const list = document.getElementById(field + '-list');
+    const empty = document.getElementById(field + '-empty');
+    const count = document.getElementById(field + '-count');
+    const toggle = document.getElementById(field.replace('_', '-') + '-toggle');
+    const cards = this.data[field];
+
+    // Update count badge
+    if (cards.length > 0) {
+      count.textContent = cards.length + ' card' + (cards.length !== 1 ? 's' : '');
+      count.classList.remove('hidden');
+      empty.classList.add('hidden');
+      // Auto-open collapse if cards exist
+      if (toggle) toggle.checked = true;
+    } else {
+      count.classList.add('hidden');
+      empty.classList.remove('hidden');
+    }
+
+    // Render cards
+    list.innerHTML = '';
+    cards.forEach((card, index) => {
+      list.appendChild(this.createCardElement(field, card, index));
+    });
+
+    // Sync to hidden input
+    this.sync(field);
+  },
+
+  createCardElement(field, card, index) {
+    const total = this.data[field].length;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'card bg-base-100 border border-base-300';
+
+    const moveUpBtn = index > 0
+      ? `<button type="button" class="btn btn-ghost btn-xs" title="Move up"
+                data-action="move-up">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+          </svg>
+        </button>`
+      : '';
+
+    const moveDownBtn = index < total - 1
+      ? `<button type="button" class="btn btn-ghost btn-xs" title="Move down"
+                data-action="move-down">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>`
+      : '';
+
+    wrapper.innerHTML = `
+      <div class="card-body p-4 gap-3">
+        <div class="flex justify-between items-start">
+          <span class="badge badge-ghost badge-sm">Card ${index + 1}</span>
+          <div class="flex gap-1">
+            ${moveUpBtn}
+            ${moveDownBtn}
+            <button type="button" class="btn btn-ghost btn-xs text-error" title="Remove card"
+                    data-action="remove">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          <div class="form-control sm:col-span-2">
+            <label class="label py-1"><span class="label-text text-xs">Icon</span></label>
+            <input type="text" data-key="icon"
+                   class="input input-bordered input-sm w-full text-center text-lg"
+                   placeholder="&#127942;"
+                   value="${this.escapeAttr(card.icon || '')}" />
+          </div>
+          <div class="form-control sm:col-span-10">
+            <label class="label py-1"><span class="label-text text-xs">Title</span></label>
+            <input type="text" data-key="title"
+                   class="input input-bordered input-sm w-full"
+                   placeholder="Card title"
+                   value="${this.escapeAttr(card.title || '')}" />
+          </div>
+        </div>
+
+        <div class="form-control">
+          <label class="label py-1">
+            <span class="label-text text-xs">Description</span>
+            <span class="label-text-alt text-xs">Supports Markdown</span>
+          </label>
+          <textarea data-key="description"
+                    class="textarea textarea-bordered textarea-sm w-full"
+                    rows="2"
+                    placeholder="Card description...">${this.escapeHtml(card.description || '')}</textarea>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="form-control">
+            <label class="label py-1"><span class="label-text text-xs">Link URL</span></label>
+            <input type="text" data-key="link_url"
+                   class="input input-bordered input-sm w-full"
+                   placeholder="/path/ or https://..."
+                   value="${this.escapeAttr(card.link_url || '')}" />
+          </div>
+          <div class="form-control">
+            <label class="label py-1"><span class="label-text text-xs">Link Text</span></label>
+            <input type="text" data-key="link_text"
+                   class="input input-bordered input-sm w-full"
+                   placeholder="Learn More"
+                   value="${this.escapeAttr(card.link_text || '')}" />
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Attach event listeners
+    wrapper.querySelectorAll('[data-key]').forEach(el => {
+      el.addEventListener('input', () => {
+        this.update(field, index, el.dataset.key,
+          el.tagName === 'TEXTAREA' ? el.value : el.value);
+      });
+    });
+
+    const removeBtn = wrapper.querySelector('[data-action="remove"]');
+    if (removeBtn) removeBtn.addEventListener('click', () => this.remove(field, index));
+
+    const upBtn = wrapper.querySelector('[data-action="move-up"]');
+    if (upBtn) upBtn.addEventListener('click', () => this.move(field, index, -1));
+
+    const downBtn = wrapper.querySelector('[data-action="move-down"]');
+    if (downBtn) downBtn.addEventListener('click', () => this.move(field, index, 1));
+
+    return wrapper;
+  },
+
+  addCard(field) {
+    this.data[field].push({
+      icon: '',
+      title: '',
+      description: '',
+      link_url: '',
+      link_text: '',
+    });
+    this.render(field);
+    // Scroll the new card into view
+    const list = document.getElementById(field + '-list');
+    const last = list.lastElementChild;
+    if (last) {
+      last.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // Focus the icon field
+      const iconInput = last.querySelector('[data-key="icon"]');
+      if (iconInput) iconInput.focus();
+    }
+  },
+
+  remove(field, index) {
+    this.data[field].splice(index, 1);
+    this.render(field);
+  },
+
+  move(field, index, direction) {
+    const cards = this.data[field];
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= cards.length) return;
+    [cards[index], cards[newIndex]] = [cards[newIndex], cards[index]];
+    this.render(field);
+  },
+
+  update(field, index, key, value) {
+    this.data[field][index][key] = value;
+    this.sync(field);
+  },
+
+  sync(field) {
+    const input = document.getElementById('id_' + field);
+    // Filter out completely empty cards
+    const filtered = this.data[field].filter(c =>
+      c.icon || c.title || c.description || c.link_url || c.link_text
+    );
+    input.value = filtered.length > 0 ? JSON.stringify(filtered) : '';
+  },
+
+  escapeAttr(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML.replace(/"/g, '&quot;');
+  },
+
+  escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => cardEditor.init());
+</script>
 {% endblock %}

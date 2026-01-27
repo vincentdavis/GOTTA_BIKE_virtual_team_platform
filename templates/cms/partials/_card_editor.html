@@ -1,0 +1,28 @@
+{% comment %}
+Card editor widget for CMS pages.
+
+Expects context:
+  field_name: "cards_above" or "cards_below"
+  field_label: Display label for the section
+  field_help: Help text
+{% endcomment %}
+
+<div class="space-y-3" id="{{ field_name }}-editor">
+  <!-- Card list container -->
+  <div id="{{ field_name }}-list" class="space-y-3"></div>
+
+  <!-- Add card button -->
+  <button type="button"
+          class="btn btn-outline btn-sm btn-block"
+          onclick="cardEditor.addCard('{{ field_name }}')">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+    </svg>
+    Add Card
+  </button>
+
+  <!-- Empty state -->
+  <div id="{{ field_name }}-empty" class="text-center py-4 text-base-content/50 text-sm hidden">
+    No cards added. Click "Add Card" to create one.
+  </div>
+</div>

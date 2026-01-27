@@ -440,6 +440,11 @@ CONSTANCE_CONFIG = {
         "Discord role IDs that grant access to Data Connections (Google Sheets exports)",
         "json_list_field",
     ),
+    "PERM_PAGES_ADMIN_ROLES": (
+        "[]",
+        "Discord role IDs that grant CMS page management (create, edit, delete pages)",
+        "json_list_field",
+    ),
     # Verification validity periods (in days)
     "WEIGHT_FULL_DAYS": (120, "Days a full weight verification is valid", int),
     "WEIGHT_LIGHT_DAYS": (30, "Days a light weight verification is valid", int),
@@ -538,6 +543,11 @@ CONSTANCE_CONFIG = {
         "Subtitle displayed on the home page",
         str,
     ),
+    "HOME_PAGE_SLUG": (
+        "",
+        "CMS page slug to use as the home page (leave empty for default)",
+        str,
+    ),
     "ABOUT_URL": ("#", "URL to About page", str),
     "CONTACT_URL": ("#", "URL to Contact page", str),
     "DISCORD_URL": ("#", "Discord server invite link", str),
@@ -593,6 +603,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "TEAM_NAME",
         "LOGO_DISPLAY_MODE",
         "SUBTITLE",
+        "HOME_PAGE_SLUG",
         "SITE_ANNOUNCEMENT",
         "MAINTENANCE_MODE",
         "ABOUT_URL",
@@ -646,6 +657,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "PERM_RACE_READY_ROLES",
         "PERM_APPROVE_VERIFICATION_ROLES",
         "PERM_DATA_CONNECTION_ROLES",
+        "PERM_PAGES_ADMIN_ROLES",
     ),
     "Verification Settings": (
         "CATEGORY_REQUIREMENTS",
