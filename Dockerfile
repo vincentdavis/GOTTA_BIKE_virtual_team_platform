@@ -10,7 +10,7 @@ WORKDIR /app
 COPY . .
 
 # Install project dependencies.
-RUN uv sync --frozen
+RUN uv sync --frozen --compile-bytecode
 
 # Install Tailwind CSS dependencies
 RUN uv run python manage.py tailwind install
