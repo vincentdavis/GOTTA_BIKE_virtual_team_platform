@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load team_tags %}
 
 {% block title %}Team Links - The Coalition{% endblock %}
 
@@ -78,7 +79,7 @@
               </div>
               <div class="flex flex-wrap gap-1 ml-4">
                 {% for type_value in link.link_types %}
-                <span class="badge badge-sm badge-outline">{{ type_value }}</span>
+                <span class="badge badge-sm {{ type_value|link_type_badge_class }}">{{ type_value }}</span>
                 {% empty %}
                 <span class="badge badge-sm badge-ghost">Uncategorized</span>
                 {% endfor %}

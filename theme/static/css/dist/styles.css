@@ -5341,6 +5341,12 @@
     }
   }
   @layer daisyui.l1.l2 {
+    .badge-neutral {
+      --badge-color: var(--color-neutral);
+      --badge-fg: var(--color-neutral-content);
+    }
+  }
+  @layer daisyui.l1.l2 {
     .badge-primary {
       --badge-color: var(--color-primary);
       --badge-fg: var(--color-primary-content);
