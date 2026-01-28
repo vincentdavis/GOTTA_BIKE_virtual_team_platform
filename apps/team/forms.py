@@ -57,11 +57,26 @@ class TeamLinkForm(forms.ModelForm):
         help_text="Select one or more types for this link",
     )
 
+    permissions = forms.MultipleChoiceField(
+        choices=TeamLink.PERMISSION_CHOICES,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-sm"}),
+        required=False,
+        help_text="Select which roles can see this link (leave empty for all team members)",
+    )
+
     class Meta:
         """Meta options for TeamLinkForm."""
 
         model = TeamLink
-        fields: ClassVar[list[str]] = ["title", "description", "url", "link_types", "date_open", "date_closed"]
+        fields: ClassVar[list[str]] = [
+            "title",
+            "description",
+            "url",
+            "link_types",
+            "permissions",
+            "date_open",
+            "date_closed",
+        ]
         widgets: ClassVar[dict] = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full", "placeholder": "Link title"}),
             "description": forms.Textarea(
@@ -89,12 +104,26 @@ class TeamLinkEditForm(forms.ModelForm):
         help_text="Select one or more types for this link",
     )
 
+    permissions = forms.MultipleChoiceField(
+        choices=TeamLink.PERMISSION_CHOICES,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-sm"}),
+        required=False,
+        help_text="Select which roles can see this link (leave empty for all team members)",
+    )
+
     class Meta:
         """Meta options for TeamLinkEditForm."""
 
         model = TeamLink
         fields: ClassVar[list[str]] = [
-            "title", "description", "url", "link_types", "date_open", "date_closed", "active",
+            "title",
+            "description",
+            "url",
+            "link_types",
+            "permissions",
+            "date_open",
+            "date_closed",
+            "active",
         ]
         widgets: ClassVar[dict] = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full", "placeholder": "Link title"}),
@@ -130,30 +159,44 @@ class RaceReadyRecordForm(forms.ModelForm):
 
         model = RaceReadyRecord
         fields: ClassVar[list[str]] = [
-            "verify_type", "media_type", "weight", "height", "ftp", "media_file", "url", "notes", "same_gender",
+            "verify_type",
+            "media_type",
+            "weight",
+            "height",
+            "ftp",
+            "media_file",
+            "url",
+            "notes",
+            "same_gender",
         ]
         widgets: ClassVar[dict] = {
             "verify_type": forms.Select(attrs={"class": "select select-bordered w-full", "id": "id_verify_type"}),
             "media_type": forms.Select(attrs={"class": "select select-bordered w-full"}),
-            "weight": forms.NumberInput(attrs={
-                "class": "input input-bordered w-full",
-                "placeholder": "e.g., 72.5",
-                "step": "0.01",
-                "min": "20",
-                "max": "200",
-            }),
-            "height": forms.NumberInput(attrs={
-                "class": "input input-bordered w-full",
-                "placeholder": "e.g., 175",
-                "min": "100",
-                "max": "250",
-            }),
-            "ftp": forms.NumberInput(attrs={
-                "class": "input input-bordered w-full",
-                "placeholder": "e.g., 280",
-                "min": "50",
-                "max": "600",
-            }),
+            "weight": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "e.g., 72.5",
+                    "step": "0.01",
+                    "min": "20",
+                    "max": "200",
+                }
+            ),
+            "height": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "e.g., 175",
+                    "min": "100",
+                    "max": "250",
+                }
+            ),
+            "ftp": forms.NumberInput(
+                attrs={
+                    "class": "input input-bordered w-full",
+                    "placeholder": "e.g., 280",
+                    "min": "50",
+                    "max": "600",
+                }
+            ),
             "media_file": forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"}),
             "url": forms.URLInput(attrs={"class": "input input-bordered w-full", "placeholder": "https://..."}),
             "notes": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 3}),
@@ -190,7 +233,7 @@ class RaceReadyRecordForm(forms.ModelForm):
             # Update weight field for lbs
             self.fields["weight"].widget.attrs.update({
                 "placeholder": "e.g., 160",
-                "min": "44",   # ~20 kg
+                "min": "44",  # ~20 kg
                 "max": "441",  # ~200 kg
                 "step": "0.1",
             })
@@ -199,8 +242,8 @@ class RaceReadyRecordForm(forms.ModelForm):
             # Update height field for inches
             self.fields["height"].widget.attrs.update({
                 "placeholder": "e.g., 69",
-                "min": "39",   # ~100 cm
-                "max": "98",   # ~250 cm
+                "min": "39",  # ~100 cm
+                "max": "98",  # ~250 cm
             })
             self.fields["height"].label = "Height (inches)"
         else:
@@ -240,9 +283,7 @@ class RaceReadyRecordForm(forms.ModelForm):
                     file_size=media_file.size,
                     error_reason="invalid_file_type",
                 )
-                raise forms.ValidationError(
-                    f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
-                )
+                raise forms.ValidationError(f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}")
         return media_file
 
     def clean_weight(self):
@@ -434,7 +475,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                 choices=TIMEZONE_CHOICES,
                 attrs={
                     "class": "select select-bordered w-full",
-                }
+                },
             ),
             "birth_year": forms.NumberInput(
                 attrs={
@@ -486,12 +527,8 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                     "placeholder": "https://tpvirtualhub.com/profile/...",
                 }
             ),
-            "agree_privacy": forms.CheckboxInput(
-                attrs={"class": "checkbox checkbox-primary"}
-            ),
-            "agree_tos": forms.CheckboxInput(
-                attrs={"class": "checkbox checkbox-primary"}
-            ),
+            "agree_privacy": forms.CheckboxInput(attrs={"class": "checkbox checkbox-primary"}),
+            "agree_tos": forms.CheckboxInput(attrs={"class": "checkbox checkbox-primary"}),
             "applicant_notes": forms.Textarea(
                 attrs={
                     "class": "textarea textarea-bordered w-full",
@@ -671,9 +708,7 @@ class MembershipApplicationAdminForm(forms.ModelForm):
         model = MembershipApplication
         fields: ClassVar[list[str]] = ["status", "admin_notes"]
         widgets: ClassVar[dict] = {
-            "status": forms.Select(
-                attrs={"class": "select select-bordered w-full"}
-            ),
+            "status": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "admin_notes": forms.Textarea(
                 attrs={
                     "class": "textarea textarea-bordered w-full",

@@ -73,6 +73,29 @@
           </label>
         </div>
 
+        <!-- Visibility Permissions -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Visibility Permissions <span class="text-base-content/60 font-normal">(Default: Members only)</span></span>
+          </label>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-2 p-4 bg-base-300 rounded-lg">
+            {% for choice in form.permissions %}
+            <label class="label cursor-pointer justify-start gap-2">
+              {{ choice.tag }}
+              <span class="label-text">{{ choice.choice_label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% if form.permissions.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.permissions.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Leave empty to show to all team members</span>
+          </label>
+        </div>
+
         <!-- Visibility Schedule -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control w-full">

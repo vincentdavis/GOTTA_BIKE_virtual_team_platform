@@ -95,10 +95,7 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
     # Apply search filter (by zwid or name)
     if search_query:
         search_lower = search_query.lower()
-        roster = [
-            r for r in roster
-            if search_lower in r.display_name.lower() or search_query in str(r.zwid)
-        ]
+        roster = [r for r in roster if search_lower in r.display_name.lower() or search_query in str(r.zwid)]
 
     # Apply ZwiftPower category filter (filter by div number)
     if zp_category_filter:
@@ -204,9 +201,7 @@ def filtered_roster_view(request: HttpRequest, filter_id: uuid.UUID) -> HttpResp
     from apps.accounts.models import User
 
     # Get user_ids that match the discord_ids
-    matching_user_ids = set(
-        User.objects.filter(discord_id__in=discord_id_set).values_list("id", flat=True)
-    )
+    matching_user_ids = set(User.objects.filter(discord_id__in=discord_id_set).values_list("id", flat=True))
 
     # Filter roster to only include riders with matching user accounts
     roster = [r for r in roster if r.user_id and r.user_id in matching_user_ids]
@@ -278,12 +273,17 @@ def team_links_view(request: HttpRequest) -> HttpResponse:
     # - active=True
     # - date_open is null OR date_open <= now
     # - date_closed is null OR date_closed > now
-    links = TeamLink.objects.filter(
-        active=True,
-    ).filter(
-        Q(date_open__isnull=True) | Q(date_open__lte=now),
-    ).filter(
-        Q(date_closed__isnull=True) | Q(date_closed__gt=now),
+    links = (
+        TeamLink.objects
+        .filter(
+            active=True,
+        )
+        .filter(
+            Q(date_open__isnull=True) | Q(date_open__lte=now),
+        )
+        .filter(
+            Q(date_closed__isnull=True) | Q(date_closed__gt=now),
+        )
     )
 
     # Get filter parameters
@@ -301,6 +301,9 @@ def team_links_view(request: HttpRequest) -> HttpResponse:
     # Apply type filter
     if type_filter:
         links = links.filter(link_types__contains=type_filter)
+
+    # Filter links by user's permissions (convert to list for filtering)
+    links = [link for link in links if link.user_can_view(request.user)]
 
     # Check if user can edit links
     can_edit_links = request.user.is_link_admin or request.user.is_superuser
@@ -828,7 +831,8 @@ def team_feed_view(request: HttpRequest) -> HttpResponse:
     from apps.accounts.models import User
 
     users = (
-        User.objects.filter(
+        User.objects
+        .filter(
             Q(youtube_channel__isnull=False) & ~Q(youtube_channel="")
             | Q(twitch_channel__isnull=False) & ~Q(twitch_channel=""),
         )
@@ -894,10 +898,7 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
     # Apply search filter (by name or zwid)
     if search_query:
         search_lower = search_query.lower()
-        riders = [
-            r for r in riders
-            if search_lower in r.display_name.lower() or search_query in str(r.zwid)
-        ]
+        riders = [r for r in riders if search_lower in r.display_name.lower() or search_query in str(r.zwid)]
 
     # Apply ZwiftPower category filter
     if zp_category_filter:
@@ -992,7 +993,8 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     if search_query:
         search_lower = search_query.lower()
         riders = [
-            r for r in riders
+            r
+            for r in riders
             if search_lower in r.full_name.lower()
             or search_lower in r.discord_nickname.lower()
             or search_lower in r.zp_name.lower()
@@ -1202,9 +1204,7 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
             admin_display = request.user.discord_nickname or request.user.first_name or request.user.username
             status_changed = old_status != app.status
             notes_changed = old_admin_notes != app.admin_notes
-            admin_url = request.build_absolute_uri(
-                reverse("team:application_admin", kwargs={"pk": pk})
-            )
+            admin_url = request.build_absolute_uri(reverse("team:application_admin", kwargs={"pk": pk}))
 
             if status_changed:
                 notify_application_update.enqueue(
@@ -1317,9 +1317,7 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
 
             # Send Discord notification for applicant update (only if something changed)
             if changed_fields:
-                admin_url = request.build_absolute_uri(
-                    reverse("team:application_admin", kwargs={"pk": pk})
-                )
+                admin_url = request.build_absolute_uri(reverse("team:application_admin", kwargs={"pk": pk}))
                 notify_application_update.enqueue(
                     application_id=str(pk),
                     update_type="applicant_updated",

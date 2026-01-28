@@ -249,9 +249,7 @@ class RaceReadyRecord(models.Model):
 
         # YouTube: youtube.com/watch?v=VIDEO_ID or youtu.be/VIDEO_ID
         # Also handle youtube.com/shorts/VIDEO_ID
-        youtube_match = re.search(
-            r"(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)([a-zA-Z0-9_-]{11})", self.url
-        )
+        youtube_match = re.search(r"(?:youtube\.com/(?:watch\?v=|shorts/)|youtu\.be/)([a-zA-Z0-9_-]{11})", self.url)
         if youtube_match:
             video_id = youtube_match.group(1)
             # Use youtube-nocookie.com for better privacy/compatibility
@@ -368,6 +366,7 @@ class TeamLink(models.Model):
         - active=True
         - date_open is None OR date_open <= now
         - date_closed is None OR date_closed > now
+        - permissions is empty OR user has a role matching any permission
 
     Use Cases:
         - Race signup forms (with open/close dates matching registration windows)
@@ -380,6 +379,7 @@ class TeamLink(models.Model):
         description: Optional longer description of the resource.
         url: The destination URL.
         link_types: List of LinkType values for categorization/filtering.
+        permissions: List of permission keys required to view (empty = all team members).
         active: Master toggle to hide link regardless of dates.
         date_open: When link becomes visible (None = immediately).
         date_closed: When link stops being visible (None = never).
@@ -391,6 +391,20 @@ class TeamLink(models.Model):
         link_types_display: Comma-separated display names of link types.
 
     """
+
+    PERMISSION_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ("PERM_APP_ADMIN_ROLES", "App Admin"),
+        ("PERM_TEAM_CAPTAIN_ROLES", "Team Captain"),
+        ("PERM_VICE_CAPTAIN_ROLES", "Vice Captain"),
+        ("PERM_LINK_ADMIN_ROLES", "Link Admin"),
+        ("PERM_MEMBERSHIP_ADMIN_ROLES", "Membership Admin"),
+        ("PERM_RACING_ADMIN_ROLES", "Racing Admin"),
+        ("PERM_TEAM_MEMBER_ROLES", "Team Member"),
+        ("PERM_RACE_READY_ROLES", "Race Ready"),
+        ("PERM_APPROVE_VERIFICATION_ROLES", "Verification Approver"),
+        ("PERM_DATA_CONNECTION_ROLES", "Data Connection"),
+        ("PERM_PAGES_ADMIN_ROLES", "Pages Admin"),
+    ]
 
     class LinkType(models.TextChoices):
         """Types of external links."""
@@ -430,6 +444,11 @@ class TeamLink(models.Model):
     )
     date_added = models.DateTimeField(auto_now_add=True, help_text="When this link was added")
     date_edited = models.DateTimeField(auto_now=True, help_text="When this link was last edited")
+    permissions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Permission mappings required to view this link (empty = all team members)",
+    )
 
     class Meta:
         """Meta options for TeamLink model."""
@@ -474,6 +493,43 @@ class TeamLink(models.Model):
             return ""
         type_map = dict(self.LinkType.choices)
         return ", ".join(type_map.get(t, t) for t in self.link_types)
+
+    def user_can_view(self, user) -> bool:
+        """Check if user has permission to view this link.
+
+        If permissions list is empty, any team member can view.
+        If permissions are set, user must have a Discord role that matches
+        ANY of the selected permission mappings (OR logic).
+
+        Args:
+            user: The user to check permissions for.
+
+        Returns:
+            True if user can view this link, False otherwise.
+
+        """
+        if not self.permissions:
+            return True  # No restrictions - visible to all team members
+
+        import json
+
+        from constance import config
+
+        user_role_ids = [str(rid) for rid in user.get_discord_role_ids()]
+
+        for perm_key in self.permissions:
+            # Get role IDs from Constance for this permission
+            role_ids_raw = getattr(config, perm_key, []) or []
+            if isinstance(role_ids_raw, str):
+                role_ids = json.loads(role_ids_raw) if role_ids_raw else []
+            else:
+                role_ids = role_ids_raw
+
+            # Check if user has any of these roles
+            if any(str(rid) in user_role_ids for rid in role_ids):
+                return True
+
+        return False
 
 
 class DiscordRole(models.Model):
@@ -956,12 +1012,7 @@ class MembershipApplication(models.Model):
             True if all required fields are filled.
 
         """
-        return bool(
-            self.first_name
-            and self.last_name
-            and self.agree_privacy
-            and self.agree_tos
-        )
+        return bool(self.first_name and self.last_name and self.agree_privacy and self.agree_tos)
 
     @property
     def is_pending(self) -> bool:
