@@ -89,23 +89,6 @@
               </label>
               {% endif %}
             </div>
-
-            <!-- Meta Description -->
-            <div class="form-control w-full">
-              <label class="label" for="id_meta_description">
-                <span class="label-text">Meta Description</span>
-              </label>
-              {{ form.meta_description }}
-              {% if form.meta_description.errors %}
-              <label class="label">
-                <span class="label-text-alt text-error">{{ form.meta_description.errors.0 }}</span>
-              </label>
-              {% else %}
-              <label class="label">
-                <span class="label-text-alt">For search engines (max 160 characters)</span>
-              </label>
-              {% endif %}
-            </div>
           </div>
         </div>
 

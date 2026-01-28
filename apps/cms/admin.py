@@ -80,13 +80,6 @@ class PageAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "SEO",
-            {
-                "fields": ("meta_description",),
-                "classes": ("collapse",),
-            },
-        ),
-        (
             "Metadata",
             {
                 "fields": ("created_at", "updated_at", "created_by"),

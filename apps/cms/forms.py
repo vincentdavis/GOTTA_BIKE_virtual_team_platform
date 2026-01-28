@@ -32,7 +32,6 @@ class PageForm(forms.ModelForm):
             "nav_order",
             "require_login",
             "require_team_member",
-            "meta_description",
         ]
         widgets: ClassVar[dict] = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full", "placeholder": "Page Title"}),
@@ -68,13 +67,6 @@ class PageForm(forms.ModelForm):
             "nav_order": forms.NumberInput(attrs={"class": "input input-bordered w-full"}),
             "require_login": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "require_team_member": forms.CheckboxInput(attrs={"class": "checkbox"}),
-            "meta_description": forms.TextInput(
-                attrs={
-                    "class": "input input-bordered w-full",
-                    "placeholder": "Meta description for SEO (max 160 characters)",
-                    "maxlength": 160,
-                }
-            ),
         }
 
     def clean_cards_above(self) -> list:

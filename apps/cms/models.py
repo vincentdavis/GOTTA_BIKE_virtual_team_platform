@@ -34,7 +34,6 @@ class Page(models.Model):
         status: Draft or published status.
         require_login: Whether login is required to view.
         require_team_member: Whether team_member permission is required.
-        meta_description: SEO meta description.
         created_at: Creation timestamp.
         updated_at: Last update timestamp.
         created_by: User who created the page.
@@ -132,13 +131,6 @@ class Page(models.Model):
     require_team_member = models.BooleanField(
         default=False,
         help_text="Require team_member permission to view this page",
-    )
-
-    # SEO
-    meta_description = models.CharField(
-        max_length=160,
-        blank=True,
-        help_text="Meta description for search engines (160 chars max)",
     )
 
     # Timestamps and tracking

@@ -3,18 +3,7 @@
 
 {% block title %}{{ page.title }} - {{ config.TEAM_NAME }}{% endblock %}
 
-{% block meta_description %}
-{% if page.meta_description %}
-<meta name="description" content="{{ page.meta_description }}">
-{% endif %}
-{% endblock %}
-
 {% block og_title %}<meta property="og:title" content="{{ page.title }}">{% endblock %}
-{% block og_description %}
-{% if page.meta_description %}
-<meta property="og:description" content="{{ page.meta_description }}">
-{% endif %}
-{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
