@@ -18,7 +18,7 @@ urlpatterns = [
     path("verification/delete-expired-media/", views.delete_expired_media_view, name="delete_expired_media"),
     path("verification/delete-rejected-media/", views.delete_rejected_media_view, name="delete_rejected_media"),
     path("performance-review/", views.performance_review_view, name="performance_review"),
-    path("youtube/", views.youtube_channels_view, name="youtube_channels"),
+    path("team-feed/", views.team_feed_view, name="team_feed"),
     # Membership
     path("discord-review/", views.discord_review_view, name="discord_review"),
     path("membership-review/", views.membership_review_view, name="membership_review"),

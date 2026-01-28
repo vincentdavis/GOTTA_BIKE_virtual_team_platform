@@ -1,40 +1,49 @@
 {% extends "base.html" %}
 
-{% block title %}YouTube Channels - {{ config.TEAM_NAME }}{% endblock %}
+{% block title %}Team Feed - {{ config.TEAM_NAME }}{% endblock %}
 
 {% block content %}
 <div class="max-w-5xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="card-title text-2xl">Team YouTube Channels</h2>
+        <h2 class="card-title text-2xl">Team Feed</h2>
       </div>
 
       <!-- Channels Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {% for user in users %}
-        <a href="{{ user.youtube_channel }}"
+        {% for entry in feed_entries %}
+        <a href="{{ entry.url }}"
            target="_blank"
            rel="noopener"
            class="card bg-base-300 hover:bg-base-100 transition-colors cursor-pointer group">
           <div class="card-body p-4">
-            <!-- YouTube Thumbnail Placeholder -->
+            {% if entry.platform == "youtube" %}
+            <!-- YouTube -->
             <div class="aspect-video bg-gradient-to-br from-red-600 to-red-800 rounded-lg flex items-center justify-center mb-3 group-hover:scale-[1.02] transition-transform">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-white opacity-90" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
               </svg>
             </div>
+            {% elif entry.platform == "twitch" %}
+            <!-- Twitch -->
+            <div class="aspect-video bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg flex items-center justify-center mb-3 group-hover:scale-[1.02] transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-white opacity-90" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
+              </svg>
+            </div>
+            {% endif %}
 
             <div class="flex items-center gap-2">
               <div class="flex-1 min-w-0">
                 <h3 class="font-semibold truncate">
-                  {% if user.first_name or user.last_name %}
-                    {{ user.first_name }} {{ user.last_name }}
+                  {% if entry.user.first_name or entry.user.last_name %}
+                    {{ entry.user.first_name }} {{ entry.user.last_name }}
                   {% else %}
-                    {{ user.discord_nickname|default:user.discord_username }}
+                    {{ entry.user.discord_nickname|default:entry.user.discord_username }}
                   {% endif %}
                 </h3>
-                <p class="text-xs text-base-content/60 truncate">{{ user.youtube_channel }}</p>
+                <p class="text-xs text-base-content/60 truncate">{{ entry.url }}</p>
               </div>
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/40 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -44,14 +53,14 @@
         </a>
         {% empty %}
         <div class="col-span-full text-center py-8 text-base-content/50">
-          No YouTube channels found.
+          No feeds found.
         </div>
         {% endfor %}
       </div>
 
       <!-- Stats -->
       <div class="mt-6 text-sm text-base-content/50">
-        {{ users|length }} channel{{ users|length|pluralize }}
+        {{ feed_entries|length }} feed{{ feed_entries|length|pluralize }}
       </div>
     </div>
   </div>

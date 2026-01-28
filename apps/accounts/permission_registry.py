@@ -62,7 +62,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/team/links/{id}/edit/ - Edit team link",
             "/team/verification/ - Verification records",
             "/team/verification/{id}/ - Verification detail",
-            "/team/youtube/ - YouTube channels",
+            "/team/team-feed/ - Team feed",
             "/team/performance-review/ - Performance review",
             "/user/profile/{id}/ - View teammate profiles",
         ],

@@ -813,30 +813,41 @@ def delete_rejected_media_view(request: HttpRequest) -> HttpResponse:
 @login_required
 @team_member_required()
 @require_GET
-def youtube_channels_view(request: HttpRequest) -> HttpResponse:
-    """Display list of team members with YouTube channels.
+def team_feed_view(request: HttpRequest) -> HttpResponse:
+    """Display team feed with YouTube and Twitch channels.
 
     Args:
         request: The HTTP request.
 
     Returns:
-        Rendered YouTube channels page.
+        Rendered team feed page.
 
     """
+    from django.db.models import Q
+
     from apps.accounts.models import User
 
-    # Get users with YouTube channels, ordered by name
-    users_with_channels = (
-        User.objects.filter(youtube_channel__isnull=False)
-        .exclude(youtube_channel="")
+    users = (
+        User.objects.filter(
+            Q(youtube_channel__isnull=False) & ~Q(youtube_channel="")
+            | Q(twitch_channel__isnull=False) & ~Q(twitch_channel=""),
+        )
+        .distinct()
         .order_by("first_name", "last_name", "discord_nickname")
     )
 
+    feed_entries = []
+    for user in users:
+        if user.youtube_channel:
+            feed_entries.append({"user": user, "platform": "youtube", "url": user.youtube_channel})
+        if user.twitch_channel:
+            feed_entries.append({"user": user, "platform": "twitch", "url": user.twitch_channel})
+
     return render(
         request,
-        "team/youtube_channels.html",
+        "team/team_feed.html",
         {
-            "users": users_with_channels,
+            "feed_entries": feed_entries,
         },
     )
 
