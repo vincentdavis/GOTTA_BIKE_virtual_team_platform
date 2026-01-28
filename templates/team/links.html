@@ -83,6 +83,9 @@
                 {% empty %}
                 <span class="badge badge-sm badge-ghost">Uncategorized</span>
                 {% endfor %}
+                {% for perm_key in link.permissions %}
+                <span class="badge badge-sm badge-outline {{ perm_key|permission_badge_class }}">{{ perm_key|permission_display_name }}</span>
+                {% endfor %}
               </div>
             </div>
           </div>
