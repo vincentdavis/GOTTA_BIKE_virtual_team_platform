@@ -90,7 +90,7 @@ class Page(models.Model):
         blank=True,
         help_text=(
             'Cards above content. Format: [{"icon": "...", "title": "...", '
-            '"description": "...", "link_url": "...", "link_text": "..."}]'
+            '"description": "...", "link_url": "...", "link_text": "...", "link_new_tab": true}]'
         ),
     )
     cards_below = models.JSONField(
@@ -98,7 +98,7 @@ class Page(models.Model):
         blank=True,
         help_text=(
             'Cards below content. Format: [{"icon": "...", "title": "...", '
-            '"description": "...", "link_url": "...", "link_text": "..."}]'
+            '"description": "...", "link_url": "...", "link_text": "...", "link_new_tab": true}]'
         ),
     )
 

@@ -61,7 +61,7 @@ class PageAdmin(admin.ModelAdmin):
                 "classes": ("collapse",),
                 "description": (
                     'JSON arrays of card objects. Format: [{"icon": "emoji", "title": "...", '
-                    '"description": "...", "link_url": "/path/", "link_text": "..."}]'
+                    '"description": "...", "link_url": "/path/", "link_text": "...", "link_new_tab": true}]'
                 ),
             },
         ),

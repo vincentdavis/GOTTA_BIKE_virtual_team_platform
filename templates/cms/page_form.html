@@ -480,14 +480,22 @@ const cardEditor = {
                    value="${this.escapeAttr(card.link_text || '')}" />
           </div>
         </div>
+        <div class="form-control mt-2">
+          <label class="label cursor-pointer justify-start gap-2 py-1">
+            <input type="checkbox" data-key="link_new_tab" class="checkbox checkbox-sm"
+                   ${card.link_new_tab ? 'checked' : ''} />
+            <span class="label-text text-xs">Open link in new tab</span>
+          </label>
+        </div>
       </div>
     `;
 
     // Attach event listeners
     wrapper.querySelectorAll('[data-key]').forEach(el => {
-      el.addEventListener('input', () => {
-        this.update(field, index, el.dataset.key,
-          el.tagName === 'TEXTAREA' ? el.value : el.value);
+      const eventType = el.type === 'checkbox' ? 'change' : 'input';
+      el.addEventListener(eventType, () => {
+        const value = el.type === 'checkbox' ? el.checked : el.value;
+        this.update(field, index, el.dataset.key, value);
       });
     });
 
@@ -510,6 +518,7 @@ const cardEditor = {
       description: '',
       link_url: '',
       link_text: '',
+      link_new_tab: false,
     });
     this.render(field);
     // Scroll the new card into view

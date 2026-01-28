@@ -17,7 +17,7 @@
             {% endif %}
             {% if card.link_url and card.link_text %}
             <div class="card-actions mt-4">
-                <a href="{{ card.link_url }}" class="btn btn-primary btn-sm">{{ card.link_text }}</a>
+                <a href="{{ card.link_url }}" class="btn btn-primary btn-sm"{% if card.link_new_tab %} target="_blank" rel="noopener"{% endif %}>{{ card.link_text }}</a>
             </div>
             {% endif %}
         </div>
