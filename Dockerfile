@@ -15,10 +15,13 @@ RUN uv sync --frozen --compile-bytecode
 # Install Tailwind CSS dependencies
 RUN uv run python manage.py tailwind install
 
-# Create staticfiles directory (required by WhiteNoise at startup)
-RUN mkdir -p /app/staticfiles
+# Build Tailwind CSS
+RUN uv run python manage.py tailwind build
 
-# Entrypoint script to handle collectstatic, migrations, and start the app.
+# Collect static files (WhiteNoise serves from this directory)
+RUN uv run python manage.py collectstatic --noinput
+
+# Entrypoint script to handle migrations and start the app.
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 

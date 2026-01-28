@@ -7,19 +7,6 @@ set -e
 #echo "Installing production dependencies..."
 #uv sync --frozen
 
-# Tailwind CSS is pre-built and committed to git for faster deployments
-# Only build if CSS file is missing (safety fallback)
-if [ ! -f "theme/static/css/dist/styles.css" ]; then
-    echo "Warning: Compiled CSS not found, building Tailwind..."
-    uv run manage.py tailwind build
-else
-    echo "Using pre-built Tailwind CSS..."
-fi
-
-# Collect static files
-echo "Collecting static files..."
-uv run manage.py collectstatic --noinput
-
 # Run Django migrations.
 echo "Running migrations..."
 uv run manage.py migrate
