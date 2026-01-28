@@ -3,7 +3,7 @@
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
     {% for card in cards %}
     <div class="card bg-base-200 shadow-md hover:shadow-lg transition-shadow">
-        <div class="card-body">
+        <div class="card-body items-center text-center">
             {% if card.icon %}
             <div class="text-4xl mb-2">{{ card.icon }}</div>
             {% endif %}
@@ -16,7 +16,7 @@
             </div>
             {% endif %}
             {% if card.link_url and card.link_text %}
-            <div class="card-actions justify-end mt-4">
+            <div class="card-actions mt-4">
                 <a href="{{ card.link_url }}" class="btn btn-primary btn-sm">{{ card.link_text }}</a>
             </div>
             {% endif %}
