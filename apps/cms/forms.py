@@ -77,16 +77,6 @@ class PageForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, **kwargs):
-        """Initialize form with JSON field handling."""
-        super().__init__(*args, **kwargs)
-        # Convert JSON fields to string for display
-        if self.instance.pk:
-            if self.instance.cards_above:
-                self.initial["cards_above"] = json.dumps(self.instance.cards_above, indent=2)
-            if self.instance.cards_below:
-                self.initial["cards_below"] = json.dumps(self.instance.cards_below, indent=2)
-
     def clean_cards_above(self) -> list:
         """Validate and parse cards_above JSON.
 
