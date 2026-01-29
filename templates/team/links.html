@@ -40,6 +40,22 @@
             </select>
           </div>
 
+          {% if available_permissions %}
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Permission</span>
+            </label>
+            <select name="permission" class="select select-bordered select-sm">
+              <option value="">All Permissions</option>
+              {% for value, label in available_permissions %}
+                <option value="{{ value }}" {% if permission_filter == value %}selected{% endif %}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+
           <button type="submit" class="btn btn-primary btn-sm">Filter</button>
           <a href="{% url 'team:links' %}" class="btn btn-ghost btn-sm">Reset</a>
         </div>

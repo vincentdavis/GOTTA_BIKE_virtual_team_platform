@@ -294,6 +294,25 @@ def team_links_view(request: HttpRequest) -> HttpResponse:
     # Get all available types for filter dropdown
     available_types = TeamLink.LinkType.choices
 
+    # Build available permissions filter based on user's roles
+    from apps.team.templatetags.team_tags import PERMISSION_SHORT_TO_KEY
+
+    user_role_ids = [str(rid) for rid in request.user.get_discord_role_ids()]
+    available_permissions = []  # List of (short_form, display_name) tuples
+
+    import json
+
+    from constance import config
+
+    for perm_key, display_name in TeamLink.PERMISSION_CHOICES:
+        # Check if user has this permission
+        role_ids_raw = getattr(config, perm_key, []) or []
+        role_ids = json.loads(role_ids_raw) if isinstance(role_ids_raw, str) and role_ids_raw else role_ids_raw or []
+
+        if any(str(rid) in user_role_ids for rid in role_ids):
+            short_form = display_name.lower().replace(" ", "_")
+            available_permissions.append((short_form, display_name))
+
     # Apply search filter
     if search_query:
         search_lower = search_query.lower()
@@ -324,7 +343,9 @@ def team_links_view(request: HttpRequest) -> HttpResponse:
             "links": links,
             "search_query": search_query,
             "type_filter": type_filter,
+            "permission_filter": permission_filter,
             "available_types": available_types,
+            "available_permissions": available_permissions,
             "can_edit_links": can_edit_links,
         },
     )
