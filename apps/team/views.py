@@ -289,6 +289,7 @@ def team_links_view(request: HttpRequest) -> HttpResponse:
     # Get filter parameters
     search_query = request.GET.get("q", "").strip()
     type_filter = request.GET.get("type", "")
+    permission_filter = request.GET.get("permission", "").strip().lower()
 
     # Get all available types for filter dropdown
     available_types = TeamLink.LinkType.choices
@@ -301,6 +302,14 @@ def team_links_view(request: HttpRequest) -> HttpResponse:
     # Apply type filter
     if type_filter:
         links = links.filter(link_types__contains=type_filter)
+
+    # Apply permission filter (e.g., ?permission=team_captain)
+    if permission_filter:
+        from apps.team.templatetags.team_tags import PERMISSION_SHORT_TO_KEY
+
+        permission_key = PERMISSION_SHORT_TO_KEY.get(permission_filter)
+        if permission_key:
+            links = links.filter(permissions__contains=permission_key)
 
     # Filter links by user's permissions (convert to list for filtering)
     links = [link for link in links if link.user_can_view(request.user)]

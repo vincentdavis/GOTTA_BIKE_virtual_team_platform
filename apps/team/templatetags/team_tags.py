@@ -9,6 +9,12 @@ register = template.Library()
 # Map permission keys to display names (from TeamLink.PERMISSION_CHOICES)
 PERMISSION_DISPLAY_NAMES: dict[str, str] = dict(TeamLink.PERMISSION_CHOICES)
 
+# Map short form (slug) to full permission key
+# e.g., "team_captain" -> "PERM_TEAM_CAPTAIN_ROLES"
+PERMISSION_SHORT_TO_KEY: dict[str, str] = {
+    display.lower().replace(" ", "_"): key for key, display in TeamLink.PERMISSION_CHOICES
+}
+
 # Map permission keys to DaisyUI badge colors
 PERMISSION_COLORS: dict[str, str] = {
     "PERM_APP_ADMIN_ROLES": "badge-error",
