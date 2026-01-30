@@ -293,6 +293,24 @@ class DataConnection(models.Model):
         # Club
         ("zr_club_name", "ZR Club Name"),
         ("zr_date_left", "ZR Date Left Club"),
+        # Seed ratings
+        ("zr_seed_race", "ZR Seed Race"),
+        ("zr_seed_time_trial", "ZR Seed Time Trial"),
+        ("zr_seed_endurance", "ZR Seed Endurance"),
+        ("zr_seed_pursuit", "ZR Seed Pursuit"),
+        ("zr_seed_sprint", "ZR Seed Sprint"),
+        ("zr_seed_punch", "ZR Seed Punch"),
+        ("zr_seed_climb", "ZR Seed Climb"),
+        ("zr_seed_tt_factor", "ZR Seed TT Factor"),
+        # Velo ratings
+        ("zr_velo_race", "ZR Velo Race"),
+        ("zr_velo_time_trial", "ZR Velo Time Trial"),
+        ("zr_velo_endurance", "ZR Velo Endurance"),
+        ("zr_velo_pursuit", "ZR Velo Pursuit"),
+        ("zr_velo_sprint", "ZR Velo Sprint"),
+        ("zr_velo_punch", "ZR Velo Punch"),
+        ("zr_velo_climb", "ZR Velo Climb"),
+        ("zr_velo_tt_factor", "ZR Velo TT Factor"),
     ]
 
     # Filter choices

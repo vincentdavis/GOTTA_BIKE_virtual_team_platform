@@ -289,6 +289,22 @@ def sync_connection(connection: DataConnection) -> int:
             "phenotype_tt",
             "club_name",
             "date_left",
+            "seed_race",
+            "seed_time_trial",
+            "seed_endurance",
+            "seed_pursuit",
+            "seed_sprint",
+            "seed_punch",
+            "seed_climb",
+            "seed_tt_factor",
+            "velo_race",
+            "velo_time_trial",
+            "velo_endurance",
+            "velo_pursuit",
+            "velo_sprint",
+            "velo_punch",
+            "velo_climb",
+            "velo_tt_factor",
         )
 
         # Build lookup dicts by zwid
