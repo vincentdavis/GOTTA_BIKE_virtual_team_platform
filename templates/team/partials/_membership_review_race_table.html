@@ -64,7 +64,14 @@
         </a>
       </th>
       <th>HR Monitor</th>
-      <th>ZP Left</th>
+      <th>
+        <a href="{{ base_url }}&sort=zp_left&dir={% if sort_by == 'zp_left' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+          ZP Left
+          {% if sort_by == "zp_left" %}
+            <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+          {% endif %}
+        </a>
+      </th>
       <th>
         <a href="{{ base_url }}&sort=results&dir={% if sort_by == 'results' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
           Results

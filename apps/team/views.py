@@ -1,6 +1,7 @@
 """Views for team app."""
 
 import uuid
+from datetime import datetime
 
 import logfire
 from django.contrib import messages
@@ -1074,6 +1075,7 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
         "timezone": lambda r: r.timezone.lower(),
         "birth_year": lambda r: r.birth_year or 0,
         "trainer": lambda r: r.trainer.lower(),
+        "zp_left": lambda r: r.zp_date_left or datetime.min,
     }
     if sort_by in sort_keys:
         riders = sorted(riders, key=sort_keys[sort_by], reverse=reverse)
