@@ -2761,11 +2761,11 @@
       cursor: pointer;
     }
   }
-  .z-40 {
-    z-index: 40;
-  }
   .z-50 {
     z-index: 50;
+  }
+  .z-\[60\] {
+    z-index: 60;
   }
   .z-\[100\] {
     z-index: 100;
@@ -4315,14 +4315,14 @@
   .h-32 {
     height: calc(var(--spacing) * 32);
   }
-  .h-\[calc\(100vh-64px\)\] {
-    height: calc(100vh - 64px);
-  }
   .h-auto {
     height: auto;
   }
   .h-full {
     height: 100%;
+  }
+  .h-screen {
+    height: 100vh;
   }
   .max-h-16 {
     max-height: calc(var(--spacing) * 16);
@@ -4335,6 +4335,9 @@
   }
   .max-h-96 {
     max-height: calc(var(--spacing) * 96);
+  }
+  .min-h-0 {
+    min-height: calc(var(--spacing) * 0);
   }
   .min-h-48 {
     min-height: calc(var(--spacing) * 48);
@@ -5613,9 +5616,6 @@
   }
   .prose-a\:text-primary-content :is(:where(a):not(:where([class~="not-prose"],[class~="not-prose"] *))) {
     color: var(--color-primary-content);
-  }
-  .prose-a\:text-warning-content :is(:where(a):not(:where([class~="not-prose"],[class~="not-prose"] *))) {
-    color: var(--color-warning-content);
   }
   .prose-a\:underline :is(:where(a):not(:where([class~="not-prose"],[class~="not-prose"] *))) {
     text-decoration-line: underline;

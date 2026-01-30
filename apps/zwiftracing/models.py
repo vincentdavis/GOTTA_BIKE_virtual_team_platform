@@ -224,6 +224,9 @@ class ZRRider(models.Model):
         # Seed and Velo
         "seed_race",
         "velo_race",
+        # Club
+        "club_id",
+        "club_name",
     ]
 
     class Meta:

@@ -30,16 +30,16 @@
   {% block extra_css %}{% endblock %}
 </head>
 
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="flex flex-col h-screen">
 <!-- Site-wide Banners (full width, above everything) -->
 {% if config.SITE_ANNOUNCEMENT %}
   <div
-      class="bg-primary text-primary-content text-center py-2 px-4 text-sm font-medium prose prose-sm max-w-none prose-a:text-primary-content prose-a:underline">
+      class="bg-primary text-primary-content text-center py-2 px-4 text-sm font-medium prose prose-sm max-w-none prose-a:text-primary-content prose-a:underline flex-shrink-0">
     {{ config.SITE_ANNOUNCEMENT|render_markdown }}
   </div>
 {% endif %}
 {% if user.is_authenticated and not user.is_profile_complete %}
-  <div class="bg-error text-error-content py-3 px-4 text-sm font-medium">
+  <div class="bg-error text-error-content py-3 px-4 text-sm font-medium flex-shrink-0">
     <div class="container mx-auto">
       <div class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
         <div class="flex items-center">
@@ -72,7 +72,7 @@
 {% endif %}
 
 <!-- Site Header (full width, always visible) -->
-<header class="navbar bg-base-200 border-b border-base-300 sticky top-0 z-50">
+<header class="navbar bg-base-200 border-b border-base-300 sticky top-0 z-50 flex-shrink-0">
   <div class="flex-none lg:hidden">
     <label for="main-drawer" class="btn btn-square btn-ghost drawer-button">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -182,7 +182,7 @@
   </div>
 </header>
 
-<div class="drawer lg:drawer-open h-[calc(100vh-64px)]">
+<div class="drawer lg:drawer-open min-h-0 flex-1">
   <input id="main-drawer" type="checkbox" class="drawer-toggle"/>
 
   <!-- Main Content Area -->
@@ -231,7 +231,7 @@
   </div>
 
   <!-- Sidebar -->
-  <div class="drawer-side z-40">
+  <div class="drawer-side z-[60]">
     <label for="main-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
     {% include "sidebar.html" %}
   </div>
