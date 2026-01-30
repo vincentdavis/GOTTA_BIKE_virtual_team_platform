@@ -4751,6 +4751,9 @@
   .bg-neutral {
     background-color: var(--color-neutral);
   }
+  .bg-primary {
+    background-color: var(--color-primary);
+  }
   .bg-sky-500 {
     background-color: var(--color-sky-500);
   }
@@ -5133,6 +5136,9 @@
   }
   .text-primary {
     color: var(--color-primary);
+  }
+  .text-primary-content {
+    color: var(--color-primary-content);
   }
   .text-success {
     color: var(--color-success);
@@ -5604,6 +5610,9 @@
     .lg\:grid-cols-4 {
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
+  }
+  .prose-a\:text-primary-content :is(:where(a):not(:where([class~="not-prose"],[class~="not-prose"] *))) {
+    color: var(--color-primary-content);
   }
   .prose-a\:text-warning-content :is(:where(a):not(:where([class~="not-prose"],[class~="not-prose"] *))) {
     color: var(--color-warning-content);
