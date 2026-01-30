@@ -137,6 +137,58 @@ class ZRRider(models.Model):
     club_id = models.PositiveIntegerField(null=True, blank=True, help_text="Club ID")
     club_name = models.CharField(max_length=255, blank=True, help_text="Club name")
 
+    # Seed ratings
+    seed_race = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Seed race rating"
+    )
+    seed_time_trial = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Seed time trial rating"
+    )
+    seed_endurance = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Seed endurance factor"
+    )
+    seed_pursuit = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Seed pursuit factor"
+    )
+    seed_sprint = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Seed sprint factor"
+    )
+    seed_punch = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Seed punch factor"
+    )
+    seed_climb = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Seed climb factor"
+    )
+    seed_tt_factor = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Seed time trial factor"
+    )
+
+    # Velo ratings
+    velo_race = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Velo race rating"
+    )
+    velo_time_trial = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Velo time trial rating"
+    )
+    velo_endurance = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Velo endurance factor"
+    )
+    velo_pursuit = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Velo pursuit factor"
+    )
+    velo_sprint = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Velo sprint factor"
+    )
+    velo_punch = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Velo punch factor"
+    )
+    velo_climb = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Velo climb factor"
+    )
+    velo_tt_factor = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True, help_text="Velo time trial factor"
+    )
+
     # Timestamps
     date_created = models.DateTimeField(auto_now_add=True, help_text="Record created date")
     date_modified = models.DateTimeField(auto_now=True, help_text="Record last modified date")
@@ -169,6 +221,9 @@ class ZRRider(models.Model):
         "race_max90_category",
         # Phenotype
         "phenotype_value",
+        # Seed and Velo
+        "seed_race",
+        "velo_race",
     ]
 
     class Meta:

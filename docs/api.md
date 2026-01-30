@@ -382,7 +382,9 @@ TASK_REGISTRY: dict = {
 | `/team/applications/` | Membership applications (admins only) |
 | `/team/apply/{uuid}/` | Public membership application form |
 | `/team/performance-review/` | Performance review |
-| `/team/youtube/` | YouTube channels |
+| `/team/membership-review/` | Membership review (admins only) |
+| `/team/team-feed/` | Team social media feed |
+| `/page/<slug>/` | CMS pages |
 | `/data-connections/` | Google Sheets exports |
 | `/site/config/` | Site configuration (admin) |
 | `/api/dbot/` | Discord bot API |

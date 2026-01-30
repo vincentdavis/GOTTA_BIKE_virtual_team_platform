@@ -117,6 +117,11 @@ WhiteNoise features:
     - Configurable filters (gender, division, rating, phenotype)
     - Manual sync clears sheet and rewrites all data
 - `magic_links` - Passwordless authentication (legacy)
+- `cms` - Dynamic CMS pages:
+    - `Page` model - Content pages with markdown, hero sections, and card layouts
+    - Publishing workflow (draft/published status)
+    - Navigation settings (show_in_nav, nav_order, nav_title)
+    - Access control (require_login, require_team_member)
 
 ### Authentication (django-allauth)
 
@@ -277,6 +282,8 @@ Permissions are granted via Discord roles configured in Constance. The system ch
 - `team_member` - Required for most pages; without it users can only see index and their profile
 - `race_ready` - Race ready status
 - `approve_verification` - Can approve/reject verification records
+- `data_connection` - Access to Google Sheets data exports
+- `pages_admin` - Can create and manage CMS pages
 
 #### Constance Permission Settings
 
@@ -285,6 +292,8 @@ Configure in Django admin at `/admin/constance/config/` under "Permission Mappin
 - `PERM_APP_ADMIN_ROLES` - JSON array of Discord role IDs, e.g., `["1234567890123456789"]`
 - `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`, `PERM_LINK_ADMIN_ROLES`, etc.
 - `PERM_APPROVE_VERIFICATION_ROLES` - Role IDs that can approve/reject verification records
+- `PERM_DATA_CONNECTION_ROLES` - Role IDs that can access data exports
+- `PERM_PAGES_ADMIN_ROLES` - Role IDs that can manage CMS pages
 
 #### Usage in Views
 
@@ -467,7 +476,9 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
     - `/team/apply/{uuid}/` - Public membership registration form
     - `/team/performance-review/` - Performance review
     - `/team/discord-review/` - Discord guild member audit (membership admins only)
-    - `/team/youtube/` - YouTube channels
+    - `/team/membership-review/` - Membership review (membership admins only)
+    - `/team/team-feed/` - Team social media feed
+- `/page/<slug>/` - CMS pages (`apps.cms.urls`)
 - `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
 - `/api/dbot/` - Discord bot API
@@ -530,7 +541,7 @@ Available settings:
 - **Zwift Racing App**: `ZRAPP_API_URL`, `ZRAPP_API_KEY` (password field - masked in admin)
 - **Permission Mappings**: `PERM_APP_ADMIN_ROLES`, `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`,
   `PERM_LINK_ADMIN_ROLES`, `PERM_MEMBERSHIP_ADMIN_ROLES`, `PERM_RACING_ADMIN_ROLES`, `PERM_TEAM_MEMBER_ROLES`,
-  `PERM_RACE_READY_ROLES` (JSON arrays of Discord role IDs)
+  `PERM_RACE_READY_ROLES`, `PERM_DATA_CONNECTION_ROLES`, `PERM_PAGES_ADMIN_ROLES` (JSON arrays of Discord role IDs)
 - **Discord Roles**: `RACE_READY_ROLE_ID` (Discord role ID assigned when user is race ready, `0` to disable),
   `NEW_ARRIVALS_CHANNEL_ID` (Discord channel ID for new member welcome messages),
   `REGISTRATION_UPDATES_CHANNEL_ID` (Discord channel for membership registration updates, `0` to disable)
@@ -542,7 +553,7 @@ Available settings:
   `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
   `POWER_VERIFICATION_DAYS` (365)
 - **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)
-- **Site Settings**: `TEAM_NAME`, `SUBTITLE`, `SITE_ANNOUNCEMENT` (yellow banner at top of all pages, supports Markdown),
+- **Site Settings**: `TEAM_NAME`, `SUBTITLE`, `SITE_ANNOUNCEMENT` (blue banner at top of all pages, supports Markdown),
   `MAINTENANCE_MODE`, `LOGO_DISPLAY_MODE` (header display: `logo_only`, `logo_and_name`, or `name_only`)
 
 Usage in code:

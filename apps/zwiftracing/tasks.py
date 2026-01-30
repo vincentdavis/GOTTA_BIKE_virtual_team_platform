@@ -66,6 +66,10 @@ def _map_rider_to_model(rider: dict) -> dict:
     phenotype = rider.get("phenotype", {}) or {}
     phenotype_scores = phenotype.get("scores", {}) or {}
     club = rider.get("club", {}) or {}
+    seed = rider.get("seed", {}) or {}
+    seed_factors = seed.get("factors", {}) or {}
+    velo = rider.get("velo", {}) or {}
+    velo_factors = velo.get("factors", {}) or {}
 
     return {
         # Basic info
@@ -141,6 +145,24 @@ def _map_rider_to_model(rider: dict) -> dict:
         # Club info
         "club_id": _parse_int(club.get("id")),
         "club_name": club.get("name") or "",
+        # Seed ratings
+        "seed_race": _parse_decimal(seed.get("race")),
+        "seed_time_trial": _parse_decimal(seed.get("timeTrial")),
+        "seed_endurance": _parse_decimal(seed_factors.get("endurance")),
+        "seed_pursuit": _parse_decimal(seed_factors.get("pursuit")),
+        "seed_sprint": _parse_decimal(seed_factors.get("sprint")),
+        "seed_punch": _parse_decimal(seed_factors.get("punch")),
+        "seed_climb": _parse_decimal(seed_factors.get("climb")),
+        "seed_tt_factor": _parse_decimal(seed_factors.get("timeTrial")),
+        # Velo ratings
+        "velo_race": _parse_decimal(velo.get("race")),
+        "velo_time_trial": _parse_decimal(velo.get("timeTrial")),
+        "velo_endurance": _parse_decimal(velo_factors.get("endurance")),
+        "velo_pursuit": _parse_decimal(velo_factors.get("pursuit")),
+        "velo_sprint": _parse_decimal(velo_factors.get("sprint")),
+        "velo_punch": _parse_decimal(velo_factors.get("punch")),
+        "velo_climb": _parse_decimal(velo_factors.get("climb")),
+        "velo_tt_factor": _parse_decimal(velo_factors.get("timeTrial")),
         # Clear date_left if rider is back on team
         "date_left": None,
     }

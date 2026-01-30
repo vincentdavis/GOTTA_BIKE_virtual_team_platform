@@ -15,6 +15,7 @@ A Django web application for The Coalition Zwift racing team. Manages team membe
 - **Data Connections** - Export team data to Google Sheets
 - **Role-Based Permissions** - Discord role-based access control
 - **Discord Bot API** - REST API for Discord bot integration
+- **CMS Pages** - Dynamic content pages with markdown support
 
 ## Quick Start
 
@@ -71,6 +72,7 @@ Full documentation is available in the [docs/](docs/) folder:
 GOTTA_BIKE_virtual_team_platform/
 ├── apps/                   # Django applications
 │   ├── accounts/           # User model, auth, permissions
+│   ├── cms/                # Dynamic CMS pages
 │   ├── team/               # Team management, verification
 │   ├── zwiftpower/         # ZwiftPower API integration
 │   ├── zwiftracing/        # Zwift Racing API integration

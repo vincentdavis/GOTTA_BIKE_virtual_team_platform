@@ -28,6 +28,7 @@ Welcome to the documentation for The Coalition Team Platform, a Django web appli
 - **Role-Based Permissions** - Team captains, admins, and members with different access levels
 - **Discord Bot API** - REST API for Discord bot integration
 - **Dynamic Settings** - Runtime-configurable settings via Django admin
+- **CMS Pages** - Dynamic content pages with markdown, hero sections, and card layouts
 - **Observability** - Logfire integration for logging and monitoring
 
 ## Tech Stack
@@ -49,6 +50,7 @@ Welcome to the documentation for The Coalition Team Platform, a Django web appli
 GOTTA_BIKE_virtual_team_platform/
 ├── apps/
 │   ├── accounts/       # User model, auth, permissions, middleware
+│   ├── cms/            # Dynamic CMS pages with markdown support
 │   ├── data_connection/ # Google Sheets data export
 │   ├── dbot_api/       # Discord bot REST API
 │   ├── magic_links/    # Passwordless auth (legacy)
