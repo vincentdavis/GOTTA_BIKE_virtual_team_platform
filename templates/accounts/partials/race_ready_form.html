@@ -1,292 +1,307 @@
-<!-- Race Ready Submission Form -->
+<!-- Race Verified Submission Form -->
 <div id="race-ready-form-container">
-    {% if success %}
+  {% if success %}
     <div class="alert alert-success mb-4">
-        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span>Race ready record submitted successfully!</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+      <span>Race Verified record submitted successfully!</span>
     </div>
+  {% endif %}
+
+  <form hx-post="{% url 'accounts:submit_race_ready' %}"
+        hx-target="#race-ready-form-container"
+        hx-swap="outerHTML"
+        enctype="multipart/form-data"
+        class="space-y-4">
+    {% csrf_token %}
+
+    <!-- Same Gender Review Preference (only shown if user has gender set) -->
+    {% if request.user.gender %}
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-3">
+          {{ race_ready_form.same_gender }}
+          <span class="label-text">Request same-gender reviewer</span>
+        </label>
+        <label class="label pt-0">
+          <span class="label-text-alt text-base-content/70">If checked, only reviewers of the same gender can approve this record</span>
+        </label>
+      </div>
     {% endif %}
 
-    <form hx-post="{% url 'accounts:submit_race_ready' %}"
-          hx-target="#race-ready-form-container"
-          hx-swap="outerHTML"
-          enctype="multipart/form-data"
-          class="space-y-4">
-        {% csrf_token %}
-
-        <!-- Same Gender Review Preference (only shown if user has gender set) -->
-        {% if request.user.gender %}
-        <div class="form-control">
-            <label class="label cursor-pointer justify-start gap-3">
-                {{ race_ready_form.same_gender }}
-                <span class="label-text">Request same-gender reviewer</span>
-            </label>
-            <label class="label pt-0">
-                <span class="label-text-alt text-base-content/70">If checked, only reviewers of the same gender can approve this record</span>
-            </label>
-        </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Verification Type -->
+      <div class="form-control w-full">
+        <label class="label" for="id_verify_type">
+          <span class="label-text">Verification Type</span>
+        </label>
+        {{ race_ready_form.verify_type }}
+        {% if race_ready_form.verify_type.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ race_ready_form.verify_type.errors.0 }}</span>
+          </label>
         {% endif %}
+      </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <!-- Verification Type -->
-            <div class="form-control w-full">
-                <label class="label" for="id_verify_type">
-                    <span class="label-text">Verification Type</span>
-                </label>
-                {{ race_ready_form.verify_type }}
-                {% if race_ready_form.verify_type.errors %}
-                <label class="label">
-                    <span class="label-text-alt text-error">{{ race_ready_form.verify_type.errors.0 }}</span>
-                </label>
-                {% endif %}
-            </div>
+      <!-- Media Type -->
+      <div class="form-control w-full">
+        <label class="label" for="id_media_type">
+          <span class="label-text">Media Type</span>
+        </label>
+        {{ race_ready_form.media_type }}
+        {% if race_ready_form.media_type.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ race_ready_form.media_type.errors.0 }}</span>
+          </label>
+        {% endif %}
+      </div>
+    </div>
 
-            <!-- Media Type -->
-            <div class="form-control w-full">
-                <label class="label" for="id_media_type">
-                    <span class="label-text">Media Type</span>
-                </label>
-                {{ race_ready_form.media_type }}
-                {% if race_ready_form.media_type.errors %}
-                <label class="label">
-                    <span class="label-text-alt text-error">{{ race_ready_form.media_type.errors.0 }}</span>
-                </label>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Instruction Links (shown based on verification type) -->
-        {% if weight_instructions_url %}
-        <div id="weight-instructions" class="alert alert-info hidden">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            <span>
+    <!-- Instruction Links (shown based on verification type) -->
+    {% if weight_instructions_url %}
+      <div id="weight-instructions" class="alert alert-info hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>
                 Please review the
-                <a href="{{ weight_instructions_url }}" target="_blank" rel="noopener" class="link link-primary font-medium">
+                <a href="{{ weight_instructions_url }}" target="_blank" rel="noopener"
+                   class="link link-primary font-medium">
                     weight verification instructions
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" fill="none" viewBox="0 0 24 24"
+                         stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                     d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                 </a>
                 before submitting.
             </span>
-        </div>
-        {% endif %}
+      </div>
+    {% endif %}
 
-        {% if height_instructions_url %}
-        <div id="height-instructions" class="alert alert-info hidden">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            <span>
+    {% if height_instructions_url %}
+      <div id="height-instructions" class="alert alert-info hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>
                 Please review the
-                <a href="{{ height_instructions_url }}" target="_blank" rel="noopener" class="link link-primary font-medium">
+                <a href="{{ height_instructions_url }}" target="_blank" rel="noopener"
+                   class="link link-primary font-medium">
                     height verification instructions
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline" fill="none" viewBox="0 0 24 24"
+                         stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                     d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                 </a>
                 before submitting.
             </span>
-        </div>
-        {% endif %}
+      </div>
+    {% endif %}
 
-        <!-- Weight Field (shown for weight_full/weight_light) -->
-        <div id="weight-field" class="form-control w-full hidden">
-            <label class="label" for="id_weight">
-                <span class="label-text">{{ race_ready_form.weight.label }}</span>
-            </label>
-            {{ race_ready_form.weight }}
-            <div id="weight-preview" class="text-sm text-base-content/70 mt-1 hidden">
-                <span class="font-medium">Saved as:</span> <span id="weight-preview-value"></span>
-            </div>
-            {% if race_ready_form.weight.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ race_ready_form.weight.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
+    <!-- Weight Field (shown for weight_full/weight_light) -->
+    <div id="weight-field" class="form-control w-full hidden">
+      <label class="label" for="id_weight">
+        <span class="label-text">{{ race_ready_form.weight.label }}</span>
+      </label>
+      {{ race_ready_form.weight }}
+      <div id="weight-preview" class="text-sm text-base-content/70 mt-1 hidden">
+        <span class="font-medium">Saved as:</span> <span id="weight-preview-value"></span>
+      </div>
+      {% if race_ready_form.weight.errors %}
+        <label class="label">
+          <span class="label-text-alt text-error">{{ race_ready_form.weight.errors.0 }}</span>
+        </label>
+      {% endif %}
+    </div>
 
-        <!-- Height Field (shown for height) -->
-        <div id="height-field" class="form-control w-full hidden">
-            <label class="label" for="id_height">
-                <span class="label-text">{{ race_ready_form.height.label }}</span>
-            </label>
-            {{ race_ready_form.height }}
-            <div id="height-preview" class="text-sm text-base-content/70 mt-1 hidden">
-                <span class="font-medium">Saved as:</span> <span id="height-preview-value"></span>
-            </div>
-            {% if race_ready_form.height.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ race_ready_form.height.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
+    <!-- Height Field (shown for height) -->
+    <div id="height-field" class="form-control w-full hidden">
+      <label class="label" for="id_height">
+        <span class="label-text">{{ race_ready_form.height.label }}</span>
+      </label>
+      {{ race_ready_form.height }}
+      <div id="height-preview" class="text-sm text-base-content/70 mt-1 hidden">
+        <span class="font-medium">Saved as:</span> <span id="height-preview-value"></span>
+      </div>
+      {% if race_ready_form.height.errors %}
+        <label class="label">
+          <span class="label-text-alt text-error">{{ race_ready_form.height.errors.0 }}</span>
+        </label>
+      {% endif %}
+    </div>
 
-        <!-- FTP Field (shown for power) -->
-        <div id="ftp-field" class="form-control w-full hidden">
-            <label class="label" for="id_ftp">
-                <span class="label-text">FTP (watts)</span>
-            </label>
-            {{ race_ready_form.ftp }}
-            {% if race_ready_form.ftp.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ race_ready_form.ftp.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
+    <!-- FTP Field (shown for power) -->
+    <div id="ftp-field" class="form-control w-full hidden">
+      <label class="label" for="id_ftp">
+        <span class="label-text">FTP (watts)</span>
+      </label>
+      {{ race_ready_form.ftp }}
+      {% if race_ready_form.ftp.errors %}
+        <label class="label">
+          <span class="label-text-alt text-error">{{ race_ready_form.ftp.errors.0 }}</span>
+        </label>
+      {% endif %}
+    </div>
 
-        <!-- Media File -->
-        <div class="form-control w-full">
-            <label class="label" for="id_media_file">
-                <span class="label-text">Upload File (optional)</span>
-            </label>
-            {{ race_ready_form.media_file }}
-            {% if race_ready_form.media_file.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ race_ready_form.media_file.errors.0 }}</span>
-            </label>
-            {% endif %}
-            <label class="label">
-                <span class="label-text-alt">Max 50MB. Allowed: jpg, jpeg, png, gif, mp4, mov, avi, webm</span>
-            </label>
-        </div>
+    <!-- Media File -->
+    <div class="form-control w-full">
+      <label class="label" for="id_media_file">
+        <span class="label-text">Upload File (optional)</span>
+      </label>
+      {{ race_ready_form.media_file }}
+      {% if race_ready_form.media_file.errors %}
+        <label class="label">
+          <span class="label-text-alt text-error">{{ race_ready_form.media_file.errors.0 }}</span>
+        </label>
+      {% endif %}
+      <label class="label">
+        <span class="label-text-alt">Max 50MB. Allowed: jpg, jpeg, png, gif, mp4, mov, avi, webm</span>
+      </label>
+    </div>
 
-        <!-- URL -->
-        <div class="form-control w-full">
-            <label class="label" for="id_url">
-                <span class="label-text">URL (optional)</span>
-            </label>
-            {{ race_ready_form.url }}
-            {% if race_ready_form.url.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ race_ready_form.url.errors.0 }}</span>
-            </label>
-            {% endif %}
-            <label class="label">
-                <span class="label-text-alt">Link to YouTube, Vimeo, or image URL</span>
-            </label>
-        </div>
+    <!-- URL -->
+    <div class="form-control w-full">
+      <label class="label" for="id_url">
+        <span class="label-text">URL (optional)</span>
+      </label>
+      {{ race_ready_form.url }}
+      {% if race_ready_form.url.errors %}
+        <label class="label">
+          <span class="label-text-alt text-error">{{ race_ready_form.url.errors.0 }}</span>
+        </label>
+      {% endif %}
+      <label class="label">
+        <span class="label-text-alt">Link to YouTube, Vimeo, or image URL</span>
+      </label>
+    </div>
 
-        <!-- Notes -->
-        <div class="form-control w-full">
-            <label class="label" for="id_notes">
-                <span class="label-text">Notes (optional)</span>
-            </label>
-            {{ race_ready_form.notes }}
-            {% if race_ready_form.notes.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ race_ready_form.notes.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
+    <!-- Notes -->
+    <div class="form-control w-full">
+      <label class="label" for="id_notes">
+        <span class="label-text">Notes (optional)</span>
+      </label>
+      {{ race_ready_form.notes }}
+      {% if race_ready_form.notes.errors %}
+        <label class="label">
+          <span class="label-text-alt text-error">{{ race_ready_form.notes.errors.0 }}</span>
+        </label>
+      {% endif %}
+    </div>
 
-        {% if race_ready_form.non_field_errors %}
-        <div class="alert alert-error">
-            {% for error in race_ready_form.non_field_errors %}
-            <span>{{ error }}</span>
-            {% endfor %}
-        </div>
-        {% endif %}
+    {% if race_ready_form.non_field_errors %}
+      <div class="alert alert-error">
+        {% for error in race_ready_form.non_field_errors %}
+          <span>{{ error }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
 
-        <div class="form-control">
-            <button type="submit" class="btn btn-primary">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Submit Record
-            </button>
-        </div>
-    </form>
+    <div class="form-control">
+      <button type="submit" class="btn btn-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        Submit Record
+      </button>
+    </div>
+  </form>
 
-    <script>
-    (function() {
-        const unitPreference = '{{ unit_preference|default:"metric" }}';
-        const verifyTypeSelect = document.getElementById('id_verify_type');
-        const weightField = document.getElementById('weight-field');
-        const heightField = document.getElementById('height-field');
-        const ftpField = document.getElementById('ftp-field');
-        const weightInstructions = document.getElementById('weight-instructions');
-        const heightInstructions = document.getElementById('height-instructions');
+  <script>
+      (function () {
+          const unitPreference = '{{ unit_preference|default:"metric" }}';
+          const verifyTypeSelect = document.getElementById('id_verify_type');
+          const weightField = document.getElementById('weight-field');
+          const heightField = document.getElementById('height-field');
+          const ftpField = document.getElementById('ftp-field');
+          const weightInstructions = document.getElementById('weight-instructions');
+          const heightInstructions = document.getElementById('height-instructions');
 
-        // Preview elements
-        const weightPreview = document.getElementById('weight-preview');
-        const weightPreviewValue = document.getElementById('weight-preview-value');
-        const heightPreview = document.getElementById('height-preview');
-        const heightPreviewValue = document.getElementById('height-preview-value');
+          // Preview elements
+          const weightPreview = document.getElementById('weight-preview');
+          const weightPreviewValue = document.getElementById('weight-preview-value');
+          const heightPreview = document.getElementById('height-preview');
+          const heightPreviewValue = document.getElementById('height-preview-value');
 
-        // Input elements
-        const weightInput = document.getElementById('id_weight');
-        const heightInput = document.getElementById('id_height');
+          // Input elements
+          const weightInput = document.getElementById('id_weight');
+          const heightInput = document.getElementById('id_height');
 
-        // Conversion constants
-        const LBS_TO_KG = 0.453592;
-        const INCHES_TO_CM = 2.54;
+          // Conversion constants
+          const LBS_TO_KG = 0.453592;
+          const INCHES_TO_CM = 2.54;
 
-        function toggleFields() {
-            const value = verifyTypeSelect.value;
+          function toggleFields() {
+              const value = verifyTypeSelect.value;
 
-            // Hide all fields and instructions first
-            weightField.classList.add('hidden');
-            heightField.classList.add('hidden');
-            ftpField.classList.add('hidden');
-            if (weightInstructions) weightInstructions.classList.add('hidden');
-            if (heightInstructions) heightInstructions.classList.add('hidden');
+              // Hide all fields and instructions first
+              weightField.classList.add('hidden');
+              heightField.classList.add('hidden');
+              ftpField.classList.add('hidden');
+              if (weightInstructions) weightInstructions.classList.add('hidden');
+              if (heightInstructions) heightInstructions.classList.add('hidden');
 
-            // Show appropriate field and instructions based on selection
-            if (value === 'weight_full' || value === 'weight_light') {
-                weightField.classList.remove('hidden');
-                if (weightInstructions) weightInstructions.classList.remove('hidden');
-            } else if (value === 'height') {
-                heightField.classList.remove('hidden');
-                if (heightInstructions) heightInstructions.classList.remove('hidden');
-            } else if (value === 'power') {
-                ftpField.classList.remove('hidden');
-            }
-        }
+              // Show appropriate field and instructions based on selection
+              if (value === 'weight_full' || value === 'weight_light') {
+                  weightField.classList.remove('hidden');
+                  if (weightInstructions) weightInstructions.classList.remove('hidden');
+              } else if (value === 'height') {
+                  heightField.classList.remove('hidden');
+                  if (heightInstructions) heightInstructions.classList.remove('hidden');
+              } else if (value === 'power') {
+                  ftpField.classList.remove('hidden');
+              }
+          }
 
-        function updateWeightPreview() {
-            const value = parseFloat(weightInput.value);
-            if (!isNaN(value) && value > 0) {
-                if (unitPreference === 'imperial') {
-                    // Convert lbs to kg for preview
-                    const kg = (value * LBS_TO_KG).toFixed(2);
-                    weightPreviewValue.textContent = kg + ' kg';
-                } else {
-                    // Already metric, just show kg
-                    weightPreviewValue.textContent = value + ' kg';
-                }
-                weightPreview.classList.remove('hidden');
-            } else {
-                weightPreview.classList.add('hidden');
-            }
-        }
+          function updateWeightPreview() {
+              const value = parseFloat(weightInput.value);
+              if (!isNaN(value) && value > 0) {
+                  if (unitPreference === 'imperial') {
+                      // Convert lbs to kg for preview
+                      const kg = (value * LBS_TO_KG).toFixed(2);
+                      weightPreviewValue.textContent = kg + ' kg';
+                  } else {
+                      // Already metric, just show kg
+                      weightPreviewValue.textContent = value + ' kg';
+                  }
+                  weightPreview.classList.remove('hidden');
+              } else {
+                  weightPreview.classList.add('hidden');
+              }
+          }
 
-        function updateHeightPreview() {
-            const value = parseFloat(heightInput.value);
-            if (!isNaN(value) && value > 0) {
-                if (unitPreference === 'imperial') {
-                    // Convert inches to cm for preview
-                    const cm = Math.round(value * INCHES_TO_CM);
-                    heightPreviewValue.textContent = cm + ' cm';
-                } else {
-                    // Already metric, just show cm
-                    heightPreviewValue.textContent = value + ' cm';
-                }
-                heightPreview.classList.remove('hidden');
-            } else {
-                heightPreview.classList.add('hidden');
-            }
-        }
+          function updateHeightPreview() {
+              const value = parseFloat(heightInput.value);
+              if (!isNaN(value) && value > 0) {
+                  if (unitPreference === 'imperial') {
+                      // Convert inches to cm for preview
+                      const cm = Math.round(value * INCHES_TO_CM);
+                      heightPreviewValue.textContent = cm + ' cm';
+                  } else {
+                      // Already metric, just show cm
+                      heightPreviewValue.textContent = value + ' cm';
+                  }
+                  heightPreview.classList.remove('hidden');
+              } else {
+                  heightPreview.classList.add('hidden');
+              }
+          }
 
-        // Run on page load and on change
-        toggleFields();
-        verifyTypeSelect.addEventListener('change', toggleFields);
+          // Run on page load and on change
+          toggleFields();
+          verifyTypeSelect.addEventListener('change', toggleFields);
 
-        // Add input listeners for preview
-        if (weightInput) {
-            weightInput.addEventListener('input', updateWeightPreview);
-            if (weightInput.value) updateWeightPreview();
-        }
-        if (heightInput) {
-            heightInput.addEventListener('input', updateHeightPreview);
-            if (heightInput.value) updateHeightPreview();
-        }
-    })();
-    </script>
+          // Add input listeners for preview
+          if (weightInput) {
+              weightInput.addEventListener('input', updateWeightPreview);
+              if (weightInput.value) updateWeightPreview();
+          }
+          if (heightInput) {
+              heightInput.addEventListener('input', updateHeightPreview);
+              if (heightInput.value) updateHeightPreview();
+          }
+      })();
+  </script>
 </div>

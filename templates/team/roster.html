@@ -11,85 +11,91 @@
         </div>
 
         {% if roster_filter %}
-        <div class="alert alert-info mb-6">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-          <div>
-            <h3 class="font-bold">Filtered View: #{{ roster_filter.channel_name }}</h3>
-            <div class="text-sm">Showing {{ roster|length }} of {{ roster_filter.member_count }} channel members with team accounts.</div>
+          <div class="alert alert-info mb-6">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                 class="stroke-current shrink-0 w-6 h-6">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div>
+              <h3 class="font-bold">Filtered View: #{{ roster_filter.channel_name }}</h3>
+              <div class="text-sm">Showing {{ roster|length }} of {{ roster_filter.member_count }} channel members with
+                team accounts.
+              </div>
+            </div>
+            <a href="{% url 'team:roster' %}" class="btn btn-sm">View Full Roster</a>
           </div>
-          <a href="{% url 'team:roster' %}" class="btn btn-sm">View Full Roster</a>
-        </div>
         {% endif %}
 
         {% if not roster_filter %}
-        <form method="get" class="mb-6">
-          <div class="flex flex-wrap gap-4 items-end">
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">Search</span>
-              </label>
-              <input type="text"
-                     name="q"
-                     placeholder="Name or Zwid..."
-                     class="input input-bordered input-sm w-48"
-                     value="{{ search_query }}"
-              />
-            </div>
+          <form method="get" class="mb-6">
+            <div class="flex flex-wrap gap-4 items-end">
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text">Search</span>
+                </label>
+                <input type="text"
+                       name="q"
+                       placeholder="Name or Zwid..."
+                       class="input input-bordered input-sm w-48"
+                       value="{{ search_query }}"
+                />
+              </div>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">Category</span>
-              </label>
-              <select name="zp_category" class="select select-bordered select-sm">
-                <option value="">All</option>
-                {% for div, cat in zp_categories %}
-                  <option value="{{ div }}" {% if zp_category_filter == div|stringformat:"d" %}selected{% endif %}>
-                    {{ cat }}
-                  </option>
-                {% endfor %}
-              </select>
-            </div>
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text">Category</span>
+                </label>
+                <select name="zp_category" class="select select-bordered select-sm">
+                  <option value="">All</option>
+                  {% for div, cat in zp_categories %}
+                    <option value="{{ div }}" {% if zp_category_filter == div|stringformat:"d" %}selected{% endif %}>
+                      {{ cat }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">Rating</span>
-              </label>
-              <select name="zr_category" class="select select-bordered select-sm">
-                <option value="">All</option>
-                {% for cat in zr_categories %}
-                  <option value="{{ cat }}" {% if zr_category_filter == cat %}selected{% endif %}>
-                    {{ cat }}
-                  </option>
-                {% endfor %}
-              </select>
-            </div>
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text">Rating</span>
+                </label>
+                <select name="zr_category" class="select select-bordered select-sm">
+                  <option value="">All</option>
+                  {% for cat in zr_categories %}
+                    <option value="{{ cat }}" {% if zr_category_filter == cat %}selected{% endif %}>
+                      {{ cat }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">Gender</span>
-              </label>
-              <select name="gender" class="select select-bordered select-sm">
-                <option value="">All</option>
-                <option value="M" {% if gender_filter == "M" %}selected{% endif %}>Male</option>
-                <option value="F" {% if gender_filter == "F" %}selected{% endif %}>Female</option>
-              </select>
-            </div>
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text">Gender</span>
+                </label>
+                <select name="gender" class="select select-bordered select-sm">
+                  <option value="">All</option>
+                  <option value="M" {% if gender_filter == "M" %}selected{% endif %}>Male</option>
+                  <option value="F" {% if gender_filter == "F" %}selected{% endif %}>Female</option>
+                </select>
+              </div>
 
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">Race Ready</span>
-              </label>
-              <select name="race_ready" class="select select-bordered select-sm">
-                <option value="">All</option>
-                <option value="yes" {% if race_ready_filter == "yes" %}selected{% endif %}>Yes</option>
-                <option value="no" {% if race_ready_filter == "no" %}selected{% endif %}>No</option>
-              </select>
-            </div>
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text">Race Verified</span>
+                </label>
+                <select name="race_ready" class="select select-bordered select-sm">
+                  <option value="">All</option>
+                  <option value="yes" {% if race_ready_filter == "yes" %}selected{% endif %}>Yes</option>
+                  <option value="no" {% if race_ready_filter == "no" %}selected{% endif %}>No</option>
+                </select>
+              </div>
 
-            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-            <a href="{% url 'team:roster' %}" class="btn btn-ghost btn-sm">Reset</a>
-          </div>
-        </form>
+              <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+              <a href="{% url 'team:roster' %}" class="btn btn-ghost btn-sm">Reset</a>
+            </div>
+          </form>
         {% endif %}
 
         <div class="stats shadow mb-6">
@@ -104,86 +110,96 @@
             <thead>
             <tr>
               {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&zr_category="|add:zr_category_filter|add:"&gender="|add:gender_filter|add:"&race_ready="|add:race_ready_filter %}
-              <th>
-                <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Name
-                  {% if sort_by == "name" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=zwid&dir={% if sort_by == 'zwid' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Zwid
-                  {% if sort_by == "zwid" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=gender&dir={% if sort_by == 'gender' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Gender
-                  {% if sort_by == "gender" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=race_ready&dir={% if sort_by == 'race_ready' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Race Ready
-                  {% if sort_by == "race_ready" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=category&dir={% if sort_by == 'category' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Category
-                  {% if sort_by == "category" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=rating&dir={% if sort_by == 'rating' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Rating
-                  {% if sort_by == "rating" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=rank&dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Rank
-                  {% if sort_by == "rank" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=ftp&dir={% if sort_by == 'ftp' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  FTP
-                  {% if sort_by == "ftp" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=wkg&dir={% if sort_by == 'wkg' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  WKG
-                  {% if sort_by == "wkg" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}&sort=results&dir={% if sort_by == 'results' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center gap-1 hover:text-primary">
-                  Results
-                  {% if sort_by == "results" %}
-                    <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
-                  {% endif %}
-                </a>
-              </th>
+                <th>
+                  <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    Name
+                    {% if sort_by == "name" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}&sort=zwid&dir={% if sort_by == 'zwid' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    Zwid
+                    {% if sort_by == "zwid" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}&sort=gender&dir={% if sort_by == 'gender' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    Gender
+                    {% if sort_by == "gender" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}&sort=race_ready&dir={% if sort_by == 'race_ready' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    Race Verified
+                    {% if sort_by == "race_ready" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}&sort=category&dir={% if sort_by == 'category' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    Category
+                    {% if sort_by == "category" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}&sort=rating&dir={% if sort_by == 'rating' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    Rating
+                    {% if sort_by == "rating" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}&sort=rank&dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    Rank
+                    {% if sort_by == "rank" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}&sort=ftp&dir={% if sort_by == 'ftp' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    FTP
+                    {% if sort_by == "ftp" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}&sort=wkg&dir={% if sort_by == 'wkg' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    WKG
+                    {% if sort_by == "wkg" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}&sort=results&dir={% if sort_by == 'results' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    Results
+                    {% if sort_by == "results" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
               {% endwith %}
             </tr>
             </thead>
@@ -192,15 +208,20 @@
               <tr>
                 <td class="font-medium">
                   {% if rider.user_id %}
-                  <a href="{% url 'accounts:public_profile' rider.user_id %}" class="link link-hover">{{ rider.display_name }}</a>
+                    <a href="{% url 'accounts:public_profile' rider.user_id %}"
+                       class="link link-hover">{{ rider.display_name }}</a>
                   {% else %}
-                  {{ rider.display_name }}
+                    {{ rider.display_name }}
                   {% endif %}
                   {% if rider.in_zwiftpower %}
-                    <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded" title="View on ZwiftPower">ZP</a>
+                    <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener"
+                       class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded"
+                       title="View on ZwiftPower">ZP</a>
                   {% endif %}
                   {% if rider.in_zwiftracing %}
-                    <a href="https://www.zwiftracing.app/riders/{{ rider.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded" title="View on Zwift Racing">ZR</a>
+                    <a href="https://www.zwiftracing.app/riders/{{ rider.zwid }}" target="_blank" rel="noopener"
+                       class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded"
+                       title="View on Zwift Racing">ZR</a>
                   {% endif %}
                 </td>
                 <td>

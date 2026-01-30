@@ -798,6 +798,11 @@ Admin page at `/team/discord-review/` for auditing Discord guild members. Requir
 Users can achieve "Race Ready" status by completing verification requirements. This status gates participation in
 official team races.
 
+### Terminology
+
+"Race Verified" and "Race Ready" have the same meaning and are used interchangeably. The UI/UX uses "Race Verified"
+while the backend code uses "Race Ready" (e.g., `is_race_ready`, `RaceReadyRecord`, `RACE_READY_ROLE_ID`).
+
 ### Requirements
 
 A user is race ready (`User.is_race_ready` property) when they have **ALL** verification types required for their
