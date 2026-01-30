@@ -155,7 +155,7 @@
         </td>
         <td>
           {% if rider.zp_date_left %}
-            <span class="badge badge-error badge-sm">{{ rider.zp_date_left|date:"Y-m-d" }}</span>
+            <span class="badge badge-error badge-sm tooltip" data-tip="{{ rider.zp_date_left|date:'Y-m-d' }}">{{ rider.days_since_zp_left }}d</span>
           {% else %}
             <span class="text-base-content/30">-</span>
           {% endif %}

@@ -642,6 +642,15 @@ class MembershipReviewRider:
         return delta.days
 
     @property
+    def days_since_zp_left(self) -> int | None:
+        """Return days since rider left ZwiftPower, or None if still active."""
+        if not self.zp_date_left:
+            return None
+        from django.utils import timezone
+        delta = timezone.now() - self.zp_date_left
+        return delta.days
+
+    @property
     def discord_profile_url(self) -> str:
         """Return Discord profile URL for this user."""
         if self.discord_id:
