@@ -136,18 +136,18 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
     from django.shortcuts import get_object_or_404
 
     from apps.team.services import ZP_DIV_TO_CATEGORY
-    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftpower.models import ZPRiderResults, ZPTeamRiders
     from apps.zwiftracing.models import ZRRider
 
     profile_user = get_object_or_404(User, id=user_id)
 
-    # Don't allow viewing own profile via public URL (redirect to private profile)
-    if profile_user == request.user:
-        return redirect("accounts:profile")
+    # Check if viewing own profile
+    is_own_profile = profile_user == request.user
 
     # Fetch ZwiftPower and ZwiftRacing data if user is verified
     zp_data = None
     zr_data = None
+    recent_results = []
     if profile_user.zwid_verified and profile_user.zwid:
         # Get ZwiftPower data
         zp_rider = ZPTeamRiders.objects.filter(zwid=profile_user.zwid).first()
@@ -168,6 +168,9 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
                 "rating": zr_rider.race_current_rating,
             }
 
+        # Get last 5 race results
+        recent_results = ZPRiderResults.objects.filter(zwid=profile_user.zwid).select_related("event")[:5]
+
     return render(
         request,
         "accounts/public_profile.html",
@@ -175,6 +178,8 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
             "profile_user": profile_user,
             "zp_data": zp_data,
             "zr_data": zr_data,
+            "is_own_profile": is_own_profile,
+            "recent_results": recent_results,
         },
     )
 
