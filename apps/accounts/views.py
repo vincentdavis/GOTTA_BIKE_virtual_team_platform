@@ -33,13 +33,42 @@ def profile_view(request: HttpRequest) -> HttpResponse:
         Rendered profile page.
 
     """
+    from apps.team.services import ZP_DIV_TO_CATEGORY
+    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftracing.models import ZRRider
+
     form = ProfileForm(instance=request.user)
+
+    # Fetch ZwiftPower and ZwiftRacing data if user is verified
+    zp_data = None
+    zr_data = None
+    if request.user.zwid_verified and request.user.zwid:
+        # Get ZwiftPower data
+        zp_rider = ZPTeamRiders.objects.filter(zwid=request.user.zwid).first()
+        if zp_rider:
+            # Use divw for females, div for everyone else
+            div = zp_rider.divw if request.user.gender == "female" else zp_rider.div
+            zp_data = {
+                "category": ZP_DIV_TO_CATEGORY.get(div, ""),
+                "rank": zp_rider.rank,
+                "ftp": zp_rider.ftp,
+            }
+
+        # Get ZwiftRacing data
+        zr_rider = ZRRider.objects.filter(zwid=request.user.zwid).first()
+        if zr_rider:
+            zr_data = {
+                "category": zr_rider.race_current_category,
+                "rating": zr_rider.race_current_rating,
+            }
 
     return render(
         request,
         "accounts/profile.html",
         {
             "form": form,
+            "zp_data": zp_data,
+            "zr_data": zr_data,
         },
     )
 
@@ -106,17 +135,46 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
     """
     from django.shortcuts import get_object_or_404
 
+    from apps.team.services import ZP_DIV_TO_CATEGORY
+    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftracing.models import ZRRider
+
     profile_user = get_object_or_404(User, id=user_id)
 
     # Don't allow viewing own profile via public URL (redirect to private profile)
     if profile_user == request.user:
         return redirect("accounts:profile")
 
+    # Fetch ZwiftPower and ZwiftRacing data if user is verified
+    zp_data = None
+    zr_data = None
+    if profile_user.zwid_verified and profile_user.zwid:
+        # Get ZwiftPower data
+        zp_rider = ZPTeamRiders.objects.filter(zwid=profile_user.zwid).first()
+        if zp_rider:
+            # Use divw for females, div for everyone else
+            div = zp_rider.divw if profile_user.gender == "female" else zp_rider.div
+            zp_data = {
+                "category": ZP_DIV_TO_CATEGORY.get(div, ""),
+                "rank": zp_rider.rank,
+                "ftp": zp_rider.ftp,
+            }
+
+        # Get ZwiftRacing data
+        zr_rider = ZRRider.objects.filter(zwid=profile_user.zwid).first()
+        if zr_rider:
+            zr_data = {
+                "category": zr_rider.race_current_category,
+                "rating": zr_rider.race_current_rating,
+            }
+
     return render(
         request,
         "accounts/public_profile.html",
         {
             "profile_user": profile_user,
+            "zp_data": zp_data,
+            "zr_data": zr_data,
         },
     )
 

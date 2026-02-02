@@ -1,27 +1,96 @@
 {% if user.zwid_verified %}
 <!-- Verified State -->
-<div class="flex items-center justify-between p-4 bg-success/10 rounded-lg border border-success/30">
-    <div class="flex items-center gap-3">
-        <div class="text-success">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
+<div class="p-4 bg-success/10 rounded-lg border border-success/30">
+    <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-3">
+            <div class="text-success">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+            </div>
+            <div>
+                <p class="font-semibold text-success">Zwift Account Verified</p>
+                <p class="text-sm text-base-content/70">Zwift ID: <span class="font-mono font-bold">{{ user.zwid }}</span></p>
+            </div>
         </div>
-        <div>
-            <p class="font-semibold text-success">Zwift Account Verified</p>
-            <p class="text-sm text-base-content/70">Zwift ID: <span class="font-mono font-bold">{{ user.zwid }}</span></p>
+        <button hx-post="{% url 'accounts:unverify_zwift' %}"
+                hx-target="#zwift-status-container"
+                hx-swap="innerHTML"
+                hx-confirm="Are you sure you want to remove your Zwift verification?"
+                class="btn btn-ghost btn-sm text-error">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Remove
+        </button>
+    </div>
+
+    <!-- Rating Stats -->
+    {% if zp_data or zr_data %}
+    <div class="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-success/20">
+        <!-- ZwiftPower -->
+        <div class="bg-base-100/50 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="px-1.5 py-0.5 text-xs font-bold text-warning-content bg-warning rounded">ZP</span>
+                <span class="text-sm font-medium">ZwiftPower</span>
+            </div>
+            {% if zp_data %}
+                <div class="space-y-1 text-sm">
+                    {% if zp_data.category %}
+                        <div class="flex justify-between">
+                            <span class="text-base-content/70">Category</span>
+                            <span class="font-semibold">{{ zp_data.category }}</span>
+                        </div>
+                    {% endif %}
+                    {% if zp_data.rank %}
+                        <div class="flex justify-between">
+                            <span class="text-base-content/70">Rank</span>
+                            <span class="font-mono">{{ zp_data.rank }}</span>
+                        </div>
+                    {% endif %}
+                    {% if zp_data.ftp %}
+                        <div class="flex justify-between">
+                            <span class="text-base-content/70">FTP</span>
+                            <span class="font-mono">{{ zp_data.ftp }}w</span>
+                        </div>
+                    {% endif %}
+                </div>
+                <a href="https://zwiftpower.com/profile.php?z={{ user.zwid }}" target="_blank" rel="noopener"
+                   class="btn btn-xs btn-ghost mt-2 w-full">View Profile</a>
+            {% else %}
+                <p class="text-sm text-base-content/50">Not found in ZwiftPower</p>
+            {% endif %}
+        </div>
+
+        <!-- Zwift Racing -->
+        <div class="bg-base-100/50 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-2">
+                <span class="px-1.5 py-0.5 text-xs font-bold text-info-content bg-info rounded">ZR</span>
+                <span class="text-sm font-medium">Zwift Racing</span>
+            </div>
+            {% if zr_data %}
+                <div class="space-y-1 text-sm">
+                    {% if zr_data.category %}
+                        <div class="flex justify-between">
+                            <span class="text-base-content/70">Category</span>
+                            <span class="font-semibold">{{ zr_data.category }}</span>
+                        </div>
+                    {% endif %}
+                    {% if zr_data.rating %}
+                        <div class="flex justify-between">
+                            <span class="text-base-content/70">Rating</span>
+                            <span class="font-mono">{{ zr_data.rating }}</span>
+                        </div>
+                    {% endif %}
+                </div>
+                <a href="https://www.zwiftracing.app/riders/{{ user.zwid }}" target="_blank" rel="noopener"
+                   class="btn btn-xs btn-ghost mt-2 w-full">View Profile</a>
+            {% else %}
+                <p class="text-sm text-base-content/50">Not found in Zwift Racing</p>
+            {% endif %}
         </div>
     </div>
-    <button hx-post="{% url 'accounts:unverify_zwift' %}"
-            hx-target="#zwift-status-container"
-            hx-swap="innerHTML"
-            hx-confirm="Are you sure you want to remove your Zwift verification?"
-            class="btn btn-ghost btn-sm text-error">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-        Remove
-    </button>
+    {% endif %}
 </div>
 {% else %}
 <!-- Unverified State -->
