@@ -160,6 +160,61 @@
         </label>
     </div>
 
+    <!-- Emergency Contact Section -->
+    <div class="divider">Emergency Contact (Optional)</div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_emergency_contact_name">
+                <span class="label-text">{{ form.emergency_contact_name.label }}</span>
+            </label>
+            {{ form.emergency_contact_name }}
+            {% if form.emergency_contact_name.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.emergency_contact_name.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_emergency_contact_relation">
+                <span class="label-text">{{ form.emergency_contact_relation.label }}</span>
+            </label>
+            {{ form.emergency_contact_relation }}
+            {% if form.emergency_contact_relation.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.emergency_contact_relation.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_emergency_contact_email">
+                <span class="label-text">{{ form.emergency_contact_email.label }}</span>
+            </label>
+            {{ form.emergency_contact_email }}
+            {% if form.emergency_contact_email.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.emergency_contact_email.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_emergency_contact_phone">
+                <span class="label-text">{{ form.emergency_contact_phone.label }}</span>
+            </label>
+            {{ form.emergency_contact_phone }}
+            {% if form.emergency_contact_phone.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.emergency_contact_phone.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
     <!-- Training Equipment Section -->
     <div class="divider">Training Equipment (Optional)</div>
 
@@ -216,61 +271,6 @@
             {% if form.heartrate_monitor.errors %}
             <label class="label">
                 <span class="label-text-alt text-error">{{ form.heartrate_monitor.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- Emergency Contact Section -->
-    <div class="divider">Emergency Contact (Optional)</div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="form-control">
-            <label class="label" for="id_emergency_contact_name">
-                <span class="label-text">{{ form.emergency_contact_name.label }}</span>
-            </label>
-            {{ form.emergency_contact_name }}
-            {% if form.emergency_contact_name.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ form.emergency_contact_name.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
-
-        <div class="form-control">
-            <label class="label" for="id_emergency_contact_relation">
-                <span class="label-text">{{ form.emergency_contact_relation.label }}</span>
-            </label>
-            {{ form.emergency_contact_relation }}
-            {% if form.emergency_contact_relation.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ form.emergency_contact_relation.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="form-control">
-            <label class="label" for="id_emergency_contact_email">
-                <span class="label-text">{{ form.emergency_contact_email.label }}</span>
-            </label>
-            {{ form.emergency_contact_email }}
-            {% if form.emergency_contact_email.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ form.emergency_contact_email.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
-
-        <div class="form-control">
-            <label class="label" for="id_emergency_contact_phone">
-                <span class="label-text">{{ form.emergency_contact_phone.label }}</span>
-            </label>
-            {{ form.emergency_contact_phone }}
-            {% if form.emergency_contact_phone.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ form.emergency_contact_phone.errors.0 }}</span>
             </label>
             {% endif %}
         </div>

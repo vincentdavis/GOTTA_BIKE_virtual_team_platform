@@ -16,4 +16,5 @@ urlpatterns = [
     path("profile/verify-zwift/", views.verify_zwift, name="verify_zwift"),
     path("profile/unverify-zwift/", views.unverify_zwift, name="unverify_zwift"),
     path("profile/race-ready/", views.submit_race_ready, name="submit_race_ready"),
+    path("verification/", views.verification_view, name="verification"),
 ]

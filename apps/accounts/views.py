@@ -35,6 +35,27 @@ def profile_view(request: HttpRequest) -> HttpResponse:
     """
     form = ProfileForm(instance=request.user)
 
+    return render(
+        request,
+        "accounts/profile.html",
+        {
+            "form": form,
+        },
+    )
+
+
+@login_required
+@require_GET
+def verification_view(request: HttpRequest) -> HttpResponse:
+    """Display user's verification records and submission form.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered verification page.
+
+    """
     # Get allowed verification types based on user's ZwiftPower category
     allowed_types = get_user_verification_types(request.user)
     race_ready_form = RaceReadyRecordForm(
@@ -54,9 +75,8 @@ def profile_view(request: HttpRequest) -> HttpResponse:
 
     return render(
         request,
-        "accounts/profile.html",
+        "accounts/verification.html",
         {
-            "form": form,
             "race_ready_form": race_ready_form,
             "race_ready_records": race_ready_records,
             "latest_by_type": latest_by_type,
@@ -412,7 +432,7 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
                     "unit_preference": request.user.unit_preference,
                 },
             )
-        return redirect("accounts:profile")
+        return redirect("accounts:verification")
     else:
         if request.headers.get("HX-Request"):
             return render(
@@ -426,7 +446,7 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
                 },
             )
         messages.error(request, "Please correct the errors below.")
-        return redirect("accounts:profile")
+        return redirect("accounts:verification")
 
 
 def _get_config_sections() -> dict:
