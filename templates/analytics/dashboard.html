@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - {{ config.TEAM_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="card-title text-2xl">Analytics</h2>
+      </div>
+
+      <!-- Time Period Tabs -->
+      <div role="tablist" class="tabs tabs-boxed mb-6 w-fit">
+        <a role="tab"
+           href="?period=year"
+           class="tab {% if period == 'year' %}tab-active{% endif %}">
+          Year
+        </a>
+        <a role="tab"
+           href="?period=month"
+           class="tab {% if period == 'month' %}tab-active{% endif %}">
+          Month
+        </a>
+        <a role="tab"
+           href="?period=week"
+           class="tab {% if period == 'week' %}tab-active{% endif %}">
+          Week
+        </a>
+        <a role="tab"
+           href="?period=day"
+           class="tab {% if period == 'day' %}tab-active{% endif %}">
+          Day
+        </a>
+      </div>
+
+      <!-- Date Range Display -->
+      <p class="text-sm text-base-content/60 mb-6">
+        {{ start_date|date:"M j, Y H:i" }} - {{ end_date|date:"M j, Y H:i" }}
+      </p>
+
+      <!-- Stats Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <!-- Total Page Views -->
+        <div class="stat bg-base-100 rounded-box shadow">
+          <div class="stat-figure text-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </div>
+          <div class="stat-title">Total Page Views</div>
+          <div class="stat-value text-primary">{{ total_views|default:0 }}</div>
+        </div>
+
+        <!-- Unique Visitors -->
+        <div class="stat bg-base-100 rounded-box shadow">
+          <div class="stat-figure text-secondary">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+          <div class="stat-title">Unique Visitors</div>
+          <div class="stat-value text-secondary">{{ unique_visitors|default:0 }}</div>
+        </div>
+
+        <!-- Logged In % -->
+        <div class="stat bg-base-100 rounded-box shadow">
+          <div class="stat-figure text-accent">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+          <div class="stat-title">Logged In</div>
+          <div class="stat-value text-accent">{{ logged_in_percent }}%</div>
+          <div class="stat-desc">{{ logged_in_count }} of {{ total_views }} visits</div>
+        </div>
+
+        <!-- Device Split -->
+        <div class="stat bg-base-100 rounded-box shadow">
+          <div class="stat-figure text-info">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-8 h-8 stroke-current">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div class="stat-title">Devices</div>
+          <div class="stat-value text-info text-lg">
+            {% if device_breakdown.percentages.desktop %}
+              {{ device_breakdown.percentages.desktop }}% Desktop
+            {% else %}
+              No data
+            {% endif %}
+          </div>
+          <div class="stat-desc">
+            {% if device_breakdown.percentages %}
+              {{ device_breakdown.percentages.mobile }}% Mobile / {{ device_breakdown.percentages.tablet }}% Tablet
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Breakdown Tables Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Top Pages -->
+        <div class="bg-base-100 rounded-box p-4 shadow">
+          <h3 class="font-semibold text-lg mb-4">Top Pages</h3>
+          {% if top_pages %}
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Path</th>
+                  <th class="text-right">Views</th>
+                  <th class="text-right">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for page in top_pages %}
+                <tr>
+                  <td class="font-mono text-sm max-w-xs truncate" title="{{ page.path }}">{{ page.path }}</td>
+                  <td class="text-right">{{ page.count }}</td>
+                  <td class="text-right">{{ page.percent }}%</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-base-content/50 italic">No page data available</p>
+          {% endif %}
+        </div>
+
+        <!-- Browsers -->
+        <div class="bg-base-100 rounded-box p-4 shadow">
+          <h3 class="font-semibold text-lg mb-4">Browsers</h3>
+          {% if browsers %}
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Browser</th>
+                  <th class="text-right">Count</th>
+                  <th class="text-right">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for browser in browsers %}
+                <tr>
+                  <td>{{ browser.name }}</td>
+                  <td class="text-right">{{ browser.count }}</td>
+                  <td class="text-right">{{ browser.percent }}%</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-base-content/50 italic">No browser data available</p>
+          {% endif %}
+        </div>
+
+        <!-- Operating Systems -->
+        <div class="bg-base-100 rounded-box p-4 shadow">
+          <h3 class="font-semibold text-lg mb-4">Operating Systems</h3>
+          {% if operating_systems %}
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>OS</th>
+                  <th class="text-right">Count</th>
+                  <th class="text-right">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for os in operating_systems %}
+                <tr>
+                  <td>{{ os.name }}</td>
+                  <td class="text-right">{{ os.count }}</td>
+                  <td class="text-right">{{ os.percent }}%</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-base-content/50 italic">No OS data available</p>
+          {% endif %}
+        </div>
+
+        <!-- Timezones -->
+        <div class="bg-base-100 rounded-box p-4 shadow">
+          <h3 class="font-semibold text-lg mb-4">Timezones</h3>
+          {% if timezones %}
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Timezone</th>
+                  <th class="text-right">Count</th>
+                  <th class="text-right">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for tz in timezones %}
+                <tr>
+                  <td class="font-mono text-sm">{{ tz.name }}</td>
+                  <td class="text-right">{{ tz.count }}</td>
+                  <td class="text-right">{{ tz.percent }}%</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-base-content/50 italic">No timezone data available</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

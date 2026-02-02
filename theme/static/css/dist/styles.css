@@ -2794,6 +2794,15 @@
     grid-column: 1 / -1;
   }
   @layer daisyui.l1.l2.l3 {
+    .stat-figure {
+      grid-column-start: 2;
+      grid-row: span 3 / span 3;
+      grid-row-start: 1;
+      place-self: center;
+      justify-self: flex-end;
+    }
+  }
+  @layer daisyui.l1.l2.l3 {
     .hero {
       display: grid;
       width: 100%;
@@ -2854,6 +2863,19 @@
       white-space: nowrap;
       font-size: 2rem;
       font-weight: 800;
+    }
+  }
+  @layer daisyui.l1.l2.l3 {
+    .stat-desc {
+      grid-column-start: 1;
+      white-space: nowrap;
+      color: var(--color-base-content);
+      font-size: 0.75rem;
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .stat-desc {
+        color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
+      }
     }
   }
   @layer daisyui.l1.l2.l3 {
@@ -4414,6 +4436,9 @@
   .w-80 {
     width: calc(var(--spacing) * 80);
   }
+  .w-fit {
+    width: fit-content;
+  }
   .w-full {
     width: 100%;
   }
@@ -5076,6 +5101,9 @@
       }
     }
   }
+  .text-accent {
+    color: var(--color-accent);
+  }
   .text-base-content {
     color: var(--color-base-content);
   }
@@ -5142,6 +5170,9 @@
   }
   .text-primary-content {
     color: var(--color-primary-content);
+  }
+  .text-secondary {
+    color: var(--color-secondary);
   }
   .text-success {
     color: var(--color-success);
@@ -5602,6 +5633,11 @@
   @media (width >= 64rem) {
     .lg\:hidden {
       display: none;
+    }
+  }
+  @media (width >= 64rem) {
+    .lg\:grid-cols-2 {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
   }
   @media (width >= 64rem) {

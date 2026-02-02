@@ -6,7 +6,7 @@ from ninja import NinjaAPI, Schema
 
 from apps.analytics.models import PageVisit
 
-api = NinjaAPI(urls_namespace="analytics", docs_url=None)
+api = NinjaAPI(urls_namespace="analytics_api", docs_url=None)
 
 
 class PageVisitSchema(Schema):
