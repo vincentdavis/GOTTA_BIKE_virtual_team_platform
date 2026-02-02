@@ -238,5 +238,29 @@
 </div>
 
 {% block extra_js %}{% endblock %}
+
+<!-- Analytics tracking -->
+<script>
+(function() {
+  // Don't track if DoNotTrack is enabled
+  if (navigator.doNotTrack === '1') return;
+
+  fetch('/api/analytics/track/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': '{{ csrf_token }}'
+    },
+    body: JSON.stringify({
+      path: window.location.pathname,
+      referer: document.referrer || '',
+      screen_width: window.screen.width,
+      screen_height: window.screen.height,
+      viewport_width: window.innerWidth,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+    })
+  }).catch(function() {});  // Silently ignore errors
+})();
+</script>
 </body>
 </html>

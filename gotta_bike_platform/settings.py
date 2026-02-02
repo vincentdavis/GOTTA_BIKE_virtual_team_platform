@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     "apps.dbot_api.apps.DbotApiConfig",
     "apps.data_connection.apps.DataConnectionConfig",
     "apps.cms.apps.CmsConfig",
+    "apps.analytics.apps.AnalyticsConfig",
     "django_tasks",
     "django_tasks.backends.database",
 ]

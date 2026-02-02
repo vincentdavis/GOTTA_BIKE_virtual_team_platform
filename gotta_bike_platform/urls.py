@@ -27,6 +27,7 @@ from apps.accounts.views import (
     config_site_images_update,
     markdown_preview,
 )
+from apps.analytics.api import api as analytics_api
 from apps.dbot_api.api import api as dbot_api
 from apps.dbot_api.cron_api import cron_api
 from gotta_bike_platform.views import about, home, robots_txt
@@ -36,6 +37,7 @@ urlpatterns = [
     path("about/", about, name="about"),
     path("robots.txt", robots_txt, name="robots_txt"),
     path("admin/", admin.site.urls),
+    path("api/analytics/", analytics_api.urls),
     path("api/dbot/", dbot_api.urls),
     path("api/cron/", cron_api.urls),
     path("accounts/", include("allauth.urls")),
