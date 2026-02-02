@@ -58,6 +58,7 @@ class Permissions:
     APPROVE_VERIFICATION = "approve_verification"
     DATA_CONNECTION = "data_connection"
     PAGES_ADMIN = "pages_admin"
+    PERFORMANCE_VERIFICATION_TEAM = "performance_verification_team"
 
     # Map permission names to Constance config keys
     CONSTANCE_MAP: ClassVar[dict[str, str]] = {
@@ -72,6 +73,7 @@ class Permissions:
         APPROVE_VERIFICATION: "PERM_APPROVE_VERIFICATION_ROLES",
         DATA_CONNECTION: "PERM_DATA_CONNECTION_ROLES",
         PAGES_ADMIN: "PERM_PAGES_ADMIN_ROLES",
+        PERFORMANCE_VERIFICATION_TEAM: "PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES",
     }
 
     CHOICES: ClassVar[list[tuple[str, str]]] = [
@@ -86,6 +88,7 @@ class Permissions:
         (APPROVE_VERIFICATION, "Approve Verification"),
         (DATA_CONNECTION, "Data Connection"),
         (PAGES_ADMIN, "Pages Admin"),
+        (PERFORMANCE_VERIFICATION_TEAM, "Performance Verification Team"),
     ]
 
     ALL: ClassVar[list[str]] = list(CONSTANCE_MAP.keys())

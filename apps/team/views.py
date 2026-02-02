@@ -628,6 +628,11 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     # User can review if they have permission and pass same_gender check (already checked above)
     can_review = has_permission
 
+    # Media visibility: pending records visible to all reviewers, approved/rejected only to verification team
+    from apps.accounts.models import Permissions
+
+    can_view_media = record.is_pending or request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+
     if request.method == "POST" and can_review and record.is_pending:
         action = request.POST.get("action")
         if action == "verify":
@@ -730,6 +735,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         {
             "record": record,
             "can_review": can_review,
+            "can_view_media": can_view_media,
             "zp_rider": zp_rider,
         },
     )

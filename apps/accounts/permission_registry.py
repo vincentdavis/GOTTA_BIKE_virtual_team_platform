@@ -102,6 +102,13 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/page/{id}/delete/ - Delete page",
         ],
     },
+    Permissions.PERFORMANCE_VERIFICATION_TEAM: {
+        "name": "Performance Verification Team",
+        "description": "Team members responsible for performance verification reviews",
+        "views": [
+            "(Status indicator - used for role identification)",
+        ],
+    },
 }
 
 

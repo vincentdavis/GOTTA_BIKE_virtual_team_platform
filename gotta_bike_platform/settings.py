@@ -446,6 +446,11 @@ CONSTANCE_CONFIG = {
         "Discord role IDs that grant CMS page management (create, edit, delete pages)",
         "json_list_field",
     ),
+    "PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES": (
+        "[]",
+        "Discord role IDs for performance verification team members",
+        "json_list_field",
+    ),
     # Verification validity periods (in days)
     "WEIGHT_FULL_DAYS": (120, "Days a full weight verification is valid", int),
     "WEIGHT_LIGHT_DAYS": (30, "Days a light weight verification is valid", int),
@@ -659,6 +664,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "PERM_APPROVE_VERIFICATION_ROLES",
         "PERM_DATA_CONNECTION_ROLES",
         "PERM_PAGES_ADMIN_ROLES",
+        "PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES",
     ),
     "Verification Settings": (
         "CATEGORY_REQUIREMENTS",
