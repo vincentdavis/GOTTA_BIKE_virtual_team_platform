@@ -34,8 +34,11 @@ AI_CRAWLERS = [
 def home(request):
     """Render the home page.
 
-    If HOME_PAGE_SLUG is configured and a matching published CMS page exists,
-    renders that page. Otherwise falls back to the default index.html template.
+    Uses different CMS pages based on authentication status:
+    - Authenticated users: HOME_PAGE_SLUG_AUTHENTICATED (falls back to HOME_PAGE_SLUG)
+    - Non-authenticated users: HOME_PAGE_SLUG
+
+    If no matching published CMS page exists, falls back to the default index.html template.
 
     Args:
         request: The HTTP request.
@@ -44,7 +47,12 @@ def home(request):
         Rendered home page template.
 
     """
-    slug = config.HOME_PAGE_SLUG
+    # Determine which page slug to use based on authentication
+    if request.user.is_authenticated and config.HOME_PAGE_SLUG_AUTHENTICATED:
+        slug = config.HOME_PAGE_SLUG_AUTHENTICATED
+    else:
+        slug = config.HOME_PAGE_SLUG
+
     if slug:
         try:
             page = Page.objects.get(slug=slug, status=Page.Status.PUBLISHED)
@@ -66,7 +74,12 @@ def home(request):
                 extensions=["nl2br"],
             )
 
-        logfire.info("Home page served from CMS", slug=slug, page_id=page.id)
+        logfire.info(
+            "Home page served from CMS",
+            slug=slug,
+            page_id=page.id,
+            is_authenticated=request.user.is_authenticated,
+        )
         context = {
             "page": page,
             "content_html": content_html,

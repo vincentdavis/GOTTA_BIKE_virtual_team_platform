@@ -551,7 +551,12 @@ CONSTANCE_CONFIG = {
     ),
     "HOME_PAGE_SLUG": (
         "",
-        "CMS page slug to use as the home page (leave empty for default)",
+        "CMS page slug to use as the home page for non-logged-in users (leave empty for default)",
+        str,
+    ),
+    "HOME_PAGE_SLUG_AUTHENTICATED": (
+        "",
+        "CMS page slug to use as the home page for logged-in users (leave empty to use HOME_PAGE_SLUG)",
         str,
     ),
     "ABOUT_URL": ("#", "URL to About page", str),
@@ -602,6 +607,10 @@ CONSTANCE_CONFIG = {
         "Google Drive folder ID where files are stored (shared with service account)",
         str,
     ),
+    # Strava API
+    "STRAVA_CLIENT_SECRET": ("", "Strava API client secret", "password_field"),
+    "STRAVA_ACCESS_TOKEN": ("", "Strava API access token", "password_field"),
+    "STRAVA_REFRESH_TOKEN": ("", "Strava API refresh token", "password_field"),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -610,6 +619,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "LOGO_DISPLAY_MODE",
         "SUBTITLE",
         "HOME_PAGE_SLUG",
+        "HOME_PAGE_SLUG_AUTHENTICATED",
         "SITE_ANNOUNCEMENT",
         "MAINTENANCE_MODE",
         "ABOUT_URL",
@@ -693,6 +703,11 @@ CONSTANCE_CONFIG_FIELDSETS = {
     "Google Settings": (
         "GOOGLE_SERVICE_ACCOUNT_EMAIL",
         "GOOGLE_DRIVE_FOLDER_ID",
+    ),
+    "Strava": (
+        "STRAVA_CLIENT_SECRET",
+        "STRAVA_ACCESS_TOKEN",
+        "STRAVA_REFRESH_TOKEN",
     ),
 }
 

@@ -554,7 +554,8 @@ Available settings:
   `POWER_VERIFICATION_DAYS` (365)
 - **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)
 - **Site Settings**: `TEAM_NAME`, `SUBTITLE`, `SITE_ANNOUNCEMENT` (blue banner at top of all pages, supports Markdown),
-  `MAINTENANCE_MODE`, `LOGO_DISPLAY_MODE` (header display: `logo_only`, `logo_and_name`, or `name_only`)
+  `MAINTENANCE_MODE`, `LOGO_DISPLAY_MODE` (header display: `logo_only`, `logo_and_name`, or `name_only`),
+  `HOME_PAGE_SLUG` (CMS page for non-logged-in users), `HOME_PAGE_SLUG_AUTHENTICATED` (CMS page for logged-in users)
 
 Usage in code:
 

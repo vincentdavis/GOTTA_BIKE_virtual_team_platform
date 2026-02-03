@@ -74,6 +74,7 @@
 
 <!-- Site Header (full width, always visible) -->
 <header class="navbar bg-base-200 border-b border-base-300 sticky top-0 z-50 flex-shrink-0">
+  {% if user.is_authenticated %}
   <div class="flex-none lg:hidden">
     <label for="main-drawer" class="btn btn-square btn-ghost drawer-button">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -81,6 +82,7 @@
       </svg>
     </label>
   </div>
+  {% endif %}
   <div class="flex-1">
     <a href="{% url 'home' %}" class="btn btn-ghost text-xl">
       {% if config.LOGO_DISPLAY_MODE == 'logo_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' %}
@@ -183,7 +185,7 @@
   </div>
 </header>
 
-<div class="drawer lg:drawer-open min-h-0 flex-1">
+<div class="drawer {% if user.is_authenticated %}lg:drawer-open{% endif %} min-h-0 flex-1">
   <input id="main-drawer" type="checkbox" class="drawer-toggle"/>
 
   <!-- Main Content Area -->
@@ -231,11 +233,13 @@
     {% include "footer.html" %}
   </div>
 
-  <!-- Sidebar -->
+  <!-- Sidebar (only for authenticated users) -->
+  {% if user.is_authenticated %}
   <div class="drawer-side z-[60]">
     <label for="main-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
     {% include "sidebar.html" %}
   </div>
+  {% endif %}
 </div>
 
 {% block extra_js %}{% endblock %}
