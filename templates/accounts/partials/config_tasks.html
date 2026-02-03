@@ -1,0 +1,77 @@
+{% if triggered_task %}
+<div class="alert alert-success mb-4">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <span>Task <strong>{{ triggered_task }}</strong> has been queued!</span>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="alert alert-error mb-4">
+    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <span>{{ error }}</span>
+</div>
+{% endif %}
+
+<p class="text-base-content/70 mb-4">
+    Manually trigger background tasks. These are the same tasks that run via the scheduled cron job.
+</p>
+
+<div class="overflow-x-auto">
+    <table class="table table-zebra">
+        <thead>
+            <tr>
+                <th>Task</th>
+                <th>Description</th>
+                <th class="w-32">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task_name, task_info in tasks.items %}
+            <tr>
+                <td class="font-mono text-sm">{{ task_name }}</td>
+                <td class="text-base-content/70">{{ task_info.description }}</td>
+                <td>
+                    <form hx-post="{% url 'config_trigger_task' %}"
+                          hx-target="#tasks-container"
+                          hx-swap="innerHTML">
+                        {% csrf_token %}
+                        <input type="hidden" name="task_name" value="{{ task_name }}">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <span class="htmx-indicator loading loading-spinner loading-xs"></span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 htmx-request-hide" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Run
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="3" class="text-center text-base-content/50">
+                    No background tasks available.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-6 p-4 bg-base-200 rounded-lg">
+    <h4 class="font-semibold mb-2 flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        About Background Tasks
+    </h4>
+    <ul class="text-sm text-base-content/70 space-y-1 list-disc list-inside">
+        <li>Tasks are queued and run asynchronously by the background worker.</li>
+        <li>Results are not displayed here; check logs for task output.</li>
+        <li>These tasks also run automatically on a scheduled basis.</li>
+    </ul>
+</div>

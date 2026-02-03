@@ -126,6 +126,11 @@
             <div id="site-images-form">
                 {% include "accounts/partials/config_site_images.html" %}
             </div>
+            {% elif is_background_tasks %}
+            <!-- Background Tasks -->
+            <div id="tasks-container">
+                {% include "accounts/partials/config_tasks.html" %}
+            </div>
             {% else %}
             <!-- Section Form -->
             <div id="section-{{ current_section.key }}">

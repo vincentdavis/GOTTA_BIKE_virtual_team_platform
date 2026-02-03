@@ -7,6 +7,7 @@
       "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
       "Courier New", monospace;
+    --color-red-500: oklch(63.7% 0.237 25.331);
     --color-red-600: oklch(57.7% 0.245 27.325);
     --color-red-800: oklch(44.4% 0.177 26.899);
     --color-orange-400: oklch(75% 0.183 55.934);
@@ -2374,6 +2375,9 @@
   .sticky {
     position: sticky;
   }
+  .inset-0 {
+    inset: calc(var(--spacing) * 0);
+  }
   @layer daisyui.l1.l2 {
     .toast-end {
       inset-inline-start: auto;
@@ -3007,9 +3011,6 @@
   }
   .my-1 {
     margin-block: calc(var(--spacing) * 1);
-  }
-  .my-3 {
-    margin-block: calc(var(--spacing) * 3);
   }
   @layer daisyui.l1.l2.l3 {
     .label {
@@ -4184,6 +4185,12 @@
       font-weight: 600;
     }
   }
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
   :root .prose {
     --tw-prose-body: var(--color-base-content);
   }
@@ -4331,11 +4338,17 @@
   .h-8 {
     height: calc(var(--spacing) * 8);
   }
+  .h-10 {
+    height: calc(var(--spacing) * 10);
+  }
   .h-12 {
     height: calc(var(--spacing) * 12);
   }
   .h-16 {
     height: calc(var(--spacing) * 16);
+  }
+  .h-20 {
+    height: calc(var(--spacing) * 20);
   }
   .h-24 {
     height: calc(var(--spacing) * 24);
@@ -4397,6 +4410,11 @@
       width: calc(var(--size-selector, 0.25rem) * 5);
     }
   }
+  @layer daisyui.l1.l2 {
+    .loading-xs {
+      width: calc(var(--size-selector, 0.25rem) * 4);
+    }
+  }
   .w-3 {
     width: calc(var(--spacing) * 3);
   }
@@ -4426,6 +4444,9 @@
   }
   .w-24 {
     width: calc(var(--spacing) * 24);
+  }
+  .w-32 {
+    width: calc(var(--spacing) * 32);
   }
   .w-48 {
     width: calc(var(--spacing) * 48);
@@ -4642,6 +4663,9 @@
     margin-block-start: calc(calc(var(--spacing) * 6) * var(--tw-space-y-reverse));
     margin-block-end: calc(calc(var(--spacing) * 6) * calc(1 - var(--tw-space-y-reverse)));
   }
+  .self-center {
+    align-self: center;
+  }
   .truncate {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -4766,6 +4790,14 @@
   .bg-black {
     background-color: var(--color-black);
   }
+  .bg-black\/30 {
+    background-color: color-mix(in srgb, #000 30%, transparent);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\/30 {
+      background-color: color-mix(in oklab, var(--color-black) 30%, transparent);
+    }
+  }
   .bg-error {
     background-color: var(--color-error);
   }
@@ -4812,6 +4844,12 @@
   }
   .bg-primary {
     background-color: var(--color-primary);
+  }
+  .bg-purple-600 {
+    background-color: var(--color-purple-600);
+  }
+  .bg-red-600 {
+    background-color: var(--color-red-600);
   }
   .bg-sky-500 {
     background-color: var(--color-sky-500);
@@ -4885,6 +4923,9 @@
   }
   .object-contain {
     object-fit: contain;
+  }
+  .object-cover {
+    object-fit: cover;
   }
   @layer daisyui.l1.l2 {
     .checkbox-sm {
@@ -5211,6 +5252,12 @@
   .text-primary-content {
     color: var(--color-primary-content);
   }
+  .text-red-500 {
+    color: var(--color-red-500);
+  }
+  .text-red-600 {
+    color: var(--color-red-600);
+  }
   .text-secondary {
     color: var(--color-secondary);
   }
@@ -5249,6 +5296,9 @@
   }
   .prose :where(.btn-link):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
     text-decoration-line: none;
+  }
+  .opacity-0 {
+    opacity: 0%;
   }
   .opacity-30 {
     opacity: 30%;
@@ -5519,6 +5569,11 @@
     }
   }
   @media (hover: hover) {
+    .hover\:bg-base-200:hover {
+      background-color: var(--color-base-200);
+    }
+  }
+  @media (hover: hover) {
     .hover\:bg-error-content:hover {
       background-color: var(--color-error-content);
     }
@@ -5563,6 +5618,11 @@
   @media (hover: hover) {
     .hover\:opacity-90:hover {
       opacity: 90%;
+    }
+  }
+  @media (hover: hover) {
+    .hover\:opacity-100:hover {
+      opacity: 100%;
     }
   }
   @media (hover: hover) {

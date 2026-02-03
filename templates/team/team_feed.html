@@ -11,41 +11,45 @@
       </div>
 
       <!-- Channels Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {% for entry in feed_entries %}
         <a href="{{ entry.url }}"
            target="_blank"
            rel="noopener"
            class="card bg-base-300 hover:bg-base-100 transition-colors cursor-pointer group">
-          <div class="card-body p-4">
-            {% if entry.platform == "youtube" %}
-            <!-- YouTube -->
-            <div class="aspect-video bg-gradient-to-br from-red-600 to-red-800 rounded-lg flex items-center justify-center mb-3 group-hover:scale-[1.02] transition-transform">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-white opacity-90" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-              </svg>
-            </div>
-            {% elif entry.platform == "twitch" %}
-            <!-- Twitch -->
-            <div class="aspect-video bg-gradient-to-br from-purple-600 to-purple-800 rounded-lg flex items-center justify-center mb-3 group-hover:scale-[1.02] transition-transform">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-white opacity-90" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
-              </svg>
-            </div>
-            {% endif %}
+          <div class="card-body p-3">
+            <div class="flex items-center gap-3">
+              <!-- Platform Icon -->
+              {% if entry.platform == "youtube" %}
+              <div class="w-10 h-10 rounded-full bg-red-600 flex items-center justify-center flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                </svg>
+              </div>
+              {% elif entry.platform == "twitch" %}
+              <div class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714Z"/>
+                </svg>
+              </div>
+              {% endif %}
 
-            <div class="flex items-center gap-2">
+              <!-- User Info -->
               <div class="flex-1 min-w-0">
-                <h3 class="font-semibold truncate">
+                <h3 class="font-semibold truncate text-sm">
                   {% if entry.user.first_name or entry.user.last_name %}
                     {{ entry.user.first_name }} {{ entry.user.last_name }}
                   {% else %}
                     {{ entry.user.discord_nickname|default:entry.user.discord_username }}
                   {% endif %}
                 </h3>
-                <p class="text-xs text-base-content/60 truncate">{{ entry.url }}</p>
+                <p class="text-xs text-base-content/50 truncate">
+                  {% if entry.platform == "youtube" %}YouTube{% else %}Twitch{% endif %}
+                </p>
               </div>
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-base-content/40 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+
+              <!-- External Link Icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/30 group-hover:text-primary transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
             </div>
@@ -60,9 +64,70 @@
 
       <!-- Stats -->
       <div class="mt-6 text-sm text-base-content/50">
-        {{ feed_entries|length }} feed{{ feed_entries|length|pluralize }}
+        {{ feed_entries|length }} channel{{ feed_entries|length|pluralize }}
       </div>
     </div>
   </div>
+
+  <!-- Recent Videos Section -->
+  {% if recent_videos %}
+  <div class="card bg-base-200 shadow-xl mt-6">
+    <div class="card-body">
+      <h2 class="card-title text-xl mb-4">Recent Videos</h2>
+
+      <div class="space-y-3">
+        {% for video in recent_videos %}
+        <a href="{{ video.url }}"
+           target="_blank"
+           rel="noopener"
+           class="flex gap-4 p-3 bg-base-300 hover:bg-base-100 rounded-lg transition-colors group">
+          <!-- Thumbnail -->
+          <div class="flex-shrink-0">
+            <img src="{{ video.thumbnail_url }}"
+                 alt="{{ video.title }}"
+                 class="w-32 h-20 object-cover rounded"
+                 loading="lazy">
+          </div>
+
+          <!-- Video Info -->
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors">
+              {{ video.title }}
+            </h3>
+            <div class="flex items-center gap-2 mt-1 text-xs text-base-content/50">
+              <!-- YouTube Icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+              </svg>
+              <span>
+                {% if video.user.first_name or video.user.last_name %}
+                  {{ video.user.first_name }} {{ video.user.last_name }}
+                {% else %}
+                  {{ video.user.discord_nickname|default:video.user.discord_username }}
+                {% endif %}
+              </span>
+              {% if video.published_at %}
+              <span class="text-base-content/30">•</span>
+              <span>{{ video.published_at|date:"M j, Y" }}</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <!-- External Link Icon -->
+          <div class="flex-shrink-0 self-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-base-content/30 group-hover:text-primary transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+
+      <div class="mt-4 text-sm text-base-content/50">
+        {{ recent_videos|length }} recent video{{ recent_videos|length|pluralize }}
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -237,3 +237,156 @@ def _get_user_display_name(user: User) -> str:
     if user.first_name:
         return user.first_name
     return user.discord_nickname or user.discord_username or f"User {user.id}"
+
+
+@task
+def sync_youtube_channel_ids() -> dict:
+    """Extract YouTube channel IDs from user YouTube URLs.
+
+    Finds users who have a youtube_channel URL but no youtube_channel_id,
+    then extracts the channel ID from the URL by fetching the page.
+
+    Returns:
+        dict with sync results summary.
+
+    """
+    from apps.accounts.utils import extract_youtube_channel_id
+
+    with logfire.span("sync_youtube_channel_ids"):
+        # Find users with YouTube URL but no channel ID
+        users_to_process = User.objects.filter(
+            youtube_channel__isnull=False,
+        ).exclude(
+            youtube_channel="",
+        ).filter(
+            youtube_channel_id="",
+        )
+
+        total = users_to_process.count()
+        logfire.info("Starting YouTube channel ID sync", users_to_process=total)
+
+        success = 0
+        failed = 0
+        users_updated = []
+
+        for user in users_to_process.iterator():
+            channel_id = extract_youtube_channel_id(user.youtube_channel)
+
+            if channel_id:
+                user.youtube_channel_id = channel_id
+                user.save(update_fields=["youtube_channel_id"])
+                success += 1
+                users_updated.append(user.id)
+                logfire.debug(
+                    "Extracted YouTube channel ID",
+                    user_id=user.id,
+                    youtube_url=user.youtube_channel,
+                    channel_id=channel_id,
+                )
+            else:
+                failed += 1
+                logfire.warning(
+                    "Failed to extract YouTube channel ID",
+                    user_id=user.id,
+                    youtube_url=user.youtube_channel,
+                )
+
+            # Rate limit: avoid hammering YouTube
+            time.sleep(1)
+
+        result = {
+            "status": "completed",
+            "total_processed": total,
+            "success": success,
+            "failed": failed,
+            "users_updated": users_updated,
+        }
+
+        logfire.info("YouTube channel ID sync completed", **result)
+
+        return result
+
+
+@task
+def sync_youtube_videos() -> dict:
+    """Fetch new videos from YouTube RSS feeds for all users with channel IDs.
+
+    Fetches videos from each user's YouTube channel RSS feed and stores
+    new videos in the database.
+
+    Returns:
+        dict with sync results summary.
+
+    """
+    from apps.accounts.models import YouTubeVideo
+    from apps.accounts.utils import fetch_youtube_videos
+
+    with logfire.span("sync_youtube_videos"):
+        # Find users with YouTube channel IDs
+        users_with_channels = User.objects.filter(
+            youtube_channel_id__isnull=False,
+        ).exclude(
+            youtube_channel_id="",
+        )
+
+        total_users = users_with_channels.count()
+        logfire.info("Starting YouTube video sync", users_to_process=total_users)
+
+        total_new_videos = 0
+        users_processed = 0
+        errors = 0
+
+        for user in users_with_channels.iterator():
+            try:
+                # Fetch videos from RSS
+                videos = fetch_youtube_videos(user.youtube_channel_id, limit=10)
+
+                new_count = 0
+                for video_data in videos:
+                    # Create or update video record
+                    video, created = YouTubeVideo.objects.update_or_create(
+                        user=user,
+                        video_id=video_data["video_id"],
+                        defaults={
+                            "title": video_data["title"],
+                            "thumbnail_url": video_data.get("thumbnail", ""),
+                            "published_at": video_data.get("published"),
+                        },
+                    )
+                    if created:
+                        new_count += 1
+
+                total_new_videos += new_count
+                users_processed += 1
+
+                logfire.debug(
+                    "Synced YouTube videos for user",
+                    user_id=user.id,
+                    channel_id=user.youtube_channel_id,
+                    videos_fetched=len(videos),
+                    new_videos=new_count,
+                )
+
+            except Exception as e:
+                errors += 1
+                logfire.error(
+                    "Error syncing YouTube videos for user",
+                    user_id=user.id,
+                    channel_id=user.youtube_channel_id,
+                    error=str(e),
+                )
+
+            # Rate limit: avoid hammering YouTube
+            time.sleep(1)
+
+        result = {
+            "status": "completed",
+            "total_users": total_users,
+            "users_processed": users_processed,
+            "new_videos": total_new_videos,
+            "errors": errors,
+        }
+
+        logfire.info("YouTube video sync completed", **result)
+
+        return result

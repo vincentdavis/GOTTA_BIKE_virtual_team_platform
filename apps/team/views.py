@@ -865,7 +865,7 @@ def team_feed_view(request: HttpRequest) -> HttpResponse:
     """
     from django.db.models import Q
 
-    from apps.accounts.models import User
+    from apps.accounts.models import User, YouTubeVideo
 
     users = (
         User.objects
@@ -884,11 +884,15 @@ def team_feed_view(request: HttpRequest) -> HttpResponse:
         if user.twitch_channel:
             feed_entries.append({"user": user, "platform": "twitch", "url": user.twitch_channel})
 
+    # Get recent videos from all users
+    recent_videos = YouTubeVideo.objects.select_related("user").order_by("-published_at")[:20]
+
     return render(
         request,
         "team/team_feed.html",
         {
             "feed_entries": feed_entries,
+            "recent_videos": recent_videos,
         },
     )
 

@@ -171,6 +171,9 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
         # Get last 5 race results
         recent_results = ZPRiderResults.objects.filter(zwid=profile_user.zwid).select_related("event")[:5]
 
+    # Get YouTube videos from database (synced via background task)
+    youtube_videos = profile_user.youtube_videos.all()[:5]
+
     return render(
         request,
         "accounts/public_profile.html",
@@ -180,6 +183,7 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
             "zr_data": zr_data,
             "is_own_profile": is_own_profile,
             "recent_results": recent_results,
+            "youtube_videos": youtube_videos,
         },
     )
 
@@ -634,6 +638,22 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
             },
         )
 
+    # Handle special "background_tasks" section
+    if section_key == "background_tasks":
+        tasks = _get_task_registry()
+        return render(
+            request,
+            "accounts/config_section_page.html",
+            {
+                "sections": sections,
+                "current_section_key": section_key,
+                "current_section": {"name": "Background Tasks", "key": "background_tasks"},
+                "is_background_tasks": True,
+                "tasks": tasks,
+                "available_roles": [],
+            },
+        )
+
     if section_key not in sections:
         return redirect("config_settings")
 
@@ -893,6 +913,73 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
             "site_settings_obj": site_settings_obj,
             "success": success,
             "errors": errors,
+        },
+    )
+
+
+def _get_task_registry() -> dict:
+    """Get the task registry from cron_api.
+
+    Returns:
+        Dictionary mapping task names to task info (task function and description).
+
+    """
+    from apps.dbot_api.cron_api import TASK_REGISTRY
+
+    return TASK_REGISTRY
+
+
+@login_required
+@require_POST
+def config_trigger_task(request: HttpRequest) -> HttpResponse:
+    """Trigger a background task manually via HTMX.
+
+    Args:
+        request: The HTTP request with task_name in POST data.
+
+    Returns:
+        Rendered tasks partial with success/error message.
+
+    Raises:
+        PermissionDenied: If user lacks app_admin permission and is not superuser.
+
+    """
+    # Check permissions: app_admin OR superuser
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    task_name = request.POST.get("task_name", "")
+    tasks = _get_task_registry()
+    triggered_task = None
+    error = None
+
+    if task_name not in tasks:
+        error = f"Task '{task_name}' not found."
+        logfire.warning(
+            "Attempted to trigger unknown task",
+            user_id=request.user.id,
+            username=request.user.username,
+            task_name=task_name,
+        )
+    else:
+        task_info = tasks[task_name]
+        task_func = task_info["task"]
+        task_func.enqueue()
+        triggered_task = task_name
+        logfire.info(
+            "Background task triggered manually",
+            user_id=request.user.id,
+            username=request.user.username,
+            task_name=task_name,
+        )
+
+    return render(
+        request,
+        "accounts/partials/config_tasks.html",
+        {
+            "tasks": tasks,
+            "triggered_task": triggered_task,
+            "error": error,
         },
     )
 

@@ -5,7 +5,12 @@ from django.http import HttpRequest
 from ninja import NinjaAPI
 from ninja.security import APIKeyHeader
 
-from apps.accounts.tasks import guild_member_sync_status, sync_race_ready_roles
+from apps.accounts.tasks import (
+    guild_member_sync_status,
+    sync_race_ready_roles,
+    sync_youtube_channel_ids,
+    sync_youtube_videos,
+)
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.tasks import sync_zr_riders
 
@@ -67,6 +72,14 @@ TASK_REGISTRY: dict = {
     "sync_race_ready_roles": {
         "task": sync_race_ready_roles,
         "description": "Sync race ready Discord roles for all users based on verification status",
+    },
+    "sync_youtube_channel_ids": {
+        "task": sync_youtube_channel_ids,
+        "description": "Extract YouTube channel IDs from user YouTube URLs",
+    },
+    "sync_youtube_videos": {
+        "task": sync_youtube_videos,
+        "description": "Fetch new videos from YouTube RSS feeds for all users",
     },
 }
 

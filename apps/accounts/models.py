@@ -191,6 +191,11 @@ class User(AbstractUser):
         blank=True,
         help_text="YouTube channel URL",
     )
+    youtube_channel_id = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text="YouTube channel ID (auto-extracted from URL)",
+    )
     twitch_channel = models.URLField(
         max_length=200,
         blank=True,
@@ -852,3 +857,68 @@ class GuildMember(models.Model):
 
         """
         return self.user is not None
+
+
+class YouTubeVideo(models.Model):
+    """YouTube video fetched from a user's channel RSS feed.
+
+    Videos are fetched periodically via background task and stored
+    for display on user profiles.
+
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="youtube_videos",
+        help_text="User who owns this video's channel",
+    )
+    video_id = models.CharField(
+        max_length=20,
+        help_text="YouTube video ID",
+    )
+    title = models.CharField(
+        max_length=500,
+        help_text="Video title",
+    )
+    thumbnail_url = models.URLField(
+        max_length=300,
+        blank=True,
+        help_text="Video thumbnail URL",
+    )
+    published_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Video publish date",
+    )
+    date_created = models.DateTimeField(auto_now_add=True)
+    date_modified = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        """Meta options for YouTubeVideo model."""
+
+        verbose_name = "YouTube Video"
+        verbose_name_plural = "YouTube Videos"
+        ordering: ClassVar[list[str]] = ["-published_at"]
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["user", "video_id"], name="unique_user_video"),
+        ]
+
+    def __str__(self) -> str:
+        """Return string representation.
+
+        Returns:
+            Video title and user.
+
+        """
+        return f"{self.title} ({self.user})"
+
+    @property
+    def url(self) -> str:
+        """Get the YouTube video URL.
+
+        Returns:
+            Full YouTube watch URL.
+
+        """
+        return f"https://www.youtube.com/watch?v={self.video_id}"

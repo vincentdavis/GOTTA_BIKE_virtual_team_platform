@@ -10,7 +10,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import path
 
-from apps.accounts.models import GuildMember, Permissions, User
+from apps.accounts.models import GuildMember, Permissions, User, YouTubeVideo
 
 
 @admin.register(User)
@@ -63,7 +63,58 @@ class UserAdmin(BaseUserAdmin):
         (
             "Personal Info",
             {
-                "fields": ("birth_year",),
+                "fields": (
+                    "birth_year",
+                    "gender",
+                    "city",
+                    "country",
+                    "timezone",
+                    "unit_preference",
+                ),
+            },
+        ),
+        (
+            "Social Accounts",
+            {
+                "fields": (
+                    "youtube_channel",
+                    "youtube_channel_id",
+                    "twitch_channel",
+                    "strava_url",
+                    "garmin_url",
+                    "tpv_profile_url",
+                    "instagram_url",
+                    "facebook_url",
+                    "twitter_url",
+                    "tiktok_url",
+                    "bluesky_url",
+                    "mastodon_url",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Training Equipment",
+            {
+                "fields": (
+                    "trainer",
+                    "powermeter",
+                    "dual_recording",
+                    "heartrate_monitor",
+                ),
+                "classes": ("collapse",),
+            },
+        ),
+        (
+            "Emergency Contact",
+            {
+                "fields": (
+                    "emergency_contact_name",
+                    "emergency_contact_relation",
+                    "emergency_contact_email",
+                    "emergency_contact_phone",
+                ),
+                "classes": ("collapse",),
             },
         ),
         (
@@ -317,3 +368,43 @@ class GuildMemberAdmin(admin.ModelAdmin):
         }
 
         return render(request, "admin/accounts/guildmember/comparison.html", context)
+
+
+@admin.register(YouTubeVideo)
+class YouTubeVideoAdmin(admin.ModelAdmin):
+    """Admin configuration for YouTubeVideo model."""
+
+    list_display: ClassVar[list[str]] = [
+        "title_truncated",
+        "user",
+        "video_id",
+        "published_at",
+        "date_created",
+    ]
+    list_filter: ClassVar[list[str]] = ["published_at", "date_created"]
+    search_fields: ClassVar[list[str]] = ["title", "video_id", "user__username", "user__discord_username"]
+    ordering: ClassVar[list[str]] = ["-published_at"]
+    readonly_fields: ClassVar[list[str]] = ["date_created", "date_modified"]
+    raw_id_fields: ClassVar[list[str]] = ["user"]
+
+    fieldsets: ClassVar[list[tuple[str | None, dict[str, Any]]]] = [
+        (None, {"fields": ["user", "video_id", "title"]}),
+        ("Media", {"fields": ["thumbnail_url"]}),
+        ("Dates", {"fields": ["published_at", "date_created", "date_modified"]}),
+    ]
+
+    def title_truncated(self, obj: YouTubeVideo) -> str:
+        """Return truncated title for list display.
+
+        Args:
+            obj: The YouTubeVideo instance.
+
+        Returns:
+            Truncated title (max 60 chars).
+
+        """
+        if len(obj.title) > 60:
+            return f"{obj.title[:57]}..."
+        return obj.title
+
+    title_truncated.short_description = "Title"  # type: ignore[attr-defined]
