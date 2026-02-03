@@ -33,6 +33,8 @@ class ProfileForm(forms.ModelForm):
         "gender",
         "timezone",
         "country",
+        "trainer",
+        "heartrate_monitor",
     ]
 
     class Meta:

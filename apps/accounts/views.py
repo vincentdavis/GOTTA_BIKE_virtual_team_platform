@@ -208,14 +208,39 @@ def profile_edit(request: HttpRequest) -> HttpResponse:
             form.save()
             # Refresh user from database to get updated is_profile_complete
             request.user.refresh_from_db()
+
+            # Get missing banner fields for the success message
+            missing_fields = []
+            field_labels = {
+                "first_name": "First Name",
+                "last_name": "Last Name",
+                "birth_year": "Birth Year",
+                "gender": "Gender",
+                "timezone": "Timezone",
+                "country": "Country",
+                "trainer": "Trainer",
+                "heartrate_monitor": "Heart Rate Monitor",
+                "zwid_verified": "Zwift Verification",
+            }
+            completion_status = request.user.profile_completion_status
+            for field, is_complete in completion_status.items():
+                if not is_complete:
+                    missing_fields.append(field_labels.get(field, field))
+
             if request.headers.get("HX-Request"):
                 # Return success message partial for HTMX
                 return render(
                     request,
                     "accounts/partials/profile_form.html",
-                    {"form": form, "success": True},
+                    {"form": form, "success": True, "missing_fields": missing_fields},
                 )
-            messages.success(request, "Profile updated successfully.")
+            if missing_fields:
+                messages.success(
+                    request,
+                    f"Profile updated successfully. Still missing: {', '.join(missing_fields)}",
+                )
+            else:
+                messages.success(request, "Profile updated successfully. Your profile is complete!")
             # Only redirect to profile if complete, otherwise stay on edit page
             if request.user.is_profile_complete:
                 return redirect("accounts:profile")

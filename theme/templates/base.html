@@ -58,8 +58,9 @@
             {% if not status.gender %}<span class="badge badge-outline badge-sm">Gender</span>{% endif %}
             {% if not status.timezone %}<span class="badge badge-outline badge-sm">Timezone</span>{% endif %}
             {% if not status.country %}<span class="badge badge-outline badge-sm">Country</span>{% endif %}
-            {% if not status.zwid_verified %}<span class="badge badge-outline badge-sm">Zwift Verification</span>
-            {% endif %}
+            {% if not status.trainer %}<span class="badge badge-outline badge-sm">Trainer</span>{% endif %}
+            {% if not status.heartrate_monitor %}<span class="badge badge-outline badge-sm">Heart Rate Monitor</span>{% endif %}
+            {% if not status.zwid_verified %}<span class="badge badge-outline badge-sm">Zwift Verification</span>{% endif %}
           {% endwith %}
         </div>
         <a href="{% url 'accounts:profile' %}"

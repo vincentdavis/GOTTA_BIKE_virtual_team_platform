@@ -673,6 +673,8 @@ class User(AbstractUser):
         - gender
         - timezone
         - country
+        - trainer
+        - heartrate_monitor
         - zwid_verified (Zwift account must be verified)
 
         Returns:
@@ -687,6 +689,8 @@ class User(AbstractUser):
             ("last_name", self.last_name),
             ("gender", self.gender),
             ("timezone", self.timezone),
+            ("trainer", self.trainer),
+            ("heartrate_monitor", self.heartrate_monitor),
         ]
 
         # Check all text fields are non-empty
@@ -733,6 +737,8 @@ class User(AbstractUser):
             "gender": bool(self.gender and self.gender.strip()),
             "timezone": bool(self.timezone and self.timezone.strip()),
             "country": bool(self.country),  # CountryField returns a Country object, not a string
+            "trainer": bool(self.trainer and self.trainer.strip()),
+            "heartrate_monitor": bool(self.heartrate_monitor and self.heartrate_monitor.strip()),
             "zwid_verified": self.zwid_verified,
         }
 
