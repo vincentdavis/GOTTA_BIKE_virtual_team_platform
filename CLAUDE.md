@@ -94,6 +94,7 @@ WhiteNoise features:
 
 - `accounts` - Custom User model with Discord/Zwift fields, django-allauth adapters, role-based permissions
     - `GuildMember` model - Tracks Discord guild members synced from bot (see Guild Member Sync below)
+    - `YouTubeVideo` model - Stores YouTube videos fetched from team members' channels (via RSS)
     - `decorators.py` - `discord_permission_required` decorator for view permissions
 - `team` - Core team management:
     - `RaceReadyRecord` - Verification records for weight/height/power (pending/verified/rejected status)
@@ -192,11 +193,15 @@ Users are encouraged to complete their profile but are **not blocked** from acce
 
 #### Profile Fields
 
+Required fields for profile completion:
+
 - `first_name`, `last_name` - User's real name
 - `birth_year` - Year of birth (validated: 1900 to current_year - 13)
 - `gender` - Gender (male/female/other)
 - `timezone` - User's timezone (e.g., "America/New_York")
 - `country` - Country of residence (uses `django-countries` CountryField with ISO 2-letter codes, rendered as dropdown)
+- `trainer` - Smart trainer type (required for racing)
+- `heartrate_monitor` - Heart rate monitor type (required for racing)
 - `zwid_verified` - Zwift account verification status
 
 #### User Model Properties
@@ -492,6 +497,7 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
     - `base.html` includes site announcement banner (yellow) when `config.SITE_ANNOUNCEMENT` is set (supports Markdown)
     - `base.html` includes profile incomplete warning (red) for users with incomplete profiles
     - `base.html` has sticky header with logo/team name and user menu (avatar, dropdown)
+    - `base.html` hides sidebar and hamburger menu for non-authenticated users (full-width layout)
     - `sidebar.html` contains navigation menu with conditional sections based on user permissions
 - `templates/index.html` - Home page with hero section (supports background image via `site_settings.hero_image`)
 - `templates/account/` - Auth templates (login, logout) with DaisyUI styling
@@ -553,6 +559,7 @@ Available settings:
   `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
   `POWER_VERIFICATION_DAYS` (365)
 - **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)
+- **Strava**: `STRAVA_CLIENT_SECRET`, `STRAVA_ACCESS_TOKEN`, `STRAVA_REFRESH_TOKEN` (password fields for Strava API)
 - **Site Settings**: `TEAM_NAME`, `SUBTITLE`, `SITE_ANNOUNCEMENT` (blue banner at top of all pages, supports Markdown),
   `MAINTENANCE_MODE`, `LOGO_DISPLAY_MODE` (header display: `logo_only`, `logo_and_name`, or `name_only`),
   `HOME_PAGE_SLUG` (CMS page for non-logged-in users), `HOME_PAGE_SLUG_AUTHENTICATED` (CMS page for logged-in users)
