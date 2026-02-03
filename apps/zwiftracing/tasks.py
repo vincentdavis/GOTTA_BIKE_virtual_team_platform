@@ -163,8 +163,6 @@ def _map_rider_to_model(rider: dict) -> dict:
         "velo_punch": _parse_decimal(velo_factors.get("punch")),
         "velo_climb": _parse_decimal(velo_factors.get("climb")),
         "velo_tt_factor": _parse_decimal(velo_factors.get("timeTrial")),
-        # Clear date_left if rider is back on team
-        "date_left": None,
     }
 
 
@@ -208,15 +206,10 @@ def sync_zr_riders(from_id: int | None = None) -> dict:
         created_count = 0
         updated_count = 0
 
-        # Track which zwids are in the current roster (for this batch)
-        current_zwids = set()
-
         for rider in riders:
             zwid = rider.get("riderId")
             if not zwid:
                 continue
-
-            current_zwids.add(zwid)
 
             defaults = _map_rider_to_model(rider)
 
@@ -245,43 +238,7 @@ def sync_zr_riders(from_id: int | None = None) -> dict:
                 "next_from_id": last_rider_id,
             }
 
-        # Mark riders who left (only on final page, when from_id is None)
-        if from_id is None:
-            left_count = 0
-            left_riders = ZRRider.objects.filter(
-                date_left__isnull=True,
-                club_id=club_id,
-            ).exclude(
-                zwid__in=current_zwids,
-            )
-
-            for rider in left_riders:
-                rider.date_left = timezone.now()
-                rider.save(update_fields=["date_left"])
-                left_count += 1
-                logfire.info(f"ZR Rider left team: {rider.name} ({rider.zwid})")
-
-                # Enqueue notification task
-                from apps.accounts.tasks import notify_rider_left_team
-
-                notify_rider_left_team.enqueue(
-                    zwid=rider.zwid,
-                    rider_name=rider.name,
-                    source="Zwift Racing",
-                )
-
-            logfire.info(
-                f"ZR Riders sync complete: {created_count} created, {updated_count} updated, {left_count} left"
-            )
-            return {
-                "status": "complete",
-                "processed": len(riders),
-                "created": created_count,
-                "updated": updated_count,
-                "left": left_count,
-            }
-
-        logfire.info(f"ZR Riders batch complete: {created_count} created, {updated_count} updated")
+        logfire.info(f"ZR Riders sync complete: {created_count} created, {updated_count} updated")
         return {
             "status": "complete",
             "processed": len(riders),
