@@ -346,8 +346,8 @@
           {% endif %}
         </div>
 
-        <!-- Training Equipment Section (Optional) -->
-        <div class="divider">Training Equipment (Optional)</div>
+        <!-- Training Equipment Section -->
+        <div class="divider">Training Equipment</div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Trainer -->
@@ -356,6 +356,9 @@
               <span class="label-text">Trainer</span>
             </label>
             {{ form.trainer }}
+            <label class="label">
+              <span class="label-text-alt text-base-content/50">A smart trainer is required to race</span>
+            </label>
             {% if form.trainer.errors %}
             <label class="label">
               <span class="label-text-alt text-error">{{ form.trainer.errors.0 }}</span>
@@ -369,6 +372,9 @@
               <span class="label-text">Power Meter</span>
             </label>
             {{ form.power_meter }}
+            <label class="label">
+              <span class="label-text-alt text-base-content/50">Powermeter on your trainer bike, if any</span>
+            </label>
             {% if form.power_meter.errors %}
             <label class="label">
               <span class="label-text-alt text-error">{{ form.power_meter.errors.0 }}</span>
@@ -400,6 +406,16 @@
               <span class="label-text">Heart Rate Monitor</span>
             </label>
             {{ form.heartrate_monitor }}
+            <label class="label">
+              <span class="label-text-alt text-base-content/50">
+                Required to race
+                <span class="tooltip tooltip-left" data-tip="You must turn on heart rate data share at zwiftpower.com">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </span>
+              </span>
+            </label>
             {% if form.heartrate_monitor.errors %}
             <label class="label">
               <span class="label-text-alt text-error">{{ form.heartrate_monitor.errors.0 }}</span>

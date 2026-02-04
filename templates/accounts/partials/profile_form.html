@@ -28,6 +28,26 @@
                 {% endif %}
             </div>
         </div>
+
+        {% if user.zwid_verified and user.zwid %}
+        <!-- Zwift Info -->
+        <div class="border-t border-base-content/10 mt-4 pt-4">
+            <div class="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                    <span class="text-base-content/50">Zwift ID</span>
+                    <p class="font-mono font-semibold">{{ user.zwid }}</p>
+                </div>
+                <div>
+                    <span class="text-base-content/50">ZwiftPower</span>
+                    <p class="font-semibold">{% if zp_data and zp_data.category %}{{ zp_data.category }}{% else %}—{% endif %}</p>
+                </div>
+                <div>
+                    <span class="text-base-content/50">Zwift Racing</span>
+                    <p class="font-semibold">{% if zr_data and zr_data.category %}{{ zr_data.category }}{% else %}—{% endif %}</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <h3 class="text-lg font-semibold mb-3">Profile Information</h3>
@@ -151,61 +171,6 @@
         </label>
     </div>
 
-    <!-- Emergency Contact Section -->
-    <div class="divider">Emergency Contact (Optional)</div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="form-control">
-            <label class="label" for="id_emergency_contact_name">
-                <span class="label-text">{{ form.emergency_contact_name.label }}</span>
-            </label>
-            {{ form.emergency_contact_name }}
-            {% if form.emergency_contact_name.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ form.emergency_contact_name.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
-
-        <div class="form-control">
-            <label class="label" for="id_emergency_contact_relation">
-                <span class="label-text">{{ form.emergency_contact_relation.label }}</span>
-            </label>
-            {{ form.emergency_contact_relation }}
-            {% if form.emergency_contact_relation.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ form.emergency_contact_relation.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div class="form-control">
-            <label class="label" for="id_emergency_contact_email">
-                <span class="label-text">{{ form.emergency_contact_email.label }}</span>
-            </label>
-            {{ form.emergency_contact_email }}
-            {% if form.emergency_contact_email.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ form.emergency_contact_email.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
-
-        <div class="form-control">
-            <label class="label" for="id_emergency_contact_phone">
-                <span class="label-text">{{ form.emergency_contact_phone.label }}</span>
-            </label>
-            {{ form.emergency_contact_phone }}
-            {% if form.emergency_contact_phone.errors %}
-            <label class="label">
-                <span class="label-text-alt text-error">{{ form.emergency_contact_phone.errors.0 }}</span>
-            </label>
-            {% endif %}
-        </div>
-    </div>
-
     <!-- Training Equipment Section -->
     <div class="divider">Training Equipment</div>
 
@@ -282,6 +247,92 @@
             {% if form.heartrate_monitor.errors %}
             <label class="label">
                 <span class="label-text-alt text-error">{{ form.heartrate_monitor.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="form-control mt-4">
+        <button type="submit" class="btn btn-primary">
+            <span class="htmx-indicator loading loading-spinner loading-sm"></span>
+            Save Changes
+        </button>
+    </div>
+
+    {% if not user.zwid_verified %}
+    <!-- Zwift Verification Prompt -->
+    <div class="alert alert-warning mt-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <div>
+            <h3 class="font-bold">Zwift Account Not Verified</h3>
+            <p class="text-sm">Verify your Zwift account to complete your profile and join team races.</p>
+        </div>
+        <button type="button"
+                onclick="document.getElementById('zwift-verify-modal').showModal()"
+                hx-get="{% url 'accounts:verify_zwift' %}"
+                hx-target="#zwift-modal-content"
+                hx-swap="innerHTML"
+                class="btn btn-sm btn-primary">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            Verify Zwift Account
+        </button>
+    </div>
+    {% endif %}
+
+    <!-- Emergency Contact Section -->
+    <div class="divider">Emergency Contact (Optional)</div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_emergency_contact_name">
+                <span class="label-text">{{ form.emergency_contact_name.label }}</span>
+            </label>
+            {{ form.emergency_contact_name }}
+            {% if form.emergency_contact_name.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.emergency_contact_name.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_emergency_contact_relation">
+                <span class="label-text">{{ form.emergency_contact_relation.label }}</span>
+            </label>
+            {{ form.emergency_contact_relation }}
+            {% if form.emergency_contact_relation.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.emergency_contact_relation.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="form-control">
+            <label class="label" for="id_emergency_contact_email">
+                <span class="label-text">{{ form.emergency_contact_email.label }}</span>
+            </label>
+            {{ form.emergency_contact_email }}
+            {% if form.emergency_contact_email.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.emergency_contact_email.errors.0 }}</span>
+            </label>
+            {% endif %}
+        </div>
+
+        <div class="form-control">
+            <label class="label" for="id_emergency_contact_phone">
+                <span class="label-text">{{ form.emergency_contact_phone.label }}</span>
+            </label>
+            {{ form.emergency_contact_phone }}
+            {% if form.emergency_contact_phone.errors %}
+            <label class="label">
+                <span class="label-text-alt text-error">{{ form.emergency_contact_phone.errors.0 }}</span>
             </label>
             {% endif %}
         </div>
