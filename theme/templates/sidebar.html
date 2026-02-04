@@ -129,7 +129,7 @@
         {% endif %}
 
         <!-- Team Performance Section (conditional) -->
-        {% if user.can_approve_verification or user.is_any_captain %}
+        {% if user.can_approve_verification %}
         <li class="menu-title mt-4">Team Performance</li>
         <li>
             <a href="{% url 'team:verification_records' %}" class="{% if request.resolver_match.url_name == 'verification_records' %}active{% endif %}">

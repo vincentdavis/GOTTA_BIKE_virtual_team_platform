@@ -898,7 +898,7 @@ def team_feed_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@team_member_required()
+@discord_permission_required("approve_verification", raise_exception=True)
 @require_GET
 def performance_review_view(request: HttpRequest) -> HttpResponse:
     """Display performance review comparing verification records with ZwiftPower data.
@@ -910,16 +910,6 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
         Rendered performance review page.
 
     """
-    # Check permission - only verification reviewers can access
-    if not request.user.can_approve_verification and not request.user.is_superuser:
-        logfire.warning(
-            "Unauthorized performance review access attempt",
-            user_id=request.user.id,
-            username=request.user.username,
-        )
-        messages.error(request, "You don't have permission to view performance review.")
-        return redirect("home")
-
     # Get performance data
     riders = get_performance_review_data()
 

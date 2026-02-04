@@ -63,7 +63,6 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/team/verification/ - Verification records",
             "/team/verification/{id}/ - Verification detail",
             "/team/team-feed/ - Team feed",
-            "/team/performance-review/ - Performance review",
             "/user/profile/{id}/ - View teammate profiles",
         ],
     },
@@ -79,6 +78,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "description": "Can approve or reject verification records",
         "views": [
             "/team/verification/{id}/ - Approve/reject verification submissions",
+            "/team/performance-review/ - Performance review dashboard",
         ],
     },
     Permissions.DATA_CONNECTION: {
