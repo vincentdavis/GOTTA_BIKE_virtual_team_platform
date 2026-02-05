@@ -54,6 +54,10 @@
               <div class="font-medium">{{ record.get_media_type_display }}</div>
             </div>
             <div>
+              <div class="text-sm text-base-content/60 mb-1">Record Date</div>
+              <div class="font-medium">{{ record.record_date|date:"F d, Y" }}</div>
+            </div>
+            <div>
               <div class="text-sm text-base-content/60 mb-1">Date Submitted</div>
               <div class="font-medium">{{ record.date_created|date:"F d, Y H:i" }}</div>
             </div>

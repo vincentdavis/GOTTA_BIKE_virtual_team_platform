@@ -144,6 +144,22 @@
       {% endif %}
     </div>
 
+    <!-- Record Date -->
+    <div class="form-control w-full">
+      <label class="label" for="id_record_date">
+        <span class="label-text">Record Date <span class="text-error">*</span></span>
+      </label>
+      {{ race_ready_form.record_date }}
+      {% if race_ready_form.record_date.errors %}
+        <label class="label">
+          <span class="label-text-alt text-error">{{ race_ready_form.record_date.errors.0 }}</span>
+        </label>
+      {% endif %}
+      <label class="label">
+        <span class="label-text-alt">Date the verification evidence was recorded</span>
+      </label>
+    </div>
+
     <!-- Media File -->
     <div class="form-control w-full">
       <label class="label" for="id_media_file">

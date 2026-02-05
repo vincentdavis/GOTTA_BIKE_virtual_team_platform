@@ -164,6 +164,7 @@ class RaceReadyRecordForm(forms.ModelForm):
             "weight",
             "height",
             "ftp",
+            "record_date",
             "media_file",
             "url",
             "notes",
@@ -197,6 +198,10 @@ class RaceReadyRecordForm(forms.ModelForm):
                     "max": "600",
                 }
             ),
+            "record_date": forms.DateInput(attrs={
+                "class": "input input-bordered w-full",
+                "type": "date",
+            }),
             "media_file": forms.FileInput(attrs={"class": "file-input file-input-bordered w-full"}),
             "url": forms.URLInput(attrs={"class": "input input-bordered w-full", "placeholder": "https://..."}),
             "notes": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 3}),
@@ -221,6 +226,9 @@ class RaceReadyRecordForm(forms.ModelForm):
         """
         super().__init__(*args, **kwargs)
         self.unit_preference = unit_preference
+
+        # Make record_date required (model allows null for existing records)
+        self.fields["record_date"].required = True
 
         if allowed_types:
             # Filter choices to only allowed types
