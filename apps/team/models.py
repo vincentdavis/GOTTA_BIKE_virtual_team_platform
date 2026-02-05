@@ -1,7 +1,7 @@
 """Models for team app."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 from typing import ClassVar
 
 import logfire
@@ -287,21 +287,24 @@ class RaceReadyRecord(models.Model):
         return validity_map.get(self.verify_type, 0)
 
     @property
-    def expires_date(self) -> datetime | None:
+    def expires_date(self) -> date | None:
         """Get the expiration date for this verification.
 
+        Expiration is calculated from record_date (the date of the evidence),
+        not the date it was reviewed.
+
         Returns:
-            Expiration datetime if applicable, None if never expires or not verified.
+            Expiration date if applicable, None if never expires or not verified.
 
         """
-        if not self.is_verified or not self.reviewed_date:
+        if not self.is_verified or not self.record_date:
             return None
 
         validity = self.validity_days
         if validity == 0:
             return None  # Never expires
 
-        return self.reviewed_date + timedelta(days=validity)
+        return self.record_date + timedelta(days=validity)
 
     @property
     def is_expired(self) -> bool:
@@ -314,7 +317,7 @@ class RaceReadyRecord(models.Model):
         expires = self.expires_date
         if expires is None:
             return False
-        is_expired = timezone.now() > expires
+        is_expired = timezone.now().date() > expires
         if is_expired:
             logfire.debug(
                 "RaceReadyRecord is expired",
@@ -322,7 +325,7 @@ class RaceReadyRecord(models.Model):
                 user_id=self.user_id,
                 verify_type=self.verify_type,
                 expires_date=expires.isoformat(),
-                reviewed_date=self.reviewed_date.isoformat() if self.reviewed_date else None,
+                record_date=self.record_date.isoformat() if self.record_date else None,
             )
         return is_expired
 
@@ -337,7 +340,7 @@ class RaceReadyRecord(models.Model):
         expires = self.expires_date
         if expires is None:
             return None
-        delta = expires - timezone.now()
+        delta = expires - timezone.now().date()
         return delta.days
 
     @property

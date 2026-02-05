@@ -104,6 +104,7 @@
               <th>Date</th>
               <th>Gender</th>
               <th>Status</th>
+              <th>Days Remaining</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -122,7 +123,9 @@
                 <div class="text-sm text-base-content/60">{{ record.user.discord_nickname }}</div>
                 {% endif %}
               </td>
-              <td>{{ record.get_verify_type_display }}</td>
+              <td>
+                <span class="badge badge-sm text-xs whitespace-nowrap {% if record.verify_type == 'weight_full' %}badge-primary{% elif record.verify_type == 'weight_light' %}badge-secondary{% elif record.verify_type == 'height' %}badge-accent{% elif record.verify_type == 'power' %}badge-warning{% else %}badge-outline{% endif %}">{{ record.get_verify_type_display }}</span>
+              </td>
               <td>
                 {% if record.weight %}
                   <span class="font-mono">{{ record.weight }} kg</span>
@@ -160,6 +163,21 @@
                 {% endif %}
               </td>
               <td>
+                {% if record.is_verified %}
+                  {% if record.days_remaining is not None %}
+                    {% if record.days_remaining >= 0 %}
+                      <span class="font-mono text-success">{{ record.days_remaining }}</span>
+                    {% else %}
+                      <span class="font-mono text-error">{{ record.days_remaining }}</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-base-content/50" title="Never expires">&infin;</span>
+                  {% endif %}
+                {% else %}
+                  <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              <td>
                 {% if can_review %}
                 <a href="{% url 'team:verification_record_detail' record.pk %}" class="btn btn-ghost btn-xs">
                   View
@@ -176,7 +194,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="8" class="text-center py-8 text-base-content/50">
+              <td colspan="9" class="text-center py-8 text-base-content/50">
                 No verification records found.
               </td>
             </tr>
