@@ -58,6 +58,14 @@
                 Team Feed
             </a>
         </li>
+        <li>
+            <a href="{% url 'club_strava:activity_list' %}" class="{% if 'strava' in request.path %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Strava Activities
+            </a>
+        </li>
 
         <!-- CMS Pages (dynamic) -->
         {% if cms_nav_pages %}
@@ -174,6 +182,7 @@
                     <li><a href="{% url 'config_section_page' 'registration' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'registration' in request.path %}active{% endif %}">Registration</a></li>
                     <li><a href="{% url 'config_section_page' 'seo_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'seo_settings' in request.path %}active{% endif %}">SEO Settings</a></li>
                     <li><a href="{% url 'config_section_page' 'google_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'google_settings' in request.path %}active{% endif %}">Google Settings</a></li>
+                    <li><a href="{% url 'config_section_page' 'strava' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'strava' in request.path %}active{% endif %}">Strava</a></li>
                     <li><a href="{% url 'config_section_page' 'site_images' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'site_images' in request.path %}active{% endif %}">Site Images</a></li>
                     <li><a href="{% url 'config_section_page' 'background_tasks' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'background_tasks' in request.path %}active{% endif %}">Background Tasks</a></li>
                 </ul>

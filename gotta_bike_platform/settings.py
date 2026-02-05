@@ -91,6 +91,7 @@ INSTALLED_APPS = [
     "apps.data_connection.apps.DataConnectionConfig",
     "apps.cms.apps.CmsConfig",
     "apps.analytics.apps.AnalyticsConfig",
+    "apps.club_strava.apps.ClubStravaConfig",
     "django_tasks",
     "django_tasks.backends.database",
 ]
@@ -608,6 +609,9 @@ CONSTANCE_CONFIG = {
         str,
     ),
     # Strava API
+    "STRAVA_CLUB_ID": (0, "Strava club ID for fetching club activities", int),
+    "STRAVA_CLUB_URL": ("", "Strava club URL (e.g., https://www.strava.com/clubs/your-club)", str),
+    "STRAVA_CLIENT_ID": ("", "Strava API client ID (from your Strava app)", str),
     "STRAVA_CLIENT_SECRET": ("", "Strava API client secret", "password_field"),
     "STRAVA_ACCESS_TOKEN": ("", "Strava API access token", "password_field"),
     "STRAVA_REFRESH_TOKEN": ("", "Strava API refresh token", "password_field"),
@@ -705,6 +709,9 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "GOOGLE_DRIVE_FOLDER_ID",
     ),
     "Strava": (
+        "STRAVA_CLUB_ID",
+        "STRAVA_CLUB_URL",
+        "STRAVA_CLIENT_ID",
         "STRAVA_CLIENT_SECRET",
         "STRAVA_ACCESS_TOKEN",
         "STRAVA_REFRESH_TOKEN",

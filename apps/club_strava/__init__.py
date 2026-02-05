@@ -1,0 +1,1 @@
+"""Club Strava integration app."""

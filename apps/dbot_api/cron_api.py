@@ -11,6 +11,7 @@ from apps.accounts.tasks import (
     sync_youtube_channel_ids,
     sync_youtube_videos,
 )
+from apps.club_strava.tasks import sync_strava_activities
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.tasks import sync_zr_riders
 
@@ -80,6 +81,10 @@ TASK_REGISTRY: dict = {
     "sync_youtube_videos": {
         "task": sync_youtube_videos,
         "description": "Fetch new videos from YouTube RSS feeds for all users",
+    },
+    "sync_strava_activities": {
+        "task": sync_strava_activities,
+        "description": "Fetch club activities from Strava",
     },
 }
 

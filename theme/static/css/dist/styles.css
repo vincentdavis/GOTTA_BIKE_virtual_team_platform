@@ -4922,6 +4922,9 @@
   .stroke-current {
     stroke: currentcolor;
   }
+  .stroke-info {
+    stroke: var(--color-info);
+  }
   .object-contain {
     object-fit: contain;
   }
@@ -5639,6 +5642,11 @@
   @media (width >= 40rem) {
     .sm\:items-center {
       align-items: center;
+    }
+  }
+  @media (width >= 40rem) {
+    .sm\:justify-between {
+      justify-content: space-between;
     }
   }
   @media (width >= 40rem) {
