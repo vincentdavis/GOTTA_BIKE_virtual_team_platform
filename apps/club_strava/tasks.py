@@ -30,5 +30,12 @@ def sync_strava_activities() -> dict:
             )
             return results
         except Exception as e:
-            logfire.error("Strava sync failed", error=str(e))
+            import traceback
+
+            logfire.error(
+                "Strava sync failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                traceback=traceback.format_exc(),
+            )
             return {"error": str(e), "created": 0, "updated": 0, "errors": 1}

@@ -62,11 +62,23 @@ def refresh_access_token() -> bool:
             timeout=30.0,
         )
 
+        logfire.debug(
+            "Strava token refresh response",
+            status_code=response.status_code,
+            response_text=response.text[:500] if response.text else "(empty)",
+        )
+
         if response.status_code != 200:
+            # Try to parse error details from response
+            try:
+                error_data = response.json()
+            except Exception:
+                error_data = response.text
+
             logfire.error(
                 "Strava token refresh failed",
                 status_code=response.status_code,
-                response=response.text,
+                error_data=error_data,
             )
             return False
 
@@ -79,8 +91,7 @@ def refresh_access_token() -> bool:
             return False
 
         # Update constance config with new tokens
-        # Import here to avoid circular imports
-        from constance.backends.database.models import Constance
+        from constance.models import Constance
 
         Constance.objects.update_or_create(
             key="STRAVA_ACCESS_TOKEN",
@@ -98,6 +109,9 @@ def refresh_access_token() -> bool:
 
     except httpx.RequestError as e:
         logfire.error("Strava token refresh request failed", error=str(e))
+        return False
+    except Exception as e:
+        logfire.error("Strava token refresh unexpected error", error=str(e), error_type=type(e).__name__)
         return False
 
 
