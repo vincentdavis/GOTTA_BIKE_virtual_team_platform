@@ -540,6 +540,7 @@ CONSTANCE_CONFIG = {
     # Site settings
     "SITE_ANNOUNCEMENT": ("", "Announcement banner on all pages. Supports Markdown: **bold**, *italic*, [links](url)", str),
     "MAINTENANCE_MODE": (False, "Enable maintenance mode (restricts access)", bool),
+    "GOOGLE_ANALYTICS_ID": ("", "Google Analytics measurement ID (e.g., G-XXXXXXXXXX)", str),
     "LOGO_DISPLAY_MODE": (
         "name_only",
         "Header display mode: 'logo_only', 'logo_and_name', or 'name_only'",
@@ -626,6 +627,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "HOME_PAGE_SLUG_AUTHENTICATED",
         "SITE_ANNOUNCEMENT",
         "MAINTENANCE_MODE",
+        "GOOGLE_ANALYTICS_ID",
         "ABOUT_URL",
         "CONTACT_URL",
         "PRIVACY_POLICY_URL",

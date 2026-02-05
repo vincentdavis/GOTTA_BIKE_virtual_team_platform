@@ -48,6 +48,7 @@
         <table class="table table-zebra">
             <thead>
                 <tr>
+                    <th>Date</th>
                     <th>Athlete</th>
                     <th>Activity</th>
                     <th>Type</th>
@@ -59,6 +60,13 @@
             <tbody>
                 {% for activity in activities %}
                 <tr>
+                    <td class="whitespace-nowrap">
+                        {% if activity.activity_date %}
+                        {{ activity.activity_date|date:"M j, Y" }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
                     <td>{{ activity.athlete_first_name }} {{ activity.athlete_last_name }}</td>
                     <td>
                         <div class="font-medium flex items-center gap-1">

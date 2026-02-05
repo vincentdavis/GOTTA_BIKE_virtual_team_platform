@@ -32,6 +32,9 @@ class ClubActivity(models.Model):
         max_digits=10, decimal_places=2, null=True, blank=True, help_text="Elevation gain in meters"
     )
 
+    # Activity date
+    activity_date = models.DateTimeField(null=True, blank=True, help_text="Activity start date/time from Strava")
+
     # Timestamps
     date_created = models.DateTimeField(auto_now_add=True, help_text="Record created in database")
     date_modified = models.DateTimeField(auto_now=True, help_text="Record last modified")
@@ -41,7 +44,7 @@ class ClubActivity(models.Model):
 
         verbose_name = "Club Activity"
         verbose_name_plural = "Club Activities"
-        ordering: ClassVar[list[str]] = ["-date_created"]
+        ordering: ClassVar[list[str]] = ["-activity_date", "-date_created"]
 
     def __str__(self) -> str:
         """Return string representation of the activity.

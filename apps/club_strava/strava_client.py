@@ -236,6 +236,18 @@ def sync_club_activities(club_id: int | None = None, pages: int = 1) -> dict:
         with transaction.atomic():
             for activity in data:
                 try:
+                    # Parse activity date (Strava returns ISO 8601 format)
+                    activity_date = None
+                    date_str = activity.get("start_date_local") or activity.get("start_date")
+                    if date_str:
+                        from datetime import datetime
+
+                        try:
+                            # Handle ISO 8601 format with Z suffix
+                            activity_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                        except ValueError:
+                            logfire.warning("Failed to parse activity date", date_str=date_str)
+
                     # Extract activity data - Strava uses different field names
                     activity_data = {
                         "athlete_first_name": activity.get("athlete", {}).get("firstname", "Unknown"),
@@ -247,6 +259,7 @@ def sync_club_activities(club_id: int | None = None, pages: int = 1) -> dict:
                         "moving_time": activity.get("moving_time", 0),
                         "elapsed_time": activity.get("elapsed_time", 0),
                         "total_elevation_gain": activity.get("total_elevation_gain"),
+                        "activity_date": activity_date,
                     }
 
                     # Club activities don't have activity IDs, generate one from name + athlete + time
