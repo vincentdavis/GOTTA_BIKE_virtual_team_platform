@@ -1,175 +1,128 @@
-#TODO list
+# TODO
 
-**Site**
+## P0 - Critical
 
-**Data Connections**
+### Testing (no test coverage exists)
 
-- [] verify spreadsheet in owned by how the organization
+- [ ] Set up pytest config (conftest.py, fixtures, pytest settings in pyproject.toml)
+- [ ] Permission system tests (has_permission, decorators, role checks)
+- [ ] Race ready verification logic tests (expiration, category requirements, is_race_ready)
+- [ ] Membership application workflow tests (status transitions, form validation)
+- [ ] Discord bot API endpoint tests (auth, sync, CRUD operations)
+- [ ] Cron API endpoint tests
+- [ ] Background task tests (ZP sync, ZR sync, Strava sync, notifications)
+- [ ] User model tests (profile completion, properties, social account reconnection)
+- [ ] CMS page tests (access control, publishing, navigation)
 
-**verifications**
+### Error Handling
 
-- [] Add a provisional status to verification records
+- [ ] Fix silent `except ValueError: pass` in team/views.py (roster date parsing, category filter)
+- [ ] Fix silent `except` in accounts/tasks.py (User lookup for Discord mention)
+- [ ] Add file upload validation (MIME type, file size limits) for race ready records
 
-**Permissions**
+## P1 - High Priority
 
-**Tasks**
+### Performance Review
 
-**Discord**
+- [ ] Add min/max FTP and 120-day min/max FTP
+- [ ] Number of ZP events and ZP races in last 120 days
+- [ ] wkg min/max and 120-day min/max wkg
+- [ ] Plot the data (charts/graphs)
 
-**USER REGISTRATION**
+### Verifications
 
-- [] Send a message to user from app
-- [] Click name to open discord user profile
+- [ ] Add provisional status to verification records
+- [ ] Backfill historical record_date values (some default to 2026-01-01)
 
-**Performance Reviews**
+### User Profile
 
-- [] add min and max ftp and 120 day min/max ftp
-- [] Number of ZP events and ZP races in the last 120 days
-- [] wkg min/max 120 days min/max wkg.
-- [] plot the data
-- [X] /team/performance-review/ is very sloe, maybe because of history
+- [x] Show ZP and ZR stats on profile page
 
-**Membership**
+### Membership
 
-- [] Show if a user has "member role" or "guest role"
-- [X] List trainer and heartrate value on /team/membership-review/ Race Profile
+- [ ] Show if user has "member role" or "guest role"
 
-**User Profile**
+### User Registration
 
-- [X] create a public user profile page
-- [] show zp and zr stats on profile page
+- [x] Click name to open Discord user profile
 
----
+### Data Connections
 
-# Logging Audit - Areas Needing Improvement
+- [ ] Verify spreadsheet is owned by the organization
 
-**Overall Status**: 40% coverage (17 of 42 core files have logging)
+### Admin Logging (remaining from audit)
 
-## CRITICAL - Fix First
+- [ ] accounts/admin.py - Add logging for permission assignments, bulk ops, custom actions
+- [ ] team/admin.py - Add logging for bulk verification record operations
+- [ ] zwiftpower/admin.py - Add logging for bulk ZP rider updates
+- [ ] zwiftracing/admin.py - Add logging
+- [ ] data_connection/admin.py - Add logging
 
-### Syntax Errors in Exception Handlers
+### Search & Filtering
 
-- [X] `apps/zwiftracing/tasks.py:29` - Fix `except InvalidOperation, ValueError:` →
-  `except (InvalidOperation, ValueError):`
-- [X] `apps/zwiftracing/tasks.py:44` - Fix `except ValueError, TypeError:` → `except (ValueError, TypeError):`
+- [ ] Add search/filter to Membership Applications page (name, status, date)
+- [x] Add filtering to Verification Records (type, status, date range)
 
-### Views Without Logging (High Traffic, Business Critical)
+### Export
 
-- [X] `apps/team/views.py` (1,138 lines) - LOGGING ADDED
-    - [X] Add logging to `verification_record_detail_view()` - record approval/rejection
-    - [X] Add logging to `membership_application_admin_view()` - admin review actions
-    - [X] Add logging to `membership_application_public_view()` - public form submissions
-    - [X] Add logging to `delete_expired_media_view()` - bulk file deletions
-    - [X] Add logging to `delete_rejected_media_view()` - bulk file deletions
-    - [X] Add logging to `application_verify_zwift()` - Zwift verification failures
-    - [X] Add logging to team link CRUD operations
-    - [X] Add logging to permission denial cases
+- [ ] CSV export from roster (with current filters applied)
+- [ ] CSV export from verification records
+- [ ] CSV export from membership applications
+- [ ] CSV export from performance review
 
-- [X] `apps/dbot_api/api.py` (1,026 lines) - LOGGING ADDED
-    - [X] Add logging to authentication failures
-    - [X] Add logging to all sync operations (roles, user roles, guild members)
-    - [X] Add logging for task queue triggers
-    - [X] Add logging for roster filter creation
-    - [X] Add logging for membership application creation via bot
+### Caching
 
-## HIGH Priority
+- [ ] Cache get_unified_team_roster() (changes infrequently, expensive query)
+- [ ] Cache ZP/ZR API responses (invalidate on manual sync)
+- [ ] Cache analytics dashboard queries
 
-### Models - Permission & Status Checks
+## P2 - Medium Priority
 
-- [X] `apps/accounts/models.py` (717 lines) - LOGGING ADDED
-    - [X] Add logging to `User.has_permission()` - log permission denials with reason
-    - [X] Add logging to `User.is_race_ready` property - log status changes
-    - [X] Add logging to `User.is_profile_complete` property
-    - [X] Add logging to role management methods (`add_role`, `remove_role`)
+### Dashboards
 
-- [X] `apps/team/models.py` (945 lines) - LOGGING ADDED
-    - [X] Add logging to `RaceReadyRecord.is_expired` - expiration checks
-    - [X] Add logging to `RaceReadyRecord.delete_media_file()` - file deletion operations
-    - [X] Add logging to `MembershipApplication` status transitions (via save method)
+- [ ] Captain dashboard with key metrics (pending apps, race-ready %, recent joins)
+- [ ] Admin dashboard with system health (sync status, pending tasks, error rates)
 
-### Services - Data Operations
+### Data Visualization
 
-- [X] `apps/team/services.py` (780 lines) - LOGGING ADDED
-    - [X] Add logfire import and error logging
-    - [X] Add logging to `get_unified_team_roster()` - complex data merging
-    - [X] Add logging to `get_membership_review_data()` - data compilation
-    - [X] Add logging to `get_performance_review_data()` - calculations
-    - [X] Add logging for JSON parsing errors in category requirements (lines 61-66, now logged)
+- [ ] Race results charts (performance trends, category distribution)
+- [ ] Team membership growth over time
+- [ ] Race-ready status breakdown (pie/bar chart)
 
-### API Clients
+### UX Improvements
 
-- [X] `apps/zwiftracing/zr_client.py` (147 lines) - LOGGING ADDED
-    - [X] Add logfire import
-    - [X] Add logging to API calls (get_club, get_rider, etc.)
-    - [X] Add logging for rate limit (429) responses with retry_after info
+- [ ] Onboarding checklist for new users (profile → verify Zwift → race verification)
+- [ ] Help/FAQ page with glossary (race-ready, categories, verification types)
+- [ ] Persistent notification center (beyond auto-dismiss toasts)
+- [ ] Mobile-optimized table views (card layout option for small screens)
 
-### Decorators
+### Accessibility
 
-- [X] `apps/accounts/decorators.py` (149 lines) - LOGGING ADDED
-    - [X] Add logging to `discord_permission_required` - log permission check failures with user context
+- [ ] Add ARIA labels to dropdown menus, badges, and status indicators
+- [ ] Add skip-to-main-content link
+- [ ] Add alt text to all images (avatars, hero, icons)
+- [ ] Add focus ring styling for keyboard navigation
+- [ ] Form error accessibility (aria-invalid, aria-describedby)
 
-## MEDIUM Priority
+### Security & Infrastructure
 
-### Forms - Validation Logging
+- [ ] Rate limiting on API endpoints (dbot, cron, analytics)
+- [ ] Separate cron API auth key from dbot API key
+- [ ] Background task retry logic for transient API failures
 
-- [X] `apps/accounts/forms.py` - LOGGING ADDED
-    - [X] Add logging for profile validation errors (birth year validation)
+### Integrations
 
-- [X] `apps/team/forms.py` - LOGGING ADDED
-    - [X] Add logging for membership application validation (birth year, agreements)
-    - [X] Add logging for agreement validation failures
-    - [X] Add logging for RaceReadyRecord form processing (media file, required fields)
+- [ ] Integrate Strava activities into Team Feed page
+- [ ] Dark mode support (DaisyUI ready, needs config toggle)
 
-- [X] `apps/data_connection/forms.py` - LOGGING ADDED
-    - [X] Add logging for spreadsheet URL validation
+## P3 - Nice to Have
 
-### Admin - Audit Trail
-
-- [] `apps/accounts/admin.py` (319 lines) - NO LOGGING
-    - [] Add logging for user permission assignments
-    - [] Add logging for bulk operations
-    - [] Add logging for custom admin actions
-
-- [] `apps/team/admin.py` (255 lines) - NO LOGGING
-    - [] Add logging for bulk verification record operations
-
-- [] `apps/zwiftpower/admin.py` (252 lines) - NO LOGGING
-    - [] Add logging for bulk ZP rider updates
-
-- [] `apps/zwiftracing/admin.py` (164 lines) - NO LOGGING
-
-- [] `apps/data_connection/admin.py` - NO LOGGING
-
-## LOW Priority - Silent Error Handlers
-
-These try/except blocks swallow exceptions without logging:
-
-- [] `apps/accounts/tasks.py:33-38` - User lookup for Discord mention (currently silent pass)
-- [X] `apps/team/services.py:61-66` - JSON config parsing (now logged with error context)
-- [] `apps/team/views.py:79-83` - ValueError in int conversion (silent pass)
-- [] `apps/team/views.py:717-722` - ValueError in category filter parsing (silent pass)
-
-## Files with GOOD Logging (Reference Examples)
-
-These files have good logging patterns to follow:
-
-- `apps/zwiftpower/tasks.py` - Comprehensive task logging with spans
-- `apps/zwiftpower/zp_client.py` - API client with session and error logging
-- `apps/accounts/discord_service.py` - Discord API with status logging
-- `apps/accounts/adapters.py` - OAuth flow logging
-
-## Logging Level Guidelines
-
-| Level               | Use For                                                                         |
-|---------------------|---------------------------------------------------------------------------------|
-| `logfire.error()`   | Permission denials, verification rejections, API failures, file deletion errors |
-| `logfire.warning()` | Profile incompleteness, config parsing fallbacks, rate limiting                 |
-| `logfire.info()`    | Form submissions, profile updates, roster filtering, admin actions              |
-| `logfire.debug()`   | Property calculations, data merging details, filter evaluations                 |
-
-## Implementation Notes
-
-- Use `with logfire.span("operation_name"):` for operations that involve multiple steps
-- Include context: `user_id`, `discord_id`, `operation_type`, `affected_records`
-- Log at entry AND exit of critical functions (especially for debugging slow operations)
-- For try/except blocks, always log the exception with `logfire.error("message", error=str(e))`
+- [ ] Team calendar/events feature
+- [ ] Email notifications (beyond Discord-only)
+- [ ] PWA manifest for mobile install
+- [ ] CMS page versioning/history
+- [ ] SEO meta fields on CMS pages (description, OG tags)
+- [ ] Auto-expire stale pending membership applications
+- [ ] Personal data export page (/user/export/ for GDPR)
+- [ ] API response pagination for large datasets
+- [ ] Remove or implement apps/zwift/ placeholder app

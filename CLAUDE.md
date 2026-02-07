@@ -53,48 +53,15 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 
 ### Static Files & Storage
 
-Static files and media (user uploads) are handled separately for optimal performance:
-
-- **Static files** (CSS, JS, images): Served via [WhiteNoise](https://whitenoise.readthedocs.io/) directly from the app
-  server. `collectstatic` writes to local `staticfiles/` directory (fast deploys, no S3 upload).
-- **Media files** (user uploads): Stored on S3-compatible storage when configured (Railway object storage).
-
-Configuration in `settings.py`:
-
-```python
-# Static files: Always WhiteNoise (fast, compressed, cached)
-STORAGES = {
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
-
-# Media files: S3 when configured, otherwise local filesystem
-if config.use_s3_storage:
-    STORAGES["default"] = {
-        "BACKEND": "storages.backends.s3.S3Storage",
-        "OPTIONS": {...},
-    }
-```
-
-Environment variables for S3 (optional):
-
-- `AWS_S3_ENDPOINT_URL` - S3 endpoint (e.g., `https://storage.railway.app`)
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` - S3 credentials
-- `AWS_STORAGE_BUCKET_NAME` - Bucket name
-- `AWS_S3_REGION_NAME` - Region (default: `auto`)
-
-WhiteNoise features:
-
-- Automatic gzip/brotli compression
-- Far-future cache headers (hashed filenames)
-- Serves files directly from memory in production
+- **Static files**: WhiteNoise (compressed, cached, served from memory). `collectstatic` writes to `staticfiles/`.
+- **Media files**: S3-compatible storage when configured (Railway), otherwise local filesystem.
+- S3 env vars (optional): `AWS_S3_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_STORAGE_BUCKET_NAME`, `AWS_S3_REGION_NAME`
 
 ### Apps (in `apps/`)
 
 - `accounts` - Custom User model with Discord/Zwift fields, django-allauth adapters, role-based permissions
     - `GuildMember` model - Tracks Discord guild members synced from bot (see Guild Member Sync below)
-    - `YouTubeVideo` model - Stores YouTube videos fetched from team members' channels (via RSS)
+    - `YouTubeVideo` model - Stores YouTube videos fetched from team members' channels (via RSS), displayed on Team Feed
     - `decorators.py` - `discord_permission_required` decorator for view permissions
 - `team` - Core team management:
     - `RaceReadyRecord` - Verification records for weight/height/power (pending/verified/rejected status)
@@ -109,7 +76,19 @@ WhiteNoise features:
     - `ZPTeamRiders` - Team roster data from admin API
     - `ZPEvent` - Event metadata
     - `ZPRiderResults` - Individual rider results per event
-- `zwiftracing` - Zwift Racing API integration, `ZRRider` model for rider data
+- `zwiftracing` - Zwift Racing API integration:
+    - `ZRRider` model - Rider data with seed/velo rating fields (`seed_race`, `seed_time_trial`, `seed_endurance`,
+      `seed_pursuit`, `seed_sprint`, `seed_punch`, `seed_climb`, `seed_tt_factor` and matching `velo_*` fields)
+- `analytics` - Server-side page visit tracking with client-side enrichment:
+    - `PageVisit` model - Tracks page visits (user, IP, user agent, screen dimensions, browser/OS info)
+    - `POST /api/analytics/track/` - Client-side tracking endpoint (Django Ninja)
+    - Dashboard at `/analytics/` with period filters (day/week/month/year), requires `app_admin` permission
+    - Client-side JS snippet in `base.html` sends screen/browser data to tracking endpoint
+- `club_strava` - Strava Club Activities integration:
+    - `ClubActivity` model - Stores Strava club activity data with distance/time formatting properties
+    - `strava_client.py` - OAuth token refresh, activity fetching, bulk sync with rate limit handling
+    - Views at `/strava/` - Activity list with sport_type and search filters
+    - `sync_strava_activities()` background task for scheduled syncing
 - `dbot_api` - Discord bot REST API using Django Ninja
 - `data_connection` - Google Sheets data export:
     - `DataConnection` model - Configurable exports to Google Sheets
@@ -129,7 +108,10 @@ WhiteNoise features:
 - Discord OAuth only (no username/password)
 - **Guild membership required**: Users must be a member of the configured Discord server (`GUILD_ID`) to sign up or log
   in
-- Custom User model fields: `discord_id`, `discord_username`, `discord_nickname`, `zwid`
+- Custom User model fields: `discord_id`, `discord_username`, `discord_nickname`, `zwid`,
+  social fields (`strava_url`, `youtube_channel`, `youtube_channel_id`, `twitch_channel`, `instagram_url`,
+  `facebook_url`, `twitter_url`, `tiktok_url`, `bluesky_url`, `mastodon_url`, `garmin_url`, `tpv_profile_url`),
+  equipment fields (`trainer`, `powermeter`, `dual_recording`, `heartrate_monitor`)
 - TOTP two-factor authentication via `allauth.mfa`
 - Custom adapter (`apps/accounts/adapters.py`):
     - Verifies guild membership via Discord API before allowing login/signup
@@ -140,52 +122,12 @@ WhiteNoise features:
 
 #### Discord OAuth Adapter (`apps/accounts/adapters.py`)
 
-The custom `DiscordSocialAccountAdapter` handles Discord OAuth login with careful data preservation:
+**Critical gotchas:**
 
-**Key Methods:**
-
-1. **`pre_social_login`** - Called on every login attempt
-   - Checks guild membership before allowing access
-   - **Critical**: Reconnects existing users by `discord_id` if their SocialAccount was lost
-   - Only updates Discord-specific fields (`discord_id`, `discord_username`, `discord_nickname`, `discord_avatar`)
-   - **Never** overwrites profile fields (`first_name`, `last_name`, `birth_year`, `gender`, `timezone`, `country`)
-
-2. **`populate_user`** - Called only for NEW users
-   - Sets Discord fields and email from OAuth data
-   - Leaves profile fields empty (user must complete profile manually)
-
-3. **`save_user`** - Called only for NEW users
-   - Creates User and SocialAccount records
-   - Syncs Discord roles
-
-**User Reconnection Logic:**
-
-If allauth can't find a SocialAccount (e.g., it was deleted), the adapter checks if a User with matching `discord_id`
-exists and reconnects them:
-
-```python
-# In pre_social_login:
-if not sociallogin.is_existing and discord_id:
-    try:
-        existing_user = User.objects.get(discord_id=discord_id)
-        sociallogin.connect(request, existing_user)
-        sociallogin.is_existing = True
-    except User.DoesNotExist:
-        pass  # Truly a new user
-```
-
-This prevents profile data loss when SocialAccount records are missing.
-
-**Important:** When modifying OAuth adapter code, always use `update_fields` when saving User objects to prevent
-accidentally overwriting profile data:
-
-```python
-# Correct - only updates specified fields
-user.save(update_fields=['discord_id', 'discord_username', 'discord_nickname', 'discord_avatar'])
-
-# Wrong - overwrites entire model including profile fields
-user.save()
-```
+- `pre_social_login` reconnects existing users by `discord_id` if SocialAccount was lost — prevents profile data loss
+- `pre_social_login` only updates Discord fields, **never** profile fields (`first_name`, `last_name`, `birth_year`, etc.)
+- `populate_user` and `save_user` are only called for NEW users
+- **Always use `update_fields`** when saving User in adapter code: `user.save(update_fields=['discord_id', ...])` — bare `user.save()` overwrites profile data
 
 ### Profile Completion
 
@@ -204,68 +146,16 @@ Required fields for profile completion:
 - `heartrate_monitor` - Heart rate monitor type (required for racing)
 - `zwid_verified` - Zwift account verification status
 
-#### User Model Properties
-
-```python
-# Check if profile is complete
-if user.is_profile_complete:
-    # All required fields filled AND Zwift verified
-    ...
-
-# Get detailed status for UI
-status = user.profile_completion_status
-# Returns: {"first_name": True, "last_name": False, "birth_year": True, ...}
-```
-
-#### Warning Banner
-
-Instead of blocking access, a red warning banner is displayed at the top of every page for users with incomplete
-profiles. The banner is defined in `theme/templates/base.html` and links to the profile edit page.
+Properties: `user.is_profile_complete` (bool), `user.profile_completion_status` (dict of field→bool).
+Incomplete profiles show a red warning banner in `base.html` (not blocking, just a warning).
 
 ### Public User Profiles
 
-Team members can view each other's profiles at `/user/profile/<user_id>/`. This allows teammates to see relevant
-information about each other without exposing sensitive data.
+Public profiles at `/user/profile/<user_id>/` (requires `team_member` permission). Viewing own profile redirects to private page.
 
-#### Access Control
+**Privacy**: Never expose `birth_year`, `email`, or emergency contact fields on public profiles. See `public_profile_view` in `apps/accounts/views.py`.
 
-- Requires `@login_required` - must be logged in
-- Requires `@team_member_required()` - must have `team_member` permission
-- Viewing your own profile redirects to the private profile page (`/user/profile/`)
-
-#### Privacy - Fields Displayed
-
-| Category | Fields Shown |
-|----------|--------------|
-| Identity | Name (first_name, last_name) |
-| Discord | Username, nickname, avatar |
-| Location | City, country, timezone |
-| Zwift | Verification status, ZwiftPower link (if verified) |
-| Racing | Race ready status, gender |
-| Equipment | Trainer, power meter, dual recording, heart rate monitor |
-| Social | All social media URL fields (YouTube, Strava, Instagram, etc.) |
-| Team | Discord roles |
-
-#### Privacy - Fields Excluded (Private)
-
-These fields are **never** shown on public profiles:
-
-- `birth_year`
-- `email`
-- Emergency contact fields (`emergency_contact_name`, `emergency_contact_relation`, `emergency_contact_email`, `emergency_contact_phone`)
-
-#### Profile Links
-
-User names are clickable to view public profiles in:
-- Team roster (`/team/roster/`)
-- Membership review tables (race view and member view)
-
-**Files:**
-
-- `apps/accounts/views.py` - `public_profile_view` function
-- `templates/accounts/public_profile.html` - Public profile template
-- `templates/team/roster.html` - Profile links on names
-- `templates/team/partials/_membership_review_*.html` - Profile links on names
+User names link to public profiles in roster and membership review tables.
 
 ### Discord Role-Based Permissions (`apps/accounts/models.py`)
 
@@ -287,6 +177,7 @@ Permissions are granted via Discord roles configured in Constance. The system ch
 - `team_member` - Required for most pages; without it users can only see index and their profile
 - `race_ready` - Race ready status
 - `approve_verification` - Can approve/reject verification records
+- `performance_verification_team` - Performance verification team member
 - `data_connection` - Access to Google Sheets data exports
 - `pages_admin` - Can create and manage CMS pages
 
@@ -297,37 +188,15 @@ Configure in Django admin at `/admin/constance/config/` under "Permission Mappin
 - `PERM_APP_ADMIN_ROLES` - JSON array of Discord role IDs, e.g., `["1234567890123456789"]`
 - `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`, `PERM_LINK_ADMIN_ROLES`, etc.
 - `PERM_APPROVE_VERIFICATION_ROLES` - Role IDs that can approve/reject verification records
+- `PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES` - Role IDs for performance verification team
 - `PERM_DATA_CONNECTION_ROLES` - Role IDs that can access data exports
 - `PERM_PAGES_ADMIN_ROLES` - Role IDs that can manage CMS pages
 
 #### Usage in Views
 
-```python
-# Using decorator
-from apps.accounts.decorators import discord_permission_required
-
-@login_required
-@discord_permission_required("team_captain", raise_exception=True)
-def verify_record(request):
-    ...
-
-# Multiple permissions (OR logic - user needs ANY)
-@discord_permission_required(["team_captain", "vice_captain"])
-def view_records(request):
-    ...
-
-# Using User methods directly
-if request.user.has_permission("team_captain"):
-    ...
-
-# Property shortcuts still work
-if request.user.is_team_captain:
-    ...
-```
-
-**Note**: The `discord_permission_required` decorator raises `PermissionDenied` (403) for authenticated users who lack
-permission, rather than redirecting to login. This prevents redirect loops. A custom `templates/403.html` provides a
-user-friendly error page.
+- Decorator: `@discord_permission_required("team_captain", raise_exception=True)` — raises 403, not redirect (prevents loops)
+- Multiple permissions (OR logic): `@discord_permission_required(["team_captain", "vice_captain"])`
+- Direct check: `request.user.has_permission("team_captain")` or `request.user.is_team_captain`
 
 #### Manual Permission Overrides
 
@@ -345,61 +214,12 @@ User's `discord_roles` field stores `{role_id: role_name}` mapping from Discord.
 
 #### Updating Permission Registry
 
-The permission registry (`apps/accounts/permission_registry.py`) maps each permission to the views it controls.
-This registry powers the help icons (?) shown on the `/site/config/` Permissions page.
-
-**When to update:**
-
-When adding a view with `@discord_permission_required` or `@team_member_required`, update the registry:
-
-```python
-# In apps/accounts/permission_registry.py
-PERMISSION_REGISTRY: dict[str, dict] = {
-    Permissions.TEAM_MEMBER: {
-        "name": "Team Member",
-        "description": "Required for most pages - basic team access",
-        "views": [
-            "/team/roster/ - Team roster",
-            "/team/new-page/ - Your new page description",  # Add new views here
-        ],
-    },
-    ...
-}
-```
-
-**Registry structure:**
-
-Each permission maps to:
-- `name` - Human-readable display name
-- `description` - What the permission allows
-- `views` - List of URL paths with descriptions (format: `/path/ - Description`)
-
-**Files:**
-
-- `apps/accounts/permission_registry.py` - Central registry (source of truth)
-- `apps/accounts/templatetags/accounts_tags.py` - `permission_help` template filter
-- `templates/accounts/partials/config_section.html` - Renders help icons in config UI
+When adding a view with `@discord_permission_required` or `@team_member_required`, also add it to `PERMISSION_REGISTRY` in `apps/accounts/permission_registry.py` (format: `"/path/ - Description"` in the `views` list). This powers the help icons on `/site/config/`.
 
 ### Background Tasks
 
-Uses Django 6.0's built-in `django-tasks` with database backend. Tasks are defined with `@task` decorator:
-
-```python
-from django.tasks import task
-
-@task
-def my_task() -> dict:
-    ...
-    return {"status": "complete"}
-
-# Enqueue immediately
-my_task.enqueue()
-
-# Enqueue with delay (run_after must be datetime, not timedelta)
-from django.utils import timezone
-from datetime import timedelta
-my_task.using(run_after=timezone.now() + timedelta(seconds=60)).enqueue()
-```
+Uses Django 6.0's built-in `django-tasks` with database backend. Define with `@task` decorator, enqueue with `.enqueue()`.
+**Gotcha**: `run_after` must be a `datetime`, not `timedelta` — use `my_task.using(run_after=timezone.now() + timedelta(seconds=60)).enqueue()`.
 
 ### External API Clients
 
@@ -408,6 +228,11 @@ my_task.using(run_after=timezone.now() + timedelta(seconds=60)).enqueue()
     - All methods return `(status_code, response_json)` tuple
     - 429 rate limit errors return the response without raising (contains `retryAfter` seconds)
     - Non-success status codes (except 429) raise `httpx.HTTPStatusError`
+- `apps/club_strava/strava_client.py` - Strava API client using httpx
+    - `refresh_access_token()` - OAuth token refresh, auto-updates Constance config
+    - `get_club_activities()` - Fetch activities with automatic token refresh on 401
+    - `sync_club_activities()` - Bulk fetch and database sync with transaction support
+    - Returns `(status_code, response)` tuple; handles 429 rate limits gracefully
 
 ### Discord Bot API (`apps/dbot_api`)
 
@@ -444,22 +269,7 @@ REST API for triggering scheduled tasks via external cron service:
     - `sync_zr_riders` - Sync riders from Zwift Racing API
     - `guild_member_sync_status` - Report guild member sync health (actual sync done by Discord bot)
 
-To add new tasks, update `TASK_REGISTRY` in `cron_api.py`:
-
-```python
-TASK_REGISTRY: dict = {
-    "task_name": {
-        "task": task_function,
-        "description": "What the task does",
-    },
-}
-```
-
-Example cron call:
-
-```bash
-curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_team_riders
-```
+To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
 
 ### URL Routes (`gotta_bike_platform/urls.py`)
 
@@ -486,8 +296,12 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
 - `/page/<slug>/` - CMS pages (`apps.cms.urls`)
 - `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
+- `/strava/` - Strava club activities (`apps.club_strava.urls`)
+- `/analytics/` - Analytics dashboard (`apps.analytics.urls`, requires `app_admin`)
 - `/api/dbot/` - Discord bot API
 - `/api/cron/` - Cron task API
+- `/api/analytics/` - Analytics tracking API (`apps.analytics.api`)
+- `/robots.txt` - Dynamic robots.txt (see Robots.txt section)
 - `/m/` - Magic links (legacy)
 
 ### Frontend
@@ -503,29 +317,12 @@ curl -X POST -H "X-Cron-Key: your-key" https://domain.com/api/cron/task/update_t
 - `templates/account/` - Auth templates (login, logout) with DaisyUI styling
 - `templates/mfa/` - MFA templates (TOTP setup, recovery codes)
 - Uses HTMX for interactivity (`django-htmx` middleware enabled)
+- Google Analytics (GA4) tracking when `GOOGLE_ANALYTICS_ID` is configured (in `base.html`)
+- Client-side analytics tracking JS sends page visit data to `/api/analytics/track/`
 
 #### daisyUI Blueprint MCP
 
-This project has the **daisyUI Blueprint MCP** configured for generating UI components. When creating or modifying
-templates that use DaisyUI components:
-
-1. **Use the MCP tools** to get accurate, up-to-date DaisyUI component code
-2. **Available tools:**
-   - `generate_page` - Generate complete page layouts
-   - `generate_section` - Generate page sections (hero, features, pricing, etc.)
-   - `generate_component` - Generate individual components (cards, modals, forms, etc.)
-
-3. **When to use:**
-   - Creating new pages or templates
-   - Adding new UI sections to existing pages
-   - Need reference for DaisyUI 5.x component syntax
-   - Building responsive layouts with Tailwind CSS 4.x
-
-4. **Integration notes:**
-   - Generated code uses DaisyUI 5.x classes (compatible with this project)
-   - Adapt generated code to use Django template tags (`{% url %}`, `{% if %}`, etc.)
-   - Replace placeholder content with actual template variables
-   - Follow existing patterns in `theme/templates/` for consistency
+DaisyUI Blueprint MCP is configured. Use its tools (`generate_page`, `generate_section`, `generate_component`) when creating/modifying DaisyUI templates. Adapt generated code to Django template tags and follow patterns in `theme/templates/`.
 
 ### Admin Customization
 
@@ -539,102 +336,27 @@ Custom admin buttons are added via:
 
 Runtime-configurable settings stored in database, editable via Django admin at `/admin/constance/config/`.
 
-Available settings:
+Settings are grouped: Team Identity, Zwift Credentials, API Keys, Permission Mappings (`PERM_*_ROLES` — JSON arrays of Discord role IDs), Discord Roles/Channels, New Arrival Messages (support `{member}`/`{server}` placeholders), Verification (`CATEGORY_REQUIREMENTS` JSON, `*_DAYS` expiration settings), Google, Strava, Site Settings.
 
-- **Team Identity**: `GUILD_NAME`, `GUILD_ID`, `DISCORD_URL` (invite link for rejected users)
-- **Zwift Credentials**: `ZWIFT_USERNAME`, `ZWIFT_PASSWORD` (password fields), `ZWIFTPOWER_TEAM_ID`
-- **API Keys**: `DBOT_AUTH_KEY` (password field - masked in admin)
-- **Zwift Racing App**: `ZRAPP_API_URL`, `ZRAPP_API_KEY` (password field - masked in admin)
-- **Permission Mappings**: `PERM_APP_ADMIN_ROLES`, `PERM_TEAM_CAPTAIN_ROLES`, `PERM_VICE_CAPTAIN_ROLES`,
-  `PERM_LINK_ADMIN_ROLES`, `PERM_MEMBERSHIP_ADMIN_ROLES`, `PERM_RACING_ADMIN_ROLES`, `PERM_TEAM_MEMBER_ROLES`,
-  `PERM_RACE_READY_ROLES`, `PERM_DATA_CONNECTION_ROLES`, `PERM_PAGES_ADMIN_ROLES` (JSON arrays of Discord role IDs)
-- **Discord Roles**: `RACE_READY_ROLE_ID` (Discord role ID assigned when user is race ready, `0` to disable),
-  `NEW_ARRIVALS_CHANNEL_ID` (Discord channel ID for new member welcome messages),
-  `REGISTRATION_UPDATES_CHANNEL_ID` (Discord channel for membership registration updates, `0` to disable)
-- **New Arrival Messages**: `NEW_ARRIVAL_MESSAGE_PUBLIC` (public welcome message for welcome channel),
-  `NEW_ARRIVAL_MESSAGE_PRIVATE` (private DM sent to new members), `SEND_NEW_ARRIVAL_DM` (toggle to enable/disable DMs).
-  Messages support Markdown and placeholders: `{member}` for member name/mention, `{server}` for server name
-- **Discord Bot Messages**: `HELP_MESSAGE` (message displayed by the Discord bot `/help` command, supports Markdown)
-- **Verification**: `CATEGORY_REQUIREMENTS` (JSON mapping ZP divisions to required verification types),
-  `WEIGHT_FULL_DAYS` (180), `WEIGHT_LIGHT_DAYS` (30), `HEIGHT_VERIFICATION_DAYS` (0=forever),
-  `POWER_VERIFICATION_DAYS` (365)
-- **Google Settings**: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_DRIVE_FOLDER_ID` (shared folder for spreadsheets)
-- **Strava**: `STRAVA_CLIENT_SECRET`, `STRAVA_ACCESS_TOKEN`, `STRAVA_REFRESH_TOKEN` (password fields for Strava API)
-- **Site Settings**: `TEAM_NAME`, `SUBTITLE`, `SITE_ANNOUNCEMENT` (blue banner at top of all pages, supports Markdown),
-  `MAINTENANCE_MODE`, `LOGO_DISPLAY_MODE` (header display: `logo_only`, `logo_and_name`, or `name_only`),
-  `HOME_PAGE_SLUG` (CMS page for non-logged-in users), `HOME_PAGE_SLUG_AUTHENTICATED` (CMS page for logged-in users)
-
-Usage in code:
-
-```python
-from constance import config
-
-team_id = config.ZWIFTPOWER_TEAM_ID
-guild_id = config.GUILD_ID
-if config.MAINTENANCE_MODE:
-    ...
-```
-
-Add new settings in `settings.py` under `CONSTANCE_CONFIG`.
+Usage: `from constance import config; config.SETTING_NAME`. Add new settings in `settings.py` under `CONSTANCE_CONFIG`.
 
 ### Site Image Settings
 
-Site images (logo and hero image) are stored in the `SiteSettings` singleton model (`gotta_bike_platform/models.py`),
-separate from Constance because they require file uploads.
+`SiteSettings` singleton model (`gotta_bike_platform/models.py`) stores `site_logo`, `favicon`, `hero_image` (separate from Constance because they're file uploads). Access via `SiteSettings.get_settings()` or `site_settings` template context variable.
 
-**SiteSettings Model:**
+`LOGO_DISPLAY_MODE` Constance setting: `name_only` (default), `logo_only`, `logo_and_name`. Falls back to team name if no logo uploaded. Managed at `/site/config/` "Site Images" section.
 
-```python
-from gotta_bike_platform.models import SiteSettings
+## Home Page Logic
 
-settings = SiteSettings.get_settings()  # Returns singleton instance
-settings.site_logo    # ImageField - Logo displayed in header
-settings.favicon      # ImageField - Favicon for browser tabs
-settings.hero_image   # ImageField - Background image for home page hero
-```
+Home page (`gotta_bike_platform/views.py: home()`): uses `HOME_PAGE_SLUG_AUTHENTICATED` for logged-in users, `HOME_PAGE_SLUG` for anonymous, falls back to `templates/index.html`.
 
-**Context Processor:**
+## Analytics
 
-The `site_settings` context processor (`gotta_bike_platform/context_processors.py`) makes the settings available in all
-templates as `site_settings`:
+Client-side JS in `base.html` sends page data to `/api/analytics/track/` (Django Ninja). `PageVisit` model stores combined server+client data. Dashboard at `/analytics/` (requires `app_admin`). Key files in `apps/analytics/`.
 
-```html
-{% if site_settings.site_logo %}
-<img src="{{ site_settings.site_logo.url }}" alt="Logo">
-{% endif %}
-```
+## Strava Integration
 
-**Logo Display Mode:**
-
-The `LOGO_DISPLAY_MODE` Constance setting controls how the header displays the team identity:
-
-| Value           | Behavior                                    |
-|-----------------|---------------------------------------------|
-| `name_only`     | Show only `TEAM_NAME` text (default)        |
-| `logo_only`     | Show only the uploaded logo                 |
-| `logo_and_name` | Show both logo and team name                |
-
-If `logo_only` or `logo_and_name` is set but no logo is uploaded, the team name is shown as fallback.
-
-**Hero Image:**
-
-When a hero image is uploaded, the home page (`templates/index.html`) displays it as a background with a dark overlay
-for text readability. Without a hero image, the section uses a solid `bg-base-200` background.
-
-**Configuration UI:**
-
-Site images can be managed at `/site/config/` in the "Site Images" section. The form supports:
-- Uploading new logo/hero images
-- Deleting existing images (red X button)
-- Preview of current images
-
-**Files:**
-
-- `gotta_bike_platform/models.py` - `SiteSettings` singleton model
-- `gotta_bike_platform/context_processors.py` - Makes `site_settings` available in templates
-- `gotta_bike_platform/admin.py` - Admin registration
-- `apps/accounts/views.py` - `config_site_images_update` view
-- `templates/accounts/partials/config_site_images.html` - Upload form partial
+`apps/club_strava/` - Strava club activity sync. Token refresh is automatic on 401 (tokens saved to Constance). Activity list at `/strava/`, manual sync at `/strava/sync/`. Constance settings: `STRAVA_CLUB_ID`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_ACCESS_TOKEN`, `STRAVA_REFRESH_TOKEN` (tokens auto-updated).
 
 ## Code Style
 
@@ -654,163 +376,26 @@ When handling API responses that may contain `None` values for string fields, us
 
 The application uses [Logfire](https://logfire.pydantic.dev/) for observability, logging, and monitoring.
 
-### Configuration
+Configured in `settings.py` (top: `logfire.configure()`, end: `instrument_django()`/`instrument_httpx()`).
+Env vars: `LOGFIRE_TOKEN` (optional), `LOGFIRE_ENVIRONMENT`. Usage: `import logfire` then `logfire.info/warning/error("msg", key=val)`.
 
-Logfire is configured at the top of `settings.py`:
+### Logging Requirements
 
-```python
-import logfire
+Add logfire logging for: API calls, error handlers, auth/permission checks, background tasks, data operations, form submissions. Never silently catch exceptions — always `logfire.error("msg", error=str(e))`. Use `logfire.span()` for multi-step operations. Include context: `user_id`, `discord_id`, `zwid`.
 
-logfire.configure(
-    service_name="coalition-platform",
-    environment=config.logfire_environment,  # from .env
-    token=config.logfire_token,              # from .env (optional)
-    send_to_logfire="if-token-present",
-)
-```
-
-Instrumentation is added at the **end** of `settings.py` (after Django is fully configured):
-
-```python
-logfire.instrument_django()
-logfire.instrument_httpx()
-logfire.info("Django settings loaded", environment=config.logfire_environment)
-```
-
-### Environment Variables
-
-- `LOGFIRE_TOKEN` - Logfire API token (optional; if not set, logs are local only)
-- `LOGFIRE_ENVIRONMENT` - Environment name (e.g., "production", "development")
-
-### Usage in Code
-
-```python
-import logfire
-
-# Structured logging
-logfire.info("User logged in", user_id=user.id, discord_id=user.discord_id)
-logfire.warning("Rate limit approaching", api="zwiftpower", remaining=5)
-logfire.error("API request failed", error=str(e), endpoint=url)
-```
-
-### Logging Requirements for New Code
-
-When writing or modifying code, add logfire logging for:
-
-- **API calls and external services** - Log requests and responses (especially errors, rate limits)
-- **Error handlers** - Never silently catch exceptions; always log with `logfire.error()`
-- **Authentication/permission checks** - Log failures with user context
-- **Data operations** - Log counts and timing for debugging performance
-- **Background tasks** - Log start, completion, and errors
-- **Form submissions and user actions** - Log significant state changes
-
-**Logging Levels:**
-
-| Level | Use For |
-|-------|---------|
-| `logfire.error()` | Failures, permission denials, exceptions, API errors |
-| `logfire.warning()` | Rate limits, config fallbacks, degraded operation, validation issues |
-| `logfire.info()` | Successful operations, user actions, state changes, admin actions |
-| `logfire.debug()` | Data counts, query details, internal state, diagnostic info |
-
-**Best Practices:**
-
-- Include context: `user_id`, `discord_id`, `zwid`, `operation_type`, `affected_records`
-- For try/except blocks, always log: `logfire.error("message", error=str(e))`
-- Use `with logfire.span("operation_name"):` for multi-step operations
-- Log at entry AND exit of critical functions (helps debug slow operations)
+Levels: `error` (failures/exceptions), `warning` (rate limits/fallbacks), `info` (operations/actions), `debug` (counts/diagnostics).
 
 ## Guild Member Sync
 
 Syncs Discord guild members with Django to track membership status.
 
-### GuildMember Model (`apps/accounts/models.py`)
+`GuildMember` model (`apps/accounts/models.py`) stores Discord member data with OneToOne link to User (matched by `discord_id`). Bot POSTs to `/api/dbot/sync_guild_members`; members not in payload get `date_left` set. Auto-syncs every 6 hours.
 
-Stores Discord guild member data:
-
-- `discord_id` - Discord user ID (unique)
-- `username`, `display_name`, `nickname` - Discord names
-- `avatar_hash`, `roles`, `joined_at`, `is_bot` - Discord data
-- `date_created`, `date_modified`, `date_left` - Tracking timestamps
-- `user` - OneToOne link to User (if they have an account)
-
-### How It Works
-
-1. Discord bot collects all guild members via `/sync_members` slash command
-2. Bot POSTs member data to `POST /api/dbot/sync_guild_members`
-3. Django creates/updates GuildMember records
-4. Members not in payload are marked as left (`date_left` set)
-5. GuildMembers are linked to User accounts by matching `discord_id`
-
-**Important**: Only affects Discord OAuth users. Regular Django accounts (staff, admin) without `discord_id` are NOT
-modified.
-
-### Admin Views
-
-- Guild Members list: `/admin/accounts/guildmember/`
-- Comparison view: `/admin/accounts/guildmember/comparison/`
-    - Guild Only: Discord members without User accounts
-    - Linked: Discord members with User accounts
-    - Left Guild: Members who left but have User accounts
-    - Discord Users (No Guild): OAuth users without GuildMember record
-
-### Discord Bot Requirements
-
-The bot needs the **Server Members Intent** (privileged):
-
-1. Enable `intents.members = True` in bot code (`src/bot.py`)
-2. Enable "Server Members Intent" in Discord Developer Portal > Bot > Privileged Gateway Intents
-
-### Automatic Sync Schedule
-
-The Discord bot automatically syncs guild members every 6 hours (configurable via `MEMBER_SYNC_INTERVAL_HOURS` env var).
-The cron API includes a `guild_member_sync_status` task that reports on sync health without performing the actual sync.
+**Important**: Only affects Discord OAuth users — regular Django accounts without `discord_id` are not modified.
 
 ### Discord Review Page
 
-Admin page at `/team/discord-review/` for auditing Discord guild members. Requires `membership_admin` permission.
-
-**Features:**
-
-- Lists all `GuildMember` records with avatar, username, nickname, join date, left date, bot status, role count
-- Search by username, display name, or nickname
-- Multi-select filters for Discord roles (include/exclude)
-- Filter by join date range, left status (active/left), bot status, account link status
-- Sortable columns
-- Username links to Discord profile (external)
-- "Linked" badge links to user's public profile (if account exists)
-- Shows match count below filters
-
-**Table Columns:**
-
-| Column | Description | Sortable |
-|--------|-------------|----------|
-| Avatar | Discord avatar or initials fallback | No |
-| Username | Discord username with link to profile | Yes |
-| Nickname | Server nickname or "-" | Yes |
-| Join Date | When member joined Discord server | Yes |
-| Left Date | Date left or "Active" badge | Yes |
-| Is Bot | "Bot" or "User" badge | Yes |
-| Role Count | Number badge with tooltip showing role names | Yes |
-| Account | "Linked" (links to profile) or "—" | No |
-
-**Filter Parameters (GET):**
-
-- `q` - Search text (username, nickname, display_name)
-- `join_from` / `join_to` - Join date range
-- `left_status` - "active" | "left" | "" (all)
-- `is_bot` - "yes" | "no" | "" (all)
-- `role` - Multi-select Discord role IDs (OR logic)
-- `exclude_role` - Multi-select Discord role IDs to exclude (AND logic)
-- `account_status` - "linked" | "unlinked" | "" (all)
-- `sort` / `dir` - Sort column and direction
-
-**Files:**
-
-- `apps/team/views.py` - `discord_review_view` function
-- `apps/team/urls.py` - URL pattern at `discord-review/`
-- `templates/team/discord_review.html` - Template
-- `theme/templates/sidebar.html` - Sidebar link in Membership section
+Admin page at `/team/discord-review/` (requires `membership_admin`). Lists GuildMember records with search, role filters (include/exclude), date range, sortable columns. See `discord_review_view` in `apps/team/views.py`.
 
 ## Race Ready Verification
 
@@ -849,42 +434,19 @@ used by both the `is_race_ready` property and the verification submission form.
 ### Verification Flow
 
 1. User submits a `RaceReadyRecord` (weight, height, or power photo) via the web app
-2. Record starts in `pending` status
-3. Users with `approve_verification` permission review and verify/reject records
-4. Verified records expire based on Constance settings:
-   - `WEIGHT_FULL_DAYS` (default: 120 days)
+2. Record includes `record_date` (date of the evidence) and optional `same_gender` flag (requires same-gender reviewer)
+3. Record starts in `pending` status
+4. Users with `approve_verification` permission review and verify/reject records
+5. Verified records expire based on `record_date` (not submission date) and Constance settings:
+   - `WEIGHT_FULL_DAYS` (default: 180 days)
+   - `WEIGHT_LIGHT_DAYS` (default: 30 days)
    - `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)
    - `POWER_VERIFICATION_DAYS` (default: 365 days)
+6. `RaceReadyRecord.days_remaining` property returns days until expiration (or None)
 
 ### Race Ready Role Assignment
 
-When a user's `is_race_ready` status is True, the Discord bot automatically assigns them the Race Ready Discord role.
-This happens when users use:
-
-- `/my_profile` - User checks their own profile
-- `/sync_my_roles` - User manually syncs their roles
-
-**Constance Settings:**
-
-- `RACE_READY_ROLE_ID` - Discord role ID to assign (set to `0` to disable)
-
-**API Response:**
-
-The `/my_profile` and `/sync_user_roles` endpoints return:
-
-```json
-{
-  "is_race_ready": true,
-  "race_ready_role_id": "1234567890123456789"
-}
-```
-
-The Discord bot uses these fields to add/remove the role based on current verification status.
-
-### Team Roster
-
-The team roster view (`/team/roster/`) displays race ready status with a filter option. The `data_connection` module
-also supports exporting `race_ready` status to Google Sheets.
+Discord bot assigns `RACE_READY_ROLE_ID` role when `is_race_ready` is True (via `/my_profile` and `/sync_user_roles` endpoints). Set `RACE_READY_ROLE_ID` to `0` to disable. Roster at `/team/roster/` shows race ready status.
 
 ## Membership Registration
 
@@ -952,30 +514,4 @@ Configure `PERM_MEMBERSHIP_ADMIN_ROLES` in Constance with Discord role IDs.
 
 ### Discord Notifications
 
-Registration updates are posted to a Discord channel for team visibility.
-
-**Constance Setting:**
-
-- `REGISTRATION_UPDATES_CHANNEL_ID` - Discord channel ID for registration updates (set to `0` to disable)
-
-**Notification Events:**
-
-| Event | Trigger | Message Format |
-|-------|---------|----------------|
-| New Registration | Discord bot creates application via API | `📝 **New Registration**\n{name} (<@discord_id>) submitted a membership registration.` |
-| Applicant Update | Applicant saves changes on public form | `📝 **Registration Updated**\n{name} (<@discord_id>) updated their registration.` |
-| Status Change | Admin changes status | `👤 **Status Changed**\n{admin} changed {name}'s status: {old} → {new}` |
-| Admin Notes | Admin updates notes (without status change) | `💬 **Admin Notes**\n{admin} updated notes for {name}'s registration.` |
-
-**Implementation:**
-
-- Background task: `apps/team/tasks.py` - `notify_application_update()`
-- Uses `send_discord_channel_message()` from `apps/accounts/discord_service.py`
-- Task is enqueued asynchronously (doesn't block request)
-- Gracefully skips if channel ID is 0 or not configured
-
-**Files:**
-
-- `apps/team/tasks.py` - `notify_application_update` task
-- `apps/dbot_api/api.py` - Calls task on application creation
-- `apps/team/views.py` - Calls task in admin and public views
+Registration updates posted to `REGISTRATION_UPDATES_CHANNEL_ID` (set to `0` to disable). Events: new registration, applicant update, status change, admin notes. Background task `notify_application_update()` in `apps/team/tasks.py` — enqueued async, skips gracefully if not configured.
