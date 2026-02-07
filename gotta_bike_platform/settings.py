@@ -610,6 +610,7 @@ CONSTANCE_CONFIG = {
         str,
     ),
     # Zwift Racing Category Roles
+    "ZR_UPGRADE_NOTICE_CHANNEL": (0, "Discord channel ID for ZR category upgrade notifications", int),
     "ZR_CATEGORY_SUFFIX": ("", "Suffix appended to Discord role names for ZR category roles", str),
     "ZR_ROLE_DIAMOND": (0, "Discord role ID for Diamond category", int),
     "ZR_ROLE_RUBY": (0, "Discord role ID for Ruby category", int),
@@ -677,6 +678,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
     "Zwift Racing App": (
         "ZRAPP_API_URL",
         "ZRAPP_API_KEY",
+        "ZR_UPGRADE_NOTICE_CHANNEL",
         "ZR_CATEGORY_SUFFIX",
         "ZR_ROLE_DIAMOND",
         "ZR_ROLE_RUBY",

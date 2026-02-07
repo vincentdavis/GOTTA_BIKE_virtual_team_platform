@@ -240,6 +240,204 @@ def _get_user_display_name(user: User) -> str:
 
 
 @task
+def sync_zr_category_roles() -> dict:
+    """Sync Zwift Racing category Discord roles for all users.
+
+    For each user with a discord_id, looks up their ZRRider record to determine
+    their current ZR category, then ensures the correct Discord role is assigned.
+    Removes any stale ZR category roles and posts upgrade announcements.
+
+    Returns:
+        dict with sync results summary.
+
+    """
+    from apps.zwiftracing.models import ZRRider
+
+    # Category order from highest to lowest
+    ZR_CATEGORY_ORDER = [
+        "Diamond",
+        "Ruby",
+        "Emerald",
+        "Sapphire",
+        "Amethyst",
+        "Platinum",
+        "Gold",
+        "Silver",
+        "Bronze",
+        "Copper",
+    ]
+
+    def _get_zr_role_config() -> dict[str, str]:
+        """Return mapping of category name to role ID string, excluding unconfigured (0) entries.
+
+        Returns:
+            Dict mapping category name to role ID string.
+
+        """
+        role_map = {
+            "Diamond": config.ZR_ROLE_DIAMOND,
+            "Ruby": config.ZR_ROLE_RUBY,
+            "Emerald": config.ZR_ROLE_EMERALD,
+            "Sapphire": config.ZR_ROLE_SAPPHIRE,
+            "Amethyst": config.ZR_ROLE_AMETHYST,
+            "Platinum": config.ZR_ROLE_PLATINUM,
+            "Gold": config.ZR_ROLE_GOLD,
+            "Silver": config.ZR_ROLE_SILVER,
+            "Bronze": config.ZR_ROLE_BRONZE,
+            "Copper": config.ZR_ROLE_COPPER,
+        }
+        return {cat: str(rid) for cat, rid in role_map.items() if rid and rid != 0}
+
+    with logfire.span("sync_zr_category_roles"):
+        role_config = _get_zr_role_config()
+        if not role_config:
+            logfire.info("No ZR category roles configured, skipping sync")
+            return {"status": "skipped", "reason": "no_roles_configured"}
+
+        # All configured ZR role IDs (for detecting stale roles)
+        all_zr_role_ids = set(role_config.values())
+        unassigned_role_id = str(config.ZR_ROLE_UNASSIGNED) if config.ZR_ROLE_UNASSIGNED else None
+        if unassigned_role_id and unassigned_role_id != "0":
+            all_zr_role_ids.add(unassigned_role_id)
+        else:
+            unassigned_role_id = None
+
+        # Reverse lookup: role_id → category name
+        role_id_to_category = {rid: cat for cat, rid in role_config.items()}
+
+        # Build ZRRider lookup by zwid
+        suffix = config.ZR_CATEGORY_SUFFIX or ""
+
+        users_with_discord = User.objects.exclude(discord_id="").exclude(discord_id__isnull=True)
+        total_users = users_with_discord.count()
+
+        logfire.info("Starting ZR category role sync", total_users=total_users, configured_roles=len(role_config))
+
+        added = 0
+        removed = 0
+        upgraded = 0
+        unchanged = 0
+        errors = 0
+
+        upgrade_channel_id = config.ZR_UPGRADE_NOTICE_CHANNEL
+
+        for user in users_with_discord.iterator():
+            try:
+                # Determine desired category
+                desired_category = None
+                if user.zwid:
+                    try:
+                        zr_rider = ZRRider.objects.get(zwid=user.zwid)
+                        desired_category = zr_rider.race_current_category or None
+                    except ZRRider.DoesNotExist:
+                        pass
+
+                # Determine desired role ID
+                if desired_category and desired_category in role_config:
+                    desired_role_id = role_config[desired_category]
+                elif unassigned_role_id:
+                    desired_role_id = unassigned_role_id
+                    desired_category = None
+                else:
+                    desired_role_id = None
+
+                # Find current ZR roles the user has
+                current_roles = user.discord_roles or {}
+                current_zr_role_ids = set(current_roles.keys()) & all_zr_role_ids
+
+                # Determine old category from current roles
+                old_category = None
+                for rid in current_zr_role_ids:
+                    if rid in role_id_to_category:
+                        old_category = role_id_to_category[rid]
+                        break
+
+                # Check if already correct
+                if desired_role_id and current_zr_role_ids == {desired_role_id}:
+                    unchanged += 1
+                    continue
+
+                if not desired_role_id and not current_zr_role_ids:
+                    unchanged += 1
+                    continue
+
+                # Remove stale ZR roles
+                roles_to_remove = current_zr_role_ids - ({desired_role_id} if desired_role_id else set())
+                for old_role_id in roles_to_remove:
+                    success = remove_discord_role(user.discord_id, old_role_id)
+                    if success:
+                        removed += 1
+                        if old_role_id in current_roles:
+                            del current_roles[old_role_id]
+                    else:
+                        errors += 1
+                    time.sleep(0.5)
+
+                # Add new role if not already present
+                if desired_role_id and desired_role_id not in current_zr_role_ids:
+                    role_name = desired_category or "Unassigned"
+                    if suffix:
+                        role_name = f"{role_name} {suffix}"
+                    success = add_discord_role(user.discord_id, desired_role_id)
+                    if success:
+                        added += 1
+                        current_roles[desired_role_id] = role_name
+                    else:
+                        errors += 1
+                    time.sleep(0.5)
+
+                # Save updated discord_roles
+                user.discord_roles = current_roles
+                user.save(update_fields=["discord_roles"])
+
+                # Check for upgrade
+                if (
+                    desired_category
+                    and old_category
+                    and desired_category != old_category
+                    and desired_category in ZR_CATEGORY_ORDER
+                    and old_category in ZR_CATEGORY_ORDER
+                ):
+                    new_index = ZR_CATEGORY_ORDER.index(desired_category)
+                    old_index = ZR_CATEGORY_ORDER.index(old_category)
+                    if new_index < old_index:
+                        upgraded += 1
+                        # Post upgrade announcement
+                        if upgrade_channel_id and upgrade_channel_id != 0:
+                            name = _get_user_display_name(user)
+                            mention = f"<@{user.discord_id}>"
+                            message = (
+                                f"⬆️ **ZR Category Upgrade**\n"
+                                f"{name} ({mention}) upgraded from **{old_category}** to **{desired_category}**!"
+                            )
+                            send_discord_channel_message(upgrade_channel_id, message)
+                            time.sleep(0.2)
+
+            except Exception as e:
+                errors += 1
+                logfire.error(
+                    "Error syncing ZR category role for user",
+                    user_id=user.id,
+                    discord_id=user.discord_id,
+                    error=str(e),
+                )
+
+        result = {
+            "status": "completed",
+            "total_users": total_users,
+            "added": added,
+            "removed": removed,
+            "upgraded": upgraded,
+            "unchanged": unchanged,
+            "errors": errors,
+        }
+
+        logfire.info("ZR category role sync completed", **result)
+
+        return result
+
+
+@task
 def sync_youtube_channel_ids() -> dict:
     """Extract YouTube channel IDs from user YouTube URLs.
 

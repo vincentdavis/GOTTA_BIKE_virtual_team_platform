@@ -10,6 +10,7 @@ from apps.accounts.tasks import (
     sync_race_ready_roles,
     sync_youtube_channel_ids,
     sync_youtube_videos,
+    sync_zr_category_roles,
 )
 from apps.club_strava.tasks import sync_strava_activities
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
@@ -85,6 +86,10 @@ TASK_REGISTRY: dict = {
     "sync_strava_activities": {
         "task": sync_strava_activities,
         "description": "Fetch club activities from Strava",
+    },
+    "sync_zr_category_roles": {
+        "task": sync_zr_category_roles,
+        "description": "Sync ZR category Discord roles based on Zwift Racing data",
     },
 }
 
