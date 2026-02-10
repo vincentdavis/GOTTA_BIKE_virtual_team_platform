@@ -742,13 +742,6 @@ class MembershipApplication(models.Model):
         METRIC = "metric", "Metric (kg, cm)"
         IMPERIAL = "imperial", "Imperial (lbs, in)"
 
-    class DualRecording(models.TextChoices):
-        """Dual recording options for power data."""
-
-        NONE = "none", "No dual recording"
-        TRAINER = "trainer", "Trainer as primary"
-        POWERMETER = "powermeter", "Power meter as primary"
-
     # Primary key - UUID for secure anonymous access
     id = models.UUIDField(
         primary_key=True,
@@ -877,11 +870,11 @@ class MembershipApplication(models.Model):
         blank=True,
         help_text="Power meter (from POWERMETER_OPTIONS)",
     )
-    dual_recording = models.CharField(
-        max_length=20,
-        choices=DualRecording.choices,
+    dual_recording = models.BooleanField(
+        null=True,
         blank=True,
-        help_text="Dual recording preference",
+        default=None,
+        help_text="Do you dual record data?",
     )
     heartrate_monitor = models.CharField(
         max_length=100,

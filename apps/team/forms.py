@@ -514,6 +514,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                 }
             ),
             "dual_recording": forms.Select(
+                choices=[("", "Select..."), ("True", "Yes"), ("False", "No")],
                 attrs={
                     "class": "select select-bordered w-full",
                 }
@@ -593,9 +594,14 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
         if "unit_preference" in self.fields:
             self.fields["unit_preference"].empty_label = "Select preference..."
 
-        # Update dual_recording field to show placeholder when empty
-        if "dual_recording" in self.fields:
-            self.fields["dual_recording"].empty_label = "Select option..."
+        # Set dual_recording initial value for Select widget
+        if "dual_recording" in self.fields and self.instance:
+            if self.instance.dual_recording is True:
+                self.initial["dual_recording"] = "True"
+            elif self.instance.dual_recording is False:
+                self.initial["dual_recording"] = "False"
+            else:
+                self.initial["dual_recording"] = ""
 
         # Populate trainer choices from Constance
         if "trainer" in self.fields:
@@ -649,6 +655,20 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                 )
                 raise forms.ValidationError("You must be at least 13 years old.")
         return birth_year
+
+    def clean_dual_recording(self) -> bool | None:
+        """Convert string value to boolean for dual_recording field.
+
+        Returns:
+            True, False, or None based on the selected value.
+
+        """
+        value = self.cleaned_data.get("dual_recording")
+        if value == "True":
+            return True
+        if value == "False":
+            return False
+        return None
 
     def clean(self):
         """Validate that required agreements are checked.

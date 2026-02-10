@@ -37,25 +37,6 @@ def get_approved_application(discord_id: str) -> MembershipApplication | None:
         return None
 
 
-def _transform_dual_recording(value: str) -> bool | None:
-    """Transform dual_recording CharField to Boolean.
-
-    Args:
-        value: The string value from MembershipApplication.
-
-    Returns:
-        True if 'trainer' or 'powermeter', False if 'none', None otherwise.
-
-    """
-    if not value:
-        return None
-    if value in ("trainer", "powermeter"):
-        return True
-    if value == "none":
-        return False
-    return None
-
-
 # Field mapping from MembershipApplication to User
 # Format: (application_field, user_field, label, transform_func)
 FIELD_MAPPING: list[tuple[str, str, str, Callable | None]] = [
@@ -71,7 +52,7 @@ FIELD_MAPPING: list[tuple[str, str, str, Callable | None]] = [
     ("unit_preference", "unit_preference", "Unit Preference", None),
     ("trainer", "trainer", "Trainer", None),
     ("power_meter", "powermeter", "Power Meter", None),
-    ("dual_recording", "dual_recording", "Dual Recording", _transform_dual_recording),
+    ("dual_recording", "dual_recording", "Dual Recording", None),
     ("heartrate_monitor", "heartrate_monitor", "Heart Rate Monitor", None),
     ("strava_profile", "strava_url", "Strava Profile", None),
     ("tpv_profile_url", "tpv_profile_url", "TPV Profile URL", None),
