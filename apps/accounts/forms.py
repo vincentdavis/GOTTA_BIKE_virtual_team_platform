@@ -25,6 +25,15 @@ TIMEZONE_CHOICES = [
 class ProfileForm(forms.ModelForm):
     """Form for editing user profile."""
 
+    # Explicit ChoiceField to prevent Django's BooleanField.to_python from
+    # converting strings before clean_dual_recording can process them.
+    dual_recording = forms.ChoiceField(
+        choices=[("", "Select..."), ("True", "Yes"), ("False", "No")],
+        required=False,
+        label="Dual Recording",
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+
     # Fields that are required for profile completion
     REQUIRED_FIELDS: ClassVar[list[str]] = [
         "first_name",
@@ -200,12 +209,6 @@ class ProfileForm(forms.ModelForm):
                 }
             ),
             "powermeter": forms.Select(
-                attrs={
-                    "class": "select select-bordered w-full",
-                }
-            ),
-            "dual_recording": forms.Select(
-                choices=[("", "Select..."), ("True", "Yes"), ("False", "No")],
                 attrs={
                     "class": "select select-bordered w-full",
                 }

@@ -371,6 +371,15 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
     Applicants can fill in their profile info, agree to policies, and add notes.
     """
 
+    # Explicit ChoiceField to prevent Django's BooleanField.to_python from
+    # converting strings before clean_dual_recording can process them.
+    dual_recording = forms.ChoiceField(
+        choices=[("", "Select..."), ("True", "Yes"), ("False", "No")],
+        required=False,
+        label="Dual Recording",
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+
     # Modal form fields (stored in modal_form_data JSONField)
     how_heard = forms.CharField(
         label="How did you hear about THE COALITION?",
@@ -509,12 +518,6 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
                 }
             ),
             "power_meter": forms.Select(
-                attrs={
-                    "class": "select select-bordered w-full",
-                }
-            ),
-            "dual_recording": forms.Select(
-                choices=[("", "Select..."), ("True", "Yes"), ("False", "No")],
                 attrs={
                     "class": "select select-bordered w-full",
                 }
