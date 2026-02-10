@@ -92,8 +92,9 @@ INSTALLED_APPS = [
     "apps.cms.apps.CmsConfig",
     "apps.analytics.apps.AnalyticsConfig",
     "apps.club_strava.apps.ClubStravaConfig",
+    "apps.events.apps.EventsConfig",
     "django_tasks",
-    "django_tasks.backends.database",
+    "django_tasks_db",
 ]
 
 # Custom User Model
@@ -245,7 +246,7 @@ else:
 
 TASKS = {
     "default": {
-        "BACKEND": "django_tasks.backends.database.DatabaseBackend",
+        "BACKEND": "django_tasks_db.DatabaseBackend",
     }
 }
 
@@ -623,6 +624,12 @@ CONSTANCE_CONFIG = {
     "ZR_ROLE_BRONZE": (0, "Discord role ID for Bronze category", int),
     "ZR_ROLE_COPPER": (0, "Discord role ID for Copper category", int),
     "ZR_ROLE_UNASSIGNED": (0, "Discord role ID for unassigned category", int),
+    # Events
+    "EVENT_TYPES": (
+        '["ZRL", "TTT", "FRR", "Club Ladder", "Other"]',
+        "List of event types available for event creation",
+        "string_list_field",
+    ),
     # Strava API
     "STRAVA_CLUB_ID": (0, "Strava club ID for fetching club activities", int),
     "STRAVA_CLUB_URL": ("", "Strava club URL (e.g., https://www.strava.com/clubs/your-club)", str),
@@ -736,6 +743,9 @@ CONSTANCE_CONFIG_FIELDSETS = {
     "Google Settings": (
         "GOOGLE_SERVICE_ACCOUNT_EMAIL",
         "GOOGLE_DRIVE_FOLDER_ID",
+    ),
+    "Events": (
+        "EVENT_TYPES",
     ),
     "Strava": (
         "STRAVA_CLUB_ID",

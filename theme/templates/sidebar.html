@@ -183,6 +183,7 @@
                     <li><a href="{% url 'config_section_page' 'seo_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'seo_settings' in request.path %}active{% endif %}">SEO Settings</a></li>
                     <li><a href="{% url 'config_section_page' 'google_settings' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'google_settings' in request.path %}active{% endif %}">Google Settings</a></li>
                     <li><a href="{% url 'config_section_page' 'strava' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'strava' in request.path %}active{% endif %}">Strava</a></li>
+                    <li><a href="{% url 'config_section_page' 'events' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'events' in request.path %}active{% endif %}">Events</a></li>
                     <li><a href="{% url 'config_section_page' 'site_images' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'site_images' in request.path %}active{% endif %}">Site Images</a></li>
                     <li><a href="{% url 'config_section_page' 'background_tasks' %}" class="{% if request.resolver_match.url_name == 'config_section_page' and 'background_tasks' in request.path %}active{% endif %}">Background Tasks</a></li>
                 </ul>

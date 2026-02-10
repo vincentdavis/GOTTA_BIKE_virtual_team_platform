@@ -11,7 +11,7 @@ from django.utils import timezone
 from ninja import NinjaAPI, Schema
 from ninja.security import APIKeyHeader
 
-from apps.accounts.models import GuildMember, User
+from apps.accounts.models import GuildMember, User, YouTubeVideo
 from apps.dbot_api.models import BotStats
 from apps.magic_links.models import MagicLink
 from apps.team.models import DiscordRole, MembershipApplication, RosterFilter
@@ -367,6 +367,38 @@ def get_team_links_magic_link(request: HttpRequest) -> dict:
             },
             status=404,
         )
+
+
+@api.get("/recent_videos")
+def get_recent_videos(request: HttpRequest) -> dict:
+    """Get the 5 most recent YouTube videos from team members.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        JSON object with recent videos and team feed URL.
+
+    """
+    videos = YouTubeVideo.objects.select_related("user").order_by("-published_at")[:5]
+
+    video_list = []
+    for video in videos:
+        user = video.user
+        user_name = f"{user.first_name} {user.last_name}".strip() or user.discord_nickname or user.discord_username
+        video_list.append({
+            "title": video.title,
+            "url": video.url,
+            "user_name": user_name,
+            "published_at": video.published_at.isoformat() if video.published_at else None,
+        })
+
+    team_feed_url = request.build_absolute_uri(reverse("team:team_feed"))
+
+    return {
+        "videos": video_list,
+        "team_feed_url": team_feed_url,
+    }
 
 
 @api.post("/sync_guild_roles")
