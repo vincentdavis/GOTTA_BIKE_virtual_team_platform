@@ -7,7 +7,10 @@
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="card-title text-2xl">Events</h2>
+        <div>
+          <h2 class="card-title text-2xl">Calendar</h2>
+          <p class="text-sm text-base-content/70">Events, Seasons, Race Series</p>
+        </div>
         {% if is_event_admin %}
         <a href="{% url 'events:event_create' %}" class="btn btn-primary btn-sm">New Event</a>
         {% endif %}
