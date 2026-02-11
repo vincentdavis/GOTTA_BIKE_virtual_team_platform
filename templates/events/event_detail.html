@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}{{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="card-title text-2xl">{{ event.title }}</h2>
+        {% if is_event_admin %}
+        <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-primary btn-sm">Edit Event</a>
+        {% endif %}
+      </div>
+
+      <p class="text-sm text-base-content/70">
+        {{ event.start_date|date:"M j, Y g:i A" }} &ndash; {{ event.end_date|date:"M j, Y g:i A" }}
+      </p>
+
+      {% if event.description %}
+      <div class="mt-4">{{ event.description|linebreaks }}</div>
+      {% endif %}
+
+      {% if event.url %}
+      <div class="mt-4">
+        <a href="{{ event.url }}" target="_blank" rel="noopener" class="link link-primary">
+          Event Link
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+      </div>
+      {% endif %}
+
+      {% if races %}
+      <div class="divider mt-6"></div>
+      <h3 class="text-lg font-semibold mb-4">Races</h3>
+      <div class="space-y-3">
+        {% for race in races %}
+        <div class="card bg-base-300">
+          <div class="card-body p-4">
+            <h4 class="font-semibold">{{ race.title }}</h4>
+            <p class="text-sm text-base-content/70">
+              {{ race.start_date|date:"M j, Y" }}{% if race.start_time %} at {{ race.start_time|time:"g:i A" }}{% endif %}
+              {% if race.end_date %} &ndash; {{ race.end_date|date:"M j, Y" }}{% endif %}
+            </p>
+            {% if race.zwift_category or race.zwift_rating %}
+            <div class="flex gap-2 mt-1">
+              {% if race.zwift_category %}
+              <span class="badge badge-sm badge-outline">Cat {{ race.zwift_category }}</span>
+              {% endif %}
+              {% if race.zwift_rating %}
+              <span class="badge badge-sm badge-outline">Rating: {{ race.zwift_rating }}</span>
+              {% endif %}
+            </div>
+            {% endif %}
+            {% if race.description %}
+            <p class="text-sm mt-2">{{ race.description }}</p>
+            {% endif %}
+            {% if race.url or race.race_pass %}
+            <div class="flex gap-3 mt-2">
+              {% if race.url %}
+              <a href="{{ race.url }}" target="_blank" rel="noopener" class="link link-primary text-sm">
+                Race Details
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+              {% endif %}
+              {% if race.race_pass %}
+              <a href="{{ race.race_pass }}" target="_blank" rel="noopener" class="link link-primary text-sm">
+                Race Pass
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="mt-6">
+        <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">&larr; Back to Events</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

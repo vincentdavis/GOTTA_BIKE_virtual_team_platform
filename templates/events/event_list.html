@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Events{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="card-title text-2xl">Events</h2>
+        {% if is_event_admin %}
+        <a href="{% url 'events:event_create' %}" class="btn btn-primary btn-sm">New Event</a>
+        {% endif %}
+      </div>
+
+      <form method="get" class="mb-6">
+        <div class="flex gap-4 items-end">
+          <div class="form-control flex-1">
+            <input type="text"
+                   name="q"
+                   placeholder="Search events..."
+                   class="input input-bordered input-sm w-full"
+                   value="{{ search_query }}"
+            />
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Search</button>
+          {% if search_query %}
+          <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">Reset</a>
+          {% endif %}
+        </div>
+      </form>
+
+      <div class="space-y-4">
+        {% for event in events %}
+        <div class="card bg-base-300">
+          <div class="card-body p-4">
+            <div class="flex justify-between items-start">
+              <div class="flex-1">
+                <h3 class="font-semibold text-lg">
+                  <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary hover:link-hover">
+                    {{ event.title }}
+                  </a>
+                </h3>
+                <p class="text-sm text-base-content/70 mt-1">
+                  {{ event.start_date|date:"M j, Y" }} &ndash; {{ event.end_date|date:"M j, Y" }}
+                </p>
+                {% if event.description %}
+                <p class="text-sm mt-2">{{ event.description|truncatewords:30 }}</p>
+                {% endif %}
+              </div>
+              <div class="flex gap-2 ml-4">
+                {% if event.url %}
+                <a href="{{ event.url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-xs" title="External link">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% empty %}
+        <div class="text-center py-8 text-base-content/50">
+          No events found.
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -3,90 +3,90 @@
 {% block title %}Discord Review - {{ config.TEAM_NAME }}{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto">
-  <div class="card bg-base-200 shadow-xl">
-    <div class="card-body">
-      <div class="flex justify-between items-center mb-6">
-        <h2 class="card-title text-2xl">Discord Review</h2>
-      </div>
+  <div class="max-w-7xl mx-auto">
+    <div class="card bg-base-200 shadow-xl">
+      <div class="card-body">
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="card-title text-2xl">Discord Review</h2>
+        </div>
 
-      <!-- Filters -->
-      <form method="get" class="mb-6">
-        <div class="flex flex-wrap gap-4 items-end">
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Search</span>
-            </label>
-            <input type="text"
-                   name="q"
-                   placeholder="Search by name..."
-                   class="input input-bordered input-sm w-48"
-                   value="{{ search_query }}"
-            />
-          </div>
-
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Join From</span>
-            </label>
-            <input type="date"
-                   name="join_from"
-                   class="input input-bordered input-sm"
-                   value="{{ join_from }}"
-            />
-          </div>
-
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Join To</span>
-            </label>
-            <input type="date"
-                   name="join_to"
-                   class="input input-bordered input-sm"
-                   value="{{ join_to }}"
-            />
-          </div>
-
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Status</span>
-            </label>
-            <select name="left_status" class="select select-bordered select-sm">
-              <option value="">All</option>
-              <option value="active" {% if left_status == "active" %}selected{% endif %}>Active</option>
-              <option value="left" {% if left_status == "left" %}selected{% endif %}>Left</option>
-            </select>
-          </div>
-
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Type</span>
-            </label>
-            <select name="is_bot" class="select select-bordered select-sm">
-              <option value="">All</option>
-              <option value="no" {% if is_bot_filter == "no" %}selected{% endif %}>Users</option>
-              <option value="yes" {% if is_bot_filter == "yes" %}selected{% endif %}>Bots</option>
-            </select>
-          </div>
-
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Account</span>
-            </label>
-            <select name="account_status" class="select select-bordered select-sm">
-              <option value="">All</option>
-              <option value="linked" {% if account_status == "linked" %}selected{% endif %}>Linked</option>
-              <option value="unlinked" {% if account_status == "unlinked" %}selected{% endif %}>Unlinked</option>
-            </select>
-          </div>
-
-          <!-- Roles - Dropdown with checkboxes -->
-          <div class="form-control">
-            <div class="label">
-              <span class="label-text">Roles</span>
+        <!-- Filters -->
+        <form method="get" class="mb-6">
+          <div class="flex flex-wrap gap-4 items-end">
+            <div class="form-control">
+              <div class="label">
+                <span class="label-text">Search</span>
+              </div>
+              <input type="text"
+                     name="q"
+                     placeholder="Search by name..."
+                     class="input input-bordered input-sm"
+                     value="{{ search_query }}"
+              />
             </div>
-            <details class="dropdown">
-              <summary class="select select-bordered select-sm min-w-40 flex items-center justify-between">
+
+            <div class="form-control">
+              <div class="label">
+                <span class="label-text">Join From</span>
+              </div>
+              <input type="date"
+                     name="join_from"
+                     class="input input-bordered input-sm"
+                     value="{{ join_from }}"
+              />
+            </div>
+
+            <div class="form-control">
+              <div class="label">
+                <span class="label-text">Join To</span>
+              </div>
+              <input type="date"
+                     name="join_to"
+                     class="input input-bordered input-sm"
+                     value="{{ join_to }}"
+              />
+            </div>
+
+            <div class="form-control">
+              <div class="label">
+                <span class="label-text">Status</span>
+              </div>
+              <select name="left_status" class="select select-bordered select-sm">
+                <option value="">All</option>
+                <option value="active" {% if left_status == "active" %}selected{% endif %}>Active</option>
+                <option value="left" {% if left_status == "left" %}selected{% endif %}>Left</option>
+              </select>
+            </div>
+
+            <div class="form-control">
+              <div class="label">
+                <span class="label-text">Type</span>
+              </div>
+              <select name="is_bot" class="select select-bordered select-sm">
+                <option value="">All</option>
+                <option value="no" {% if is_bot_filter == "no" %}selected{% endif %}>Users</option>
+                <option value="yes" {% if is_bot_filter == "yes" %}selected{% endif %}>Bots</option>
+              </select>
+            </div>
+
+            <div class="form-control">
+              <div class="label">
+                <span class="label-text">Account</span>
+              </div>
+              <select name="account_status" class="select select-bordered select-sm">
+                <option value="">All</option>
+                <option value="linked" {% if account_status == "linked" %}selected{% endif %}>Linked</option>
+                <option value="unlinked" {% if account_status == "unlinked" %}selected{% endif %}>Unlinked</option>
+              </select>
+            </div>
+
+            <!-- Roles - Dropdown with checkboxes -->
+            <div class="form-control">
+              <div class="label">
+                <span class="label-text">Roles</span>
+              </div>
+              <details class="dropdown">
+                <summary class="select select-bordered select-sm min-w-40 flex items-center justify-between">
                 <span class="font-normal">
                   {% if role_filters %}
                     {{ role_filters|length }} selected
@@ -94,30 +94,31 @@
                     Select roles...
                   {% endif %}
                 </span>
-              </summary>
-              <div class="dropdown-content z-[100] p-2 shadow bg-base-100 rounded-box w-64 max-h-60 overflow-y-auto overflow-x-hidden flex flex-col">
-                {% for role in all_roles %}
-                <label class="label cursor-pointer justify-start gap-3 py-1 flex-shrink-0">
-                  <input type="checkbox"
-                         name="role"
-                         value="{{ role.role_id }}"
-                         class="checkbox checkbox-sm"
-                         {% if role.role_id in role_filters %}checked{% endif %}
-                  />
-                  <span class="label-text truncate">{{ role.name }}</span>
-                </label>
-                {% endfor %}
-              </div>
-            </details>
-          </div>
-
-          <!-- ~Roles (exclude) - Dropdown with checkboxes -->
-          <div class="form-control">
-            <div class="label">
-              <span class="label-text">~Roles (exclude)</span>
+                </summary>
+                <div
+                    class="dropdown-content z-[100] p-2 shadow bg-base-100 rounded-box w-64 max-h-60 overflow-y-auto overflow-x-hidden flex flex-col">
+                  {% for role in all_roles %}
+                    <label class="label cursor-pointer justify-start gap-3 py-1 flex-shrink-0">
+                      <input type="checkbox"
+                             name="role"
+                             value="{{ role.role_id }}"
+                             class="checkbox checkbox-sm"
+                             {% if role.role_id in role_filters %}checked{% endif %}
+                      />
+                      <span class="label-text truncate">{{ role.name }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </details>
             </div>
-            <details class="dropdown">
-              <summary class="select select-bordered select-sm min-w-40 flex items-center justify-between">
+
+            <!-- ~Roles (exclude) - Dropdown with checkboxes -->
+            <div class="form-control">
+              <div class="label">
+                <span class="label-text">~Roles (exclude)</span>
+              </div>
+              <details class="dropdown">
+                <summary class="select select-bordered select-sm min-w-40 flex items-center justify-between">
                 <span class="font-normal">
                   {% if exclude_roles %}
                     {{ exclude_roles|length }} selected
@@ -125,197 +126,263 @@
                     Select roles...
                   {% endif %}
                 </span>
-              </summary>
-              <div class="dropdown-content z-[100] p-2 shadow bg-base-100 rounded-box w-64 max-h-60 overflow-y-auto overflow-x-hidden flex flex-col">
-                {% for role in all_roles %}
-                <label class="label cursor-pointer justify-start gap-3 py-1 flex-shrink-0">
-                  <input type="checkbox"
-                         name="exclude_roles"
-                         value="{{ role.role_id }}"
-                         class="checkbox checkbox-sm"
-                         {% if role.role_id in exclude_roles %}checked{% endif %}
-                  />
-                  <span class="label-text truncate">{{ role.name }}</span>
-                </label>
-                {% endfor %}
-              </div>
-            </details>
+                </summary>
+                <div
+                    class="dropdown-content z-[100] p-2 shadow bg-base-100 rounded-box w-64 max-h-60 overflow-y-auto overflow-x-hidden flex flex-col">
+                  {% for role in all_roles %}
+                    <label class="label cursor-pointer justify-start gap-3 py-1 flex-shrink-0">
+                      <input type="checkbox"
+                             name="exclude_roles"
+                             value="{{ role.role_id }}"
+                             class="checkbox checkbox-sm"
+                             {% if role.role_id in exclude_roles %}checked{% endif %}
+                      />
+                      <span class="label-text truncate">{{ role.name }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </details>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+            <a href="{% url 'team:discord_review' %}" class="btn btn-ghost btn-sm">Reset</a>
           </div>
+        </form>
 
-          <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-          <a href="{% url 'team:discord_review' %}" class="btn btn-ghost btn-sm">Reset</a>
+        <div class="mb-4 text-sm text-base-content/70">
+          Showing {{ members|length }} member{{ members|length|pluralize }}
         </div>
-      </form>
 
-      <div class="mb-4 text-sm text-base-content/70">
-        Showing {{ members|length }} member{{ members|length|pluralize }}
-      </div>
+        <!-- Table -->
+        <div class="overflow-x-auto">
+          {% with base_url=request.path %}
+            <table class="table table-zebra">
+              <thead>
+              <tr>
+                <th>Avatar</th>
+                <th>
+                  <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status=
 
-      <!-- Table -->
-      <div class="overflow-x-auto">
-        {% with base_url=request.path %}
-        <table class="table table-zebra">
-          <thead>
-            <tr>
-              <th>Avatar</th>
-              <th>
-                <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status={{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=username&dir={% if sort_by == 'username' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1">
-                  Username
-                  {% if sort_by == "username" %}
-                    {% if sort_dir == "asc" %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
-                    {% else %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                      {{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=username&dir={% if sort_by == 'username' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1">
+                    Username
+                    {% if sort_by == "username" %}
+                      {% if sort_dir == "asc" %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                        </svg>
+                      {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      {% endif %}
                     {% endif %}
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status={{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=nickname&dir={% if sort_by == 'nickname' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1">
-                  Nickname
-                  {% if sort_by == "nickname" %}
-                    {% if sort_dir == "asc" %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
-                    {% else %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status=
+
+                      {{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=nickname&dir={% if sort_by == 'nickname' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1">
+                    Nickname
+                    {% if sort_by == "nickname" %}
+                      {% if sort_dir == "asc" %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                        </svg>
+                      {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      {% endif %}
                     {% endif %}
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status={{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=joined_at&dir={% if sort_by == 'joined_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1">
-                  Joined
-                  {% if sort_by == "joined_at" %}
-                    {% if sort_dir == "asc" %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
-                    {% else %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status=
+
+                      {{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=joined_at&dir={% if sort_by == 'joined_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1">
+                    Joined
+                    {% if sort_by == "joined_at" %}
+                      {% if sort_dir == "asc" %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                        </svg>
+                      {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      {% endif %}
                     {% endif %}
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status={{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=date_left&dir={% if sort_by == 'date_left' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1">
-                  Left
-                  {% if sort_by == "date_left" %}
-                    {% if sort_dir == "asc" %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
-                    {% else %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status=
+
+                      {{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=date_left&dir={% if sort_by == 'date_left' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1">
+                    Left
+                    {% if sort_by == "date_left" %}
+                      {% if sort_dir == "asc" %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                        </svg>
+                      {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      {% endif %}
                     {% endif %}
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status={{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=is_bot&dir={% if sort_by == 'is_bot' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1">
-                  Type
-                  {% if sort_by == "is_bot" %}
-                    {% if sort_dir == "asc" %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
-                    {% else %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status=
+
+                      {{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=is_bot&dir={% if sort_by == 'is_bot' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1">
+                    Type
+                    {% if sort_by == "is_bot" %}
+                      {% if sort_dir == "asc" %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                        </svg>
+                      {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      {% endif %}
                     {% endif %}
-                  {% endif %}
-                </a>
-              </th>
-              <th>
-                <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status={{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=role_count&dir={% if sort_by == 'role_count' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1">
-                  Roles
-                  {% if sort_by == "role_count" %}
-                    {% if sort_dir == "asc" %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" /></svg>
-                    {% else %}
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                  </a>
+                </th>
+                <th>
+                  <a href="{{ base_url }}?q={{ search_query }}&join_from={{ join_from }}&join_to={{ join_to }}&left_status={{ left_status }}&is_bot={{ is_bot_filter }}&account_status=
+
+                      {{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=role_count&dir={% if sort_by == 'role_count' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                     class="flex items-center gap-1">
+                    Roles
+                    {% if sort_by == "role_count" %}
+                      {% if sort_dir == "asc" %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                        </svg>
+                      {% else %}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </svg>
+                      {% endif %}
                     {% endif %}
-                  {% endif %}
-                </a>
-              </th>
-              <th>Account</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for member in members %}
-            <tr>
-              <td>
-                {% if member.avatar_url %}
-                <div class="avatar">
-                  <div class="w-10 rounded-full">
-                    <img src="{{ member.avatar_url }}" alt="{{ member.username }}" />
-                  </div>
-                </div>
-                {% else %}
-                <div class="avatar placeholder">
-                  <div class="bg-neutral text-neutral-content w-10 rounded-full">
-                    <span class="text-sm">{{ member.username|slice:":2"|upper }}</span>
-                  </div>
-                </div>
-                {% endif %}
-              </td>
-              <td>
-                <a href="https://discord.com/users/{{ member.discord_id }}" target="_blank" rel="noopener noreferrer" class="link link-hover font-medium inline-flex items-center gap-1">
-                  {{ member.username }}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                </a>
-                {% if member.display_name and member.display_name != member.username %}
-                <div class="text-sm text-base-content/60">{{ member.display_name }}</div>
-                {% endif %}
-              </td>
-              <td>
-                {% if member.nickname %}
-                <span>{{ member.nickname }}</span>
-                {% else %}
-                <span class="text-base-content/30">-</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if member.joined_at %}
-                {{ member.joined_at|date:"M d, Y" }}
-                {% else %}
-                <span class="text-base-content/30">-</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if member.date_left %}
-                <span class="text-error">{{ member.date_left|date:"M d, Y" }}</span>
-                {% else %}
-                <span class="badge badge-success badge-sm">Active</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if member.is_bot %}
-                <span class="badge badge-info badge-sm">Bot</span>
-                {% else %}
-                <span class="badge badge-ghost badge-sm">User</span>
-                {% endif %}
-              </td>
-              <td>
-                <div class="tooltip" data-tip="{{ member.role_names_display }}">
-                  <span class="badge badge-primary badge-sm cursor-help">{{ member.role_count }}</span>
-                </div>
-              </td>
-              <td>
-                {% if member.user %}
-                <a href="{% url 'accounts:public_profile' member.user.id %}" target="_blank" rel="noopener noreferrer" class="badge badge-success badge-sm inline-flex items-center gap-1 hover:opacity-80">
-                  Linked
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                </a>
-                {% else %}
-                <span class="badge badge-ghost badge-sm">None</span>
-                {% endif %}
-              </td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="8" class="text-center py-8 text-base-content/50">
-                No guild members found.
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% endwith %}
+                  </a>
+                </th>
+                <th>Account</th>
+              </tr>
+              </thead>
+              <tbody>
+              {% for member in members %}
+                <tr>
+                  <td>
+                    {% if member.avatar_url %}
+                      <div class="avatar">
+                        <div class="w-10 rounded-full">
+                          <img src="{{ member.avatar_url }}" alt="{{ member.username }}"/>
+                        </div>
+                      </div>
+                    {% else %}
+                      <div class="avatar placeholder">
+                        <div class="bg-neutral text-neutral-content w-10 rounded-full">
+                          <span class="text-sm">{{ member.username|slice:":2"|upper }}</span>
+                        </div>
+                      </div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <a href="https://discord.com/users/{{ member.discord_id }}" target="_blank"
+                       rel="noopener noreferrer" class="link link-hover font-medium inline-flex items-center gap-1">
+                      {{ member.username }}
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24"
+                           stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                      </svg>
+                    </a>
+                    {% if member.display_name and member.display_name != member.username %}
+                      <div class="text-sm text-base-content/60">{{ member.display_name }}</div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if member.nickname %}
+                      <span>{{ member.nickname }}</span>
+                    {% else %}
+                      <span class="text-base-content/30">-</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if member.joined_at %}
+                      {{ member.joined_at|date:"M d, Y" }}
+                    {% else %}
+                      <span class="text-base-content/30">-</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if member.date_left %}
+                      <span class="text-error">{{ member.date_left|date:"M d, Y" }}</span>
+                    {% else %}
+                      <span class="badge badge-success badge-sm">Active</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if member.is_bot %}
+                      <span class="badge badge-info badge-sm">Bot</span>
+                    {% else %}
+                      <span class="badge badge-ghost badge-sm">User</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="tooltip" data-tip="{{ member.role_names_display }}">
+                      <span class="badge badge-primary badge-sm cursor-help">{{ member.role_count }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    {% if member.user %}
+                      <a href="{% url 'accounts:public_profile' member.user.id %}" target="_blank"
+                         rel="noopener noreferrer"
+                         class="badge badge-success badge-sm inline-flex items-center gap-1 hover:opacity-80">
+                        Linked
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                        </svg>
+                      </a>
+                    {% else %}
+                      <span class="badge badge-ghost badge-sm">None</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="8" class="text-center py-8 text-base-content/50">
+                    No guild members found.
+                  </td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          {% endwith %}
+        </div>
       </div>
     </div>
   </div>
-</div>
 {% endblock %}
