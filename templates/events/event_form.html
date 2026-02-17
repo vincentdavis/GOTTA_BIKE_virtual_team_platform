@@ -83,6 +83,22 @@
           </label>
         </div>
 
+        <!-- Discord Channel ID -->
+        <div class="form-control w-full">
+          <label class="label" for="id_discord_channel_id">
+            <span class="label-text">Discord Channel ID</span>
+          </label>
+          {{ form.discord_channel_id }}
+          {% if form.discord_channel_id.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.discord_channel_id.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Discord channel for event coordination (0 or blank = none)</span>
+          </label>
+        </div>
+
         <!-- Visible -->
         <div class="form-control">
           <label class="label cursor-pointer justify-start gap-2">

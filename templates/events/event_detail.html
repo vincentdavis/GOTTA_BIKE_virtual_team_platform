@@ -21,14 +21,24 @@
       <div class="mt-4">{{ event.description|linebreaks }}</div>
       {% endif %}
 
-      {% if event.url %}
-      <div class="mt-4">
+      {% if event.url or event.discord_channel_id %}
+      <div class="flex flex-wrap gap-4 mt-4">
+        {% if event.url %}
         <a href="{{ event.url }}" target="_blank" rel="noopener" class="link link-primary">
           Event Link
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
         </a>
+        {% endif %}
+        {% if event.discord_channel_id %}
+        <a href="https://discord.com/channels/{{ guild_id }}/{{ event.discord_channel_id }}" target="_blank" rel="noopener" class="link link-primary">
+          Discord Channel
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+        </a>
+        {% endif %}
       </div>
       {% endif %}
 
@@ -57,8 +67,8 @@
             {% if race.description %}
             <p class="text-sm mt-2">{{ race.description }}</p>
             {% endif %}
-            {% if race.url or race.race_pass %}
-            <div class="flex gap-3 mt-2">
+            {% if race.url or race.race_pass or race.discord_channel_id %}
+            <div class="flex flex-wrap gap-3 mt-2">
               {% if race.url %}
               <a href="{{ race.url }}" target="_blank" rel="noopener" class="link link-primary text-sm">
                 Race Details
@@ -70,6 +80,14 @@
               {% if race.race_pass %}
               <a href="{{ race.race_pass }}" target="_blank" rel="noopener" class="link link-primary text-sm">
                 Race Pass
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+              {% endif %}
+              {% if race.discord_channel_id %}
+              <a href="https://discord.com/channels/{{ guild_id }}/{{ race.discord_channel_id }}" target="_blank" rel="noopener" class="link link-primary text-sm">
+                Discord Channel
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                 </svg>

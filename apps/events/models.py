@@ -15,6 +15,7 @@ class Event(models.Model):
         end_date: When the event ends.
         visible: Whether the event is visible to team members.
         url: External URL for event details or signup.
+        discord_channel_id: Discord channel ID for event coordination.
         created_at: When the record was created.
         updated_at: When the record was last modified.
         created_by: User who created the event.
@@ -27,6 +28,10 @@ class Event(models.Model):
     end_date = models.DateTimeField(help_text="Event end date and time")
     visible = models.BooleanField(default=True, help_text="Whether the event is visible to team members")
     url = models.URLField(max_length=500, blank=True, help_text="External URL for event details or signup")
+    discord_channel_id = models.BigIntegerField(
+        default=0,
+        help_text="Discord channel ID for event coordination (0 = none)",
+    )
     created_at = models.DateTimeField(default=timezone.now, help_text="When the event was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the event was last updated")
     created_by = models.ForeignKey(

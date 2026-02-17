@@ -1,6 +1,7 @@
 """Views for events app."""
 
 import logfire
+from constance import config
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -66,6 +67,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "event": event,
             "races": races,
             "is_event_admin": request.user.is_event_admin,
+            "guild_id": config.GUILD_ID,
         },
     )
 

@@ -20,6 +20,7 @@ class EventForm(forms.ModelForm):
             "start_date",
             "end_date",
             "url",
+            "discord_channel_id",
             "visible",
         ]
         widgets: ClassVar[dict] = {
@@ -43,6 +44,9 @@ class EventForm(forms.ModelForm):
             ),
             "url": forms.URLInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},
+            ),
+            "discord_channel_id": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "Discord channel ID (0 = none)"},
             ),
             "visible": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
