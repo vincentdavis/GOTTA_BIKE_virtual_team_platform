@@ -29,7 +29,14 @@
           <label class="label" for="id_description">
             <span class="label-text">Description</span>
           </label>
-          {{ form.description }}
+          <div role="tablist" class="tabs tabs-bordered mb-1">
+            <button type="button" role="tab" class="tab tab-active" data-md-tab="write" data-md-target="description">Write</button>
+            <button type="button" role="tab" class="tab" data-md-tab="preview" data-md-target="description">Preview</button>
+          </div>
+          <div data-md-write="description">
+            {{ form.description }}
+          </div>
+          <div data-md-preview="description" class="prose prose-sm max-w-none border border-base-300 rounded-lg p-3 min-h-[8rem] bg-base-100 hidden"></div>
           {% if form.description.errors %}
           <label class="label">
             <span class="label-text-alt text-error">{{ form.description.errors.0 }}</span>
@@ -120,14 +127,21 @@
           <label class="label" for="id_signup_instructions">
             <span class="label-text">Signup Instructions</span>
           </label>
-          {{ form.signup_instructions }}
+          <div role="tablist" class="tabs tabs-bordered mb-1">
+            <button type="button" role="tab" class="tab tab-active" data-md-tab="write" data-md-target="signup_instructions">Write</button>
+            <button type="button" role="tab" class="tab" data-md-tab="preview" data-md-target="signup_instructions">Preview</button>
+          </div>
+          <div data-md-write="signup_instructions">
+            {{ form.signup_instructions }}
+          </div>
+          <div data-md-preview="signup_instructions" class="prose prose-sm max-w-none border border-base-300 rounded-lg p-3 min-h-[6rem] bg-base-100 hidden"></div>
           {% if form.signup_instructions.errors %}
           <label class="label">
             <span class="label-text-alt text-error">{{ form.signup_instructions.errors.0 }}</span>
           </label>
           {% endif %}
           <label class="label">
-            <span class="label-text-alt">Shown at the top of the signup modal form</span>
+            <span class="label-text-alt">Supports Markdown. Shown at the top of the signup modal form</span>
           </label>
         </div>
 
@@ -496,5 +510,37 @@ document.querySelectorAll('[data-signup-table]').forEach(function(table) {
     });
   });
 });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+(function() {
+  var fieldMap = {
+    description: 'id_description',
+    signup_instructions: 'id_signup_instructions'
+  };
+
+  document.querySelectorAll('[data-md-tab]').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var target = tab.getAttribute('data-md-target');
+      var mode = tab.getAttribute('data-md-tab');
+      var writePane = document.querySelector('[data-md-write="' + target + '"]');
+      var previewPane = document.querySelector('[data-md-preview="' + target + '"]');
+      var tabs = tab.parentElement.querySelectorAll('[role="tab"]');
+
+      tabs.forEach(function(t) { t.classList.remove('tab-active'); });
+      tab.classList.add('tab-active');
+
+      if (mode === 'preview') {
+        var textarea = document.getElementById(fieldMap[target]);
+        previewPane.innerHTML = marked.parse(textarea.value || '');
+        writePane.classList.add('hidden');
+        previewPane.classList.remove('hidden');
+      } else {
+        writePane.classList.remove('hidden');
+        previewPane.classList.add('hidden');
+      }
+    });
+  });
+})();
 </script>
 {% endblock %}
