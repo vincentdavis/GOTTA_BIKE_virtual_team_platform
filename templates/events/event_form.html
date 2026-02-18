@@ -3,7 +3,7 @@
 {% block title %}{{ page_title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-xl mx-auto">
+<div class="max-w-4xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
       <h2 class="card-title text-2xl mb-6">{{ page_title }}</h2>
@@ -228,8 +228,8 @@
             <tr>
               <td class="font-semibold">{{ squad.name }}</td>
               <td>{{ squad.member_count }}</td>
-              <td>{{ squad.captain|default:"-" }}</td>
-              <td>{{ squad.vice_captain|default:"-" }}</td>
+              <td>{% if squad.captain %}{{ squad.captain.get_full_name|default:squad.captain.discord_username }}{% else %}-{% endif %}</td>
+              <td>{% if squad.vice_captain %}{{ squad.vice_captain.get_full_name|default:squad.vice_captain.discord_username }}{% else %}-{% endif %}</td>
               <td>
                 {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category %}
                 {{ squad.min_zwift_racing_category|default:"" }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %} &ndash; {% endif %}{{ squad.max_zwift_racing_category|default:"" }}
