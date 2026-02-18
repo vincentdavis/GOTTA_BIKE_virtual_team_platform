@@ -339,6 +339,7 @@
           <thead>
             <tr>
               <th>Name</th>
+              <th>Timezone</th>
               <th>Members</th>
               <th>Captain</th>
               <th>Vice Captain</th>
@@ -350,6 +351,7 @@
             {% for squad in squads %}
             <tr>
               <td class="font-semibold">{{ squad.name }}</td>
+              <td>{{ squad.squad_timezone|default:"-" }}</td>
               <td>
                 {% if squad.enriched_members %}
                 <div class="tooltip tooltip-right" data-tip="{{ squad.member_names_tooltip }}">
@@ -380,7 +382,7 @@
             </tr>
             {% if squad.enriched_members %}
             <tr id="squad-members-{{ squad.pk }}" style="display:none">
-              <td colspan="6" class="p-0">
+              <td colspan="7" class="p-0">
                 <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2 overflow-x-auto">
                   <table class="table table-xs">
                     <thead>
