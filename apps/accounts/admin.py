@@ -20,15 +20,15 @@ class UserAdmin(BaseUserAdmin):
     change_list_template = "admin/accounts/user/change_list.html"
 
     list_display = (
-        "username",
+        "full_name",
         "email",
-        "first_name",
-        "last_name",
         "discord_username",
         "zwid",
+        "date_joined",
+        "birth_year",
         "is_staff",
     )
-    list_filter = (*BaseUserAdmin.list_filter, "discord_id")
+    list_filter = BaseUserAdmin.list_filter
     search_fields = (
         *BaseUserAdmin.search_fields,
         "discord_id",
@@ -141,6 +141,19 @@ class UserAdmin(BaseUserAdmin):
             },
         ),
     )
+
+    @admin.display(description="Full Name", ordering="first_name")
+    def full_name(self, obj: User) -> str:
+        """Return user's full name or discord username as fallback.
+
+        Args:
+            obj: The User instance.
+
+        Returns:
+            Full name string.
+
+        """
+        return obj.get_full_name() or obj.discord_username or obj.username
 
     def get_urls(self) -> list:
         """Add custom URLs for permission mappings view.

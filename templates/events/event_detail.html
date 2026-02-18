@@ -141,6 +141,9 @@
       <div class="mt-4">
         <div class="flex items-center gap-2 mb-2">
           <span class="badge badge-neutral">{{ signup_count }} signed up</span>
+          {% if squads %}
+          <button type="button" class="btn btn-outline btn-sm" id="toggle-squad-assign" onclick="toggleSquadAssign()">Assign Squads</button>
+          {% endif %}
           <input type="text" class="input input-bordered input-sm ml-auto w-48" placeholder="Search by name..." data-signup-search="detail">
         </div>
         <div class="overflow-x-auto pb-8">
@@ -155,6 +158,7 @@
                 <th data-sort="num" class="cursor-pointer hover:text-primary select-none">FTP</th>
                 <th data-sort="num" class="cursor-pointer hover:text-primary select-none">WKG</th>
                 <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Verified</th>
+                {% if squads %}<th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>{% endif %}
                 <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Notes</th>
               </tr>
             </thead>
@@ -223,6 +227,34 @@
                   <span class="badge badge-error badge-sm">No</span>
                   {% endif %}
                 </td>
+                {% if squads %}
+                <td>
+                  {% for sq in entry.assigned_squads %}
+                  <span class="badge badge-outline badge-sm mr-1 gap-0.5">
+                    {{ sq.name }}
+                    <form method="post" action="{% url 'events:squad_assign' event.pk %}" class="inline squad-assign-ctrl" style="display:none">
+                      {% csrf_token %}
+                      <input type="hidden" name="signup_id" value="{{ entry.signup.pk }}">
+                      <input type="hidden" name="squad_id" value="0">
+                      <input type="hidden" name="remove_squad_id" value="{{ sq.pk }}">
+                      <button type="submit" class="ml-0.5 text-error hover:text-error/70 font-bold leading-none" title="Remove from {{ sq.name }}">&times;</button>
+                    </form>
+                  </span>
+                  {% empty %}
+                  <span class="text-base-content/30 no-squad-dash">-</span>
+                  {% endfor %}
+                  <form method="post" action="{% url 'events:squad_assign' event.pk %}" class="squad-assign-ctrl mt-1" style="display:none">
+                    {% csrf_token %}
+                    <input type="hidden" name="signup_id" value="{{ entry.signup.pk }}">
+                    <select name="squad_id" class="select select-bordered select-xs" onchange="if(this.value!=''){this.form.submit()}">
+                      <option value="">+ Add</option>
+                      {% for squad in squads %}
+                      <option value="{{ squad.pk }}">{{ squad.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </form>
+                </td>
+                {% endif %}
                 <td>
                   {% if entry.signup.notes %}
                   <div class="tooltip tooltip-left" data-tip="{{ entry.signup.notes }}">
@@ -311,13 +343,22 @@
               <th>Captain</th>
               <th>Vice Captain</th>
               <th>ZR Category</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {% for squad in squads %}
             <tr>
               <td class="font-semibold">{{ squad.name }}</td>
-              <td>{{ squad.member_count }}</td>
+              <td>
+                {% if squad.enriched_members %}
+                <div class="tooltip tooltip-right" data-tip="{{ squad.member_names_tooltip }}">
+                  <span class="cursor-default underline decoration-dotted">{{ squad.member_count }}</span>
+                </div>
+                {% else %}
+                {{ squad.member_count }}
+                {% endif %}
+              </td>
               <td>{% if squad.captain %}{{ squad.captain.get_full_name|default:squad.captain.discord_username }}{% else %}-{% endif %}</td>
               <td>{% if squad.vice_captain %}{{ squad.vice_captain.get_full_name|default:squad.vice_captain.discord_username }}{% else %}-{% endif %}</td>
               <td>
@@ -327,7 +368,104 @@
                 -
                 {% endif %}
               </td>
+              <td>
+                {% if squad.enriched_members %}
+                <button type="button" class="btn btn-ghost btn-xs" onclick="toggleSquadMembers({{ squad.pk }})" title="Show members">
+                  <svg id="squad-arrow-{{ squad.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                {% endif %}
+              </td>
             </tr>
+            {% if squad.enriched_members %}
+            <tr id="squad-members-{{ squad.pk }}" style="display:none">
+              <td colspan="6" class="p-0">
+                <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2 overflow-x-auto">
+                  <table class="table table-xs">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Gender</th>
+                        <th>Category</th>
+                        <th>Rating</th>
+                        <th>FTP</th>
+                        <th>WKG</th>
+                        <th>Verified</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for member in squad.enriched_members %}
+                      <tr>
+                        <td>
+                          <a href="{% url 'accounts:public_profile' member.user.pk %}" class="link link-hover">{{ member.user.get_full_name|default:member.user.discord_username }}</a>
+                          {% if member.in_zwiftpower and member.zwid %}
+                          <a href="https://zwiftpower.com/profile.php?z={{ member.zwid }}" target="_blank" rel="noopener"
+                             class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded"
+                             title="View on ZwiftPower">ZP</a>
+                          {% endif %}
+                          {% if member.in_zwiftracing and member.zwid %}
+                          <a href="https://www.zwiftracing.app/riders/{{ member.zwid }}" target="_blank" rel="noopener"
+                             class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded"
+                             title="View on Zwift Racing">ZR</a>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if member.gender == "male" %}
+                          <span class="badge badge-info badge-sm">M</span>
+                          {% elif member.gender == "female" %}
+                          <span class="badge badge-secondary badge-sm">F</span>
+                          {% else %}
+                          <span class="text-base-content/30">-</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if member.in_zwiftpower %}
+                            {% if member.zp_category_w %}
+                            <span class="badge badge-secondary badge-sm">{{ member.zp_category_w }}</span>
+                            {% else %}
+                            <span class="badge badge-primary badge-sm">{{ member.zp_category|default:"-" }}</span>
+                            {% endif %}
+                          {% else %}
+                          <span class="text-base-content/30">-</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if member.in_zwiftracing %}
+                          <span class="badge badge-secondary badge-sm">{{ member.zr_category|default:"N/A" }}</span>
+                          {% else %}
+                          <span class="text-base-content/30">-</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if member.zp_ftp %}
+                          <span class="font-mono text-sm">{{ member.zp_ftp }}</span>
+                          {% else %}
+                          <span class="text-base-content/30">-</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if member.wkg %}
+                          <span class="font-mono text-sm">{{ member.wkg }}</span>
+                          {% else %}
+                          <span class="text-base-content/30">-</span>
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if member.is_race_ready %}
+                          <span class="badge badge-success badge-sm">Yes</span>
+                          {% else %}
+                          <span class="badge badge-error badge-sm">No</span>
+                          {% endif %}
+                        </td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </td>
+            </tr>
+            {% endif %}
             {% endfor %}
           </tbody>
         </table>
@@ -341,6 +479,30 @@
   </div>
 </div>
 
+<script>
+function toggleSquadMembers(squadPk) {
+  var row = document.getElementById('squad-members-' + squadPk);
+  var arrow = document.getElementById('squad-arrow-' + squadPk);
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    arrow.style.transform = 'rotate(90deg)';
+  } else {
+    row.style.display = 'none';
+    arrow.style.transform = '';
+  }
+}
+function toggleSquadAssign() {
+  var btn = document.getElementById('toggle-squad-assign');
+  var ctrls = document.querySelectorAll('.squad-assign-ctrl');
+  var dashes = document.querySelectorAll('.no-squad-dash');
+  var visible = ctrls.length > 0 && ctrls[0].style.display !== 'none';
+  ctrls.forEach(function(el) { el.style.display = visible ? 'none' : ''; });
+  dashes.forEach(function(el) { el.style.display = visible ? '' : 'none'; });
+  btn.textContent = visible ? 'Assign Squads' : 'Done';
+  btn.classList.toggle('btn-outline', visible);
+  btn.classList.toggle('btn-primary', !visible);
+}
+</script>
 <script>
 (function() {
   // Search

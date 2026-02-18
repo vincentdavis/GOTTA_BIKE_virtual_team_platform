@@ -13,17 +13,70 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.accounts.decorators import team_member_required
 from apps.events.forms import EventForm, SquadForm
-from apps.events.models import Event, EventSignup, Squad
+from apps.events.models import Event, EventSignup, Squad, SquadMember
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
 
 
-def _enrich_signups(signups):
-    """Enrich signup queryset with ZP/ZR data for display.
+def _enrich_squad_members(event):
+    """Build enriched member data grouped by squad for an event.
+
+    Queries ZP/ZR data for all squad members in one batch, then groups by squad.
+
+    Args:
+        event: Event instance to look up squad members for.
+
+    Returns:
+        Dict mapping squad pk to list of enriched member dicts.
+
+    """
+    all_sms = list(
+        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER)
+        .select_related("user", "squad")
+    )
+    if not all_sms:
+        return {}
+
+    zwids = [sm.user.zwid for sm in all_sms if sm.user.zwid]
+    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
+    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+
+    by_squad = {}
+    for sm in all_sms:
+        user = sm.user
+        zwid = user.zwid
+        zp = zp_by_zwid.get(zwid)
+        zr = zr_by_zwid.get(zwid)
+        zp_ftp = zp.ftp if zp else None
+        zp_weight = zp.weight if zp else None
+        wkg = round(Decimal(zp_ftp) / zp_weight, 2) if zp_ftp and zp_weight and zp_weight > 0 else None
+
+        entry = {
+            "user": user,
+            "zwid": zwid,
+            "gender": user.gender or "",
+            "is_race_ready": user.is_race_ready,
+            "in_zwiftpower": zp is not None,
+            "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
+            "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
+            "zp_ftp": zp_ftp,
+            "wkg": wkg,
+            "in_zwiftracing": zr is not None,
+            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+        }
+        by_squad.setdefault(sm.squad_id, []).append(entry)
+
+    return by_squad
+
+
+def _enrich_signups(signups, event=None):
+    """Enrich signup queryset with ZP/ZR data and squad assignment for display.
 
     Args:
         signups: EventSignup queryset with select_related("user").
+        event: Optional Event instance to look up squad assignments.
 
     Returns:
         List of dicts with signup + rider data for template rendering.
@@ -32,6 +85,11 @@ def _enrich_signups(signups):
     zwids = [s.user.zwid for s in signups if s.user.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
     zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+
+    squads_by_user: dict[int, list] = {}
+    if event:
+        for sm in SquadMember.objects.filter(squad__event=event).select_related("squad"):
+            squads_by_user.setdefault(sm.user_id, []).append(sm.squad)
 
     enriched = []
     for signup in signups:
@@ -58,6 +116,7 @@ def _enrich_signups(signups):
             "in_zwiftracing": zr is not None,
             "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
             "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+            "assigned_squads": squads_by_user.get(user.pk, []),
         })
     return enriched
 
@@ -115,10 +174,20 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     """
     event = get_object_or_404(Event, pk=pk)
     races = event.races.all()
-    squads = event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+    squads = list(
+        event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+    )
     signups = event.signups.select_related("user").all()
     user_signup = event.signups.filter(user=request.user).first()
-    enriched_signups = _enrich_signups(signups) if request.user.is_event_admin else []
+    enriched_signups = _enrich_signups(signups, event=event) if request.user.is_event_admin else []
+
+    # Attach enriched member data and tooltip to each squad
+    squad_members_data = _enrich_squad_members(event) if squads else {}
+    for squad in squads:
+        squad.enriched_members = squad_members_data.get(squad.pk, [])
+        names = [m["user"].get_full_name() or m["user"].discord_username for m in squad.enriched_members]
+        squad.member_names_tooltip = ", ".join(names) if names else "No members"
+
     logfire.debug("Event detail viewed", user_id=request.user.id, event_id=pk)
     return render(
         request,
@@ -226,7 +295,7 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
         form = EventForm(instance=event)
 
     squads = event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
-    enriched_signups = _enrich_signups(event.signups.select_related("user").all())
+    enriched_signups = _enrich_signups(event.signups.select_related("user").all(), event=event)
     return render(
         request,
         "events/event_form.html",
@@ -595,4 +664,89 @@ def squad_delete_view(request: HttpRequest, event_pk: int, squad_pk: int) -> Htt
         user_id=request.user.id,
     )
     messages.success(request, f'Squad "{squad_name}" deleted successfully!')
+    return redirect("events:event_detail", pk=event_pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Assign or unassign a signed-up user to a squad.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+
+    Returns:
+        Redirect to event detail page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized squad assign attempt",
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to assign squads.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    signup_id = request.POST.get("signup_id")
+    squad_id = request.POST.get("squad_id")
+
+    if not signup_id or squad_id is None:
+        messages.error(request, "Missing signup or squad selection.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    signup = get_object_or_404(EventSignup, pk=signup_id, event=event)
+    squad_id = int(squad_id)
+
+    if squad_id == 0:
+        # Unassign from a specific squad or all squads
+        remove_squad_id = request.POST.get("remove_squad_id")
+        if remove_squad_id:
+            remove_squad = get_object_or_404(Squad, pk=int(remove_squad_id), event=event)
+            deleted, _ = SquadMember.objects.filter(squad=remove_squad, user=signup.user).delete()
+            if deleted:
+                logfire.info(
+                    "Squad assignment removed",
+                    event_id=event_pk,
+                    squad_id=remove_squad.pk,
+                    squad_name=remove_squad.name,
+                    user_id=signup.user_id,
+                    admin_user_id=request.user.id,
+                )
+                messages.success(request, f"{signup.user} removed from {remove_squad.name}.")
+            else:
+                messages.info(request, f"{signup.user} was not in {remove_squad.name}.")
+        else:
+            deleted, _ = SquadMember.objects.filter(squad__event=event, user=signup.user).delete()
+            if deleted:
+                logfire.info(
+                    "All squad assignments removed",
+                    event_id=event_pk,
+                    user_id=signup.user_id,
+                    admin_user_id=request.user.id,
+                )
+                messages.success(request, f"{signup.user} removed from all squads.")
+            else:
+                messages.info(request, f"{signup.user} was not assigned to any squad.")
+    else:
+        squad = get_object_or_404(Squad, pk=squad_id, event=event)
+        SquadMember.objects.update_or_create(
+            squad=squad,
+            user=signup.user,
+            defaults={"status": SquadMember.Status.MEMBER},
+        )
+        logfire.info(
+            "Squad assignment created",
+            event_id=event_pk,
+            squad_id=squad.pk,
+            squad_name=squad.name,
+            user_id=signup.user_id,
+            admin_user_id=request.user.id,
+        )
+        messages.success(request, f"{signup.user} assigned to {squad.name}.")
+
     return redirect("events:event_detail", pk=event_pk)
