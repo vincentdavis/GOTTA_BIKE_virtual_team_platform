@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load accounts_tags %}
 
 {% block title %}Events{% endblock %}
 
@@ -48,7 +49,7 @@
                   {{ event.start_date|date:"M j, Y" }} &ndash; {{ event.end_date|date:"M j, Y" }}
                 </p>
                 {% if event.description %}
-                <p class="text-sm mt-2">{{ event.description|truncatewords:30 }}</p>
+                <div class="prose prose-sm max-w-none mt-2">{{ event.description|render_markdown|truncatewords_html:30 }}</div>
                 {% endif %}
                 <div class="flex flex-wrap items-center gap-2 mt-2">
                   {% if event.signup_count %}
