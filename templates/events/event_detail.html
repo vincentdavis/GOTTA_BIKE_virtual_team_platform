@@ -230,7 +230,7 @@
                 {% if squads %}
                 <td>
                   {% for sq in entry.assigned_squads %}
-                  <span class="badge badge-outline badge-sm mr-1 gap-0.5">
+                  <span class="badge badge-outline badge-sm mr-1 gap-0.5 max-w-28 truncate" title="{{ sq.name }}">
                     {{ sq.name }}
                     <form method="post" action="{% url 'events:squad_assign' event.pk %}" class="inline squad-assign-ctrl" style="display:none">
                       {% csrf_token %}
