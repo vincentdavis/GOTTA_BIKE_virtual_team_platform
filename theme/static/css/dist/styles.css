@@ -4487,6 +4487,9 @@
   .w-80 {
     width: calc(var(--spacing) * 80);
   }
+  .w-auto {
+    width: auto;
+  }
   .w-fit {
     width: fit-content;
   }
@@ -4692,6 +4695,9 @@
   }
   .self-center {
     align-self: center;
+  }
+  .self-start {
+    align-self: flex-start;
   }
   .truncate {
     overflow: hidden;
@@ -5236,6 +5242,14 @@
   @supports (color: color-mix(in lab, red, red)) {
     .text-base-content\/70 {
       color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+    }
+  }
+  .text-base-content\/80 {
+    color: var(--color-base-content);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-base-content\/80 {
+      color: color-mix(in oklab, var(--color-base-content) 80%, transparent);
     }
   }
   .text-error {

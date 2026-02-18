@@ -306,10 +306,13 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, "Invalid timezone selection.")
             return redirect("events:event_detail", pk=pk)
 
+    notes = request.POST.get("notes", "").strip()
+
     EventSignup.objects.create(
         event=event,
         user=request.user,
         signup_timezone=signup_timezone,
+        notes=notes,
     )
     logfire.info(
         "Event signup created",

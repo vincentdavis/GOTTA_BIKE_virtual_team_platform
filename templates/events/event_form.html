@@ -115,6 +115,22 @@
           </div>
         </div>
 
+        <!-- Signup Instructions -->
+        <div class="form-control w-full">
+          <label class="label" for="id_signup_instructions">
+            <span class="label-text">Signup Instructions</span>
+          </label>
+          {{ form.signup_instructions }}
+          {% if form.signup_instructions.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.signup_instructions.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Shown at the top of the signup modal form</span>
+          </label>
+        </div>
+
         <!-- Timezone Options (chip/tag input) -->
         <div class="form-control w-full">
           <label class="label">

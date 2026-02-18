@@ -23,6 +23,7 @@ class EventForm(forms.ModelForm):
             "discord_channel_id",
             "visible",
             "signups_open",
+            "signup_instructions",
             "timezone_options",
             "timezone_required",
         ]
@@ -56,6 +57,13 @@ class EventForm(forms.ModelForm):
             ),
             "signups_open": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
+            ),
+            "signup_instructions": forms.Textarea(
+                attrs={
+                    "class": "textarea textarea-bordered w-full",
+                    "rows": 3,
+                    "placeholder": "Instructions shown to users on the signup form",
+                },
             ),
             "timezone_options": forms.HiddenInput(),
             "timezone_required": forms.CheckboxInput(

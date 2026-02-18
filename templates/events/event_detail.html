@@ -52,23 +52,43 @@
           <span>You're signed up for this event!{% if user_signup.signup_timezone %} (Timezone: {{ user_signup.signup_timezone }}){% endif %}</span>
         </div>
         {% else %}
-        <form method="post" action="{% url 'events:event_signup' event.pk %}" class="mb-4">
-          {% csrf_token %}
-          {% if event.timezone_options %}
-          <div class="form-control w-full max-w-xs mb-3">
-            <label class="label" for="signup_timezone">
-              <span class="label-text">Timezone{% if event.timezone_required %} <span class="text-error">*</span>{% endif %}</span>
-            </label>
-            <select name="signup_timezone" id="signup_timezone" class="select select-bordered w-full max-w-xs"{% if event.timezone_required %} required{% endif %}>
-              <option value="">Select timezone...</option>
-              {% for tz in event.timezone_options %}
-              <option value="{{ tz }}">{{ tz }}</option>
-              {% endfor %}
-            </select>
+        <button class="btn btn-primary btn-sm self-start mb-4" onclick="document.getElementById('signup_modal').showModal()">Sign Up</button>
+
+        <dialog id="signup_modal" class="modal">
+          <div class="modal-box">
+            <h3 class="text-lg font-bold mb-4">Sign Up for {{ event.title }}</h3>
+            {% if event.signup_instructions %}
+            <div class="text-sm text-base-content/80 mb-4">{{ event.signup_instructions|linebreaks }}</div>
+            {% endif %}
+            <form method="post" action="{% url 'events:event_signup' event.pk %}" class="space-y-4">
+              {% csrf_token %}
+              {% if event.timezone_options %}
+              <div class="form-control w-full">
+                <label class="label" for="signup_timezone">
+                  <span class="label-text">Timezone{% if event.timezone_required %} <span class="text-error">*</span>{% endif %}</span>
+                </label>
+                <select name="signup_timezone" id="signup_timezone" class="select select-bordered w-full"{% if event.timezone_required %} required{% endif %}>
+                  <option value="">Select timezone...</option>
+                  {% for tz in event.timezone_options %}
+                  <option value="{{ tz }}">{{ tz }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              {% endif %}
+              <div class="form-control w-full">
+                <label class="label" for="signup_notes">
+                  <span class="label-text">Notes</span>
+                </label>
+                <textarea name="notes" id="signup_notes" class="textarea textarea-bordered w-full" rows="3" placeholder="Any notes for the event admins (optional)"></textarea>
+              </div>
+              <div class="modal-action">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('signup_modal').close()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Sign Up</button>
+              </div>
+            </form>
           </div>
-          {% endif %}
-          <button type="submit" class="btn btn-primary btn-sm">Sign Up</button>
-        </form>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
         {% endif %}
       {% else %}
       <p class="text-sm text-base-content/50">Signups are closed.</p>
