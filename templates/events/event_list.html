@@ -50,6 +50,18 @@
                 {% if event.description %}
                 <p class="text-sm mt-2">{{ event.description|truncatewords:30 }}</p>
                 {% endif %}
+                <div class="flex flex-wrap items-center gap-2 mt-2">
+                  {% if event.signup_count %}
+                  <span class="badge badge-neutral badge-sm">{{ event.signup_count }} signed up</span>
+                  {% endif %}
+                  {% if event.signups_open %}
+                    {% if event.pk in user_signup_event_ids %}
+                    <span class="badge badge-success badge-sm">Signed up</span>
+                    {% else %}
+                    <a href="{% url 'events:event_detail' event.pk %}" class="btn btn-primary btn-xs">Sign Up</a>
+                    {% endif %}
+                  {% endif %}
+                </div>
               </div>
               <div class="flex gap-2 ml-4">
                 {% if event.url %}

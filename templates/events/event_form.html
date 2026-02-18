@@ -303,7 +303,7 @@
                    title="View on Zwift Racing">ZR</a>
                 {% endif %}
               </td>
-              <td>{{ entry.signup.signup_timezone|default:"-" }}</td>
+              <td>{% if entry.signup.signup_timezone %}{% for tz in entry.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
               <td>
                 {% if entry.gender == "male" %}
                 <span class="badge badge-info badge-sm">M</span>

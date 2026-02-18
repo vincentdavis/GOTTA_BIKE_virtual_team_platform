@@ -75,10 +75,17 @@ def event_list_view(request: HttpRequest) -> HttpResponse:
         Rendered event list page.
 
     """
-    events = Event.objects.filter(visible=True)
+    events = Event.objects.filter(visible=True).annotate(
+        signup_count=Count("signups", filter=Q(signups__status="registered")),
+    )
     search_query = request.GET.get("q", "").strip()
     if search_query:
         events = events.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
+    user_signup_event_ids = set(
+        EventSignup.objects.filter(user=request.user, status=EventSignup.Status.REGISTERED).values_list(
+            "event_id", flat=True
+        )
+    )
     logfire.debug("Event list viewed", user_id=request.user.id, event_count=events.count())
     return render(
         request,
@@ -87,6 +94,7 @@ def event_list_view(request: HttpRequest) -> HttpResponse:
             "events": events,
             "search_query": search_query,
             "is_event_admin": request.user.is_event_admin,
+            "user_signup_event_ids": user_signup_event_ids,
         },
     )
 
@@ -296,13 +304,14 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.warning(request, "You are already signed up for this event.")
         return redirect("events:event_detail", pk=pk)
 
-    signup_timezone = ""
+    signup_timezone = []
     if event.timezone_options:
-        signup_timezone = request.POST.get("signup_timezone", "").strip()
+        signup_timezone = request.POST.getlist("signup_timezone")
         if event.timezone_required and not signup_timezone:
-            messages.error(request, "Please select a timezone.")
+            messages.error(request, "Please select at least one timezone.")
             return redirect("events:event_detail", pk=pk)
-        if signup_timezone and signup_timezone not in event.timezone_options:
+        invalid = [tz for tz in signup_timezone if tz not in event.timezone_options]
+        if invalid:
             messages.error(request, "Invalid timezone selection.")
             return redirect("events:event_detail", pk=pk)
 
@@ -322,6 +331,75 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
         signup_timezone=signup_timezone,
     )
     messages.success(request, "You have signed up for this event!")
+    return redirect("events:event_detail", pk=pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def event_signup_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Update the current user's signup for an event.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+
+    Returns:
+        Redirect to event detail page.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    signup = get_object_or_404(EventSignup, event=event, user=request.user, status=EventSignup.Status.REGISTERED)
+
+    signup_timezone = []
+    if event.timezone_options:
+        signup_timezone = request.POST.getlist("signup_timezone")
+        if event.timezone_required and not signup_timezone:
+            messages.error(request, "Please select at least one timezone.")
+            return redirect("events:event_detail", pk=pk)
+        invalid = [tz for tz in signup_timezone if tz not in event.timezone_options]
+        if invalid:
+            messages.error(request, "Invalid timezone selection.")
+            return redirect("events:event_detail", pk=pk)
+
+    signup.signup_timezone = signup_timezone
+    signup.notes = request.POST.get("notes", "").strip()
+    signup.save(update_fields=["signup_timezone", "notes", "updated_at"])
+    logfire.info(
+        "Event signup updated",
+        event_id=pk,
+        event_title=event.title,
+        user_id=request.user.id,
+        signup_timezone=signup_timezone,
+    )
+    messages.success(request, "Your signup has been updated.")
+    return redirect("events:event_detail", pk=pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def event_signup_delete_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete the current user's signup for an event.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+
+    Returns:
+        Redirect to event detail page.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    signup = get_object_or_404(EventSignup, event=event, user=request.user, status=EventSignup.Status.REGISTERED)
+    signup.delete()
+    logfire.info(
+        "Event signup deleted",
+        event_id=pk,
+        event_title=event.title,
+        user_id=request.user.id,
+    )
+    messages.success(request, "Your signup has been removed.")
     return redirect("events:event_detail", pk=pk)
 
 

@@ -38,8 +38,8 @@ class Event(models.Model):
     Attributes:
         title: Display name for the event.
         description: Longer description of the event (supports Markdown).
-        start_date: When the event starts.
-        end_date: When the event ends.
+        start_date: Event start date.
+        end_date: Event end date.
         visible: Whether the event is visible to team members.
         url: External URL for event details or signup.
         discord_channel_id: Discord channel ID for event coordination.
@@ -51,8 +51,8 @@ class Event(models.Model):
 
     title = models.CharField(max_length=200, help_text="Event title")
     description = models.TextField(blank=True, help_text="Event description (supports Markdown)")
-    start_date = models.DateTimeField(help_text="Event start date and time")
-    end_date = models.DateTimeField(help_text="Event end date and time")
+    start_date = models.DateField(help_text="Event start date")
+    end_date = models.DateField(help_text="Event end date")
     visible = models.BooleanField(default=True, help_text="Whether the event is visible to team members")
     signups_open = models.BooleanField(default=False, help_text="Whether signups are currently open")
     signup_instructions = models.TextField(blank=True, help_text="Instructions shown at the top of the signup form")
@@ -265,7 +265,7 @@ class EventSignup(models.Model):
         related_name="event_signups",
         help_text="The signed-up user",
     )
-    signup_timezone = models.CharField(max_length=50, blank=True, help_text="Selected timezone from event options")
+    signup_timezone = models.JSONField(default=list, blank=True, help_text="Selected timezones from event options")
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

@@ -14,7 +14,7 @@
       </div>
 
       <p class="text-sm text-base-content/70">
-        {{ event.start_date|date:"M j, Y g:i A" }} &ndash; {{ event.end_date|date:"M j, Y g:i A" }}
+        {{ event.start_date|date:"M j, Y" }} &ndash; {{ event.end_date|date:"M j, Y" }}
       </p>
 
       {% if event.description %}
@@ -48,9 +48,50 @@
 
       {% if event.signups_open %}
         {% if user_signup and user_signup.status == "registered" %}
-        <div class="alert alert-success mb-4">
-          <span>You're signed up for this event!{% if user_signup.signup_timezone %} (Timezone: {{ user_signup.signup_timezone }}){% endif %}</span>
+        <div class="flex items-center gap-3 mb-4">
+          <span class="badge badge-success">Signed up</span>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('edit_signup_modal').showModal()">Edit Signup</button>
         </div>
+
+        <dialog id="edit_signup_modal" class="modal">
+          <div class="modal-box">
+            <h3 class="text-lg font-bold mb-4">Edit Signup</h3>
+            <form method="post" action="{% url 'events:event_signup_edit' event.pk %}" class="space-y-4">
+              {% csrf_token %}
+              {% if event.timezone_options %}
+              <div class="form-control w-full">
+                <label class="label">
+                  <span class="label-text">Timezone{% if event.timezone_required %} <span class="text-error">*</span>{% endif %}</span>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  {% for tz in event.timezone_options %}
+                  <label class="label cursor-pointer gap-2">
+                    <input type="checkbox" name="signup_timezone" value="{{ tz }}" class="checkbox checkbox-sm"{% if tz in user_signup.signup_timezone %} checked{% endif %}>
+                    <span class="label-text">{{ tz }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              <div class="form-control w-full">
+                <label class="label" for="edit_signup_notes">
+                  <span class="label-text">Notes</span>
+                </label>
+                <textarea name="notes" id="edit_signup_notes" class="textarea textarea-bordered w-full" rows="3" placeholder="Any notes for the event admins (optional)">{{ user_signup.notes }}</textarea>
+              </div>
+              <div class="modal-action">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('edit_signup_modal').close()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+              </div>
+            </form>
+            <div class="divider">or</div>
+            <form method="post" action="{% url 'events:event_signup_delete' event.pk %}" onsubmit="return confirm('Are you sure you want to remove your signup?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-error btn-outline btn-sm w-full">Remove Signup</button>
+            </form>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
         {% else %}
         <button class="btn btn-primary btn-sm self-start mb-4" onclick="document.getElementById('signup_modal').showModal()">Sign Up</button>
 
@@ -64,15 +105,17 @@
               {% csrf_token %}
               {% if event.timezone_options %}
               <div class="form-control w-full">
-                <label class="label" for="signup_timezone">
+                <label class="label">
                   <span class="label-text">Timezone{% if event.timezone_required %} <span class="text-error">*</span>{% endif %}</span>
                 </label>
-                <select name="signup_timezone" id="signup_timezone" class="select select-bordered w-full"{% if event.timezone_required %} required{% endif %}>
-                  <option value="">Select timezone...</option>
+                <div class="flex flex-wrap gap-3">
                   {% for tz in event.timezone_options %}
-                  <option value="{{ tz }}">{{ tz }}</option>
+                  <label class="label cursor-pointer gap-2">
+                    <input type="checkbox" name="signup_timezone" value="{{ tz }}" class="checkbox checkbox-sm">
+                    <span class="label-text">{{ tz }}</span>
+                  </label>
                   {% endfor %}
-                </select>
+                </div>
               </div>
               {% endif %}
               <div class="form-control w-full">
@@ -131,7 +174,7 @@
                      title="View on Zwift Racing">ZR</a>
                   {% endif %}
                 </td>
-                <td>{{ entry.signup.signup_timezone|default:"-" }}</td>
+                <td>{% if entry.signup.signup_timezone %}{% for tz in entry.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
                 <td>
                   {% if entry.gender == "male" %}
                   <span class="badge badge-info badge-sm">M</span>

@@ -38,13 +38,13 @@ class EventForm(forms.ModelForm):
                     "placeholder": "Event description (supports Markdown)",
                 },
             ),
-            "start_date": forms.DateTimeInput(
-                attrs={"class": "input input-bordered w-full", "type": "datetime-local"},
-                format="%Y-%m-%dT%H:%M",
+            "start_date": forms.DateInput(
+                attrs={"class": "input input-bordered w-full", "type": "date"},
+                format="%Y-%m-%d",
             ),
-            "end_date": forms.DateTimeInput(
-                attrs={"class": "input input-bordered w-full", "type": "datetime-local"},
-                format="%Y-%m-%dT%H:%M",
+            "end_date": forms.DateInput(
+                attrs={"class": "input input-bordered w-full", "type": "date"},
+                format="%Y-%m-%d",
             ),
             "url": forms.URLInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},
