@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl mb-2">{{ page_title }}</h2>
+      <p class="text-sm text-base-content/70 mb-4">Event: {{ event.title }}</p>
+
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        <!-- Name -->
+        <div class="form-control w-full">
+          <label class="label" for="id_name">
+            <span class="label-text">Squad Name <span class="text-error">*</span></span>
+          </label>
+          {{ form.name }}
+          {% if form.name.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.name.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Captain / Vice Captain -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="id_captain">
+              <span class="label-text">Captain</span>
+            </label>
+            {{ form.captain }}
+            {% if form.captain.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.captain.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="id_vice_captain">
+              <span class="label-text">Vice Captain</span>
+            </label>
+            {{ form.vice_captain }}
+            {% if form.vice_captain.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.vice_captain.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Zwift Racing Category Range -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="id_min_zwift_racing_category">
+              <span class="label-text">Min ZR Category</span>
+            </label>
+            {{ form.min_zwift_racing_category }}
+            {% if form.min_zwift_racing_category.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.min_zwift_racing_category.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="id_max_zwift_racing_category">
+              <span class="label-text">Max ZR Category</span>
+            </label>
+            {{ form.max_zwift_racing_category }}
+            {% if form.max_zwift_racing_category.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.max_zwift_racing_category.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Zwift Category Range -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="id_min_zwift_category">
+              <span class="label-text">Min Zwift Category</span>
+            </label>
+            {{ form.min_zwift_category }}
+            {% if form.min_zwift_category.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.min_zwift_category.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="id_max_zwift_category">
+              <span class="label-text">Max Zwift Category</span>
+            </label>
+            {{ form.max_zwift_category }}
+            {% if form.max_zwift_category.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.max_zwift_category.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Timezone -->
+        <div class="form-control w-full">
+          <label class="label" for="id_squad_timezone">
+            <span class="label-text">Timezone</span>
+          </label>
+          {{ form.squad_timezone }}
+          {% if form.squad_timezone.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.squad_timezone.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Discord Channel ID -->
+        <div class="form-control w-full">
+          <label class="label" for="id_discord_channel_id">
+            <span class="label-text">Discord Channel ID</span>
+          </label>
+          {{ form.discord_channel_id }}
+          {% if form.discord_channel_id.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.discord_channel_id.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Discord channel for squad coordination (0 = none)</span>
+          </label>
+        </div>
+
+        <!-- Team Discord Role -->
+        <div class="form-control w-full">
+          <label class="label" for="id_team_discord_role">
+            <span class="label-text">Discord Role ID</span>
+          </label>
+          {{ form.team_discord_role }}
+          {% if form.team_discord_role.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.team_discord_role.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Discord role for squad members (0 = none)</span>
+          </label>
+        </div>
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-error">
+          {% for error in form.non_field_errors %}
+          <span>{{ error }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="form-control mt-6">
+          <button type="submit" class="btn btn-primary">
+            {{ submit_label }}
+          </button>
+        </div>
+      </form>
+
+      {% if squad %}
+      <div class="divider"></div>
+      <div class="flex justify-between items-center">
+        <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary">Back to Event</a>
+        <form method="post" action="{% url 'events:squad_delete' event.pk squad.pk %}"
+              onsubmit="return confirm('Are you sure you want to delete this squad? This cannot be undone.');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-error btn-sm btn-outline">Delete Squad</button>
+        </form>
+      </div>
+      {% else %}
+      <div class="divider"></div>
+      <div class="text-center">
+        <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary">Back to Event</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

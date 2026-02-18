@@ -42,6 +42,98 @@
       </div>
       {% endif %}
 
+      {# Event Signup Section #}
+      <div class="divider mt-6"></div>
+      <h3 class="text-lg font-semibold mb-4">Signup</h3>
+
+      {% if event.signups_open %}
+        {% if user_signup and user_signup.status == "registered" %}
+        <div class="alert alert-success mb-4">
+          <span>You're signed up for this event!{% if user_signup.signup_timezone %} (Timezone: {{ user_signup.signup_timezone }}){% endif %}</span>
+        </div>
+        {% else %}
+        <form method="post" action="{% url 'events:event_signup' event.pk %}" class="mb-4">
+          {% csrf_token %}
+          {% if event.timezone_options %}
+          <div class="form-control w-full max-w-xs mb-3">
+            <label class="label" for="signup_timezone">
+              <span class="label-text">Timezone{% if event.timezone_required %} <span class="text-error">*</span>{% endif %}</span>
+            </label>
+            <select name="signup_timezone" id="signup_timezone" class="select select-bordered w-full max-w-xs"{% if event.timezone_required %} required{% endif %}>
+              <option value="">Select timezone...</option>
+              {% for tz in event.timezone_options %}
+              <option value="{{ tz }}">{{ tz }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+          <button type="submit" class="btn btn-primary btn-sm">Sign Up</button>
+        </form>
+        {% endif %}
+      {% else %}
+      <p class="text-sm text-base-content/50">Signups are closed.</p>
+      {% endif %}
+
+      {% if is_event_admin and signups %}
+      <div class="mt-4">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="badge badge-neutral">{{ signup_count }} signed up</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Gender</th>
+                <th>Profiles</th>
+                <th>ZP Cat</th>
+                <th>ZR Cat</th>
+                <th>Verified</th>
+                <th>Timezone</th>
+                <th>Status</th>
+                <th>Signed Up</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in signups %}
+              <tr>
+                <td>{{ entry.user.get_full_name|default:entry.user.discord_username }}</td>
+                <td>{% if entry.gender == "male" %}M{% elif entry.gender == "female" %}F{% elif entry.gender %}{{ entry.gender }}{% else %}-{% endif %}</td>
+                <td class="flex gap-1">
+                  {% if entry.in_zwiftpower and entry.zwid %}
+                  <a href="https://zwiftpower.com/profile.php?z={{ entry.zwid }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">ZP</a>
+                  {% endif %}
+                  {% if entry.in_zwiftracing and entry.zwid %}
+                  <a href="https://www.zwiftracing.app/riders/{{ entry.zwid }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">ZR</a>
+                  {% endif %}
+                  {% if not entry.in_zwiftpower and not entry.in_zwiftracing %}-{% endif %}
+                </td>
+                <td>{{ entry.zp_category|default:"-" }}</td>
+                <td>{% if entry.zr_category %}{{ entry.zr_category }}{% if entry.zr_rating %} ({{ entry.zr_rating }}){% endif %}{% else %}-{% endif %}</td>
+                <td>
+                  {% if entry.is_race_ready %}
+                  <span class="badge badge-success badge-sm">Yes</span>
+                  {% else %}
+                  <span class="badge badge-error badge-sm">No</span>
+                  {% endif %}
+                </td>
+                <td>{{ entry.signup.signup_timezone|default:"-" }}</td>
+                <td>
+                  {% if entry.signup.status == "registered" %}
+                  <span class="badge badge-success badge-sm">Registered</span>
+                  {% else %}
+                  <span class="badge badge-warning badge-sm">Withdrawn</span>
+                  {% endif %}
+                </td>
+                <td>{{ entry.signup.created_at|date:"M j, Y" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
       {% if races %}
       <div class="divider mt-6"></div>
       <h3 class="text-lg font-semibold mb-4">Races</h3>
@@ -98,6 +190,41 @@
           </div>
         </div>
         {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if squads %}
+      <div class="divider mt-6"></div>
+      <h3 class="text-lg font-semibold mb-4">Squads</h3>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Members</th>
+              <th>Captain</th>
+              <th>Vice Captain</th>
+              <th>ZR Category</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for squad in squads %}
+            <tr>
+              <td class="font-semibold">{{ squad.name }}</td>
+              <td>{{ squad.member_count }}</td>
+              <td>{{ squad.captain|default:"-" }}</td>
+              <td>{{ squad.vice_captain|default:"-" }}</td>
+              <td>
+                {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category %}
+                {{ squad.min_zwift_racing_category|default:"" }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %} &ndash; {% endif %}{{ squad.max_zwift_racing_category|default:"" }}
+                {% else %}
+                -
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
       {% endif %}
 

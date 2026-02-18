@@ -4,6 +4,20 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+ZR_CATEGORY_ORDER = [
+    "Diamond",
+    "Ruby",
+    "Emerald",
+    "Sapphire",
+    "Amethyst",
+    "Platinum",
+    "Gold",
+    "Silver",
+    "Bronze",
+    "Copper",
+]
+ZR_CATEGORY_CHOICES = [(cat, cat) for cat in ZR_CATEGORY_ORDER]
+
 
 class Event(models.Model):
     """A team event such as a race series, time trial, or club ride.
@@ -27,6 +41,13 @@ class Event(models.Model):
     start_date = models.DateTimeField(help_text="Event start date and time")
     end_date = models.DateTimeField(help_text="Event end date and time")
     visible = models.BooleanField(default=True, help_text="Whether the event is visible to team members")
+    signups_open = models.BooleanField(default=False, help_text="Whether signups are currently open")
+    timezone_options = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='JSON list of timezone options, e.g. ["WEMA", "AMER", "APAC"]',
+    )
+    timezone_required = models.BooleanField(default=False, help_text="Whether timezone selection is required at signup")
     url = models.URLField(max_length=500, blank=True, help_text="External URL for event details or signup")
     discord_channel_id = models.BigIntegerField(
         default=0,
@@ -193,3 +214,229 @@ class EventRegistration(models.Model):
 
         """
         return f"{self.user} - {self.race.title}"
+
+
+class EventSignup(models.Model):
+    """Links a user to an event they have signed up for.
+
+    Event-level signup independent of squads and races. Squad/race assignment
+    happens separately after signup.
+
+    Attributes:
+        event: The event the user signed up for.
+        user: The signed-up user.
+        signup_timezone: Selected timezone from event's timezone_options.
+        status: Signup status (registered or withdrawn).
+        notes: Optional notes.
+        created_at: When the signup was created.
+        updated_at: When the signup was last modified.
+
+    """
+
+    class Status(models.TextChoices):
+        """Signup status choices."""
+
+        REGISTERED = "registered", "Registered"
+        WITHDRAWN = "withdrawn", "Withdrawn"
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="signups",
+        help_text="The event the user signed up for",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="event_signups",
+        help_text="The signed-up user",
+    )
+    signup_timezone = models.CharField(max_length=50, blank=True, help_text="Selected timezone from event options")
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.REGISTERED,
+        help_text="Signup status",
+    )
+    notes = models.TextField(blank=True, help_text="Optional notes")
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the signup was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the signup was last updated")
+
+    class Meta:
+        """Meta options for EventSignup model."""
+
+        ordering = ["-created_at"]  # noqa: RUF012
+        unique_together = [("event", "user")]  # noqa: RUF012
+        verbose_name = "Event Signup"
+        verbose_name_plural = "Event Signups"
+
+    def __str__(self) -> str:
+        """Return user and event description.
+
+        Returns:
+            String in format "username - Event Title".
+
+        """
+        return f"{self.user} - {self.event.title}"
+
+
+class Squad(models.Model):
+    """A squad within an event (e.g., racing squads/divisions).
+
+    An event has many squads. Users join squads via the SquadMember through model.
+
+    Attributes:
+        event: The parent event this squad belongs to.
+        name: Squad name.
+        squad_timezone: Optional timezone string for the squad.
+        discord_channel_id: Discord channel ID for squad coordination.
+        captain: Squad captain.
+        vice_captain: Squad vice captain.
+        team_discord_role: Discord role ID for the squad.
+        min_zwift_category: Minimum Zwift category letter.
+        max_zwift_category: Maximum Zwift category letter.
+        min_zwift_racing_category: Minimum Zwift Racing category.
+        max_zwift_racing_category: Maximum Zwift Racing category.
+        members: Many-to-many relation to users via SquadMember.
+        created_by: User who created this squad.
+        created_at: When the record was created.
+        updated_at: When the record was last modified.
+
+    """
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="squads",
+        help_text="The event this squad belongs to",
+    )
+    name = models.CharField(max_length=200, help_text="Squad name")
+    squad_timezone = models.CharField(max_length=50, blank=True, help_text="Optional timezone string")
+    discord_channel_id = models.BigIntegerField(
+        default=0,
+        help_text="Discord channel ID for squad coordination (0 = none)",
+    )
+    captain = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="captain_squads",
+        help_text="Squad captain",
+    )
+    vice_captain = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vice_captain_squads",
+        help_text="Squad vice captain",
+    )
+    team_discord_role = models.BigIntegerField(
+        default=0,
+        help_text="Discord role ID for the squad (0 = none)",
+    )
+    min_zwift_category = models.CharField(max_length=20, blank=True, help_text="Minimum Zwift category (e.g., A, B, C)")
+    max_zwift_category = models.CharField(max_length=20, blank=True, help_text="Maximum Zwift category (e.g., A, B, C)")
+    min_zwift_racing_category = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=ZR_CATEGORY_CHOICES,
+        help_text="Minimum Zwift Racing category",
+    )
+    max_zwift_racing_category = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=ZR_CATEGORY_CHOICES,
+        help_text="Maximum Zwift Racing category",
+    )
+    members = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        through="SquadMember",
+        related_name="squads",
+        help_text="Squad members",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_squads",
+        help_text="User who created this squad",
+    )
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the squad was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the squad was last updated")
+
+    class Meta:
+        """Meta options for Squad model."""
+
+        ordering = ["name"]  # noqa: RUF012
+        verbose_name = "Squad"
+        verbose_name_plural = "Squads"
+
+    def __str__(self) -> str:
+        """Return event and squad name.
+
+        Returns:
+            String in format "Event Title - Squad Name".
+
+        """
+        return f"{self.event.title} - {self.name}"
+
+
+class SquadMember(models.Model):
+    """Links a user to a squad with membership status.
+
+    Attributes:
+        squad: The squad.
+        user: The member.
+        status: Membership status (member, pending, rejected).
+        created_at: When the membership was created.
+        updated_at: When the membership was last modified.
+
+    """
+
+    class Status(models.TextChoices):
+        """Squad membership status choices."""
+
+        MEMBER = "member", "Member"
+        PENDING = "pending", "Pending"
+        REJECTED = "rejected", "Rejected"
+
+    squad = models.ForeignKey(
+        Squad,
+        on_delete=models.CASCADE,
+        related_name="squad_members",
+        help_text="The squad",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="squad_memberships",
+        help_text="The squad member",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        help_text="Membership status",
+    )
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the membership was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the membership was last updated")
+
+    class Meta:
+        """Meta options for SquadMember model."""
+
+        ordering = ["user__first_name", "user__last_name"]  # noqa: RUF012
+        unique_together = [("squad", "user")]  # noqa: RUF012
+        verbose_name = "Squad Member"
+        verbose_name_plural = "Squad Members"
+
+    def __str__(self) -> str:
+        """Return squad and user.
+
+        Returns:
+            String in format "Squad Name - User".
+
+        """
+        return f"{self.squad.name} - {self.user}"

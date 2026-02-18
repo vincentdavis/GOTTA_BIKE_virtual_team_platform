@@ -99,11 +99,43 @@
           </label>
         </div>
 
-        <!-- Visible -->
+        <!-- Visible & Signups Open -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-2">
+              {{ form.visible }}
+              <span class="label-text">Visible to team members</span>
+            </label>
+          </div>
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-2">
+              {{ form.signups_open }}
+              <span class="label-text">Signups open</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Timezone Options -->
+        <div class="form-control w-full">
+          <label class="label" for="id_timezone_options">
+            <span class="label-text">Timezone Options</span>
+          </label>
+          {{ form.timezone_options }}
+          {% if form.timezone_options.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.timezone_options.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">JSON list, e.g. ["WEMA", "AMER", "APAC"]</span>
+          </label>
+        </div>
+
+        <!-- Timezone Required -->
         <div class="form-control">
           <label class="label cursor-pointer justify-start gap-2">
-            {{ form.visible }}
-            <span class="label-text">Visible to team members</span>
+            {{ form.timezone_required }}
+            <span class="label-text">Require timezone selection at signup</span>
           </label>
         </div>
 
@@ -148,5 +180,139 @@
       {% endif %}
     </div>
   </div>
+
+  {% if event %}
+  <div class="card bg-base-200 shadow-xl mt-6">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold">Squads</h3>
+        <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">Add Squad</a>
+      </div>
+
+      {% if squads %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Members</th>
+              <th>Captain</th>
+              <th>Vice Captain</th>
+              <th>ZR Category</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for squad in squads %}
+            <tr>
+              <td class="font-semibold">{{ squad.name }}</td>
+              <td>{{ squad.member_count }}</td>
+              <td>{{ squad.captain|default:"-" }}</td>
+              <td>{{ squad.vice_captain|default:"-" }}</td>
+              <td>
+                {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category %}
+                {{ squad.min_zwift_racing_category|default:"" }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %} &ndash; {% endif %}{{ squad.max_zwift_racing_category|default:"" }}
+                {% else %}
+                -
+                {% endif %}
+              </td>
+              <td class="flex gap-1">
+                <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="btn btn-ghost btn-xs">Edit</a>
+                <form method="post" action="{% url 'events:squad_delete' event.pk squad.pk %}" onsubmit="return confirm('Delete squad &quot;{{ squad.name }}&quot;?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-error btn-outline btn-xs">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/70">No squads yet. Click "Add Squad" to create one.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Signups Management #}
+  <div class="card bg-base-200 shadow-xl mt-6">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold">
+          Signups
+          {% if signups %}
+          <span class="badge badge-neutral ml-2">{{ signups|length }}</span>
+          {% endif %}
+        </h3>
+      </div>
+
+      {% if signups %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Gender</th>
+              <th>Profiles</th>
+              <th>ZP Cat</th>
+              <th>ZR Cat</th>
+              <th>Verified</th>
+              <th>Timezone</th>
+              <th>Status</th>
+              <th>Signed Up</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in signups %}
+            <tr>
+              <td>{{ entry.user.get_full_name|default:entry.user.discord_username }}</td>
+              <td>{% if entry.gender == "male" %}M{% elif entry.gender == "female" %}F{% elif entry.gender %}{{ entry.gender }}{% else %}-{% endif %}</td>
+              <td class="flex gap-1">
+                {% if entry.in_zwiftpower and entry.zwid %}
+                <a href="https://zwiftpower.com/profile.php?z={{ entry.zwid }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">ZP</a>
+                {% endif %}
+                {% if entry.in_zwiftracing and entry.zwid %}
+                <a href="https://www.zwiftracing.app/riders/{{ entry.zwid }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">ZR</a>
+                {% endif %}
+                {% if not entry.in_zwiftpower and not entry.in_zwiftracing %}-{% endif %}
+              </td>
+              <td>{{ entry.zp_category|default:"-" }}</td>
+              <td>{% if entry.zr_category %}{{ entry.zr_category }}{% if entry.zr_rating %} ({{ entry.zr_rating }}){% endif %}{% else %}-{% endif %}</td>
+              <td>
+                {% if entry.is_race_ready %}
+                <span class="badge badge-success badge-sm">Yes</span>
+                {% else %}
+                <span class="badge badge-error badge-sm">No</span>
+                {% endif %}
+              </td>
+              <td>{{ entry.signup.signup_timezone|default:"-" }}</td>
+              <td>
+                {% if entry.signup.status == "registered" %}
+                <span class="badge badge-success badge-sm">Registered</span>
+                {% else %}
+                <span class="badge badge-warning badge-sm">Withdrawn</span>
+                {% endif %}
+              </td>
+              <td>{{ entry.signup.created_at|date:"M j, Y" }}</td>
+              <td>
+                {% if entry.signup.status == "registered" %}
+                <form method="post" action="{% url 'events:event_signup_withdraw' event.pk entry.signup.pk %}" onsubmit="return confirm('Withdraw signup for {{ entry.user }}?')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-warning btn-outline btn-xs">Withdraw</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/70">No signups yet.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

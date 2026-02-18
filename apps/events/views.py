@@ -4,14 +4,57 @@ import logfire
 from constance import config
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import team_member_required
-from apps.events.forms import EventForm
-from apps.events.models import Event
+from apps.events.forms import EventForm, SquadForm
+from apps.events.models import Event, EventSignup, Squad
+from apps.team.services import ZP_DIV_TO_CATEGORY
+from apps.zwiftpower.models import ZPTeamRiders
+from apps.zwiftracing.models import ZRRider
+
+
+def _enrich_signups(signups):
+    """Enrich signup queryset with ZP/ZR data for display.
+
+    Args:
+        signups: EventSignup queryset with select_related("user").
+
+    Returns:
+        List of dicts with signup + rider data for template rendering.
+
+    """
+    zwids = [s.user.zwid for s in signups if s.user.zwid]
+    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
+    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+
+    enriched = []
+    for signup in signups:
+        user = signup.user
+        zwid = user.zwid
+        zp = zp_by_zwid.get(zwid)
+        zr = zr_by_zwid.get(zwid)
+
+        zp_div = None
+        if zp:
+            zp_div = zp.divw if user.gender == "female" else zp.div
+
+        enriched.append({
+            "signup": signup,
+            "user": user,
+            "zwid": zwid,
+            "gender": user.gender or "",
+            "is_race_ready": user.is_race_ready,
+            "in_zwiftpower": zp is not None,
+            "zp_category": ZP_DIV_TO_CATEGORY.get(zp_div, "") if zp_div else "",
+            "in_zwiftracing": zr is not None,
+            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+        })
+    return enriched
 
 
 @require_GET
@@ -59,6 +102,10 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     """
     event = get_object_or_404(Event, pk=pk)
     races = event.races.all()
+    squads = event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+    signups = event.signups.select_related("user").all()
+    user_signup = event.signups.filter(user=request.user).first()
+    enriched_signups = _enrich_signups(signups) if request.user.is_event_admin else []
     logfire.debug("Event detail viewed", user_id=request.user.id, event_id=pk)
     return render(
         request,
@@ -66,6 +113,10 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         {
             "event": event,
             "races": races,
+            "squads": squads,
+            "signups": enriched_signups,
+            "signup_count": signups.count(),
+            "user_signup": user_signup,
             "is_event_admin": request.user.is_event_admin,
             "guild_id": config.GUILD_ID,
         },
@@ -161,10 +212,19 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
     else:
         form = EventForm(instance=event)
 
+    squads = event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+    enriched_signups = _enrich_signups(event.signups.select_related("user").all())
     return render(
         request,
         "events/event_form.html",
-        {"form": form, "event": event, "page_title": "Edit Event", "submit_label": "Save Changes"},
+        {
+            "form": form,
+            "event": event,
+            "squads": squads,
+            "signups": enriched_signups,
+            "page_title": "Edit Event",
+            "submit_label": "Save Changes",
+        },
     )
 
 
@@ -205,3 +265,248 @@ def event_delete_view(request: HttpRequest, pk: int) -> HttpResponse:
     )
     messages.success(request, f'Event "{event_title}" deleted successfully!')
     return redirect("events:event_list")
+
+
+@login_required
+@team_member_required()
+@require_POST
+def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Sign up the current user for an event.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+
+    Returns:
+        Redirect to event detail page.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+
+    if not event.signups_open:
+        messages.error(request, "Signups are not open for this event.")
+        return redirect("events:event_detail", pk=pk)
+
+    if event.signups.filter(user=request.user).exists():
+        messages.warning(request, "You are already signed up for this event.")
+        return redirect("events:event_detail", pk=pk)
+
+    signup_timezone = ""
+    if event.timezone_options:
+        signup_timezone = request.POST.get("signup_timezone", "").strip()
+        if event.timezone_required and not signup_timezone:
+            messages.error(request, "Please select a timezone.")
+            return redirect("events:event_detail", pk=pk)
+        if signup_timezone and signup_timezone not in event.timezone_options:
+            messages.error(request, "Invalid timezone selection.")
+            return redirect("events:event_detail", pk=pk)
+
+    EventSignup.objects.create(
+        event=event,
+        user=request.user,
+        signup_timezone=signup_timezone,
+    )
+    logfire.info(
+        "Event signup created",
+        event_id=pk,
+        event_title=event.title,
+        user_id=request.user.id,
+        signup_timezone=signup_timezone,
+    )
+    messages.success(request, "You have signed up for this event!")
+    return redirect("events:event_detail", pk=pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def event_signup_withdraw_view(request: HttpRequest, event_pk: int, signup_pk: int) -> HttpResponse:
+    """Withdraw a signup (admin only).
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        signup_pk: The signup primary key.
+
+    Returns:
+        Redirect to event edit page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized signup withdraw attempt",
+            event_id=event_pk,
+            signup_id=signup_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage signups.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    signup = get_object_or_404(EventSignup, pk=signup_pk, event=event)
+    signup.status = EventSignup.Status.WITHDRAWN
+    signup.save(update_fields=["status", "updated_at"])
+    logfire.info(
+        "Event signup withdrawn",
+        event_id=event_pk,
+        signup_id=signup_pk,
+        signup_user_id=signup.user_id,
+        admin_user_id=request.user.id,
+    )
+    messages.success(request, f"Signup for {signup.user} has been withdrawn.")
+    return redirect("events:event_edit", pk=event_pk)
+
+
+@login_required
+@team_member_required()
+@require_http_methods(["GET", "POST"])
+def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Create a new squad for an event.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+
+    Returns:
+        Rendered form or redirect on success.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized squad creation attempt",
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage squads.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    if request.method == "POST":
+        form = SquadForm(request.POST)
+        if form.is_valid():
+            squad = form.save(commit=False)
+            squad.event = event
+            squad.created_by = request.user
+            squad.save()
+            logfire.info(
+                "Squad created",
+                squad_id=squad.pk,
+                squad_name=squad.name,
+                event_id=event_pk,
+                user_id=request.user.id,
+            )
+            messages.success(request, f'Squad "{squad.name}" created successfully!')
+            return redirect("events:event_detail", pk=event_pk)
+    else:
+        form = SquadForm()
+
+    return render(
+        request,
+        "events/squad_form.html",
+        {
+            "form": form,
+            "event": event,
+            "page_title": "Add Squad",
+            "submit_label": "Create Squad",
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_http_methods(["GET", "POST"])
+def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
+    """Edit an existing squad.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        Rendered form or redirect on success.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized squad edit attempt",
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage squads.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    if request.method == "POST":
+        form = SquadForm(request.POST, instance=squad)
+        if form.is_valid():
+            form.save()
+            logfire.info(
+                "Squad updated",
+                squad_id=squad_pk,
+                squad_name=squad.name,
+                event_id=event_pk,
+                user_id=request.user.id,
+            )
+            messages.success(request, f'Squad "{squad.name}" updated successfully!')
+            return redirect("events:event_detail", pk=event_pk)
+    else:
+        form = SquadForm(instance=squad)
+
+    return render(
+        request,
+        "events/squad_form.html",
+        {
+            "form": form,
+            "event": event,
+            "squad": squad,
+            "page_title": "Edit Squad",
+            "submit_label": "Save Changes",
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_POST
+def squad_delete_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
+    """Delete a squad.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        Redirect to event detail.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized squad delete attempt",
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage squads.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    squad_name = squad.name
+    squad.delete()
+    logfire.info(
+        "Squad deleted",
+        squad_id=squad_pk,
+        squad_name=squad_name,
+        event_id=event_pk,
+        user_id=request.user.id,
+    )
+    messages.success(request, f'Squad "{squad_name}" deleted successfully!')
+    return redirect("events:event_detail", pk=event_pk)
