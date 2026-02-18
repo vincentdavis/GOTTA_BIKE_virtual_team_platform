@@ -19,6 +19,19 @@ ZR_CATEGORY_ORDER = [
 ZR_CATEGORY_CHOICES = [(cat, cat) for cat in ZR_CATEGORY_ORDER]
 
 
+DEFAULT_TIMEZONE_OPTIONS = ["US EAST", "US WEST", "Atlantic", "EMEA Central", "EMEA West"]
+
+
+def _default_timezone_options() -> list[str]:
+    """Return a copy of the default timezone options list.
+
+    Returns:
+        List of default timezone option strings.
+
+    """
+    return list(DEFAULT_TIMEZONE_OPTIONS)
+
+
 class Event(models.Model):
     """A team event such as a race series, time trial, or club ride.
 
@@ -43,9 +56,9 @@ class Event(models.Model):
     visible = models.BooleanField(default=True, help_text="Whether the event is visible to team members")
     signups_open = models.BooleanField(default=False, help_text="Whether signups are currently open")
     timezone_options = models.JSONField(
-        default=list,
+        default=_default_timezone_options,
         blank=True,
-        help_text='JSON list of timezone options, e.g. ["WEMA", "AMER", "APAC"]',
+        help_text="Timezone options available at signup",
     )
     timezone_required = models.BooleanField(default=False, help_text="Whether timezone selection is required at signup")
     url = models.URLField(max_length=500, blank=True, help_text="External URL for event details or signup")

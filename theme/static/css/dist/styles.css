@@ -4020,6 +4020,9 @@
   .ml-7 {
     margin-left: calc(var(--spacing) * 7);
   }
+  .ml-auto {
+    margin-left: auto;
+  }
   @layer daisyui.l1.l2.l3 {
     .status {
       display: inline-block;
@@ -4403,6 +4406,9 @@
   }
   .min-h-64 {
     min-height: calc(var(--spacing) * 64);
+  }
+  .min-h-\[2rem\] {
+    min-height: 2rem;
   }
   .min-h-\[12rem\] {
     min-height: 12rem;
@@ -5512,6 +5518,10 @@
   .select-all {
     -webkit-user-select: all;
     user-select: all;
+  }
+  .select-none {
+    -webkit-user-select: none;
+    user-select: none;
   }
   @layer daisyui.l1.l2 {
     .input-error, .input-error:focus, .input-error:focus-within {

@@ -115,19 +115,24 @@
           </div>
         </div>
 
-        <!-- Timezone Options -->
+        <!-- Timezone Options (chip/tag input) -->
         <div class="form-control w-full">
-          <label class="label" for="id_timezone_options">
+          <label class="label">
             <span class="label-text">Timezone Options</span>
           </label>
           {{ form.timezone_options }}
+          <div id="tz-chips" class="flex flex-wrap gap-2 mb-2 min-h-[2rem]"></div>
+          <div class="join w-full">
+            <input type="text" id="tz-input" class="input input-bordered join-item w-full" placeholder="e.g. WEMA, AMER, APAC">
+            <button type="button" id="tz-add-btn" class="btn btn-primary join-item">Add</button>
+          </div>
           {% if form.timezone_options.errors %}
           <label class="label">
             <span class="label-text-alt text-error">{{ form.timezone_options.errors.0 }}</span>
           </label>
           {% endif %}
           <label class="label">
-            <span class="label-text-alt">JSON list, e.g. ["WEMA", "AMER", "APAC"]</span>
+            <span class="label-text-alt">Type a timezone label and press Enter or click Add</span>
           </label>
         </div>
 
@@ -247,38 +252,83 @@
       </div>
 
       {% if signups %}
+      <div class="mb-2">
+        <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="edit">
+      </div>
       <div class="overflow-x-auto">
-        <table class="table table-sm">
+        <table class="table table-sm" data-signup-table="edit">
           <thead>
             <tr>
-              <th>User</th>
-              <th>Gender</th>
-              <th>Profiles</th>
-              <th>ZP Cat</th>
-              <th>ZR Cat</th>
-              <th>Verified</th>
-              <th>Timezone</th>
-              <th>Status</th>
-              <th>Signed Up</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Gender</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Category</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Rating</th>
+              <th data-sort="num" class="cursor-pointer hover:text-primary select-none">FTP</th>
+              <th data-sort="num" class="cursor-pointer hover:text-primary select-none">WKG</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Verified</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Status</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {% for entry in signups %}
             <tr>
-              <td>{{ entry.user.get_full_name|default:entry.user.discord_username }}</td>
-              <td>{% if entry.gender == "male" %}M{% elif entry.gender == "female" %}F{% elif entry.gender %}{{ entry.gender }}{% else %}-{% endif %}</td>
-              <td class="flex gap-1">
+              <td>
+                {{ entry.user.get_full_name|default:entry.user.discord_username }}
                 {% if entry.in_zwiftpower and entry.zwid %}
-                <a href="https://zwiftpower.com/profile.php?z={{ entry.zwid }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">ZP</a>
+                <a href="https://zwiftpower.com/profile.php?z={{ entry.zwid }}" target="_blank" rel="noopener"
+                   class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded"
+                   title="View on ZwiftPower">ZP</a>
                 {% endif %}
                 {% if entry.in_zwiftracing and entry.zwid %}
-                <a href="https://www.zwiftracing.app/riders/{{ entry.zwid }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">ZR</a>
+                <a href="https://www.zwiftracing.app/riders/{{ entry.zwid }}" target="_blank" rel="noopener"
+                   class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded"
+                   title="View on Zwift Racing">ZR</a>
                 {% endif %}
-                {% if not entry.in_zwiftpower and not entry.in_zwiftracing %}-{% endif %}
               </td>
-              <td>{{ entry.zp_category|default:"-" }}</td>
-              <td>{% if entry.zr_category %}{{ entry.zr_category }}{% if entry.zr_rating %} ({{ entry.zr_rating }}){% endif %}{% else %}-{% endif %}</td>
+              <td>{{ entry.signup.signup_timezone|default:"-" }}</td>
+              <td>
+                {% if entry.gender == "male" %}
+                <span class="badge badge-info badge-sm">M</span>
+                {% elif entry.gender == "female" %}
+                <span class="badge badge-secondary badge-sm">F</span>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if entry.in_zwiftpower %}
+                  {% if entry.zp_category_w %}
+                  <span class="badge badge-secondary badge-sm">{{ entry.zp_category_w }}</span>
+                  {% else %}
+                  <span class="badge badge-primary badge-sm">{{ entry.zp_category|default:"-" }}</span>
+                  {% endif %}
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if entry.in_zwiftracing %}
+                <span class="badge badge-secondary badge-sm">{{ entry.zr_category|default:"N/A" }}</span>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if entry.zp_ftp %}
+                <span class="font-mono text-sm">{{ entry.zp_ftp }}</span>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if entry.wkg %}
+                <span class="font-mono text-sm">{{ entry.wkg }}</span>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
               <td>
                 {% if entry.is_race_ready %}
                 <span class="badge badge-success badge-sm">Yes</span>
@@ -286,7 +336,6 @@
                 <span class="badge badge-error badge-sm">No</span>
                 {% endif %}
               </td>
-              <td>{{ entry.signup.signup_timezone|default:"-" }}</td>
               <td>
                 {% if entry.signup.status == "registered" %}
                 <span class="badge badge-success badge-sm">Registered</span>
@@ -294,7 +343,6 @@
                 <span class="badge badge-warning badge-sm">Withdrawn</span>
                 {% endif %}
               </td>
-              <td>{{ entry.signup.created_at|date:"M j, Y" }}</td>
               <td>
                 {% if entry.signup.status == "registered" %}
                 <form method="post" action="{% url 'events:event_signup_withdraw' event.pk entry.signup.pk %}" onsubmit="return confirm('Withdraw signup for {{ entry.user }}?')">
@@ -315,4 +363,120 @@
   </div>
   {% endif %}
 </div>
+
+<script>
+(function() {
+  const hiddenInput = document.getElementById('id_timezone_options');
+  const chipsContainer = document.getElementById('tz-chips');
+  const textInput = document.getElementById('tz-input');
+  const addBtn = document.getElementById('tz-add-btn');
+
+  // Parse existing value from hidden input
+  let timezones = [];
+  try {
+    const val = hiddenInput.value;
+    if (val) timezones = JSON.parse(val);
+  } catch(e) {
+    timezones = [];
+  }
+  if (!Array.isArray(timezones)) timezones = [];
+
+  function sync() {
+    hiddenInput.value = JSON.stringify(timezones);
+  }
+
+  function render() {
+    chipsContainer.innerHTML = '';
+    timezones.forEach(function(tz, i) {
+      const chip = document.createElement('span');
+      chip.className = 'badge badge-lg gap-1';
+      chip.textContent = tz;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn btn-ghost btn-xs btn-circle';
+      removeBtn.innerHTML = '&times;';
+      removeBtn.setAttribute('aria-label', 'Remove ' + tz);
+      removeBtn.addEventListener('click', function() {
+        timezones.splice(i, 1);
+        sync();
+        render();
+      });
+      chip.appendChild(removeBtn);
+      chipsContainer.appendChild(chip);
+    });
+  }
+
+  function addTimezone() {
+    const val = textInput.value.trim().toUpperCase();
+    if (!val) return;
+    if (timezones.indexOf(val) !== -1) {
+      textInput.value = '';
+      return;
+    }
+    timezones.push(val);
+    sync();
+    render();
+    textInput.value = '';
+    textInput.focus();
+  }
+
+  addBtn.addEventListener('click', addTimezone);
+  textInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addTimezone();
+    }
+  });
+
+  sync();
+  render();
+})();
+
+document.querySelectorAll('[data-signup-search]').forEach(function(input) {
+  var tableId = input.getAttribute('data-signup-search');
+  var table = document.querySelector('[data-signup-table="' + tableId + '"]');
+  if (!table) return;
+  input.addEventListener('input', function() {
+    var query = this.value.toLowerCase();
+    table.querySelectorAll('tbody tr').forEach(function(row) {
+      var name = row.cells[0].textContent.toLowerCase();
+      row.style.display = name.indexOf(query) !== -1 ? '' : 'none';
+    });
+  });
+});
+
+document.querySelectorAll('[data-signup-table]').forEach(function(table) {
+  var headers = table.querySelectorAll('th[data-sort]');
+  headers.forEach(function(th, colIdx) {
+    th.addEventListener('click', function() {
+      var sortType = th.getAttribute('data-sort');
+      var asc = th.getAttribute('data-dir') !== 'asc';
+      headers.forEach(function(h) {
+        h.removeAttribute('data-dir');
+        var ind = h.querySelector('.sort-indicator');
+        if (ind) ind.remove();
+      });
+      th.setAttribute('data-dir', asc ? 'asc' : 'desc');
+      var indicator = document.createElement('span');
+      indicator.className = 'sort-indicator text-primary ml-1';
+      indicator.textContent = asc ? '\u25B2' : '\u25BC';
+      th.appendChild(indicator);
+
+      var tbody = table.querySelector('tbody');
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort(function(a, b) {
+        var aText = a.cells[colIdx].textContent.trim();
+        var bText = b.cells[colIdx].textContent.trim();
+        if (sortType === 'num') {
+          var aNum = parseFloat(aText) || 0;
+          var bNum = parseFloat(bText) || 0;
+          return asc ? aNum - bNum : bNum - aNum;
+        }
+        return asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+      });
+      rows.forEach(function(row) { tbody.appendChild(row); });
+    });
+  });
+});
+</script>
 {% endblock %}

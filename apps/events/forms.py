@@ -57,13 +57,7 @@ class EventForm(forms.ModelForm):
             "signups_open": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
-            "timezone_options": forms.Textarea(
-                attrs={
-                    "class": "textarea textarea-bordered w-full",
-                    "rows": 2,
-                    "placeholder": '["WEMA", "AMER", "APAC"]',
-                },
-            ),
+            "timezone_options": forms.HiddenInput(),
             "timezone_required": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),

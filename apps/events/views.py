@@ -1,5 +1,7 @@
 """Views for events app."""
 
+from decimal import Decimal
+
 import logfire
 from constance import config
 from django.contrib import messages
@@ -38,9 +40,9 @@ def _enrich_signups(signups):
         zp = zp_by_zwid.get(zwid)
         zr = zr_by_zwid.get(zwid)
 
-        zp_div = None
-        if zp:
-            zp_div = zp.divw if user.gender == "female" else zp.div
+        zp_ftp = zp.ftp if zp else None
+        zp_weight = zp.weight if zp else None
+        wkg = round(Decimal(zp_ftp) / zp_weight, 2) if zp_ftp and zp_weight and zp_weight > 0 else None
 
         enriched.append({
             "signup": signup,
@@ -49,7 +51,10 @@ def _enrich_signups(signups):
             "gender": user.gender or "",
             "is_race_ready": user.is_race_ready,
             "in_zwiftpower": zp is not None,
-            "zp_category": ZP_DIV_TO_CATEGORY.get(zp_div, "") if zp_div else "",
+            "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
+            "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
+            "zp_ftp": zp_ftp,
+            "wkg": wkg,
             "in_zwiftracing": zr is not None,
             "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
             "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
