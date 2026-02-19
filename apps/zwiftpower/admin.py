@@ -26,8 +26,10 @@ class ZPTeamRidersAdmin(SimpleHistoryAdmin):
         "weight",
         "skill",
         "date_left",
+        "date_created",
+        "date_modified",
     ]
-    list_filter: ClassVar[list[str]] = ["div", "date_left"]
+    list_filter: ClassVar[list[str]] = ["div", "date_left", "date_created", "date_modified"]
     search_fields: ClassVar[list[str]] = ["name", "zwid", "aid"]
     ordering: ClassVar[list[str]] = ["name"]
     readonly_fields: ClassVar[list[str]] = ["date_created", "date_modified"]

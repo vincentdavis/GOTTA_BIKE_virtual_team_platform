@@ -27,6 +27,8 @@ class ZRRiderAdmin(SimpleHistoryAdmin):
         "phenotype_value",
         "club_name",
         "date_left",
+        "date_created",
+        "date_modified",
     ]
     list_filter: ClassVar[list[str]] = [
         "zp_category",
@@ -35,6 +37,8 @@ class ZRRiderAdmin(SimpleHistoryAdmin):
         "country",
         "phenotype_value",
         "date_left",
+        "date_created",
+        "date_modified",
     ]
     search_fields: ClassVar[list[str]] = ["name", "zwid", "club_name"]
     ordering: ClassVar[list[str]] = ["name"]
