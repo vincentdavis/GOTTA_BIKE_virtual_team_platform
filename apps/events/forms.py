@@ -21,6 +21,7 @@ class EventForm(forms.ModelForm):
             "end_date",
             "url",
             "discord_channel_id",
+            "head_captain_role_id",
             "visible",
             "signups_open",
             "signup_instructions",
@@ -51,6 +52,9 @@ class EventForm(forms.ModelForm):
             ),
             "discord_channel_id": forms.NumberInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "Discord channel ID (0 = none)"},
+            ),
+            "head_captain_role_id": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "Discord role ID (0 = none)"},
             ),
             "visible": forms.CheckboxInput(
                 attrs={"class": "checkbox"},

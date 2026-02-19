@@ -41,6 +41,7 @@ class Event(models.Model):
         start_date: Event start date.
         end_date: Event end date.
         visible: Whether the event is visible to team members.
+        head_captain_role_id: Discord role ID for the head captain of this event.
         url: External URL for event details or signup.
         discord_channel_id: Discord channel ID for event coordination.
         created_at: When the record was created.
@@ -66,6 +67,10 @@ class Event(models.Model):
     discord_channel_id = models.BigIntegerField(
         default=0,
         help_text="Discord channel ID for event coordination (0 = none)",
+    )
+    head_captain_role_id = models.BigIntegerField(
+        default=0,
+        help_text="Discord role ID for the head captain of this event (0 = none)",
     )
     created_at = models.DateTimeField(default=timezone.now, help_text="When the event was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the event was last updated")
