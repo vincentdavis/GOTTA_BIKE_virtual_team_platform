@@ -52,6 +52,9 @@ def _enrich_squad_members(event):
         zp_weight = zp.weight if zp else None
         wkg = round(Decimal(zp_ftp) / zp_weight, 2) if zp_ftp and zp_weight and zp_weight > 0 else None
 
+        squad_role_id = sm.squad.team_discord_role
+        has_discord_role = user.has_discord_role(squad_role_id) if squad_role_id else None
+
         entry = {
             "user": user,
             "zwid": zwid,
@@ -65,6 +68,7 @@ def _enrich_squad_members(event):
             "in_zwiftracing": zr is not None,
             "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
             "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+            "has_discord_role": has_discord_role,
         }
         by_squad.setdefault(sm.squad_id, []).append(entry)
 
