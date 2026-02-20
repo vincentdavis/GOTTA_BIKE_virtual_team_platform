@@ -145,19 +145,27 @@
           {% endif %}
         </div>
 
-        <!-- Discord Channel ID -->
-        <div class="form-control w-full">
+        <!-- Discord Channel -->
+        <div class="form-control w-full" data-channel-field>
           <label class="label" for="id_discord_channel_id">
-            <span class="label-text">Discord Channel ID</span>
+            <span class="label-text">Discord Channel</span>
           </label>
-          {{ form.discord_channel_id }}
+          <div data-channel-select>
+            {{ form.discord_channel_id }}
+          </div>
+          <div data-channel-manual class="hidden">
+            <input type="text" class="input input-bordered w-full"
+                   placeholder="Enter Discord channel ID" inputmode="numeric" pattern="[0-9]*">
+          </div>
           {% if form.discord_channel_id.errors %}
           <label class="label">
             <span class="label-text-alt text-error">{{ form.discord_channel_id.errors.0 }}</span>
           </label>
           {% endif %}
           <label class="label">
-            <span class="label-text-alt">Discord channel for squad coordination (0 = none)</span>
+            <span class="label-text-alt">
+              <button type="button" data-channel-toggle class="link link-primary text-xs">or enter ID manually</button>
+            </span>
           </label>
         </div>
 
@@ -211,4 +219,36 @@
     </div>
   </div>
 </div>
+
+<script>
+(function() {
+  document.querySelectorAll('[data-channel-field]').forEach(function(field) {
+    var selectWrap = field.querySelector('[data-channel-select]');
+    var manualWrap = field.querySelector('[data-channel-manual]');
+    var toggle = field.querySelector('[data-channel-toggle]');
+    var select = selectWrap.querySelector('select');
+    var manualInput = manualWrap.querySelector('input');
+    var isManual = false;
+
+    toggle.addEventListener('click', function() {
+      isManual = !isManual;
+      if (isManual) {
+        selectWrap.classList.add('hidden');
+        manualWrap.classList.remove('hidden');
+        select.removeAttribute('name');
+        manualInput.setAttribute('name', 'discord_channel_id');
+        manualInput.value = select.value !== '0' ? select.value : '';
+        manualInput.focus();
+        toggle.textContent = 'or select from list';
+      } else {
+        manualWrap.classList.add('hidden');
+        selectWrap.classList.remove('hidden');
+        manualInput.removeAttribute('name');
+        select.setAttribute('name', 'discord_channel_id');
+        toggle.textContent = 'or enter ID manually';
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}

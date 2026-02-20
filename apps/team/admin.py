@@ -1,12 +1,13 @@
 """Admin configuration for team app."""
 
-from django.contrib import admin
-from django.http import HttpRequest, HttpResponse
+from django.contrib import admin, messages
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
-from django.urls import path
+from django.urls import path, reverse
 
-from apps.team.models import DiscordRole, MembershipApplication, RaceReadyRecord, TeamLink
+from apps.team.models import DiscordChannel, DiscordRole, MembershipApplication, RaceReadyRecord, TeamLink
 from apps.team.services import get_unified_team_roster
+from apps.team.tasks import sync_discord_channels
 
 
 @admin.register(RaceReadyRecord)
@@ -159,6 +160,56 @@ class DiscordRoleAdmin(admin.ModelAdmin):
             hex_color,
             hex_color,
         )
+
+
+@admin.register(DiscordChannel)
+class DiscordChannelAdmin(admin.ModelAdmin):
+    """Admin for DiscordChannel model."""
+
+    list_display = (
+        "name",
+        "channel_id",
+        "channel_type",
+        "category_name",
+        "position",
+        "date_synced",
+    )
+    list_filter = ("channel_type", "category_name")
+    search_fields = ("name", "channel_id", "category_name")
+    readonly_fields = ("date_synced",)
+    ordering = ("category_name", "position")
+
+    def get_urls(self) -> list:
+        """Add custom URL for sync action.
+
+        Returns:
+            List of URL patterns including custom sync URL.
+
+        """
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                "sync/",
+                self.admin_site.admin_view(self.sync_from_discord),
+                name="team_discordchannel_sync",
+            ),
+        ]
+        return custom_urls + urls
+
+    def sync_from_discord(self, request: HttpRequest) -> HttpResponseRedirect:
+        """Handle the sync button click.
+
+        Returns:
+            Redirect to the changelist page.
+
+        """
+        sync_discord_channels.enqueue()
+        self.message_user(
+            request,
+            "Sync Discord channels task has been queued.",
+            messages.SUCCESS,
+        )
+        return HttpResponseRedirect(reverse("admin:team_discordchannel_changelist"))
 
 
 @admin.register(MembershipApplication)

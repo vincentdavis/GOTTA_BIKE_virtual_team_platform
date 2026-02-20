@@ -1,11 +1,12 @@
 """Background tasks for team app."""
 
+import httpx
 import logfire
 from constance import config
 from django.tasks import task  # ty:ignore[unresolved-import]
 
 from apps.accounts.discord_service import send_discord_channel_message
-from apps.team.models import MembershipApplication
+from apps.team.models import DiscordChannel, MembershipApplication
 
 
 @task
@@ -253,3 +254,91 @@ def _get_user_display_name(user) -> str:
     if user.first_name:
         return user.first_name
     return user.discord_nickname or user.discord_username or f"User {user.id}"
+
+
+@task
+def sync_discord_channels() -> dict:
+    """Fetch guild channels from the Discord API and sync to DiscordChannel model.
+
+    Requires DISCORD_BOT_TOKEN and GUILD_ID to be configured in constance.
+
+    Returns:
+        dict with sync results (created, updated, deleted, total).
+
+    """
+    with logfire.span("sync_discord_channels"):
+        bot_token = config.DISCORD_BOT_TOKEN
+        guild_id = config.GUILD_ID
+
+        if not bot_token:
+            logfire.warning("DISCORD_BOT_TOKEN not configured, skipping channel sync")
+            return {"status": "skipped", "reason": "bot_token_not_configured"}
+
+        if not guild_id:
+            logfire.warning("GUILD_ID not configured, skipping channel sync")
+            return {"status": "skipped", "reason": "guild_id_not_configured"}
+
+        # Fetch channels from Discord API
+        response = httpx.get(
+            f"https://discord.com/api/v10/guilds/{guild_id}/channels",
+            headers={"Authorization": f"Bot {bot_token}"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        channels_data = response.json()
+
+        # Build a category lookup for resolving parent names
+        categories = {
+            ch["id"]: ch["name"]
+            for ch in channels_data
+            if ch.get("type") == DiscordChannel.ChannelType.CATEGORY
+        }
+
+        received_channel_ids = set()
+        created = 0
+        updated = 0
+
+        for ch in channels_data:
+            channel_id = ch["id"]
+            received_channel_ids.add(channel_id)
+
+            parent_id = ch.get("parent_id") or ""
+            category_name = categories.get(parent_id, "") if parent_id else ""
+
+            _, was_created = DiscordChannel.objects.update_or_create(
+                channel_id=channel_id,
+                defaults={
+                    "name": ch.get("name") or "",
+                    "channel_type": ch.get("type", 0),
+                    "position": ch.get("position", 0),
+                    "category_id": parent_id,
+                    "category_name": category_name,
+                },
+            )
+            if was_created:
+                created += 1
+            else:
+                updated += 1
+
+        # Delete channels no longer in Discord
+        existing_ids = set(DiscordChannel.objects.values_list("channel_id", flat=True))
+        stale_ids = existing_ids - received_channel_ids
+        deleted = 0
+        if stale_ids:
+            deleted, _ = DiscordChannel.objects.filter(channel_id__in=stale_ids).delete()
+
+        logfire.info(
+            "Discord channels synced from API",
+            created=created,
+            updated=updated,
+            deleted=deleted,
+            total_received=len(channels_data),
+        )
+
+        return {
+            "status": "success",
+            "created": created,
+            "updated": updated,
+            "deleted": deleted,
+            "total": len(channels_data),
+        }

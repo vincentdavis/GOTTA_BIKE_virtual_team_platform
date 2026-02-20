@@ -602,6 +602,74 @@ class DiscordRole(models.Model):
         return f"#{self.color:06x}"
 
 
+class DiscordChannel(models.Model):
+    """Discord guild channels synced from the server."""
+
+    class ChannelType(models.IntegerChoices):
+        """Discord channel type choices."""
+
+        TEXT = 0, "Text"
+        VOICE = 2, "Voice"
+        CATEGORY = 4, "Category"
+        ANNOUNCEMENT = 5, "Announcement"
+        STAGE = 13, "Stage"
+        FORUM = 15, "Forum"
+        MEDIA = 16, "Media"
+
+    channel_id = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text="Discord channel ID (snowflake)",
+    )
+    name = models.CharField(
+        max_length=100,
+        help_text="Channel name",
+    )
+    channel_type = models.IntegerField(
+        choices=ChannelType.choices,
+        default=ChannelType.TEXT,
+        help_text="Discord channel type",
+    )
+    position = models.IntegerField(
+        default=0,
+        help_text="Channel position in the list",
+    )
+    category_id = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Parent category channel ID (snowflake)",
+    )
+    category_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Parent category name (denormalized for display)",
+    )
+    date_synced = models.DateTimeField(
+        auto_now=True,
+        help_text="When this channel was last synced from Discord",
+    )
+
+    class Meta:
+        """Meta options for DiscordChannel model."""
+
+        verbose_name = "Discord Channel"
+        verbose_name_plural = "Discord Channels"
+        ordering: ClassVar[list[str]] = ["category_name", "position"]
+
+    def __str__(self) -> str:
+        """Return string representation of channel.
+
+        Returns:
+            Channel name with category prefix if applicable.
+
+        """
+        if self.category_name:
+            return f"{self.category_name} > #{self.name}"
+        return f"#{self.name}"
+
+
 class RosterFilter(models.Model):
     """Temporary filtered roster view created from Discord channel members.
 

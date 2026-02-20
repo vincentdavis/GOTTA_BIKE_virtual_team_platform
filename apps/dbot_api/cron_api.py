@@ -13,6 +13,7 @@ from apps.accounts.tasks import (
     sync_zr_category_roles,
 )
 from apps.club_strava.tasks import sync_strava_activities
+from apps.team.tasks import sync_discord_channels
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.tasks import sync_zr_riders
 
@@ -90,6 +91,10 @@ TASK_REGISTRY: dict = {
     "sync_zr_category_roles": {
         "task": sync_zr_category_roles,
         "description": "Sync ZR category Discord roles based on Zwift Racing data",
+    },
+    "sync_discord_channels": {
+        "task": sync_discord_channels,
+        "description": "Fetch Discord guild channels and sync to database",
     },
 }
 

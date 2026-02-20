@@ -387,16 +387,13 @@
                 {% endif %}
               </td>
               <td>
-                {% if squad.enriched_members %}
-                <button type="button" class="btn btn-ghost btn-xs" onclick="toggleSquadMembers({{ squad.pk }})" title="Show members">
+                <button type="button" class="btn btn-ghost btn-xs" onclick="toggleSquadMembers({{ squad.pk }})" title="Show details">
                   <svg id="squad-arrow-{{ squad.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
-                {% endif %}
               </td>
             </tr>
-            {% if squad.enriched_members %}
             <tr id="squad-members-{{ squad.pk }}" style="display:none">
               <td colspan="7" class="p-0">
                 <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2 overflow-x-auto">
@@ -420,6 +417,7 @@
                     </a>
                     {% endif %}
                   </div>
+                  {% if squad.enriched_members %}
                   <table class="table table-xs">
                     <thead>
                       <tr>
@@ -510,10 +508,12 @@
                       {% endfor %}
                     </tbody>
                   </table>
+                  {% else %}
+                  <p class="text-sm text-base-content/50">No members in this squad yet.</p>
+                  {% endif %}
                 </div>
               </td>
             </tr>
-            {% endif %}
             {% endfor %}
           </tbody>
         </table>

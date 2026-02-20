@@ -14,7 +14,7 @@ from ninja.security import APIKeyHeader
 from apps.accounts.models import GuildMember, User, YouTubeVideo
 from apps.dbot_api.models import BotStats
 from apps.magic_links.models import MagicLink
-from apps.team.models import DiscordRole, MembershipApplication, RosterFilter
+from apps.team.models import DiscordChannel, DiscordRole, MembershipApplication, RosterFilter
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.models import ZRRider
@@ -154,6 +154,23 @@ class MembershipApplicationCreateSchema(Schema):
     first_name: str = ""
     last_name: str = ""
     applicant_notes: str = ""
+
+
+class DiscordChannelSchema(Schema):
+    """Schema for a Discord channel from the bot."""
+
+    id: str
+    name: str
+    type: int = 0
+    position: int = 0
+    category_id: str = ""
+    category_name: str = ""
+
+
+class SyncGuildChannelsRequest(Schema):
+    """Request schema for syncing all guild channels."""
+
+    channels: list[DiscordChannelSchema]
 
 
 class DBotAuth(APIKeyHeader):
@@ -459,6 +476,65 @@ def sync_guild_roles(request: HttpRequest, payload: SyncGuildRolesRequest) -> di
         "updated": updated,
         "deleted": deleted,
         "total": len(payload.roles),
+    }
+
+
+@api.post("/sync_guild_channels")
+def sync_guild_channels(request: HttpRequest, payload: SyncGuildChannelsRequest) -> dict:
+    """Sync all guild channels from Discord bot.
+
+    The bot should call this endpoint with all channels from the guild.
+    Channels not in the payload will be deleted from the database.
+
+    Args:
+        request: The HTTP request.
+        payload: The request body with list of channels.
+
+    Returns:
+        JSON object with sync results.
+
+    """
+    received_channel_ids = {ch.id for ch in payload.channels}
+    existing_channel_ids = set(DiscordChannel.objects.values_list("channel_id", flat=True))
+
+    created = 0
+    updated = 0
+    deleted = 0
+
+    for ch_data in payload.channels:
+        _, was_created = DiscordChannel.objects.update_or_create(
+            channel_id=ch_data.id,
+            defaults={
+                "name": ch_data.name,
+                "channel_type": ch_data.type,
+                "position": ch_data.position,
+                "category_id": ch_data.category_id,
+                "category_name": ch_data.category_name,
+            },
+        )
+        if was_created:
+            created += 1
+        else:
+            updated += 1
+
+    channels_to_delete = existing_channel_ids - received_channel_ids
+    if channels_to_delete:
+        deleted, _ = DiscordChannel.objects.filter(channel_id__in=channels_to_delete).delete()
+
+    logfire.info(
+        "Guild channels synced",
+        created=created,
+        updated=updated,
+        deleted=deleted,
+        total_received=len(payload.channels),
+        discord_user_id=request.auth["discord_user_id"],  # ty:ignore[unresolved-attribute]
+    )
+
+    return {
+        "created": created,
+        "updated": updated,
+        "deleted": deleted,
+        "total": len(payload.channels),
     }
 
 
