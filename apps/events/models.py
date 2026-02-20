@@ -316,6 +316,8 @@ class Squad(models.Model):
         max_zwift_category: Maximum Zwift category letter.
         min_zwift_racing_category: Minimum Zwift Racing category.
         max_zwift_racing_category: Maximum Zwift Racing category.
+        url: External URL for squad details.
+        invite_url: Invite URL for joining the squad.
         members: Many-to-many relation to users via SquadMember.
         created_by: User who created this squad.
         created_at: When the record was created.
@@ -369,6 +371,8 @@ class Squad(models.Model):
         choices=ZR_CATEGORY_CHOICES,
         help_text="Maximum Zwift Racing category",
     )
+    url = models.URLField(max_length=500, blank=True, help_text="External URL for squad details")
+    invite_url = models.URLField(max_length=500, blank=True, help_text="Invite URL for joining the squad")
     members = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         through="SquadMember",

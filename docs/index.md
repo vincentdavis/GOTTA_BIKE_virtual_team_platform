@@ -25,6 +25,10 @@ Welcome to the documentation for The Coalition Team Platform, a Django web appli
 - **Team Management** - Unified roster combining ZwiftPower, Zwift Racing, and user data
 - **Guild Member Sync** - Sync Discord guild members with Django to compare membership vs accounts
 - **Data Connections** - Export team data to Google Sheets with configurable fields and filters
+- **Events & Squads** - Event management with signups, squads, and squad member assignment
+- **Strava Integration** - Sync and display Strava club activities
+- **Analytics** - Server-side page visit tracking with admin dashboard
+- **Help Page** - Admin-editable help page backed by constance setting
 - **Role-Based Permissions** - Team captains, admins, and members with different access levels
 - **Discord Bot API** - REST API for Discord bot integration
 - **Dynamic Settings** - Runtime-configurable settings via Django admin
@@ -50,9 +54,12 @@ Welcome to the documentation for The Coalition Team Platform, a Django web appli
 GOTTA_BIKE_virtual_team_platform/
 ├── apps/
 │   ├── accounts/       # User model, auth, permissions, middleware
+│   ├── analytics/      # Page visit tracking & dashboard
+│   ├── club_strava/    # Strava club activities
 │   ├── cms/            # Dynamic CMS pages with markdown support
 │   ├── data_connection/ # Google Sheets data export
 │   ├── dbot_api/       # Discord bot REST API
+│   ├── events/         # Events, squads, signups
 │   ├── magic_links/    # Passwordless auth (legacy)
 │   ├── team/           # Team management, verification records
 │   ├── zwift/          # Zwift integration

@@ -92,7 +92,7 @@
 ### UX Improvements
 
 - [ ] Onboarding checklist for new users (profile → verify Zwift → race verification)
-- [ ] Help/FAQ page with glossary (race-ready, categories, verification types)
+- [x] Help/FAQ page with glossary (race-ready, categories, verification types)
 - [ ] Persistent notification center (beyond auto-dismiss toasts)
 - [ ] Mobile-optimized table views (card layout option for small screens)
 
@@ -117,7 +117,7 @@
 
 ## P3 - Nice to Have
 
-- [ ] Team calendar/events feature
+- [x] Team calendar/events feature
 - [ ] Email notifications (beyond Discord-only)
 - [ ] PWA manifest for mobile install
 - [ ] CMS page versioning/history

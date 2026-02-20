@@ -94,6 +94,8 @@ class SquadForm(forms.ModelForm):
             "max_zwift_category",
             "min_zwift_racing_category",
             "max_zwift_racing_category",
+            "url",
+            "invite_url",
         ]
         widgets: ClassVar[dict] = {
             "name": forms.TextInput(
@@ -125,5 +127,11 @@ class SquadForm(forms.ModelForm):
             ),
             "max_zwift_racing_category": forms.Select(
                 attrs={"class": "select select-bordered w-full"},
+            ),
+            "url": forms.URLInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},
+            ),
+            "invite_url": forms.URLInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},
             ),
         }

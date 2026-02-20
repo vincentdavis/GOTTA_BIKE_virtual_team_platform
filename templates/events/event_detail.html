@@ -153,6 +153,7 @@
             <thead>
               <tr>
                 <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+                <th data-sort="num" class="cursor-pointer hover:text-primary select-none">ZWID</th>
                 <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
                 <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Gender</th>
                 <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Category</th>
@@ -178,6 +179,13 @@
                   <a href="https://www.zwiftracing.app/riders/{{ entry.zwid }}" target="_blank" rel="noopener"
                      class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded"
                      title="View on Zwift Racing">ZR</a>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if entry.zwid %}
+                  <span class="font-mono text-sm">{{ entry.zwid }}</span>
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
                 <td>{% if entry.signup.signup_timezone %}{% for tz in entry.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
@@ -333,9 +341,15 @@
       </div>
       {% endif %}
 
-      {% if squads %}
+      {% if squads or is_event_admin %}
       <div class="divider mt-6"></div>
-      <h3 class="text-lg font-semibold mb-4">Squads</h3>
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold">Squads</h3>
+        {% if is_event_admin %}
+        <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">New Squad</a>
+        {% endif %}
+      </div>
+      {% if squads %}
       <div class="overflow-x-auto">
         <table class="table table-sm">
           <thead>
@@ -367,7 +381,7 @@
               <td>{% if squad.vice_captain %}{{ squad.vice_captain.get_full_name|default:squad.vice_captain.discord_username }}{% else %}-{% endif %}</td>
               <td>
                 {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category %}
-                {{ squad.min_zwift_racing_category|default:"" }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %} &ndash; {% endif %}{{ squad.max_zwift_racing_category|default:"" }}
+                {% if squad.min_zwift_racing_category == squad.max_zwift_racing_category %}{{ squad.max_zwift_racing_category }}{% else %}{{ squad.min_zwift_racing_category|default:"" }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %} &ndash; {% endif %}{{ squad.max_zwift_racing_category|default:"" }}{% endif %}
                 {% else %}
                 -
                 {% endif %}
@@ -386,6 +400,26 @@
             <tr id="squad-members-{{ squad.pk }}" style="display:none">
               <td colspan="7" class="p-0">
                 <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2 overflow-x-auto">
+                  <div class="flex flex-wrap items-center gap-2 mb-2">
+                    {% if squad.url %}
+                    <a href="{{ squad.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-xs">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                      Squad Link
+                    </a>
+                    {% endif %}
+                    {% if squad.invite_url and squad.user_is_member %}
+                    <a href="{{ squad.invite_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-xs">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                      Invite Link
+                    </a>
+                    {% endif %}
+                    {% if is_event_admin %}
+                    <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="btn btn-ghost btn-xs">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                      Edit Squad
+                    </a>
+                    {% endif %}
+                  </div>
                   <table class="table table-xs">
                     <thead>
                       <tr>
@@ -484,6 +518,7 @@
           </tbody>
         </table>
       </div>
+      {% endif %}
       {% endif %}
 
       <div class="mt-6">

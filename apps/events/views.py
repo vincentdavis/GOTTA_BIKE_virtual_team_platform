@@ -187,10 +187,14 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     # Attach enriched member data and tooltip to each squad
     squad_members_data = _enrich_squad_members(event) if squads else {}
+    user_squad_ids = set(
+        SquadMember.objects.filter(squad__event=event, user=request.user).values_list("squad_id", flat=True)
+    )
     for squad in squads:
         squad.enriched_members = squad_members_data.get(squad.pk, [])
         names = [m["user"].get_full_name() or m["user"].discord_username for m in squad.enriched_members]
         squad.member_names_tooltip = ", ".join(names) if names else "No members"
+        squad.user_is_member = squad.pk in user_squad_ids
 
     logfire.debug("Event detail viewed", user_id=request.user.id, event_id=pk)
     return render(

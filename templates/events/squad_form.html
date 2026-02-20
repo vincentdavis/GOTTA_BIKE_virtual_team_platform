@@ -119,6 +119,32 @@
           {% endif %}
         </div>
 
+        <!-- URL -->
+        <div class="form-control w-full">
+          <label class="label" for="id_url">
+            <span class="label-text">URL</span>
+          </label>
+          {{ form.url }}
+          {% if form.url.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.url.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
+        <!-- Invite URL -->
+        <div class="form-control w-full">
+          <label class="label" for="id_invite_url">
+            <span class="label-text">Invite URL</span>
+          </label>
+          {{ form.invite_url }}
+          {% if form.invite_url.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.invite_url.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
         <!-- Discord Channel ID -->
         <div class="form-control w-full">
           <label class="label" for="id_discord_channel_id">

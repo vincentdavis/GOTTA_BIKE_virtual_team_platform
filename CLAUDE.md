@@ -96,6 +96,17 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - Supports field selection from User, ZwiftPower, and Zwift Racing data
     - Configurable filters (gender, division, rating, phenotype)
     - Manual sync clears sheet and rewrites all data
+- `events` - Event management with squads and signups:
+    - `Event` model - Team events with title, description (Markdown), dates, Discord channel/role IDs, signup settings
+    - `Squad` model - Squads within an event with captain/vice-captain, ZR category range, Discord role, URL, invite URL
+    - `SquadMember` model - Links users to squads (member/pending/rejected status, unique on squad+user)
+    - `EventSignup` model - Event-level signups with timezone selection and status
+    - `Race` model - Individual races within an event
+    - `EventRegistration` model - Race-level registrations
+    - Views require `team_member` permission; create/edit/delete/squad management require `is_event_admin`
+    - Squad assignment from signup list (event admins can assign users to multiple squads)
+    - Expandable squad member list with ZP/ZR data, Discord role checks
+    - Markdown rendering for event description and signup instructions
 - `magic_links` - Passwordless authentication (legacy)
 - `cms` - Dynamic CMS pages:
     - `Page` model - Content pages with markdown, hero sections, and card layouts
@@ -294,6 +305,15 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
     - `/team/membership-review/` - Membership review (membership admins only)
     - `/team/team-feed/` - Team social media feed
 - `/page/<slug>/` - CMS pages (`apps.cms.urls`)
+- `/events/` - Events management (`apps.events.urls`):
+    - `/events/` - Event list
+    - `/events/create/` - Create event (event admins)
+    - `/events/<id>/` - Event detail with signups, squads, and squad assignment
+    - `/events/<id>/edit/` - Edit event (event admins)
+    - `/events/<id>/signup/` - Sign up for event
+    - `/events/<id>/squads/add/` - Create squad (event admins)
+    - `/events/<id>/squads/<squad_id>/edit/` - Edit squad (event admins)
+    - `/events/<id>/squads/assign/` - Assign user to squad (event admins, POST)
 - `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
 - `/strava/` - Strava club activities (`apps.club_strava.urls`)
@@ -301,6 +321,7 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
 - `/api/dbot/` - Discord bot API
 - `/api/cron/` - Cron task API
 - `/api/analytics/` - Analytics tracking API (`apps.analytics.api`)
+- `/help/` - Help page (Markdown from constance `HELP_PAGE`, editable by `app_admin`)
 - `/robots.txt` - Dynamic robots.txt (see Robots.txt section)
 - `/m/` - Magic links (legacy)
 
