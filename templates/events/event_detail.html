@@ -351,21 +351,21 @@
       </div>
       {% if squads %}
       <div class="overflow-x-auto">
-        <table class="table table-sm">
+        <table class="table table-sm" id="squad-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Timezone</th>
-              <th>Members</th>
-              <th>Captain</th>
-              <th>Vice Captain</th>
-              <th>ZR Category</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
+              <th data-sort="num" class="cursor-pointer hover:text-primary select-none">Members</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Captain</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Vice Captain</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">ZR Category</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {% for squad in squads %}
-            <tr>
+            <tr class="squad-row">
               <td class="font-semibold">{{ squad.name }}</td>
               <td>{{ squad.squad_timezone|default:"-" }}</td>
               <td>
@@ -441,6 +441,7 @@
                       {% for member in squad.enriched_members %}
                       <tr>
                         <td>
+                          {% if squad.captain and member.user.pk == squad.captain.pk %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif squad.vice_captain and member.user.pk == squad.vice_captain.pk %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
                           <a href="{% url 'accounts:public_profile' member.user.pk %}" class="link link-hover">{{ member.user.get_full_name|default:member.user.discord_username }}</a>
                           {% if member.in_zwiftpower and member.zwid %}
                           <a href="https://zwiftpower.com/profile.php?z={{ member.zwid }}" target="_blank" rel="noopener"
@@ -557,6 +558,51 @@ function toggleSquadAssign() {
   btn.classList.toggle('btn-outline', visible);
   btn.classList.toggle('btn-primary', !visible);
 }
+
+// Squad table sorting (keeps data row + detail row paired)
+(function() {
+  var table = document.getElementById('squad-table');
+  if (!table) return;
+  var headers = table.querySelectorAll('th[data-sort]');
+  headers.forEach(function(th, colIdx) {
+    th.addEventListener('click', function() {
+      var sortType = th.getAttribute('data-sort');
+      var asc = th.getAttribute('data-dir') !== 'asc';
+      headers.forEach(function(h) {
+        h.removeAttribute('data-dir');
+        var ind = h.querySelector('.sort-indicator');
+        if (ind) ind.remove();
+      });
+      th.setAttribute('data-dir', asc ? 'asc' : 'desc');
+      var indicator = document.createElement('span');
+      indicator.className = 'sort-indicator text-primary ml-1';
+      indicator.textContent = asc ? '\u25B2' : '\u25BC';
+      th.appendChild(indicator);
+
+      var tbody = table.querySelector('tbody');
+      // Collect paired rows: each .squad-row + its next sibling (detail row)
+      var pairs = [];
+      var dataRows = tbody.querySelectorAll('tr.squad-row');
+      dataRows.forEach(function(row) {
+        pairs.push({ data: row, detail: row.nextElementSibling });
+      });
+      pairs.sort(function(a, b) {
+        var aText = a.data.cells[colIdx].textContent.trim();
+        var bText = b.data.cells[colIdx].textContent.trim();
+        if (sortType === 'num') {
+          var aNum = parseFloat(aText) || 0;
+          var bNum = parseFloat(bText) || 0;
+          return asc ? aNum - bNum : bNum - aNum;
+        }
+        return asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+      });
+      pairs.forEach(function(pair) {
+        tbody.appendChild(pair.data);
+        if (pair.detail) tbody.appendChild(pair.detail);
+      });
+    });
+  });
+})();
 </script>
 <script>
 (function() {
