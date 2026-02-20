@@ -552,6 +552,11 @@ class User(AbstractUser):
         return self.has_permission(Permissions.APPROVE_VERIFICATION)
 
     @property
+    def is_performance_verification_team(self) -> bool:
+        """Check if user is on the performance verification team."""
+        return self.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+
+    @property
     def is_pages_admin(self) -> bool:
         """Check if user has pages admin permission."""
         return self.has_permission(Permissions.PAGES_ADMIN)

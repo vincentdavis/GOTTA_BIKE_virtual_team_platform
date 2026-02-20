@@ -898,7 +898,7 @@ def team_feed_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@discord_permission_required("approve_verification", raise_exception=True)
+@discord_permission_required("performance_verification_team", raise_exception=True)
 @require_GET
 def performance_review_view(request: HttpRequest) -> HttpResponse:
     """Display performance review comparing verification records with ZwiftPower data.

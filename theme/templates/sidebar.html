@@ -145,8 +145,9 @@
         {% endif %}
 
         <!-- Team Performance Section (conditional) -->
-        {% if user.can_approve_verification %}
+        {% if user.can_approve_verification or user.is_performance_verification_team %}
         <li class="menu-title mt-4">Team Performance</li>
+        {% if user.can_approve_verification %}
         <li>
             <a href="{% url 'team:verification_records' %}" class="{% if request.resolver_match.url_name == 'verification_records' %}active{% endif %}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -155,6 +156,8 @@
                 Verification Records
             </a>
         </li>
+        {% endif %}
+        {% if user.is_performance_verification_team %}
         <li>
             <a href="{% url 'team:performance_review' %}" class="{% if request.resolver_match.url_name == 'performance_review' %}active{% endif %}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -163,6 +166,7 @@
                 Performance Review
             </a>
         </li>
+        {% endif %}
         {% endif %}
 
         <!-- Admin Section (conditional) -->
