@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Help Page{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl mb-4">Edit Help Page</h2>
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div class="form-control w-full">
+          <div role="tablist" class="tabs tabs-bordered mb-1">
+            <button type="button" role="tab" class="tab tab-active" data-md-tab="write" data-md-target="help_content">Write</button>
+            <button type="button" role="tab" class="tab" data-md-tab="preview" data-md-target="help_content">Preview</button>
+          </div>
+          <div data-md-write="help_content">
+            <textarea name="content" id="id_help_content" class="textarea textarea-bordered w-full" rows="20">{{ content }}</textarea>
+          </div>
+          <div data-md-preview="help_content" class="prose prose-sm max-w-none border border-base-300 rounded-lg p-3 min-h-[20rem] bg-base-100 hidden"></div>
+          <label class="label">
+            <span class="label-text-alt">Supports Markdown</span>
+          </label>
+        </div>
+        <div class="flex gap-2">
+          <button type="submit" class="btn btn-primary">Save</button>
+          <a href="{% url 'help_page' %}" class="btn btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+(function() {
+  var fieldMap = { help_content: 'id_help_content' };
+  document.querySelectorAll('[data-md-tab]').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var target = tab.getAttribute('data-md-target');
+      var mode = tab.getAttribute('data-md-tab');
+      var writePane = document.querySelector('[data-md-write="' + target + '"]');
+      var previewPane = document.querySelector('[data-md-preview="' + target + '"]');
+      var tabs = tab.parentElement.querySelectorAll('[role="tab"]');
+      tabs.forEach(function(t) { t.classList.remove('tab-active'); });
+      tab.classList.add('tab-active');
+      if (mode === 'preview') {
+        var textarea = document.getElementById(fieldMap[target]);
+        previewPane.innerHTML = marked.parse(textarea.value || '');
+        writePane.classList.add('hidden');
+        previewPane.classList.remove('hidden');
+      } else {
+        writePane.classList.remove('hidden');
+        previewPane.classList.add('hidden');
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

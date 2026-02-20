@@ -6,7 +6,7 @@ requires-python = ">=3.14"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "boto3>=1.42.41",
-    "dj-database-url>=3.1.1",
+    "dj-database-url>=3.1.2",
     "django>=6.0.2",
     "django-allauth[mfa,socialaccount]>=65.14.3",
     "django-constance>=4.3.4",
@@ -26,12 +26,12 @@ dependencies = [
     "honcho>=2.0.0",
     "httpx>=0.28.1",
     "justhtml>=1.7.0",
-    "logfire[asgi,django,psycopg,httpx]>=4.24.0",
+    "logfire[asgi,django,psycopg,httpx]>=4.25.0",
     "markdown>=3.10.2",
     "pillow>=12.1.1",
-    "psycopg[binary]>=3.3.1",
+    "psycopg[binary]>=3.3.3",
     "pydantic>=2.12.5",
-    "pydantic-settings>=2.13.0",
+    "pydantic-settings>=2.13.1",
     "whitenoise>=6.11.0",
 ]
 
@@ -43,7 +43,7 @@ dev = [
     "django-reset-migrations>=0.4.0",
     "django-stubs>=5.2.8",
     "pytest>=9.0.1",
-    "ruff>=0.15.1",
+    "ruff>=0.15.2",
     "ty>=0.0.17",
     "logfire-mcp>=0.6.0"
 ]

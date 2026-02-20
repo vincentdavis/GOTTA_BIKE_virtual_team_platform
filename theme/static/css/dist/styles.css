@@ -4425,6 +4425,9 @@
   .min-h-\[12rem\] {
     min-height: 12rem;
   }
+  .min-h-\[20rem\] {
+    min-height: 20rem;
+  }
   .min-h-\[50vh\] {
     min-height: 50vh;
   }

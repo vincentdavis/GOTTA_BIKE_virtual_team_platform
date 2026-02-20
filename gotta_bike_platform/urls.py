@@ -31,11 +31,13 @@ from apps.accounts.views import (
 from apps.analytics.api import api as analytics_api
 from apps.dbot_api.api import api as dbot_api
 from apps.dbot_api.cron_api import cron_api
-from gotta_bike_platform.views import about, home, robots_txt
+from gotta_bike_platform.views import about, help_page_edit_view, help_page_view, home, robots_txt
 
 urlpatterns = [
     path("", home, name="home"),
     path("about/", about, name="about"),
+    path("help/", help_page_view, name="help_page"),
+    path("help/edit/", help_page_edit_view, name="help_page_edit"),
     path("robots.txt", robots_txt, name="robots_txt"),
     path("admin/", admin.site.urls),
     path("api/analytics/", analytics_api.urls),
