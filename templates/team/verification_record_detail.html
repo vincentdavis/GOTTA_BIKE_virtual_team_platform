@@ -64,6 +64,7 @@
           </div>
         </div>
 
+        {% if can_view_values %}
         <!-- Bottom Left: Submitted Value -->
         <div class="bg-base-300 rounded-lg p-4">
           <div class="text-sm text-base-content/60 mb-1">Submitted Value</div>
@@ -94,6 +95,7 @@
             {% endwith %}
           </div>
         </div>
+        {% endif %}
         {% endif %}
       </div>
 

@@ -631,7 +631,11 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     # Media visibility: pending records visible to all reviewers, approved/rejected only to verification team
     from apps.accounts.models import Permissions
 
-    can_view_media = record.is_pending or request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+    is_own_record = record.user == request.user
+    is_pvt = request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+    can_view_media = record.is_pending or is_pvt
+    # Submitted values/ZP data: hide on reviewed records unless own record or PVT member
+    can_view_values = record.is_pending or is_own_record or is_pvt
 
     if request.method == "POST" and can_review and record.is_pending:
         action = request.POST.get("action")
@@ -736,6 +740,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             "record": record,
             "can_review": can_review,
             "can_view_media": can_view_media,
+            "can_view_values": can_view_values,
             "zp_rider": zp_rider,
         },
     )
