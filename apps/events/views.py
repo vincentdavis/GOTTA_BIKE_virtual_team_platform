@@ -757,4 +757,21 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         )
         messages.success(request, f"{signup.user} assigned to {squad.name}.")
 
+    # HTMX: return just the updated squad cell instead of full page reload
+    if request.headers.get("HX-Request"):
+        assigned_squads = list(Squad.objects.filter(
+            pk__in=SquadMember.objects.filter(squad__event=event, user=signup.user).values_list("squad_id", flat=True),
+        ))
+        all_squads = list(event.squads.all())
+        return render(
+            request,
+            "events/_squad_cell.html",
+            {
+                "assigned_squads": assigned_squads,
+                "squads": all_squads,
+                "event_pk": event_pk,
+                "signup_id": signup.pk,
+            },
+        )
+
     return redirect("events:event_detail", pk=event_pk)

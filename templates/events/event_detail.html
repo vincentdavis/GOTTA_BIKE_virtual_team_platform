@@ -4,7 +4,12 @@
 {% block title %}{{ event.title }}{% endblock %}
 
 {% block content %}
-<style>.tooltip::before,.tooltip::after{transition-delay:0s!important;transition-duration:75ms!important}</style>
+<style>
+.tooltip::before,.tooltip::after{transition-delay:0s!important;transition-duration:75ms!important}
+.squad-assign-ctrl{display:none}
+.assign-mode .squad-assign-ctrl{display:inline}
+.assign-mode .no-squad-dash{display:none}
+</style>
 <div class="max-w-4xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
@@ -251,31 +256,8 @@
                   {% endif %}
                 </td>
                 {% if squads %}
-                <td>
-                  {% for sq in entry.assigned_squads %}
-                  <span class="badge badge-outline badge-sm mr-1 gap-0.5 max-w-28 truncate" title="{{ sq.name }}">
-                    {{ sq.name }}
-                    <form method="post" action="{% url 'events:squad_assign' event.pk %}" class="inline squad-assign-ctrl" style="display:none">
-                      {% csrf_token %}
-                      <input type="hidden" name="signup_id" value="{{ entry.signup.pk }}">
-                      <input type="hidden" name="squad_id" value="0">
-                      <input type="hidden" name="remove_squad_id" value="{{ sq.pk }}">
-                      <button type="submit" class="ml-0.5 text-error hover:text-error/70 font-bold leading-none" title="Remove from {{ sq.name }}">&times;</button>
-                    </form>
-                  </span>
-                  {% empty %}
-                  <span class="text-base-content/30 no-squad-dash">-</span>
-                  {% endfor %}
-                  <form method="post" action="{% url 'events:squad_assign' event.pk %}" class="squad-assign-ctrl mt-1" style="display:none">
-                    {% csrf_token %}
-                    <input type="hidden" name="signup_id" value="{{ entry.signup.pk }}">
-                    <select name="squad_id" class="select select-bordered select-xs" onchange="if(this.value!=''){this.form.submit()}">
-                      <option value="">+ Add</option>
-                      {% for squad in squads %}
-                      <option value="{{ squad.pk }}">{{ squad.name }}</option>
-                      {% endfor %}
-                    </select>
-                  </form>
+                <td id="squad-cell-{{ entry.signup.pk }}">
+                  {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk %}
                 </td>
                 {% endif %}
                 <td>
@@ -574,14 +556,11 @@ function toggleSquadMembers(squadPk) {
 }
 function toggleSquadAssign() {
   var btn = document.getElementById('toggle-squad-assign');
-  var ctrls = document.querySelectorAll('.squad-assign-ctrl');
-  var dashes = document.querySelectorAll('.no-squad-dash');
-  var visible = ctrls.length > 0 && ctrls[0].style.display !== 'none';
-  ctrls.forEach(function(el) { el.style.display = visible ? 'none' : ''; });
-  dashes.forEach(function(el) { el.style.display = visible ? '' : 'none'; });
-  btn.textContent = visible ? 'Assign Squads' : 'Done';
-  btn.classList.toggle('btn-outline', visible);
-  btn.classList.toggle('btn-primary', !visible);
+  var table = document.querySelector('[data-signup-table="detail"]');
+  var active = table.classList.toggle('assign-mode');
+  btn.textContent = active ? 'Done' : 'Assign Squads';
+  btn.classList.toggle('btn-outline', !active);
+  btn.classList.toggle('btn-primary', active);
 }
 
 // Squad table sorting (keeps data row + detail row paired)

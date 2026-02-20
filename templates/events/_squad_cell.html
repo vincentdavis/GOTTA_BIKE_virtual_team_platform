@@ -1,0 +1,26 @@
+{% for sq in assigned_squads %}
+<span class="badge badge-outline badge-sm mr-1 gap-0.5 max-w-28 inline-flex" title="{{ sq.name }}">
+  <span class="truncate">{{ sq.name }}</span>
+  <form method="post" action="{% url 'events:squad_assign' event_pk %}" class="inline shrink-0 squad-assign-ctrl"
+        hx-post="{% url 'events:squad_assign' event_pk %}" hx-target="#squad-cell-{{ signup_id }}" hx-swap="innerHTML">
+    {% csrf_token %}
+    <input type="hidden" name="signup_id" value="{{ signup_id }}">
+    <input type="hidden" name="squad_id" value="0">
+    <input type="hidden" name="remove_squad_id" value="{{ sq.pk }}">
+    <button type="submit" class="ml-0.5 text-error hover:text-error/70 font-bold leading-none" title="Remove from {{ sq.name }}">&times;</button>
+  </form>
+</span>
+{% empty %}
+<span class="text-base-content/30 no-squad-dash">-</span>
+{% endfor %}
+<form method="post" action="{% url 'events:squad_assign' event_pk %}" class="squad-assign-ctrl mt-1"
+      hx-post="{% url 'events:squad_assign' event_pk %}" hx-target="#squad-cell-{{ signup_id }}" hx-swap="innerHTML">
+  {% csrf_token %}
+  <input type="hidden" name="signup_id" value="{{ signup_id }}">
+  <select name="squad_id" class="select select-bordered select-xs" onchange="if(this.value!=''){htmx.trigger(this.closest('form'),'submit')}">
+    <option value="">+ Add</option>
+    {% for squad in squads %}
+    <option value="{{ squad.pk }}">{{ squad.name }}</option>
+    {% endfor %}
+  </select>
+</form>
