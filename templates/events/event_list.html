@@ -34,19 +34,28 @@
         </div>
       </form>
 
-      <div class="space-y-4">
+      <ul class="timeline timeline-vertical timeline-compact">
         {% for event in events %}
-        <div class="card bg-base-300">
-          <div class="card-body p-4">
-            <div class="flex justify-between items-start">
+        <li{% if event.end_date < today %} class="opacity-50"{% endif %}>
+          {% if not forloop.first %}<hr{% if event.end_date < today %} class="bg-base-content/20"{% endif %} />{% endif %}
+          <div class="timeline-start font-mono text-sm text-base-content/70">
+            {{ event.start_date|date:"M j" }}
+          </div>
+          <div class="timeline-middle">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 {% if event.end_date < today %}text-base-content/30{% else %}text-primary{% endif %}">
+              <circle cx="10" cy="10" r="6" />
+            </svg>
+          </div>
+          <div class="timeline-end timeline-box w-full bg-base-300">
+            <div class="flex items-start gap-4">
               {% if event.logo %}
-              <div class="mr-4 shrink-0 self-center">
+              <div class="shrink-0 self-center">
                 <a href="{% url 'events:event_detail' event.pk %}">
-                  <img src="{{ event.logo.url }}" alt="{{ event.title }}" class="h-24 max-w-40 object-contain rounded" style="filter:drop-shadow(0 0 1px rgba(0,0,0,.4)) drop-shadow(0 0 1px rgba(255,255,255,.4))">
+                  <img src="{{ event.logo.url }}" alt="{{ event.title }}" class="h-20 max-w-36 object-contain rounded" style="filter:drop-shadow(0 0 1px rgba(0,0,0,.4)) drop-shadow(0 0 1px rgba(255,255,255,.4))">
                 </a>
               </div>
               {% endif %}
-              <div class="flex-1">
+              <div class="flex-1 min-w-0">
                 <h3 class="font-semibold text-lg">
                   <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary hover:link-hover">
                     {{ event.title }}
@@ -71,17 +80,14 @@
                   {% endif %}
                 </div>
               </div>
-              <div class="flex gap-2 ml-4">
-              </div>
             </div>
           </div>
-        </div>
+          {% if not forloop.last %}<hr{% if event.end_date < today %} class="bg-base-content/20"{% endif %} />{% endif %}
+        </li>
         {% empty %}
-        <div class="text-center py-8 text-base-content/50">
-          No events found.
-        </div>
+        <li class="text-center py-8 text-base-content/50">No events found.</li>
         {% endfor %}
-      </div>
+      </ul>
     </div>
   </div>
 </div>

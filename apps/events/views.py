@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import team_member_required
@@ -158,6 +159,7 @@ def event_list_view(request: HttpRequest) -> HttpResponse:
             "search_query": search_query,
             "is_event_admin": request.user.is_event_admin,
             "user_signup_event_ids": user_signup_event_ids,
+            "today": timezone.now().date(),
         },
     )
 
