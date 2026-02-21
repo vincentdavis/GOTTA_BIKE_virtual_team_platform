@@ -13,8 +13,13 @@
 <div class="max-w-4xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <div class="flex justify-between items-center mb-4">
-        <h2 class="card-title text-2xl">{{ event.title }}</h2>
+      <div class="flex justify-between items-start mb-4">
+        <div class="flex items-center gap-4">
+          {% if event.logo %}
+          <img src="{{ event.logo.url }}" alt="{{ event.title }}" class="h-16 max-w-32 object-contain rounded" style="filter:drop-shadow(0 0 1px rgba(0,0,0,.4)) drop-shadow(0 0 1px rgba(255,255,255,.4))">
+          {% endif %}
+          <h2 class="card-title text-2xl">{{ event.title }}</h2>
+        </div>
         {% if is_event_admin %}
         <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-primary btn-sm">Edit Event</a>
         {% endif %}
@@ -52,7 +57,7 @@
       {# Event Signup Section #}
       <div class="divider mt-6"></div>
       <div class="flex items-center gap-2 mb-4">
-        <h3 class="text-lg font-semibold">Signup</h3>
+        <h3 class="text-lg font-semibold">Signups</h3>
         {% if is_event_admin and signup_count %}
         <span class="badge badge-neutral">{{ signup_count }}</span>
         <button type="button" class="btn btn-ghost btn-xs" id="toggle-signups-btn" onclick="toggleSignups()" title="Show signups">

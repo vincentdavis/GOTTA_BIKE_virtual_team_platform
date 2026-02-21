@@ -140,7 +140,7 @@ def event_list_view(request: HttpRequest) -> HttpResponse:
     """
     events = Event.objects.filter(visible=True).annotate(
         signup_count=Count("signups", filter=Q(signups__status="registered")),
-    )
+    ).order_by("start_date")
     search_query = request.GET.get("q", "").strip()
     if search_query:
         events = events.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
@@ -236,7 +236,7 @@ def event_create_view(request: HttpRequest) -> HttpResponse:
         return redirect("events:event_list")
 
     if request.method == "POST":
-        form = EventForm(request.POST)
+        form = EventForm(request.POST, request.FILES)
         if form.is_valid():
             event = form.save(commit=False)
             event.created_by = request.user
@@ -287,7 +287,7 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("events:event_detail", pk=pk)
 
     if request.method == "POST":
-        form = EventForm(request.POST, instance=event)
+        form = EventForm(request.POST, request.FILES, instance=event)
         if form.is_valid():
             form.save()
             logfire.info(

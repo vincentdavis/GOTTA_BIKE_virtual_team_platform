@@ -53,6 +53,7 @@ class EventForm(forms.ModelForm):
         model = Event
         fields: ClassVar[list[str]] = [
             "title",
+            "logo",
             "description",
             "start_date",
             "end_date",
@@ -68,6 +69,9 @@ class EventForm(forms.ModelForm):
         widgets: ClassVar[dict] = {
             "title": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "Event title"},
+            ),
+            "logo": forms.ClearableFileInput(
+                attrs={"class": "file-input file-input-bordered w-full", "accept": "image/*"},
             ),
             "description": forms.Textarea(
                 attrs={

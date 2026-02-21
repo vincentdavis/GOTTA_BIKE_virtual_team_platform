@@ -39,6 +39,13 @@
         <div class="card bg-base-300">
           <div class="card-body p-4">
             <div class="flex justify-between items-start">
+              {% if event.logo %}
+              <div class="mr-4 shrink-0 self-center">
+                <a href="{% url 'events:event_detail' event.pk %}">
+                  <img src="{{ event.logo.url }}" alt="{{ event.title }}" class="h-24 max-w-40 object-contain rounded" style="filter:drop-shadow(0 0 1px rgba(0,0,0,.4)) drop-shadow(0 0 1px rgba(255,255,255,.4))">
+                </a>
+              </div>
+              {% endif %}
               <div class="flex-1">
                 <h3 class="font-semibold text-lg">
                   <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary hover:link-hover">
@@ -65,13 +72,6 @@
                 </div>
               </div>
               <div class="flex gap-2 ml-4">
-                {% if event.url %}
-                <a href="{{ event.url }}" target="_blank" rel="noopener" class="btn btn-ghost btn-xs" title="External link">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-                {% endif %}
               </div>
             </div>
           </div>

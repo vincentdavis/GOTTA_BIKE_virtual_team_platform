@@ -8,7 +8,7 @@
     <div class="card-body">
       <h2 class="card-title text-2xl mb-6">{{ page_title }}</h2>
 
-      <form method="post" class="space-y-4">
+      <form method="post" enctype="multipart/form-data" class="space-y-4">
         {% csrf_token %}
 
         <!-- Title -->
@@ -22,6 +22,27 @@
             <span class="label-text-alt text-error">{{ form.title.errors.0 }}</span>
           </label>
           {% endif %}
+        </div>
+
+        <!-- Logo -->
+        <div class="form-control w-full">
+          <label class="label" for="id_logo">
+            <span class="label-text">Logo</span>
+          </label>
+          {% if event and event.logo %}
+          <div class="mb-2">
+            <img src="{{ event.logo.url }}" alt="Current logo" class="h-16 rounded">
+          </div>
+          {% endif %}
+          {{ form.logo }}
+          {% if form.logo.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.logo.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Optional image shown on the event card</span>
+          </label>
         </div>
 
         <!-- Description -->

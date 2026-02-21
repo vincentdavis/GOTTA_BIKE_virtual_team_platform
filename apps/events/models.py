@@ -63,6 +63,7 @@ class Event(models.Model):
         help_text="Timezone options available at signup",
     )
     timezone_required = models.BooleanField(default=False, help_text="Whether timezone selection is required at signup")
+    logo = models.ImageField(upload_to="event_logos/", blank=True, help_text="Optional logo image for the event")
     url = models.URLField(max_length=500, blank=True, help_text="External URL for event details or signup")
     discord_channel_id = models.BigIntegerField(
         default=0,
