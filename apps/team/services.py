@@ -33,14 +33,18 @@ def get_user_verification_types(user: User) -> list[str]:
     """Get allowed verification types based on user's ZwiftPower category.
 
     Looks up the user's ZwiftPower division (div for male, divw for female)
-    and returns the verification types required for that category from
-    the CATEGORY_REQUIREMENTS Constance setting.
+    and returns the verification types for that category from the
+    CATEGORY_REQUIREMENTS Constance setting.
+
+    For categories 40/50, the returned list includes both weight_light and
+    weight_full. Having either one (not both) satisfies the weight requirement
+    for race ready status — the OR logic is handled by ``User.is_race_ready``.
 
     Args:
         user: The user to get verification types for.
 
     Returns:
-        List of verify_type values the user can submit.
+        List of verify_type values the user is allowed to submit.
         Defaults to ["weight_light", "height"] if no category found.
 
     """

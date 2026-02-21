@@ -44,6 +44,6 @@ dev = [
     "django-stubs>=5.2.8",
     "pytest>=9.0.1",
     "ruff>=0.15.2",
-    "ty>=0.0.17",
+    "ty>=0.0.18",
     "logfire-mcp>=0.6.0"
 ]

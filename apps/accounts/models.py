@@ -574,6 +574,11 @@ class User(AbstractUser):
         ZwiftPower division (category). Defaults to weight_light + height if
         no category is found.
 
+        When both weight_light and weight_full appear in required types (categories
+        40/50), having either one satisfies the weight requirement (OR logic).
+        When only one weight type is listed (categories 5-30), the original strict
+        AND logic applies.
+
         Returns:
             True if user has all required verifications, False otherwise.
 
@@ -598,9 +603,22 @@ class User(AbstractUser):
             else:
                 expired_types.append(record.verify_type)
 
-        # Check that ALL required types are present
-        is_ready = all(req_type in valid_types for req_type in required_types)
-        missing_types = [t for t in required_types if t not in valid_types]
+        # Check weight types: OR logic when both are listed, AND for everything else
+        weight_types = {"weight_light", "weight_full"}
+        weight_required = weight_types.intersection(required_types)
+
+        if len(weight_required) > 1:
+            # Both weight types listed (e.g. categories 40/50) — having either satisfies
+            non_weight_required = [t for t in required_types if t not in weight_types]
+            weight_ok = bool(weight_required.intersection(valid_types))
+            is_ready = all(t in valid_types for t in non_weight_required) and weight_ok
+            missing_types = [t for t in non_weight_required if t not in valid_types]
+            if not weight_ok:
+                missing_types.append("weight_light or weight_full")
+        else:
+            # Original logic: all required types must be present
+            is_ready = all(req_type in valid_types for req_type in required_types)
+            missing_types = [t for t in required_types if t not in valid_types]
 
         if is_ready:
             logfire.debug(
