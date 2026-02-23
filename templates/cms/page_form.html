@@ -240,8 +240,25 @@
             <div class="form-control">
               <label class="label cursor-pointer justify-start gap-3">
                 {{ form.show_in_nav }}
-                <span class="label-text">Show in sidebar navigation</span>
+                <span class="label-text">Show in navigation</span>
               </label>
+            </div>
+
+            <!-- Nav Location -->
+            <div class="form-control w-full">
+              <label class="label" for="id_nav_location">
+                <span class="label-text">Navigation Location</span>
+              </label>
+              {{ form.nav_location }}
+              {% if form.nav_location.errors %}
+              <label class="label">
+                <span class="label-text-alt text-error">{{ form.nav_location.errors.0 }}</span>
+              </label>
+              {% else %}
+              <label class="label">
+                <span class="label-text-alt">Sidebar or user dropdown menu</span>
+              </label>
+              {% endif %}
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -46,6 +46,12 @@ class Page(models.Model):
         DRAFT = "draft", "Draft"
         PUBLISHED = "published", "Published"
 
+    class NavLocation(models.TextChoices):
+        """Navigation location choices for page links."""
+
+        MAIN_NAV = "main_nav", "Main Nav (Sidebar)"
+        USER_MENU = "user_menu", "User Menu (Top Right)"
+
     # Identity
     slug = models.SlugField(
         max_length=100,
@@ -105,7 +111,7 @@ class Page(models.Model):
     # Navigation settings
     show_in_nav = models.BooleanField(
         default=False,
-        help_text="Show this page in the sidebar navigation",
+        help_text="Show this page in navigation (location controlled by Nav Location)",
     )
     nav_title = models.CharField(
         max_length=50,
@@ -115,6 +121,12 @@ class Page(models.Model):
     nav_order = models.IntegerField(
         default=0,
         help_text="Sort order in navigation (lower numbers appear first)",
+    )
+    nav_location = models.CharField(
+        max_length=20,
+        choices=NavLocation.choices,
+        default=NavLocation.MAIN_NAV,
+        help_text="Where to display the nav link: sidebar or user dropdown menu",
     )
 
     # Access control

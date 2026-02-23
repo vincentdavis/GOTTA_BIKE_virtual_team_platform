@@ -30,6 +30,7 @@ class PageForm(forms.ModelForm):
             "show_in_nav",
             "nav_title",
             "nav_order",
+            "nav_location",
             "require_login",
             "require_team_member",
         ]
@@ -65,6 +66,7 @@ class PageForm(forms.ModelForm):
                 attrs={"class": "input input-bordered w-full", "placeholder": "Nav Title (optional)"}
             ),
             "nav_order": forms.NumberInput(attrs={"class": "input input-bordered w-full"}),
+            "nav_location": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "require_login": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "require_team_member": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }

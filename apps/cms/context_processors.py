@@ -14,11 +14,15 @@ def cms_nav_pages(request: HttpRequest) -> dict[str, QuerySet]:
     - show_in_nav=True
     - User permissions (login, team_member requirements)
 
+    Splits pages by nav_location into:
+    - cms_nav_pages: Pages for the sidebar (main_nav)
+    - cms_user_menu_pages: Pages for the user dropdown menu (user_menu)
+
     Args:
         request: The HTTP request.
 
     Returns:
-        Dictionary with 'cms_nav_pages' containing filtered QuerySet.
+        Dictionary with 'cms_nav_pages' and 'cms_user_menu_pages' QuerySets.
 
     """
     # Get published pages marked for nav
@@ -38,4 +42,7 @@ def cms_nav_pages(request: HttpRequest) -> dict[str, QuerySet]:
             # Non-team-members: exclude team-member-only pages
             pages = pages.filter(require_team_member=False)
 
-    return {"cms_nav_pages": pages}
+    return {
+        "cms_nav_pages": pages.filter(nav_location=Page.NavLocation.MAIN_NAV),
+        "cms_user_menu_pages": pages.filter(nav_location=Page.NavLocation.USER_MENU),
+    }
