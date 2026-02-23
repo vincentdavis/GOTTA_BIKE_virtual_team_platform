@@ -514,6 +514,11 @@ CONSTANCE_CONFIG = {
         "textarea_field",
     ),
     # Verification instructions
+    "VERIFICATION_FORM_MESSAGE": (
+        "",
+        "Message displayed at the top of the verification form. Supports Markdown.",
+        "textarea_field",
+    ),
     "WEIGHT_INSTRUCTIONS_URL": ("", "URL to weight verification instructions", str),
     "HEIGHT_INSTRUCTIONS_URL": ("", "URL to height verification instructions", str),
     # Equipment options
@@ -731,6 +736,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "WEIGHT_LIGHT_DAYS",
         "HEIGHT_VERIFICATION_DAYS",
         "POWER_VERIFICATION_DAYS",
+        "VERIFICATION_FORM_MESSAGE",
         "WEIGHT_INSTRUCTIONS_URL",
         "HEIGHT_INSTRUCTIONS_URL",
     ),

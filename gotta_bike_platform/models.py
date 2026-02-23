@@ -6,13 +6,17 @@ from django.db import models
 class SiteSettings(models.Model):
     """Singleton model for site-wide image settings.
 
-    This model stores uploaded images for the site logo, favicon, and hero section.
+    This model stores uploaded images for the site logo, favicon, hero section,
+    and verification status emojis.
     Only one instance should exist - use SiteSettings.get_settings() to access.
 
     Attributes:
         site_logo: Uploaded logo image for the header.
         favicon: Uploaded favicon for browser tabs.
         hero_image: Uploaded image for the home page hero section.
+        not_verified_emoji: Emoji/icon for not-verified status.
+        verified_emoji: Emoji/icon for verified status.
+        extra_verified_emoji: Emoji/icon for extra-verified status.
         date_modified: When the settings were last updated.
 
     """
@@ -34,6 +38,24 @@ class SiteSettings(models.Model):
         null=True,
         blank=True,
         help_text="Hero image for the home page (recommended: 1920x600)",
+    )
+    not_verified_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon shown for not-verified status (recommended: 64x64 PNG)",
+    )
+    verified_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon shown for verified status (recommended: 64x64 PNG)",
+    )
+    extra_verified_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon shown for extra-verified status (recommended: 64x64 PNG)",
     )
     date_modified = models.DateTimeField(auto_now=True)
 

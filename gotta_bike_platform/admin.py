@@ -9,7 +9,7 @@ from gotta_bike_platform.models import SiteSettings
 class SiteSettingsAdmin(admin.ModelAdmin):
     """Admin for SiteSettings singleton model."""
 
-    list_display = ("__str__", "has_logo", "has_hero_image", "date_modified")
+    list_display = ("__str__", "has_logo", "has_hero_image", "has_verification_emojis", "date_modified")
     readonly_fields = ("date_modified",)
 
     def has_logo(self, obj):
@@ -25,6 +25,13 @@ class SiteSettingsAdmin(admin.ModelAdmin):
 
     has_hero_image.boolean = True
     has_hero_image.short_description = "Hero Image"
+
+    def has_verification_emojis(self, obj):
+        """Check if any verification emoji is uploaded."""
+        return bool(obj.not_verified_emoji or obj.verified_emoji or obj.extra_verified_emoji)
+
+    has_verification_emojis.boolean = True
+    has_verification_emojis.short_description = "Verification Emojis"
 
     def has_add_permission(self, request):
         """Prevent adding new instances if one exists."""

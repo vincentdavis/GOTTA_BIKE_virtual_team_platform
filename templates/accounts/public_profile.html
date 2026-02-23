@@ -111,9 +111,17 @@
               <div class="flex items-center justify-between">
                 <span class="text-base-content/70">Race Verified</span>
                 {% if profile_user.is_race_ready %}
-                  <span class="badge badge-success badge-sm">Yes</span>
+                  {% if site_settings.verified_emoji %}
+                    <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
+                  {% else %}
+                    <span class="badge badge-success badge-sm">Yes</span>
+                  {% endif %}
                 {% else %}
-                  <span class="badge badge-ghost badge-sm">No</span>
+                  {% if site_settings.not_verified_emoji %}
+                    <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">No</span>
+                  {% endif %}
                 {% endif %}
               </div>
               {% if profile_user.gender %}

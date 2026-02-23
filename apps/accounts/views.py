@@ -109,6 +109,7 @@ def verification_view(request: HttpRequest) -> HttpResponse:
             "race_ready_form": race_ready_form,
             "race_ready_records": race_ready_records,
             "latest_by_type": latest_by_type,
+            "verification_form_message": config.VERIFICATION_FORM_MESSAGE,
             "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
             "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
             "unit_preference": request.user.unit_preference,
@@ -927,6 +928,36 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
             username=username,
             deleted_file=old_hero_name,
         )
+
+    # Handle verification emoji uploads and deletions
+    for emoji_field, label in [
+        ("not_verified_emoji", "Not Verified Emoji"),
+        ("verified_emoji", "Verified Emoji"),
+        ("extra_verified_emoji", "Extra Verified Emoji"),
+    ]:
+        if emoji_field in request.FILES:
+            uploaded_file = request.FILES[emoji_field]
+            setattr(site_settings_obj, emoji_field, uploaded_file)
+            success = True
+            logfire.info(
+                f"{label} uploaded",
+                user_id=user_id,
+                username=username,
+                filename=uploaded_file.name,
+                file_size=uploaded_file.size,
+            )
+        delete_key = f"delete_{emoji_field}"
+        if request.POST.get(delete_key) == "true" and getattr(site_settings_obj, emoji_field):
+            old_name = getattr(site_settings_obj, emoji_field).name
+            getattr(site_settings_obj, emoji_field).delete(save=False)
+            setattr(site_settings_obj, emoji_field, None)
+            success = True
+            logfire.info(
+                f"{label} deleted",
+                user_id=user_id,
+                username=username,
+                deleted_file=old_name,
+            )
 
     if success:
         site_settings_obj.save()

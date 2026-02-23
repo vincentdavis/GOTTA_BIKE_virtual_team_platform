@@ -112,6 +112,93 @@
         </div>
     </div>
 
+    <!-- Verification Emojis -->
+    <div class="divider">Verification Emojis</div>
+
+    <!-- Not Verified Emoji -->
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text font-medium">Not Verified Emoji</span>
+        </label>
+        <div class="flex items-start gap-4">
+            {% if site_settings_obj.not_verified_emoji %}
+            <div class="relative">
+                <img src="{{ site_settings_obj.not_verified_emoji.url }}" alt="Not verified emoji" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
+                <button type="submit" name="delete_not_verified_emoji" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            {% endif %}
+            <div class="flex-1">
+                <input type="file"
+                       name="not_verified_emoji"
+                       accept="image/*"
+                       class="file-input file-input-bordered w-full">
+                <label class="label">
+                    <span class="label-text-alt">Recommended: 64x64 PNG with transparency</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Verified Emoji -->
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text font-medium">Verified Emoji</span>
+        </label>
+        <div class="flex items-start gap-4">
+            {% if site_settings_obj.verified_emoji %}
+            <div class="relative">
+                <img src="{{ site_settings_obj.verified_emoji.url }}" alt="Verified emoji" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
+                <button type="submit" name="delete_verified_emoji" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            {% endif %}
+            <div class="flex-1">
+                <input type="file"
+                       name="verified_emoji"
+                       accept="image/*"
+                       class="file-input file-input-bordered w-full">
+                <label class="label">
+                    <span class="label-text-alt">Recommended: 64x64 PNG with transparency</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Extra Verified Emoji -->
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text font-medium">Extra Verified Emoji</span>
+        </label>
+        <div class="flex items-start gap-4">
+            {% if site_settings_obj.extra_verified_emoji %}
+            <div class="relative">
+                <img src="{{ site_settings_obj.extra_verified_emoji.url }}" alt="Extra verified emoji" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
+                <button type="submit" name="delete_extra_verified_emoji" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            {% endif %}
+            <div class="flex-1">
+                <input type="file"
+                       name="extra_verified_emoji"
+                       accept="image/*"
+                       class="file-input file-input-bordered w-full">
+                <label class="label">
+                    <span class="label-text-alt">Recommended: 64x64 PNG with transparency</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
     <div class="form-control mt-6">
         <button type="submit" class="btn btn-primary">
             <span class="htmx-indicator loading loading-spinner loading-sm"></span>

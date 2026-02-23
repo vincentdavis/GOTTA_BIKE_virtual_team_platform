@@ -359,13 +359,13 @@ Custom admin buttons are added via:
 
 Runtime-configurable settings stored in database, editable via Django admin at `/admin/constance/config/`.
 
-Settings are grouped: Team Identity, Zwift Credentials, API Keys, Permission Mappings (`PERM_*_ROLES` — JSON arrays of Discord role IDs), Discord Roles/Channels, New Arrival Messages (support `{member}`/`{server}` placeholders), Verification (`CATEGORY_REQUIREMENTS` JSON, `*_DAYS` expiration settings), Google, Strava, Site Settings.
+Settings are grouped: Team Identity, Zwift Credentials, API Keys, Permission Mappings (`PERM_*_ROLES` — JSON arrays of Discord role IDs), Discord Roles/Channels, New Arrival Messages (support `{member}`/`{server}` placeholders), Verification (`CATEGORY_REQUIREMENTS` JSON, `*_DAYS` expiration settings, `VERIFICATION_FORM_MESSAGE` Markdown message shown on verification form), Google, Strava, Site Settings.
 
 Usage: `from constance import config; config.SETTING_NAME`. Add new settings in `settings.py` under `CONSTANCE_CONFIG`.
 
 ### Site Image Settings
 
-`SiteSettings` singleton model (`gotta_bike_platform/models.py`) stores `site_logo`, `favicon`, `hero_image` (separate from Constance because they're file uploads). Access via `SiteSettings.get_settings()` or `site_settings` template context variable.
+`SiteSettings` singleton model (`gotta_bike_platform/models.py`) stores `site_logo`, `favicon`, `hero_image`, `not_verified_emoji`, `verified_emoji`, `extra_verified_emoji` (separate from Constance because they're file uploads). Access via `SiteSettings.get_settings()` or `site_settings` template context variable.
 
 `LOGO_DISPLAY_MODE` Constance setting: `name_only` (default), `logo_only`, `logo_and_name`. Falls back to team name if no logo uploaded. Managed at `/site/config/` "Site Images" section.
 
@@ -453,6 +453,20 @@ female). Configured via `CATEGORY_REQUIREMENTS` Constance setting:
 
 The `get_user_verification_types(user)` function in `apps/team/services.py` returns required types for a user. This is
 used by both the `is_race_ready` property and the verification submission form.
+
+### Verification Form
+
+The `/user/verification/` page displays a Markdown message from `VERIFICATION_FORM_MESSAGE` (Constance setting) below the card title, rendered via `render_markdown` template filter.
+
+### Verification Emojis
+
+Custom emoji/icon images for verification status are stored on `SiteSettings` (not Constance, since they're file uploads):
+
+- `not_verified_emoji` - Shown for not-verified status
+- `verified_emoji` - Shown for verified status
+- `extra_verified_emoji` - Shown for extra-verified status
+
+Managed via `/site/config/` "Site Images" section or Django admin. Accessible in templates via `site_settings.not_verified_emoji` etc.
 
 ### Verification Flow
 

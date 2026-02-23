@@ -255,9 +255,17 @@
                 </td>
                 <td>
                   {% if entry.is_race_ready %}
-                  <span class="badge badge-success badge-sm">Yes</span>
+                    {% if site_settings.verified_emoji %}
+                    <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
+                    {% else %}
+                    <span class="badge badge-success badge-sm">Yes</span>
+                    {% endif %}
                   {% else %}
-                  <span class="badge badge-error badge-sm">No</span>
+                    {% if site_settings.not_verified_emoji %}
+                    <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
+                    {% else %}
+                    <span class="badge badge-error badge-sm">No</span>
+                    {% endif %}
                   {% endif %}
                 </td>
                 {% if squads %}
@@ -498,9 +506,17 @@
                         </td>
                         <td>
                           {% if member.is_race_ready %}
-                          <span class="badge badge-success badge-sm">Yes</span>
+                            {% if site_settings.verified_emoji %}
+                            <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
+                            {% else %}
+                            <span class="badge badge-success badge-sm">Yes</span>
+                            {% endif %}
                           {% else %}
-                          <span class="badge badge-error badge-sm">No</span>
+                            {% if site_settings.not_verified_emoji %}
+                            <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
+                            {% else %}
+                            <span class="badge badge-error badge-sm">No</span>
+                            {% endif %}
                           {% endif %}
                         </td>
                         {% if squad.team_discord_role %}

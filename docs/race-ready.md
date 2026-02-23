@@ -33,6 +33,23 @@ Validity periods are configurable via Constance settings:
 - `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)
 - `POWER_VERIFICATION_DAYS` (default: 365)
 
+A configurable Markdown message can be displayed at the top of the verification form via the `VERIFICATION_FORM_MESSAGE` Constance setting (in the "Verification Settings" group). When set, it renders below the card title on `/user/verification/`.
+
+### Verification Emojis
+
+Custom emoji/icon images for verification status are stored on the `SiteSettings` model (not Constance, since they
+require file uploads):
+
+| Field                  | Description                          |
+|------------------------|--------------------------------------|
+| `not_verified_emoji`   | Icon for not-verified status         |
+| `verified_emoji`       | Icon for verified status             |
+| `extra_verified_emoji` | Icon for extra-verified status       |
+
+Upload via `/site/config/` "Site Images" section or Django admin (`/admin/gotta_bike_platform/sitesettings/`).
+Accessible in templates via `site_settings.not_verified_emoji`, `site_settings.verified_emoji`, and
+`site_settings.extra_verified_emoji`. Recommended size: 64x64 PNG with transparency.
+
 ## Category-Based Requirements
 
 The verification types **required** for race ready status depend on the user's ZwiftPower category. This is configured
