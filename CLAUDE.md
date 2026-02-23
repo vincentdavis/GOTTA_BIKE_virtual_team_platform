@@ -468,6 +468,16 @@ Custom emoji/icon images for verification status are stored on `SiteSettings` (n
 
 Managed via `/site/config/` "Site Images" section or Django admin. Accessible in templates via `site_settings.not_verified_emoji` etc.
 
+When uploaded, these emojis replace the default colored badges/SVGs for race verified status across all templates:
+- `base.html` - Header status text and user dropdown menu
+- `accounts/verification.html` - Verification page title icon
+- `accounts/public_profile.html` - Public profile Race Verified row
+- `team/roster.html` - Roster Race Verified column
+- `events/event_detail.html` - Signup list and squad member list
+- `events/event_form.html` - Event edit signup list
+
+Falls back to original badges/SVGs when no emoji image is uploaded.
+
 ### Verification Flow
 
 1. User submits a `RaceReadyRecord` (weight, height, or power photo) via the web app

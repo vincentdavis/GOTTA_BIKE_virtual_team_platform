@@ -50,6 +50,20 @@ Upload via `/site/config/` "Site Images" section or Django admin (`/admin/gotta_
 Accessible in templates via `site_settings.not_verified_emoji`, `site_settings.verified_emoji`, and
 `site_settings.extra_verified_emoji`. Recommended size: 64x64 PNG with transparency.
 
+When uploaded, `verified_emoji` and `not_verified_emoji` replace the default colored badges/SVGs for race verified
+status across all pages:
+
+| Template                       | Location                                  |
+|--------------------------------|-------------------------------------------|
+| `base.html`                    | Header status text and user dropdown menu |
+| `accounts/verification.html`   | Verification page title icon              |
+| `accounts/public_profile.html` | Public profile Race Verified row          |
+| `team/roster.html`             | Roster Race Verified column               |
+| `events/event_detail.html`     | Signup list and squad member list         |
+| `events/event_form.html`       | Event edit signup list                    |
+
+If no emoji image is uploaded, the original badges and SVG icons are shown as fallback.
+
 ## Category-Based Requirements
 
 The verification types **required** for race ready status depend on the user's ZwiftPower category. This is configured
