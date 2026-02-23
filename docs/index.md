@@ -32,7 +32,7 @@ Welcome to the documentation for The Coalition Team Platform, a Django web appli
 - **Role-Based Permissions** - Team captains, admins, and members with different access levels
 - **Discord Bot API** - REST API for Discord bot integration
 - **Dynamic Settings** - Runtime-configurable settings via Django admin
-- **CMS Pages** - Dynamic content pages with markdown, hero sections, and card layouts
+- **CMS Pages** - Dynamic content pages with markdown, hero sections, card layouts, accordion sections, and configurable nav location (sidebar or user menu)
 - **Observability** - Logfire integration for logging and monitoring
 
 ## Tech Stack

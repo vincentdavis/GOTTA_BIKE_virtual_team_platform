@@ -112,6 +112,28 @@
           </div>
         </div>
 
+        <!-- Accordions -->
+        <div class="collapse collapse-arrow bg-base-300 rounded-lg">
+          <input type="checkbox" id="accordions-toggle" />
+          <div class="collapse-title font-semibold text-lg">
+            Accordions
+            <span id="accordions-count" class="badge badge-info badge-sm ml-2 hidden"></span>
+          </div>
+          <div class="collapse-content">
+            <div class="pt-2">
+              {{ form.accordions }}
+              {% if form.accordions.errors %}
+              <div class="alert alert-error mb-3">
+                <span>{{ form.accordions.errors.0 }}</span>
+              </div>
+              {% endif %}
+              {% with field_name="accordions" %}
+              {% include "cms/partials/_accordion_editor.html" %}
+              {% endwith %}
+            </div>
+          </div>
+        </div>
+
         <!-- Hero Section -->
         <div class="collapse collapse-arrow bg-base-300 rounded-lg">
           <input type="checkbox" {% if form.hero_enabled.value %}checked{% endif %} />
@@ -589,6 +611,199 @@ const cardEditor = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => cardEditor.init());
+const accordionEditor = {
+  data: {
+    accordions: [],
+  },
+
+  init() {
+    const field = 'accordions';
+    const input = document.getElementById('id_' + field);
+    if (input && input.value) {
+      try {
+        const parsed = JSON.parse(input.value);
+        if (Array.isArray(parsed)) {
+          this.data[field] = parsed;
+        }
+      } catch (e) {
+        // Leave empty if invalid JSON
+      }
+    }
+    this.render(field);
+  },
+
+  render(field) {
+    const list = document.getElementById(field + '-list');
+    const empty = document.getElementById(field + '-empty');
+    const count = document.getElementById(field + '-count');
+    const toggle = document.getElementById(field + '-toggle');
+    const items = this.data[field];
+
+    if (items.length > 0) {
+      count.textContent = items.length + ' item' + (items.length !== 1 ? 's' : '');
+      count.classList.remove('hidden');
+      empty.classList.add('hidden');
+      if (toggle) toggle.checked = true;
+    } else {
+      count.classList.add('hidden');
+      empty.classList.remove('hidden');
+    }
+
+    list.innerHTML = '';
+    items.forEach((item, index) => {
+      list.appendChild(this.createItemElement(field, item, index));
+    });
+
+    this.sync(field);
+  },
+
+  createItemElement(field, item, index) {
+    const total = this.data[field].length;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'card bg-base-100 border border-base-300';
+
+    const moveUpBtn = index > 0
+      ? `<button type="button" class="btn btn-ghost btn-xs" title="Move up"
+                data-action="move-up">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+          </svg>
+        </button>`
+      : '';
+
+    const moveDownBtn = index < total - 1
+      ? `<button type="button" class="btn btn-ghost btn-xs" title="Move down"
+                data-action="move-down">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>`
+      : '';
+
+    wrapper.innerHTML = `
+      <div class="card-body p-4 gap-3">
+        <div class="flex justify-between items-start">
+          <span class="badge badge-ghost badge-sm">Item ${index + 1}</span>
+          <div class="flex gap-1">
+            ${moveUpBtn}
+            ${moveDownBtn}
+            <button type="button" class="btn btn-ghost btn-xs text-error" title="Remove item"
+                    data-action="remove">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-control">
+          <label class="label py-1"><span class="label-text text-xs">Title</span></label>
+          <input type="text" data-key="title"
+                 class="input input-bordered input-sm w-full"
+                 placeholder="Accordion heading"
+                 value="${this.escapeAttr(item.title || '')}" />
+        </div>
+
+        <div class="form-control">
+          <label class="label py-1">
+            <span class="label-text text-xs">Content</span>
+            <span class="label-text-alt text-xs">Supports Markdown</span>
+          </label>
+          <textarea data-key="content"
+                    class="textarea textarea-bordered textarea-sm w-full font-mono"
+                    rows="3"
+                    placeholder="Accordion content (Markdown)...">${this.escapeHtml(item.content || '')}</textarea>
+        </div>
+
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-2 py-1">
+            <input type="checkbox" data-key="open" class="checkbox checkbox-sm"
+                   ${item.open ? 'checked' : ''} />
+            <span class="label-text text-xs">Start expanded</span>
+          </label>
+        </div>
+      </div>
+    `;
+
+    // Attach event listeners
+    wrapper.querySelectorAll('[data-key]').forEach(el => {
+      const eventType = el.type === 'checkbox' ? 'change' : 'input';
+      el.addEventListener(eventType, () => {
+        const value = el.type === 'checkbox' ? el.checked : el.value;
+        this.update(field, index, el.dataset.key, value);
+      });
+    });
+
+    const removeBtn = wrapper.querySelector('[data-action="remove"]');
+    if (removeBtn) removeBtn.addEventListener('click', () => this.remove(field, index));
+
+    const upBtn = wrapper.querySelector('[data-action="move-up"]');
+    if (upBtn) upBtn.addEventListener('click', () => this.move(field, index, -1));
+
+    const downBtn = wrapper.querySelector('[data-action="move-down"]');
+    if (downBtn) downBtn.addEventListener('click', () => this.move(field, index, 1));
+
+    return wrapper;
+  },
+
+  addItem(field) {
+    this.data[field].push({
+      title: '',
+      content: '',
+      open: false,
+    });
+    this.render(field);
+    const list = document.getElementById(field + '-list');
+    const last = list.lastElementChild;
+    if (last) {
+      last.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      const titleInput = last.querySelector('[data-key="title"]');
+      if (titleInput) titleInput.focus();
+    }
+  },
+
+  remove(field, index) {
+    this.data[field].splice(index, 1);
+    this.render(field);
+  },
+
+  move(field, index, direction) {
+    const items = this.data[field];
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= items.length) return;
+    [items[index], items[newIndex]] = [items[newIndex], items[index]];
+    this.render(field);
+  },
+
+  update(field, index, key, value) {
+    this.data[field][index][key] = value;
+    this.sync(field);
+  },
+
+  sync(field) {
+    const input = document.getElementById('id_' + field);
+    const filtered = this.data[field].filter(item =>
+      item.title || item.content
+    );
+    input.value = filtered.length > 0 ? JSON.stringify(filtered) : '';
+  },
+
+  escapeAttr(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML.replace(/"/g, '&quot;');
+  },
+
+  escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  },
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  cardEditor.init();
+  accordionEditor.init();
+});
 </script>
 {% endblock %}

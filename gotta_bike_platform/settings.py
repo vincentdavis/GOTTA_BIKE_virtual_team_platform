@@ -640,8 +640,6 @@ CONSTANCE_CONFIG = {
         "List of event types available for event creation",
         "string_list_field",
     ),
-    # Help Page
-    "HELP_PAGE": ("# Help\n\nWelcome to the help page.", "Markdown content for the /help/ page", "textarea_field"),
     # Strava API
     "STRAVA_CLUB_ID": (0, "Strava club ID for fetching club activities", int),
     "STRAVA_CLUB_URL": ("", "Strava club URL (e.g., https://www.strava.com/clubs/your-club)", str),
@@ -665,7 +663,6 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "CONTACT_URL",
         "PRIVACY_POLICY_URL",
         "TERMS_OF_SERVICE_URL",
-        "HELP_PAGE",
     ),
     "Social Links": (
         "SOCIAL_LINKEDIN_URL",

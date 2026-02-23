@@ -15,6 +15,7 @@ class Page(models.Model):
     - Markdown content (main body)
     - Optional hero section with image, title, and subtitle
     - Optional card sections above/below content
+    - Optional accordion sections (collapsible items with Markdown content)
     - Access control (login required, team member required)
     - Navigation visibility settings
 
@@ -28,6 +29,7 @@ class Page(models.Model):
         hero_subtitle: Subtitle text for hero section.
         cards_above: JSON array of card objects above content.
         cards_below: JSON array of card objects below content.
+        accordions: JSON array of accordion items between content and cards_below.
         show_in_nav: Whether to show in sidebar navigation.
         nav_title: Override title for navigation (optional).
         nav_order: Sort order in navigation (lower = higher).
@@ -106,6 +108,13 @@ class Page(models.Model):
             'Cards below content. Format: [{"icon": "...", "title": "...", '
             '"description": "...", "link_url": "...", "link_text": "...", "link_new_tab": true}]'
         ),
+    )
+
+    # Accordion sections (JSON array)
+    accordions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Accordion items. Format: [{"title": "...", "content": "...", "open": false}]',
     )
 
     # Navigation settings

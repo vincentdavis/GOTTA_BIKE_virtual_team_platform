@@ -27,6 +27,7 @@ class PageForm(forms.ModelForm):
             "hero_subtitle",
             "cards_above",
             "cards_below",
+            "accordions",
             "show_in_nav",
             "nav_title",
             "nav_order",
@@ -61,6 +62,7 @@ class PageForm(forms.ModelForm):
             ),
             "cards_above": forms.HiddenInput(attrs={"id": "id_cards_above"}),
             "cards_below": forms.HiddenInput(attrs={"id": "id_cards_below"}),
+            "accordions": forms.HiddenInput(attrs={"id": "id_accordions"}),
             "show_in_nav": forms.CheckboxInput(attrs={"class": "checkbox"}),
             "nav_title": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "Nav Title (optional)"}
@@ -88,6 +90,15 @@ class PageForm(forms.ModelForm):
 
         """
         return self._clean_json_field("cards_below")
+
+    def clean_accordions(self) -> list:
+        """Validate and parse accordions JSON.
+
+        Returns:
+            Parsed JSON list.
+
+        """
+        return self._clean_json_field("accordions")
 
     def _clean_json_field(self, field_name: str) -> list:
         """Clean a JSON field, parsing string input to list.

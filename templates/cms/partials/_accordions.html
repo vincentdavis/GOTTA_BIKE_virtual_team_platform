@@ -1,0 +1,18 @@
+{% load accounts_tags %}
+{% if accordions %}
+<div class="space-y-2 mb-8">
+    {% for item in accordions %}
+    <div class="collapse collapse-arrow bg-base-200">
+        <input type="checkbox" {% if item.open %}checked{% endif %} />
+        <div class="collapse-title font-semibold">{{ item.title }}</div>
+        <div class="collapse-content">
+            {% if item.content %}
+            <div class="prose prose-sm max-w-none">
+                {{ item.content|render_markdown }}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}

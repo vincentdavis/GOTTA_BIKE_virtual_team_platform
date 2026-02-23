@@ -110,9 +110,11 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - Markdown rendering for event description and signup instructions
 - `magic_links` - Passwordless authentication (legacy)
 - `cms` - Dynamic CMS pages:
-    - `Page` model - Content pages with markdown, hero sections, and card layouts
+    - `Page` model - Content pages with markdown, hero sections, card layouts, and accordion sections
     - Publishing workflow (draft/published status)
-    - Navigation settings (show_in_nav, nav_order, nav_title)
+    - Navigation settings (show_in_nav, nav_location, nav_order, nav_title)
+    - `nav_location` choices: `main_nav` (sidebar, default) or `user_menu` (top-right user dropdown)
+    - Context processor provides `cms_nav_pages` (sidebar) and `cms_user_menu_pages` (user dropdown)
     - Access control (require_login, require_team_member)
 
 ### Authentication (django-allauth)

@@ -55,13 +55,14 @@ class PageAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Card Sections",
+            "Cards & Accordions",
             {
-                "fields": ("cards_above", "cards_below"),
+                "fields": ("cards_above", "cards_below", "accordions"),
                 "classes": ("collapse",),
                 "description": (
-                    'JSON arrays of card objects. Format: [{"icon": "emoji", "title": "...", '
-                    '"description": "...", "link_url": "/path/", "link_text": "...", "link_new_tab": true}]'
+                    'Cards: [{"icon": "emoji", "title": "...", "description": "...", '
+                    '"link_url": "/path/", "link_text": "...", "link_new_tab": true}]. '
+                    'Accordions: [{"title": "...", "content": "Markdown...", "open": false}]'
                 ),
             },
         ),

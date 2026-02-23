@@ -34,6 +34,12 @@
     </div>
     {% endif %}
 
+    {% if page.accordions %}
+    {% with accordions=page.accordions %}
+    {% include "cms/partials/_accordions.html" %}
+    {% endwith %}
+    {% endif %}
+
     {% if page.cards_below %}
     {% with cards=page.cards_below %}
     {% include "cms/partials/_cards.html" %}

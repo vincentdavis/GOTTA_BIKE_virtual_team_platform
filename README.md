@@ -19,7 +19,7 @@ A Django web application for The Coalition Zwift racing team. Manages team membe
 - **Analytics** - Server-side page visit tracking with dashboard
 - **Help Page** - Admin-editable help page with markdown support
 - **Discord Bot API** - REST API for Discord bot integration
-- **CMS Pages** - Dynamic content pages with markdown support
+- **CMS Pages** - Dynamic content pages with markdown support, accordion sections, configurable nav location (sidebar or user menu)
 
 ## Quick Start
 

@@ -3,13 +3,10 @@
 import logfire
 import markdown
 from constance import config
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
-from django.shortcuts import redirect, render
-from django.views.decorators.http import require_GET, require_http_methods
+from django.shortcuts import render
+from django.views.decorators.http import require_GET
 
-from apps.accounts.decorators import team_member_required
 from apps.cms.models import Page
 
 # AI crawlers to block when ROBOTS_DISALLOW_AI is enabled
@@ -148,56 +145,3 @@ def robots_txt(request):
 
     content = "\n".join(lines)
     return HttpResponse(content, content_type="text/plain")
-
-
-@require_GET
-@login_required
-@team_member_required()
-def help_page_view(request):
-    """Render the help page from constance HELP_PAGE markdown content.
-
-    Args:
-        request: The HTTP request.
-
-    Returns:
-        Rendered help page.
-
-    """
-    content_html = markdown.markdown(
-        config.HELP_PAGE or "",
-        extensions=["extra", "nl2br", "sane_lists", "tables"],
-    )
-    return render(request, "help.html", {
-        "content_html": content_html,
-        "is_app_admin": request.user.has_permission("app_admin"),
-    })
-
-
-@login_required
-@team_member_required()
-@require_http_methods(["GET", "POST"])
-def help_page_edit_view(request):
-    """Edit the help page content (app admins only).
-
-    Args:
-        request: The HTTP request.
-
-    Returns:
-        Rendered edit form or redirect on save.
-
-    """
-    if not request.user.has_permission("app_admin"):
-        messages.error(request, "You don't have permission to edit the help page.")
-        return redirect("help_page")
-
-    if request.method == "POST":
-        from constance import config as constance_config
-
-        constance_config.HELP_PAGE = request.POST.get("content", "")
-        logfire.info("Help page updated", user_id=request.user.id)
-        messages.success(request, "Help page updated.")
-        return redirect("help_page")
-
-    return render(request, "help_edit.html", {
-        "content": config.HELP_PAGE or "",
-    })
