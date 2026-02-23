@@ -1,0 +1,42 @@
+{% extends "account/base.html" %}
+
+{% block title %}Login Error{% endblock %}
+
+{% block card_title %}
+<h2 class="card-title justify-center text-2xl">Login Error</h2>
+{% endblock %}
+
+{% block card_content %}
+<div class="mt-4">
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags }} mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>{{ message }}</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="alert alert-error mb-4">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span>Something went wrong during login. Please try again.</span>
+    </div>
+    {% endif %}
+
+    <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <h3 class="font-semibold mb-2">Common causes</h3>
+        <ul class="list-disc list-inside text-sm text-base-content/70 space-y-1">
+            <li>Your Discord account's email is not verified</li>
+            <li>You denied the authorization request</li>
+            <li>Your Discord session expired &mdash; try logging into Discord first</li>
+        </ul>
+    </div>
+
+    <a href="{% url 'account_login' %}" class="btn btn-primary w-full">
+        Try Again
+    </a>
+</div>
+{% endblock %}

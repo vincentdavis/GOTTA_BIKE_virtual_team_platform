@@ -56,7 +56,8 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             user_guild_ids = [int(g["id"]) for g in guilds]
             if guild_id not in user_guild_ids:
                 guild_name = config.GUILD_NAME or "the team"
-                discord_url = config.DISCORD_URL or "#"
+                raw_url = config.DISCORD_URL or ""
+                discord_url = raw_url if raw_url.startswith(("http://", "https://", "/")) else reverse("account_login")
                 logfire.warning(
                     "User not in required guild",
                     discord_id=sociallogin.account.extra_data.get("id"),
@@ -259,6 +260,39 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
 
             # Sync Discord guild roles for existing user on login
             sync_user_discord_roles(user)
+
+    def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
+        """Handle OAuth authentication errors with user-friendly messages.
+
+        Called by allauth when the OAuth callback contains an error, e.g. when
+        Discord denies authorization because the user's email is unverified.
+
+        Args:
+            request: The HTTP request.
+            provider: The social account provider.
+            error: The error code (e.g. AuthError.DENIED, AuthError.UNKNOWN).
+            exception: The exception that occurred, if any.
+            extra_context: Additional context dict.
+
+        """
+        logfire.warning(
+            "Discord OAuth authentication error",
+            error=str(error),
+            exception=str(exception) if exception else None,
+            provider=str(provider),
+        )
+
+        if error == "denied":
+            messages.error(
+                request,
+                "Discord denied the login request. Please make sure your Discord account's "
+                "email is verified, then try again.",
+            )
+        else:
+            messages.error(
+                request,
+                "Something went wrong during Discord login. Please try again.",
+            )
 
     def get_login_redirect_url(self, request):
         """Return redirect URL after login.
