@@ -325,7 +325,6 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
 - `/api/dbot/` - Discord bot API
 - `/api/cron/` - Cron task API
 - `/api/analytics/` - Analytics tracking API (`apps.analytics.api`)
-- `/help/` - Help page (Markdown from constance `HELP_PAGE`, editable by `app_admin`)
 - `/robots.txt` - Dynamic robots.txt (see Robots.txt section)
 - `/m/` - Magic links (legacy)
 
