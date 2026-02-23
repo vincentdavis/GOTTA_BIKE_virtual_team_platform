@@ -2833,6 +2833,18 @@
       cursor: not-allowed;
     }
   }
+  @layer daisyui.l1.l2 {
+    .btn-active {
+      --btn-bg: var(--btn-color, var(--color-base-200));
+      --btn-shadow: 0 0 0 0 oklch(0% 0 0/0), 0 0 0 0 oklch(0% 0 0/0);
+      isolation: isolate;
+    }
+    @supports (color: color-mix(in lab, red, red)) {
+      .btn-active {
+        --btn-bg: color-mix(in oklab, var(--btn-color, var(--color-base-200)), #000 7%);
+      }
+    }
+  }
   @layer daisyui.l1.l2.l3 {
     .modal-backdrop {
       grid-column-start: 1;
@@ -5257,6 +5269,9 @@
   }
   .px-2 {
     padding-inline: calc(var(--spacing) * 2);
+  }
+  .px-3 {
+    padding-inline: calc(var(--spacing) * 3);
   }
   .px-4 {
     padding-inline: calc(var(--spacing) * 4);

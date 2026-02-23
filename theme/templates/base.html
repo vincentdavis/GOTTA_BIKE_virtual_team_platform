@@ -38,6 +38,14 @@
           integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
           crossorigin="anonymous"></script>
   {% block extra_css %}{% endblock %}
+  <script>
+    (function() {
+      var t = localStorage.getItem("theme");
+      if (t === "light" || t === "dark") {
+        document.documentElement.setAttribute("data-theme", t);
+      }
+    })();
+  </script>
 </head>
 
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="flex flex-col h-screen">
@@ -206,6 +214,37 @@
             <li class="my-1">
               <hr class="border-base-300">
             </li>
+            <li class="px-3 py-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-base-content/60">Theme</span>
+                <div class="flex gap-1">
+                  <button onclick="setTheme('light')" id="theme-light" title="Light"
+                          class="btn btn-ghost btn-xs btn-square">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                  </button>
+                  <button onclick="setTheme('dark')" id="theme-dark" title="Dark"
+                          class="btn btn-ghost btn-xs btn-square">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                    </svg>
+                  </button>
+                  <button onclick="setTheme('auto')" id="theme-auto" title="System"
+                          class="btn btn-ghost btn-xs btn-square">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </li>
+            <li class="my-1">
+              <hr class="border-base-300">
+            </li>
             <li>
               <a href="{% url 'account_logout' %}" class="text-error">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
@@ -281,6 +320,38 @@
 </div>
 
 {% block extra_js %}{% endblock %}
+
+<!-- Theme switcher -->
+<script>
+function setTheme(mode) {
+  if (mode === "light" || mode === "dark") {
+    document.documentElement.setAttribute("data-theme", mode);
+    localStorage.setItem("theme", mode);
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+    localStorage.setItem("theme", "auto");
+  }
+  updateThemeButtons(mode);
+}
+function updateThemeButtons(mode) {
+  var ids = ["theme-light", "theme-dark", "theme-auto"];
+  for (var i = 0; i < ids.length; i++) {
+    var btn = document.getElementById(ids[i]);
+    if (btn) {
+      if (ids[i] === "theme-" + mode) {
+        btn.classList.add("btn-active");
+      } else {
+        btn.classList.remove("btn-active");
+      }
+    }
+  }
+}
+// Highlight the active button on page load
+(function() {
+  var t = localStorage.getItem("theme") || "auto";
+  updateThemeButtons(t);
+})();
+</script>
 
 <!-- Analytics tracking -->
 <script>
