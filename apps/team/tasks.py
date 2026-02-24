@@ -174,6 +174,7 @@ def notify_race_ready_change(
         dict with notification status.
 
     """
+    from apps.accounts.discord_service import add_discord_role, remove_discord_role
     from apps.accounts.models import User
 
     with logfire.span(
@@ -181,18 +182,43 @@ def notify_race_ready_change(
         user_id=user_id,
         is_now_race_ready=is_now_race_ready,
     ):
-        channel_id = config.USER_CHANGE_LOG
-
-        if not channel_id or channel_id == 0:
-            logfire.debug("USER_CHANGE_LOG not configured, skipping notification")
-            return {"status": "skipped", "reason": "channel_not_configured"}
-
         # Get the user
         try:
             user = User.objects.get(pk=user_id)
         except User.DoesNotExist:
             logfire.error("User not found for race ready notification", user_id=user_id)
             return {"status": "error", "reason": "user_not_found"}
+
+        # Sync the race ready Discord role
+        race_ready_role_id = config.RACE_READY_ROLE_ID
+        role_synced = False
+        if race_ready_role_id and race_ready_role_id != 0 and user.discord_id:
+            role_id_str = str(race_ready_role_id)
+            if is_now_race_ready:
+                role_synced = add_discord_role(user.discord_id, role_id_str)
+                if role_synced:
+                    if user.discord_roles is None:
+                        user.discord_roles = {}
+                    user.discord_roles[role_id_str] = "Race Ready"
+                    user.save(update_fields=["discord_roles"])
+            else:
+                role_synced = remove_discord_role(user.discord_id, role_id_str)
+                if role_synced and user.discord_roles and role_id_str in user.discord_roles:
+                    del user.discord_roles[role_id_str]
+                    user.save(update_fields=["discord_roles"])
+            logfire.info(
+                "Race ready role sync",
+                user_id=user_id,
+                discord_id=user.discord_id,
+                is_now_race_ready=is_now_race_ready,
+                role_synced=role_synced,
+            )
+
+        channel_id = config.USER_CHANGE_LOG
+
+        if not channel_id or channel_id == 0:
+            logfire.debug("USER_CHANGE_LOG not configured, skipping notification")
+            return {"status": "role_only", "role_synced": role_synced}
 
         # Get admin who made the change
         admin_name = None
@@ -236,7 +262,7 @@ def notify_race_ready_change(
             success=success,
         )
 
-        return {"status": "sent" if success else "failed", "user_id": user_id}
+        return {"status": "sent" if success else "failed", "user_id": user_id, "role_synced": role_synced}
 
 
 def _get_user_display_name(user) -> str:

@@ -2434,6 +2434,16 @@
     position: sticky;
   }
   @layer daisyui.l1.l2 {
+    .tooltip-bottom > .tooltip-content, .tooltip-bottom[data-tip]:before {
+      transform: translateX(-50%) translateY(var(--tt-pos, -0.25rem));
+      inset: var(--tt-off) auto auto 50%;
+    }
+    .tooltip-bottom:after {
+      transform: translateX(-50%) translateY(var(--tt-pos, -0.25rem)) rotate(180deg);
+      inset: var(--tt-tail) auto auto 50%;
+    }
+  }
+  @layer daisyui.l1.l2 {
     .tooltip-left > .tooltip-content, .tooltip-left[data-tip]:before {
       transform: translateX(calc(var(--tt-pos, 0.25rem) - 0.25rem)) translateY(-50%);
       inset: 50% var(--tt-off) auto auto;
