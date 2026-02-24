@@ -101,7 +101,7 @@ TASK_REGISTRY: dict = {
         "description": "Send DMs to users whose verifications expire in exactly N days",
         "params": [
             {"name": "days", "type": "number", "label": "Days until expiration", "default": 15, "required": True},
-            {"name": "dry_run", "type": "checkbox", "label": "Dry run (don't send DMs)", "default": False},
+            {"name": "dry_run", "type": "checkbox", "label": "Dry run (don't send DMs)", "default": True},
         ],
     },
 }

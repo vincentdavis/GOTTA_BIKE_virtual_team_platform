@@ -48,7 +48,7 @@
                                            class="input input-bordered input-sm w-24" placeholder="{{ param.label }}">
                                 {% elif param.type == "checkbox" %}
                                     <label class="label cursor-pointer gap-2">
-                                        <input type="checkbox" name="{{ param.name }}" class="checkbox checkbox-sm">
+                                        <input type="checkbox" name="{{ param.name }}" class="checkbox checkbox-sm" {% if param.default %}checked{% endif %}>
                                         <span class="label-text text-xs">{{ param.label }}</span>
                                     </label>
                                 {% endif %}

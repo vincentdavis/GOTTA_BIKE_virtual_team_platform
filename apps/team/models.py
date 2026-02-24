@@ -72,7 +72,6 @@ class RaceReadyRecord(models.Model):
             ("video", "Video"),
             ("photo", "Photo"),
             ("link", "Link"),
-            ("other", "Other"),
         ],
         help_text="Type of media",
     )

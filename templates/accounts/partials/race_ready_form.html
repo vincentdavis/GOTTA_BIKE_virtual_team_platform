@@ -229,6 +229,8 @@
       (function () {
           const unitPreference = '{{ unit_preference|default:"metric" }}';
           const verifyTypeSelect = document.getElementById('id_verify_type');
+          const mediaTypeSelect = document.getElementById('id_media_type');
+          const allMediaOptions = Array.from(mediaTypeSelect.options).map(o => ({value: o.value, text: o.text}));
           const weightField = document.getElementById('weight-field');
           const heightField = document.getElementById('height-field');
           const ftpField = document.getElementById('ftp-field');
@@ -258,6 +260,24 @@
               ftpField.classList.add('hidden');
               if (weightInstructions) weightInstructions.classList.add('hidden');
               if (heightInstructions) heightInstructions.classList.add('hidden');
+
+              // Filter media type options: weight_light only allows photo, others exclude photo
+              const currentMediaValue = mediaTypeSelect.value;
+              mediaTypeSelect.innerHTML = '';
+              const allowedOptions = value === 'weight_light'
+                  ? allMediaOptions.filter(o => o.value === 'photo')
+                  : allMediaOptions.filter(o => o.value !== 'photo');
+              allowedOptions.forEach(o => {
+                  const opt = document.createElement('option');
+                  opt.value = o.value;
+                  opt.text = o.text;
+                  if (o.value === currentMediaValue) opt.selected = true;
+                  mediaTypeSelect.appendChild(opt);
+              });
+              // If previous selection isn't available, select the first option
+              if (!allowedOptions.some(o => o.value === currentMediaValue)) {
+                  mediaTypeSelect.value = allowedOptions[0]?.value || '';
+              }
 
               // Show appropriate field and instructions based on selection
               if (value === 'weight_full' || value === 'weight_light') {
