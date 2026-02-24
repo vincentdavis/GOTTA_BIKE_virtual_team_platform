@@ -5,7 +5,7 @@ from typing import ClassVar
 from django import forms
 
 from apps.events.models import Event, Squad
-from apps.team.models import DiscordChannel
+from apps.team.models import DiscordChannel, DiscordRole
 
 
 def _get_channel_choices() -> list:
@@ -39,12 +39,30 @@ def _get_channel_choices() -> list:
     return choices
 
 
+def _get_role_choices() -> list[tuple[str, str]]:
+    """Build choices list for Discord role Select widget.
+
+    Returns:
+        List of (role_id, name) tuples ordered by position (highest first).
+
+    """
+    choices: list[tuple[str, str]] = [("0", "(none)")]
+    choices.extend((role.role_id, f"@{role.name}") for role in DiscordRole.objects.order_by("-position"))
+    return choices
+
+
 class EventForm(forms.ModelForm):
     """Form for creating and editing events."""
 
     discord_channel_id = forms.CharField(
         required=False,
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+
+    head_captain_role_id = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        label="Head Captain Role",
     )
 
     class Meta:
@@ -91,9 +109,6 @@ class EventForm(forms.ModelForm):
             "url": forms.URLInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},
             ),
-            "head_captain_role_id": forms.NumberInput(
-                attrs={"class": "input input-bordered w-full", "placeholder": "Discord role ID (0 = none)"},
-            ),
             "visible": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
@@ -129,6 +144,15 @@ class EventForm(forms.ModelForm):
         self.fields["discord_channel_id"].widget.choices = choices
         self.initial["discord_channel_id"] = current_value
 
+        # Populate Discord role choices for head_captain_role_id
+        role_choices = _get_role_choices()
+        current_role = str(self.initial.get("head_captain_role_id", 0) or 0)
+        role_values = {c[0] for c in role_choices}
+        if current_role != "0" and current_role not in role_values:
+            role_choices.append((current_role, f"Unknown Role ({current_role})"))
+        self.fields["head_captain_role_id"].widget.choices = role_choices
+        self.initial["head_captain_role_id"] = current_role
+
     @staticmethod
     def _flat_choice_values(choices: list) -> set[str]:
         """Extract all values from a choices list including optgroups.
@@ -162,6 +186,19 @@ class EventForm(forms.ModelForm):
         except (ValueError, TypeError):
             return 0
 
+    def clean_head_captain_role_id(self) -> int:
+        """Convert selected role ID string back to int for the model.
+
+        Returns:
+            Role ID as integer (0 for none).
+
+        """
+        value = self.cleaned_data.get("head_captain_role_id", "0")
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return 0
+
 
 class SquadForm(forms.ModelForm):
     """Form for creating and editing squads."""
@@ -169,6 +206,12 @@ class SquadForm(forms.ModelForm):
     discord_channel_id = forms.CharField(
         required=False,
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
+
+    team_discord_role = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        label="Discord Role",
     )
 
     class Meta:
@@ -202,9 +245,6 @@ class SquadForm(forms.ModelForm):
             "vice_captain": forms.Select(
                 attrs={"class": "select select-bordered w-full"},
             ),
-            "team_discord_role": forms.NumberInput(
-                attrs={"class": "input input-bordered w-full", "placeholder": "Discord role ID (0 = none)"},
-            ),
             "min_zwift_category": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "e.g., A, B, C, D, E"},
             ),
@@ -226,8 +266,16 @@ class SquadForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs) -> None:
-        """Initialize form with Discord channel choices."""
+        """Initialize form with Discord channel choices and captain labels."""
         super().__init__(*args, **kwargs)
+
+        # Show full names for captain/vice_captain dropdowns
+        for field_name in ("captain", "vice_captain"):
+            field = self.fields[field_name]
+            field.label_from_instance = lambda u: (
+                f"{u.first_name} {u.last_name}".strip() or u.discord_nickname or u.discord_username or u.username
+            )
+
         choices = _get_channel_choices()
 
         current_value = str(self.initial.get("discord_channel_id", 0) or 0)
@@ -239,6 +287,15 @@ class SquadForm(forms.ModelForm):
         self.fields["discord_channel_id"].widget.choices = choices
         self.initial["discord_channel_id"] = current_value
 
+        # Populate Discord role choices
+        role_choices = _get_role_choices()
+        current_role = str(self.initial.get("team_discord_role", 0) or 0)
+        role_values = {c[0] for c in role_choices}
+        if current_role != "0" and current_role not in role_values:
+            role_choices.append((current_role, f"Unknown Role ({current_role})"))
+        self.fields["team_discord_role"].widget.choices = role_choices
+        self.initial["team_discord_role"] = current_role
+
     def clean_discord_channel_id(self) -> int:
         """Convert selected channel ID string back to int for the model.
 
@@ -247,6 +304,19 @@ class SquadForm(forms.ModelForm):
 
         """
         value = self.cleaned_data.get("discord_channel_id", "0")
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return 0
+
+    def clean_team_discord_role(self) -> int:
+        """Convert selected role ID string back to int for the model.
+
+        Returns:
+            Role ID as integer (0 for none).
+
+        """
+        value = self.cleaned_data.get("team_discord_role", "0")
         try:
             return int(value)
         except (ValueError, TypeError):
