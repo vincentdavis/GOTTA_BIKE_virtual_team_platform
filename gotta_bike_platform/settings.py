@@ -467,6 +467,11 @@ CONSTANCE_CONFIG = {
         int,
     ),
     "POWER_VERIFICATION_DAYS": (365, "Days a power verification is valid", int),
+    "EXPIRE_WARNING_DAYS": (
+        "[15, 7, 3, 1]",
+        "Days before expiration to warn users. JSON list of integers.",
+        "json_field",
+    ),
     # Category-based verification requirements
     "CATEGORY_REQUIREMENTS": (
         '{"5": ["weight_full", "height", "power"], "10": ["weight_full", "height"], '
@@ -733,6 +738,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "WEIGHT_LIGHT_DAYS",
         "HEIGHT_VERIFICATION_DAYS",
         "POWER_VERIFICATION_DAYS",
+        "EXPIRE_WARNING_DAYS",
         "VERIFICATION_FORM_MESSAGE",
         "WEIGHT_INSTRUCTIONS_URL",
         "HEIGHT_INSTRUCTIONS_URL",

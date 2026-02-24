@@ -1007,6 +1007,7 @@ def config_trigger_task(request: HttpRequest) -> HttpResponse:
     task_name = request.POST.get("task_name", "")
     tasks = _get_task_registry()
     triggered_task = None
+    dry_run_result = None
     error = None
 
     if task_name not in tasks:
@@ -1020,13 +1021,31 @@ def config_trigger_task(request: HttpRequest) -> HttpResponse:
     else:
         task_info = tasks[task_name]
         task_func = task_info["task"]
-        task_func.enqueue()
-        triggered_task = task_name
+        kwargs = {}
+        for param in task_info.get("params", []):
+            value = request.POST.get(param["name"])
+            if param["type"] == "number" and value:
+                kwargs[param["name"]] = int(value)
+            elif param["type"] == "checkbox":
+                kwargs[param["name"]] = value == "on"
+        # Run dry_run tasks synchronously so results display in the UI
+        if kwargs.get("dry_run"):
+            try:
+                dry_run_result = task_func.call(**kwargs)
+            except Exception as e:
+                logfire.error("Dry run task failed", task_name=task_name, error=str(e))
+                error = f"Dry run failed: {e}"
+            else:
+                triggered_task = task_name
+        else:
+            task_func.enqueue(**kwargs)
+            triggered_task = task_name
         logfire.info(
             "Background task triggered manually",
             user_id=request.user.id,
             username=request.user.username,
             task_name=task_name,
+            task_kwargs=kwargs,
         )
 
     return render(
@@ -1035,6 +1054,7 @@ def config_trigger_task(request: HttpRequest) -> HttpResponse:
         {
             "tasks": tasks,
             "triggered_task": triggered_task,
+            "dry_run_result": dry_run_result,
             "error": error,
         },
     )

@@ -1,4 +1,4 @@
-{% if triggered_task %}
+{% if triggered_task and not dry_run_result %}
 <div class="alert alert-success mb-4">
     <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -40,6 +40,21 @@
                           hx-swap="innerHTML">
                         {% csrf_token %}
                         <input type="hidden" name="task_name" value="{{ task_name }}">
+                        {% if task_info.params %}
+                        <div class="flex items-center gap-2 mb-2">
+                            {% for param in task_info.params %}
+                                {% if param.type == "number" %}
+                                    <input type="number" name="{{ param.name }}" value="{{ param.default }}"
+                                           class="input input-bordered input-sm w-24" placeholder="{{ param.label }}">
+                                {% elif param.type == "checkbox" %}
+                                    <label class="label cursor-pointer gap-2">
+                                        <input type="checkbox" name="{{ param.name }}" class="checkbox checkbox-sm">
+                                        <span class="label-text text-xs">{{ param.label }}</span>
+                                    </label>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                         <button type="submit" class="btn btn-primary btn-sm">
                             <span class="htmx-indicator loading loading-spinner loading-xs"></span>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 htmx-request-hide" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -51,6 +66,23 @@
                     </form>
                 </td>
             </tr>
+            {% if dry_run_result and triggered_task == task_name %}
+            <tr>
+                <td colspan="3" class="bg-info/10 p-4">
+                    <h4 class="font-semibold text-sm mb-1">Dry Run Results</h4>
+                    <p class="text-sm">Checked {{ dry_run_result.total_checked }} record{{ dry_run_result.total_checked|pluralize }} — {{ dry_run_result.users_warned|length }} expiring in {{ dry_run_result.days }} day{{ dry_run_result.days|pluralize }}.</p>
+                    {% if dry_run_result.users_warned %}
+                    <ul class="text-sm list-disc list-inside mt-2">
+                        {% for entry in dry_run_result.users_warned %}
+                        <li>{{ entry }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-sm mt-1 text-base-content/50">No matching records found.</p>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endif %}
             {% empty %}
             <tr>
                 <td colspan="3" class="text-center text-base-content/50">
@@ -73,5 +105,7 @@
         <li>Tasks are queued and run asynchronously by the background worker.</li>
         <li>Results are not displayed here; check logs for task output.</li>
         <li>These tasks also run automatically on a scheduled basis.</li>
+        <li><strong>Dry run</strong> tasks run immediately and display results on this page. No external actions (e.g. DMs) are performed.</li>
+        <li><strong>Normal (non-dry-run)</strong> tasks are queued in the background. Results are only available in logs.</li>
     </ul>
 </div>

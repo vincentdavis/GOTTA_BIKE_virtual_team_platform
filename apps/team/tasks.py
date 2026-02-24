@@ -1,12 +1,14 @@
 """Background tasks for team app."""
 
+import time
+
 import httpx
 import logfire
 from constance import config
 from django.tasks import task  # ty:ignore[unresolved-import]
 
-from apps.accounts.discord_service import send_discord_channel_message
-from apps.team.models import DiscordChannel, MembershipApplication
+from apps.accounts.discord_service import send_discord_channel_message, send_discord_dm
+from apps.team.models import DiscordChannel, MembershipApplication, RaceReadyRecord
 
 
 @task
@@ -367,4 +369,105 @@ def sync_discord_channels() -> dict:
             "updated": updated,
             "deleted": deleted,
             "total": len(channels_data),
+        }
+
+
+@task
+def warn_expiring_verifications(days: int = 15, dry_run: bool = False) -> dict:
+    """Send Discord DMs to users whose verification records expire in exactly N days.
+
+    Args:
+        days: Exact number of days until expiration to match (strict equality).
+        dry_run: If True, return the list of matching users/records without sending DMs.
+
+    Returns:
+        Summary dict with status, counts, and user list.
+
+    """
+    with logfire.span("warn_expiring_verifications", days=days, dry_run=dry_run):
+        verified_records = RaceReadyRecord.objects.filter(
+            status=RaceReadyRecord.Status.VERIFIED,
+            user__discord_id__isnull=False,
+        ).exclude(user__discord_id="").select_related("user")
+
+        total_checked = 0
+        matching_records = []
+
+        for record in verified_records:
+            total_checked += 1
+            remaining = record.days_remaining
+            if remaining is None:
+                continue
+            if remaining == days:
+                matching_records.append(record)
+
+        logfire.info(
+            "Expiring verification scan complete",
+            days=days,
+            total_checked=total_checked,
+            matching=len(matching_records),
+            dry_run=dry_run,
+        )
+
+        if dry_run:
+            users_warned = [
+                f"{_get_user_display_name(r.user)} ({r.get_verify_type_display()}, expires {r.expires_date})"
+                for r in matching_records
+            ]
+            return {
+                "status": "dry_run",
+                "days": days,
+                "dry_run": True,
+                "total_checked": total_checked,
+                "warnings_sent": 0,
+                "users_warned": users_warned,
+                "errors": [],
+            }
+
+        warnings_sent = 0
+        users_warned = []
+        errors = []
+
+        for record in matching_records:
+            user = record.user
+            verify_label = record.get_verify_type_display()
+            expires = record.expires_date
+            expires_str = expires.strftime("%B %d, %Y") if expires else "unknown"
+
+            message = (
+                f"\u23f0 **Verification Expiring Soon**\n\n"
+                f"Your **{verify_label}** verification expires in **{days} days** ({expires_str}).\n\n"
+                f"Please submit a new verification record to maintain your Race Ready status."
+            )
+
+            success = send_discord_dm(user.discord_id, message)
+            if success:
+                warnings_sent += 1
+                users_warned.append(_get_user_display_name(user))
+                logfire.info(
+                    "Expiring verification DM sent",
+                    user_id=user.id,
+                    discord_id=user.discord_id,
+                    verify_type=record.verify_type,
+                    days_remaining=days,
+                )
+            else:
+                errors.append(f"Failed to DM {_get_user_display_name(user)} ({user.discord_id})")
+                logfire.warning(
+                    "Failed to send expiring verification DM",
+                    user_id=user.id,
+                    discord_id=user.discord_id,
+                    verify_type=record.verify_type,
+                )
+
+            time.sleep(0.5)
+
+        return {
+            "status": "complete",
+            "days": days,
+            "dry_run": False,
+            "total_checked": total_checked,
+            "warnings_sent": warnings_sent,
+            "users_warned": users_warned,
+            "errors": errors,
         }
