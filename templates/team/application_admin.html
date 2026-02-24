@@ -378,6 +378,22 @@
         </div>
       </div>
 
+      <!-- Delete -->
+      <div class="bg-error/10 border border-error rounded-lg p-4 mb-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h3 class="font-bold text-error">Delete Registration</h3>
+            <p class="text-sm text-base-content/70">Permanently delete this registration record. This cannot be undone.</p>
+          </div>
+          <button type="button" class="btn btn-error btn-outline btn-sm" onclick="document.getElementById('delete-modal').showModal()">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete
+          </button>
+        </div>
+      </div>
+
       <!-- Back Link -->
       <div class="divider"></div>
       <div class="text-center">
@@ -391,6 +407,23 @@
     </div>
   </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+<dialog id="delete-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg text-error">Delete Registration</h3>
+    <p class="mt-2">Are you sure you want to delete the registration for <strong>{{ application.display_name }}</strong>?</p>
+    <p class="text-sm text-base-content/70 mt-1">This action cannot be undone.</p>
+    <div class="modal-action">
+      <button type="button" class="btn" onclick="document.getElementById('delete-modal').close()">Cancel</button>
+      <form method="post" action="{% url 'team:application_delete' application.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-error">Delete</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 
 <!-- Leave Message Modal -->
 <dialog id="message-modal" class="modal">

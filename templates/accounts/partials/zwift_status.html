@@ -38,8 +38,14 @@
                 <div class="space-y-1 text-sm">
                     {% if zp_data.category %}
                         <div class="flex justify-between">
-                            <span class="text-base-content/70">Category</span>
+                            <span class="text-base-content/70">Category{% if zp_data.category_mixed %} (W){% endif %}</span>
                             <span class="font-semibold">{{ zp_data.category }}</span>
+                        </div>
+                    {% endif %}
+                    {% if zp_data.category_mixed %}
+                        <div class="flex justify-between">
+                            <span class="text-base-content/70">Category (Mixed)</span>
+                            <span class="font-semibold">{{ zp_data.category_mixed }}</span>
                         </div>
                     {% endif %}
                     {% if zp_data.rank %}

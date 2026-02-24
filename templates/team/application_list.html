@@ -81,97 +81,117 @@
         </div>
       </form>
 
+      <!-- Bulk Actions -->
+      <div id="bulk-actions" class="flex items-center gap-3 mb-4 hidden">
+        <span class="text-sm text-base-content/70"><span id="selected-count">0</span> selected</span>
+        <button type="button" class="btn btn-error btn-sm btn-outline" onclick="document.getElementById('bulk-delete-modal').showModal()">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Delete Selected
+        </button>
+      </div>
+
       <!-- Registrations Table -->
       <div class="overflow-x-auto">
-        <table class="table table-zebra">
-          <thead>
-            <tr>
-              <th>Avatar</th>
-              <th>Discord</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Complete</th>
-              <th>Date Created</th>
-              <th>Date Modified</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for app in applications %}
-            <tr>
-              <td>
-                {% if app.avatar_url %}
-                <div class="avatar">
-                  <div class="w-10 rounded-full">
-                    <img src="{{ app.avatar_url }}" alt="{{ app.discord_username }}" />
+        <form id="bulk-form" method="post" action="{% url 'team:application_bulk_delete' %}">
+          {% csrf_token %}
+          <table class="table table-zebra">
+            <thead>
+              <tr>
+                <th class="w-10">
+                  <input type="checkbox" id="select-all" class="checkbox checkbox-sm" />
+                </th>
+                <th>Avatar</th>
+                <th>Discord</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Complete</th>
+                <th>Date Created</th>
+                <th>Date Modified</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for app in applications %}
+              <tr>
+                <td>
+                  <input type="checkbox" name="selected" value="{{ app.pk }}" class="checkbox checkbox-sm row-select" />
+                </td>
+                <td>
+                  {% if app.avatar_url %}
+                  <div class="avatar">
+                    <div class="w-10 rounded-full">
+                      <img src="{{ app.avatar_url }}" alt="{{ app.discord_username }}" />
+                    </div>
                   </div>
-                </div>
-                {% else %}
-                <div class="avatar placeholder">
-                  <div class="bg-neutral text-neutral-content w-10 rounded-full">
-                    <span class="text-sm">{{ app.discord_username|slice:":2"|upper }}</span>
+                  {% else %}
+                  <div class="avatar placeholder">
+                    <div class="bg-neutral text-neutral-content w-10 rounded-full">
+                      <span class="text-sm">{{ app.discord_username|slice:":2"|upper }}</span>
+                    </div>
                   </div>
-                </div>
-                {% endif %}
-              </td>
-              <td>
-                <div class="font-medium">
-                  <a href="https://discord.com/users/{{ app.discord_id }}" target="_blank" rel="noopener" class="link link-hover inline-flex items-center gap-1">
-                    {{ app.discord_username }}
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="font-medium">
+                    <a href="https://discord.com/users/{{ app.discord_id }}" target="_blank" rel="noopener" class="link link-hover inline-flex items-center gap-1">
+                      {{ app.discord_username }}
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </div>
+                  {% if app.server_nickname %}
+                  <div class="text-sm text-base-content/60">{{ app.server_nickname }}</div>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if app.full_name %}
+                  <span class="font-medium">{{ app.full_name }}</span>
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if app.status == "pending" %}
+                  <span class="badge badge-warning badge-sm">Pending</span>
+                  {% elif app.status == "in_progress" %}
+                  <span class="badge badge-info badge-sm">In Progress</span>
+                  {% elif app.status == "approved" %}
+                  <span class="badge badge-success badge-sm">Approved</span>
+                  {% elif app.status == "rejected" %}
+                  <span class="badge badge-error badge-sm">Rejected</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if app.is_complete %}
+                  <span class="badge badge-success badge-sm">Yes</span>
+                  {% else %}
+                  <span class="badge badge-warning badge-sm">No</span>
+                  {% endif %}
+                </td>
+                <td>{{ app.date_created|date:"M d, Y" }}</td>
+                <td>{{ app.date_modified|date:"M d, Y" }}</td>
+                <td>
+                  <a href="{% url 'team:application_admin' app.pk %}" class="btn btn-ghost btn-xs">
+                    View
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                     </svg>
                   </a>
-                </div>
-                {% if app.server_nickname %}
-                <div class="text-sm text-base-content/60">{{ app.server_nickname }}</div>
-                {% endif %}
-              </td>
-              <td>
-                {% if app.full_name %}
-                <span class="font-medium">{{ app.full_name }}</span>
-                {% else %}
-                <span class="text-base-content/30">-</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if app.status == "pending" %}
-                <span class="badge badge-warning badge-sm">Pending</span>
-                {% elif app.status == "in_progress" %}
-                <span class="badge badge-info badge-sm">In Progress</span>
-                {% elif app.status == "approved" %}
-                <span class="badge badge-success badge-sm">Approved</span>
-                {% elif app.status == "rejected" %}
-                <span class="badge badge-error badge-sm">Rejected</span>
-                {% endif %}
-              </td>
-              <td>
-                {% if app.is_complete %}
-                <span class="badge badge-success badge-sm">Yes</span>
-                {% else %}
-                <span class="badge badge-warning badge-sm">No</span>
-                {% endif %}
-              </td>
-              <td>{{ app.date_created|date:"M d, Y" }}</td>
-              <td>{{ app.date_modified|date:"M d, Y" }}</td>
-              <td>
-                <a href="{% url 'team:application_admin' app.pk %}" class="btn btn-ghost btn-xs">
-                  View
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
-                </a>
-              </td>
-            </tr>
-            {% empty %}
-            <tr>
-              <td colspan="8" class="text-center py-8 text-base-content/50">
-                No membership registrations found.
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="9" class="text-center py-8 text-base-content/50">
+                  No membership registrations found.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </form>
       </div>
 
       <!-- Stats -->
@@ -181,4 +201,44 @@
     </div>
   </div>
 </div>
+
+<!-- Bulk Delete Confirmation Modal -->
+<dialog id="bulk-delete-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg text-error">Delete Selected Registrations</h3>
+    <p class="mt-2">Are you sure you want to delete <strong><span id="modal-count">0</span> registration(s)</strong>?</p>
+    <p class="text-sm text-base-content/70 mt-1">This action cannot be undone.</p>
+    <div class="modal-action">
+      <button type="button" class="btn" onclick="document.getElementById('bulk-delete-modal').close()">Cancel</button>
+      <button type="button" class="btn btn-error" onclick="document.getElementById('bulk-form').submit()">Delete</button>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<script>
+(function() {
+  const selectAll = document.getElementById('select-all');
+  const rowCheckboxes = document.querySelectorAll('.row-select');
+  const bulkActions = document.getElementById('bulk-actions');
+  const selectedCount = document.getElementById('selected-count');
+  const modalCount = document.getElementById('modal-count');
+
+  function updateUI() {
+    const checked = document.querySelectorAll('.row-select:checked').length;
+    selectedCount.textContent = checked;
+    modalCount.textContent = checked;
+    bulkActions.classList.toggle('hidden', checked === 0);
+    selectAll.checked = rowCheckboxes.length > 0 && checked === rowCheckboxes.length;
+    selectAll.indeterminate = checked > 0 && checked < rowCheckboxes.length;
+  }
+
+  selectAll.addEventListener('change', function() {
+    rowCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+    updateUI();
+  });
+
+  rowCheckboxes.forEach(cb => cb.addEventListener('change', updateUI));
+})();
+</script>
 {% endblock %}

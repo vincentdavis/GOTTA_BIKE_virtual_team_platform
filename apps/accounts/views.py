@@ -53,6 +53,9 @@ def profile_view(request: HttpRequest) -> HttpResponse:
                 "rank": zp_rider.rank,
                 "ftp": zp_rider.ftp,
             }
+            # Include women's category for female riders
+            if request.user.gender == "female" and zp_rider.div:
+                zp_data["category_mixed"] = ZP_DIV_TO_CATEGORY.get(zp_rider.div, "")
 
         # Get ZwiftRacing data
         zr_rider = ZRRider.objects.filter(zwid=request.user.zwid).first()
@@ -160,6 +163,9 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
                 "rank": zp_rider.rank,
                 "ftp": zp_rider.ftp,
             }
+            # Include women's category for female riders
+            if profile_user.gender == "female" and zp_rider.div:
+                zp_data["category_mixed"] = ZP_DIV_TO_CATEGORY.get(zp_rider.div, "")
 
         # Get ZwiftRacing data
         zr_rider = ZRRider.objects.filter(zwid=profile_user.zwid).first()

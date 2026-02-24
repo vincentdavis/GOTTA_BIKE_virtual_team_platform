@@ -1276,6 +1276,67 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
     )
 
 
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_POST
+def membership_application_delete_view(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
+    """Delete a membership application.
+
+    Args:
+        request: The HTTP request.
+        pk: UUID of the MembershipApplication.
+
+    Returns:
+        Redirect to application list.
+
+    """
+    application = get_object_or_404(MembershipApplication, pk=pk)
+    display_name = application.display_name
+    logfire.info(
+        "Membership application deleted",
+        application_id=str(pk),
+        applicant_discord_id=application.discord_id,
+        applicant_name=display_name,
+        deleted_by_id=request.user.id,
+        deleted_by_username=request.user.username,
+    )
+    application.delete()
+    messages.success(request, f"Registration for {display_name} has been deleted.")
+    return redirect("team:application_list")
+
+
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_POST
+def membership_application_bulk_delete_view(request: HttpRequest) -> HttpResponse:
+    """Delete multiple membership applications.
+
+    Args:
+        request: The HTTP request with 'selected' list of UUIDs.
+
+    Returns:
+        Redirect to application list.
+
+    """
+    selected_ids = request.POST.getlist("selected")
+    if not selected_ids:
+        messages.warning(request, "No registrations selected.")
+        return redirect("team:application_list")
+
+    applications = MembershipApplication.objects.filter(pk__in=selected_ids)
+    count = applications.count()
+    logfire.info(
+        "Bulk delete membership applications",
+        count=count,
+        application_ids=selected_ids,
+        deleted_by_id=request.user.id,
+        deleted_by_username=request.user.username,
+    )
+    applications.delete()
+    messages.success(request, f"Deleted {count} registration{'' if count == 1 else 's'}.")
+    return redirect("team:application_list")
+
+
 @require_http_methods(["GET", "POST"])
 def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
     """Display and edit a membership application (public applicant view).
