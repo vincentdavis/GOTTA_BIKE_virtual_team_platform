@@ -50,7 +50,6 @@
       <p class="text-sm text-base-content/70">
         Enter your Zwift login credentials to verify your account.
         <br>Your password is used only to fetch your Zwift ID and is not stored.
-        <br>If you do not wish to use this automated check, ask for a manual verification.
       </p>
     </div>
 
@@ -97,6 +96,14 @@
         </label>
       {% endif %}
     </div>
+
+    <p class="text-xs text-base-content/50 text-center">
+      Don't want to use the automated check?
+      <a href="#" class="link link-primary"
+         hx-get="{% url 'team:application_manual_zwift_verify' application.pk %}"
+         hx-target="closest .modal-box"
+         hx-swap="innerHTML">Request manual verification</a>.
+    </p>
 
     <div class="modal-action">
       <button type="button" class="btn btn-ghost" onclick="document.getElementById('zwift-verify-modal').close()">

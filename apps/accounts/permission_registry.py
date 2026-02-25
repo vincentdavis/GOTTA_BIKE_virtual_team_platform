@@ -78,6 +78,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "description": "Can approve or reject verification records",
         "views": [
             "/team/verification/{id}/ - Approve/reject verification submissions",
+            "/team/verification/zwid-action/{user_id}/ - Verify/reject pending ZWID verifications",
         ],
     },
     Permissions.DATA_CONNECTION: {

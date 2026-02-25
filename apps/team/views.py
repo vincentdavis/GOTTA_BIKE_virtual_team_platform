@@ -511,6 +511,13 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         messages.error(request, "You don't have permission to view verification records.")
         return redirect("home")
 
+    # Query users with pending ZWID verification (zwid set but not verified)
+    pending_zwid_users = (
+        User.objects.filter(zwid__isnull=False, zwid_verified=False)
+        .exclude(zwid=0)
+        .order_by("discord_username", "username")
+    )
+
     records = RaceReadyRecord.objects.select_related("user", "reviewed_by").order_by("-date_created")
 
     # Get filter parameters
@@ -579,8 +586,67 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
             "status_choices": status_choices,
             "gender_choices": gender_choices,
             "can_verify": can_verify,
+            "pending_zwid_users": pending_zwid_users,
         },
     )
+
+
+@login_required
+@team_member_required()
+@require_POST
+def zwid_verification_action_view(request: HttpRequest, user_id: int) -> HttpResponse:
+    """Verify or reject a pending ZWID verification.
+
+    Args:
+        request: The HTTP request.
+        user_id: The ID of the user whose ZWID to verify/reject.
+
+    Returns:
+        Empty HttpResponse for HTMX row removal.
+
+    """
+    if not request.user.can_approve_verification and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized ZWID verification action attempt",
+            user_id=request.user.id,
+            username=request.user.username,
+            target_user_id=user_id,
+        )
+        return HttpResponse(status=403)
+
+    target_user = get_object_or_404(User, pk=user_id)
+    action = request.POST.get("action")
+
+    if action == "verify":
+        # Allow admin to edit ZWID before verifying
+        edited_zwid = request.POST.get("zwid", "").strip()
+        if edited_zwid and edited_zwid.isdigit() and int(edited_zwid) > 0:
+            target_user.zwid = int(edited_zwid)
+        target_user.zwid_verified = True
+        target_user.save(update_fields=["zwid", "zwid_verified"])
+        logfire.info(
+            "ZWID verified by admin",
+            admin_id=request.user.id,
+            admin_username=request.user.username,
+            target_user_id=target_user.id,
+            target_username=target_user.username,
+            zwid=target_user.zwid,
+        )
+    elif action == "reject":
+        old_zwid = target_user.zwid
+        target_user.zwid = None
+        target_user.zwid_verified = False
+        target_user.save(update_fields=["zwid", "zwid_verified"])
+        logfire.info(
+            "ZWID rejected by admin",
+            admin_id=request.user.id,
+            admin_username=request.user.username,
+            target_user_id=target_user.id,
+            target_username=target_user.username,
+            old_zwid=old_zwid,
+        )
+
+    return HttpResponse("")
 
 
 @login_required
@@ -1515,6 +1581,71 @@ def application_verify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpRespons
         request,
         "team/partials/application_zwift_verify_modal.html",
         {"application": application, "form": form},
+    )
+
+
+@require_http_methods(["GET", "POST"])
+def application_manual_zwift_verify(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
+    """Set Zwift ID on a membership application via ZwiftPower URL without marking as verified.
+
+    Auth is based on knowing the application UUID (no login required).
+
+    Args:
+        request: The HTTP request.
+        pk: UUID of the MembershipApplication.
+
+    Returns:
+        Rendered manual verification modal partial.
+
+    """
+    import re
+
+    application = get_object_or_404(MembershipApplication, pk=pk)
+
+    if not application.is_editable:
+        return render(
+            request,
+            "team/partials/application_manual_zwift_verify_modal.html",
+            {"application": application, "error": "Application is no longer editable."},
+        )
+
+    error = None
+    if request.method == "POST":
+        raw_input = request.POST.get("zwiftpower_url", "").strip()
+        zwid = None
+
+        match = re.search(r"zwiftpower\.com/profile\.php\?z=(\d+)", raw_input)
+        if match:
+            zwid = int(match.group(1))
+        elif raw_input.isdigit() and int(raw_input) > 0:
+            zwid = int(raw_input)
+
+        if zwid:
+            application.zwift_id = zwid
+            application.save(update_fields=["zwift_id"])
+            logfire.info(
+                "Manual ZWID set for membership application",
+                application_id=str(pk),
+                applicant_discord_id=application.discord_id,
+                zwid=zwid,
+            )
+            return render(
+                request,
+                "team/partials/application_manual_zwift_verify_modal.html",
+                {"application": application, "success": True, "zwid": zwid},
+            )
+        else:
+            error = "Please enter a valid ZwiftPower profile URL or numeric Zwift ID."
+            logfire.warning(
+                "Invalid manual ZWID input for application",
+                application_id=str(pk),
+                raw_input=raw_input,
+            )
+
+    return render(
+        request,
+        "team/partials/application_manual_zwift_verify_modal.html",
+        {"application": application, "error": error},
     )
 
 

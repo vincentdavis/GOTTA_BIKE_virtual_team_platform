@@ -415,6 +415,61 @@ def import_application_view(request: HttpRequest, application_id: str) -> HttpRe
 
 @login_required
 @require_http_methods(["GET", "POST"])
+def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
+    """Allow user to set their ZWID via ZwiftPower profile URL without marking as verified.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered manual verification modal partial.
+
+    """
+    import re
+
+    error = None
+    if request.method == "POST":
+        raw_input = request.POST.get("zwiftpower_url", "").strip()
+        zwid = None
+
+        # Try to extract ZWID from ZwiftPower URL
+        match = re.search(r"zwiftpower\.com/profile\.php\?z=(\d+)", raw_input)
+        if match:
+            zwid = int(match.group(1))
+        elif raw_input.isdigit() and int(raw_input) > 0:
+            zwid = int(raw_input)
+
+        if zwid:
+            request.user.zwid = zwid
+            request.user.save(update_fields=["zwid"])
+            logfire.info(
+                "Manual ZWID set via verification page",
+                user_id=request.user.id,
+                discord_id=request.user.discord_id,
+                zwid=zwid,
+            )
+            return render(
+                request,
+                "accounts/partials/manual_zwift_verify_modal.html",
+                {"success": True, "zwid": zwid},
+            )
+        else:
+            error = "Please enter a valid ZwiftPower profile URL or numeric Zwift ID."
+            logfire.warning(
+                "Invalid manual ZWID input",
+                user_id=request.user.id,
+                raw_input=raw_input,
+            )
+
+    return render(
+        request,
+        "accounts/partials/manual_zwift_verify_modal.html",
+        {"error": error},
+    )
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
 def verify_zwift(request: HttpRequest) -> HttpResponse:
     """Verify user's Zwift account and fetch their Zwift ID.
 

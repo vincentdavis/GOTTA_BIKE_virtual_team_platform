@@ -1,0 +1,90 @@
+{% if error and not application.is_editable %}
+  <!-- Error State -->
+  <div class="text-center py-4">
+    <div class="text-error mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24"
+           stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+    </div>
+    <h3 class="text-lg font-bold mb-2">Error</h3>
+    <p class="text-base-content/70 mb-4">{{ error }}</p>
+    <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">
+      Close
+    </button>
+  </div>
+{% elif success %}
+  <!-- Success State -->
+  <div class="text-center py-4">
+    <div class="text-success mb-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24"
+           stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <h3 class="text-lg font-bold mb-2">Zwift ID Submitted</h3>
+    <p class="text-base-content/70 mb-2">Your Zwift ID: <span class="font-mono font-bold">{{ zwid }}</span></p>
+    <p class="text-sm text-base-content/50 mb-4">An admin will verify your account manually.</p>
+    <button type="button" class="btn btn-primary"
+            onclick="this.closest('dialog').close(); location.reload();">
+      Done
+    </button>
+  </div>
+{% else %}
+  <!-- Form State -->
+  <form hx-post="{% url 'team:application_manual_zwift_verify' application.pk %}"
+        hx-target="closest .modal-box"
+        hx-swap="innerHTML"
+        class="space-y-4">
+    {% csrf_token %}
+
+    <div class="text-center mb-4">
+      <div class="text-info mb-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24"
+             stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+        </svg>
+      </div>
+      <p class="text-sm text-base-content/70">
+        Enter your ZwiftPower profile URL or Zwift ID.
+        <br>An admin will verify your account manually.
+      </p>
+    </div>
+
+    {% if error %}
+      <div class="alert alert-error">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span>{{ error }}</span>
+      </div>
+    {% endif %}
+
+    <div class="form-control">
+      <label class="label" for="id_zwiftpower_url">
+        <span class="label-text">ZwiftPower URL or Zwift ID</span>
+      </label>
+      <input type="text" id="id_zwiftpower_url" name="zwiftpower_url"
+             class="input input-bordered w-full"
+             placeholder="https://zwiftpower.com/profile.php?z=123456"
+             required>
+      <label class="label">
+        <span class="label-text-alt text-base-content/50">Example: https://zwiftpower.com/profile.php?z=123456 or just 123456</span>
+      </label>
+    </div>
+
+    <div class="modal-action">
+      <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">
+        Cancel
+      </button>
+      <button type="submit" class="btn btn-primary">
+        <span class="htmx-indicator loading loading-spinner loading-sm"></span>
+        Submit
+      </button>
+    </div>
+  </form>
+{% endif %}

@@ -3,8 +3,9 @@
 import logfire
 import markdown
 from constance import config
+from django.contrib import messages
 from django.http import HttpResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
 from apps.cms.models import Page
@@ -102,6 +103,33 @@ def about(request):
 
     """
     return render(request, "about.html")
+
+
+def block_social_signup(request):
+    """Block the allauth social signup page and redirect to login.
+
+    This prevents users from creating disconnected accounts via the
+    allauth 3rd-party signup form. All account creation must go through
+    the Discord OAuth flow.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Redirect to login page with error message.
+
+    """
+    logfire.warning(
+        "Blocked social signup page access",
+        user=str(request.user),
+        method=request.method,
+    )
+    messages.error(
+        request,
+        "Account signup is only available through Discord. "
+        "Please click 'Sign in with Discord' to log in or create an account.",
+    )
+    return redirect("account_login")
 
 
 @require_GET

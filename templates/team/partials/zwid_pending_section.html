@@ -1,0 +1,90 @@
+{% if can_verify and pending_zwid_users %}
+<div class="card bg-base-200 shadow-xl mb-6">
+  <div class="card-body">
+    <h3 class="card-title text-xl">Pending ZWID Verifications</h3>
+    <p class="text-sm text-base-content/60 mb-4">
+      Users who submitted their Zwift ID via manual verification. Verify the ZWID matches the user on ZwiftPower, or reject to clear it.
+    </p>
+    <div class="overflow-x-auto">
+      <table class="table table-zebra">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>ZWID</th>
+            <th>ZwiftPower</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in pending_zwid_users %}
+          <tr id="zwid-row-{{ user.id }}">
+            <td>
+              <div class="flex items-center gap-3">
+                {% if user.discord_avatar_url %}
+                  <div class="avatar">
+                    <div class="w-8 rounded-full">
+                      <img src="{{ user.discord_avatar_url }}" alt="{{ user.discord_username|default:user.username }}" />
+                    </div>
+                  </div>
+                {% else %}
+                  <div class="avatar placeholder">
+                    <div class="bg-neutral text-neutral-content w-8 rounded-full">
+                      <span class="text-xs">{{ user.first_name|slice:":1"|upper }}{{ user.last_name|slice:":1"|upper }}</span>
+                    </div>
+                  </div>
+                {% endif %}
+                <div>
+                  <a href="{% url 'accounts:public_profile' user.id %}" class="link link-hover font-medium">
+                    {{ user.first_name }} {{ user.last_name }}
+                  </a>
+                  <div class="text-sm text-base-content/60">{{ user.discord_username|default:"-" }}</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <form id="zwid-form-{{ user.id }}">
+                {% csrf_token %}
+                <input type="number"
+                       name="zwid"
+                       value="{{ user.zwid }}"
+                       min="1"
+                       class="input input-bordered input-sm w-32 font-mono"
+                />
+              </form>
+            </td>
+            <td>
+              <a href="https://zwiftpower.com/profile.php?z={{ user.zwid }}"
+                 target="_blank"
+                 rel="noopener"
+                 class="btn btn-xs btn-ghost">
+                <span class="inline-block px-1 text-xs font-bold text-orange-400 bg-gray-700 rounded">ZP</span>
+                View
+              </a>
+            </td>
+            <td class="flex gap-2">
+              <button class="btn btn-success btn-xs"
+                      hx-post="{% url 'team:zwid_verification_action' user.id %}"
+                      hx-include="#zwid-form-{{ user.id }}"
+                      hx-vals='{"action": "verify"}'
+                      hx-target="#zwid-row-{{ user.id }}"
+                      hx-swap="outerHTML"
+                      hx-confirm="Verify ZWID for {{ user.discord_username|default:user.username }}?">
+                Verify
+              </button>
+              <button class="btn btn-error btn-xs"
+                      hx-post="{% url 'team:zwid_verification_action' user.id %}"
+                      hx-vals='{"action": "reject"}'
+                      hx-target="#zwid-row-{{ user.id }}"
+                      hx-swap="outerHTML"
+                      hx-confirm="Reject and clear ZWID for {{ user.discord_username|default:user.username }}?">
+                Reject
+              </button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
