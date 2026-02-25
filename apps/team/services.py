@@ -29,40 +29,27 @@ ZP_DIV_TO_CATEGORY: dict[int, str] = {
 }
 
 
-def get_user_verification_types(user: User) -> list[str]:
-    """Get allowed verification types based on user's ZwiftPower category.
-
-    Looks up the user's ZwiftPower division (div for male, divw for female)
-    and returns the verification types for that category from the
-    CATEGORY_REQUIREMENTS Constance setting.
-
-    For categories 40/50, the returned list includes both weight_light and
-    weight_full. Having either one (not both) satisfies the weight requirement
-    for race ready status — the OR logic is handled by ``User.is_race_ready``.
+def get_user_required_verification_types(user: User) -> list[str]:
+    """Get required verification types for race-ready status based on ZwiftPower category.
 
     Args:
-        user: The user to get verification types for.
+        user: The user to get required types for.
 
     Returns:
-        List of verify_type values the user is allowed to submit.
-        Defaults to ["weight_light", "height"] if no category found.
+        List of verify_type values required for race-ready status.
 
     """
     if not user.zwid:
         return DEFAULT_VERIFICATION_TYPES
 
-    # Look up ZwiftPower rider
     zp_rider = ZPTeamRiders.objects.filter(zwid=user.zwid).first()
     if not zp_rider:
         return DEFAULT_VERIFICATION_TYPES
 
-    # Get category based on gender: female uses divw, everyone else uses div
     category = zp_rider.divw if user.gender == "female" else zp_rider.div
-
     if not category:
         return DEFAULT_VERIFICATION_TYPES
 
-    # Look up requirements from Constance
     try:
         requirements = json.loads(config.CATEGORY_REQUIREMENTS)
         types = requirements.get(str(category), DEFAULT_VERIFICATION_TYPES)
@@ -75,6 +62,40 @@ def get_user_verification_types(user: User) -> list[str]:
             zwid=user.zwid,
         )
         return DEFAULT_VERIFICATION_TYPES
+
+
+def get_user_verification_types(user: User) -> list[str]:
+    """Get all verification types a user is allowed to submit.
+
+    Starts with the required types from CATEGORY_REQUIREMENTS, then adds:
+    - ``power`` — always available for any rider to submit.
+    - ``weight_light`` — available if the rider has a verified weight_full record.
+
+    Args:
+        user: The user to get submittable types for.
+
+    Returns:
+        List of verify_type values the user may submit.
+
+    """
+    types = list(get_user_required_verification_types(user))
+
+    # Power verification is always available (not required for all categories, but any rider can submit)
+    if "power" not in types:
+        types.append("power")
+
+    # Riders with a verified weight_full can also submit weight_light
+    if "weight_light" not in types:
+        from apps.team.models import RaceReadyRecord
+
+        has_verified_weight = user.race_ready_records.filter(
+            verify_type="weight_full",
+            status=RaceReadyRecord.Status.VERIFIED,
+        ).exists()
+        if has_verified_weight:
+            types.append("weight_light")
+
+    return types
 
 
 @dataclass
@@ -114,6 +135,7 @@ class UnifiedRider:
 
     # Race Ready status
     is_race_ready: bool = False
+    is_extra_verified: bool = False
 
     # Class variable for div mapping
     DIV_TO_CATEGORY: ClassVar[dict[int, str]] = ZP_DIV_TO_CATEGORY
@@ -223,6 +245,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     # Get race ready status for users (need full objects for property access)
     user_objects = User.objects.filter(zwid__isnull=False).prefetch_related("race_ready_records")
     race_ready_by_zwid: dict[int, bool] = {u.zwid: u.is_race_ready for u in user_objects}
+    extra_verified_by_zwid: dict[int, bool] = {u.zwid: u.is_extra_verified for u in user_objects}
 
     # Build lookup dicts
     user_by_zwid: dict[int, dict] = {u["zwid"]: u for u in users}
@@ -252,6 +275,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.zwid_verified = u["zwid_verified"]
             rider.user_gender = u["gender"] or ""
             rider.is_race_ready = race_ready_by_zwid.get(zwid, False)
+            rider.is_extra_verified = extra_verified_by_zwid.get(zwid, False)
             if u["discord_id"] and u["discord_avatar"]:
                 rider.discord_avatar_url = (
                     f"https://cdn.discordapp.com/avatars/{u['discord_id']}/{u['discord_avatar']}.png"

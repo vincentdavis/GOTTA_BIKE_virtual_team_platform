@@ -14,8 +14,8 @@ from apps.team.tasks import sync_discord_channels
 class RaceReadyRecordAdmin(admin.ModelAdmin):
     """Admin for RaceReadyRecord model."""
 
-    list_display = ("user", "verify_type", "media_type", "date_created")
-    list_filter = ("verify_type", "media_type", "date_created")
+    list_display = ("user", "verify_type", "status", "media_type", "date_created", "reviewed_date")
+    list_filter = ("status", "verify_type", "media_type", "date_created")
     search_fields = ("user__username", "user__email", "user__discord_username", "notes")
     raw_id_fields = ("user",)
     readonly_fields = ("date_created",)

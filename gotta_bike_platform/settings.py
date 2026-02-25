@@ -476,7 +476,7 @@ CONSTANCE_CONFIG = {
     "CATEGORY_REQUIREMENTS": (
         '{"5": ["weight_full", "height", "power"], "10": ["weight_full", "height"], '
         '"20": ["weight_full", "height"], "30": ["weight_full", "height"], '
-        '"40": ["weight_light", "height"], "50": ["weight_light", "height"]}',
+        '"40": ["weight_full", "weight_light", "height"], "50": ["weight_full", "weight_light", "height"]}',
         "Record types required per ZwiftPower category. Keys are division numbers, values are required types.",
         "json_field",
     ),

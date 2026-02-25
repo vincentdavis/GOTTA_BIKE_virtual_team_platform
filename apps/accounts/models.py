@@ -585,10 +585,10 @@ class User(AbstractUser):
 
         """
         from apps.team.models import RaceReadyRecord
-        from apps.team.services import get_user_verification_types
+        from apps.team.services import get_user_required_verification_types
 
         # Get required verification types for this user's category
-        required_types = get_user_verification_types(self)
+        required_types = get_user_required_verification_types(self)
 
         # Get verified records for this user
         verified_records = self.race_ready_records.filter(
@@ -641,6 +641,17 @@ class User(AbstractUser):
             )
 
         return is_ready
+
+    @property
+    def is_extra_verified(self) -> bool:
+        """Check if user is race ready and has both valid weight_full and weight_light records."""
+        if not self.is_race_ready:
+            return False
+        from apps.team.models import RaceReadyRecord
+
+        verified_records = self.race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
+        valid_types = {r.verify_type for r in verified_records if not r.is_expired}
+        return "weight_full" in valid_types and "weight_light" in valid_types
 
     @property
     def is_any_admin(self) -> bool:
