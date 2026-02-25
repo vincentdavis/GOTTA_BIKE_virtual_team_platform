@@ -545,6 +545,138 @@
       {% endif %}
       {% endif %}
 
+      {% if zp_by_squad %}
+      <div class="divider mt-6"></div>
+      <div class="flex items-center gap-2 mb-4">
+        <h3 class="text-lg font-semibold">By Category</h3>
+        <span class="badge badge-neutral" id="category-total-badge">{{ zp_total_all }}</span>
+        <button type="button" class="btn btn-ghost btn-xs" onclick="toggleByCategory()" title="Show category breakdown">
+          <svg id="category-arrow" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </div>
+      <div id="category-content" style="display:none">
+        <div class="flex items-center gap-1 mb-3">
+          <span class="text-sm text-base-content/70 mr-1">Source:</span>
+          <button type="button" class="btn btn-xs btn-primary" id="cat-toggle-zp" onclick="switchCategorySource('zp')">ZwiftPower</button>
+          <button type="button" class="btn btn-xs btn-ghost" id="cat-toggle-zr" onclick="switchCategorySource('zr')">Zwift Racing</button>
+        </div>
+
+        {# ZwiftPower table #}
+        <div id="cat-table-zp" class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Squad</th>
+                <th>Timezone</th>
+                {% for cat in zp_category_columns %}
+                <th class="text-center">{{ cat }}</th>
+                {% endfor %}
+                <th class="text-center">-</th>
+                <th class="text-center">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in zp_by_squad %}
+              <tr>
+                <td class="font-semibold">{{ row.squad.name }}</td>
+                <td>{{ row.squad.squad_timezone|default:"-" }}</td>
+                {% for cat in zp_category_columns %}
+                <td class="text-center">
+                  {% with val=row.counts|get_item:cat %}
+                  {% if val %}<span class="badge badge-primary badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
+                  {% endwith %}
+                </td>
+                {% endfor %}
+                <td class="text-center">
+                  {% with val=row.counts|get_item:"-" %}
+                  {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
+                  {% endwith %}
+                </td>
+                <td class="text-center"><span class="badge badge-neutral badge-sm">{{ row.total }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="font-semibold">
+                <td colspan="2">Total</td>
+                {% for cat in zp_category_columns %}
+                <td class="text-center">
+                  {% with val=zp_totals|get_item:cat %}
+                  {% if val %}<span class="badge badge-primary badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
+                  {% endwith %}
+                </td>
+                {% endfor %}
+                <td class="text-center">
+                  {% with val=zp_totals|get_item:"-" %}
+                  {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
+                  {% endwith %}
+                </td>
+                <td class="text-center"><span class="badge badge-neutral badge-sm">{{ zp_total_all }}</span></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {# Zwift Racing table #}
+        <div id="cat-table-zr" class="overflow-x-auto" style="display:none">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Squad</th>
+                <th>Timezone</th>
+                {% for cat in zr_category_columns %}
+                <th class="text-center">{{ cat }}</th>
+                {% endfor %}
+                <th class="text-center">-</th>
+                <th class="text-center">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in zr_by_squad %}
+              <tr>
+                <td class="font-semibold">{{ row.squad.name }}</td>
+                <td>{{ row.squad.squad_timezone|default:"-" }}</td>
+                {% for cat in zr_category_columns %}
+                <td class="text-center">
+                  {% with val=row.counts|get_item:cat %}
+                  {% if val %}<span class="badge badge-primary badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
+                  {% endwith %}
+                </td>
+                {% endfor %}
+                <td class="text-center">
+                  {% with val=row.counts|get_item:"-" %}
+                  {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
+                  {% endwith %}
+                </td>
+                <td class="text-center"><span class="badge badge-neutral badge-sm">{{ row.total }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="font-semibold">
+                <td colspan="2">Total</td>
+                {% for cat in zr_category_columns %}
+                <td class="text-center">
+                  {% with val=zr_totals|get_item:cat %}
+                  {% if val %}<span class="badge badge-primary badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
+                  {% endwith %}
+                </td>
+                {% endfor %}
+                <td class="text-center">
+                  {% with val=zr_totals|get_item:"-" %}
+                  {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
+                  {% endwith %}
+                </td>
+                <td class="text-center"><span class="badge badge-neutral badge-sm">{{ zr_total_all }}</span></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
       <div class="mt-6">
         <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">&larr; Back to Events</a>
       </div>
@@ -573,6 +705,34 @@ function toggleSquadMembers(squadPk) {
   } else {
     row.style.display = 'none';
     arrow.style.transform = '';
+  }
+}
+function toggleByCategory() {
+  var content = document.getElementById('category-content');
+  var arrow = document.getElementById('category-arrow');
+  if (content.style.display === 'none') {
+    content.style.display = '';
+    arrow.style.transform = 'rotate(90deg)';
+  } else {
+    content.style.display = 'none';
+    arrow.style.transform = '';
+  }
+}
+function switchCategorySource(source) {
+  var zpTable = document.getElementById('cat-table-zp');
+  var zrTable = document.getElementById('cat-table-zr');
+  var zpBtn = document.getElementById('cat-toggle-zp');
+  var zrBtn = document.getElementById('cat-toggle-zr');
+  if (source === 'zr') {
+    zpTable.style.display = 'none';
+    zrTable.style.display = '';
+    zpBtn.className = 'btn btn-xs btn-ghost';
+    zrBtn.className = 'btn btn-xs btn-primary';
+  } else {
+    zpTable.style.display = '';
+    zrTable.style.display = 'none';
+    zpBtn.className = 'btn btn-xs btn-primary';
+    zrBtn.className = 'btn btn-xs btn-ghost';
   }
 }
 function toggleSquadAssign() {

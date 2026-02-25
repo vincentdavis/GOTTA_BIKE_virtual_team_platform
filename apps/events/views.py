@@ -1,5 +1,6 @@
 """Views for events app."""
 
+from collections import defaultdict
 from decimal import Decimal
 
 import logfire
@@ -18,6 +19,8 @@ from apps.events.models import Event, EventSignup, Squad, SquadMember
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
+
+CATEGORY_COLUMNS = ["A+", "A", "B", "C", "D", "E"]
 
 
 def _enrich_squad_members(event):
@@ -198,6 +201,38 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         squad.member_names_tooltip = ", ".join(names) if names else "No members"
         squad.user_is_member = squad.pk in user_squad_ids
 
+    # Aggregate ZP and ZR category counts per squad
+    zp_by_squad = []
+    zp_totals = defaultdict(int)
+    zp_total_all = 0
+    zr_by_squad = []
+    zr_totals = defaultdict(int)
+    zr_total_all = 0
+    zr_cats_seen = set()
+    for squad in squads:
+        zp_counts = defaultdict(int)
+        zr_counts = defaultdict(int)
+        for member in squad.enriched_members:
+            zp_cat = member["zp_category_w"] or member["zp_category"] or "-"
+            zp_counts[zp_cat] += 1
+            zr_cat = member["zr_category"] or "-"
+            zr_counts[zr_cat] += 1
+            if zr_cat != "-":
+                zr_cats_seen.add(zr_cat)
+        zp_total = sum(zp_counts.values())
+        zp_by_squad.append({"squad": squad, "counts": dict(zp_counts), "total": zp_total})
+        for cat, count in zp_counts.items():
+            zp_totals[cat] += count
+        zp_total_all += zp_total
+        zr_total = sum(zr_counts.values())
+        zr_by_squad.append({"squad": squad, "counts": dict(zr_counts), "total": zr_total})
+        for cat, count in zr_counts.items():
+            zr_totals[cat] += count
+        zr_total_all += zr_total
+    zp_totals = dict(zp_totals)
+    zr_totals = dict(zr_totals)
+    zr_category_columns = sorted(zr_cats_seen)
+
     logfire.debug("Event detail viewed", user_id=request.user.id, event_id=pk)
     return render(
         request,
@@ -211,6 +246,14 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "user_signup": user_signup,
             "is_event_admin": request.user.is_event_admin,
             "guild_id": config.GUILD_ID,
+            "zp_category_columns": CATEGORY_COLUMNS,
+            "zp_by_squad": zp_by_squad,
+            "zp_totals": zp_totals,
+            "zp_total_all": zp_total_all,
+            "zr_category_columns": zr_category_columns,
+            "zr_by_squad": zr_by_squad,
+            "zr_totals": zr_totals,
+            "zr_total_all": zr_total_all,
         },
     )
 
