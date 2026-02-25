@@ -148,6 +148,7 @@ class User(AbstractUser):
     zwid = models.PositiveIntegerField(
         null=True,
         blank=True,
+        db_index=True,
         help_text="Zwift user ID",
     )
     zwid_verified = models.BooleanField(
