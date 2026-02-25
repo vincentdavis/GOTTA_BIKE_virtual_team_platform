@@ -56,6 +56,17 @@
 
           <div class="form-control">
             <label class="label">
+              <span class="label-text">Guild</span>
+            </label>
+            <select name="guild" class="select select-bordered select-sm">
+              <option value="">All</option>
+              <option value="in" {% if guild_filter == "in" %}selected{% endif %}>In Guild</option>
+              <option value="left" {% if guild_filter == "left" %}selected{% endif %}>Left</option>
+            </select>
+          </div>
+
+          <div class="form-control">
+            <label class="label">
               <span class="label-text">Sort By</span>
             </label>
             <select name="sort" class="select select-bordered select-sm">

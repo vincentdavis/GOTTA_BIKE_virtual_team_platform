@@ -1195,6 +1195,7 @@ def membership_application_list_view(request: HttpRequest) -> HttpResponse:
     # Get filter parameters
     search_query = request.GET.get("q", "").strip()
     status_filter = request.GET.get("status", "")
+    guild_filter = request.GET.get("guild", "")
 
     # Get sort parameters
     sort_by = request.GET.get("sort", "date_created")
@@ -1219,6 +1220,12 @@ def membership_application_list_view(request: HttpRequest) -> HttpResponse:
     if status_filter:
         applications = applications.filter(status=status_filter)
 
+    # Apply guild membership filter
+    if guild_filter == "in":
+        applications = applications.filter(discord_id__in=active_guild_ids)
+    elif guild_filter == "left":
+        applications = applications.exclude(discord_id__in=active_guild_ids)
+
     # Apply sorting
     sort_mapping = {
         "date_created": "date_created",
@@ -1240,6 +1247,7 @@ def membership_application_list_view(request: HttpRequest) -> HttpResponse:
             "active_guild_ids": active_guild_ids,
             "search_query": search_query,
             "status_filter": status_filter,
+            "guild_filter": guild_filter,
             "status_choices": MembershipApplication.Status.choices,
             "status_counts": status_counts,
             "sort_by": sort_by,
