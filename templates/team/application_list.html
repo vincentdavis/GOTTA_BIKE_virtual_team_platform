@@ -105,6 +105,7 @@
                 <th>Avatar</th>
                 <th>Discord</th>
                 <th>Name</th>
+                <th>Guild</th>
                 <th>Status</th>
                 <th>Complete</th>
                 <th>Date Created</th>
@@ -154,6 +155,13 @@
                   {% endif %}
                 </td>
                 <td>
+                  {% if app.discord_id in active_guild_ids %}
+                  <span class="badge badge-success badge-sm">In Guild</span>
+                  {% else %}
+                  <span class="badge badge-error badge-sm">Left</span>
+                  {% endif %}
+                </td>
+                <td>
                   {% if app.status == "pending" %}
                   <span class="badge badge-warning badge-sm">Pending</span>
                   {% elif app.status == "in_progress" %}
@@ -184,7 +192,7 @@
               </tr>
               {% empty %}
               <tr>
-                <td colspan="9" class="text-center py-8 text-base-content/50">
+                <td colspan="10" class="text-center py-8 text-base-content/50">
                   No membership registrations found.
                 </td>
               </tr>

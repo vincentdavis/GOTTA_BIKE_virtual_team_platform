@@ -1117,7 +1117,14 @@ def membership_application_list_view(request: HttpRequest) -> HttpResponse:
         Rendered membership application list page.
 
     """
+    from apps.accounts.models import GuildMember
+
     applications = MembershipApplication.objects.select_related("modified_by").order_by("-date_created")
+
+    # Build set of discord IDs still in the guild (date_left is null)
+    active_guild_ids = set(
+        GuildMember.objects.filter(date_left__isnull=True).values_list("discord_id", flat=True)
+    )
 
     # Get filter parameters
     search_query = request.GET.get("q", "").strip()
@@ -1164,6 +1171,7 @@ def membership_application_list_view(request: HttpRequest) -> HttpResponse:
         "team/application_list.html",
         {
             "applications": applications,
+            "active_guild_ids": active_guild_ids,
             "search_query": search_query,
             "status_filter": status_filter,
             "status_choices": MembershipApplication.Status.choices,
