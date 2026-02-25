@@ -214,12 +214,6 @@
                         <img src="{{ rider.discord_avatar_url }}" alt="{{ rider.display_name }}" loading="lazy" />
                       </div>
                     </div>
-                    {% else %}
-                    <div class="avatar placeholder">
-                      <div class="bg-neutral text-neutral-content w-7 rounded-full">
-                        <span class="text-xs">{{ rider.display_name|slice:":1"|upper }}</span>
-                      </div>
-                    </div>
                     {% endif %}
                     <div>
                       {% if rider.user_id %}
