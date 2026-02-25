@@ -207,22 +207,39 @@
             {% for rider in roster %}
               <tr>
                 <td class="font-medium">
-                  {% if rider.user_id %}
-                    <a href="{% url 'accounts:public_profile' rider.user_id %}"
-                       class="link link-hover">{{ rider.display_name }}</a>
-                  {% else %}
-                    {{ rider.display_name }}
-                  {% endif %}
-                  {% if rider.in_zwiftpower %}
-                    <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener"
-                       class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded"
-                       title="View on ZwiftPower">ZP</a>
-                  {% endif %}
-                  {% if rider.in_zwiftracing %}
-                    <a href="https://www.zwiftracing.app/riders/{{ rider.zwid }}" target="_blank" rel="noopener"
-                       class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded"
-                       title="View on Zwift Racing">ZR</a>
-                  {% endif %}
+                  <div class="flex items-center gap-2">
+                    {% if rider.discord_avatar_url %}
+                    <div class="avatar">
+                      <div class="w-7 rounded-full">
+                        <img src="{{ rider.discord_avatar_url }}" alt="{{ rider.display_name }}" loading="lazy" />
+                      </div>
+                    </div>
+                    {% else %}
+                    <div class="avatar placeholder">
+                      <div class="bg-neutral text-neutral-content w-7 rounded-full">
+                        <span class="text-xs">{{ rider.display_name|slice:":1"|upper }}</span>
+                      </div>
+                    </div>
+                    {% endif %}
+                    <div>
+                      {% if rider.user_id %}
+                        <a href="{% url 'accounts:public_profile' rider.user_id %}"
+                           class="link link-hover">{{ rider.display_name }}</a>
+                      {% else %}
+                        {{ rider.display_name }}
+                      {% endif %}
+                      {% if rider.in_zwiftpower %}
+                        <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener"
+                           class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded"
+                           title="View on ZwiftPower">ZP</a>
+                      {% endif %}
+                      {% if rider.in_zwiftracing %}
+                        <a href="https://www.zwiftracing.app/riders/{{ rider.zwid }}" target="_blank" rel="noopener"
+                           class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded"
+                           title="View on Zwift Racing">ZR</a>
+                      {% endif %}
+                    </div>
+                  </div>
                 </td>
                 <td>
                   <span class="font-mono text-sm">{{ rider.zwid }}</span>

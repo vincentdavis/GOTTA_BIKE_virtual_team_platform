@@ -88,6 +88,7 @@ class UnifiedRider:
     user_id: int | None = None
     username: str = ""
     discord_username: str = ""
+    discord_avatar_url: str = ""
     zwid_verified: bool = False
     user_gender: str = ""
 
@@ -209,7 +210,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     """
     # Query each source with .values() for efficiency
     users = User.objects.filter(zwid__isnull=False).values(
-        "id", "zwid", "username", "discord_username", "zwid_verified", "gender"
+        "id", "zwid", "username", "discord_username", "discord_id", "discord_avatar", "zwid_verified", "gender"
     )
     zp_riders = ZPTeamRiders.objects.all().values(
         "zwid", "name", "div", "divw", "date_left", "rank", "ftp", "weight"
@@ -251,6 +252,10 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.zwid_verified = u["zwid_verified"]
             rider.user_gender = u["gender"] or ""
             rider.is_race_ready = race_ready_by_zwid.get(zwid, False)
+            if u["discord_id"] and u["discord_avatar"]:
+                rider.discord_avatar_url = (
+                    f"https://cdn.discordapp.com/avatars/{u['discord_id']}/{u['discord_avatar']}.png"
+                )
 
         # ZwiftPower data
         if zwid in zp_by_zwid:
