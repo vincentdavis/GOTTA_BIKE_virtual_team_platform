@@ -3,6 +3,7 @@
 from django.urls import path
 
 from apps.events.views import (
+    availability_create_view,
     event_create_view,
     event_delete_view,
     event_detail_view,
@@ -34,4 +35,9 @@ urlpatterns = [
     path("<int:event_pk>/squads/add/", squad_create_view, name="squad_create"),
     path("<int:event_pk>/squads/<int:squad_pk>/edit/", squad_edit_view, name="squad_edit"),
     path("<int:event_pk>/squads/<int:squad_pk>/delete/", squad_delete_view, name="squad_delete"),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/create/",
+        availability_create_view,
+        name="availability_create",
+    ),
 ]

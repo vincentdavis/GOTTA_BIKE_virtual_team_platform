@@ -835,3 +835,35 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         )
 
     return redirect("events:event_detail", pk=event_pk)
+
+
+@require_GET
+@login_required
+@team_member_required()
+def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
+    """Display the availability grid builder for a squad.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        Rendered availability builder page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized availability builder access",
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    logfire.debug("Availability builder viewed", user_id=request.user.id, event_id=event_pk, squad_id=squad_pk)
+    return render(request, "events/availability_builder.html", {"event": event, "squad": squad})

@@ -1,0 +1,584 @@
+{% extends "base.html" %}
+
+{% block title %}Availability Builder - {{ squad.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .avail-grid-wrap { overflow-x: auto; }
+  .avail-grid { border-collapse: collapse; user-select: none; -webkit-user-select: none; }
+  .avail-grid th,
+  .avail-grid td { border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent); text-align: center; min-width: 5rem; }
+  .avail-grid th { position: sticky; top: 0; z-index: 2; padding: 0.35rem 0.5rem; font-size: 0.75rem; cursor: pointer; }
+  .avail-grid th.row-header { position: sticky; left: 0; z-index: 3; background: var(--color-base-200); }
+  .avail-grid thead th { background: var(--color-base-200); }
+  .avail-grid thead th:first-child { z-index: 4; }
+  .avail-cell { width: 5rem; height: 2.25rem; cursor: pointer; transition: background-color 0.05s; }
+  .avail-cell[data-state="open"] { background: var(--color-base-300); }
+  .avail-cell[data-state="blocked"] { background: var(--color-neutral); color: var(--color-neutral-content); }
+  /* Preview modal cell states */
+  .avail-cell[data-state="available"] { background: var(--color-success); opacity: 0.5; }
+  .avail-cell[data-state="unselected"] { background: var(--color-base-300); }
+  .avail-cell.preview-blocked { background: var(--color-neutral); opacity: 0.4; cursor: not-allowed; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="link link-primary text-sm">&larr; Back to Squad</a>
+  </div>
+
+  <h1 class="text-2xl font-bold mb-1">Availability Builder</h1>
+  <p class="text-base-content/70 mb-6">{{ event.title }} &mdash; {{ squad.name }}</p>
+
+  <!-- Settings Panel -->
+  <div class="card bg-base-200 shadow-md mb-6">
+    <div class="card-body p-4">
+      <h2 class="card-title text-lg mb-3">Grid Settings</h2>
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="form-control">
+          <label class="label py-0"><span class="label-text text-xs">Start Date</span></label>
+          <input type="date" id="cfg-start-date" class="input input-bordered input-sm w-full">
+        </div>
+        <div class="form-control">
+          <label class="label py-0"><span class="label-text text-xs">End Date</span></label>
+          <input type="date" id="cfg-end-date" class="input input-bordered input-sm w-full">
+        </div>
+        <div class="form-control">
+          <label class="label py-0"><span class="label-text text-xs">Start Time (UTC)</span></label>
+          <select id="cfg-start-time" class="select select-bordered select-sm w-full"></select>
+        </div>
+        <div class="form-control">
+          <label class="label py-0"><span class="label-text text-xs">End Time (UTC)</span></label>
+          <select id="cfg-end-time" class="select select-bordered select-sm w-full"></select>
+        </div>
+        <div class="form-control">
+          <label class="label py-0"><span class="label-text text-xs">Slot Duration</span></label>
+          <select id="cfg-slot-duration" class="select select-bordered select-sm w-full">
+            <option value="15">15 min</option>
+            <option value="30" selected>30 min</option>
+            <option value="60">60 min</option>
+          </select>
+        </div>
+        <div class="form-control justify-end">
+          <button id="btn-generate" class="btn btn-primary btn-sm w-full">Generate Grid</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk Actions -->
+  <div id="bulk-actions" class="hidden mb-3 flex gap-2">
+    <button id="btn-block-all" class="btn btn-neutral btn-xs btn-outline">Block All</button>
+    <button id="btn-open-all" class="btn btn-ghost btn-xs btn-outline">Open All</button>
+    <button id="btn-preview" class="btn btn-secondary btn-xs btn-outline" onclick="document.getElementById('preview-modal').showModal()">Preview</button>
+  </div>
+
+  <!-- Grid Container -->
+  <div id="grid-container" class="avail-grid-wrap mb-6"></div>
+
+  <!-- JSON Output -->
+  <div id="json-panel" class="hidden">
+    <div class="card bg-base-200 shadow-md">
+      <div class="card-body p-4">
+        <div class="flex justify-between items-center mb-2">
+          <h2 class="card-title text-lg">Grid Configuration (JSON)</h2>
+          <button id="btn-copy-json" class="btn btn-ghost btn-sm btn-outline">Copy to Clipboard</button>
+        </div>
+        <pre id="json-output" class="bg-base-300 p-3 rounded-lg text-xs overflow-x-auto max-h-96 overflow-y-auto"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <dialog id="preview-modal" class="modal">
+    <div class="modal-box max-w-5xl w-11/12">
+      <h3 class="text-lg font-bold">Member Availability Preview</h3>
+      <p class="text-base-content/70 text-sm mb-4">{{ event.title }} &mdash; {{ squad.name }}</p>
+      <div id="preview-grid-container" class="avail-grid-wrap"></div>
+      <div class="modal-action">
+        <form method="dialog"><button class="btn btn-sm">Close</button></form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var EVENT_ID = {{ event.pk }};
+  var SQUAD_ID = {{ squad.pk }};
+
+  // DOM refs
+  var startDateEl = document.getElementById('cfg-start-date');
+  var endDateEl = document.getElementById('cfg-end-date');
+  var startTimeEl = document.getElementById('cfg-start-time');
+  var endTimeEl = document.getElementById('cfg-end-time');
+  var slotDurationEl = document.getElementById('cfg-slot-duration');
+  var btnGenerate = document.getElementById('btn-generate');
+  var gridContainer = document.getElementById('grid-container');
+  var bulkActions = document.getElementById('bulk-actions');
+  var jsonPanel = document.getElementById('json-panel');
+  var jsonOutput = document.getElementById('json-output');
+  var btnCopy = document.getElementById('btn-copy-json');
+  var btnBlockAll = document.getElementById('btn-block-all');
+  var btnOpenAll = document.getElementById('btn-open-all');
+
+  // Populate time selects with 30-min increments
+  function populateTimeSelects() {
+    var options = [];
+    for (var h = 0; h < 24; h++) {
+      for (var m = 0; m < 60; m += 30) {
+        var val = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+        options.push(val);
+      }
+    }
+    options.push('24:00');
+    [startTimeEl, endTimeEl].forEach(function(sel) {
+      sel.innerHTML = '';
+      options.forEach(function(v) {
+        var opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v;
+        sel.appendChild(opt);
+      });
+    });
+    startTimeEl.value = '08:00';
+    endTimeEl.value = '20:00';
+  }
+
+  // Set default dates (today + 6 days)
+  function setDefaultDates() {
+    var today = new Date();
+    var end = new Date(today);
+    end.setDate(end.getDate() + 6);
+    startDateEl.value = formatDate(today);
+    endDateEl.value = formatDate(end);
+  }
+
+  function formatDate(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function parseDateStr(s) {
+    var parts = s.split('-');
+    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  }
+
+  var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Generate date range
+  function getDates(startStr, endStr) {
+    var dates = [];
+    var cur = parseDateStr(startStr);
+    var end = parseDateStr(endStr);
+    while (cur <= end) {
+      dates.push(formatDate(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+    return dates;
+  }
+
+  // Generate time slots
+  function getTimeSlots(startTime, endTime, duration) {
+    var slots = [];
+    var startMins = timeToMinutes(startTime);
+    var endMins = timeToMinutes(endTime);
+    for (var m = startMins; m < endMins; m += duration) {
+      slots.push(minutesToTime(m));
+    }
+    return slots;
+  }
+
+  function timeToMinutes(t) {
+    var parts = t.split(':');
+    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+  }
+
+  function minutesToTime(m) {
+    return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  }
+
+  // State
+  var dates = [];
+  var timeSlots = [];
+  var cellStates = {}; // "date|time" -> "open"|"blocked"
+
+  function cellKey(date, time) { return date + '|' + time; }
+
+  // Drag state
+  var isDragging = false;
+  var paintMode = ''; // "block" or "open"
+
+  function toggleCell(td) {
+    var key = td.dataset.key;
+    var current = cellStates[key];
+    var newState = current === 'blocked' ? 'open' : 'blocked';
+    cellStates[key] = newState;
+    td.dataset.state = newState;
+    return newState;
+  }
+
+  function paintCell(td, mode) {
+    var key = td.dataset.key;
+    cellStates[key] = mode;
+    td.dataset.state = mode;
+  }
+
+  // Build grid table
+  function buildGrid() {
+    var startDate = startDateEl.value;
+    var endDate = endDateEl.value;
+    var startTime = startTimeEl.value;
+    var endTime = endTimeEl.value;
+    var duration = parseInt(slotDurationEl.value);
+
+    if (!startDate || !endDate || startDate > endDate) {
+      gridContainer.innerHTML = '<p class="text-error text-sm">Please set valid start and end dates.</p>';
+      return;
+    }
+    if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+      gridContainer.innerHTML = '<p class="text-error text-sm">Start time must be before end time.</p>';
+      return;
+    }
+
+    dates = getDates(startDate, endDate);
+    timeSlots = getTimeSlots(startTime, endTime, duration);
+
+    if (dates.length === 0 || timeSlots.length === 0) {
+      gridContainer.innerHTML = '<p class="text-error text-sm">No slots to display.</p>';
+      return;
+    }
+    if (dates.length > 31) {
+      gridContainer.innerHTML = '<p class="text-error text-sm">Date range too large (max 31 days).</p>';
+      return;
+    }
+
+    // Init cell states (preserve existing if key matches)
+    var newStates = {};
+    dates.forEach(function(date) {
+      timeSlots.forEach(function(time) {
+        var key = cellKey(date, time);
+        newStates[key] = cellStates[key] || 'open';
+      });
+    });
+    cellStates = newStates;
+
+    // Build table
+    var table = document.createElement('table');
+    table.className = 'avail-grid';
+
+    // Header row
+    var thead = document.createElement('thead');
+    var headerRow = document.createElement('tr');
+    var cornerTh = document.createElement('th');
+    cornerTh.className = 'row-header';
+    cornerTh.textContent = 'UTC';
+    headerRow.appendChild(cornerTh);
+
+    dates.forEach(function(date) {
+      var th = document.createElement('th');
+      var d = parseDateStr(date);
+      th.innerHTML = DAY_NAMES[d.getDay()] + '<br>' + date.slice(5);
+      th.dataset.date = date;
+      th.title = 'Click to toggle column';
+      th.addEventListener('click', function() { toggleColumn(date); });
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Body rows
+    var tbody = document.createElement('tbody');
+    timeSlots.forEach(function(time) {
+      var tr = document.createElement('tr');
+      var rowTh = document.createElement('th');
+      rowTh.className = 'row-header';
+      rowTh.textContent = time;
+      rowTh.dataset.time = time;
+      rowTh.title = 'Click to toggle row';
+      rowTh.addEventListener('click', function() { toggleRow(time); });
+      tr.appendChild(rowTh);
+
+      dates.forEach(function(date) {
+        var td = document.createElement('td');
+        var key = cellKey(date, time);
+        td.className = 'avail-cell';
+        td.dataset.key = key;
+        td.dataset.date = date;
+        td.dataset.time = time;
+        td.dataset.state = cellStates[key];
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    gridContainer.innerHTML = '';
+    gridContainer.appendChild(table);
+    bulkActions.classList.remove('hidden');
+    jsonPanel.classList.remove('hidden');
+
+    // Attach mouse/touch events to table
+    attachGridEvents(table);
+    updateJSON();
+  }
+
+  function attachGridEvents(table) {
+    // Mouse events
+    table.addEventListener('mousedown', function(e) {
+      var td = e.target.closest('.avail-cell');
+      if (!td) return;
+      e.preventDefault();
+      isDragging = true;
+      var newState = toggleCell(td);
+      paintMode = newState === 'blocked' ? 'block' : 'open';
+      updateJSON();
+    });
+
+    table.addEventListener('mouseover', function(e) {
+      if (!isDragging) return;
+      var td = e.target.closest('.avail-cell');
+      if (!td) return;
+      paintCell(td, paintMode === 'block' ? 'blocked' : 'open');
+      updateJSON();
+    });
+
+    document.addEventListener('mouseup', function() {
+      if (isDragging) {
+        isDragging = false;
+        updateJSON();
+      }
+    });
+
+    // Touch events
+    table.addEventListener('touchstart', function(e) {
+      var td = e.target.closest('.avail-cell');
+      if (!td) return;
+      e.preventDefault();
+      isDragging = true;
+      var newState = toggleCell(td);
+      paintMode = newState === 'blocked' ? 'block' : 'open';
+      updateJSON();
+    }, { passive: false });
+
+    table.addEventListener('touchmove', function(e) {
+      if (!isDragging) return;
+      e.preventDefault();
+      var touch = e.touches[0];
+      var el = document.elementFromPoint(touch.clientX, touch.clientY);
+      var td = el ? el.closest('.avail-cell') : null;
+      if (!td) return;
+      paintCell(td, paintMode === 'block' ? 'blocked' : 'open');
+      updateJSON();
+    }, { passive: false });
+
+    table.addEventListener('touchend', function() {
+      if (isDragging) {
+        isDragging = false;
+        updateJSON();
+      }
+    });
+  }
+
+  // Toggle all cells in a column (majority-based)
+  function toggleColumn(date) {
+    var blocked = 0, open = 0;
+    timeSlots.forEach(function(time) {
+      if (cellStates[cellKey(date, time)] === 'blocked') blocked++; else open++;
+    });
+    var target = blocked > open ? 'open' : 'blocked';
+    timeSlots.forEach(function(time) {
+      var key = cellKey(date, time);
+      cellStates[key] = target;
+      var td = gridContainer.querySelector('[data-key="' + key + '"]');
+      if (td) td.dataset.state = target;
+    });
+    updateJSON();
+  }
+
+  // Toggle all cells in a row (majority-based)
+  function toggleRow(time) {
+    var blocked = 0, open = 0;
+    dates.forEach(function(date) {
+      if (cellStates[cellKey(date, time)] === 'blocked') blocked++; else open++;
+    });
+    var target = blocked > open ? 'open' : 'blocked';
+    dates.forEach(function(date) {
+      var key = cellKey(date, time);
+      cellStates[key] = target;
+      var td = gridContainer.querySelector('[data-key="' + key + '"]');
+      if (td) td.dataset.state = target;
+    });
+    updateJSON();
+  }
+
+  // Bulk actions
+  function setAllCells(state) {
+    Object.keys(cellStates).forEach(function(key) {
+      cellStates[key] = state;
+    });
+    gridContainer.querySelectorAll('.avail-cell').forEach(function(td) {
+      td.dataset.state = state;
+    });
+    updateJSON();
+  }
+
+  // Build JSON output
+  function updateJSON() {
+    var blockedCells = [];
+    dates.forEach(function(date) {
+      timeSlots.forEach(function(time) {
+        if (cellStates[cellKey(date, time)] === 'blocked') {
+          blockedCells.push({ date: date, time: time });
+        }
+      });
+    });
+
+    var obj = {
+      version: 1,
+      squad_id: SQUAD_ID,
+      event_id: EVENT_ID,
+      created_at: new Date().toISOString(),
+      settings: {
+        start_date: startDateEl.value,
+        end_date: endDateEl.value,
+        start_time: startTimeEl.value,
+        end_time: endTimeEl.value,
+        slot_duration_minutes: parseInt(slotDurationEl.value),
+        timezone: 'UTC'
+      },
+      dates: dates,
+      time_slots: timeSlots,
+      blocked_cells: blockedCells
+    };
+
+    jsonOutput.textContent = JSON.stringify(obj, null, 2);
+  }
+
+  // Copy to clipboard
+  btnCopy.addEventListener('click', function() {
+    navigator.clipboard.writeText(jsonOutput.textContent).then(function() {
+      btnCopy.textContent = 'Copied!';
+      setTimeout(function() { btnCopy.textContent = 'Copy to Clipboard'; }, 2000);
+    });
+  });
+
+  // --- Preview Modal ---
+  var previewModal = document.getElementById('preview-modal');
+  var previewContainer = document.getElementById('preview-grid-container');
+
+  function buildPreviewGrid() {
+    if (dates.length === 0 || timeSlots.length === 0) return;
+
+    var table = document.createElement('table');
+    table.className = 'avail-grid';
+
+    // Header row: date labels
+    var thead = document.createElement('thead');
+    var headerRow = document.createElement('tr');
+    var cornerTh = document.createElement('th');
+    cornerTh.className = 'row-header';
+    cornerTh.textContent = 'UTC';
+    headerRow.appendChild(cornerTh);
+
+    dates.forEach(function(date) {
+      var th = document.createElement('th');
+      var d = parseDateStr(date);
+      th.innerHTML = DAY_NAMES[d.getDay()] + '<br>' + date.slice(5);
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+
+    // Quick-select row: All / None buttons per column
+    var quickRow = document.createElement('tr');
+    var quickCorner = document.createElement('th');
+    quickCorner.className = 'row-header';
+    quickRow.appendChild(quickCorner);
+
+    dates.forEach(function(date) {
+      var th = document.createElement('th');
+      th.style.padding = '0.2rem 0.25rem';
+      var btnAll = document.createElement('button');
+      btnAll.className = 'btn btn-success btn-xs px-1 mr-0.5';
+      btnAll.textContent = 'All';
+      btnAll.style.minHeight = '0';
+      btnAll.style.height = '1.25rem';
+      btnAll.style.fontSize = '0.65rem';
+      btnAll.addEventListener('click', function() { previewSelectColumn(date, true); });
+      var btnNone = document.createElement('button');
+      btnNone.className = 'btn btn-ghost btn-xs px-1';
+      btnNone.textContent = 'None';
+      btnNone.style.minHeight = '0';
+      btnNone.style.height = '1.25rem';
+      btnNone.style.fontSize = '0.65rem';
+      btnNone.addEventListener('click', function() { previewSelectColumn(date, false); });
+      th.appendChild(btnAll);
+      th.appendChild(btnNone);
+      quickRow.appendChild(th);
+    });
+    thead.appendChild(quickRow);
+    table.appendChild(thead);
+
+    // Body rows
+    var tbody = document.createElement('tbody');
+    timeSlots.forEach(function(time) {
+      var tr = document.createElement('tr');
+      var rowTh = document.createElement('th');
+      rowTh.className = 'row-header';
+      rowTh.textContent = time;
+      tr.appendChild(rowTh);
+
+      dates.forEach(function(date) {
+        var td = document.createElement('td');
+        var key = cellKey(date, time);
+        td.className = 'avail-cell';
+        td.dataset.date = date;
+        td.dataset.time = time;
+
+        if (cellStates[key] === 'blocked') {
+          td.classList.add('preview-blocked');
+          td.dataset.state = 'blocked';
+        } else {
+          td.dataset.state = 'unselected';
+          td.addEventListener('click', function() {
+            td.dataset.state = td.dataset.state === 'available' ? 'unselected' : 'available';
+          });
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    previewContainer.innerHTML = '';
+    previewContainer.appendChild(table);
+  }
+
+  function previewSelectColumn(date, selectAll) {
+    previewContainer.querySelectorAll('.avail-cell[data-date="' + date + '"]').forEach(function(td) {
+      if (td.classList.contains('preview-blocked')) return;
+      td.dataset.state = selectAll ? 'available' : 'unselected';
+    });
+  }
+
+  previewModal.addEventListener('show', buildPreviewGrid);
+  // DaisyUI <dialog> uses showModal(), listen for the open event
+  var origShowModal = previewModal.showModal.bind(previewModal);
+  previewModal.showModal = function() {
+    buildPreviewGrid();
+    origShowModal();
+  };
+
+  // Wire up
+  btnGenerate.addEventListener('click', buildGrid);
+  btnBlockAll.addEventListener('click', function() { setAllCells('blocked'); });
+  btnOpenAll.addEventListener('click', function() { setAllCells('open'); });
+
+  populateTimeSelects();
+  setDefaultDates();
+})();
+</script>
+{% endblock %}

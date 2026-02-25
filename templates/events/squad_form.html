@@ -204,11 +204,15 @@
       <div class="divider"></div>
       <div class="flex justify-between items-center">
         <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary">Back to Event</a>
-        <form method="post" action="{% url 'events:squad_delete' event.pk squad.pk %}"
-              onsubmit="return confirm('Are you sure you want to delete this squad? This cannot be undone.');">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-error btn-sm btn-outline">Delete Squad</button>
-        </form>
+        <div class="flex gap-2">
+          <a href="{% url 'events:availability_create' event.pk squad.pk %}"
+             class="btn btn-secondary btn-sm btn-outline">New Availability</a>
+          <form method="post" action="{% url 'events:squad_delete' event.pk squad.pk %}"
+                onsubmit="return confirm('Are you sure you want to delete this squad? This cannot be undone.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-error btn-sm btn-outline">Delete Squad</button>
+          </form>
+        </div>
       </div>
       {% else %}
       <div class="divider"></div>
