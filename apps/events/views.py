@@ -127,6 +127,14 @@ def _enrich_signups(signups, event=None):
             "in_zwiftracing": zr is not None,
             "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
             "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+            "zr_age": getattr(zr, "age", "") or "" if zr else "",
+            "zr_current_rating": getattr(zr, "race_current_rating", None) if zr else None,
+            "zr_current_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+            "zr_max30_rating": getattr(zr, "race_max30_rating", None) if zr else None,
+            "zr_max30_category": getattr(zr, "race_max30_category", "") or "" if zr else "",
+            "zr_max90_rating": getattr(zr, "race_max90_rating", None) if zr else None,
+            "zr_max90_category": getattr(zr, "race_max90_category", "") or "" if zr else "",
+            "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
             "assigned_squads": squads_by_user.get(user.pk, []),
         })
     return enriched

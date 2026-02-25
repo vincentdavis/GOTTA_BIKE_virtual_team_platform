@@ -169,29 +169,64 @@
           {% if squads %}
           <button type="button" class="btn btn-outline btn-sm" id="toggle-squad-assign" onclick="toggleSquadAssign()">Assign Squads</button>
           {% endif %}
-          <input type="text" class="input input-bordered input-sm ml-auto w-48" placeholder="Search by name..." data-signup-search="detail">
+          <div class="ml-auto flex items-center gap-2">
+            <div class="dropdown dropdown-end">
+              <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>
+              <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-56 max-h-72 overflow-y-auto">
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="name" checked> Name</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zwid" checked> ZWID</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="timezone" checked> Timezone</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="gender" checked> Gender</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="category" checked> ZP Category</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="rating" checked> ZR Category</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="ftp" checked> FTP</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="wkg" checked> WKG</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="verified" checked> Verified</label></li>
+                {% if squads %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad" checked> Squad</label></li>{% endif %}
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="notes" checked> Notes</label></li>
+                <li class="menu-title text-xs pt-2">Zwift Racing</li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_age"> Age</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_cur_rating"> Current Rating</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_cur_cat"> Current Cat</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max30_rating"> Max30 Rating</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max30_cat"> Max30 Cat</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max90_rating"> Max90 Rating</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max90_cat"> Max90 Cat</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_phenotype"> Phenotype</label></li>
+              </ul>
+            </div>
+            <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
+          </div>
         </div>
         <div class="overflow-x-auto pb-8">
           <table class="table table-sm" data-signup-table="detail">
             <thead>
               <tr>
-                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
-                <th data-sort="num" class="cursor-pointer hover:text-primary select-none">ZWID</th>
-                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
-                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Gender</th>
-                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Category</th>
-                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Rating</th>
-                <th data-sort="num" class="cursor-pointer hover:text-primary select-none">FTP</th>
-                <th data-sort="num" class="cursor-pointer hover:text-primary select-none">WKG</th>
-                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Verified</th>
-                {% if squads %}<th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>{% endif %}
-                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Notes</th>
+                <th data-col="name" data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+                <th data-col="zwid" data-sort="num" class="cursor-pointer hover:text-primary select-none">ZWID</th>
+                <th data-col="timezone" data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
+                <th data-col="gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Gender</th>
+                <th data-col="category" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZP Category</th>
+                <th data-col="rating" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZR Category</th>
+                <th data-col="ftp" data-sort="num" class="cursor-pointer hover:text-primary select-none">FTP</th>
+                <th data-col="wkg" data-sort="num" class="cursor-pointer hover:text-primary select-none">WKG</th>
+                <th data-col="verified" data-sort="text" class="cursor-pointer hover:text-primary select-none">Verified</th>
+                {% if squads %}<th data-col="squad" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>{% endif %}
+                <th data-col="notes" data-sort="text" class="cursor-pointer hover:text-primary select-none">Notes</th>
+                <th data-col="zr_age" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Age</th>
+                <th data-col="zr_cur_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Rating</th>
+                <th data-col="zr_cur_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Cat</th>
+                <th data-col="zr_max30_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Max30 Rating</th>
+                <th data-col="zr_max30_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Max30 Cat</th>
+                <th data-col="zr_max90_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Max90 Rating</th>
+                <th data-col="zr_max90_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Max90 Cat</th>
+                <th data-col="zr_phenotype" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Phenotype</th>
               </tr>
             </thead>
             <tbody>
               {% for entry in signups %}
               <tr>
-                <td>
+                <td data-col="name">
                   <a href="{% url 'accounts:public_profile' entry.user.pk %}" class="link link-hover">{{ entry.user.get_full_name|default:entry.user.discord_username }}</a>
                   {% if entry.in_zwiftpower and entry.zwid %}
                   <a href="https://zwiftpower.com/profile.php?z={{ entry.zwid }}" target="_blank" rel="noopener"
@@ -204,15 +239,15 @@
                      title="View on Zwift Racing">ZR</a>
                   {% endif %}
                 </td>
-                <td>
+                <td data-col="zwid">
                   {% if entry.zwid %}
                   <span class="font-mono text-sm">{{ entry.zwid }}</span>
                   {% else %}
                   <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>{% if entry.signup.signup_timezone %}{% for tz in entry.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
-                <td>
+                <td data-col="timezone">{% if entry.signup.signup_timezone %}{% for tz in entry.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
+                <td data-col="gender">
                   {% if entry.gender == "male" %}
                   <span class="badge badge-info badge-sm">M</span>
                   {% elif entry.gender == "female" %}
@@ -221,7 +256,7 @@
                   <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-col="category">
                   {% if entry.in_zwiftpower %}
                     {% if entry.zp_category_w %}
                     <span class="badge badge-secondary badge-sm">{{ entry.zp_category_w }}</span>
@@ -232,28 +267,28 @@
                   <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-col="rating">
                   {% if entry.in_zwiftracing %}
                   <span class="badge badge-secondary badge-sm">{{ entry.zr_category|default:"N/A" }}</span>
                   {% else %}
                   <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-col="ftp">
                   {% if entry.zp_ftp %}
                   <span class="font-mono text-sm">{{ entry.zp_ftp }}</span>
                   {% else %}
                   <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-col="wkg">
                   {% if entry.wkg %}
                   <span class="font-mono text-sm">{{ entry.wkg }}</span>
                   {% else %}
                   <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-col="verified">
                   {% if entry.is_extra_verified and site_settings.extra_verified_emoji %}
                     <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
                   {% elif entry.is_race_ready %}
@@ -271,11 +306,11 @@
                   {% endif %}
                 </td>
                 {% if squads %}
-                <td id="squad-cell-{{ entry.signup.pk }}">
+                <td data-col="squad" id="squad-cell-{{ entry.signup.pk }}">
                   {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk %}
                 </td>
                 {% endif %}
-                <td>
+                <td data-col="notes">
                   {% if entry.signup.notes %}
                   <div class="tooltip tooltip-left" data-tip="{{ entry.signup.notes }}">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-info cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
@@ -283,6 +318,38 @@
                   {% else %}
                   <span class="text-base-content/30">-</span>
                   {% endif %}
+                </td>
+                <td data-col="zr_age" style="display:none">
+                  {% if entry.zr_age %}<span class="text-sm">{{ entry.zr_age }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_cur_rating" style="display:none">
+                  {% if entry.zr_current_rating %}<span class="font-mono text-sm">{{ entry.zr_current_rating }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_cur_cat" style="display:none">
+                  {% if entry.zr_current_category %}<span class="badge badge-sm">{{ entry.zr_current_category }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_max30_rating" style="display:none">
+                  {% if entry.zr_max30_rating %}<span class="font-mono text-sm">{{ entry.zr_max30_rating }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_max30_cat" style="display:none">
+                  {% if entry.zr_max30_category %}<span class="badge badge-sm">{{ entry.zr_max30_category }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_max90_rating" style="display:none">
+                  {% if entry.zr_max90_rating %}<span class="font-mono text-sm">{{ entry.zr_max90_rating }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_max90_cat" style="display:none">
+                  {% if entry.zr_max90_category %}<span class="badge badge-sm">{{ entry.zr_max90_category }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_phenotype" style="display:none">
+                  {% if entry.zr_phenotype %}<span class="text-sm">{{ entry.zr_phenotype }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
                 </td>
               </tr>
               {% endfor %}
@@ -761,6 +828,48 @@ function toggleSquadAssign() {
   btn.classList.toggle('btn-outline', !active);
   btn.classList.toggle('btn-primary', active);
 }
+
+// Column toggler for signup table
+(function() {
+  var STORAGE_KEY = 'event_signup_cols';
+  var DEFAULTS = {
+    name: true, zwid: true, timezone: true, gender: true, category: true,
+    rating: true, ftp: true, wkg: true, verified: true, squad: true, notes: true,
+    zr_age: false, zr_cur_rating: false, zr_cur_cat: false,
+    zr_max30_rating: false, zr_max30_cat: false,
+    zr_max90_rating: false, zr_max90_cat: false, zr_phenotype: false
+  };
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e) {}
+
+  function getVisible(col) {
+    return col in saved ? saved[col] : (col in DEFAULTS ? DEFAULTS[col] : true);
+  }
+
+  function applyCols() {
+    document.querySelectorAll('.col-toggle').forEach(function(cb) {
+      var col = cb.getAttribute('data-col');
+      var show = getVisible(col);
+      cb.checked = show;
+      document.querySelectorAll('[data-col="' + col + '"]').forEach(function(el) {
+        el.style.display = show ? '' : 'none';
+      });
+    });
+  }
+
+  document.querySelectorAll('.col-toggle').forEach(function(cb) {
+    cb.addEventListener('change', function() {
+      var col = this.getAttribute('data-col');
+      saved[col] = this.checked;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      document.querySelectorAll('[data-col="' + col + '"]').forEach(function(el) {
+        el.style.display = saved[col] ? '' : 'none';
+      });
+    });
+  });
+
+  applyCols();
+})();
 
 // Squad table sorting (keeps data row + detail row paired)
 (function() {

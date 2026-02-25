@@ -4615,6 +4615,9 @@
   .max-h-60 {
     max-height: calc(var(--spacing) * 60);
   }
+  .max-h-72 {
+    max-height: calc(var(--spacing) * 72);
+  }
   .max-h-96 {
     max-height: calc(var(--spacing) * 96);
   }
@@ -5211,6 +5214,12 @@
     .checkbox-sm {
       padding: 0.1875rem;
       --size: calc(var(--size-selector, 0.25rem) * 5);
+    }
+  }
+  @layer daisyui.l1.l2 {
+    .checkbox-xs {
+      padding: 0.125rem;
+      --size: calc(var(--size-selector, 0.25rem) * 4);
     }
   }
   .p-0 {
