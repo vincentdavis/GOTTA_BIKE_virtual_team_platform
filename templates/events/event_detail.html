@@ -10,7 +10,7 @@
 .assign-mode .squad-assign-ctrl{display:inline}
 .assign-mode .no-squad-dash{display:none}
 </style>
-<div class="max-w-4xl mx-auto">
+<div class="max-w-6xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
       <div class="flex justify-between items-start mb-4">
@@ -565,15 +565,16 @@
 
         {# ZwiftPower table #}
         <div id="cat-table-zp" class="overflow-x-auto">
-          <table class="table table-sm">
+          <table class="table table-sm" data-cat-table>
             <thead>
               <tr>
-                <th>Squad</th>
-                <th>Timezone</th>
+                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>
+                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
                 {% for cat in zp_category_columns %}
                 <th class="text-center">{{ cat }}</th>
                 {% endfor %}
                 <th class="text-center">-</th>
+                <th data-sort="num" data-default-sort="desc" class="text-center cursor-pointer hover:text-primary select-none">Avg Rank</th>
                 <th class="text-center">Total</th>
               </tr>
             </thead>
@@ -594,6 +595,9 @@
                   {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
                   {% endwith %}
                 </td>
+                <td class="text-center">
+                  {% if row.avg_rank %}<span class="font-mono text-sm">{{ row.avg_rank }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
                 <td class="text-center"><span class="badge badge-neutral badge-sm">{{ row.total }}</span></td>
               </tr>
               {% endfor %}
@@ -613,6 +617,9 @@
                   {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
                   {% endwith %}
                 </td>
+                <td class="text-center">
+                  {% if zp_avg_rank_all %}<span class="font-mono text-sm">{{ zp_avg_rank_all }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
                 <td class="text-center"><span class="badge badge-neutral badge-sm">{{ zp_total_all }}</span></td>
               </tr>
             </tfoot>
@@ -621,15 +628,16 @@
 
         {# Zwift Racing table #}
         <div id="cat-table-zr" class="overflow-x-auto" style="display:none">
-          <table class="table table-sm">
+          <table class="table table-sm" data-cat-table>
             <thead>
               <tr>
-                <th>Squad</th>
-                <th>Timezone</th>
+                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>
+                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
                 {% for cat in zr_category_columns %}
                 <th class="text-center">{{ cat }}</th>
                 {% endfor %}
                 <th class="text-center">-</th>
+                <th data-sort="num" data-default-sort="desc" class="text-center cursor-pointer hover:text-primary select-none">Avg Rating</th>
                 <th class="text-center">Total</th>
               </tr>
             </thead>
@@ -650,6 +658,9 @@
                   {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
                   {% endwith %}
                 </td>
+                <td class="text-center">
+                  {% if row.avg_rating %}<span class="font-mono text-sm">{{ row.avg_rating }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
                 <td class="text-center"><span class="badge badge-neutral badge-sm">{{ row.total }}</span></td>
               </tr>
               {% endfor %}
@@ -668,6 +679,9 @@
                   {% with val=zr_totals|get_item:"-" %}
                   {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
                   {% endwith %}
+                </td>
+                <td class="text-center">
+                  {% if zr_avg_rating_all %}<span class="font-mono text-sm">{{ zr_avg_rating_all }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}
                 </td>
                 <td class="text-center"><span class="badge badge-neutral badge-sm">{{ zr_total_all }}</span></td>
               </tr>
@@ -789,6 +803,67 @@ function toggleSquadAssign() {
   });
   // Sort by Name A-Z on page load
   if (headers.length > 0) headers[0].click();
+})();
+
+// Category table sorting (both ZP and ZR tables)
+(function() {
+  function getColIdx(th) {
+    return Array.from(th.parentNode.children).indexOf(th);
+  }
+
+  function sortCatTable(table, colIdx, sortType, asc) {
+    var tbody = table.querySelector('tbody');
+    var rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort(function(a, b) {
+      var aText = a.cells[colIdx].textContent.trim();
+      var bText = b.cells[colIdx].textContent.trim();
+      if (sortType === 'num') {
+        var aNum = parseFloat(aText) || 0;
+        var bNum = parseFloat(bText) || 0;
+        return asc ? aNum - bNum : bNum - aNum;
+      }
+      return asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+    });
+    rows.forEach(function(row) { tbody.appendChild(row); });
+  }
+
+  function setIndicator(th, dir) {
+    th.setAttribute('data-dir', dir);
+    var ind = document.createElement('span');
+    ind.className = 'sort-indicator text-primary ml-1';
+    ind.textContent = dir === 'asc' ? '\u25B2' : '\u25BC';
+    th.appendChild(ind);
+  }
+
+  document.querySelectorAll('[data-cat-table]').forEach(function(table) {
+    var headers = table.querySelectorAll('th[data-sort]');
+    headers.forEach(function(th) {
+      th.addEventListener('click', function() {
+        var sortType = th.getAttribute('data-sort');
+        var colIdx = getColIdx(th);
+        var asc = th.getAttribute('data-dir') !== 'asc';
+        headers.forEach(function(h) {
+          h.removeAttribute('data-dir');
+          var ind = h.querySelector('.sort-indicator');
+          if (ind) ind.remove();
+        });
+        setIndicator(th, asc ? 'asc' : 'desc');
+        sortCatTable(table, colIdx, sortType, asc);
+      });
+    });
+    // Default sort: primary by default-sort column desc, secondary by timezone asc
+    // Stable sort: apply secondary first, then primary
+    var defaultCol = table.querySelector('th[data-default-sort]');
+    var tzHeader = headers[1]; // Timezone is always second sortable header
+    if (defaultCol && tzHeader) {
+      sortCatTable(table, getColIdx(tzHeader), 'text', true);
+      sortCatTable(table, getColIdx(defaultCol), defaultCol.getAttribute('data-sort'), false);
+      setIndicator(defaultCol, 'desc');
+    } else if (tzHeader) {
+      sortCatTable(table, getColIdx(tzHeader), 'text', true);
+      setIndicator(tzHeader, 'asc');
+    }
+  });
 })();
 </script>
 <script>

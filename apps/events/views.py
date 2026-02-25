@@ -15,7 +15,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.accounts.decorators import team_member_required
 from apps.events.forms import EventForm, SquadForm
-from apps.events.models import Event, EventSignup, Squad, SquadMember
+from apps.events.models import ZR_CATEGORY_ORDER, Event, EventSignup, Squad, SquadMember
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -68,6 +68,7 @@ def _enrich_squad_members(event):
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
             "zp_ftp": zp_ftp,
+            "zp_rank": zp.rank if zp else None,
             "wkg": wkg,
             "in_zwiftracing": zr is not None,
             "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
@@ -208,30 +209,40 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     zr_by_squad = []
     zr_totals = defaultdict(int)
     zr_total_all = 0
-    zr_cats_seen = set()
+    all_ranks = []
+    all_ratings = []
     for squad in squads:
         zp_counts = defaultdict(int)
         zr_counts = defaultdict(int)
+        squad_ranks = []
+        squad_ratings = []
         for member in squad.enriched_members:
             zp_cat = member["zp_category_w"] or member["zp_category"] or "-"
             zp_counts[zp_cat] += 1
             zr_cat = member["zr_category"] or "-"
             zr_counts[zr_cat] += 1
-            if zr_cat != "-":
-                zr_cats_seen.add(zr_cat)
+            if member["zp_rank"] is not None:
+                squad_ranks.append(member["zp_rank"])
+            if member["zr_rating"] is not None:
+                squad_ratings.append(member["zr_rating"])
+        avg_rank = round(sum(squad_ranks) / len(squad_ranks), 1) if squad_ranks else None
+        avg_rating = round(sum(squad_ratings) / len(squad_ratings), 1) if squad_ratings else None
+        all_ranks.extend(squad_ranks)
+        all_ratings.extend(squad_ratings)
         zp_total = sum(zp_counts.values())
-        zp_by_squad.append({"squad": squad, "counts": dict(zp_counts), "total": zp_total})
+        zp_by_squad.append({"squad": squad, "counts": dict(zp_counts), "total": zp_total, "avg_rank": avg_rank})
         for cat, count in zp_counts.items():
             zp_totals[cat] += count
         zp_total_all += zp_total
         zr_total = sum(zr_counts.values())
-        zr_by_squad.append({"squad": squad, "counts": dict(zr_counts), "total": zr_total})
+        zr_by_squad.append({"squad": squad, "counts": dict(zr_counts), "total": zr_total, "avg_rating": avg_rating})
         for cat, count in zr_counts.items():
             zr_totals[cat] += count
         zr_total_all += zr_total
     zp_totals = dict(zp_totals)
     zr_totals = dict(zr_totals)
-    zr_category_columns = sorted(zr_cats_seen)
+    zp_avg_rank_all = round(sum(all_ranks) / len(all_ranks), 1) if all_ranks else None
+    zr_avg_rating_all = round(sum(all_ratings) / len(all_ratings), 1) if all_ratings else None
 
     logfire.debug("Event detail viewed", user_id=request.user.id, event_id=pk)
     return render(
@@ -250,10 +261,12 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "zp_by_squad": zp_by_squad,
             "zp_totals": zp_totals,
             "zp_total_all": zp_total_all,
-            "zr_category_columns": zr_category_columns,
+            "zp_avg_rank_all": zp_avg_rank_all,
+            "zr_category_columns": ZR_CATEGORY_ORDER,
             "zr_by_squad": zr_by_squad,
             "zr_totals": zr_totals,
             "zr_total_all": zr_total_all,
+            "zr_avg_rating_all": zr_avg_rating_all,
         },
     )
 
