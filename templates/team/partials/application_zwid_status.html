@@ -1,0 +1,79 @@
+<div id="application-zwid-section">
+  {% if application.zwift_id and not application.zwift_verified %}
+  {# Pending manual verification — show verify/reject UI #}
+  <div class="alert alert-warning mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+    </svg>
+    <div class="flex-1">
+      <h4 class="font-bold">Pending ZWID Verification</h4>
+      <p class="text-sm">This applicant submitted a Zwift ID for manual verification. Check ZwiftPower to confirm it matches, then verify or reject.</p>
+    </div>
+  </div>
+  <div class="bg-base-300 rounded-lg p-4 mb-6">
+    <h3 class="font-bold text-lg mb-4">ZWID Verification</h3>
+    <div class="flex flex-wrap items-end gap-4">
+      <form id="app-zwid-form">
+        {% csrf_token %}
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Zwift ID</span>
+          </label>
+          <input type="number"
+                 name="zwift_id"
+                 value="{{ application.zwift_id }}"
+                 min="1"
+                 class="input input-bordered input-sm w-40 font-mono"
+          />
+        </div>
+      </form>
+      <a href="https://zwiftpower.com/profile.php?z={{ application.zwift_id }}"
+         target="_blank"
+         rel="noopener"
+         class="btn btn-sm btn-ghost">
+        <span class="inline-block px-1 text-xs font-bold text-orange-400 bg-gray-700 rounded">ZP</span>
+        View on ZwiftPower
+      </a>
+      <a href="https://www.zwiftracing.app/riders/{{ application.zwift_id }}"
+         target="_blank"
+         rel="noopener"
+         class="btn btn-sm btn-ghost">
+        <span class="inline-block px-1 text-xs font-bold text-white bg-sky-500 rounded">ZR</span>
+        View on Zwift Racing
+      </a>
+      <div class="flex gap-2 ml-auto">
+        <button class="btn btn-success btn-sm"
+                hx-post="{% url 'team:application_zwid_admin_action' application.pk %}"
+                hx-include="#app-zwid-form"
+                hx-vals='{"action": "verify"}'
+                hx-target="#application-zwid-section"
+                hx-swap="outerHTML"
+                hx-confirm="Verify ZWID {{ application.zwift_id }} for {{ application.display_name }}?">
+          Verify ZWID
+        </button>
+        <button class="btn btn-error btn-sm btn-outline"
+                hx-post="{% url 'team:application_zwid_admin_action' application.pk %}"
+                hx-vals='{"action": "reject"}'
+                hx-target="#application-zwid-section"
+                hx-swap="outerHTML"
+                hx-confirm="Reject and clear ZWID for {{ application.display_name }}?">
+          Reject
+        </button>
+      </div>
+    </div>
+  </div>
+  {% elif application.zwift_id and application.zwift_verified %}
+  {# Verified — show confirmed status #}
+  <div class="alert alert-success mb-6">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+    <div>
+      <span class="font-bold">Zwift ID Verified:</span>
+      <span class="font-mono">{{ application.zwift_id }}</span>
+      <a href="https://zwiftpower.com/profile.php?z={{ application.zwift_id }}" target="_blank" rel="noopener" class="ml-2 inline-block px-1 text-xs font-bold text-orange-400 bg-gray-700 rounded">ZP</a>
+      <a href="https://www.zwiftracing.app/riders/{{ application.zwift_id }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-white bg-sky-500 rounded">ZR</a>
+    </div>
+  </div>
+  {% endif %}
+</div>

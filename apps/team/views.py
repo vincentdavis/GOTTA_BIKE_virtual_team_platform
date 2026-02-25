@@ -1850,3 +1850,55 @@ def application_unverify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpRespo
         "team/partials/application_zwift_status.html",
         {"application": application},
     )
+
+
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_POST
+def application_zwid_admin_action_view(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
+    """Verify or reject a pending ZWID on a membership application.
+
+    Args:
+        request: The HTTP request.
+        pk: UUID of the MembershipApplication.
+
+    Returns:
+        Rendered partial showing the updated ZWID status.
+
+    """
+    application = get_object_or_404(MembershipApplication, pk=pk)
+    action = request.POST.get("action")
+
+    if action == "verify":
+        edited_zwid = request.POST.get("zwift_id", "").strip()
+        if edited_zwid and edited_zwid.isdigit() and int(edited_zwid) > 0:
+            application.zwift_id = edited_zwid
+        application.zwift_verified = True
+        application.save(update_fields=["zwift_id", "zwift_verified"])
+        logfire.info(
+            "Application ZWID verified by admin",
+            application_id=str(pk),
+            admin_id=request.user.id,
+            admin_username=request.user.username,
+            discord_username=application.discord_username,
+            zwift_id=application.zwift_id,
+        )
+    elif action == "reject":
+        old_zwid = application.zwift_id
+        application.zwift_id = ""
+        application.zwift_verified = False
+        application.save(update_fields=["zwift_id", "zwift_verified"])
+        logfire.info(
+            "Application ZWID rejected by admin",
+            application_id=str(pk),
+            admin_id=request.user.id,
+            admin_username=request.user.username,
+            discord_username=application.discord_username,
+            old_zwid=old_zwid,
+        )
+
+    return render(
+        request,
+        "team/partials/application_zwid_status.html",
+        {"application": application},
+    )

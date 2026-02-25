@@ -42,6 +42,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/team/membership-review/ - Membership review dashboard",
             "/team/applications/ - Membership application list",
             "/team/applications/{uuid}/ - Individual application review",
+            "/team/applications/{uuid}/zwid-action/ - Verify/reject ZWID on membership application",
             "/team/discord-review/ - Discord guild member review",
         ],
     },

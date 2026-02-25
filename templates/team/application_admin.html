@@ -204,13 +204,23 @@
         </div>
       </div>
 
+      <!-- ZWID Verification -->
+      {% include "team/partials/application_zwid_status.html" %}
+
       <!-- Profile Information -->
       <div class="bg-base-300 rounded-lg p-4 mb-6">
         <h3 class="font-bold text-lg mb-4">Profile Information</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <div class="text-sm text-base-content/60">Zwift ID</div>
-            <div class="font-medium">{{ application.zwift_id|default:"-" }}</div>
+            <div class="font-medium">
+              {{ application.zwift_id|default:"-" }}
+              {% if application.zwift_verified %}
+                <span class="badge badge-success badge-xs ml-1">Verified</span>
+              {% elif application.zwift_id %}
+                <span class="badge badge-warning badge-xs ml-1">Pending</span>
+              {% endif %}
+            </div>
           </div>
           <div>
             <div class="text-sm text-base-content/60">Country</div>
