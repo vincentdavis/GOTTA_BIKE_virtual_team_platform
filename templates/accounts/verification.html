@@ -10,11 +10,7 @@
         <div class="flex items-center justify-between mb-6">
           <h2 class="card-title text-2xl flex items-center gap-2">
             Race Verification
-            {% if user.is_extra_verified and site_settings.extra_verified_emoji %}
-              <span class="tooltip" data-tip="Extra Verified">
-                <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-6 w-6">
-              </span>
-            {% elif user.is_race_ready %}
+            {% if user.is_race_ready %}
               <span class="tooltip" data-tip="Race Verified">
                 {% if site_settings.verified_emoji %}
                   <img src="{{ site_settings.verified_emoji.url }}" alt="Race Verified" class="h-6 w-6">

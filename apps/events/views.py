@@ -54,7 +54,9 @@ def _enrich_squad_members(event):
 
     """
     all_sms = list(
-        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER).select_related("user", "squad")
+        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER)
+        .select_related("user", "squad")
+        .prefetch_related("user__race_ready_records")
     )
     if not all_sms:
         return {}
@@ -81,7 +83,6 @@ def _enrich_squad_members(event):
             "zwid": zwid,
             "gender": user.gender or "",
             "is_race_ready": user.is_race_ready,
-            "is_extra_verified": user.is_extra_verified,
             "in_zwiftpower": zp is not None,
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
@@ -143,7 +144,6 @@ def _enrich_signups(signups, event=None):
             "zwid": zwid,
             "gender": user.gender or "",
             "is_race_ready": user.is_race_ready,
-            "is_extra_verified": user.is_extra_verified,
             "in_zwiftpower": zp is not None,
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
@@ -227,7 +227,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     squads = list(
         event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
     )
-    signups = event.signups.select_related("user").all()
+    signups = event.signups.select_related("user").prefetch_related("user__race_ready_records").all()
     user_signup = event.signups.filter(user=request.user).first()
     enriched_signups = _enrich_signups(signups, event=event) if request.user.is_event_admin else []
 
@@ -406,7 +406,9 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
         form = EventForm(instance=event)
 
     squads = event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
-    enriched_signups = _enrich_signups(event.signups.select_related("user").all(), event=event)
+    enriched_signups = _enrich_signups(
+        event.signups.select_related("user").prefetch_related("user__race_ready_records").all(), event=event
+    )
     return render(
         request,
         "events/event_form.html",

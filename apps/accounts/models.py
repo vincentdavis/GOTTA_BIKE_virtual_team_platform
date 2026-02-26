@@ -643,17 +643,6 @@ class User(AbstractUser):
         return is_ready
 
     @property
-    def is_extra_verified(self) -> bool:
-        """Check if user is race ready and has both valid weight_full and weight_light records."""
-        if not self.is_race_ready:
-            return False
-        from apps.team.models import RaceReadyRecord
-
-        verified_records = self.race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
-        valid_types = {r.verify_type for r in verified_records if not r.is_expired}
-        return "weight_full" in valid_types and "weight_light" in valid_types
-
-    @property
     def is_any_admin(self) -> bool:
         """Check if user has any admin role."""
         return self.is_app_admin or self.is_link_admin or self.is_membership_admin or self.is_racing_admin

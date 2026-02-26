@@ -289,9 +289,7 @@
                   {% endif %}
                 </td>
                 <td data-col="verified">
-                  {% if entry.is_extra_verified and site_settings.extra_verified_emoji %}
-                    <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
-                  {% elif entry.is_race_ready %}
+                  {% if entry.is_race_ready %}
                     {% if site_settings.verified_emoji %}
                     <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
                     {% else %}
@@ -630,9 +628,7 @@
                           {% endif %}
                         </td>
                         <td data-col="sq_verified">
-                          {% if member.is_extra_verified and site_settings.extra_verified_emoji %}
-                            <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
-                          {% elif member.is_race_ready %}
+                          {% if member.is_race_ready %}
                             {% if site_settings.verified_emoji %}
                             <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
                             {% else %}

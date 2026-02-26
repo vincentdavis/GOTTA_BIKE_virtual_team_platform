@@ -110,9 +110,7 @@
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-base-content/70">Race Verified</span>
-                {% if profile_user.is_extra_verified and site_settings.extra_verified_emoji %}
-                  <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
-                {% elif profile_user.is_race_ready %}
+                {% if profile_user.is_race_ready %}
                   {% if site_settings.verified_emoji %}
                     <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
                   {% else %}

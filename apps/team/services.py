@@ -135,8 +135,6 @@ class UnifiedRider:
 
     # Race Ready status
     is_race_ready: bool = False
-    is_extra_verified: bool = False
-
     # Class variable for div mapping
     DIV_TO_CATEGORY: ClassVar[dict[int, str]] = ZP_DIV_TO_CATEGORY
 
@@ -245,7 +243,6 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     # Get race ready status for users (need full objects for property access)
     user_objects = User.objects.filter(zwid__isnull=False).prefetch_related("race_ready_records")
     race_ready_by_zwid: dict[int, bool] = {u.zwid: u.is_race_ready for u in user_objects}
-    extra_verified_by_zwid: dict[int, bool] = {u.zwid: u.is_extra_verified for u in user_objects}
 
     # Build lookup dicts
     user_by_zwid: dict[int, dict] = {u["zwid"]: u for u in users}
@@ -275,7 +272,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.zwid_verified = u["zwid_verified"]
             rider.user_gender = u["gender"] or ""
             rider.is_race_ready = race_ready_by_zwid.get(zwid, False)
-            rider.is_extra_verified = extra_verified_by_zwid.get(zwid, False)
+
             if u["discord_id"] and u["discord_avatar"]:
                 rider.discord_avatar_url = (
                     f"https://cdn.discordapp.com/avatars/{u['discord_id']}/{u['discord_avatar']}.png"

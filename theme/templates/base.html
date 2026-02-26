@@ -124,9 +124,7 @@
           <p class="text-sm font-medium">{{ user.first_name|default:user.discord_nickname|default:user.username }}</p>
           <p class="text-xs text-base-content/60 flex items-center justify-end gap-1">
             Race Verified
-            {% if user.is_extra_verified and site_settings.extra_verified_emoji %}
-              <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-4 w-4">
-            {% elif user.is_race_ready %}
+            {% if user.is_race_ready %}
               {% if site_settings.verified_emoji %}
                 <img src="{{ site_settings.verified_emoji.url }}" alt="Verified" class="h-4 w-4">
               {% else %}
@@ -176,9 +174,7 @@
                                     </svg>
                                     Race Verified
                                 </span>
-                {% if user.is_extra_verified and site_settings.extra_verified_emoji %}
-                  <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-4 w-4">
-                {% elif user.is_race_ready %}
+                {% if user.is_race_ready %}
                   {% if site_settings.verified_emoji %}
                     <img src="{{ site_settings.verified_emoji.url }}" alt="Verified" class="h-4 w-4">
                   {% else %}
