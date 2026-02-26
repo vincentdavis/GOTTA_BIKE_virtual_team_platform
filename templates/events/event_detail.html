@@ -518,6 +518,12 @@
                       Discord Channel
                     </a>
                     {% endif %}
+                    {% if squad.audio_channel_id %}
+                    <a href="https://discord.com/channels/{{ guild_id }}/{{ squad.audio_channel_id }}" target="_blank" rel="noopener" class="btn btn-outline btn-xs">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                      Audio Channel
+                    </a>
+                    {% endif %}
                     {% if is_event_admin %}
                     <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="btn btn-ghost btn-xs">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>

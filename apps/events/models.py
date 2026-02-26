@@ -310,6 +310,7 @@ class Squad(models.Model):
         name: Squad name.
         squad_timezone: Optional timezone string for the squad.
         discord_channel_id: Discord channel ID for squad coordination.
+        audio_channel_id: Discord voice/stage channel ID for squad audio.
         captain: Squad captain.
         vice_captain: Squad vice captain.
         team_discord_role: Discord role ID for the squad.
@@ -337,6 +338,10 @@ class Squad(models.Model):
     discord_channel_id = models.BigIntegerField(
         default=0,
         help_text="Discord channel ID for squad coordination (0 = none)",
+    )
+    audio_channel_id = models.BigIntegerField(
+        default=0,
+        help_text="Discord voice/stage channel ID for squad audio (0 = none)",
     )
     captain = models.ForeignKey(
         settings.AUTH_USER_MODEL,

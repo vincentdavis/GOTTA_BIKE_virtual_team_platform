@@ -169,6 +169,22 @@
           </label>
         </div>
 
+        <!-- Audio Channel -->
+        <div class="form-control w-full">
+          <label class="label" for="id_audio_channel_id">
+            <span class="label-text">Audio Channel</span>
+          </label>
+          {{ form.audio_channel_id }}
+          {% if form.audio_channel_id.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.audio_channel_id.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Discord voice/stage channel for squad comms</span>
+          </label>
+        </div>
+
         <!-- Team Discord Role -->
         <div class="form-control w-full">
           <label class="label" for="id_team_discord_role">

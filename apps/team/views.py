@@ -2,10 +2,12 @@
 
 import uuid
 from datetime import datetime, timezone as dt_tz
+from urllib.parse import urlencode
 
 import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -141,11 +143,39 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
     if sort_by in sort_keys:
         roster = sorted(roster, key=sort_keys[sort_by], reverse=reverse)
 
+    total_count = len(roster)
+    per_page = request.GET.get("per_page", "100")
+    try:
+        per_page = int(per_page)
+    except ValueError:
+        per_page = 100
+    if per_page <= 0:
+        per_page = 100
+
+    paginator = Paginator(roster, per_page)
+    page_number = request.GET.get("page", "1")
+    page_obj = paginator.get_page(page_number)
+
+    # Build base query strings for template links
+    filter_params = {
+        "q": search_query,
+        "zp_category": zp_category_filter,
+        "zr_category": zr_category_filter,
+        "gender": gender_filter,
+        "race_ready": race_ready_filter,
+    }
+    filter_qs = urlencode({k: v for k, v in filter_params.items() if v})
+    base_params = {**filter_params, "sort": sort_by, "dir": sort_dir, "per_page": per_page}
+    base_qs = urlencode({k: v for k, v in base_params.items() if v})
+
     return render(
         request,
         "team/roster.html",
         {
-            "roster": roster,
+            "roster": page_obj,
+            "page_obj": page_obj,
+            "total_count": total_count,
+            "per_page": per_page,
             "search_query": search_query,
             "zp_category_filter": zp_category_filter,
             "zr_category_filter": zr_category_filter,
@@ -155,6 +185,9 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
             "zr_categories": zr_categories,
             "sort_by": sort_by,
             "sort_dir": sort_dir,
+            "filter_qs": filter_qs,
+            "base_qs": base_qs,
+            "per_page_options": [25, 50, 100, 250],
         },
     )
 

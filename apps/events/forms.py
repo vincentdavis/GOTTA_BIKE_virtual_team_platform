@@ -39,6 +39,37 @@ def _get_channel_choices() -> list:
     return choices
 
 
+def _get_voice_channel_choices() -> list:
+    """Build choices list for Discord voice/stage channel Select widget.
+
+    Returns grouped choices with optgroups by category name.
+    Only voice and stage channel types are included.
+
+    Returns:
+        List of choices with (value, label) tuples and optgroup tuples.
+
+    """
+    channels = DiscordChannel.objects.filter(
+        channel_type__in=[
+            DiscordChannel.ChannelType.VOICE,
+            DiscordChannel.ChannelType.STAGE,
+        ]
+    ).order_by("category_name", "position")
+
+    choices: list = [("0", "(none)")]
+
+    groups: dict[str, list[tuple[str, str]]] = {}
+    for ch in channels:
+        group = ch.category_name or "Uncategorized"
+        type_label = "Stage" if ch.channel_type == DiscordChannel.ChannelType.STAGE else "Voice"
+        groups.setdefault(group, []).append((ch.channel_id, f"{ch.name} ({type_label})"))
+
+    for group_label, group_choices in groups.items():
+        choices.append((group_label, group_choices))
+
+    return choices
+
+
 def _get_role_choices() -> list[tuple[str, str]]:
     """Build choices list for Discord role Select widget.
 
@@ -208,6 +239,12 @@ class SquadForm(forms.ModelForm):
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
     )
 
+    audio_channel_id = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        label="Audio Channel",
+    )
+
     team_discord_role = forms.CharField(
         required=False,
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
@@ -222,6 +259,7 @@ class SquadForm(forms.ModelForm):
             "name",
             "squad_timezone",
             "discord_channel_id",
+            "audio_channel_id",
             "captain",
             "vice_captain",
             "team_discord_role",
@@ -287,6 +325,15 @@ class SquadForm(forms.ModelForm):
         self.fields["discord_channel_id"].widget.choices = choices
         self.initial["discord_channel_id"] = current_value
 
+        # Populate voice channel choices for audio_channel_id
+        voice_choices = _get_voice_channel_choices()
+        current_audio = str(self.initial.get("audio_channel_id", 0) or 0)
+        audio_values = EventForm._flat_choice_values(voice_choices)
+        if current_audio != "0" and current_audio not in audio_values:
+            voice_choices.append((current_audio, f"Unknown Channel ({current_audio})"))
+        self.fields["audio_channel_id"].widget.choices = voice_choices
+        self.initial["audio_channel_id"] = current_audio
+
         # Populate Discord role choices
         role_choices = _get_role_choices()
         current_role = str(self.initial.get("team_discord_role", 0) or 0)
@@ -304,6 +351,19 @@ class SquadForm(forms.ModelForm):
 
         """
         value = self.cleaned_data.get("discord_channel_id", "0")
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return 0
+
+    def clean_audio_channel_id(self) -> int:
+        """Convert selected audio channel ID string back to int for the model.
+
+        Returns:
+            Channel ID as integer (0 for none).
+
+        """
+        value = self.cleaned_data.get("audio_channel_id", "0")
         try:
             return int(value)
         except (ValueError, TypeError):

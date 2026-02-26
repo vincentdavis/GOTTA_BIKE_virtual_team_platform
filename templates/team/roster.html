@@ -98,10 +98,19 @@
           </form>
         {% endif %}
 
-        <div class="stats shadow mb-6">
-          <div class="stat">
-            <div class="stat-title">Showing</div>
-            <div class="stat-value">{{ roster|length }}</div>
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div class="stats shadow">
+            <div class="stat py-2 px-4">
+              <div class="stat-title">Showing</div>
+              <div class="stat-value text-xl">{{ page_obj.start_index }}&ndash;{{ page_obj.end_index }} of {{ total_count }}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-base-content/70">Per page:</span>
+            {% for size in per_page_options %}
+            <a href="?{{ filter_qs }}{% if filter_qs %}&{% endif %}sort={{ sort_by }}&dir={{ sort_dir }}&per_page={{ size }}"
+               class="btn btn-xs {% if per_page == size %}btn-primary{% else %}btn-ghost{% endif %}">{{ size }}</a>
+            {% endfor %}
           </div>
         </div>
 
@@ -109,94 +118,94 @@
           <table class="table table-zebra">
             <thead>
             <tr>
-              {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&zr_category="|add:zr_category_filter|add:"&gender="|add:gender_filter|add:"&race_ready="|add:race_ready_filter %}
+              {% with bq=filter_qs %}
                 <th>
-                  <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     Name
                     {% if sort_by == "name" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
                 <th>
-                  <a href="{{ base_url }}&sort=zwid&dir={% if sort_by == 'zwid' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=zwid&dir={% if sort_by == 'zwid' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     Zwid
                     {% if sort_by == "zwid" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
                 <th>
-                  <a href="{{ base_url }}&sort=gender&dir={% if sort_by == 'gender' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=gender&dir={% if sort_by == 'gender' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     Gender
                     {% if sort_by == "gender" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
                 <th>
-                  <a href="{{ base_url }}&sort=race_ready&dir={% if sort_by == 'race_ready' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=race_ready&dir={% if sort_by == 'race_ready' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     Race Verified
                     {% if sort_by == "race_ready" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
                 <th>
-                  <a href="{{ base_url }}&sort=category&dir={% if sort_by == 'category' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=category&dir={% if sort_by == 'category' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     Category
                     {% if sort_by == "category" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
                 <th>
-                  <a href="{{ base_url }}&sort=rating&dir={% if sort_by == 'rating' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=rating&dir={% if sort_by == 'rating' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     Rating
                     {% if sort_by == "rating" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
                 <th>
-                  <a href="{{ base_url }}&sort=rank&dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=rank&dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     Rank
                     {% if sort_by == "rank" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
                 <th>
-                  <a href="{{ base_url }}&sort=ftp&dir={% if sort_by == 'ftp' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=ftp&dir={% if sort_by == 'ftp' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     FTP
                     {% if sort_by == "ftp" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
                 <th>
-                  <a href="{{ base_url }}&sort=wkg&dir={% if sort_by == 'wkg' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=wkg&dir={% if sort_by == 'wkg' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     WKG
                     {% if sort_by == "wkg" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
                 <th>
-                  <a href="{{ base_url }}&sort=results&dir={% if sort_by == 'results' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}"
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=results&dir={% if sort_by == 'results' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     Results
                     {% if sort_by == "results" %}
-                      <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
                     {% endif %}
                   </a>
                 </th>
@@ -324,6 +333,39 @@
             </tbody>
           </table>
         </div>
+
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="flex justify-center mt-6">
+          <div class="join">
+            {% if page_obj.has_previous %}
+            <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page=1" class="join-item btn btn-sm">&#171;</a>
+            <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page_obj.previous_page_number }}" class="join-item btn btn-sm">&#8249;</a>
+            {% else %}
+            <span class="join-item btn btn-sm btn-disabled">&#171;</span>
+            <span class="join-item btn btn-sm btn-disabled">&#8249;</span>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+              {% if num == page_obj.number %}
+              <span class="join-item btn btn-sm btn-primary">{{ num }}</span>
+              {% elif num == 1 or num == page_obj.paginator.num_pages or num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+              <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ num }}" class="join-item btn btn-sm">{{ num }}</a>
+              {% elif num == page_obj.number|add:"-3" or num == page_obj.number|add:"3" %}
+              <span class="join-item btn btn-sm btn-disabled">...</span>
+              {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next %}
+            <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page_obj.next_page_number }}" class="join-item btn btn-sm">&#8250;</a>
+            <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page_obj.paginator.num_pages }}" class="join-item btn btn-sm">&#187;</a>
+            {% else %}
+            <span class="join-item btn btn-sm btn-disabled">&#8250;</span>
+            <span class="join-item btn btn-sm btn-disabled">&#187;</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
       </div>
     </div>
   </div>
