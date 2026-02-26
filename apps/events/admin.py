@@ -187,6 +187,7 @@ class AvailabilityGridAdmin(admin.ModelAdmin):
         "squad",
         "title",
         "status",
+        "grid_timezone",
         "start_date",
         "end_date",
         "response_count",

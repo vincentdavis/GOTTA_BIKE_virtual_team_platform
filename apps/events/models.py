@@ -519,6 +519,11 @@ class AvailabilityGrid(models.Model):
     slot_duration = models.PositiveSmallIntegerField(
         help_text="Minutes per time slot (15, 30, or 60)",
     )
+    grid_timezone = models.CharField(
+        max_length=50,
+        default="UTC",
+        help_text="IANA timezone used when creating this grid",
+    )
     blocked_cells = models.JSONField(
         default=list,
         blank=True,

@@ -35,7 +35,7 @@
   <div class="card bg-base-200 shadow-md mb-6">
     <div class="card-body p-4">
       <h2 class="card-title text-lg mb-3">Grid Settings</h2>
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <div class="form-control">
           <label class="label py-0"><span class="label-text text-xs">Start Date</span></label>
           <input type="date" id="cfg-start-date" class="input input-bordered input-sm w-full">
@@ -45,12 +45,16 @@
           <input type="date" id="cfg-end-date" class="input input-bordered input-sm w-full">
         </div>
         <div class="form-control">
-          <label class="label py-0"><span class="label-text text-xs">Start Time (UTC)</span></label>
+          <label class="label py-0"><span class="label-text text-xs">Start Time</span></label>
           <select id="cfg-start-time" class="select select-bordered select-sm w-full"></select>
         </div>
         <div class="form-control">
-          <label class="label py-0"><span class="label-text text-xs">End Time (UTC)</span></label>
+          <label class="label py-0"><span class="label-text text-xs">End Time</span></label>
           <select id="cfg-end-time" class="select select-bordered select-sm w-full"></select>
+        </div>
+        <div class="form-control">
+          <label class="label py-0"><span class="label-text text-xs">Timezone</span></label>
+          <select id="cfg-timezone" class="select select-bordered select-sm w-full"></select>
         </div>
         <div class="form-control">
           <label class="label py-0"><span class="label-text text-xs">Slot Duration</span></label>
@@ -122,12 +126,15 @@
 (function() {
   var EVENT_ID = {{ event.pk }};
   var SQUAD_ID = {{ squad.pk }};
+  var TIMEZONE_CHOICES = {{ timezone_choices_json|safe }};
+  var USER_TIMEZONE = '{{ user_timezone }}';
 
   // DOM refs
   var startDateEl = document.getElementById('cfg-start-date');
   var endDateEl = document.getElementById('cfg-end-date');
   var startTimeEl = document.getElementById('cfg-start-time');
   var endTimeEl = document.getElementById('cfg-end-time');
+  var timezoneEl = document.getElementById('cfg-timezone');
   var slotDurationEl = document.getElementById('cfg-slot-duration');
   var btnGenerate = document.getElementById('btn-generate');
   var gridContainer = document.getElementById('grid-container');
@@ -287,7 +294,7 @@
     var headerRow = document.createElement('tr');
     var cornerTh = document.createElement('th');
     cornerTh.className = 'row-header';
-    cornerTh.textContent = 'UTC';
+    cornerTh.textContent = timezoneEl.value || 'UTC';
     headerRow.appendChild(cornerTh);
 
     dates.forEach(function(date) {
@@ -460,7 +467,7 @@
         start_time: startTimeEl.value,
         end_time: endTimeEl.value,
         slot_duration_minutes: parseInt(slotDurationEl.value),
-        timezone: 'UTC'
+        timezone: timezoneEl.value || 'UTC'
       },
       dates: dates,
       time_slots: timeSlots,
@@ -493,7 +500,7 @@
     var headerRow = document.createElement('tr');
     var cornerTh = document.createElement('th');
     cornerTh.className = 'row-header';
-    cornerTh.textContent = 'UTC';
+    cornerTh.textContent = timezoneEl.value || 'UTC';
     headerRow.appendChild(cornerTh);
 
     dates.forEach(function(date) {
@@ -621,6 +628,7 @@
       start_time: startTimeEl.value,
       end_time: endTimeEl.value,
       slot_duration: parseInt(slotDurationEl.value),
+      timezone: timezoneEl.value || 'UTC',
       blocked_cells: blockedCells
     };
 
@@ -659,6 +667,21 @@
   btnBlockAll.addEventListener('click', function() { setAllCells('blocked'); });
   btnOpenAll.addEventListener('click', function() { setAllCells('open'); });
 
+  // Populate timezone select, default to user's profile timezone
+  function populateTimezoneSelect() {
+    timezoneEl.innerHTML = '';
+    TIMEZONE_CHOICES.forEach(function(tz) {
+      var opt = document.createElement('option');
+      opt.value = tz[0];
+      opt.textContent = tz[1];
+      timezoneEl.appendChild(opt);
+    });
+    // Default to user's profile timezone if it exists in the list
+    var found = TIMEZONE_CHOICES.some(function(tz) { return tz[0] === USER_TIMEZONE; });
+    timezoneEl.value = found ? USER_TIMEZONE : 'UTC';
+  }
+
+  populateTimezoneSelect();
   populateTimeSelects();
   setDefaultDates();
 })();

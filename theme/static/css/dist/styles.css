@@ -6024,6 +6024,11 @@
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
+  @media (width >= 48rem) {
+    .md\:grid-cols-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
   @media (width >= 64rem) {
     @layer daisyui.l1.l2.l3 {
       .lg\:drawer-open > .drawer-toggle:checked ~ .drawer-side {
@@ -6101,6 +6106,11 @@
   @media (width >= 64rem) {
     .lg\:grid-cols-7 {
       grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+  }
+  @media (width >= 64rem) {
+    .lg\:grid-cols-8 {
+      grid-template-columns: repeat(8, minmax(0, 1fr));
     }
   }
   .prose-a\:text-primary-content :is(:where(a):not(:where([class~="not-prose"],[class~="not-prose"] *))) {

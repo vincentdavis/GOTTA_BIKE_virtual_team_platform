@@ -5,6 +5,7 @@ import re
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal
+from zoneinfo import available_timezones
 
 import logfire
 from constance import config
@@ -27,6 +28,12 @@ from apps.events.models import (
     Squad,
     SquadMember,
 )
+from apps.events.tz_utils import (
+    TIMEZONE_CHOICES,
+    convert_blocked_cells_to_utc,
+    convert_grid_to_local,
+    convert_local_to_utc,
+)
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -47,8 +54,7 @@ def _enrich_squad_members(event):
 
     """
     all_sms = list(
-        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER)
-        .select_related("user", "squad")
+        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER).select_related("user", "squad")
     )
     if not all_sms:
         return {}
@@ -172,9 +178,14 @@ def event_list_view(request: HttpRequest) -> HttpResponse:
         Rendered event list page.
 
     """
-    events = Event.objects.filter(visible=True).annotate(
-        signup_count=Count("signups", filter=Q(signups__status="registered")),
-    ).order_by("start_date")
+    events = (
+        Event.objects
+        .filter(visible=True)
+        .annotate(
+            signup_count=Count("signups", filter=Q(signups__status="registered")),
+        )
+        .order_by("start_date")
+    )
     search_query = request.GET.get("q", "").strip()
     if search_query:
         events = events.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
@@ -854,9 +865,13 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
     # HTMX: return just the updated squad cell instead of full page reload
     if request.headers.get("HX-Request"):
-        assigned_squads = list(Squad.objects.filter(
-            pk__in=SquadMember.objects.filter(squad__event=event, user=signup.user).values_list("squad_id", flat=True),
-        ))
+        assigned_squads = list(
+            Squad.objects.filter(
+                pk__in=SquadMember.objects.filter(squad__event=event, user=signup.user).values_list(
+                    "squad_id", flat=True
+                ),
+            )
+        )
         all_squads = list(event.squads.all())
         return render(
             request,
@@ -908,8 +923,18 @@ def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int)
     if request.method == "POST":
         return _handle_availability_save(request, event, squad)
 
+    user_tz = getattr(request.user, "timezone", "") or "UTC"
     logfire.debug("Availability builder viewed", user_id=request.user.id, event_id=event_pk, squad_id=squad_pk)
-    return render(request, "events/availability_builder.html", {"event": event, "squad": squad})
+    return render(
+        request,
+        "events/availability_builder.html",
+        {
+            "event": event,
+            "squad": squad,
+            "timezone_choices_json": json.dumps(TIMEZONE_CHOICES),
+            "user_timezone": user_tz,
+        },
+    )
 
 
 def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) -> JsonResponse:
@@ -963,6 +988,21 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
     if not isinstance(blocked_cells, list):
         return JsonResponse({"error": "blocked_cells must be a list."}, status=400)
 
+    # --- Timezone handling ---
+    grid_tz = str(data.get("timezone", "UTC")).strip() or "UTC"
+    if grid_tz != "UTC" and grid_tz not in available_timezones():
+        return JsonResponse({"error": f"Invalid timezone: {grid_tz}"}, status=400)
+
+    if grid_tz != "UTC":
+        start_date, end_date, start_time, end_time = convert_local_to_utc(
+            start_date,
+            end_date,
+            start_time,
+            end_time,
+            grid_tz,
+        )
+        blocked_cells = convert_blocked_cells_to_utc(blocked_cells, grid_tz, slot_duration)
+
     grid = AvailabilityGrid.objects.create(
         squad=squad,
         title=title,
@@ -971,6 +1011,7 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
         start_time=start_time,
         end_time=end_time,
         slot_duration=slot_duration,
+        grid_timezone=grid_tz,
         blocked_cells=blocked_cells,
         status=AvailabilityGrid.Status.DRAFT,
         created_by=request.user,
@@ -1096,7 +1137,22 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
         return JsonResponse({"status": "ok"})
 
     existing_response = AvailabilityResponse.objects.filter(grid=grid, user=request.user).first()
-    existing_cells_json = json.dumps(existing_response.available_cells if existing_response else [])
+
+    # Determine display timezone: user profile → grid timezone → UTC
+    user_tz = getattr(request.user, "timezone", "") or ""
+    display_tz = user_tz or grid.grid_timezone or "UTC"
+    tz_is_default = not user_tz
+
+    grid_data = convert_grid_to_local(grid.dates, grid.time_slots, grid.blocked_cells, display_tz)
+
+    # Convert existing response UTC keys → local keys
+    existing_local_keys: list[str] = []
+    if existing_response:
+        for cell in existing_response.available_cells:
+            utc_key = f"{cell['date']}|{cell['time']}"
+            local_key = grid_data["reverse_map"].get(utc_key)
+            if local_key:
+                existing_local_keys.append(local_key)
 
     logfire.debug(
         "Availability respond page viewed",
@@ -1104,6 +1160,7 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
         user_id=request.user.id,
         event_id=event_pk,
         squad_id=squad_pk,
+        display_tz=display_tz,
     )
     return render(
         request,
@@ -1112,10 +1169,14 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
             "event": event,
             "squad": squad,
             "grid": grid,
-            "dates_json": json.dumps(grid.dates),
-            "time_slots_json": json.dumps(grid.time_slots),
-            "blocked_cells_json": json.dumps(grid.blocked_cells),
-            "existing_cells_json": existing_cells_json,
+            "display_dates_json": json.dumps(grid_data["display_dates"]),
+            "display_time_slots_json": json.dumps(grid_data["display_time_slots"]),
+            "display_blocked_json": json.dumps(sorted(grid_data["display_blocked"])),
+            "existing_local_keys_json": json.dumps(existing_local_keys),
+            "cell_utc_map_json": json.dumps(grid_data["cell_map"]),
+            "valid_cells_json": json.dumps(sorted(grid_data["valid_cells"])),
+            "display_timezone": display_tz,
+            "tz_is_default": tz_is_default,
         },
     )
 
@@ -1147,18 +1208,33 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     responses = list(AvailabilityResponse.objects.filter(grid=grid).select_related("user"))
     total_responders = len(responses)
 
-    cell_counts: dict[str, int] = {}
-    cell_names: dict[str, list[str]] = {}
+    # Aggregate counts/names keyed by UTC
+    utc_cell_counts: dict[str, int] = {}
+    utc_cell_names: dict[str, list[str]] = {}
     for response in responses:
         name = response.user.get_full_name() or response.user.discord_username
         for cell in response.available_cells:
             key = f"{cell['date']}|{cell['time']}"
-            cell_counts[key] = cell_counts.get(key, 0) + 1
-            cell_names.setdefault(key, []).append(name)
+            utc_cell_counts[key] = utc_cell_counts.get(key, 0) + 1
+            utc_cell_names.setdefault(key, []).append(name)
 
-    responder_names = [
-        r.user.get_full_name() or r.user.discord_username for r in responses
-    ]
+    # Determine display timezone
+    user_tz = getattr(request.user, "timezone", "") or ""
+    display_tz = user_tz or grid.grid_timezone or "UTC"
+    tz_is_default = not user_tz
+
+    grid_data = convert_grid_to_local(grid.dates, grid.time_slots, grid.blocked_cells, display_tz)
+
+    # Re-key counts and names from UTC → local
+    cell_counts: dict[str, int] = {}
+    cell_names: dict[str, list[str]] = {}
+    for utc_key, local_key in grid_data["reverse_map"].items():
+        if utc_key in utc_cell_counts:
+            cell_counts[local_key] = utc_cell_counts[utc_key]
+        if utc_key in utc_cell_names:
+            cell_names[local_key] = utc_cell_names[utc_key]
+
+    responder_names = [r.user.get_full_name() or r.user.discord_username for r in responses]
 
     logfire.debug(
         "Availability results viewed",
@@ -1167,6 +1243,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         event_id=event_pk,
         squad_id=squad_pk,
         total_responders=total_responders,
+        display_tz=display_tz,
     )
     return render(
         request,
@@ -1175,12 +1252,14 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "event": event,
             "squad": squad,
             "grid": grid,
-            "dates_json": json.dumps(grid.dates),
-            "time_slots_json": json.dumps(grid.time_slots),
-            "blocked_cells_json": json.dumps(grid.blocked_cells),
+            "display_dates_json": json.dumps(grid_data["display_dates"]),
+            "display_time_slots_json": json.dumps(grid_data["display_time_slots"]),
+            "display_blocked_json": json.dumps(sorted(grid_data["display_blocked"])),
             "cell_counts_json": json.dumps(cell_counts),
             "cell_names_json": json.dumps(cell_names),
             "total_responders": total_responders,
             "responder_names": responder_names,
+            "display_timezone": display_tz,
+            "tz_is_default": tz_is_default,
         },
     )

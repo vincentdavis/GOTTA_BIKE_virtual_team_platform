@@ -16,6 +16,7 @@
   .avail-cell[data-state="available"] { background: var(--color-success); opacity: 0.6; }
   .avail-cell[data-state="unselected"] { background: var(--color-base-300); }
   .avail-cell.cell-blocked { background: var(--color-neutral); opacity: 0.4; cursor: not-allowed; }
+  .avail-cell.cell-inactive { background: var(--color-base-200); opacity: 0.3; cursor: not-allowed; }
 </style>
 {% endblock %}
 
@@ -27,9 +28,16 @@
 
   <h1 class="text-2xl font-bold mb-1">{{ grid.title }}</h1>
   <p class="text-base-content/70 mb-2">{{ event.title }} &mdash; {{ squad.name }}</p>
+
+  <!-- Timezone banner -->
+  <div class="alert alert-info mb-4 py-2">
+    <span class="text-sm">
+      Times shown in <strong>{{ display_timezone }}</strong>{% if tz_is_default %} (grid default &mdash; <a href="{% url 'accounts:profile_edit' %}" class="link link-primary">set your timezone in profile</a>){% endif %}
+    </span>
+  </div>
+
   <p class="text-sm text-base-content/50 mb-6">
     Click cells to mark when you are available. Blocked cells (dark) cannot be selected.
-    Times are in UTC.
   </p>
 
   <!-- Toast -->
@@ -54,21 +62,28 @@
 <script>
 (function() {
   var CSRF_TOKEN = '{{ csrf_token }}';
-  var dates = {{ dates_json|safe }};
-  var timeSlots = {{ time_slots_json|safe }};
-  var blockedCells = {{ blocked_cells_json|safe }};
-  var existingCells = {{ existing_cells_json|safe }};
+  var dates = {{ display_dates_json|safe }};
+  var timeSlots = {{ display_time_slots_json|safe }};
+  var blockedKeys = {{ display_blocked_json|safe }};
+  var existingLocalKeys = {{ existing_local_keys_json|safe }};
+  var cellUtcMap = {{ cell_utc_map_json|safe }};
+  var validCellsList = {{ valid_cells_json|safe }};
+  var displayTimezone = '{{ display_timezone }}';
 
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var gridContainer = document.getElementById('grid-container');
 
   // Build blocked set for fast lookup
   var blockedSet = {};
-  blockedCells.forEach(function(c) { blockedSet[c.date + '|' + c.time] = true; });
+  blockedKeys.forEach(function(k) { blockedSet[k] = true; });
 
-  // Build existing set
+  // Build valid cells set
+  var validSet = {};
+  validCellsList.forEach(function(k) { validSet[k] = true; });
+
+  // Build existing set from local keys
   var selectedSet = {};
-  existingCells.forEach(function(c) { selectedSet[c.date + '|' + c.time] = true; });
+  existingLocalKeys.forEach(function(k) { selectedSet[k] = true; });
 
   function parseDateStr(s) {
     var parts = s.split('-');
@@ -90,7 +105,7 @@
     var headerRow = document.createElement('tr');
     var cornerTh = document.createElement('th');
     cornerTh.className = 'row-header';
-    cornerTh.textContent = 'UTC';
+    cornerTh.textContent = displayTimezone;
     headerRow.appendChild(cornerTh);
 
     dates.forEach(function(date) {
@@ -144,13 +159,22 @@
         var td = document.createElement('td');
         var key = cellKey(date, time);
         td.className = 'avail-cell';
-        td.dataset.date = date;
-        td.dataset.time = time;
         td.dataset.key = key;
+
+        // Store UTC coordinates from the cell map
+        var utcData = cellUtcMap[key];
+        if (utcData) {
+          td.dataset.utcDate = utcData.date;
+          td.dataset.utcTime = utcData.time;
+        }
 
         if (blockedSet[key]) {
           td.classList.add('cell-blocked');
           td.dataset.state = 'blocked';
+        } else if (!validSet[key]) {
+          // Grid edge gap from timezone conversion
+          td.classList.add('cell-inactive');
+          td.dataset.state = 'inactive';
         } else {
           td.dataset.state = selectedSet[key] ? 'available' : 'unselected';
         }
@@ -168,7 +192,7 @@
   function attachGridEvents(table) {
     table.addEventListener('mousedown', function(e) {
       var td = e.target.closest('.avail-cell');
-      if (!td || td.classList.contains('cell-blocked')) return;
+      if (!td || td.classList.contains('cell-blocked') || td.classList.contains('cell-inactive')) return;
       e.preventDefault();
       isDragging = true;
       var newState = td.dataset.state === 'available' ? 'unselected' : 'available';
@@ -180,7 +204,7 @@
     table.addEventListener('mouseover', function(e) {
       if (!isDragging) return;
       var td = e.target.closest('.avail-cell');
-      if (!td || td.classList.contains('cell-blocked')) return;
+      if (!td || td.classList.contains('cell-blocked') || td.classList.contains('cell-inactive')) return;
       td.dataset.state = paintMode;
       selectedSet[td.dataset.key] = paintMode === 'available';
     });
@@ -189,7 +213,7 @@
 
     table.addEventListener('touchstart', function(e) {
       var td = e.target.closest('.avail-cell');
-      if (!td || td.classList.contains('cell-blocked')) return;
+      if (!td || td.classList.contains('cell-blocked') || td.classList.contains('cell-inactive')) return;
       e.preventDefault();
       isDragging = true;
       var newState = td.dataset.state === 'available' ? 'unselected' : 'available';
@@ -204,7 +228,7 @@
       var touch = e.touches[0];
       var el = document.elementFromPoint(touch.clientX, touch.clientY);
       var td = el ? el.closest('.avail-cell') : null;
-      if (!td || td.classList.contains('cell-blocked')) return;
+      if (!td || td.classList.contains('cell-blocked') || td.classList.contains('cell-inactive')) return;
       td.dataset.state = paintMode;
       selectedSet[td.dataset.key] = paintMode === 'available';
     }, { passive: false });
@@ -213,11 +237,13 @@
   }
 
   function selectColumn(date, selectAll) {
-    gridContainer.querySelectorAll('.avail-cell[data-date="' + date + '"]').forEach(function(td) {
-      if (td.classList.contains('cell-blocked')) return;
+    gridContainer.querySelectorAll('.avail-cell').forEach(function(td) {
+      var key = td.dataset.key;
+      if (!key || !key.startsWith(date + '|')) return;
+      if (td.classList.contains('cell-blocked') || td.classList.contains('cell-inactive')) return;
       var newState = selectAll ? 'available' : 'unselected';
       td.dataset.state = newState;
-      selectedSet[td.dataset.key] = selectAll;
+      selectedSet[key] = selectAll;
     });
   }
 
@@ -231,17 +257,14 @@
     setTimeout(function() { toast.classList.add('hidden'); }, 4000);
   }
 
-  // Submit
+  // Submit — read UTC coordinates from data attributes
   var btnSubmit = document.getElementById('btn-submit');
   btnSubmit.addEventListener('click', function() {
     var availableCells = [];
-    dates.forEach(function(date) {
-      timeSlots.forEach(function(time) {
-        var key = cellKey(date, time);
-        if (selectedSet[key]) {
-          availableCells.push({ date: date, time: time });
-        }
-      });
+    gridContainer.querySelectorAll('.avail-cell').forEach(function(td) {
+      if (td.dataset.state === 'available' && td.dataset.utcDate && td.dataset.utcTime) {
+        availableCells.push({ date: td.dataset.utcDate, time: td.dataset.utcTime });
+      }
     });
 
     btnSubmit.disabled = true;
