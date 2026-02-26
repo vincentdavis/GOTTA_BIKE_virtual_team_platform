@@ -55,7 +55,12 @@
             </div>
             <div>
               <div class="text-sm text-base-content/60 mb-1">Record Date</div>
+              {% if can_review and record.is_pending %}
+              <input type="date" id="editable-record-date" value="{{ record.record_date|date:'Y-m-d' }}"
+                     class="input input-bordered input-sm w-full font-medium">
+              {% else %}
               <div class="font-medium">{{ record.record_date|date:"F d, Y" }}</div>
+              {% endif %}
             </div>
             <div>
               <div class="text-sm text-base-content/60 mb-1">Date Submitted</div>
@@ -228,6 +233,7 @@
           <form method="post">
             {% csrf_token %}
             <input type="hidden" name="action" value="verify">
+            <input type="hidden" name="record_date" class="js-record-date-hidden">
             <button type="submit" class="btn btn-success">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -251,6 +257,7 @@
           <form method="post" class="mt-4">
             {% csrf_token %}
             <input type="hidden" name="action" value="reject">
+            <input type="hidden" name="record_date" class="js-record-date-hidden">
             <div class="form-control">
               <label class="label">
                 <span class="label-text">Reason for rejection (optional)</span>
@@ -287,4 +294,18 @@
     </div>
   </div>
 </div>
+{% if can_review and record.is_pending %}
+<script>
+(function() {
+  var datePicker = document.getElementById('editable-record-date');
+  if (!datePicker) return;
+  document.querySelectorAll('.js-record-date-hidden').forEach(function(hidden) {
+    hidden.value = datePicker.value;
+    hidden.closest('form').addEventListener('submit', function() {
+      hidden.value = datePicker.value;
+    });
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

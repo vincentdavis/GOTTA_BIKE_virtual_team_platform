@@ -738,6 +738,26 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
 
     if request.method == "POST" and can_review and record.is_pending:
         action = request.POST.get("action")
+
+        # Update record_date if reviewer changed it
+        new_record_date = request.POST.get("record_date", "").strip()
+        if new_record_date:
+            from datetime import date as date_cls
+
+            try:
+                parsed_date = date_cls.fromisoformat(new_record_date)
+                if parsed_date != record.record_date:
+                    logfire.info(
+                        "Reviewer updated record_date",
+                        record_id=pk,
+                        old_date=str(record.record_date),
+                        new_date=str(parsed_date),
+                        reviewer_id=request.user.id,
+                    )
+                    record.record_date = parsed_date
+            except ValueError:
+                pass  # ignore malformed date, keep original
+
         if action == "verify":
             # Prevent self-approval
             if record.user == request.user:
