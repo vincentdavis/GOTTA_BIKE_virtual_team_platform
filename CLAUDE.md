@@ -99,7 +99,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - Manual sync clears sheet and rewrites all data
 - `events` - Event management with squads and signups:
     - `Event` model - Team events with title, description (Markdown), dates, Discord channel/role IDs, signup settings
-    - `Squad` model - Squads within an event with captain/vice-captain, ZR category range, Discord role, URL, invite URL
+    - `Squad` model - Squads within an event with captain/vice-captain, ZR category range, Discord text/audio channels, Discord role, URL, invite URL
     - `SquadMember` model - Links users to squads (member/pending/rejected status, unique on squad+user)
     - `EventSignup` model - Event-level signups with timezone selection and status
     - `Race` model - Individual races within an event
@@ -191,9 +191,10 @@ Permissions are granted via Discord roles configured in Constance. The system ch
 - `team_member` - Required for most pages; without it users can only see index and their profile
 - `race_ready` - Race ready status
 - `approve_verification` - Can approve/reject verification records
-- `performance_verification_team` - Performance verification team member
+- `performance_verification_team` - Performance verification team member; can view media on reviewed records, change status of any record, and delete any verification record
 - `data_connection` - Access to Google Sheets data exports
 - `pages_admin` - Can create and manage CMS pages
+- `event_admin` - Create, edit, and manage events, squads, and signups
 
 #### Constance Permission Settings
 
@@ -205,6 +206,7 @@ Configure in Django admin at `/admin/constance/config/` under "Permission Mappin
 - `PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES` - Role IDs for performance verification team
 - `PERM_DATA_CONNECTION_ROLES` - Role IDs that can access data exports
 - `PERM_PAGES_ADMIN_ROLES` - Role IDs that can manage CMS pages
+- `PERM_EVENT_ADMIN_ROLES` - Role IDs that can manage events, squads, and signups
 
 #### Usage in Views
 
@@ -317,7 +319,9 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
     - `/events/<id>/signup/` - Sign up for event
     - `/events/<id>/squads/add/` - Create squad (event admins)
     - `/events/<id>/squads/<squad_id>/edit/` - Edit squad (event admins)
+    - `/events/<id>/squads/<squad_id>/delete/` - Delete squad (event admins, POST)
     - `/events/<id>/squads/assign/` - Assign user to squad (event admins, POST)
+    - `/events/<id>/availability/<squad_id>/` - Create availability for squad (event admins)
 - `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
 - `/strava/` - Strava club activities (`apps.club_strava.urls`)
@@ -484,13 +488,14 @@ Falls back to original badges/SVGs when no emoji image is uploaded.
 1. User submits a `RaceReadyRecord` (weight, height, or power photo) via the web app
 2. Record includes `record_date` (date of the evidence) and optional `same_gender` flag (requires same-gender reviewer)
 3. Record starts in `pending` status
-4. Users with `approve_verification` permission review and verify/reject records
-5. Verified records expire based on `record_date` (not submission date) and Constance settings:
+4. Users with `approve_verification` permission review and verify/reject records; reviewers can edit `record_date` before acting
+5. Users with `performance_verification_team` or `app_admin` permission can change the status of or delete any verification record (any status)
+6. Verified records expire based on `record_date` (not submission date) and Constance settings:
    - `WEIGHT_FULL_DAYS` (default: 180 days)
    - `WEIGHT_LIGHT_DAYS` (default: 30 days)
    - `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)
    - `POWER_VERIFICATION_DAYS` (default: 365 days)
-6. `RaceReadyRecord.days_remaining` property returns days until expiration (or None)
+7. `RaceReadyRecord.days_remaining` property returns days until expiration (or None)
 
 ### Race Ready Role Assignment
 

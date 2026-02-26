@@ -189,6 +189,22 @@
         <div class="text-sm text-base-content/70">
           {{ record.reviewed_date|date:"F d, Y H:i" }}
         </div>
+        {% if can_change_status %}
+        <div class="mt-3 pt-3 border-t border-success/30 flex gap-2">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reset_pending">
+            <button type="submit" class="btn btn-warning btn-xs btn-outline"
+                    onclick="return confirm('Reset this record to pending?')">Reset to Pending</button>
+          </form>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reject">
+            <button type="submit" class="btn btn-error btn-xs btn-outline"
+                    onclick="return confirm('Reject this verified record?')">Reject</button>
+          </form>
+        </div>
+        {% endif %}
       </div>
       {% elif record.is_rejected %}
       <div class="bg-error/10 border border-error rounded-lg p-4 mb-6">
@@ -209,6 +225,24 @@
         <div class="text-sm mt-2">
           <span class="font-medium">Reason: </span>
           <span>{{ record.rejection_reason }}</span>
+        </div>
+        {% endif %}
+        {% if can_change_status %}
+        <div class="mt-3 pt-3 border-t border-error/30 flex gap-2">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reset_pending">
+            <button type="submit" class="btn btn-warning btn-xs btn-outline"
+                    onclick="return confirm('Reset this record to pending?')">Reset to Pending</button>
+          </form>
+          {% if record.user != user %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="verify">
+            <button type="submit" class="btn btn-success btn-xs btn-outline"
+                    onclick="return confirm('Verify this rejected record?')">Verify</button>
+          </form>
+          {% endif %}
         </div>
         {% endif %}
       </div>

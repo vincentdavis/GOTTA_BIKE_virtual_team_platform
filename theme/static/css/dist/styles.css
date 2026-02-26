@@ -5035,6 +5035,14 @@
   .border-error-content {
     border-color: var(--color-error-content);
   }
+  .border-error\/30 {
+    border-color: var(--color-error);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-error\/30 {
+      border-color: color-mix(in oklab, var(--color-error) 30%, transparent);
+    }
+  }
   .border-info {
     border-color: var(--color-info);
   }

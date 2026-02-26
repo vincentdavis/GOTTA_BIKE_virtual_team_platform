@@ -108,6 +108,22 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "description": "Team members responsible for performance verification reviews",
         "views": [
             "/team/performance-review/ - Performance review dashboard",
+            "/team/verification/{id}/ - Change status of any verification record",
+            "/team/verification/{id}/ - Delete any verification record",
+        ],
+    },
+    Permissions.EVENT_ADMIN: {
+        "name": "Event Admin",
+        "description": "Create, edit, and manage events, squads, and signups",
+        "views": [
+            "/events/create/ - Create new event",
+            "/events/{id}/edit/ - Edit event",
+            "/events/{id}/delete/ - Delete event",
+            "/events/{id}/squads/add/ - Create squad",
+            "/events/{id}/squads/{squad_id}/edit/ - Edit squad",
+            "/events/{id}/squads/{squad_id}/delete/ - Delete squad",
+            "/events/{id}/squads/assign/ - Assign users to squads",
+            "/events/{id}/availability/ - Manage availability",
         ],
     },
 }

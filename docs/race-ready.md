@@ -136,18 +136,23 @@ Each verification record has one of three statuses:
 1. **User submits record**: User uploads verification evidence (photo, video, or URL) via `/user/verification/submit/`
 2. **Pending status**: Record starts in `pending` status
 3. **Approver review**: Users with `approve_verification` permission review at `/team/verification/`
-4. **Verification or Rejection**: Approver verifies (with optional notes) or rejects (with required reason)
-5. **Media cleanup**: On verification, uploaded media files are deleted for privacy
-6. **Expiration**: Verified records expire based on validity period; user must re-verify
+4. **Record date editing**: Reviewers can edit the record date before verifying/rejecting (e.g., to correct a date)
+5. **Verification or Rejection**: Approver verifies (with optional notes) or rejects (with required reason)
+6. **Deletion**: Users with `performance_verification_team` or `app_admin` permission can delete any verification record (any status)
+7. **Media cleanup**: On verification, uploaded media files are deleted for privacy
+8. **Expiration**: Verified records expire based on validity period; user must re-verify
 
 ## Permissions
 
-| Action                         | Required Permission           | Constance Setting                 |
-|--------------------------------|-------------------------------|-----------------------------------|
-| Submit verification record     | Any authenticated team member | -                                 |
-| View verification records list | `approve_verification`        | `PERM_APPROVE_VERIFICATION_ROLES` |
-| View individual record details | `approve_verification`        | `PERM_APPROVE_VERIFICATION_ROLES` |
-| Verify/reject records          | `approve_verification`        | `PERM_APPROVE_VERIFICATION_ROLES` |
+| Action                         | Required Permission                              | Constance Setting                              |
+|--------------------------------|--------------------------------------------------|------------------------------------------------|
+| Submit verification record     | Any authenticated team member                    | -                                              |
+| View verification records list | `approve_verification`                           | `PERM_APPROVE_VERIFICATION_ROLES`              |
+| View individual record details | `approve_verification`                           | `PERM_APPROVE_VERIFICATION_ROLES`              |
+| Verify/reject records          | `approve_verification`                           | `PERM_APPROVE_VERIFICATION_ROLES`              |
+| Edit record date during review | `approve_verification`                           | `PERM_APPROVE_VERIFICATION_ROLES`              |
+| Change status of any record    | `performance_verification_team` or `app_admin`   | `PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES` / `PERM_APP_ADMIN_ROLES` |
+| Delete any verification record | `performance_verification_team` or `app_admin`   | `PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES` / `PERM_APP_ADMIN_ROLES` |
 
 **Note**: Superusers always have all permissions.
 

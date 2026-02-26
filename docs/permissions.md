@@ -24,8 +24,10 @@ The system checks permissions in this order:
 | `team_member` | Required for most pages; without it users can only see index and their profile |
 | `race_ready` | Race ready status |
 | `approve_verification` | Can approve/reject verification records |
+| `performance_verification_team` | Performance verification team member; can view media on reviewed records, change status of any record, and delete any verification record |
 | `data_connection` | Access to Google Sheets data exports |
 | `pages_admin` | Can create and manage CMS pages |
+| `event_admin` | Create, edit, and manage events, squads, and signups |
 
 ## Configuration
 
@@ -42,8 +44,10 @@ Configure permission mappings in Django admin at `/admin/constance/config/` unde
 | `PERM_TEAM_MEMBER_ROLES` | Discord role IDs for team members |
 | `PERM_RACE_READY_ROLES` | Discord role IDs for race ready status |
 | `PERM_APPROVE_VERIFICATION_ROLES` | Discord role IDs that can approve/reject verification records |
+| `PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES` | Discord role IDs for performance verification team |
 | `PERM_DATA_CONNECTION_ROLES` | Discord role IDs that can access data exports |
 | `PERM_PAGES_ADMIN_ROLES` | Discord role IDs that can manage CMS pages |
+| `PERM_EVENT_ADMIN_ROLES` | Discord role IDs that can manage events, squads, and signups |
 
 **Format**: JSON array of Discord role IDs, e.g., `["1234567890123456789", "9876543210987654321"]`
 

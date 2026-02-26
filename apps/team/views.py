@@ -734,6 +734,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     is_pvt = request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
     is_app_admin = request.user.has_permission(Permissions.APP_ADMIN)
     can_delete = is_pvt or is_app_admin or request.user.is_superuser
+    can_change_status = is_pvt or is_app_admin or request.user.is_superuser
     can_view_media = record.is_pending or is_pvt
     # Submitted values/ZP data: hide on reviewed records unless own record or PVT member
     can_view_values = record.is_pending or is_own_record or is_pvt
@@ -754,7 +755,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         messages.success(request, f"Verification record for {target_user.username} has been deleted.")
         return redirect("team:verification_records")
 
-    if request.method == "POST" and can_review and record.is_pending:
+    if request.method == "POST" and (can_change_status or (can_review and record.is_pending)):
         action = request.POST.get("action")
 
         # Update record_date if reviewer changed it
@@ -863,6 +864,36 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                 )
 
             messages.warning(request, f"Record for {record.user.username} has been rejected.")
+        elif action == "reset_pending" and can_change_status:
+            was_race_ready = record.user.is_race_ready
+
+            old_status = record.status
+            record.status = RaceReadyRecord.Status.PENDING
+            record.reviewed_by = None
+            record.reviewed_date = None
+            record.rejection_reason = ""
+            record.save()
+            logfire.info(
+                "Verification record reset to pending",
+                record_id=pk,
+                verify_type=record.verify_type,
+                old_status=old_status,
+                target_user_id=record.user.id,
+                target_username=record.user.username,
+                reset_by_id=request.user.id,
+                reset_by_username=request.user.username,
+            )
+
+            is_now_race_ready = record.user.is_race_ready
+            if was_race_ready != is_now_race_ready:
+                notify_race_ready_change.enqueue(
+                    user_id=record.user.id,
+                    is_now_race_ready=is_now_race_ready,
+                    changed_by_user_id=request.user.id,
+                    verification_type=record.verify_type,
+                )
+
+            messages.info(request, f"Record for {record.user.username} has been reset to pending.")
         return redirect("team:verification_records")
 
     # Get ZwiftPower data for the user if they have a zwid
@@ -878,6 +909,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             "can_review": can_review,
             "can_view_media": can_view_media,
             "can_view_values": can_view_values,
+            "can_change_status": can_change_status,
             "can_delete": can_delete,
             "zp_rider": zp_rider,
         },
