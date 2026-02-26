@@ -22,10 +22,20 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <!-- Top Left: User Info -->
         <div class="bg-base-300 rounded-lg p-4">
-          <div class="text-sm text-base-content/60 mb-1">User</div>
+          <div class="text-sm text-base-content/60 mb-1">Teammate</div>
           <div class="font-medium">{{ record.user.first_name }} {{ record.user.last_name }}</div>
           {% if record.user.discord_nickname %}
-          <div class="text-sm text-base-content/70">{{ record.user.discord_nickname }}</div>
+          <div class="text-sm text-base-content/70">
+            {{ record.user.discord_nickname }}
+            {% if record.user.discord_id %}
+            <a href="https://discord.com/users/{{ record.user.discord_id }}" target="_blank" rel="noopener"
+               class="inline-block ml-1 align-middle tooltip tooltip-right" data-tip="Message on Discord">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary hover:text-primary-focus" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </a>
+            {% endif %}
+          </div>
           {% endif %}
           {% if record.user.zwid %}
           <div class="text-sm text-base-content/70 mt-1">ZWID: {{ record.user.zwid }}</div>
@@ -199,7 +209,18 @@
         </div>
         <div class="text-sm">
           <span>Reviewed by: </span>
-          <span class="font-medium">{{ record.reviewed_by.username }}</span>
+          <span class="font-medium">{{ record.reviewed_by.first_name }} {{ record.reviewed_by.last_name }}</span>
+          {% if record.reviewed_by.discord_nickname %}
+          <span class="text-base-content/70">({{ record.reviewed_by.discord_nickname }})</span>
+          {% endif %}
+          {% if record.reviewed_by.discord_id %}
+          <a href="https://discord.com/users/{{ record.reviewed_by.discord_id }}" target="_blank" rel="noopener"
+             class="inline-block ml-1 align-middle tooltip tooltip-right" data-tip="Message on Discord">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary hover:text-primary-focus" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </a>
+          {% endif %}
         </div>
         <div class="text-sm text-base-content/70">
           {{ record.reviewed_date|date:"F d, Y H:i" }}
@@ -231,7 +252,18 @@
         </div>
         <div class="text-sm">
           <span>Reviewed by: </span>
-          <span class="font-medium">{{ record.reviewed_by.username }}</span>
+          <span class="font-medium">{{ record.reviewed_by.first_name }} {{ record.reviewed_by.last_name }}</span>
+          {% if record.reviewed_by.discord_nickname %}
+          <span class="text-base-content/70">({{ record.reviewed_by.discord_nickname }})</span>
+          {% endif %}
+          {% if record.reviewed_by.discord_id %}
+          <a href="https://discord.com/users/{{ record.reviewed_by.discord_id }}" target="_blank" rel="noopener"
+             class="inline-block ml-1 align-middle tooltip tooltip-right" data-tip="Message on Discord">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-primary hover:text-primary-focus" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </a>
+          {% endif %}
         </div>
         <div class="text-sm text-base-content/70 mb-2">
           {{ record.reviewed_date|date:"F d, Y H:i" }}
