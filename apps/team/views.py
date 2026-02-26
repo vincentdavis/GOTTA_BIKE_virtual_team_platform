@@ -732,9 +732,27 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
 
     is_own_record = record.user == request.user
     is_pvt = request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+    is_app_admin = request.user.has_permission(Permissions.APP_ADMIN)
+    can_delete = is_pvt or is_app_admin or request.user.is_superuser
     can_view_media = record.is_pending or is_pvt
     # Submitted values/ZP data: hide on reviewed records unless own record or PVT member
     can_view_values = record.is_pending or is_own_record or is_pvt
+
+    # Handle delete action (any record status, requires PVT or app_admin)
+    if request.method == "POST" and request.POST.get("action") == "delete" and can_delete:
+        target_user = record.user
+        logfire.info(
+            "Verification record deleted",
+            record_id=pk,
+            verify_type=record.verify_type,
+            target_user_id=target_user.id,
+            target_username=target_user.username,
+            deleted_by_id=request.user.id,
+            deleted_by_username=request.user.username,
+        )
+        record.delete()
+        messages.success(request, f"Verification record for {target_user.username} has been deleted.")
+        return redirect("team:verification_records")
 
     if request.method == "POST" and can_review and record.is_pending:
         action = request.POST.get("action")
@@ -860,6 +878,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             "can_review": can_review,
             "can_view_media": can_view_media,
             "can_view_values": can_view_values,
+            "can_delete": can_delete,
             "zp_rider": zp_rider,
         },
     )
