@@ -1,6 +1,10 @@
 """Models for gotta_bike_platform app."""
 
+from django.core.cache import cache
 from django.db import models
+
+SITE_SETTINGS_CACHE_KEY = "site_settings_singleton"
+SITE_SETTINGS_CACHE_TIMEOUT = 300  # 5 minutes
 
 
 class SiteSettings(models.Model):
@@ -70,21 +74,25 @@ class SiteSettings(models.Model):
         return "Site Settings"
 
     def save(self, *args, **kwargs):
-        """Ensure only one instance exists."""
+        """Ensure only one instance exists and invalidate cache."""
         self.pk = 1
         super().save(*args, **kwargs)
+        cache.delete(SITE_SETTINGS_CACHE_KEY)
 
     def delete(self, *args, **kwargs):
         """Prevent deletion of the singleton instance."""
         pass
 
     @classmethod
-    def get_settings(cls) -> "SiteSettings":
-        """Get or create the singleton settings instance.
+    def get_settings(cls) -> SiteSettings:
+        """Get or create the singleton settings instance (cached).
 
         Returns:
             The SiteSettings instance.
 
         """
-        obj, _ = cls.objects.get_or_create(pk=1)
+        obj = cache.get(SITE_SETTINGS_CACHE_KEY)
+        if obj is None:
+            obj, _ = cls.objects.get_or_create(pk=1)
+            cache.set(SITE_SETTINGS_CACHE_KEY, obj, SITE_SETTINGS_CACHE_TIMEOUT)
         return obj
