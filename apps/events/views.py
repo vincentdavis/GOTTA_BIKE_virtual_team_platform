@@ -1,6 +1,9 @@
 """Views for events app."""
 
+import json
+import re
 from collections import defaultdict
+from datetime import date
 from decimal import Decimal
 
 import logfire
@@ -8,14 +11,22 @@ from constance import config
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import team_member_required
 from apps.events.forms import EventForm, SquadForm
-from apps.events.models import ZR_CATEGORY_ORDER, Event, EventSignup, Squad, SquadMember
+from apps.events.models import (
+    ZR_CATEGORY_ORDER,
+    AvailabilityGrid,
+    AvailabilityResponse,
+    Event,
+    EventSignup,
+    Squad,
+    SquadMember,
+)
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -214,11 +225,16 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     user_squad_ids = set(
         SquadMember.objects.filter(squad__event=event, user=request.user).values_list("squad_id", flat=True)
     )
+    published_grids_by_squad: dict[int, list] = {}
+    for grid in AvailabilityGrid.objects.filter(squad__event=event, status__in=["published", "closed"]):
+        published_grids_by_squad.setdefault(grid.squad_id, []).append(grid)
+
     for squad in squads:
         squad.enriched_members = squad_members_data.get(squad.pk, [])
         names = [m["user"].get_full_name() or m["user"].discord_username for m in squad.enriched_members]
         squad.member_names_tooltip = ", ".join(names) if names else "No members"
         squad.user_is_member = squad.pk in user_squad_ids
+        squad.published_grids = published_grids_by_squad.get(squad.pk, [])
 
     # Aggregate ZP and ZR category counts per squad
     zp_by_squad = []
@@ -697,6 +713,8 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
     else:
         form = SquadForm(instance=squad)
 
+    availability_grids = squad.availability_grids.all()
+
     return render(
         request,
         "events/squad_form.html",
@@ -704,6 +722,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             "form": form,
             "event": event,
             "squad": squad,
+            "availability_grids": availability_grids,
             "page_title": "Edit Squad",
             "submit_label": "Save Changes",
         },
@@ -853,11 +872,14 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     return redirect("events:event_detail", pk=event_pk)
 
 
-@require_GET
+@require_http_methods(["GET", "POST"])
 @login_required
 @team_member_required()
 def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
-    """Display the availability grid builder for a squad.
+    """Display the availability grid builder or save a new grid.
+
+    GET: renders the builder UI.
+    POST: accepts JSON body, validates, creates an AvailabilityGrid, returns JSON.
 
     Args:
         request: The HTTP request.
@@ -865,7 +887,7 @@ def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int)
         squad_pk: The squad primary key.
 
     Returns:
-        Rendered availability builder page.
+        Rendered availability builder page (GET) or JsonResponse (POST).
 
     """
     event = get_object_or_404(Event, pk=event_pk)
@@ -878,8 +900,283 @@ def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int)
             event_id=event_pk,
             user_id=request.user.id,
         )
+        if request.method == "POST":
+            return JsonResponse({"error": "Permission denied."}, status=403)
         messages.error(request, "You don't have permission to manage availability.")
         return redirect("events:event_detail", pk=event_pk)
 
+    if request.method == "POST":
+        return _handle_availability_save(request, event, squad)
+
     logfire.debug("Availability builder viewed", user_id=request.user.id, event_id=event_pk, squad_id=squad_pk)
     return render(request, "events/availability_builder.html", {"event": event, "squad": squad})
+
+
+def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) -> JsonResponse:
+    """Validate and persist an AvailabilityGrid from a JSON POST body.
+
+    Args:
+        request: The HTTP request with JSON body.
+        event: The parent event.
+        squad: The squad to attach the grid to.
+
+    Returns:
+        JsonResponse with grid id on success, or error details on failure.
+
+    """
+    hhmm_re = re.compile(r"^\d{2}:\d{2}$")
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "Invalid JSON body."}, status=400)
+
+    # --- Parse & validate fields ---
+    title = str(data.get("title", "")).strip()
+
+    try:
+        start_date = date.fromisoformat(str(data.get("start_date", "")))
+        end_date = date.fromisoformat(str(data.get("end_date", "")))
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "Invalid or missing start_date / end_date."}, status=400)
+
+    if start_date > end_date:
+        return JsonResponse({"error": "start_date must be on or before end_date."}, status=400)
+    if (end_date - start_date).days > 31:
+        return JsonResponse({"error": "Date range cannot exceed 31 days."}, status=400)
+
+    start_time = str(data.get("start_time", ""))
+    end_time = str(data.get("end_time", ""))
+    if not hhmm_re.match(start_time) or not hhmm_re.match(end_time):
+        return JsonResponse({"error": "start_time and end_time must be HH:MM format."}, status=400)
+    if start_time >= end_time:
+        return JsonResponse({"error": "start_time must be before end_time."}, status=400)
+
+    try:
+        slot_duration = int(data.get("slot_duration", 0))
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "slot_duration must be an integer."}, status=400)
+    if slot_duration not in (15, 30, 60):
+        return JsonResponse({"error": "slot_duration must be 15, 30, or 60."}, status=400)
+
+    blocked_cells = data.get("blocked_cells", [])
+    if not isinstance(blocked_cells, list):
+        return JsonResponse({"error": "blocked_cells must be a list."}, status=400)
+
+    grid = AvailabilityGrid.objects.create(
+        squad=squad,
+        title=title,
+        start_date=start_date,
+        end_date=end_date,
+        start_time=start_time,
+        end_time=end_time,
+        slot_duration=slot_duration,
+        blocked_cells=blocked_cells,
+        status=AvailabilityGrid.Status.DRAFT,
+        created_by=request.user,
+    )
+
+    logfire.info(
+        "Availability grid created",
+        grid_id=str(grid.id),
+        squad_id=squad.pk,
+        event_id=event.pk,
+        user_id=request.user.id,
+    )
+    return JsonResponse({"id": str(grid.id), "status": "ok"})
+
+
+@login_required
+@team_member_required()
+@require_POST
+def availability_status_view(request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str) -> HttpResponse:
+    """Change the status of an availability grid (publish or close).
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+
+    Returns:
+        Redirect to squad edit page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized availability status change",
+            grid_id=str(grid.id),
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    new_status = request.POST.get("status", "")
+    allowed_transitions = {
+        AvailabilityGrid.Status.DRAFT: AvailabilityGrid.Status.PUBLISHED,
+        AvailabilityGrid.Status.PUBLISHED: AvailabilityGrid.Status.CLOSED,
+    }
+
+    expected = allowed_transitions.get(grid.status)
+    if expected is None or new_status != expected:
+        messages.error(request, f'Cannot change status from "{grid.get_status_display()}" to "{new_status}".')
+        return redirect("events:squad_edit", event_pk=event_pk, squad_pk=squad_pk)
+
+    grid.status = new_status
+    grid.save(update_fields=["status", "updated_at"])
+
+    logfire.info(
+        "Availability grid status changed",
+        grid_id=str(grid.id),
+        new_status=new_status,
+        squad_id=squad_pk,
+        event_id=event_pk,
+        user_id=request.user.id,
+    )
+    messages.success(request, f'Grid "{grid.title}" is now {grid.get_status_display().lower()}.')
+    return redirect("events:squad_edit", event_pk=event_pk, squad_pk=squad_pk)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+@team_member_required()
+def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str) -> HttpResponse:
+    """Display the availability response form or save a member's response.
+
+    GET: renders the response grid pre-populated with any existing response.
+    POST: accepts JSON body with available_cells, creates/updates AvailabilityResponse.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+
+    Returns:
+        Rendered response page (GET) or JsonResponse (POST).
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+
+    if grid.status != AvailabilityGrid.Status.PUBLISHED:
+        messages.error(request, "This availability grid is not open for responses.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({"error": "Invalid JSON body."}, status=400)
+
+        available_cells = data.get("available_cells", [])
+        if not isinstance(available_cells, list):
+            return JsonResponse({"error": "available_cells must be a list."}, status=400)
+
+        AvailabilityResponse.objects.update_or_create(
+            grid=grid,
+            user=request.user,
+            defaults={"available_cells": available_cells},
+        )
+        logfire.info(
+            "Availability response saved",
+            grid_id=str(grid.id),
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+            cell_count=len(available_cells),
+        )
+        return JsonResponse({"status": "ok"})
+
+    existing_response = AvailabilityResponse.objects.filter(grid=grid, user=request.user).first()
+    existing_cells_json = json.dumps(existing_response.available_cells if existing_response else [])
+
+    logfire.debug(
+        "Availability respond page viewed",
+        grid_id=str(grid.id),
+        user_id=request.user.id,
+        event_id=event_pk,
+        squad_id=squad_pk,
+    )
+    return render(
+        request,
+        "events/availability_respond.html",
+        {
+            "event": event,
+            "squad": squad,
+            "grid": grid,
+            "dates_json": json.dumps(grid.dates),
+            "time_slots_json": json.dumps(grid.time_slots),
+            "blocked_cells_json": json.dumps(grid.blocked_cells),
+            "existing_cells_json": existing_cells_json,
+        },
+    )
+
+
+@require_GET
+@login_required
+@team_member_required()
+def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str) -> HttpResponse:
+    """Display aggregated availability results as a heatmap.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+
+    Returns:
+        Rendered results heatmap page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+
+    if grid.status not in (AvailabilityGrid.Status.PUBLISHED, AvailabilityGrid.Status.CLOSED):
+        messages.error(request, "Results are not available for this grid.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    responses = list(AvailabilityResponse.objects.filter(grid=grid).select_related("user"))
+    total_responders = len(responses)
+
+    cell_counts: dict[str, int] = {}
+    for response in responses:
+        for cell in response.available_cells:
+            key = f"{cell['date']}|{cell['time']}"
+            cell_counts[key] = cell_counts.get(key, 0) + 1
+
+    responder_names = [
+        r.user.get_full_name() or r.user.discord_username for r in responses
+    ]
+
+    logfire.debug(
+        "Availability results viewed",
+        grid_id=str(grid.id),
+        user_id=request.user.id,
+        event_id=event_pk,
+        squad_id=squad_pk,
+        total_responders=total_responders,
+    )
+    return render(
+        request,
+        "events/availability_results.html",
+        {
+            "event": event,
+            "squad": squad,
+            "grid": grid,
+            "dates_json": json.dumps(grid.dates),
+            "time_slots_json": json.dumps(grid.time_slots),
+            "blocked_cells_json": json.dumps(grid.blocked_cells),
+            "cell_counts_json": json.dumps(cell_counts),
+            "total_responders": total_responders,
+            "responder_names": responder_names,
+        },
+    )

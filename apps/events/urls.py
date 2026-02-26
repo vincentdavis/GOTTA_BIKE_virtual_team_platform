@@ -4,6 +4,9 @@ from django.urls import path
 
 from apps.events.views import (
     availability_create_view,
+    availability_respond_view,
+    availability_results_view,
+    availability_status_view,
     event_create_view,
     event_delete_view,
     event_detail_view,
@@ -39,5 +42,20 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/create/",
         availability_create_view,
         name="availability_create",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/status/",
+        availability_status_view,
+        name="availability_status",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/",
+        availability_respond_view,
+        name="availability_respond",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/results/",
+        availability_results_view,
+        name="availability_results",
     ),
 ]

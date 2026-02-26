@@ -35,7 +35,7 @@
   <div class="card bg-base-200 shadow-md mb-6">
     <div class="card-body p-4">
       <h2 class="card-title text-lg mb-3">Grid Settings</h2>
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
         <div class="form-control">
           <label class="label py-0"><span class="label-text text-xs">Start Date</span></label>
           <input type="date" id="cfg-start-date" class="input input-bordered input-sm w-full">
@@ -60,6 +60,10 @@
             <option value="60">60 min</option>
           </select>
         </div>
+        <div class="form-control">
+          <label class="label py-0"><span class="label-text text-xs">Grid Title (optional)</span></label>
+          <input type="text" id="cfg-title" class="input input-bordered input-sm w-full" placeholder="Auto-generated if blank">
+        </div>
         <div class="form-control justify-end">
           <button id="btn-generate" class="btn btn-primary btn-sm w-full">Generate Grid</button>
         </div>
@@ -72,6 +76,14 @@
     <button id="btn-block-all" class="btn btn-neutral btn-xs btn-outline">Block All</button>
     <button id="btn-open-all" class="btn btn-ghost btn-xs btn-outline">Open All</button>
     <button id="btn-preview" class="btn btn-secondary btn-xs btn-outline" onclick="document.getElementById('preview-modal').showModal()">Preview</button>
+    <button id="btn-save" class="btn btn-success btn-xs">Save Grid</button>
+  </div>
+
+  <!-- Save toast -->
+  <div id="save-toast" class="toast toast-end toast-top hidden z-50">
+    <div id="save-toast-inner" class="alert">
+      <span id="save-toast-msg"></span>
+    </div>
   </div>
 
   <!-- Grid Container -->
@@ -571,6 +583,76 @@
     buildPreviewGrid();
     origShowModal();
   };
+
+  // --- Save Grid ---
+  var CSRF_TOKEN = '{{ csrf_token }}';
+  var btnSave = document.getElementById('btn-save');
+  var titleEl = document.getElementById('cfg-title');
+
+  function showToast(msg, isError) {
+    var toast = document.getElementById('save-toast');
+    var inner = document.getElementById('save-toast-inner');
+    var msgEl = document.getElementById('save-toast-msg');
+    msgEl.textContent = msg;
+    inner.className = 'alert ' + (isError ? 'alert-error' : 'alert-success');
+    toast.classList.remove('hidden');
+    setTimeout(function() { toast.classList.add('hidden'); }, 4000);
+  }
+
+  btnSave.addEventListener('click', function() {
+    if (dates.length === 0 || timeSlots.length === 0) {
+      showToast('Generate a grid first.', true);
+      return;
+    }
+
+    var blockedCells = [];
+    dates.forEach(function(date) {
+      timeSlots.forEach(function(time) {
+        if (cellStates[cellKey(date, time)] === 'blocked') {
+          blockedCells.push({ date: date, time: time });
+        }
+      });
+    });
+
+    var payload = {
+      title: titleEl.value.trim(),
+      start_date: startDateEl.value,
+      end_date: endDateEl.value,
+      start_time: startTimeEl.value,
+      end_time: endTimeEl.value,
+      slot_duration: parseInt(slotDurationEl.value),
+      blocked_cells: blockedCells
+    };
+
+    btnSave.disabled = true;
+    btnSave.textContent = 'Saving…';
+
+    fetch(window.location.pathname, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF_TOKEN
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(function(resp) {
+      return resp.json().then(function(data) { return { ok: resp.ok, data: data }; });
+    })
+    .then(function(result) {
+      if (result.ok) {
+        window.location.href = '{% url "events:squad_edit" event.pk squad.pk %}';
+      } else {
+        showToast(result.data.error || 'Save failed.', true);
+        btnSave.disabled = false;
+        btnSave.textContent = 'Save Grid';
+      }
+    })
+    .catch(function() {
+      showToast('Network error. Please try again.', true);
+      btnSave.disabled = false;
+      btnSave.textContent = 'Save Grid';
+    });
+  });
 
   // Wire up
   btnGenerate.addEventListener('click', buildGrid);

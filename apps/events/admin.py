@@ -4,7 +4,16 @@ from typing import ClassVar
 
 from django.contrib import admin
 
-from apps.events.models import Event, EventRegistration, EventSignup, Race, Squad, SquadMember
+from apps.events.models import (
+    AvailabilityGrid,
+    AvailabilityResponse,
+    Event,
+    EventRegistration,
+    EventSignup,
+    Race,
+    Squad,
+    SquadMember,
+)
 
 
 class SquadInline(admin.TabularInline):
@@ -159,3 +168,50 @@ class SquadMemberAdmin(admin.ModelAdmin):
     ]
     readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
     ordering: ClassVar[list[str]] = ["-created_at"]
+
+
+class AvailabilityResponseInline(admin.TabularInline):
+    """Inline admin for responses within an availability grid."""
+
+    model = AvailabilityResponse
+    extra = 0
+    fields: ClassVar[list[str]] = ["user", "available_cells", "created_at", "updated_at"]
+    readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
+
+
+@admin.register(AvailabilityGrid)
+class AvailabilityGridAdmin(admin.ModelAdmin):
+    """Admin for AvailabilityGrid model."""
+
+    list_display: ClassVar[list[str]] = [
+        "squad",
+        "title",
+        "status",
+        "start_date",
+        "end_date",
+        "response_count",
+        "created_by",
+    ]
+    list_filter: ClassVar[list[str]] = ["status", "squad__event"]
+    search_fields: ClassVar[list[str]] = ["title", "squad__name", "squad__event__title"]
+    readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
+    inlines: ClassVar[list] = [AvailabilityResponseInline]
+
+
+@admin.register(AvailabilityResponse)
+class AvailabilityResponseAdmin(admin.ModelAdmin):
+    """Admin for AvailabilityResponse model."""
+
+    list_display: ClassVar[list[str]] = [
+        "user",
+        "grid",
+        "created_at",
+    ]
+    list_filter: ClassVar[list[str]] = ["grid__squad__event"]
+    search_fields: ClassVar[list[str]] = [
+        "user__discord_username",
+        "user__first_name",
+        "user__last_name",
+        "grid__title",
+    ]
+    readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]

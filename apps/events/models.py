@@ -1,5 +1,8 @@
 """Models for events app."""
 
+import uuid
+from datetime import datetime, timedelta
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -469,3 +472,225 @@ class SquadMember(models.Model):
 
         """
         return f"{self.squad.name} - {self.user}"
+
+
+class AvailabilityGrid(models.Model):
+    """A date/time grid configuration for collecting squad member availability.
+
+    Created by event admins or squad captains. Members respond by marking
+    which time slots they are available.
+
+    Attributes:
+        id: UUID primary key for shareable member-facing URLs.
+        squad: The squad this grid belongs to.
+        title: Optional label; auto-generated on save if blank.
+        start_date: Grid start date.
+        end_date: Grid end date.
+        start_time: UTC start time as "HH:MM" string.
+        end_time: UTC end time as "HH:MM" string.
+        slot_duration: Minutes per slot (15, 30, or 60).
+        blocked_cells: JSON list of blocked cell dicts.
+        status: Grid lifecycle status (draft/published/closed).
+        created_by: User who created this grid.
+        created_at: When the grid was created.
+        updated_at: When the grid was last modified.
+
+    """
+
+    class Status(models.TextChoices):
+        """Grid lifecycle status choices."""
+
+        DRAFT = "draft", "Draft"
+        PUBLISHED = "published", "Published"
+        CLOSED = "closed", "Closed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    squad = models.ForeignKey(
+        Squad,
+        on_delete=models.CASCADE,
+        related_name="availability_grids",
+        help_text="The squad this availability grid belongs to",
+    )
+    title = models.CharField(max_length=200, blank=True, help_text="Optional label for this grid")
+    start_date = models.DateField(help_text="Grid start date")
+    end_date = models.DateField(help_text="Grid end date")
+    start_time = models.CharField(max_length=5, help_text='UTC start time as "HH:MM"')
+    end_time = models.CharField(max_length=5, help_text='UTC end time as "HH:MM"')
+    slot_duration = models.PositiveSmallIntegerField(
+        help_text="Minutes per time slot (15, 30, or 60)",
+    )
+    blocked_cells = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of blocked cells, each {"date": "YYYY-MM-DD", "time": "HH:MM"}',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+        help_text="Grid lifecycle status",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_availability_grids",
+        help_text="User who created this grid",
+    )
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the grid was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the grid was last updated")
+
+    class Meta:
+        """Meta options for AvailabilityGrid model."""
+
+        ordering = ["-created_at"]  # noqa: RUF012
+        verbose_name = "Availability Grid"
+        verbose_name_plural = "Availability Grids"
+
+    def __str__(self) -> str:
+        """Return squad and title description.
+
+        Returns:
+            String in format "Squad - Title" or "Squad - Availability Grid".
+
+        """
+        return f"{self.squad} - {self.title or 'Availability Grid'}"
+
+    def save(self, *args, **kwargs) -> None:
+        """Auto-generate title if blank, then save.
+
+        Args:
+            *args: Positional arguments passed to Model.save().
+            **kwargs: Keyword arguments passed to Model.save().
+
+        """
+        if not self.title:
+            self.title = f"{self.squad.event.title} {self.squad.name} {self.start_date} - {self.end_date}"
+        super().save(*args, **kwargs)
+
+    @property
+    def dates(self) -> list[str]:
+        """Return list of date strings from start_date to end_date.
+
+        Returns:
+            List of "YYYY-MM-DD" strings for each day in the grid range.
+
+        """
+        result = []
+        current = self.start_date
+        while current <= self.end_date:
+            result.append(current.isoformat())
+            current += timedelta(days=1)
+        return result
+
+    @property
+    def time_slots(self) -> list[str]:
+        """Return list of time slot strings from start_time to end_time by slot_duration.
+
+        Returns:
+            List of "HH:MM" strings for each slot in the time range.
+
+        """
+        start = datetime.strptime(self.start_time, "%H:%M")
+        end = datetime.strptime(self.end_time, "%H:%M")
+        delta = timedelta(minutes=self.slot_duration)
+        result = []
+        current = start
+        while current < end:
+            result.append(current.strftime("%H:%M"))
+            current += delta
+        return result
+
+    @property
+    def response_count(self) -> int:
+        """Return the number of responses for this grid.
+
+        Returns:
+            Count of AvailabilityResponse objects linked to this grid.
+
+        """
+        return self.responses.count()
+
+    @property
+    def is_draft(self) -> bool:
+        """Check if grid is in draft status.
+
+        Returns:
+            True if status is draft.
+
+        """
+        return self.status == self.Status.DRAFT
+
+    @property
+    def is_published(self) -> bool:
+        """Check if grid is published.
+
+        Returns:
+            True if status is published.
+
+        """
+        return self.status == self.Status.PUBLISHED
+
+    @property
+    def is_closed(self) -> bool:
+        """Check if grid is closed.
+
+        Returns:
+            True if status is closed.
+
+        """
+        return self.status == self.Status.CLOSED
+
+
+class AvailabilityResponse(models.Model):
+    """A single member's availability selections for an availability grid.
+
+    Each user can submit one response per grid. Submitting again overwrites
+    the previous response.
+
+    Attributes:
+        grid: The availability grid this response belongs to.
+        user: The responding member.
+        available_cells: JSON list of cells the user marked as available.
+        created_at: When the response was created.
+        updated_at: When the response was last modified.
+
+    """
+
+    grid = models.ForeignKey(
+        AvailabilityGrid,
+        on_delete=models.CASCADE,
+        related_name="responses",
+        help_text="The availability grid this response belongs to",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="availability_responses",
+        help_text="The responding member",
+    )
+    available_cells = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of available cells, each {"date": "YYYY-MM-DD", "time": "HH:MM"}',
+    )
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the response was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the response was last updated")
+
+    class Meta:
+        """Meta options for AvailabilityResponse model."""
+
+        ordering = ["user__first_name", "user__last_name"]  # noqa: RUF012
+        unique_together = [("grid", "user")]  # noqa: RUF012
+        verbose_name = "Availability Response"
+        verbose_name_plural = "Availability Responses"
+
+    def __str__(self) -> str:
+        """Return user and grid description.
+
+        Returns:
+            String in format "User - Grid".
+
+        """
+        return f"{self.user} - {self.grid}"

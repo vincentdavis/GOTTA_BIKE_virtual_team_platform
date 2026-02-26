@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+
+{% block title %}{{ grid.title }} - Availability{% endblock %}
+
+{% block extra_css %}
+<style>
+  .avail-grid-wrap { overflow-x: auto; }
+  .avail-grid { border-collapse: collapse; user-select: none; -webkit-user-select: none; }
+  .avail-grid th,
+  .avail-grid td { border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent); text-align: center; min-width: 5rem; }
+  .avail-grid th { position: sticky; top: 0; z-index: 2; padding: 0.35rem 0.5rem; font-size: 0.75rem; }
+  .avail-grid th.row-header { position: sticky; left: 0; z-index: 3; background: var(--color-base-200); }
+  .avail-grid thead th { background: var(--color-base-200); }
+  .avail-grid thead th:first-child { z-index: 4; }
+  .avail-cell { width: 5rem; height: 2.25rem; cursor: pointer; transition: background-color 0.05s; }
+  .avail-cell[data-state="available"] { background: var(--color-success); opacity: 0.6; }
+  .avail-cell[data-state="unselected"] { background: var(--color-base-300); }
+  .avail-cell.cell-blocked { background: var(--color-neutral); opacity: 0.4; cursor: not-allowed; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
+  </div>
+
+  <h1 class="text-2xl font-bold mb-1">{{ grid.title }}</h1>
+  <p class="text-base-content/70 mb-2">{{ event.title }} &mdash; {{ squad.name }}</p>
+  <p class="text-sm text-base-content/50 mb-6">
+    Click cells to mark when you are available. Blocked cells (dark) cannot be selected.
+    Times are in UTC.
+  </p>
+
+  <!-- Toast -->
+  <div id="save-toast" class="toast toast-end toast-top hidden z-50">
+    <div id="save-toast-inner" class="alert">
+      <span id="save-toast-msg"></span>
+    </div>
+  </div>
+
+  <!-- Grid Container -->
+  <div id="grid-container" class="avail-grid-wrap mb-4"></div>
+
+  <!-- Actions -->
+  <div class="flex flex-wrap items-center gap-2 mb-6">
+    <button id="btn-submit" class="btn btn-success btn-sm">Submit Availability</button>
+    <a href="{% url 'events:availability_results' event.pk squad.pk grid.pk %}" class="btn btn-outline btn-sm">View Results</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  var CSRF_TOKEN = '{{ csrf_token }}';
+  var dates = {{ dates_json|safe }};
+  var timeSlots = {{ time_slots_json|safe }};
+  var blockedCells = {{ blocked_cells_json|safe }};
+  var existingCells = {{ existing_cells_json|safe }};
+
+  var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var gridContainer = document.getElementById('grid-container');
+
+  // Build blocked set for fast lookup
+  var blockedSet = {};
+  blockedCells.forEach(function(c) { blockedSet[c.date + '|' + c.time] = true; });
+
+  // Build existing set
+  var selectedSet = {};
+  existingCells.forEach(function(c) { selectedSet[c.date + '|' + c.time] = true; });
+
+  function parseDateStr(s) {
+    var parts = s.split('-');
+    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  }
+
+  function cellKey(date, time) { return date + '|' + time; }
+
+  // Drag state
+  var isDragging = false;
+  var paintMode = '';
+
+  function buildGrid() {
+    var table = document.createElement('table');
+    table.className = 'avail-grid';
+
+    // Header row
+    var thead = document.createElement('thead');
+    var headerRow = document.createElement('tr');
+    var cornerTh = document.createElement('th');
+    cornerTh.className = 'row-header';
+    cornerTh.textContent = 'UTC';
+    headerRow.appendChild(cornerTh);
+
+    dates.forEach(function(date) {
+      var th = document.createElement('th');
+      var d = parseDateStr(date);
+      th.innerHTML = DAY_NAMES[d.getDay()] + '<br>' + date.slice(5);
+      headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+
+    // Quick-select row
+    var quickRow = document.createElement('tr');
+    var quickCorner = document.createElement('th');
+    quickCorner.className = 'row-header';
+    quickRow.appendChild(quickCorner);
+
+    dates.forEach(function(date) {
+      var th = document.createElement('th');
+      th.style.padding = '0.2rem 0.25rem';
+      var btnAll = document.createElement('button');
+      btnAll.className = 'btn btn-success btn-xs px-1 mr-0.5';
+      btnAll.textContent = 'All';
+      btnAll.style.minHeight = '0';
+      btnAll.style.height = '1.25rem';
+      btnAll.style.fontSize = '0.65rem';
+      btnAll.addEventListener('click', function() { selectColumn(date, true); });
+      var btnNone = document.createElement('button');
+      btnNone.className = 'btn btn-ghost btn-xs px-1';
+      btnNone.textContent = 'None';
+      btnNone.style.minHeight = '0';
+      btnNone.style.height = '1.25rem';
+      btnNone.style.fontSize = '0.65rem';
+      btnNone.addEventListener('click', function() { selectColumn(date, false); });
+      th.appendChild(btnAll);
+      th.appendChild(btnNone);
+      quickRow.appendChild(th);
+    });
+    thead.appendChild(quickRow);
+    table.appendChild(thead);
+
+    // Body rows
+    var tbody = document.createElement('tbody');
+    timeSlots.forEach(function(time) {
+      var tr = document.createElement('tr');
+      var rowTh = document.createElement('th');
+      rowTh.className = 'row-header';
+      rowTh.textContent = time;
+      tr.appendChild(rowTh);
+
+      dates.forEach(function(date) {
+        var td = document.createElement('td');
+        var key = cellKey(date, time);
+        td.className = 'avail-cell';
+        td.dataset.date = date;
+        td.dataset.time = time;
+        td.dataset.key = key;
+
+        if (blockedSet[key]) {
+          td.classList.add('cell-blocked');
+          td.dataset.state = 'blocked';
+        } else {
+          td.dataset.state = selectedSet[key] ? 'available' : 'unselected';
+        }
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+
+    gridContainer.innerHTML = '';
+    gridContainer.appendChild(table);
+    attachGridEvents(table);
+  }
+
+  function attachGridEvents(table) {
+    table.addEventListener('mousedown', function(e) {
+      var td = e.target.closest('.avail-cell');
+      if (!td || td.classList.contains('cell-blocked')) return;
+      e.preventDefault();
+      isDragging = true;
+      var newState = td.dataset.state === 'available' ? 'unselected' : 'available';
+      td.dataset.state = newState;
+      selectedSet[td.dataset.key] = newState === 'available';
+      paintMode = newState;
+    });
+
+    table.addEventListener('mouseover', function(e) {
+      if (!isDragging) return;
+      var td = e.target.closest('.avail-cell');
+      if (!td || td.classList.contains('cell-blocked')) return;
+      td.dataset.state = paintMode;
+      selectedSet[td.dataset.key] = paintMode === 'available';
+    });
+
+    document.addEventListener('mouseup', function() { isDragging = false; });
+
+    table.addEventListener('touchstart', function(e) {
+      var td = e.target.closest('.avail-cell');
+      if (!td || td.classList.contains('cell-blocked')) return;
+      e.preventDefault();
+      isDragging = true;
+      var newState = td.dataset.state === 'available' ? 'unselected' : 'available';
+      td.dataset.state = newState;
+      selectedSet[td.dataset.key] = newState === 'available';
+      paintMode = newState;
+    }, { passive: false });
+
+    table.addEventListener('touchmove', function(e) {
+      if (!isDragging) return;
+      e.preventDefault();
+      var touch = e.touches[0];
+      var el = document.elementFromPoint(touch.clientX, touch.clientY);
+      var td = el ? el.closest('.avail-cell') : null;
+      if (!td || td.classList.contains('cell-blocked')) return;
+      td.dataset.state = paintMode;
+      selectedSet[td.dataset.key] = paintMode === 'available';
+    }, { passive: false });
+
+    table.addEventListener('touchend', function() { isDragging = false; });
+  }
+
+  function selectColumn(date, selectAll) {
+    gridContainer.querySelectorAll('.avail-cell[data-date="' + date + '"]').forEach(function(td) {
+      if (td.classList.contains('cell-blocked')) return;
+      var newState = selectAll ? 'available' : 'unselected';
+      td.dataset.state = newState;
+      selectedSet[td.dataset.key] = selectAll;
+    });
+  }
+
+  function showToast(msg, isError) {
+    var toast = document.getElementById('save-toast');
+    var inner = document.getElementById('save-toast-inner');
+    var msgEl = document.getElementById('save-toast-msg');
+    msgEl.textContent = msg;
+    inner.className = 'alert ' + (isError ? 'alert-error' : 'alert-success');
+    toast.classList.remove('hidden');
+    setTimeout(function() { toast.classList.add('hidden'); }, 4000);
+  }
+
+  // Submit
+  var btnSubmit = document.getElementById('btn-submit');
+  btnSubmit.addEventListener('click', function() {
+    var availableCells = [];
+    dates.forEach(function(date) {
+      timeSlots.forEach(function(time) {
+        var key = cellKey(date, time);
+        if (selectedSet[key]) {
+          availableCells.push({ date: date, time: time });
+        }
+      });
+    });
+
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Submitting...';
+
+    fetch(window.location.pathname, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF_TOKEN
+      },
+      body: JSON.stringify({ available_cells: availableCells })
+    })
+    .then(function(resp) {
+      return resp.json().then(function(data) { return { ok: resp.ok, data: data }; });
+    })
+    .then(function(result) {
+      if (result.ok) {
+        showToast('Availability saved!', false);
+      } else {
+        showToast(result.data.error || 'Save failed.', true);
+      }
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Submit Availability';
+    })
+    .catch(function() {
+      showToast('Network error. Please try again.', true);
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = 'Submit Availability';
+    });
+  });
+
+  buildGrid();
+})();
+</script>
+{% endblock %}
