@@ -498,8 +498,8 @@
             </tr>
             <tr id="squad-members-{{ squad.pk }}" style="display:none">
               <td colspan="7" class="p-0">
-                <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2 overflow-x-auto">
-                  <div class="flex flex-wrap items-center gap-2 mb-2">
+                <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2">
+                  <div class="flex flex-wrap items-center gap-2 mb-2 relative">
                     {% if squad.url %}
                     <a href="{{ squad.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-xs">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
@@ -530,20 +530,26 @@
                       Edit Squad
                     </a>
                     {% endif %}
-                    {% for grid in squad.published_grids %}
-                    {% if grid.is_published %}
-                    <a href="{% url 'events:availability_respond' event.pk squad.pk grid.pk %}" class="btn btn-outline btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                      Respond: {{ grid.title }}
-                    </a>
+                    {% if squad.published_grids %}
+                    <div class="dropdown dropdown-end">
+                      <label tabindex="0" class="btn btn-outline btn-xs">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        Availability
+                      </label>
+                      <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-64">
+                        {% for grid in squad.published_grids %}
+                        <li class="menu-title text-xs">{{ grid.title }}{% if grid.is_closed %} <span class="badge badge-neutral badge-xs ml-1">Closed</span>{% endif %}</li>
+                        {% if grid.is_published %}
+                        <li><a href="{% url 'events:availability_respond' event.pk squad.pk grid.pk %}">Respond</a></li>
+                        {% endif %}
+                        <li><a href="{% url 'events:availability_results' event.pk squad.pk grid.pk %}">Results <span class="badge badge-ghost badge-xs">{{ grid.response_count }}</span></a></li>
+                        {% endfor %}
+                      </ul>
+                    </div>
                     {% endif %}
-                    <a href="{% url 'events:availability_results' event.pk squad.pk grid.pk %}" class="btn btn-outline btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                      Results: {{ grid.title }}
-                    </a>
-                    {% endfor %}
                   </div>
                   {% if squad.enriched_members %}
+                  <div class="overflow-x-auto">
                   <table class="table table-xs squad-member-table">
                     <thead>
                       <tr>
@@ -685,6 +691,7 @@
                       {% endfor %}
                     </tbody>
                   </table>
+                  </div>
                   {% else %}
                   <p class="text-sm text-base-content/50">No members in this squad yet.</p>
                   {% endif %}

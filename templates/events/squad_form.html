@@ -28,10 +28,14 @@
         <!-- Captain / Vice Captain -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control w-full">
-            <label class="label" for="id_captain">
+            <label class="label">
               <span class="label-text">Captain</span>
             </label>
-            {{ form.captain }}
+            <div class="searchable-select" data-for="id_captain">
+              {{ form.captain }}
+              <input type="text" class="input input-bordered w-full" placeholder="Search by name..." autocomplete="off">
+              <ul class="menu bg-base-200 rounded-box shadow-lg w-full max-h-48 overflow-y-auto flex-nowrap" style="display:none"></ul>
+            </div>
             {% if form.captain.errors %}
             <label class="label">
               <span class="label-text-alt text-error">{{ form.captain.errors.0 }}</span>
@@ -40,10 +44,14 @@
           </div>
 
           <div class="form-control w-full">
-            <label class="label" for="id_vice_captain">
+            <label class="label">
               <span class="label-text">Vice Captain</span>
             </label>
-            {{ form.vice_captain }}
+            <div class="searchable-select" data-for="id_vice_captain">
+              {{ form.vice_captain }}
+              <input type="text" class="input input-bordered w-full" placeholder="Search by name..." autocomplete="off">
+              <ul class="menu bg-base-200 rounded-box shadow-lg w-full max-h-48 overflow-y-auto flex-nowrap" style="display:none"></ul>
+            </div>
             {% if form.vice_captain.errors %}
             <label class="label">
               <span class="label-text-alt text-error">{{ form.vice_captain.errors.0 }}</span>
@@ -329,6 +337,77 @@
         select.setAttribute('name', 'discord_channel_id');
         toggle.textContent = 'or enter ID manually';
       }
+    });
+  });
+})();
+</script>
+<script>
+(function() {
+  document.querySelectorAll('.searchable-select').forEach(function(wrap) {
+    var select = wrap.querySelector('select');
+    var input = wrap.querySelector('input[type="text"]');
+    var list = wrap.querySelector('ul');
+
+    // Hide the native select
+    select.style.display = 'none';
+
+    // Build options data from the select
+    var options = [];
+    Array.from(select.options).forEach(function(opt) {
+      options.push({ value: opt.value, label: opt.textContent, lowerLabel: opt.textContent.toLowerCase() });
+    });
+
+    // Set input to current selection
+    var currentOpt = select.options[select.selectedIndex];
+    if (currentOpt && currentOpt.value) {
+      input.value = currentOpt.textContent;
+    }
+
+    function renderList(query) {
+      list.innerHTML = '';
+      var lower = query.toLowerCase();
+      var matches = options.filter(function(o) {
+        if (!o.value) return lower === ''; // show "(none)" only when empty
+        return o.lowerLabel.indexOf(lower) !== -1;
+      });
+      if (matches.length === 0) {
+        list.style.display = 'none';
+        return;
+      }
+      matches.slice(0, 30).forEach(function(o) {
+        var li = document.createElement('li');
+        var a = document.createElement('a');
+        a.textContent = o.label;
+        a.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          select.value = o.value;
+          input.value = o.value ? o.label : '';
+          list.style.display = 'none';
+        });
+        li.appendChild(a);
+        list.appendChild(li);
+      });
+      list.style.display = '';
+    }
+
+    input.addEventListener('focus', function() {
+      renderList(input.value);
+    });
+
+    input.addEventListener('input', function() {
+      renderList(input.value);
+    });
+
+    input.addEventListener('blur', function() {
+      // Delay to allow mousedown on list item
+      setTimeout(function() {
+        list.style.display = 'none';
+        // If input was cleared, clear selection
+        if (!input.value.trim()) {
+          select.value = '';
+          input.value = '';
+        }
+      }, 200);
     });
   });
 })();

@@ -1148,10 +1148,13 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     total_responders = len(responses)
 
     cell_counts: dict[str, int] = {}
+    cell_names: dict[str, list[str]] = {}
     for response in responses:
+        name = response.user.get_full_name() or response.user.discord_username
         for cell in response.available_cells:
             key = f"{cell['date']}|{cell['time']}"
             cell_counts[key] = cell_counts.get(key, 0) + 1
+            cell_names.setdefault(key, []).append(name)
 
     responder_names = [
         r.user.get_full_name() or r.user.discord_username for r in responses
@@ -1176,6 +1179,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "time_slots_json": json.dumps(grid.time_slots),
             "blocked_cells_json": json.dumps(grid.blocked_cells),
             "cell_counts_json": json.dumps(cell_counts),
+            "cell_names_json": json.dumps(cell_names),
             "total_responders": total_responders,
             "responder_names": responder_names,
         },

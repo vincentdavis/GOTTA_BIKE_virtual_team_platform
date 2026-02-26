@@ -307,9 +307,13 @@ class SquadForm(forms.ModelForm):
         """Initialize form with Discord channel choices and captain labels."""
         super().__init__(*args, **kwargs)
 
-        # Show full names for captain/vice_captain dropdowns
+        # Sort captain/vice_captain alphabetically and show full names
+        from apps.accounts.models import User
+
+        captain_qs = User.objects.order_by("first_name", "last_name", "discord_username")
         for field_name in ("captain", "vice_captain"):
             field = self.fields[field_name]
+            field.queryset = captain_qs
             field.label_from_instance = lambda u: (
                 f"{u.first_name} {u.last_name}".strip() or u.discord_nickname or u.discord_username or u.username
             )
