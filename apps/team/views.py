@@ -564,10 +564,14 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     status_choices = RaceReadyRecord.Status.choices
     gender_choices = User.Gender.choices
 
-    # Apply search filter (by username or discord_username)
+    # Apply search filter
     if search_query:
         records = records.filter(
-            Q(user__username__icontains=search_query) | Q(user__discord_username__icontains=search_query)
+            Q(user__first_name__icontains=search_query)
+            | Q(user__last_name__icontains=search_query)
+            | Q(user__discord_nickname__icontains=search_query)
+            | Q(user__discord_username__icontains=search_query)
+            | Q(user__username__icontains=search_query)
         )
 
     # Apply type filter
