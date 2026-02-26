@@ -298,7 +298,15 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             provider=str(provider),
         )
 
-        if error == "denied":
+        exception_str = str(exception) if exception else ""
+
+        if "rate limited" in exception_str.lower():
+            messages.error(
+                request,
+                "Discord is temporarily rate limiting login requests. "
+                "Please wait a few minutes and try again.",
+            )
+        elif error == "denied":
             messages.error(
                 request,
                 "Discord denied the login request. This usually means your Discord account's "
