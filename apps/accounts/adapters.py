@@ -239,6 +239,22 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
         # Check guild membership before allowing login
         self._check_guild_membership(request, sociallogin)
 
+        # Check that Discord email is verified
+        email_verified = extra_data.get('verified', False)
+        if not email_verified:
+            logfire.warning(
+                "Discord email not verified - blocking login",
+                discord_id=discord_id,
+                discord_username=extra_data.get('username'),
+                email_verified=email_verified,
+            )
+            messages.error(
+                request,
+                "Your Discord account's email is not verified. "
+                "Please verify your email in Discord Settings > My Account, then try again.",
+            )
+            raise ImmediateHttpResponse(redirect("account_login"))
+
         # For EXISTING users, only update Discord fields (never profile fields)
         if sociallogin.is_existing:
             user = sociallogin.user
@@ -285,13 +301,16 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
         if error == "denied":
             messages.error(
                 request,
-                "Discord denied the login request. Please make sure your Discord account's "
-                "email is verified, then try again.",
+                "Discord denied the login request. This usually means your Discord account's "
+                "email is not verified. Please check Discord Settings > My Account and verify "
+                "your email address, then try again.",
             )
         else:
             messages.error(
                 request,
-                "Something went wrong during Discord login. Please try again.",
+                "Something went wrong during Discord login. Please try again. "
+                "If the problem persists, make sure your Discord email is verified "
+                "in Discord Settings > My Account.",
             )
 
     def get_login_redirect_url(self, request):
