@@ -163,7 +163,6 @@ class RaceReadyRecordForm(forms.ModelForm):
             "media_type",
             "weight",
             "height",
-            "ftp",
             "record_date",
             "media_file",
             "url",
@@ -188,14 +187,6 @@ class RaceReadyRecordForm(forms.ModelForm):
                     "placeholder": "e.g., 175",
                     "min": "100",
                     "max": "250",
-                }
-            ),
-            "ftp": forms.NumberInput(
-                attrs={
-                    "class": "input input-bordered w-full",
-                    "placeholder": "e.g., 280",
-                    "min": "50",
-                    "max": "600",
                 }
             ),
             "record_date": forms.DateInput(attrs={
@@ -336,7 +327,6 @@ class RaceReadyRecordForm(forms.ModelForm):
         verify_type = cleaned_data.get("verify_type")
         weight = cleaned_data.get("weight")
         height = cleaned_data.get("height")
-        ftp = cleaned_data.get("ftp")
 
         # Require file or URL
         if not media_file and not url:
@@ -350,9 +340,6 @@ class RaceReadyRecordForm(forms.ModelForm):
         if verify_type == "height" and not height:
             self.add_error("height", "Height is required for height verification.")
             missing_fields.append("height")
-        if verify_type == "power" and not ftp:
-            self.add_error("ftp", "FTP is required for power verification.")
-            missing_fields.append("ftp")
 
         if missing_fields:
             logfire.warning(

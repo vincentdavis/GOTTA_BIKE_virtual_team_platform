@@ -131,19 +131,6 @@
       {% endif %}
     </div>
 
-    <!-- FTP Field (shown for power) -->
-    <div id="ftp-field" class="form-control w-full hidden">
-      <label class="label" for="id_ftp">
-        <span class="label-text">FTP (watts)</span>
-      </label>
-      {{ race_ready_form.ftp }}
-      {% if race_ready_form.ftp.errors %}
-        <label class="label">
-          <span class="label-text-alt text-error">{{ race_ready_form.ftp.errors.0 }}</span>
-        </label>
-      {% endif %}
-    </div>
-
     <!-- Record Date -->
     <div class="form-control w-full">
       <label class="label" for="id_record_date">
@@ -233,7 +220,6 @@
           const allMediaOptions = Array.from(mediaTypeSelect.options).map(o => ({value: o.value, text: o.text}));
           const weightField = document.getElementById('weight-field');
           const heightField = document.getElementById('height-field');
-          const ftpField = document.getElementById('ftp-field');
           const weightInstructions = document.getElementById('weight-instructions');
           const heightInstructions = document.getElementById('height-instructions');
 
@@ -257,7 +243,6 @@
               // Hide all fields and instructions first
               weightField.classList.add('hidden');
               heightField.classList.add('hidden');
-              ftpField.classList.add('hidden');
               if (weightInstructions) weightInstructions.classList.add('hidden');
               if (heightInstructions) heightInstructions.classList.add('hidden');
 
@@ -286,8 +271,6 @@
               } else if (value === 'height') {
                   heightField.classList.remove('hidden');
                   if (heightInstructions) heightInstructions.classList.remove('hidden');
-              } else if (value === 'power') {
-                  ftpField.classList.remove('hidden');
               }
           }
 
