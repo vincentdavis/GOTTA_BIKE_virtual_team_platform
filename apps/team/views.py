@@ -901,6 +901,19 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     if record.user.zwid:
         zp_rider = ZPTeamRiders.objects.filter(zwid=record.user.zwid).first()
 
+    # Load verification checklist for the record's verify type
+    checklist_items = []
+    if can_review and record.is_pending:
+        import json
+
+        from constance import config
+
+        try:
+            checklist_data = json.loads(config.VERIFICATION_CHECK_LIST or "{}")
+            checklist_items = checklist_data.get(record.verify_type, [])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     return render(
         request,
         "team/verification_record_detail.html",
@@ -911,6 +924,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             "can_view_values": can_view_values,
             "can_change_status": can_change_status,
             "can_delete": can_delete,
+            "checklist_items": checklist_items,
             "zp_rider": zp_rider,
         },
     )

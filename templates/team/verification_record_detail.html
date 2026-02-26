@@ -173,6 +173,21 @@
       </div>
       {% endif %}
 
+      <!-- Review Checklist -->
+      {% if checklist_items %}
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <div class="text-sm text-base-content/60 mb-2">Review Checklist</div>
+        <div class="space-y-1">
+          {% for item in checklist_items %}
+          <label class="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" class="checkbox checkbox-sm checkbox-primary mt-0.5 review-checklist-item">
+            <span class="text-sm">{{ item }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Verification Status -->
       {% if record.is_verified %}
       <div class="bg-success/10 border border-success rounded-lg p-4 mb-6">

@@ -532,6 +532,30 @@ CONSTANCE_CONFIG = {
         "Message displayed at the top of the verification form. Supports Markdown.",
         "textarea_field",
     ),
+    "VERIFICATION_CHECK_LIST": (
+        '{"weight_full": ['
+        '"Rider shows face and date/time via timeanddate.com refresh", '
+        '"Rider weight shown clearly on scale", '
+        '"Rider shows bottom of scale/sets back down in a different spot", '
+        '"Heavy weight (labeled) and shown clearly on scale", '
+        '"Combined weight (rider + weight) shown clearly on scale", '
+        '"Zwift weight updated on screen and matches scale"], '
+        '"weight_light": ['
+        '"Photo/video shows rider on scale (centre of room)", '
+        '"Weight reading clearly visible", '
+        '"Date shown (screen or written, post-it is ok)", '
+        '"Zwift weight updated and matches"], '
+        '"height": ['
+        '"Full body visible", '
+        '"Book or similar flat on head against wall", '
+        '"Wall mark shown", '
+        '"Tape measure from floor to mark shown clearly", '
+        '"Show Zwift height matches measurement"], '
+        '"power": ['
+        '"Dual record link on ZP looks ok"]}',
+        "JSON checklist for verification reviewers. Keys are verify types, values are lists of checklist items.",
+        "json_field",
+    ),
     "WEIGHT_INSTRUCTIONS_URL": ("", "URL to weight verification instructions", str),
     "HEIGHT_INSTRUCTIONS_URL": ("", "URL to height verification instructions", str),
     # Equipment options
@@ -748,6 +772,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "POWER_VERIFICATION_DAYS",
         "EXPIRE_WARNING_DAYS",
         "VERIFICATION_FORM_MESSAGE",
+        "VERIFICATION_CHECK_LIST",
         "WEIGHT_INSTRUCTIONS_URL",
         "HEIGHT_INSTRUCTIONS_URL",
     ),
