@@ -10,6 +10,7 @@ from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import path
+from django.utils.html import format_html
 
 from apps.accounts.models import GuildMember, Permissions, User, YouTubeVideo
 
@@ -232,7 +233,7 @@ class GuildMemberAdmin(admin.ModelAdmin):
     list_display: ClassVar[list[str]] = [
         "display_name_or_username",
         "nickname",
-        "discord_id",
+        "discord_profile_link",
         "user_link",
         "is_bot",
         "joined_at",
@@ -267,6 +268,24 @@ class GuildMemberAdmin(admin.ModelAdmin):
         return obj.nickname or obj.display_name or obj.username
 
     display_name_or_username.short_description = "Name"  # type: ignore[attr-defined]
+
+    def discord_profile_link(self, obj: GuildMember) -> str:
+        """Return clickable link to Discord profile.
+
+        Args:
+            obj: The GuildMember instance.
+
+        Returns:
+            HTML link to the Discord user profile.
+
+        """
+        return format_html(
+            '<a href="https://discord.com/users/{}" target="_blank" rel="noopener">{}</a>',
+            obj.discord_id,
+            obj.discord_id,
+        )
+
+    discord_profile_link.short_description = "Discord Profile"  # type: ignore[attr-defined]
 
     def user_link(self, obj: GuildMember) -> str:
         """Return link to user or dash if none.
