@@ -7,6 +7,7 @@ from ninja.security import APIKeyHeader
 
 from apps.accounts.tasks import (
     guild_member_sync_status,
+    refresh_all_race_ready,
     sync_race_ready_roles,
     sync_youtube_channel_ids,
     sync_youtube_videos,
@@ -75,6 +76,10 @@ TASK_REGISTRY: dict = {
     "sync_race_ready_roles": {
         "task": sync_race_ready_roles,
         "description": "Sync race ready Discord roles for all users based on verification status",
+    },
+    "refresh_all_race_ready": {
+        "task": refresh_all_race_ready,
+        "description": "Refresh cached is_race_ready field for all users (handles expiration)",
     },
     "sync_youtube_channel_ids": {
         "task": sync_youtube_channel_ids,

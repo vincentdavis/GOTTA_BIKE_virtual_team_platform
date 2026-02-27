@@ -302,6 +302,12 @@ class User(AbstractUser):
         help_text="Emergency contact phone number",
     )
 
+    # Cached race ready status (updated by refresh_race_ready / refresh_all_race_ready task)
+    is_race_ready = models.BooleanField(
+        default=False,
+        help_text="Cached race ready status. Updated when verification records change and by periodic cron task.",
+    )
+
     # Roles
     roles = models.JSONField(
         default=list,
@@ -567,9 +573,8 @@ class User(AbstractUser):
         """Check if user has event admin permission."""
         return self.has_permission(Permissions.EVENT_ADMIN)
 
-    @property
-    def is_race_ready(self) -> bool:
-        """Check if user has all required verifications for their ZwiftPower category.
+    def calculate_race_ready(self) -> bool:
+        """Calculate if user has all required verifications for their ZwiftPower category.
 
         Required types are determined by CATEGORY_REQUIREMENTS based on user's
         ZwiftPower division (category). Defaults to weight_light + height if
@@ -641,6 +646,25 @@ class User(AbstractUser):
             )
 
         return is_ready
+
+    def refresh_race_ready(self) -> bool:
+        """Recalculate and save the cached is_race_ready field if changed.
+
+        Returns:
+            The new is_race_ready value.
+
+        """
+        new_value = self.calculate_race_ready()
+        if self.is_race_ready != new_value:
+            self.is_race_ready = new_value
+            self.save(update_fields=["is_race_ready"])
+            logfire.info(
+                "Race ready status updated",
+                user_id=self.id,
+                discord_id=self.discord_id,
+                is_race_ready=new_value,
+            )
+        return new_value
 
     @property
     def is_any_admin(self) -> bool:

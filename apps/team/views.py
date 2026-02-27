@@ -756,6 +756,8 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             deleted_by_username=request.user.username,
         )
         record.delete()
+        # Recalculate and save cached race ready status after deletion
+        target_user.refresh_race_ready()
         messages.success(request, f"Verification record for {target_user.username} has been deleted.")
         return redirect("team:verification_records")
 
@@ -817,8 +819,8 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     verify_type=record.verify_type,
                 )
 
-            # Check if race ready status changed and send notification
-            is_now_race_ready = record.user.is_race_ready
+            # Recalculate and save cached race ready status
+            is_now_race_ready = record.user.refresh_race_ready()
             if was_race_ready != is_now_race_ready:
                 notify_race_ready_change.enqueue(
                     user_id=record.user.id,
@@ -857,8 +859,8 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     rejection_reason=rejection_reason or None,
                 )
 
-            # Check if race ready status changed and send notification
-            is_now_race_ready = record.user.is_race_ready
+            # Recalculate and save cached race ready status
+            is_now_race_ready = record.user.refresh_race_ready()
             if was_race_ready != is_now_race_ready:
                 notify_race_ready_change.enqueue(
                     user_id=record.user.id,
@@ -888,7 +890,8 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                 reset_by_username=request.user.username,
             )
 
-            is_now_race_ready = record.user.is_race_ready
+            # Recalculate and save cached race ready status
+            is_now_race_ready = record.user.refresh_race_ready()
             if was_race_ready != is_now_race_ready:
                 notify_race_ready_change.enqueue(
                     user_id=record.user.id,

@@ -141,7 +141,7 @@ def sync_race_ready_roles() -> dict:
         users_removed = []
 
         for user in users_with_discord.iterator():
-            # Check if user is race ready
+            # Read cached race ready status (updated by refresh_all_race_ready task)
             is_race_ready = user.is_race_ready
 
             # Check if user currently has the role
@@ -219,6 +219,45 @@ def sync_race_ready_roles() -> dict:
 
         logfire.info("Race ready role sync completed", **result)
 
+        return result
+
+
+@task
+def refresh_all_race_ready() -> dict:
+    """Refresh cached is_race_ready field for all users with a discord_id.
+
+    Recalculates race ready status from verification records and bulk-updates
+    any users whose cached value differs. This handles expiration — records
+    that expired since the last run get caught here.
+
+    Returns:
+        dict with refresh results summary.
+
+    """
+    with logfire.span("refresh_all_race_ready"):
+        users = (
+            User.objects
+            .exclude(discord_id="")
+            .exclude(discord_id__isnull=True)
+            .prefetch_related("race_ready_records")
+        )
+        total = users.count()
+        logfire.info("Starting race ready refresh", total_users=total)
+
+        updated = 0
+        for user in users.iterator():
+            new_value = user.calculate_race_ready()
+            if user.is_race_ready != new_value:
+                user.is_race_ready = new_value
+                user.save(update_fields=["is_race_ready"])
+                updated += 1
+
+        result = {
+            "status": "completed",
+            "total_users": total,
+            "updated": updated,
+        }
+        logfire.info("Race ready refresh completed", **result)
         return result
 
 
