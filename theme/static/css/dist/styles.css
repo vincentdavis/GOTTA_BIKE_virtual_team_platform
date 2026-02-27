@@ -4920,6 +4920,9 @@
   .gap-1 {
     gap: calc(var(--spacing) * 1);
   }
+  .gap-1\.5 {
+    gap: calc(var(--spacing) * 1.5);
+  }
   .gap-2 {
     gap: calc(var(--spacing) * 2);
   }
@@ -4962,6 +4965,9 @@
     margin-block-start: calc(calc(var(--spacing) * 6) * var(--tw-space-y-reverse));
     margin-block-end: calc(calc(var(--spacing) * 6) * calc(1 - var(--tw-space-y-reverse)));
   }
+  .gap-x-3 {
+    column-gap: calc(var(--spacing) * 3);
+  }
   .gap-x-4 {
     column-gap: calc(var(--spacing) * 4);
   }
@@ -4972,6 +4978,9 @@
   }
   .gap-y-1 {
     row-gap: calc(var(--spacing) * 1);
+  }
+  .gap-y-2 {
+    row-gap: calc(var(--spacing) * 2);
   }
   .self-center {
     align-self: center;
@@ -5465,6 +5474,9 @@
       font-size: 0.625rem;
     }
   }
+  .text-\[10px\] {
+    font-size: 10px;
+  }
   @layer daisyui.l1.l2 {
     .textarea-sm {
       font-size: max(var(--font-size, 0.75rem), 0.75rem);
@@ -5686,6 +5698,9 @@
         text-decoration-line: underline;
       }
     }
+  }
+  .no-underline {
+    text-decoration-line: none;
   }
   .prose :where(.btn-link):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
     text-decoration-line: none;
@@ -5995,6 +6010,11 @@
           text-decoration-line: underline;
         }
       }
+    }
+  }
+  @media (hover: hover) {
+    .hover\:underline:hover {
+      text-decoration-line: underline;
     }
   }
   @media (hover: hover) {

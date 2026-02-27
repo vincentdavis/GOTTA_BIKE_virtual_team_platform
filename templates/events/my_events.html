@@ -108,9 +108,29 @@
                     </div>
                     <div id="my-squad-members-{{ item.event.pk }}-{{ sq.squad.pk }}" style="display:none" class="mt-2">
                       {% if sq.members %}
-                      <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                      <div class="flex flex-wrap gap-x-3 gap-y-2 text-sm">
                         {% for member in sq.members %}
-                        <a href="{% url 'accounts:public_profile' member.pk %}" class="link link-hover">{{ member.get_full_name|default:member.discord_username }}</a>
+                        <a href="{% url 'accounts:public_profile' member.pk %}" class="flex items-center gap-1.5 link link-hover no-underline hover:underline">
+                          {% if member.discord_avatar_url %}
+                          <img src="{{ member.discord_avatar_url }}" alt="" class="h-5 w-5 rounded-full">
+                          {% else %}
+                          <div class="h-5 w-5 rounded-full bg-neutral text-neutral-content flex items-center justify-center text-[10px] font-medium">{{ member.username|slice:":1"|upper }}</div>
+                          {% endif %}
+                          <span>{{ member.get_full_name|default:member.discord_username }}</span>
+                          {% if member.is_race_ready %}
+                            {% if site_settings.verified_emoji %}
+                            <img src="{{ site_settings.verified_emoji.url }}" alt="Verified" class="h-3.5 w-3.5">
+                            {% else %}
+                            <span class="badge badge-success badge-xs"></span>
+                            {% endif %}
+                          {% else %}
+                            {% if site_settings.not_verified_emoji %}
+                            <img src="{{ site_settings.not_verified_emoji.url }}" alt="Not Verified" class="h-3.5 w-3.5">
+                            {% else %}
+                            <span class="badge badge-error badge-xs"></span>
+                            {% endif %}
+                          {% endif %}
+                        </a>
                         {% endfor %}
                       </div>
                       {% else %}

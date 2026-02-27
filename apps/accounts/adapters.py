@@ -39,6 +39,9 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             # No guild configured, skip check
             return
 
+        discord_id = sociallogin.account.extra_data.get("id")
+        discord_username = sociallogin.account.extra_data.get("username")
+
         # Get the access token from the social login
         access_token = sociallogin.token.token
 
@@ -49,6 +52,22 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
                 headers={"Authorization": f"Bearer {access_token}"},
                 timeout=10.0,
             )
+
+            if response.status_code == 429:
+                retry_after = response.json().get("retry_after", "a few")
+                logfire.warning(
+                    "Discord API rate limited during guild membership check",
+                    discord_id=discord_id,
+                    discord_username=discord_username,
+                    retry_after=retry_after,
+                )
+                messages.error(
+                    request,
+                    "Discord is temporarily rate limiting requests. "
+                    "Please wait a few minutes and try again.",
+                )
+                raise ImmediateHttpResponse(redirect("account_login"))
+
             response.raise_for_status()
             guilds = response.json()
 
@@ -56,24 +75,35 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             user_guild_ids = [int(g["id"]) for g in guilds]
             if guild_id not in user_guild_ids:
                 guild_name = config.GUILD_NAME or "the team"
-                raw_url = config.DISCORD_URL or ""
-                discord_url = raw_url if raw_url.startswith(("http://", "https://", "/")) else reverse("account_login")
+                discord_url = config.DISCORD_URL or ""
                 logfire.warning(
                     "User not in required guild",
-                    discord_id=sociallogin.account.extra_data.get("id"),
-                    discord_username=sociallogin.account.extra_data.get("username"),
+                    discord_id=discord_id,
+                    discord_username=discord_username,
                     required_guild_id=guild_id,
+                    user_guild_count=len(user_guild_ids),
                 )
+                invite_msg = ""
+                if discord_url and discord_url.startswith(("http://", "https://")):
+                    invite_msg = f' <a href="{discord_url}" target="_blank" class="link">Join here</a>.'
                 messages.error(
                     request,
-                    f"You must be a member of {guild_name} Discord server to sign up. "
-                    f"Please join the server first and try again.",
+                    f"You must be a member of the {guild_name} Discord server to log in.{invite_msg}",
                 )
-                raise ImmediateHttpResponse(redirect(discord_url))
+                raise ImmediateHttpResponse(redirect("account_login"))
 
         except httpx.HTTPError as e:
-            logfire.error(f"Failed to fetch Discord guilds: {e}")
-            messages.error(request, "Failed to verify Discord membership. Please try again.")
+            logfire.error(
+                "Failed to fetch Discord guilds",
+                error=str(e),
+                status_code=getattr(e, "response", None) and e.response.status_code,
+                discord_id=discord_id,
+                discord_username=discord_username,
+            )
+            messages.error(
+                request,
+                "Failed to verify Discord server membership. Please try again.",
+            )
             raise ImmediateHttpResponse(redirect("account_login")) from e
 
     def populate_user(self, request, sociallogin, data):
@@ -193,6 +223,9 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             request: The HTTP request.
             sociallogin: The social login object.
 
+        Raises:
+            ImmediateHttpResponse: If guild membership or email verification fails.
+
         """
         from apps.accounts.models import User
 
@@ -291,16 +324,18 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             extra_context: Additional context dict.
 
         """
-        logfire.warning(
-            "Discord OAuth authentication error",
-            error=str(error),
-            exception=str(exception) if exception else None,
-            provider=str(provider),
-        )
-
         exception_str = str(exception) if exception else ""
 
-        if "rate limited" in exception_str.lower():
+        logfire.error(
+            "Discord OAuth authentication error",
+            error=str(error),
+            error_type=type(exception).__name__ if exception else None,
+            exception=exception_str,
+            provider=str(provider),
+            extra_context=str(extra_context) if extra_context else None,
+        )
+
+        if "rate" in exception_str.lower() and "limit" in exception_str.lower():
             messages.error(
                 request,
                 "Discord is temporarily rate limiting login requests. "
@@ -316,9 +351,8 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
         else:
             messages.error(
                 request,
-                "Something went wrong during Discord login. Please try again. "
-                "If the problem persists, make sure your Discord email is verified "
-                "in Discord Settings > My Account.",
+                f"Something went wrong during Discord login. Please try again. "
+                f"If the problem persists, contact a team admin. (Error: {error or 'unknown'})",
             )
 
     def get_login_redirect_url(self, request):
