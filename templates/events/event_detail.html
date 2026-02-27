@@ -650,10 +650,25 @@
                         </td>
                         {% if squad.team_discord_role %}
                         <td data-col="sq_has_role">
-                          {% if member.has_discord_role %}
-                          <div class="tooltip" data-tip="Has discord role"><span class="text-success">&#10003;</span></div>
+                          {% if can_assign_roles %}
+                            <form method="post" action="{% url 'events:squad_toggle_role' event.pk squad.pk member.user.pk %}" class="inline">
+                              {% csrf_token %}
+                              {% if member.has_discord_role %}
+                              <button type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to remove role">
+                                <span class="text-success">&#10003;</span>
+                              </button>
+                              {% else %}
+                              <button type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to add role">
+                                <span class="text-error">&#10007;</span>
+                              </button>
+                              {% endif %}
+                            </form>
                           {% else %}
-                          <div class="tooltip" data-tip="Missing discord role"><span class="text-error">&#10007;</span></div>
+                            {% if member.has_discord_role %}
+                            <div class="tooltip" data-tip="Has discord role"><span class="text-success">&#10003;</span></div>
+                            {% else %}
+                            <div class="tooltip" data-tip="Missing discord role"><span class="text-error">&#10007;</span></div>
+                            {% endif %}
                           {% endif %}
                         </td>
                         {% endif %}

@@ -21,6 +21,7 @@ from apps.events.views import (
     squad_create_view,
     squad_delete_view,
     squad_edit_view,
+    squad_toggle_role_view,
 )
 
 app_name = "events"
@@ -40,6 +41,11 @@ urlpatterns = [
     path("<int:event_pk>/squads/add/", squad_create_view, name="squad_create"),
     path("<int:event_pk>/squads/<int:squad_pk>/edit/", squad_edit_view, name="squad_edit"),
     path("<int:event_pk>/squads/<int:squad_pk>/delete/", squad_delete_view, name="squad_delete"),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/toggle-role/<int:user_id>/",
+        squad_toggle_role_view,
+        name="squad_toggle_role",
+    ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/availability/create/",
         availability_create_view,

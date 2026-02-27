@@ -53,6 +53,7 @@ class Event(models.Model):
 
     """
 
+    prefix = models.CharField(max_length=50, blank=True, help_text='Channel/role prefix, e.g. "$" in $DRS')
     title = models.CharField(max_length=200, help_text="Event title")
     description = models.TextField(blank=True, help_text="Event description (supports Markdown)")
     start_date = models.DateField(help_text="Event start date")

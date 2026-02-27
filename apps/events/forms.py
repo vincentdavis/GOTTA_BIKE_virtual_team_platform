@@ -101,6 +101,7 @@ class EventForm(forms.ModelForm):
 
         model = Event
         fields: ClassVar[list[str]] = [
+            "prefix",
             "title",
             "logo",
             "description",
@@ -115,7 +116,16 @@ class EventForm(forms.ModelForm):
             "timezone_options",
             "timezone_required",
         ]
+        labels: ClassVar[dict] = {
+            "prefix": "Discord Prefix",
+        }
+        help_texts: ClassVar[dict] = {
+            "prefix": 'Channel and role prefix, e.g. "$" in $DRS',
+        }
         widgets: ClassVar[dict] = {
+            "prefix": forms.TextInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "$"},
+            ),
             "title": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "Event title"},
             ),

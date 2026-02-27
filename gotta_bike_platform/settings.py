@@ -466,6 +466,11 @@ CONSTANCE_CONFIG = {
         "Discord role IDs that grant event management permission (create, edit, delete events and races)",
         "json_list_field",
     ),
+    "PERM_ASSIGN_ROLES": (
+        "[]",
+        "Discord role IDs that grant permission to assign Discord roles",
+        "json_list_field",
+    ),
     # Verification validity periods (in days)
     "WEIGHT_FULL_DAYS": (120, "Days a full weight verification is valid", int),
     "WEIGHT_LIGHT_DAYS": (30, "Days a light weight verification is valid", int),
@@ -763,6 +768,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "PERM_PAGES_ADMIN_ROLES",
         "PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES",
         "PERM_EVENT_ADMIN_ROLES",
+        "PERM_ASSIGN_ROLES",
     ),
     "Verification Settings": (
         "CATEGORY_REQUIREMENTS",

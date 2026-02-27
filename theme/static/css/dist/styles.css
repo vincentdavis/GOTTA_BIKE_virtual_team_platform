@@ -5037,6 +5037,10 @@
     border-style: var(--tw-border-style);
     border-width: 1px;
   }
+  .border-0 {
+    border-style: var(--tw-border-style);
+    border-width: 0px;
+  }
   .border-t {
     border-top-style: var(--tw-border-style);
     border-top-width: 1px;
@@ -5212,6 +5216,9 @@
     .bg-success\/10 {
       background-color: color-mix(in oklab, var(--color-success) 10%, transparent);
     }
+  }
+  .bg-transparent {
+    background-color: transparent;
   }
   .bg-warning {
     background-color: var(--color-warning);
