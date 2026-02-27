@@ -109,29 +109,59 @@
                     <div id="my-squad-members-{{ item.event.pk }}-{{ sq.squad.pk }}" style="display:none" class="mt-2">
                       {% if sq.members %}
                       <div class="flex flex-wrap gap-x-3 gap-y-2 text-sm">
-                        {% for member in sq.members %}
-                        <a href="{% url 'accounts:public_profile' member.pk %}" class="flex items-center gap-1.5 link link-hover no-underline hover:underline">
-                          {% if member.discord_avatar_url %}
-                          <img src="{{ member.discord_avatar_url }}" alt="" class="h-5 w-5 rounded-full">
-                          {% else %}
-                          <div class="h-5 w-5 rounded-full bg-neutral text-neutral-content flex items-center justify-center text-[10px] font-medium">{{ member.username|slice:":1"|upper }}</div>
-                          {% endif %}
-                          {% if member.pk == sq.squad.captain_id %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif member.pk == sq.squad.vice_captain_id %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
-                          <span>{{ member.get_full_name|default:member.discord_username }}</span>
-                          {% if member.is_race_ready %}
-                            {% if site_settings.verified_emoji %}
-                            <img src="{{ site_settings.verified_emoji.url }}" alt="Verified" class="h-3.5 w-3.5">
+                        {% for m in sq.members %}
+                        <div class="dropdown dropdown-hover dropdown-top">
+                          <a tabindex="0" href="{% url 'accounts:public_profile' m.user.pk %}" class="flex items-center gap-1.5 link link-hover no-underline hover:underline">
+                            {% if m.user.discord_avatar_url %}
+                            <img src="{{ m.user.discord_avatar_url }}" alt="" class="h-5 w-5 rounded-full">
                             {% else %}
-                            <span class="badge badge-success badge-xs"></span>
+                            <div class="h-5 w-5 rounded-full bg-neutral text-neutral-content flex items-center justify-center text-[10px] font-medium">{{ m.user.username|slice:":1"|upper }}</div>
                             {% endif %}
-                          {% else %}
-                            {% if site_settings.not_verified_emoji %}
-                            <img src="{{ site_settings.not_verified_emoji.url }}" alt="Not Verified" class="h-3.5 w-3.5">
+                            {% if m.user.pk == sq.squad.captain_id %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif m.user.pk == sq.squad.vice_captain_id %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
+                            <span>{{ m.user.get_full_name|default:m.user.discord_username }}</span>
+                            {% if m.user.is_race_ready %}
+                              {% if site_settings.verified_emoji %}
+                              <img src="{{ site_settings.verified_emoji.url }}" alt="Verified" class="h-3.5 w-3.5">
+                              {% else %}
+                              <span class="badge badge-success badge-xs"></span>
+                              {% endif %}
                             {% else %}
-                            <span class="badge badge-error badge-xs"></span>
+                              {% if site_settings.not_verified_emoji %}
+                              <img src="{{ site_settings.not_verified_emoji.url }}" alt="Not Verified" class="h-3.5 w-3.5">
+                              {% else %}
+                              <span class="badge badge-error badge-xs"></span>
+                              {% endif %}
                             {% endif %}
-                          {% endif %}
-                        </a>
+                          </a>
+                          <div tabindex="0" class="dropdown-content bg-base-100 rounded-box shadow-lg z-50 p-3 w-56 border border-base-300">
+                            <p class="font-semibold text-sm mb-1">{{ m.user.get_full_name|default:m.user.discord_username }}</p>
+                            <div class="text-xs text-base-content/70 space-y-0.5">
+                              {% if m.zp_category or m.zp_category_w %}
+                              <p>ZP Category: <span class="font-medium text-base-content">{{ m.zp_category_w|default:m.zp_category }}</span></p>
+                              {% endif %}
+                              {% if m.zr_category %}
+                              <p>ZR Category: <span class="font-medium text-base-content">{{ m.zr_category }}</span></p>
+                              {% endif %}
+                              {% if m.zr_rating %}
+                              <p>ZR Rating: <span class="font-medium text-base-content">{{ m.zr_rating }}</span></p>
+                              {% endif %}
+                              {% if m.zr_phenotype %}
+                              <p>Phenotype: <span class="font-medium text-base-content">{{ m.zr_phenotype }}</span></p>
+                              {% endif %}
+                              {% if not m.zp_category and not m.zp_category_w and not m.zr_category %}
+                              <p class="text-base-content/40">No ZP/ZR data</p>
+                              {% endif %}
+                            </div>
+                            {% if m.zwid %}
+                            <div class="flex gap-2 mt-2">
+                              <a href="https://zwiftpower.com/profile.php?z={{ m.zwid }}" target="_blank" rel="noopener"
+                                 class="inline-block px-1.5 py-0.5 text-xs font-bold text-warning-content bg-warning rounded">ZP</a>
+                              <a href="https://www.zwiftracing.app/riders/{{ m.zwid }}" target="_blank" rel="noopener"
+                                 class="inline-block px-1.5 py-0.5 text-xs font-bold text-info-content bg-info rounded">ZR</a>
+                            </div>
+                            {% endif %}
+                          </div>
+                        </div>
                         {% endfor %}
                       </div>
                       {% else %}

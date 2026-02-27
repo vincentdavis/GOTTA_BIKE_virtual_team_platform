@@ -211,12 +211,28 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
     all_squad_ids = [sq.pk for squads in squads_by_event.values() for sq in squads]
     members_by_squad: dict[int, list] = {}
     if all_squad_ids:
-        for sm in (
+        all_sms = list(
             SquadMember.objects.filter(squad_id__in=all_squad_ids, status=SquadMember.Status.MEMBER)
             .select_related("user")
             .order_by("user__first_name", "user__last_name")
-        ):
-            members_by_squad.setdefault(sm.squad_id, []).append(sm.user)
+        )
+        zwids = [sm.user.zwid for sm in all_sms if sm.user.zwid]
+        zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
+        zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+        for sm in all_sms:
+            user = sm.user
+            zwid = user.zwid
+            zp = zp_by_zwid.get(zwid)
+            zr = zr_by_zwid.get(zwid)
+            members_by_squad.setdefault(sm.squad_id, []).append({
+                "user": user,
+                "zwid": zwid,
+                "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
+                "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
+                "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+                "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+                "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+            })
 
     events_data = []
     for signup in signups:
