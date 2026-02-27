@@ -1,5 +1,6 @@
 """Admin configuration for accounts app."""
 
+import csv
 import json
 from typing import Any, ClassVar
 
@@ -230,6 +231,7 @@ class GuildMemberAdmin(admin.ModelAdmin):
 
     list_display: ClassVar[list[str]] = [
         "display_name_or_username",
+        "nickname",
         "discord_id",
         "user_link",
         "is_bot",
@@ -242,6 +244,7 @@ class GuildMemberAdmin(admin.ModelAdmin):
     ordering: ClassVar[list[str]] = ["-date_modified"]
     readonly_fields: ClassVar[list[str]] = ["date_created", "date_modified", "date_left"]
     raw_id_fields: ClassVar[list[str]] = ["user"]
+    actions: ClassVar[list[str]] = ["export_csv"]
 
     fieldsets: ClassVar[list[tuple[str | None, dict[str, Any]]]] = [
         (None, {"fields": ["discord_id", "username", "display_name", "nickname"]}),
@@ -296,6 +299,34 @@ class GuildMemberAdmin(admin.ModelAdmin):
         return "Active"
 
     status_display.short_description = "Status"  # type: ignore[attr-defined]
+
+    @admin.action(description="Export selected to CSV")
+    def export_csv(self, request: HttpRequest, queryset: QuerySet) -> HttpResponse:
+        """Export selected guild members to CSV.
+
+        Returns:
+            CSV file download response.
+
+        """
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = 'attachment; filename="guild_members.csv"'
+        writer = csv.writer(response)
+        headers = ["Discord ID", "Username", "Display Name", "Nickname", "User Account",
+                    "Is Bot", "Joined At", "Status", "Date Left"]
+        writer.writerow(headers)
+        for obj in queryset.select_related("user").order_by("username"):
+            writer.writerow([
+                obj.discord_id,
+                obj.username,
+                obj.display_name,
+                obj.nickname,
+                obj.user.username if obj.user else "",
+                obj.is_bot,
+                obj.joined_at.strftime("%Y-%m-%d %H:%M") if obj.joined_at else "",
+                "Left" if obj.date_left else "Active",
+                obj.date_left.strftime("%Y-%m-%d %H:%M") if obj.date_left else "",
+            ])
+        return response
 
     def get_urls(self) -> list:
         """Add custom URLs for comparison view.

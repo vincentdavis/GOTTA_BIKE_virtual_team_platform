@@ -91,6 +91,7 @@
 
 ### UX Improvements
 
+- [ ] Reusable user tooltip partial (`templates/accounts/_user_tooltip.html`). A single `{% include %}` that wraps any user name with a hover tooltip showing avatar, Discord username, race ready status, ZP/ZR category, rating, phenotype, and profile links. Accepts optional enriched ZP/ZR context; gracefully omits fields not provided. Replace existing per-page tooltip implementations (my_events squad members, event_detail squad members, roster, etc.) with this shared partial.
 - [ ] Onboarding checklist for new users (profile → verify Zwift → race verification)
 - [x] Help/FAQ page with glossary (race-ready, categories, verification types)
 - [ ] Persistent notification center (beyond auto-dismiss toasts)
