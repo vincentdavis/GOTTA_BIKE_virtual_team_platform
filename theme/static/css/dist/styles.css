@@ -4978,16 +4978,10 @@
   .gap-x-3 {
     column-gap: calc(var(--spacing) * 3);
   }
-  .gap-x-4 {
-    column-gap: calc(var(--spacing) * 4);
-  }
   :where(.space-x-1 > :not(:last-child)) {
     --tw-space-x-reverse: 0;
     margin-inline-start: calc(calc(var(--spacing) * 1) * var(--tw-space-x-reverse));
     margin-inline-end: calc(calc(var(--spacing) * 1) * calc(1 - var(--tw-space-x-reverse)));
-  }
-  .gap-y-1 {
-    row-gap: calc(var(--spacing) * 1);
   }
   .gap-y-2 {
     row-gap: calc(var(--spacing) * 2);
@@ -5579,21 +5573,6 @@
       }
     }
   }
-  @layer daisyui.l1.l2 {
-    .link-secondary {
-      color: var(--color-secondary);
-    }
-    @media (hover: hover) {
-      .link-secondary:hover {
-        color: var(--color-secondary);
-      }
-      @supports (color: color-mix(in lab, red, red)) {
-        .link-secondary:hover {
-          color: color-mix(in oklab, var(--color-secondary) 80%, #000);
-        }
-      }
-    }
-  }
   .text-accent {
     color: var(--color-accent);
   }
@@ -6170,16 +6149,6 @@
   @media (width >= 64rem) {
     .lg\:grid-cols-4 {
       grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-  }
-  @media (width >= 64rem) {
-    .lg\:grid-cols-6 {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-    }
-  }
-  @media (width >= 64rem) {
-    .lg\:grid-cols-7 {
-      grid-template-columns: repeat(7, minmax(0, 1fr));
     }
   }
   @media (width >= 64rem) {
