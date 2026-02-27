@@ -654,12 +654,14 @@ def event_signup_delete_view(request: HttpRequest, pk: int) -> HttpResponse:
     """
     event = get_object_or_404(Event, pk=pk)
     signup = get_object_or_404(EventSignup, event=event, user=request.user, status=EventSignup.Status.REGISTERED)
+    removed_squads, _ = SquadMember.objects.filter(squad__event=event, user=request.user).delete()
     signup.delete()
     logfire.info(
         "Event signup deleted",
         event_id=pk,
         event_title=event.title,
         user_id=request.user.id,
+        squad_memberships_removed=removed_squads,
     )
     messages.success(request, "Your signup has been removed.")
     return redirect("events:event_detail", pk=pk)
@@ -693,6 +695,7 @@ def event_signup_withdraw_view(request: HttpRequest, event_pk: int, signup_pk: i
         return redirect("events:event_detail", pk=event_pk)
 
     signup = get_object_or_404(EventSignup, pk=signup_pk, event=event)
+    removed_squads, _ = SquadMember.objects.filter(squad__event=event, user=signup.user).delete()
     signup.status = EventSignup.Status.WITHDRAWN
     signup.save(update_fields=["status", "updated_at"])
     logfire.info(
@@ -701,6 +704,7 @@ def event_signup_withdraw_view(request: HttpRequest, event_pk: int, signup_pk: i
         signup_id=signup_pk,
         signup_user_id=signup.user_id,
         admin_user_id=request.user.id,
+        squad_memberships_removed=removed_squads,
     )
     messages.success(request, f"Signup for {signup.user} has been withdrawn.")
     return redirect("events:event_edit", pk=event_pk)

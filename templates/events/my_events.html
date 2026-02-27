@@ -116,6 +116,7 @@
                           {% else %}
                           <div class="h-5 w-5 rounded-full bg-neutral text-neutral-content flex items-center justify-center text-[10px] font-medium">{{ member.username|slice:":1"|upper }}</div>
                           {% endif %}
+                          {% if member.pk == sq.squad.captain_id %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif member.pk == sq.squad.vice_captain_id %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
                           <span>{{ member.get_full_name|default:member.discord_username }}</span>
                           {% if member.is_race_ready %}
                             {% if site_settings.verified_emoji %}
