@@ -1073,6 +1073,19 @@ def squad_toggle_role_view(request: HttpRequest, event_pk: int, squad_pk: int, u
             )
             messages.error(request, "Failed to add Discord role. Check bot token configuration.")
 
+    if request.headers.get("HX-Request"):
+        has_role = target_user.has_discord_role(role_id)
+        return render(
+            request,
+            "events/_squad_role_cell.html",
+            {
+                "event_pk": event_pk,
+                "squad_pk": squad_pk,
+                "member_user_pk": user_id,
+                "has_role": has_role,
+            },
+        )
+
     return redirect("events:event_detail", pk=event_pk)
 
 
