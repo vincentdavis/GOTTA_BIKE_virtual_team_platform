@@ -167,6 +167,87 @@ def _enrich_signups(signups, event=None):
 @require_GET
 @login_required
 @team_member_required()
+def my_events_view(request: HttpRequest) -> HttpResponse:
+    """Display the current user's event signups with squad and availability info.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered my events page.
+
+    """
+    signups = (
+        EventSignup.objects.filter(user=request.user, status=EventSignup.Status.REGISTERED)
+        .select_related("event")
+        .order_by("-event__start_date")
+    )
+    squad_memberships = (
+        SquadMember.objects.filter(user=request.user, status=SquadMember.Status.MEMBER)
+        .select_related("squad", "squad__event")
+    )
+    squads_by_event: dict[int, list] = {}
+    for sm in squad_memberships:
+        squads_by_event.setdefault(sm.squad.event_id, []).append(sm.squad)
+
+    signup_event_ids = [s.event_id for s in signups]
+    squad_event_ids = [eid for eid in squads_by_event if eid not in signup_event_ids]
+
+    grids = AvailabilityGrid.objects.filter(
+        squad__event_id__in=signup_event_ids + squad_event_ids,
+        status__in=[AvailabilityGrid.Status.PUBLISHED, AvailabilityGrid.Status.CLOSED],
+    ).select_related("squad")
+    grids_by_squad: dict[int, list] = {}
+    for grid in grids:
+        grids_by_squad.setdefault(grid.squad_id, []).append(grid)
+
+    responded_grid_ids = set(
+        AvailabilityResponse.objects.filter(
+            user=request.user,
+            grid__in=grids,
+        ).values_list("grid_id", flat=True)
+    )
+
+    all_squad_ids = [sq.pk for squads in squads_by_event.values() for sq in squads]
+    members_by_squad: dict[int, list] = {}
+    if all_squad_ids:
+        for sm in (
+            SquadMember.objects.filter(squad_id__in=all_squad_ids, status=SquadMember.Status.MEMBER)
+            .select_related("user")
+            .order_by("user__first_name", "user__last_name")
+        ):
+            members_by_squad.setdefault(sm.squad_id, []).append(sm.user)
+
+    events_data = []
+    for signup in signups:
+        event = signup.event
+        event_squads = squads_by_event.get(event.pk, [])
+        squad_data = []
+        for squad in event_squads:
+            squad_grids = grids_by_squad.get(squad.pk, [])
+            for g in squad_grids:
+                g.user_responded = g.pk in responded_grid_ids
+            squad_data.append({
+                "squad": squad,
+                "grids": squad_grids,
+                "members": members_by_squad.get(squad.pk, []),
+            })
+        events_data.append({"event": event, "squads": squad_data})
+
+    logfire.debug("My events viewed", user_id=request.user.id, event_count=len(events_data))
+    return render(
+        request,
+        "events/my_events.html",
+        {
+            "events_data": events_data,
+            "guild_id": config.GUILD_ID,
+        },
+    )
+
+
+@require_GET
+@login_required
+@team_member_required()
 def event_list_view(request: HttpRequest) -> HttpResponse:
     """Display list of visible events.
 

@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}My Events{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="card-title text-2xl">My Events</h2>
+        <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">All Events</a>
+      </div>
+
+      {% if events_data %}
+        <div class="flex flex-col gap-6">
+          {% for item in events_data %}
+          <div class="card bg-base-300">
+            <div class="card-body p-4">
+              <div class="flex items-start gap-4">
+                {% if item.event.logo %}
+                <div class="shrink-0 self-center">
+                  <a href="{% url 'events:event_detail' item.event.pk %}">
+                    <img src="{{ item.event.logo.url }}" alt="{{ item.event.title }}" class="h-14 max-w-28 object-contain rounded" style="filter:drop-shadow(0 0 1px rgba(0,0,0,.4)) drop-shadow(0 0 1px rgba(255,255,255,.4))">
+                  </a>
+                </div>
+                {% endif %}
+                <div class="flex-1 min-w-0">
+                  <h3 class="font-semibold text-lg">
+                    <a href="{% url 'events:event_detail' item.event.pk %}" class="link link-primary hover:link-hover">
+                      {{ item.event.title }}
+                    </a>
+                  </h3>
+                  <p class="text-sm text-base-content/70">
+                    {{ item.event.start_date|date:"M j, Y" }} &ndash; {{ item.event.end_date|date:"M j, Y" }}
+                  </p>
+                </div>
+              </div>
+
+              {% if item.squads %}
+              <div class="mt-3">
+                <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wide mb-2">My Squads</p>
+                <div class="flex flex-col gap-3">
+                  {% for sq in item.squads %}
+                  <div class="bg-base-200 rounded-lg p-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleMySquadMembers('{{ item.event.pk }}-{{ sq.squad.pk }}')" title="Show members">
+                        <svg id="my-squad-arrow-{{ item.event.pk }}-{{ sq.squad.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      <span class="font-medium">{{ sq.squad.name }}</span>
+                      <span class="badge badge-neutral badge-xs">{{ sq.members|length }}</span>
+
+                      {% if sq.squad.discord_channel_id %}
+                      <a href="https://discord.com/channels/{{ guild_id }}/{{ sq.squad.discord_channel_id }}"
+                         target="_blank" rel="noopener"
+                         class="btn btn-xs btn-outline gap-1" title="Discord Channel">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                        Channel
+                      </a>
+                      {% endif %}
+
+                      {% if sq.squad.audio_channel_id %}
+                      <a href="https://discord.com/channels/{{ guild_id }}/{{ sq.squad.audio_channel_id }}"
+                         target="_blank" rel="noopener"
+                         class="btn btn-xs btn-outline gap-1" title="Audio Channel">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        </svg>
+                        Audio
+                      </a>
+                      {% endif %}
+
+                      {% if sq.squad.url %}
+                      <a href="{{ sq.squad.url }}" target="_blank" rel="noopener"
+                         class="btn btn-xs btn-outline gap-1" title="Squad Link">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        Link
+                      </a>
+                      {% endif %}
+                      {% if sq.grids %}
+                      <div class="dropdown dropdown-end">
+                        <label tabindex="0" class="btn btn-outline btn-xs gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                          Availability
+                        </label>
+                        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box shadow-lg z-50 p-2 w-64">
+                          {% for grid in sq.grids %}
+                          <li class="menu-title text-xs">{{ grid.title }}{% if grid.is_closed %} <span class="badge badge-neutral badge-xs ml-1">Closed</span>{% endif %}</li>
+                          {% if grid.is_published %}
+                          <li>
+                            {% if grid.user_responded %}
+                            <a href="{% url 'events:availability_respond' event_pk=item.event.pk squad_pk=sq.squad.pk grid_pk=grid.pk %}">Edit Response</a>
+                            {% else %}
+                            <a href="{% url 'events:availability_respond' event_pk=item.event.pk squad_pk=sq.squad.pk grid_pk=grid.pk %}">Respond</a>
+                            {% endif %}
+                          </li>
+                          {% endif %}
+                          <li><a href="{% url 'events:availability_results' event_pk=item.event.pk squad_pk=sq.squad.pk grid_pk=grid.pk %}">Results <span class="badge badge-ghost badge-xs">{{ grid.response_count }}</span></a></li>
+                          {% endfor %}
+                        </ul>
+                      </div>
+                      {% endif %}
+                    </div>
+                    <div id="my-squad-members-{{ item.event.pk }}-{{ sq.squad.pk }}" style="display:none" class="mt-2">
+                      {% if sq.members %}
+                      <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                        {% for member in sq.members %}
+                        <a href="{% url 'accounts:public_profile' member.pk %}" class="link link-hover">{{ member.get_full_name|default:member.discord_username }}</a>
+                        {% endfor %}
+                      </div>
+                      {% else %}
+                      <p class="text-sm text-base-content/50">No members in this squad yet.</p>
+                      {% endif %}
+                    </div>
+                  </div>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-center py-12">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto text-base-content/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <p class="text-base-content/60 mb-4">You haven't signed up for any events yet.</p>
+          <a href="{% url 'events:event_list' %}" class="btn btn-primary btn-sm">Browse Events</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleMySquadMembers(key) {
+  var row = document.getElementById('my-squad-members-' + key);
+  var arrow = document.getElementById('my-squad-arrow-' + key);
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    arrow.style.transform = 'rotate(90deg)';
+  } else {
+    row.style.display = 'none';
+    arrow.style.transform = '';
+  }
+}
+</script>
+{% endblock %}

@@ -73,7 +73,7 @@
                   {% endif %}
                   {% if event.signups_open %}
                     {% if event.pk in user_signup_event_ids %}
-                    <span class="badge badge-success badge-sm">Signed up</span>
+                    <span class="badge badge-success badge-sm whitespace-nowrap">Signed up</span>
                     {% else %}
                     <a href="{% url 'events:event_detail' event.pk %}" class="btn btn-primary btn-xs">Sign Up</a>
                     {% endif %}

@@ -9,6 +9,12 @@
 .squad-assign-ctrl{display:none}
 .assign-mode .squad-assign-ctrl{display:inline}
 .assign-mode .no-squad-dash{display:none}
+@media(max-width:767px){
+  [data-signup-table] [data-col="zwid"],
+  [data-signup-table] [data-col="ftp"],
+  [data-signup-table] [data-col="wkg"],
+  [data-signup-table] [data-col="notes"]{display:none!important}
+}
 </style>
 <div class="max-w-6xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
@@ -69,7 +75,7 @@
         {% if event.signups_open %}
           {% if user_signup and user_signup.status == "registered" %}
           <div class="flex items-center gap-3 ml-auto">
-            <span class="badge badge-success">Signed up</span>
+            <span class="badge badge-success whitespace-nowrap">Signed up</span>
             <button class="btn btn-outline btn-sm" onclick="document.getElementById('edit_signup_modal').showModal()">Edit Signup</button>
           </div>
           {% else %}
@@ -454,18 +460,25 @@
         <table class="table table-sm" id="squad-table">
           <thead>
             <tr>
+              <th class="!px-0 !w-6"></th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
               <th data-sort="num" class="cursor-pointer hover:text-primary select-none">Members</th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Captain</th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Vice Captain</th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">ZR Category</th>
-              <th></th>
             </tr>
           </thead>
           <tbody>
             {% for squad in squads %}
             <tr class="squad-row">
+              <td class="!px-0 !w-6">
+                <button type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleSquadMembers({{ squad.pk }})" title="Show details">
+                  <svg id="squad-arrow-{{ squad.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </td>
               <td class="font-semibold">{{ squad.name }}</td>
               <td>{{ squad.squad_timezone|default:"-" }}</td>
               <td>
@@ -485,13 +498,6 @@
                 {% else %}
                 -
                 {% endif %}
-              </td>
-              <td>
-                <button type="button" class="btn btn-ghost btn-xs" onclick="toggleSquadMembers({{ squad.pk }})" title="Show details">
-                  <svg id="squad-arrow-{{ squad.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
               </td>
             </tr>
             <tr id="squad-members-{{ squad.pk }}" style="display:none">

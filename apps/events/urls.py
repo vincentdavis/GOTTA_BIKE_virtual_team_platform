@@ -16,6 +16,7 @@ from apps.events.views import (
     event_signup_edit_view,
     event_signup_view,
     event_signup_withdraw_view,
+    my_events_view,
     squad_assign_view,
     squad_create_view,
     squad_delete_view,
@@ -26,6 +27,7 @@ app_name = "events"
 
 urlpatterns = [
     path("", event_list_view, name="event_list"),
+    path("my-events/", my_events_view, name="my_events"),
     path("create/", event_create_view, name="event_create"),
     path("<int:pk>/", event_detail_view, name="event_detail"),
     path("<int:pk>/edit/", event_edit_view, name="event_edit"),
