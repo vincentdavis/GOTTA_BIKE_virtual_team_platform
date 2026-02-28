@@ -21,6 +21,14 @@
         </a>
       </th>
       <th>
+        <a href="{{ base_url }}&sort=guild_nickname&dir={% if sort_by == 'guild_nickname' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+          Guild Nickname
+          {% if sort_by == "guild_nickname" %}
+            <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+          {% endif %}
+        </a>
+      </th>
+      <th>
         <a href="{{ base_url }}&sort=zp_name&dir={% if sort_by == 'zp_name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
           ZP Name
           {% if sort_by == "zp_name" %}
@@ -95,6 +103,13 @@
             </a>
           {% elif rider.discord_nickname %}
             {{ rider.discord_nickname }}
+          {% else %}
+            <span class="text-base-content/30">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if rider.guild_nickname %}
+            {{ rider.guild_nickname }}
           {% else %}
             <span class="text-base-content/30">-</span>
           {% endif %}
@@ -186,7 +201,7 @@
       </tr>
     {% empty %}
       <tr>
-        <td colspan="12" class="text-center text-base-content/50">
+        <td colspan="13" class="text-center text-base-content/50">
           No members found.
         </td>
       </tr>

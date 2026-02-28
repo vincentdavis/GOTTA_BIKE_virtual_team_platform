@@ -10,7 +10,7 @@ import logfire
 from constance import config
 from django.db.models import Count, Max, Min, OuterRef, Subquery
 
-from apps.accounts.models import User
+from apps.accounts.models import GuildMember, User
 from apps.team.models import RaceReadyRecord
 from apps.zwiftpower.models import ZPRiderResults, ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -604,13 +604,17 @@ def get_performance_review_data() -> list[PerformanceRider]:
 class MembershipReviewRider:
     """Member data for membership review view."""
 
-    zwid: int
+    zwid: int = 0
     user_id: int | None = None
 
     # User data
     full_name: str = ""
     discord_id: str = ""
     discord_nickname: str = ""
+
+    # Guild data
+    guild_nickname: str = ""
+    in_guild: bool = False
 
     # ZP/ZR names
     zp_name: str = ""
@@ -839,8 +843,78 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
 
         riders.append(rider)
 
+    # Enrich with guild member data and add guild-only members
+    guild_members = GuildMember.objects.filter(
+        date_left__isnull=True, is_bot=False,
+    ).values("discord_id", "nickname", "username", "display_name", "user_id")
+    guild_by_discord_id: dict[str, dict] = {gm["discord_id"]: gm for gm in guild_members}
+
+    # Build set of discord_ids already represented
+    seen_discord_ids: set[str] = set()
+    for rider in riders:
+        if rider.discord_id and rider.discord_id in guild_by_discord_id:
+            gm = guild_by_discord_id[rider.discord_id]
+            rider.guild_nickname = gm["nickname"] or ""
+            rider.in_guild = True
+            seen_discord_ids.add(rider.discord_id)
+
+    # Also check users WITHOUT zwid that are linked to guild members
+    users_no_zwid = {
+        u["discord_id"]: u
+        for u in User.objects.filter(
+            zwid__isnull=True, discord_id__isnull=False,
+        ).exclude(discord_id="").values(
+            "id", "first_name", "last_name", "discord_id", "discord_nickname", "discord_username",
+            "gender", "zwid_verified",
+            "birth_year", "city", "country", "timezone",
+            "trainer", "powermeter", "dual_recording", "heartrate_monitor",
+            "emergency_contact_name", "emergency_contact_phone",
+        )
+        if u["discord_id"]
+    }
+
+    # Add guild members not yet represented
+    for discord_id, gm in guild_by_discord_id.items():
+        if discord_id in seen_discord_ids:
+            continue
+        rider = MembershipReviewRider(zwid=0, has_account=False, in_guild=True)
+        rider.discord_id = discord_id
+        rider.guild_nickname = gm["nickname"] or ""
+        rider.discord_nickname = gm["display_name"] or gm["username"] or ""
+
+        # Check if there's a user without ZWID linked to this guild member
+        if discord_id in users_no_zwid:
+            u = users_no_zwid[discord_id]
+            rider.user_id = u["id"]
+            rider.has_account = True
+            rider.discord_nickname = u["discord_nickname"] or u["discord_username"] or rider.discord_nickname
+            first = u["first_name"] or ""
+            last = u["last_name"] or ""
+            rider.full_name = f"{first} {last}".strip()
+            if u["gender"] == "male":
+                rider.gender = "M"
+            elif u["gender"] == "female":
+                rider.gender = "F"
+            rider.birth_year = u["birth_year"]
+            rider.city = u["city"] or ""
+            rider.country = str(u["country"]) if u["country"] else ""
+            rider.country_name = countries.name(u["country"]) if u["country"] else ""
+            rider.timezone = u["timezone"] or ""
+            rider.trainer = u["trainer"] or ""
+            rider.powermeter = u["powermeter"] or ""
+            rider.dual_recording = u["dual_recording"]
+            rider.heartrate_monitor = u["heartrate_monitor"] or ""
+            rider.emergency_contact_name = u["emergency_contact_name"] or ""
+            rider.emergency_contact_phone = u["emergency_contact_phone"] or ""
+            rider.zwid_verified = u["zwid_verified"]
+
+        riders.append(rider)
+
     # Sort by best available name
-    sorted_riders = sorted(riders, key=lambda r: (r.full_name or r.zp_name or r.zr_name or "").lower())
+    sorted_riders = sorted(
+        riders,
+        key=lambda r: (r.full_name or r.discord_nickname or r.guild_nickname or r.zp_name or r.zr_name or "").lower(),
+    )
 
     logfire.debug(
         "Membership review data loaded",
@@ -848,6 +922,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
         users_with_zwid=len(user_by_zwid),
         zp_riders=len(zp_by_zwid),
         zr_riders=len(zr_by_zwid),
+        guild_members=len(guild_by_discord_id),
     )
 
     return sorted_riders

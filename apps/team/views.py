@@ -1,7 +1,7 @@
 """Views for team app."""
 
 import uuid
-from datetime import datetime, timezone as dt_tz
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 import logfire
@@ -1248,6 +1248,8 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     # Apply status filter
     if status_filter == "active":
         riders = [r for r in riders if r.is_active_member]
+    elif status_filter == "guild_only":
+        riders = [r for r in riders if r.in_guild and not r.in_zwiftpower and not r.in_zwiftracing and r.zwid == 0]
     elif status_filter in ("both", "zp_only", "zr_only", "left", "none"):
         riders = [r for r in riders if r.membership_status == status_filter]
 
@@ -1271,7 +1273,8 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
         "timezone": lambda r: r.timezone.lower(),
         "birth_year": lambda r: r.birth_year or 0,
         "trainer": lambda r: r.trainer.lower(),
-        "zp_left": lambda r: r.zp_date_left or datetime(1970, 1, 1, tzinfo=dt_tz.utc),
+        "zp_left": lambda r: r.zp_date_left or datetime(1970, 1, 1, tzinfo=UTC),
+        "guild_nickname": lambda r: r.guild_nickname.lower(),
     }
     if sort_by in sort_keys:
         riders = sorted(riders, key=sort_keys[sort_by], reverse=reverse)
