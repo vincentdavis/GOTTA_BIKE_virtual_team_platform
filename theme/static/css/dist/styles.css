@@ -2512,6 +2512,16 @@
     }
   }
   @layer daisyui.l1.l2 {
+    .dropdown-bottom {
+      --anchor-v: bottom;
+    }
+    .dropdown-bottom .dropdown-content {
+      top: 100%;
+      bottom: auto;
+      transform-origin: top;
+    }
+  }
+  @layer daisyui.l1.l2 {
     .dropdown-top {
       --anchor-v: top;
     }
@@ -4589,6 +4599,9 @@
   }
   .h-6 {
     height: calc(var(--spacing) * 6);
+  }
+  .h-7 {
+    height: calc(var(--spacing) * 7);
   }
   .h-8 {
     height: calc(var(--spacing) * 8);

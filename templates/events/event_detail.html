@@ -265,9 +265,9 @@
                 <td data-col="category">
                   {% if entry.in_zwiftpower %}
                     {% if entry.zp_category_w %}
-                    <span class="badge badge-secondary badge-sm">{{ entry.zp_category_w }}</span>
+                    {% zp_category_badge entry.zp_category_w is_women=True %}
                     {% else %}
-                    <span class="badge badge-primary badge-sm">{{ entry.zp_category|default:"-" }}</span>
+                    {% zp_category_badge entry.zp_category|default:"-" %}
                     {% endif %}
                   {% else %}
                   <span class="text-base-content/30">-</span>
@@ -604,9 +604,9 @@
                         <td data-col="sq_category">
                           {% if member.in_zwiftpower %}
                             {% if member.zp_category_w %}
-                            <span class="badge badge-secondary badge-sm">{{ member.zp_category_w }}</span>
+                            {% zp_category_badge member.zp_category_w is_women=True %}
                             {% else %}
-                            <span class="badge badge-primary badge-sm">{{ member.zp_category|default:"-" }}</span>
+                            {% zp_category_badge member.zp_category|default:"-" %}
                             {% endif %}
                           {% else %}
                           <span class="text-base-content/30">-</span>

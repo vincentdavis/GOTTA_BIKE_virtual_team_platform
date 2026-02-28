@@ -128,6 +128,8 @@ class UnifiedRider:
     zr_name: str = ""
     zr_category: str = ""
     zr_date_left: datetime | None = None
+    zr_rating: Decimal | None = None
+    zr_phenotype: str = ""
 
     # ZwiftPower Results (aggregated)
     has_results: bool = False
@@ -236,7 +238,9 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     zp_riders = ZPTeamRiders.objects.all().values(
         "zwid", "name", "div", "divw", "date_left", "rank", "ftp", "weight"
     )
-    zr_riders = ZRRider.objects.all().values("zwid", "name", "race_current_category", "date_left")
+    zr_riders = ZRRider.objects.all().values(
+        "zwid", "name", "race_current_category", "date_left", "race_current_rating", "phenotype_value",
+    )
 
     # Get result counts per rider
     result_counts = ZPRiderResults.objects.values("zwid").annotate(count=Count("id"))
@@ -294,6 +298,8 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.zr_name = zr["name"]
             rider.zr_category = zr["race_current_category"] or ""
             rider.zr_date_left = zr["date_left"]
+            rider.zr_rating = zr["race_current_rating"]
+            rider.zr_phenotype = zr["phenotype_value"] or ""
 
         # Results data
         if zwid in results_by_zwid:

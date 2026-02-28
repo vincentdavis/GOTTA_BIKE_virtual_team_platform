@@ -721,6 +721,8 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "current_section": {"name": "Site Images", "key": "site_images"},
                 "is_site_images": True,
                 "site_settings_obj": site_settings_obj,
+                "zp_emoji_items": _build_zp_emoji_items(site_settings_obj),
+                "zr_emoji_items": _build_zr_emoji_items(site_settings_obj),
                 "available_roles": [],
             },
         )
@@ -854,6 +856,65 @@ def config_section_update(request: HttpRequest, section_key: str) -> HttpRespons
             "errors": errors,
         },
     )
+
+
+def _build_zp_emoji_items(site_settings_obj) -> list[dict]:
+    """Build list of ZP category emoji items for template rendering.
+
+    Args:
+        site_settings_obj: SiteSettings instance.
+
+    Returns:
+        List of dicts with field_name, label, and file for each ZP category emoji.
+
+    """
+    items = []
+    for field_name, label in [
+        ("zp_a_emoji", "ZP A Category"),
+        ("zp_b_emoji", "ZP B Category"),
+        ("zp_c_emoji", "ZP C Category"),
+        ("zp_d_emoji", "ZP D Category"),
+        ("zp_e_emoji", "ZP E Category"),
+    ]:
+        file_field = getattr(site_settings_obj, field_name, None)
+        items.append({
+            "field_name": field_name,
+            "label": label,
+            "file": file_field if file_field else None,
+        })
+    return items
+
+
+def _build_zr_emoji_items(site_settings_obj) -> list[dict]:
+    """Build list of ZR category emoji items for template rendering.
+
+    Args:
+        site_settings_obj: SiteSettings instance.
+
+    Returns:
+        List of dicts with field_name, label, and file for each ZR category emoji.
+
+    """
+    items = []
+    for field_name, label in [
+        ("zr_diamond_emoji", "Diamond"),
+        ("zr_ruby_emoji", "Ruby"),
+        ("zr_emerald_emoji", "Emerald"),
+        ("zr_sapphire_emoji", "Sapphire"),
+        ("zr_amethyst_emoji", "Amethyst"),
+        ("zr_platinum_emoji", "Platinum"),
+        ("zr_gold_emoji", "Gold"),
+        ("zr_silver_emoji", "Silver"),
+        ("zr_bronze_emoji", "Bronze"),
+        ("zr_copper_emoji", "Copper"),
+    ]:
+        file_field = getattr(site_settings_obj, field_name, None)
+        items.append({
+            "field_name": field_name,
+            "label": label,
+            "file": file_field if file_field else None,
+        })
+    return items
 
 
 @login_required
@@ -990,11 +1051,26 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
             deleted_file=old_hero_name,
         )
 
-    # Handle verification emoji uploads and deletions
+    # Handle verification emoji and ZP category emoji uploads and deletions
     for emoji_field, label in [
         ("not_verified_emoji", "Not Verified Emoji"),
         ("verified_emoji", "Verified Emoji"),
         ("extra_verified_emoji", "Extra Verified Emoji"),
+        ("zp_a_emoji", "ZP A Category Emoji"),
+        ("zp_b_emoji", "ZP B Category Emoji"),
+        ("zp_c_emoji", "ZP C Category Emoji"),
+        ("zp_d_emoji", "ZP D Category Emoji"),
+        ("zp_e_emoji", "ZP E Category Emoji"),
+        ("zr_diamond_emoji", "ZR Diamond Emoji"),
+        ("zr_ruby_emoji", "ZR Ruby Emoji"),
+        ("zr_emerald_emoji", "ZR Emerald Emoji"),
+        ("zr_sapphire_emoji", "ZR Sapphire Emoji"),
+        ("zr_amethyst_emoji", "ZR Amethyst Emoji"),
+        ("zr_platinum_emoji", "ZR Platinum Emoji"),
+        ("zr_gold_emoji", "ZR Gold Emoji"),
+        ("zr_silver_emoji", "ZR Silver Emoji"),
+        ("zr_bronze_emoji", "ZR Bronze Emoji"),
+        ("zr_copper_emoji", "ZR Copper Emoji"),
     ]:
         if emoji_field in request.FILES:
             uploaded_file = request.FILES[emoji_field]
@@ -1028,6 +1104,8 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
         "accounts/partials/config_site_images.html",
         {
             "site_settings_obj": site_settings_obj,
+            "zp_emoji_items": _build_zp_emoji_items(site_settings_obj),
+            "zr_emoji_items": _build_zr_emoji_items(site_settings_obj),
             "success": success,
             "errors": errors,
         },

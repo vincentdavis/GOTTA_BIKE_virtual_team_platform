@@ -199,6 +199,72 @@
         </div>
     </div>
 
+    <!-- ZP Category Emojis -->
+    <div class="divider">ZP Category Emojis</div>
+    <p class="text-sm text-base-content/70 mb-4">When uploaded, these replace the default letter badges for ZwiftPower categories.</p>
+
+    {% for item in zp_emoji_items %}
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text font-medium">{{ item.label }}</span>
+        </label>
+        <div class="flex items-start gap-4">
+            {% if item.file %}
+            <div class="relative">
+                <img src="{{ item.file.url }}" alt="{{ item.label }}" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
+                <button type="submit" name="delete_{{ item.field_name }}" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            {% endif %}
+            <div class="flex-1">
+                <input type="file"
+                       name="{{ item.field_name }}"
+                       accept="image/*"
+                       class="file-input file-input-bordered w-full">
+                <label class="label">
+                    <span class="label-text-alt">Recommended: 64x64 PNG with transparency</span>
+                </label>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- ZR Category Emojis -->
+    <div class="divider">ZR Category Emojis</div>
+    <p class="text-sm text-base-content/70 mb-4">When uploaded, these replace the default text badges for Zwift Racing categories.</p>
+
+    {% for item in zr_emoji_items %}
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text font-medium">{{ item.label }}</span>
+        </label>
+        <div class="flex items-start gap-4">
+            {% if item.file %}
+            <div class="relative">
+                <img src="{{ item.file.url }}" alt="{{ item.label }}" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
+                <button type="submit" name="delete_{{ item.field_name }}" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            {% endif %}
+            <div class="flex-1">
+                <input type="file"
+                       name="{{ item.field_name }}"
+                       accept="image/*"
+                       class="file-input file-input-bordered w-full">
+                <label class="label">
+                    <span class="label-text-alt">Recommended: 64x64 PNG with transparency</span>
+                </label>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
     <div class="form-control mt-6">
         <button type="submit" class="btn btn-primary">
             <span class="htmx-indicator loading loading-spinner loading-sm"></span>

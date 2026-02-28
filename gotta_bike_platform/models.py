@@ -61,6 +61,96 @@ class SiteSettings(models.Model):
         blank=True,
         help_text="Emoji/icon shown for extra-verified status (recommended: 64x64 PNG)",
     )
+    zp_a_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for ZwiftPower A category (recommended: 64x64 PNG)",
+    )
+    zp_b_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for ZwiftPower B category (recommended: 64x64 PNG)",
+    )
+    zp_c_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for ZwiftPower C category (recommended: 64x64 PNG)",
+    )
+    zp_d_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for ZwiftPower D category (recommended: 64x64 PNG)",
+    )
+    zp_e_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for ZwiftPower E category (recommended: 64x64 PNG)",
+    )
+    zr_diamond_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Diamond category (recommended: 64x64 PNG)",
+    )
+    zr_ruby_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Ruby category (recommended: 64x64 PNG)",
+    )
+    zr_emerald_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Emerald category (recommended: 64x64 PNG)",
+    )
+    zr_sapphire_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Sapphire category (recommended: 64x64 PNG)",
+    )
+    zr_amethyst_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Amethyst category (recommended: 64x64 PNG)",
+    )
+    zr_platinum_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Platinum category (recommended: 64x64 PNG)",
+    )
+    zr_gold_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Gold category (recommended: 64x64 PNG)",
+    )
+    zr_silver_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Silver category (recommended: 64x64 PNG)",
+    )
+    zr_bronze_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Bronze category (recommended: 64x64 PNG)",
+    )
+    zr_copper_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Zwift Racing Copper category (recommended: 64x64 PNG)",
+    )
     date_modified = models.DateTimeField(auto_now=True)
 
     class Meta:

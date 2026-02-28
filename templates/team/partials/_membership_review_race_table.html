@@ -1,3 +1,4 @@
+{% load accounts_tags %}
 {# Race Profile Table for Membership Review #}
 <div class="overflow-x-auto">
   <table class="table table-zebra table-sm">
@@ -153,7 +154,7 @@
         </td>
         <td>
           {% if rider.zp_category %}
-            <span class="badge badge-primary badge-sm">{{ rider.zp_category }}</span>
+            {% zp_category_badge rider.zp_category %}
           {% else %}
             <span class="text-base-content/30">-</span>
           {% endif %}

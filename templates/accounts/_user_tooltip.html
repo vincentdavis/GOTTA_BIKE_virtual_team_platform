@@ -1,0 +1,76 @@
+{% load accounts_tags %}
+<div class="dropdown dropdown-hover dropdown-bottom">
+  <a tabindex="0"
+     {% if user_id %}href="{% url 'accounts:public_profile' user_id %}"{% endif %}
+     class="flex items-center gap-1.5 {% if user_id %}link link-hover no-underline hover:underline{% endif %}">
+    {% if discord_avatar_url %}
+    <div class="avatar">
+      <div class="w-7 rounded-full">
+        <img src="{{ discord_avatar_url }}" alt="{{ display_name }}" loading="lazy" />
+      </div>
+    </div>
+    {% endif %}
+    <span>{{ display_name }}</span>
+    {% if is_race_ready %}
+      {% if site_settings.verified_emoji %}
+        <img src="{{ site_settings.verified_emoji.url }}" alt="Verified" class="h-5 w-5">
+      {% else %}
+        <span class="badge badge-success badge-sm">V</span>
+      {% endif %}
+    {% else %}
+      {% if site_settings.not_verified_emoji %}
+        <img src="{{ site_settings.not_verified_emoji.url }}" alt="Not Verified" class="h-5 w-5">
+      {% else %}
+        <span class="badge badge-ghost badge-sm">NV</span>
+      {% endif %}
+    {% endif %}
+    {% if in_zwiftpower %}
+      {% if zp_category_w %}
+        {% zp_category_badge zp_category_w is_women=True %}
+      {% else %}
+        {% zp_category_badge zp_category|default:"-" %}
+      {% endif %}
+    {% endif %}
+    {% if in_zwiftracing %}
+      {% zr_category_badge zr_category %}
+    {% endif %}
+  </a>
+  <div tabindex="0" class="dropdown-content bg-base-100 rounded-box shadow-lg z-50 p-3 w-56 border border-base-300">
+    <p class="font-semibold text-sm mb-1">{{ display_name }}</p>
+    <div class="text-xs text-base-content/70 space-y-0.5">
+      {% if zwid %}
+      <p>ZWID: <span class="font-medium font-mono text-base-content">{{ zwid }}</span></p>
+      {% endif %}
+      {% if zp_category or zp_category_w %}
+      <p>ZP Category: <span class="font-medium text-base-content">{{ zp_category_w|default:zp_category }}</span></p>
+      {% endif %}
+      {% if zr_category %}
+      <p>ZR Category: <span class="font-medium text-base-content">{{ zr_category }}</span></p>
+      {% endif %}
+      {% if zr_rating %}
+      <p>ZR Rating: <span class="font-medium text-base-content">{{ zr_rating }}</span></p>
+      {% endif %}
+      {% if zr_phenotype %}
+      <p>Phenotype: <span class="font-medium text-base-content">{{ zr_phenotype }}</span></p>
+      {% endif %}
+      {% if not zp_category and not zp_category_w and not zr_category %}
+      <p class="text-base-content/40">No ZP/ZR data</p>
+      {% endif %}
+      <p>Race Verified: <span class="font-medium text-base-content">{% if is_race_ready %}Yes{% else %}No{% endif %}</span></p>
+    </div>
+    <div class="flex flex-wrap gap-2 mt-2">
+      {% if user_id %}
+      <a href="{% url 'accounts:public_profile' user_id %}"
+         class="inline-block px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary rounded">Profile</a>
+      {% endif %}
+      {% if zwid and in_zwiftpower %}
+      <a href="https://zwiftpower.com/profile.php?z={{ zwid }}" target="_blank" rel="noopener"
+         class="inline-block px-1.5 py-0.5 text-xs font-bold text-warning-content bg-warning rounded">ZP</a>
+      {% endif %}
+      {% if zwid and in_zwiftracing %}
+      <a href="https://www.zwiftracing.app/riders/{{ zwid }}" target="_blank" rel="noopener"
+         class="inline-block px-1.5 py-0.5 text-xs font-bold text-info-content bg-info rounded">ZR</a>
+      {% endif %}
+    </div>
+  </div>
+</div>

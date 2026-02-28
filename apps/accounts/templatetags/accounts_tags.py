@@ -11,6 +11,27 @@ from apps.accounts.permission_registry import get_permission_help
 
 register = template.Library()
 
+ZP_CATEGORY_EMOJI_FIELDS = {
+    "A": "zp_a_emoji",
+    "B": "zp_b_emoji",
+    "C": "zp_c_emoji",
+    "D": "zp_d_emoji",
+    "E": "zp_e_emoji",
+}
+
+ZR_CATEGORY_EMOJI_FIELDS = {
+    "Diamond": "zr_diamond_emoji",
+    "Ruby": "zr_ruby_emoji",
+    "Emerald": "zr_emerald_emoji",
+    "Sapphire": "zr_sapphire_emoji",
+    "Amethyst": "zr_amethyst_emoji",
+    "Platinum": "zr_platinum_emoji",
+    "Gold": "zr_gold_emoji",
+    "Silver": "zr_silver_emoji",
+    "Bronze": "zr_bronze_emoji",
+    "Copper": "zr_copper_emoji",
+}
+
 
 @register.filter
 def permission_help(constance_key: str) -> dict | None:
@@ -176,3 +197,77 @@ def weight_diff(record_weight: Decimal | float | None, zp_weight: Decimal | floa
     if diff > 0:
         return f"+{diff:.1f} kg"
     return f"{diff:.1f} kg"
+
+
+@register.simple_tag(takes_context=True)
+def zp_category_badge(context, category, is_women=False):
+    """Render a ZP category as emoji image or badge.
+
+    If a ZP category emoji is uploaded in SiteSettings, renders an img tag.
+    Otherwise falls back to the standard badge span.
+
+    Args:
+        context: Template context (for site_settings access).
+        category: The ZP category letter (e.g., "A", "B", "C").
+        is_women: Whether to use badge-secondary styling (women's category).
+
+    Returns:
+        HTML string for the category display.
+
+    """
+    if not category or category == "-":
+        return mark_safe('<span class="text-base-content/30">-</span>')
+
+    from django.utils.html import escape
+
+    escaped_category = escape(category)
+
+    site_settings = context.get("site_settings")
+    if site_settings:
+        field_name = ZP_CATEGORY_EMOJI_FIELDS.get(category)
+        if field_name:
+            emoji_file = getattr(site_settings, field_name, None)
+            if emoji_file:
+                return mark_safe(  # noqa: S308
+                    f'<img src="{escape(emoji_file.url)}" alt="{escaped_category}" '
+                    f'class="h-7 w-7" title="Category {escaped_category}">'
+                )
+
+    badge_class = "badge-secondary" if is_women else "badge-primary"
+    return mark_safe(f'<span class="badge {badge_class} badge-sm">{escaped_category}</span>')  # noqa: S308
+
+
+@register.simple_tag(takes_context=True)
+def zr_category_badge(context, category):
+    """Render a ZR category as emoji image or badge.
+
+    If a ZR category emoji is uploaded in SiteSettings, renders an img tag.
+    Otherwise falls back to the standard badge span.
+
+    Args:
+        context: Template context (for site_settings access).
+        category: The ZR category name (e.g., "Gold", "Silver").
+
+    Returns:
+        HTML string for the category display.
+
+    """
+    if not category:
+        return mark_safe('<span class="text-base-content/30">-</span>')
+
+    from django.utils.html import escape
+
+    escaped_category = escape(category)
+
+    site_settings = context.get("site_settings")
+    if site_settings:
+        field_name = ZR_CATEGORY_EMOJI_FIELDS.get(category)
+        if field_name:
+            emoji_file = getattr(site_settings, field_name, None)
+            if emoji_file:
+                return mark_safe(  # noqa: S308
+                    f'<img src="{escape(emoji_file.url)}" alt="{escaped_category}" '
+                    f'class="h-7 w-7" title="{escaped_category}">'
+                )
+
+    return mark_safe(f'<span class="badge badge-secondary badge-sm">{escaped_category}</span>')  # noqa: S308
