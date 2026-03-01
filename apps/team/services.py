@@ -108,6 +108,7 @@ class UnifiedRider:
     has_account: bool = False
     user_id: int | None = None
     username: str = ""
+    discord_id: str = ""
     discord_username: str = ""
     discord_avatar_url: str = ""
     zwid_verified: bool = False
@@ -269,6 +270,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.has_account = True
             rider.user_id = u["id"]
             rider.username = u["username"]
+            rider.discord_id = u["discord_id"] or ""
             rider.discord_username = u["discord_username"] or ""
             rider.zwid_verified = u["zwid_verified"]
             rider.user_gender = u["gender"] or ""
