@@ -243,14 +243,25 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
         squad_data = []
         for squad in event_squads:
             squad_grids = grids_by_squad.get(squad.pk, [])
+            pending_count = 0
             for g in squad_grids:
                 g.user_responded = g.pk in responded_grid_ids
+                if g.is_published and not g.user_responded:
+                    pending_count += 1
             squad_data.append({
                 "squad": squad,
                 "grids": squad_grids,
+                "pending_availability_count": pending_count,
                 "members": members_by_squad.get(squad.pk, []),
             })
-        events_data.append({"event": event, "squads": squad_data})
+        event_pending = sum(sq["pending_availability_count"] for sq in squad_data)
+        has_grids = any(sq["grids"] for sq in squad_data)
+        events_data.append({
+            "event": event,
+            "squads": squad_data,
+            "pending_availability_count": event_pending,
+            "has_availability_grids": has_grids,
+        })
 
     logfire.debug("My events viewed", user_id=request.user.id, event_count=len(events_data))
     return render(
