@@ -12,6 +12,7 @@ from apps.accounts.permission_registry import get_permission_help
 register = template.Library()
 
 ZP_CATEGORY_EMOJI_FIELDS = {
+    "A+": "zp_a_plus_emoji",
     "A": "zp_a_emoji",
     "B": "zp_b_emoji",
     "C": "zp_c_emoji",

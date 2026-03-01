@@ -870,6 +870,7 @@ def _build_zp_emoji_items(site_settings_obj) -> list[dict]:
     """
     items = []
     for field_name, label in [
+        ("zp_a_plus_emoji", "ZP A+ Category"),
         ("zp_a_emoji", "ZP A Category"),
         ("zp_b_emoji", "ZP B Category"),
         ("zp_c_emoji", "ZP C Category"),

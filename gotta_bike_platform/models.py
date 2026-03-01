@@ -61,6 +61,12 @@ class SiteSettings(models.Model):
         blank=True,
         help_text="Emoji/icon shown for extra-verified status (recommended: 64x64 PNG)",
     )
+    zp_a_plus_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for ZwiftPower A+ category (recommended: 64x64 PNG)",
+    )
     zp_a_emoji = models.ImageField(
         upload_to="site/",
         null=True,

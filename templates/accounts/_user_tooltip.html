@@ -2,7 +2,7 @@
 <div class="dropdown dropdown-hover dropdown-bottom">
   <a tabindex="0"
      {% if user_id %}href="{% url 'accounts:public_profile' user_id %}"{% endif %}
-     class="flex items-center gap-1.5 {% if user_id %}link link-hover no-underline hover:underline{% endif %}">
+     class="flex items-center gap-1.5 flex-wrap {% if user_id %}link link-hover no-underline hover:underline{% endif %}">
     {% if discord_avatar_url %}
     <div class="avatar">
       <div class="w-7 rounded-full">
@@ -52,6 +52,9 @@
       {% endif %}
       {% if zr_phenotype %}
       <p>Phenotype: <span class="font-medium text-base-content">{{ zr_phenotype }}</span></p>
+      {% endif %}
+      {% if zr_age %}
+      <p>Age: <span class="font-medium text-base-content">{{ zr_age }}</span></p>
       {% endif %}
       {% if not zp_category and not zp_category_w and not zr_category %}
       <p class="text-base-content/40">No ZP/ZR data</p>

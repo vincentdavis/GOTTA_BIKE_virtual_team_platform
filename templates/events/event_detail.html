@@ -204,7 +204,7 @@
             <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
           </div>
         </div>
-        <div class="overflow-x-auto pb-8">
+        <div>
           <table class="table table-sm" data-signup-table="detail">
             <thead>
               <tr>
@@ -233,17 +233,7 @@
               {% for entry in signups %}
               <tr>
                 <td data-col="name">
-                  <a href="{% url 'accounts:public_profile' entry.user.pk %}" class="link link-hover">{{ entry.user.get_full_name|default:entry.user.discord_username }}</a>
-                  {% if entry.in_zwiftpower and entry.zwid %}
-                  <a href="https://zwiftpower.com/profile.php?z={{ entry.zwid }}" target="_blank" rel="noopener"
-                     class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded"
-                     title="View on ZwiftPower">ZP</a>
-                  {% endif %}
-                  {% if entry.in_zwiftracing and entry.zwid %}
-                  <a href="https://www.zwiftracing.app/riders/{{ entry.zwid }}" target="_blank" rel="noopener"
-                     class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded"
-                     title="View on Zwift Racing">ZR</a>
-                  {% endif %}
+                  {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                 </td>
                 <td data-col="zwid">
                   {% if entry.zwid %}
@@ -553,7 +543,7 @@
                     {% endif %}
                   </div>
                   {% if squad.enriched_members %}
-                  <div class="overflow-x-auto">
+                  <div>
                   <table class="table table-xs squad-member-table">
                     <thead>
                       <tr>
@@ -580,17 +570,7 @@
                       <tr>
                         <td data-col="sq_name">
                           {% if squad.captain and member.user.pk == squad.captain.pk %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif squad.vice_captain and member.user.pk == squad.vice_captain.pk %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
-                          <a href="{% url 'accounts:public_profile' member.user.pk %}" class="link link-hover">{{ member.user.get_full_name|default:member.user.discord_username }}</a>
-                          {% if member.in_zwiftpower and member.zwid %}
-                          <a href="https://zwiftpower.com/profile.php?z={{ member.zwid }}" target="_blank" rel="noopener"
-                             class="ml-1 inline-block px-1 text-xs font-bold text-warning-content bg-warning rounded"
-                             title="View on ZwiftPower">ZP</a>
-                          {% endif %}
-                          {% if member.in_zwiftracing and member.zwid %}
-                          <a href="https://www.zwiftracing.app/riders/{{ member.zwid }}" target="_blank" rel="noopener"
-                             class="ml-1 inline-block px-1 text-xs font-bold text-info-content bg-info rounded"
-                             title="View on Zwift Racing">ZR</a>
-                          {% endif %}
+                          {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
                         </td>
                         <td data-col="sq_gender">
                           {% if member.gender == "male" %}
@@ -928,8 +908,8 @@ function toggleSquadAssign() {
 (function() {
   var STORAGE_KEY = 'event_signup_cols';
   var DEFAULTS = {
-    name: true, zwid: true, timezone: true, gender: true, category: true,
-    rating: true, ftp: true, wkg: true, verified: true, squad: true, notes: true,
+    name: true, zwid: false, timezone: true, gender: true, category: true,
+    rating: true, ftp: false, wkg: false, verified: false, squad: true, notes: true,
     zr_age: false, zr_cur_rating: false, zr_cur_cat: false,
     zr_max30_rating: false, zr_max30_cat: false,
     zr_max90_rating: false, zr_max90_cat: false, zr_phenotype: false
@@ -971,7 +951,7 @@ function toggleSquadAssign() {
   var STORAGE_KEY = 'event_squad_cols';
   var DEFAULTS = {
     sq_name: true, sq_gender: true, sq_category: true, sq_rating: true,
-    sq_ftp: true, sq_wkg: true, sq_verified: true, sq_has_role: true,
+    sq_ftp: false, sq_wkg: false, sq_verified: false, sq_has_role: true,
     sq_zr_age: false, sq_zr_cur_rating: false, sq_zr_cur_cat: false,
     sq_zr_max30_rating: false, sq_zr_max30_cat: false,
     sq_zr_max90_rating: false, sq_zr_max90_cat: false, sq_zr_phenotype: false
