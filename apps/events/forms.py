@@ -70,15 +70,21 @@ def _get_voice_channel_choices() -> list:
     return choices
 
 
-def _get_role_choices() -> list[tuple[str, str]]:
+def _get_role_choices(prefix: str = "") -> list[tuple[str, str]]:
     """Build choices list for Discord role Select widget.
+
+    Args:
+        prefix: If provided, only include roles whose name starts with this prefix.
 
     Returns:
         List of (role_id, name) tuples ordered by position (highest first).
 
     """
     choices: list[tuple[str, str]] = [("0", "(none)")]
-    choices.extend((role.role_id, f"@{role.name}") for role in DiscordRole.objects.order_by("-position"))
+    qs = DiscordRole.objects.order_by("-position")
+    if prefix:
+        qs = qs.filter(name__startswith=prefix)
+    choices.extend((role.role_id, f"@{role.name}") for role in qs)
     return choices
 
 
@@ -96,6 +102,12 @@ class EventForm(forms.ModelForm):
         label="Head Captain Role",
     )
 
+    event_role = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        label="Event Role",
+    )
+
     class Meta:
         """Meta options for EventForm."""
 
@@ -110,6 +122,7 @@ class EventForm(forms.ModelForm):
             "url",
             "discord_channel_id",
             "head_captain_role_id",
+            "event_role",
             "visible",
             "signups_open",
             "signup_instructions",
@@ -194,6 +207,16 @@ class EventForm(forms.ModelForm):
         self.fields["head_captain_role_id"].widget.choices = role_choices
         self.initial["head_captain_role_id"] = current_role
 
+        # Populate Discord role choices for event_role, filtered by prefix if set
+        prefix = self.initial.get("prefix", "") or (self.data.get("prefix", "") if self.is_bound else "")
+        event_role_choices = _get_role_choices(prefix=prefix)
+        current_event_role = str(self.initial.get("event_role", 0) or 0)
+        event_role_values = {c[0] for c in event_role_choices}
+        if current_event_role != "0" and current_event_role not in event_role_values:
+            event_role_choices.append((current_event_role, f"Unknown Role ({current_event_role})"))
+        self.fields["event_role"].widget.choices = event_role_choices
+        self.initial["event_role"] = current_event_role
+
     @staticmethod
     def _flat_choice_values(choices: list) -> set[str]:
         """Extract all values from a choices list including optgroups.
@@ -235,6 +258,19 @@ class EventForm(forms.ModelForm):
 
         """
         value = self.cleaned_data.get("head_captain_role_id", "0")
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return 0
+
+    def clean_event_role(self) -> int:
+        """Convert selected event role ID string back to int for the model.
+
+        Returns:
+            Role ID as integer (0 for none).
+
+        """
+        value = self.cleaned_data.get("event_role", "0")
         try:
             return int(value)
         except (ValueError, TypeError):

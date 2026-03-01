@@ -128,6 +128,8 @@ def _enrich_signups(signups, event=None):
         for sm in SquadMember.objects.filter(squad__event=event).select_related("squad"):
             squads_by_user.setdefault(sm.user_id, []).append(sm.squad)
 
+    event_role_id = str(event.event_role) if event and event.event_role else ""
+
     enriched = []
     for signup in signups:
         user = signup.user
@@ -145,6 +147,7 @@ def _enrich_signups(signups, event=None):
             "zwid": zwid,
             "gender": user.gender or "",
             "is_race_ready": user.is_race_ready,
+            "has_event_role": user.has_discord_role(event_role_id) if event_role_id else False,
             "in_zwiftpower": zp is not None,
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",

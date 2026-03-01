@@ -77,6 +77,10 @@ class Event(models.Model):
         default=0,
         help_text="Discord role ID for the head captain of this event (0 = none)",
     )
+    event_role = models.BigIntegerField(
+        default=0,
+        help_text="Discord role ID for the event (0 = none)",
+    )
     created_at = models.DateTimeField(default=timezone.now, help_text="When the event was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the event was last updated")
     created_by = models.ForeignKey(
