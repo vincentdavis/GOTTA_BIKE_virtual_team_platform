@@ -5,6 +5,19 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
+  {% if event %}
+  <div class="mb-4 flex gap-2">
+    <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-primary btn-sm">Manage Squads</a>
+    {% if can_assign_roles %}
+    <a href="{% url 'events:manage_roles' event.pk %}" class="btn btn-primary btn-sm">Manage Roles</a>
+    {% else %}
+    <span class="tooltip" data-tip="Requires Assign Roles permission">
+      <button class="btn btn-sm btn-disabled" disabled>Manage Roles</button>
+    </span>
+    {% endif %}
+  </div>
+  {% endif %}
+
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
       <h2 class="card-title text-2xl mb-6">{{ page_title }}</h2>
@@ -295,58 +308,6 @@
   </div>
 
   {% if event %}
-  <div class="card bg-base-200 shadow-xl mt-6">
-    <div class="card-body">
-      <div class="flex justify-between items-center mb-4">
-        <h3 class="text-lg font-semibold">Squads</h3>
-        <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">Add Squad</a>
-      </div>
-
-      {% if squads %}
-      <div class="overflow-x-auto">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Members</th>
-              <th>Captain</th>
-              <th>Vice Captain</th>
-              <th>ZR Category</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for squad in squads %}
-            <tr>
-              <td class="font-semibold">{{ squad.name }}</td>
-              <td>{{ squad.member_count }}</td>
-              <td>{% if squad.captain %}{{ squad.captain.get_full_name|default:squad.captain.discord_username }}{% else %}-{% endif %}</td>
-              <td>{% if squad.vice_captain %}{{ squad.vice_captain.get_full_name|default:squad.vice_captain.discord_username }}{% else %}-{% endif %}</td>
-              <td>
-                {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category %}
-                {{ squad.min_zwift_racing_category|default:"" }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %} &ndash; {% endif %}{{ squad.max_zwift_racing_category|default:"" }}
-                {% else %}
-                -
-                {% endif %}
-              </td>
-              <td class="flex gap-1">
-                <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="btn btn-ghost btn-xs">Edit</a>
-                <form method="post" action="{% url 'events:squad_delete' event.pk squad.pk %}" onsubmit="return confirm('Delete squad &quot;{{ squad.name }}&quot;?')">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-error btn-outline btn-xs">Delete</button>
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-      <p class="text-sm text-base-content/70">No squads yet. Click "Add Squad" to create one.</p>
-      {% endif %}
-    </div>
-  </div>
-
   {# Signups Management #}
   <div class="card bg-base-200 shadow-xl mt-6">
     <div class="card-body">

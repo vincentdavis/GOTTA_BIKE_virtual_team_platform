@@ -126,6 +126,15 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/events/{id}/availability/ - Manage availability",
         ],
     },
+    Permissions.ASSIGN_ROLES: {
+        "name": "Assign Roles",
+        "description": "Manage Discord role assignments for event and squad members",
+        "views": [
+            "/events/{id}/manage-roles/ - Manage Discord roles for event signups",
+            "/events/{id}/toggle-event-role/{user_id}/ - Toggle event Discord role",
+            "/events/{id}/squads/{squad_id}/toggle-role/{user_id}/ - Toggle squad Discord role",
+        ],
+    },
 }
 
 

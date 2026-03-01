@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Squads - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
+  </div>
+
+  <div class="flex justify-between items-center mb-4">
+    <h2 class="text-xl font-bold">Squads &mdash; {{ event.title }}</h2>
+    <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">Add Squad</a>
+  </div>
+
+  {% if squads %}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {% for squad in squads %}
+    <div class="card bg-base-200 shadow-md">
+      <div class="card-body p-4">
+        {# Header: name + action buttons #}
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="card-title text-base">{{ squad.name }}</h3>
+          <div class="flex gap-1">
+            <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="btn btn-primary btn-sm">Edit</a>
+            <form method="post" action="{% url 'events:squad_delete' event.pk squad.pk %}" onsubmit="return confirm('Delete squad &quot;{{ squad.name }}&quot;?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-error btn-outline btn-sm">Delete</button>
+            </form>
+          </div>
+        </div>
+
+        {# Subtitle badges #}
+        <div class="flex flex-wrap gap-3 text-sm text-base-content/70 mb-3">
+          <span>{{ squad.member_count }} member{{ squad.member_count|pluralize }}</span>
+          {% if squad.squad_timezone %}
+          <span>{{ squad.squad_timezone }}</span>
+          {% endif %}
+        </div>
+
+        {# Leadership section #}
+        {% if squad.captain or squad.vice_captain %}
+        <div class="card bg-base-300 p-3 mb-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Leadership</p>
+          <div class="space-y-1">
+            {% if squad.captain %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Captain</span>
+              <span class="text-sm">{{ squad.captain.get_full_name|default:squad.captain.discord_username }}</span>
+            </div>
+            {% endif %}
+            {% if squad.vice_captain %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Vice Captain</span>
+              <span class="text-sm">{{ squad.vice_captain.get_full_name|default:squad.vice_captain.discord_username }}</span>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        {# Category Range section #}
+        {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category or squad.min_zwift_category or squad.max_zwift_category %}
+        <div class="card bg-base-300 p-3 mb-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Category Range</p>
+          <div class="space-y-1">
+            {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">ZR Category</span>
+              <span class="text-sm">{{ squad.min_zwift_racing_category|default:"" }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %} &ndash; {% endif %}{{ squad.max_zwift_racing_category|default:"" }}</span>
+            </div>
+            {% endif %}
+            {% if squad.min_zwift_category or squad.max_zwift_category %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Zwift Category</span>
+              <span class="text-sm">{{ squad.min_zwift_category|default:"" }}{% if squad.min_zwift_category and squad.max_zwift_category %} &ndash; {% endif %}{{ squad.max_zwift_category|default:"" }}</span>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        {# Discord section #}
+        {% if squad.discord_channel_id or squad.audio_channel_id or squad.team_discord_role %}
+        <div class="card bg-base-300 p-3 mb-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Discord</p>
+          <div class="space-y-1">
+            {% if squad.discord_channel_id %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Channel</span>
+              <span class="text-sm">{% if squad.channel_name %}#{{ squad.channel_name }}{% else %}<span class="font-mono text-xs">{{ squad.discord_channel_id }}</span>{% endif %}</span>
+            </div>
+            {% endif %}
+            {% if squad.audio_channel_id %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Audio</span>
+              <span class="text-sm">{% if squad.audio_name %}{{ squad.audio_name }}{% else %}<span class="font-mono text-xs">{{ squad.audio_channel_id }}</span>{% endif %}</span>
+            </div>
+            {% endif %}
+            {% if squad.team_discord_role %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Role</span>
+              <span class="text-sm">{% if squad.role_name %}@{{ squad.role_name }}{% else %}<span class="font-mono text-xs">{{ squad.team_discord_role }}</span>{% endif %}</span>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        {# Links section #}
+        {% if squad.url or squad.invite_url %}
+        <div class="card bg-base-300 p-3 mb-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Links</p>
+          <div class="space-y-1">
+            {% if squad.url %}
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-base-content/70 text-sm">URL</span>
+              <a href="{{ squad.url }}" target="_blank" rel="noopener" class="link link-hover text-sm truncate max-w-[200px]">{{ squad.url }}</a>
+            </div>
+            {% endif %}
+            {% if squad.invite_url %}
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-base-content/70 text-sm">Invite URL</span>
+              <a href="{{ squad.invite_url }}" target="_blank" rel="noopener" class="link link-hover text-sm truncate max-w-[200px]">{{ squad.invite_url }}</a>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        {# Footer: timestamps #}
+        <div class="text-xs text-base-content/50 mt-1 flex gap-4">
+          <span>Created {{ squad.created_at|date:"M j, Y" }}</span>
+          {% if squad.updated_at != squad.created_at %}
+          <span>Updated {{ squad.updated_at|date:"M j, Y" }}</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <p class="text-sm text-base-content/70">No squads yet. Click "Add Squad" to create one.</p>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

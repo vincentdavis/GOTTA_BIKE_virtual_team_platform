@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% load accounts_tags %}
+
+{% block title %}Manage Discord Roles - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl mb-4">Manage Discord Roles &mdash; {{ event.title }}</h2>
+
+      {% if role_info %}
+      <div class="bg-base-300 rounded-lg p-4 mb-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Configured Roles</p>
+        <div class="space-y-1">
+          {% for ri in role_info %}
+          <div class="flex items-center gap-2 text-sm">
+            <span class="font-semibold">{{ ri.label }}:</span>
+            <span>{% if ri.name %}@{{ ri.name }}{% else %}<span class="text-base-content/50 italic">unknown</span>{% endif %}</span>
+            <span class="font-mono text-xs text-base-content/50">({{ ri.role_id }})</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if enriched_signups %}
+      <div class="mb-2">
+        <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-roles-search>
+      </div>
+      <div class="overflow-x-auto pb-8">
+        <table class="table table-sm" data-roles-table>
+          <thead>
+            <tr>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squads</th>
+              {% if event.event_role %}
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Event Role</th>
+              {% endif %}
+              {% for squad in role_squads %}
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">{{ squad.name }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for entry in enriched_signups %}
+            <tr>
+              <td>
+                <a href="{% url 'accounts:public_profile' entry.user.pk %}" class="link link-hover">{{ entry.user.get_full_name|default:entry.user.discord_username }}</a>
+              </td>
+              <td>
+                {% if entry.assigned_squads %}
+                  {% for sq in entry.assigned_squads %}{{ sq.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                {% else %}
+                  <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              {% if event.event_role %}
+              <td>
+                {% include "events/_event_role_cell.html" with event_pk=event.pk member_user_pk=entry.user.pk has_role=entry.has_event_role %}
+              </td>
+              {% endif %}
+              {% for srs in entry.squad_role_status %}
+              <td>
+                {% if srs.is_member %}
+                  {% include "events/_squad_role_cell.html" with event_pk=event.pk squad_pk=srs.squad.pk member_user_pk=entry.user.pk has_role=srs.has_role %}
+                {% else %}
+                  <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/70">No registered signups for this event.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  var searchInput = document.querySelector('[data-roles-search]');
+  var table = document.querySelector('[data-roles-table]');
+  if (!searchInput || !table) return;
+
+  searchInput.addEventListener('input', function() {
+    var query = this.value.toLowerCase();
+    table.querySelectorAll('tbody tr').forEach(function(row) {
+      var name = row.cells[0].textContent.toLowerCase();
+      row.style.display = name.indexOf(query) !== -1 ? '' : 'none';
+    });
+  });
+
+  var headers = table.querySelectorAll('th[data-sort]');
+  headers.forEach(function(th, colIdx) {
+    th.addEventListener('click', function() {
+      var sortType = th.getAttribute('data-sort');
+      var asc = th.getAttribute('data-dir') !== 'asc';
+      headers.forEach(function(h) {
+        h.removeAttribute('data-dir');
+        var ind = h.querySelector('.sort-indicator');
+        if (ind) ind.remove();
+      });
+      th.setAttribute('data-dir', asc ? 'asc' : 'desc');
+      var indicator = document.createElement('span');
+      indicator.className = 'sort-indicator text-primary ml-1';
+      indicator.textContent = asc ? '\u25B2' : '\u25BC';
+      th.appendChild(indicator);
+
+      var tbody = table.querySelector('tbody');
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort(function(a, b) {
+        var aText = a.cells[colIdx].textContent.trim();
+        var bText = b.cells[colIdx].textContent.trim();
+        if (sortType === 'num') {
+          var aNum = parseFloat(aText) || 0;
+          var bNum = parseFloat(bText) || 0;
+          return asc ? aNum - bNum : bNum - aNum;
+        }
+        return asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+      });
+      rows.forEach(function(row) { tbody.appendChild(row); });
+    });
+  });
+})();
+</script>
+{% endblock %}

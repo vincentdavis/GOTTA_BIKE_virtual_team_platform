@@ -518,7 +518,6 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
     else:
         form = EventForm(instance=event)
 
-    squads = event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
     enriched_signups = _enrich_signups(
         event.signups.select_related("user").all(), event=event
     )
@@ -528,10 +527,73 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
         {
             "form": form,
             "event": event,
-            "squads": squads,
             "signups": enriched_signups,
             "page_title": "Edit Event",
             "submit_label": "Save Changes",
+            "can_assign_roles": request.user.has_permission(Permissions.ASSIGN_ROLES),
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_GET
+def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Manage squads for an event.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+
+    Returns:
+        Rendered squad management page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized squad manage attempt",
+            event_id=event_pk,
+            user_id=request.user.id,
+            username=request.user.username,
+        )
+        messages.error(request, "You don't have permission to manage squads.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    squads = event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+
+    # Build ID→name lookups for Discord channels and roles
+    channel_ids = set()
+    role_ids = set()
+    for s in squads:
+        if s.discord_channel_id:
+            channel_ids.add(str(s.discord_channel_id))
+        if s.audio_channel_id:
+            channel_ids.add(str(s.audio_channel_id))
+        if s.team_discord_role:
+            role_ids.add(str(s.team_discord_role))
+
+    from apps.team.models import DiscordChannel, DiscordRole
+
+    channel_names = dict(
+        DiscordChannel.objects.filter(channel_id__in=channel_ids).values_list("channel_id", "name")
+    ) if channel_ids else {}
+    role_names = dict(
+        DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
+    ) if role_ids else {}
+
+    for s in squads:
+        s.channel_name = channel_names.get(str(s.discord_channel_id), "") if s.discord_channel_id else ""
+        s.audio_name = channel_names.get(str(s.audio_channel_id), "") if s.audio_channel_id else ""
+        s.role_name = role_names.get(str(s.team_discord_role), "") if s.team_discord_role else ""
+
+    return render(
+        request,
+        "events/squad_manage.html",
+        {
+            "event": event,
+            "squads": squads,
         },
     )
 
@@ -839,7 +901,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
                 user_id=request.user.id,
             )
             messages.success(request, f'Squad "{squad.name}" updated successfully!')
-            return redirect("events:event_detail", pk=event_pk)
+            return redirect("events:squad_manage", event_pk=event_pk)
     else:
         form = SquadForm(instance=squad)
 
@@ -1479,3 +1541,188 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "tz_is_default": tz_is_default,
         },
     )
+
+
+@require_GET
+@login_required
+@discord_permission_required("assign_roles", raise_exception=True)
+def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Display consolidated Discord role management for all event signups.
+
+    Shows a table of all signups with event role and per-squad role toggle buttons.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+
+    Returns:
+        Rendered role management page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    signups = event.signups.select_related("user").filter(status=EventSignup.Status.REGISTERED)
+    enriched_signups = _enrich_signups(signups, event=event)
+
+    # Squads that have a Discord role configured
+    role_squads = list(event.squads.exclude(team_discord_role=0).exclude(team_discord_role__isnull=True))
+
+    # Resolve Discord role IDs to names
+    from apps.team.models import DiscordRole
+
+    role_ids = set()
+    if event.event_role:
+        role_ids.add(str(event.event_role))
+    for s in role_squads:
+        role_ids.add(str(s.team_discord_role))
+    role_names = dict(
+        DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
+    ) if role_ids else {}
+
+    # Build role info list for display
+    role_info = []
+    if event.event_role:
+        role_info.append({
+            "label": "Event Role",
+            "name": role_names.get(str(event.event_role), ""),
+            "role_id": event.event_role,
+        })
+    for s in role_squads:
+        s.role_name = role_names.get(str(s.team_discord_role), "")
+        role_info.append({
+            "label": s.name,
+            "name": s.role_name,
+            "role_id": s.team_discord_role,
+        })
+
+    # Build squad membership lookup: {user_id: set(squad_ids)}
+    squad_member_map: dict[int, set[int]] = {}
+    for sm in SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER):
+        squad_member_map.setdefault(sm.user_id, set()).add(sm.squad_id)
+
+    # Enrich each signup with per-squad role status
+    for entry in enriched_signups:
+        user = entry["user"]
+        user_squads = squad_member_map.get(user.pk, set())
+        squad_role_status = []
+        for squad in role_squads:
+            if squad.pk in user_squads:
+                squad_role_status.append({
+                    "squad": squad,
+                    "is_member": True,
+                    "has_role": user.has_discord_role(squad.team_discord_role),
+                })
+            else:
+                squad_role_status.append({
+                    "squad": squad,
+                    "is_member": False,
+                    "has_role": False,
+                })
+        entry["squad_role_status"] = squad_role_status
+
+    logfire.info(
+        "Manage roles page viewed",
+        event_id=event_pk,
+        user_id=request.user.id,
+        signup_count=len(enriched_signups),
+    )
+    return render(
+        request,
+        "events/manage_roles.html",
+        {
+            "event": event,
+            "enriched_signups": enriched_signups,
+            "role_squads": role_squads,
+            "role_info": role_info,
+        },
+    )
+
+
+@login_required
+@discord_permission_required("assign_roles", raise_exception=True)
+@require_POST
+def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) -> HttpResponse:
+    """Toggle an event's Discord role for a signup user.
+
+    Adds the role if the user doesn't have it, removes it if they do.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        user_id: The target user primary key.
+
+    Returns:
+        HTMX partial or redirect to manage roles page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    role_id = event.event_role
+    if not role_id:
+        messages.error(request, "This event has no Discord role configured.")
+        return redirect("events:manage_roles", event_pk=event_pk)
+
+    target_user = get_object_or_404(User, pk=user_id)
+    if not target_user.discord_id:
+        messages.error(request, f"{target_user} has no linked Discord account.")
+        return redirect("events:manage_roles", event_pk=event_pk)
+
+    role_id_str = str(role_id)
+    if target_user.has_discord_role(role_id):
+        success = remove_discord_role(target_user.discord_id, role_id_str)
+        if success:
+            roles = dict(target_user.discord_roles or {})
+            roles.pop(role_id_str, None)
+            target_user.discord_roles = roles
+            target_user.save(update_fields=["discord_roles"])
+            logfire.info(
+                "Event Discord role removed",
+                event_id=event_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+                admin_user_id=request.user.id,
+            )
+            messages.success(request, f"Removed event role from {target_user}.")
+        else:
+            logfire.error(
+                "Failed to remove event Discord role",
+                event_id=event_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+            )
+            messages.error(request, "Failed to remove Discord role. Check bot token configuration.")
+    else:
+        success = add_discord_role(target_user.discord_id, role_id_str)
+        if success:
+            roles = dict(target_user.discord_roles or {})
+            roles[role_id_str] = event.title
+            target_user.discord_roles = roles
+            target_user.save(update_fields=["discord_roles"])
+            logfire.info(
+                "Event Discord role added",
+                event_id=event_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+                admin_user_id=request.user.id,
+            )
+            messages.success(request, f"Added event role to {target_user}.")
+        else:
+            logfire.error(
+                "Failed to add event Discord role",
+                event_id=event_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+            )
+            messages.error(request, "Failed to add Discord role. Check bot token configuration.")
+
+    if request.headers.get("HX-Request"):
+        has_role = target_user.has_discord_role(role_id)
+        return render(
+            request,
+            "events/_event_role_cell.html",
+            {
+                "event_pk": event_pk,
+                "member_user_pk": user_id,
+                "has_role": has_role,
+            },
+        )
+
+    return redirect("events:manage_roles", event_pk=event_pk)
