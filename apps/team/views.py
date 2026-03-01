@@ -35,6 +35,7 @@ from apps.team.services import (
 from apps.team.tasks import notify_application_update, notify_race_ready_change
 from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
+from apps.zwiftracing.models import ZRRider
 
 
 def _format_field_value_for_notification(field_name: str, value) -> str:
@@ -608,7 +609,24 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         return record.user.gender == request.user.gender
 
     # Create list of (record, can_review) tuples for template
-    records_with_review_status = [(record, user_can_review_record(record)) for record in records]
+    records_list = list(records)
+    records_with_review_status = [(record, user_can_review_record(record)) for record in records_list]
+
+    # Batch-fetch ZP/ZR data for user tooltip display
+    zwids = [r.user.zwid for r in records_list if r.user.zwid]
+    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
+    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+    for record in records_list:
+        zwid = record.user.zwid
+        zp = zp_by_zwid.get(zwid)
+        zr = zr_by_zwid.get(zwid)
+        record.tt_zp_category = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
+        record.tt_zp_category_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
+        record.tt_in_zwiftpower = zp is not None
+        record.tt_zr_category = getattr(zr, "race_current_category", "") or "" if zr else ""
+        record.tt_zr_rating = getattr(zr, "race_current_rating", None) if zr else None
+        record.tt_zr_phenotype = getattr(zr, "phenotype_value", "") or "" if zr else ""
+        record.tt_in_zwiftracing = zr is not None
 
     return render(
         request,

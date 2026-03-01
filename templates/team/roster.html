@@ -181,7 +181,7 @@
             {% for rider in roster %}
               <tr>
                 <td class="font-medium">
-                  {% include "accounts/_user_tooltip.html" with display_name=rider.display_name user_id=rider.user_id discord_avatar_url=rider.discord_avatar_url zwid=rider.zwid zp_category=rider.zp_category zp_category_w=rider.zp_category_w zr_category=rider.zr_category zr_rating=rider.zr_rating zr_phenotype=rider.zr_phenotype is_race_ready=rider.is_race_ready in_zwiftpower=rider.in_zwiftpower in_zwiftracing=rider.in_zwiftracing %}
+                  {% include "accounts/_user_tooltip.html" with display_name=rider.display_name user_id=rider.user_id discord_id=rider.discord_id discord_avatar_url=rider.discord_avatar_url zwid=rider.zwid zp_category=rider.zp_category zp_category_w=rider.zp_category_w zr_category=rider.zr_category zr_rating=rider.zr_rating zr_phenotype=rider.zr_phenotype is_race_ready=rider.is_race_ready in_zwiftpower=rider.in_zwiftpower in_zwiftracing=rider.in_zwiftracing %}
                 </td>
                 <td>
                   {% if rider.gender == "M" %}

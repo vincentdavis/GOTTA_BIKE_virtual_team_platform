@@ -234,7 +234,7 @@
               {% for entry in signups %}
               <tr>
                 <td data-col="name">
-                  {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                  {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                 </td>
                 <td data-col="zwid">
                   {% if entry.zwid %}
@@ -580,7 +580,7 @@
                       <tr>
                         <td data-col="sq_name">
                           {% if squad.captain and member.user.pk == squad.captain.pk %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif squad.vice_captain and member.user.pk == squad.vice_captain.pk %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
-                          {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
+                          {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_id=member.user.discord_id discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
                         </td>
                         <td data-col="sq_gender">
                           {% if member.gender == "male" %}

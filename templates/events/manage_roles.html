@@ -131,5 +131,36 @@
     });
   });
 })();
+
+document.body.addEventListener('showToast', function(e) {
+  var msgs = e.detail.value || e.detail;
+  if (!Array.isArray(msgs)) return;
+  var container = document.getElementById('messages-toast');
+  if (!container) {
+    container = document.createElement('div');
+    container.className = 'toast toast-top toast-end z-50';
+    container.id = 'messages-toast';
+    document.body.appendChild(container);
+  }
+  msgs.forEach(function(m) {
+    var cls = 'alert shadow-lg ';
+    if (m.tags === 'error') cls += 'alert-error';
+    else if (m.tags === 'warning') cls += 'alert-warning';
+    else if (m.tags === 'success') cls += 'alert-success';
+    else cls += 'alert-info';
+    var div = document.createElement('div');
+    div.className = cls;
+    div.setAttribute('role', 'alert');
+    div.innerHTML = '<span>' + m.message + '</span>' +
+      '<button type="button" class="btn btn-ghost btn-xs" aria-label="Close">&times;</button>';
+    div.querySelector('button').addEventListener('click', function() { div.remove(); });
+    container.appendChild(div);
+    setTimeout(function() {
+      div.style.transition = 'opacity 0.5s ease-out';
+      div.style.opacity = '0';
+      setTimeout(function() { div.remove(); }, 500);
+    }, 5000);
+  });
+});
 </script>
 {% endblock %}

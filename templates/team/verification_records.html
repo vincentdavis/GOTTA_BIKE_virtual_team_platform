@@ -100,43 +100,22 @@
             <tr>
               <th>User</th>
               <th>Type</th>
-              <th>Value</th>
               <th>Media</th>
               <th>Date</th>
               <th>Gender</th>
               <th>Status</th>
-              <th>Days Remaining</th>
+              <th>Expiry</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {% for record, can_review in records_with_review_status %}
             <tr class="{% if not can_review %}opacity-50{% endif %}">
-              <td>
-                <div class="font-medium">
-                  {{ record.user.first_name }} {{ record.user.last_name }}
-                  {% if record.user.zwid %}
-                    <a href="https://zwiftpower.com/profile.php?z={{ record.user.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-orange-400 bg-gray-700 rounded" title="View on ZwiftPower">ZP</a>
-                    <a href="https://www.zwiftracing.app/riders/{{ record.user.zwid }}" target="_blank" rel="noopener" class="ml-1 inline-block px-1 text-xs font-bold text-white bg-sky-500 rounded" title="View on Zwift Racing">ZR</a>
-                  {% endif %}
-                </div>
-                {% if record.user.discord_nickname %}
-                <div class="text-sm text-base-content/60">{{ record.user.discord_nickname }}</div>
-                {% endif %}
+              <td class="font-medium">
+                {% include "accounts/_user_tooltip.html" with display_name=record.user.get_full_name|default:record.user.discord_username user_id=record.user.pk discord_id=record.user.discord_id discord_avatar_url=record.user.discord_avatar_url zwid=record.user.zwid zp_category=record.tt_zp_category zp_category_w=record.tt_zp_category_w zr_category=record.tt_zr_category zr_rating=record.tt_zr_rating zr_phenotype=record.tt_zr_phenotype is_race_ready=record.user.is_race_ready in_zwiftpower=record.tt_in_zwiftpower in_zwiftracing=record.tt_in_zwiftracing %}
               </td>
               <td>
                 <span class="badge badge-sm text-xs whitespace-nowrap {% if record.verify_type == 'weight_full' %}badge-primary{% elif record.verify_type == 'weight_light' %}badge-secondary{% elif record.verify_type == 'height' %}badge-accent{% elif record.verify_type == 'power' %}badge-warning{% else %}badge-outline{% endif %}">{{ record.get_verify_type_display }}</span>
-              </td>
-              <td>
-                {% if record.weight %}
-                  <span class="font-mono">{{ record.weight }} kg</span>
-                {% elif record.height %}
-                  <span class="font-mono">{{ record.height }} cm</span>
-                {% elif record.ftp %}
-                  <span class="font-mono">{{ record.ftp }} W</span>
-                {% else %}
-                  <span class="text-base-content/30">-</span>
-                {% endif %}
               </td>
               <td>{{ record.get_media_type_display }}</td>
               <td>{{ record.date_created|date:"M d, Y" }}</td>
@@ -195,7 +174,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="9" class="text-center py-8 text-base-content/50">
+              <td colspan="8" class="text-center py-8 text-base-content/50">
                 No verification records found.
               </td>
             </tr>

@@ -5146,6 +5146,9 @@
       }
     }
   }
+  .bg-\[\#5865F2\] {
+    background-color: #5865F2;
+  }
   .bg-base-100 {
     background-color: var(--color-base-100);
   }

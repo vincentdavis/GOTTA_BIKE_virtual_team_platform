@@ -1151,7 +1151,7 @@ def squad_toggle_role_view(request: HttpRequest, event_pk: int, squad_pk: int, u
 
     if request.headers.get("HX-Request"):
         has_role = target_user.has_discord_role(role_id)
-        return render(
+        response = render(
             request,
             "events/_squad_role_cell.html",
             {
@@ -1161,6 +1161,11 @@ def squad_toggle_role_view(request: HttpRequest, event_pk: int, squad_pk: int, u
                 "has_role": has_role,
             },
         )
+        stored = messages.get_messages(request)
+        msg_list = [{"message": str(m), "tags": m.tags} for m in stored]
+        if msg_list:
+            response["HX-Trigger"] = json.dumps({"showToast": msg_list})
+        return response
 
     return redirect("events:event_detail", pk=event_pk)
 
@@ -1715,7 +1720,7 @@ def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) ->
 
     if request.headers.get("HX-Request"):
         has_role = target_user.has_discord_role(role_id)
-        return render(
+        response = render(
             request,
             "events/_event_role_cell.html",
             {
@@ -1724,5 +1729,10 @@ def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) ->
                 "has_role": has_role,
             },
         )
+        stored = messages.get_messages(request)
+        msg_list = [{"message": str(m), "tags": m.tags} for m in stored]
+        if msg_list:
+            response["HX-Trigger"] = json.dumps({"showToast": msg_list})
+        return response
 
     return redirect("events:manage_roles", event_pk=event_pk)
