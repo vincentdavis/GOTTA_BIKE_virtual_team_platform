@@ -233,6 +233,7 @@ class GuildMemberAdmin(admin.ModelAdmin):
     list_display: ClassVar[list[str]] = [
         "display_name_or_username",
         "nickname",
+        "display_name",
         "discord_profile_link",
         "user_link",
         "is_bot",
