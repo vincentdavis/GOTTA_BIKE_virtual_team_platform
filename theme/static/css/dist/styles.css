@@ -2938,6 +2938,9 @@
       cursor: pointer;
     }
   }
+  .z-10 {
+    z-index: 10;
+  }
   .z-50 {
     z-index: 50;
   }
@@ -4704,6 +4707,9 @@
   }
   .max-h-96 {
     max-height: calc(var(--spacing) * 96);
+  }
+  .max-h-\[70vh\] {
+    max-height: 70vh;
   }
   .\!min-h-0 {
     min-height: calc(var(--spacing) * 0) !important;
