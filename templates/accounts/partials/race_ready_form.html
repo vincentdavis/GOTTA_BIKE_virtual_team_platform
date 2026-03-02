@@ -153,6 +153,9 @@
         <span class="label-text">Upload File (optional)</span>
       </label>
       {{ race_ready_form.media_file }}
+      <div id="file-info" class="text-sm text-base-content/70 mt-1 hidden">
+        <span id="file-name"></span> (<span id="file-size"></span>)
+      </div>
       {% if race_ready_form.media_file.errors %}
         <label class="label">
           <span class="label-text-alt text-error">{{ race_ready_form.media_file.errors.0 }}</span>
@@ -161,6 +164,15 @@
       <label class="label">
         <span class="label-text-alt">Max 50MB. Allowed: jpg, jpeg, png, gif, mp4, mov, avi, webm</span>
       </label>
+    </div>
+
+    <!-- Upload Progress -->
+    <div id="upload-progress" class="hidden">
+      <div class="flex items-center gap-3">
+        <span class="loading loading-spinner loading-sm"></span>
+        <span class="text-sm">Uploading<span id="upload-pct"></span>...</span>
+      </div>
+      <progress id="upload-bar" class="progress progress-primary w-full mt-1" value="0" max="100"></progress>
     </div>
 
     <!-- URL -->
@@ -201,7 +213,7 @@
     {% endif %}
 
     <div class="form-control">
-      <button type="submit" class="btn btn-primary">
+      <button id="submit-btn" type="submit" class="btn btn-primary">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24"
              stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -320,6 +332,55 @@
           if (heightInput) {
               heightInput.addEventListener('input', updateHeightPreview);
               if (heightInput.value) updateHeightPreview();
+          }
+
+          // File info display
+          const fileInput = document.getElementById('id_media_file');
+          const fileInfo = document.getElementById('file-info');
+          const fileName = document.getElementById('file-name');
+          const fileSize = document.getElementById('file-size');
+          if (fileInput) {
+              fileInput.addEventListener('change', function () {
+                  if (this.files && this.files[0]) {
+                      const f = this.files[0];
+                      const mb = (f.size / 1024 / 1024).toFixed(1);
+                      fileName.textContent = f.name;
+                      fileSize.textContent = mb + ' MB';
+                      fileInfo.classList.remove('hidden');
+                  } else {
+                      fileInfo.classList.add('hidden');
+                  }
+              });
+          }
+
+          // Upload progress via HTMX
+          const form = document.querySelector('#race-ready-form-container form');
+          const progressEl = document.getElementById('upload-progress');
+          const progressBar = document.getElementById('upload-bar');
+          const progressPct = document.getElementById('upload-pct');
+          const submitBtn = document.getElementById('submit-btn');
+
+          if (form) {
+              form.addEventListener('htmx:xhr:progress', function (e) {
+                  if (e.detail.loaded && e.detail.total) {
+                      const pct = Math.round((e.detail.loaded / e.detail.total) * 100);
+                      progressBar.value = pct;
+                      progressPct.textContent = ' ' + pct + '%';
+                  }
+              });
+              form.addEventListener('htmx:beforeRequest', function () {
+                  if (fileInput && fileInput.files && fileInput.files.length > 0) {
+                      progressEl.classList.remove('hidden');
+                      progressBar.value = 0;
+                      progressPct.textContent = '';
+                  }
+                  submitBtn.disabled = true;
+                  submitBtn.classList.add('btn-disabled');
+                  submitBtn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Submitting...';
+              });
+              form.addEventListener('htmx:afterRequest', function () {
+                  progressEl.classList.add('hidden');
+              });
           }
       })();
   </script>

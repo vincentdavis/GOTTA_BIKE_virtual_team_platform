@@ -197,10 +197,28 @@
                     <span class="font-mono">{{ zp_data.rank }}</span>
                   </div>
                 {% endif %}
+                {% if zp_data.weight %}
+                  <div class="flex items-center justify-between">
+                    <span class="text-base-content/70">Weight</span>
+                    <span class="font-mono">{{ zp_data.weight }} kg</span>
+                  </div>
+                {% endif %}
                 {% if zp_data.ftp %}
                   <div class="flex items-center justify-between">
                     <span class="text-base-content/70">FTP</span>
-                    <span class="font-mono">{{ zp_data.ftp }}w</span>
+                    <span class="font-mono">{{ zp_data.ftp }}w{% if zp_data.wkg %} <span class="text-base-content/50">({{ zp_data.wkg }} w/kg)</span>{% endif %}</span>
+                  </div>
+                {% endif %}
+                {% if zp_data.h_1200_watts %}
+                  <div class="flex items-center justify-between">
+                    <span class="text-base-content/70">20min Power</span>
+                    <span class="font-mono">{{ zp_data.h_1200_watts }}w{% if zp_data.h_1200_wkg %} <span class="text-base-content/50">({{ zp_data.h_1200_wkg }} w/kg)</span>{% endif %}</span>
+                  </div>
+                {% endif %}
+                {% if zp_data.h_15_watts %}
+                  <div class="flex items-center justify-between">
+                    <span class="text-base-content/70">15sec Power</span>
+                    <span class="font-mono">{{ zp_data.h_15_watts }}w{% if zp_data.h_15_wkg %} <span class="text-base-content/50">({{ zp_data.h_15_wkg }} w/kg)</span>{% endif %}</span>
                   </div>
                 {% endif %}
               </div>
@@ -245,6 +263,35 @@
                     <span class="font-mono">{{ zr_data.rating }}</span>
                   </div>
                 {% endif %}
+                {% if zr_data.phenotype %}
+                  <div class="flex items-center justify-between">
+                    <span class="text-base-content/70">Phenotype</span>
+                    <span>{{ zr_data.phenotype }}{% if zr_data.phenotype_bias %} <span class="text-base-content/50 font-mono text-xs">({{ zr_data.phenotype_bias }})</span>{% endif %}</span>
+                  </div>
+                {% endif %}
+                {% if zr_data.age %}
+                  <div class="flex items-center justify-between">
+                    <span class="text-base-content/70">Age</span>
+                    <span>{{ zr_data.age }}</span>
+                  </div>
+                {% endif %}
+                {% if zr_data.race_finishes %}
+                  <div class="flex items-center justify-between">
+                    <span class="text-base-content/70">Races</span>
+                    <span class="font-mono text-sm">{{ zr_data.race_finishes }} fin, {{ zr_data.race_wins }} W, {{ zr_data.race_podiums }} P, {{ zr_data.race_dnfs }} DNF</span>
+                  </div>
+                {% endif %}
+                {% if zr_data.handicap_flat is not None %}
+                  <div class="mt-1">
+                    <span class="text-base-content/70 text-sm">Handicaps</span>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-0.5 text-sm">
+                      <div class="flex justify-between"><span class="text-base-content/50">Flat</span><span class="font-mono">{{ zr_data.handicap_flat }}</span></div>
+                      <div class="flex justify-between"><span class="text-base-content/50">Rolling</span><span class="font-mono">{{ zr_data.handicap_rolling }}</span></div>
+                      <div class="flex justify-between"><span class="text-base-content/50">Hilly</span><span class="font-mono">{{ zr_data.handicap_hilly }}</span></div>
+                      <div class="flex justify-between"><span class="text-base-content/50">Mountain</span><span class="font-mono">{{ zr_data.handicap_mountainous }}</span></div>
+                    </div>
+                  </div>
+                {% endif %}
               </div>
               <a href="https://www.zwiftracing.app/riders/{{ profile_user.zwid }}" target="_blank" rel="noopener"
                  class="btn btn-sm btn-ghost mt-3 w-full">
@@ -266,6 +313,88 @@
               <p class="text-base-content/50 text-sm">Not verified</p>
             {% endif %}
           </div>
+
+          <!-- Verification Records -->
+          {% if verification_summary or pending_records %}
+          <div class="card bg-base-300 p-4">
+            <h3 class="font-semibold mb-3 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+              </svg>
+              Verification Records
+            </h3>
+            <div class="space-y-2">
+              {% if verification_summary.weight_full %}
+                <div class="flex items-center justify-between">
+                  <span class="text-base-content/70">Weight Full</span>
+                  <span class="font-mono text-sm">
+                    {% if verification_summary.weight_full.days_remaining is not None %}
+                      {% if verification_summary.weight_full.days_remaining > 0 %}
+                        <span class="text-success">{{ verification_summary.weight_full.days_remaining }}d remaining</span>
+                      {% else %}
+                        <span class="text-error">Expired</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="text-success">No expiry</span>
+                    {% endif %}
+                  </span>
+                </div>
+              {% endif %}
+              {% if verification_summary.weight_light %}
+                <div class="flex items-center justify-between">
+                  <span class="text-base-content/70">Weight Light</span>
+                  <span class="font-mono text-sm">
+                    {% if verification_summary.weight_light.days_remaining is not None %}
+                      {% if verification_summary.weight_light.days_remaining > 0 %}
+                        <span class="text-success">{{ verification_summary.weight_light.days_remaining }}d remaining</span>
+                      {% else %}
+                        <span class="text-error">Expired</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="text-success">No expiry</span>
+                    {% endif %}
+                  </span>
+                </div>
+              {% endif %}
+              {% if verification_summary.height %}
+                <div class="flex items-center justify-between">
+                  <span class="text-base-content/70">Height</span>
+                  <span class="font-mono text-sm text-base-content/70">{{ verification_summary.height.record_date|date:"M j, Y" }}</span>
+                </div>
+              {% endif %}
+              {% if verification_summary.power %}
+                <div class="flex items-center justify-between">
+                  <span class="text-base-content/70">Power</span>
+                  <span class="font-mono text-sm">
+                    {% if verification_summary.power.days_remaining is not None %}
+                      {% if verification_summary.power.days_remaining > 0 %}
+                        <span class="text-success">{{ verification_summary.power.days_remaining }}d remaining</span>
+                      {% else %}
+                        <span class="text-error">Expired</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="text-success">No expiry</span>
+                    {% endif %}
+                  </span>
+                </div>
+              {% endif %}
+              {% if not verification_summary %}
+                <p class="text-base-content/50 text-sm">No verified records</p>
+              {% endif %}
+              {% if pending_records %}
+                <div class="divider my-1"></div>
+                <div>
+                  <span class="text-sm text-base-content/70">Pending</span>
+                  <div class="flex flex-wrap gap-1 mt-1">
+                    {% for record in pending_records %}
+                      <span class="badge badge-warning badge-sm">{{ record.get_verify_type_display }}</span>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
         </div>
 
         <!-- YouTube Videos -->

@@ -17,7 +17,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import send_verification_notification
-from apps.accounts.models import Permissions, User
+from apps.accounts.models import User
 from apps.team.forms import (
     ApplicationZwiftVerificationForm,
     MembershipApplicationAdminForm,
@@ -696,8 +696,6 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         messages.error(request, "You don't have permission to view verification records.")
         return redirect("home")
 
-    from constance import config
-
     # Query users with pending ZWID verification (zwid set but not verified)
     pending_zwid_users = (
         User.objects.filter(zwid__isnull=False, zwid_verified=False)
@@ -743,13 +741,13 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     # Check if user can verify records (has permission)
     can_verify = request.user.can_approve_verification or request.user.is_superuser
 
-    # Add can_review flag to each record based on same_gender preference and power gating
+    # Add can_review flag to each record based on same_gender preference
     def user_can_review_record(record: RaceReadyRecord) -> bool:
         """Check if the current user can review a specific record.
 
-        Superusers can always review. Power records require performance_verification_team
-        permission when POWER_REQUIRES_PER_VER is enabled. If same_gender is False, anyone
-        with permission can review. If same_gender is True, only same-gender reviewers can.
+        Superusers can always review. If same_gender is False, anyone with
+        permission can review. If same_gender is True, only same-gender
+        reviewers can review.
 
         Returns:
             True if the user can review this record, False otherwise.
@@ -757,12 +755,6 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         """
         if request.user.is_superuser:
             return True
-        if (
-            record.verify_type == "power"
-            and config.POWER_REQUIRES_PER_VER
-            and not request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
-        ):
-            return False
         if not record.same_gender:
             return True
         return record.user.gender == request.user.gender
@@ -906,10 +898,22 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         return redirect("team:verification_records")
 
     # User can review if they have permission and pass same_gender check (already checked above)
-    can_review = has_permission
+    # Power records require PVT permission when POWER_REQUIRES_PER_VER is enabled
+    from constance import config
+
+    from apps.accounts.models import Permissions
+
+    if (
+        record.verify_type == "power"
+        and config.POWER_REQUIRES_PER_VER
+        and not request.user.is_superuser
+        and not request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+    ):
+        can_review = False
+    else:
+        can_review = has_permission
 
     # Media visibility: pending records visible to all reviewers, approved/rejected only to verification team
-    from apps.accounts.models import Permissions
 
     is_own_record = record.user == request.user
     is_pvt = request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)

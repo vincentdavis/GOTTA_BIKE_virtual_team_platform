@@ -158,10 +158,17 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
         if zp_rider:
             # Use divw for females, div for everyone else
             div = zp_rider.divw if profile_user.gender == "female" else zp_rider.div
+            wkg = round(float(zp_rider.ftp) / float(zp_rider.weight), 2) if zp_rider.ftp and zp_rider.weight else None
             zp_data = {
                 "category": ZP_DIV_TO_CATEGORY.get(div, ""),
                 "rank": zp_rider.rank,
                 "ftp": zp_rider.ftp,
+                "wkg": wkg,
+                "weight": zp_rider.weight,
+                "h_1200_watts": zp_rider.h_1200_watts,
+                "h_1200_wkg": zp_rider.h_1200_wkg,
+                "h_15_watts": zp_rider.h_15_watts,
+                "h_15_wkg": zp_rider.h_15_wkg,
             }
             # Include women's category for female riders
             if profile_user.gender == "female" and zp_rider.div:
@@ -173,6 +180,17 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
             zr_data = {
                 "category": zr_rider.race_current_category,
                 "rating": zr_rider.race_current_rating,
+                "phenotype": zr_rider.phenotype_value,
+                "phenotype_bias": zr_rider.phenotype_bias,
+                "age": zr_rider.age,
+                "race_finishes": zr_rider.race_finishes,
+                "race_wins": zr_rider.race_wins,
+                "race_podiums": zr_rider.race_podiums,
+                "race_dnfs": zr_rider.race_dnfs,
+                "handicap_flat": zr_rider.handicap_flat,
+                "handicap_rolling": zr_rider.handicap_rolling,
+                "handicap_hilly": zr_rider.handicap_hilly,
+                "handicap_mountainous": zr_rider.handicap_mountainous,
             }
 
         # Get last 5 race results
@@ -180,6 +198,24 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
 
     # Get YouTube videos from database (synced via background task)
     youtube_videos = profile_user.youtube_videos.all()[:5]
+
+    # Get verification records for this user
+    from apps.team.models import RaceReadyRecord
+
+    verified_records = RaceReadyRecord.objects.filter(
+        user=profile_user,
+        status=RaceReadyRecord.Status.VERIFIED,
+    ).order_by("-reviewed_date")
+    pending_records = RaceReadyRecord.objects.filter(
+        user=profile_user,
+        status=RaceReadyRecord.Status.PENDING,
+    ).order_by("-date_created")
+
+    # Build verification summary: latest verified record per type
+    verification_summary = {}
+    for record in verified_records:
+        if record.verify_type not in verification_summary:
+            verification_summary[record.verify_type] = record
 
     return render(
         request,
@@ -191,6 +227,8 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
             "is_own_profile": is_own_profile,
             "recent_results": recent_results,
             "youtube_videos": youtube_videos,
+            "verification_summary": verification_summary,
+            "pending_records": pending_records,
         },
     )
 
