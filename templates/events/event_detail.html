@@ -504,52 +504,11 @@
               <td colspan="7" class="p-0">
                 <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2">
                   <div class="flex flex-wrap items-center gap-2 mb-2 relative">
-                    {% if squad.url %}
-                    <a href="{{ squad.url }}" target="_blank" rel="noopener" class="btn btn-outline btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                      Squad Link
-                    </a>
-                    {% endif %}
-                    {% if squad.invite_url and squad.user_is_member %}
-                    <a href="{{ squad.invite_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
-                      Invite Link
-                    </a>
-                    {% endif %}
                     {% if squad.discord_channel_id %}
                     <a href="https://discord.com/channels/{{ guild_id }}/{{ squad.discord_channel_id }}" target="_blank" rel="noopener" class="btn btn-outline btn-xs">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                       Discord Channel
                     </a>
-                    {% endif %}
-                    {% if squad.audio_channel_id %}
-                    <a href="https://discord.com/channels/{{ guild_id }}/{{ squad.audio_channel_id }}" target="_blank" rel="noopener" class="btn btn-outline btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
-                      Audio Channel
-                    </a>
-                    {% endif %}
-                    {% if is_event_admin %}
-                    <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="btn btn-ghost btn-xs">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                      Edit Squad
-                    </a>
-                    {% endif %}
-                    {% if squad.published_grids %}
-                    <div class="dropdown dropdown-end">
-                      <label tabindex="0" class="btn btn-outline btn-xs">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        Availability
-                      </label>
-                      <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-64">
-                        {% for grid in squad.published_grids %}
-                        <li class="menu-title text-xs">{{ grid.title }}{% if grid.is_closed %} <span class="badge badge-neutral badge-xs ml-1">Closed</span>{% endif %}</li>
-                        {% if grid.is_published %}
-                        <li><a href="{% url 'events:availability_respond' event.pk squad.pk grid.pk %}">Respond</a></li>
-                        {% endif %}
-                        <li><a href="{% url 'events:availability_results' event.pk squad.pk grid.pk %}">Results <span class="badge badge-ghost badge-xs">{{ grid.response_count }}</span></a></li>
-                        {% endfor %}
-                      </ul>
-                    </div>
                     {% endif %}
                   </div>
                   {% if squad.enriched_members %}

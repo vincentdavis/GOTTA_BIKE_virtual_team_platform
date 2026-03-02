@@ -145,7 +145,7 @@ class SquadAdmin(admin.ModelAdmin):
         "name",
         "event__title",
     ]
-    readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
+    readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at", "invite_token"]
     inlines: ClassVar[list] = [SquadMemberInline]
 
 

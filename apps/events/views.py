@@ -1736,3 +1736,95 @@ def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) ->
         return response
 
     return redirect("events:manage_roles", event_pk=event_pk)
+
+
+@team_member_required(raise_exception=True)
+@require_GET
+def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
+    """Accept a squad invite link and add the user to the squad.
+
+    Looks up squad by invite_token, creates event signup if needed,
+    and adds user as a full squad member.
+
+    Args:
+        request: The HTTP request.
+        token: The squad invite UUID token.
+
+    Returns:
+        Redirect to event detail page.
+
+    """
+    squad = get_object_or_404(Squad, invite_token=token)
+    event = squad.event
+
+    if not event.visible:
+        logfire.warning(
+            "Squad invite rejected: event not visible",
+            squad_id=squad.pk,
+            event_id=event.pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "This event is not currently available.")
+        return redirect("events:event_list")
+
+    # Ensure event signup exists and is active
+    signup, created = EventSignup.objects.get_or_create(
+        event=event,
+        user=request.user,
+        defaults={"status": EventSignup.Status.REGISTERED},
+    )
+    if not created and signup.status == EventSignup.Status.WITHDRAWN:
+        signup.status = EventSignup.Status.REGISTERED
+        signup.save(update_fields=["status"])
+
+    # Add or upgrade squad membership
+    _sm, sm_created = SquadMember.objects.update_or_create(
+        squad=squad,
+        user=request.user,
+        defaults={"status": SquadMember.Status.MEMBER},
+    )
+
+    if sm_created:
+        logfire.info(
+            "User joined squad via invite link",
+            squad_id=squad.pk,
+            event_id=event.pk,
+            user_id=request.user.id,
+        )
+        messages.success(request, f"You've been added to squad {squad.name}!")
+    else:
+        logfire.info(
+            "User used invite link but already in squad",
+            squad_id=squad.pk,
+            event_id=event.pk,
+            user_id=request.user.id,
+        )
+        messages.info(request, f"You're already a member of squad {squad.name}.")
+
+    return redirect("events:event_detail", pk=event.pk)
+
+
+@discord_permission_required("event_admin", raise_exception=True)
+@require_POST
+def squad_regenerate_token_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
+    """Generate or regenerate an invite token for a squad.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        Redirect to squad manage page.
+
+    """
+    squad = get_object_or_404(Squad, pk=squad_pk, event_id=event_pk)
+    squad.regenerate_invite_token()
+    logfire.info(
+        "Squad invite token regenerated",
+        squad_id=squad.pk,
+        event_id=event_pk,
+        admin_user_id=request.user.id,
+    )
+    messages.success(request, f"Invite link for {squad.name} has been generated.")
+    return redirect("events:squad_manage", event_pk=event_pk)

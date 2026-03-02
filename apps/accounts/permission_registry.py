@@ -65,6 +65,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/team/verification/{id}/ - Verification detail",
             "/team/team-feed/ - Team feed",
             "/user/profile/{id}/ - View teammate profiles",
+            "/events/squad-invite/{token}/ - Accept squad invite link",
         ],
     },
     Permissions.RACE_READY: {
@@ -123,6 +124,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/events/{id}/squads/{squad_id}/edit/ - Edit squad",
             "/events/{id}/squads/{squad_id}/delete/ - Delete squad",
             "/events/{id}/squads/assign/ - Assign users to squads",
+            "/events/{id}/squads/{squad_id}/regenerate-token/ - Generate/regenerate squad invite link",
             "/events/{id}/availability/ - Manage availability",
         ],
     },

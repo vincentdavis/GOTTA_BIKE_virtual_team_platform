@@ -387,6 +387,13 @@ class Squad(models.Model):
     )
     url = models.URLField(max_length=500, blank=True, help_text="External URL for squad details")
     invite_url = models.URLField(max_length=500, blank=True, help_text="Invite URL for joining the squad")
+    invite_token = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        editable=False,
+        help_text="Token for shareable squad invite links",
+    )
     members = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         through="SquadMember",
@@ -419,6 +426,11 @@ class Squad(models.Model):
 
         """
         return f"{self.event.title} - {self.name}"
+
+    def regenerate_invite_token(self) -> None:
+        """Generate or regenerate the squad invite token, invalidating the old one."""
+        self.invite_token = uuid.uuid4()
+        self.save(update_fields=["invite_token"])
 
 
 class SquadMember(models.Model):

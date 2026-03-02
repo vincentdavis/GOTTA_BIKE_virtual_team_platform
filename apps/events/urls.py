@@ -23,13 +23,16 @@ from apps.events.views import (
     squad_create_view,
     squad_delete_view,
     squad_edit_view,
+    squad_invite_view,
     squad_manage_view,
+    squad_regenerate_token_view,
     squad_toggle_role_view,
 )
 
 app_name = "events"
 
 urlpatterns = [
+    path("squad-invite/<uuid:token>/", squad_invite_view, name="squad_invite"),
     path("", event_list_view, name="event_list"),
     path("my-events/", my_events_view, name="my_events"),
     path("create/", event_create_view, name="event_create"),
@@ -51,6 +54,11 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/toggle-role/<int:user_id>/",
         squad_toggle_role_view,
         name="squad_toggle_role",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/regenerate-token/",
+        squad_regenerate_token_view,
+        name="squad_regenerate_token",
     ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/availability/create/",

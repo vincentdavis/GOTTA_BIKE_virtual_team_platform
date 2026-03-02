@@ -128,6 +128,28 @@
         </div>
         {% endif %}
 
+        {# Invite Link section #}
+        <div class="card bg-base-300 p-3 mb-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Squad Invite Link</p>
+          {% if squad.invite_token %}
+          <div class="flex items-center gap-2">
+            <input type="text" readonly value="{{ request.scheme }}://{{ request.get_host }}{% url 'events:squad_invite' squad.invite_token %}" class="input input-bordered input-sm flex-1 font-mono text-xs" id="invite-url-{{ squad.pk }}">
+            <button type="button" class="btn btn-outline btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('invite-url-{{ squad.pk }}').value).then(()=>{this.textContent='Copied!';setTimeout(()=>{this.textContent='Copy'},1500)})">Copy</button>
+          </div>
+          <div class="mt-2">
+            <form method="post" action="{% url 'events:squad_regenerate_token' event.pk squad.pk %}" onsubmit="return confirm('Regenerate invite link? The current link will stop working.')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-warning btn-outline btn-xs">Regenerate Link</button>
+            </form>
+          </div>
+          {% else %}
+          <form method="post" action="{% url 'events:squad_regenerate_token' event.pk squad.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary btn-sm">Generate Invite Link</button>
+          </form>
+          {% endif %}
+        </div>
+
         {# Footer: timestamps #}
         <div class="text-xs text-base-content/50 mt-1 flex gap-4">
           <span>Created {{ squad.created_at|date:"M j, Y" }}</span>
