@@ -348,8 +348,19 @@ class PerformanceRider:
     zwid: int
     display_name: str = ""
     zp_div: int = 0
+    zp_divw: int = 0
     gender: str = ""
     has_account: bool = False
+    user_id: int | None = None
+    discord_id: str = ""
+    discord_avatar_url: str = ""
+    is_race_ready: bool = False
+    in_zwiftpower: bool = False
+    in_zwiftracing: bool = False
+    zr_category: str = ""
+    zr_rating: Decimal | None = None
+    zr_phenotype: str = ""
+    zr_age: str = ""
 
     # Verification data - weight light
     weight_light_date: datetime | None = None
@@ -386,6 +397,11 @@ class PerformanceRider:
         return ZP_DIV_TO_CATEGORY.get(self.zp_div, "")
 
     @property
+    def zp_category_w(self) -> str:
+        """Return ZwiftPower women's category letter from division number."""
+        return ZP_DIV_TO_CATEGORY.get(self.zp_divw, "")
+
+    @property
     def latest_verification_weight(self) -> Decimal | None:
         """Return the most recent verification weight (full or light)."""
         if self.weight_full_date and self.weight_light_date:
@@ -408,7 +424,7 @@ class PerformanceRider:
         verification_weight = self.latest_verification_weight
         if verification_weight is None or self.zp_result_weight is None:
             return None
-        return self.zp_result_weight - verification_weight
+        return verification_weight - self.zp_result_weight
 
     @property
     def weight_diff_abs(self) -> Decimal | None:
@@ -418,15 +434,28 @@ class PerformanceRider:
 
     @property
     def has_weight_concern(self) -> bool:
-        """True if weight diff > 2kg."""
-        diff = self.weight_diff_abs
-        return diff is not None and diff > 2
+        """True if weight decreased by more than 2kg (diff < -2)."""
+        diff = self.weight_diff
+        return diff is not None and diff < -2
 
     @property
     def has_severe_weight_concern(self) -> bool:
-        """True if weight diff > 5kg."""
-        diff = self.weight_diff_abs
-        return diff is not None and diff > 5
+        """True if weight decreased by more than 5kg (diff < -5)."""
+        diff = self.weight_diff
+        return diff is not None and diff < -5
+
+    @property
+    def height_diff(self) -> int | None:
+        """Difference between verification height and ZP result height in cm.
+
+        Returns:
+            Positive if verification is taller, negative if shorter.
+            None if either value is missing.
+
+        """
+        if self.height_value is None or self.zp_height_value is None:
+            return None
+        return self.height_value - self.zp_height_value
 
     @property
     def wkg(self) -> Decimal | None:
@@ -463,8 +492,18 @@ def get_performance_review_data() -> list[PerformanceRider]:
         rider_info[r.zwid] = {
             "display_name": r.display_name,
             "zp_div": r.zp_div,
+            "zp_divw": r.zp_divw,
             "gender": r.gender,
             "has_account": r.has_account,
+            "user_id": r.user_id,
+            "discord_id": r.discord_id,
+            "discord_avatar_url": r.discord_avatar_url,
+            "is_race_ready": r.is_race_ready,
+            "in_zwiftpower": r.in_zwiftpower,
+            "in_zwiftracing": r.in_zwiftracing,
+            "zr_category": r.zr_category,
+            "zr_rating": r.zr_rating,
+            "zr_phenotype": r.zr_phenotype,
         }
 
     if not rider_info:
@@ -563,8 +602,18 @@ def get_performance_review_data() -> list[PerformanceRider]:
             zwid=zwid,
             display_name=info["display_name"],
             zp_div=info["zp_div"],
+            zp_divw=info["zp_divw"],
             gender=info["gender"],
             has_account=info["has_account"],
+            user_id=info["user_id"],
+            discord_id=info["discord_id"],
+            discord_avatar_url=info["discord_avatar_url"],
+            is_race_ready=info["is_race_ready"],
+            in_zwiftpower=info["in_zwiftpower"],
+            in_zwiftracing=info["in_zwiftracing"],
+            zr_category=info["zr_category"],
+            zr_rating=info["zr_rating"],
+            zr_phenotype=info["zr_phenotype"],
         )
 
         # Add verification data

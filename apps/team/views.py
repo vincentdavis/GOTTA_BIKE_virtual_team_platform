@@ -17,7 +17,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import send_verification_notification
-from apps.accounts.models import User
+from apps.accounts.models import Permissions, User
 from apps.team.forms import (
     ApplicationZwiftVerificationForm,
     MembershipApplicationAdminForm,
@@ -696,6 +696,8 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         messages.error(request, "You don't have permission to view verification records.")
         return redirect("home")
 
+    from constance import config
+
     # Query users with pending ZWID verification (zwid set but not verified)
     pending_zwid_users = (
         User.objects.filter(zwid__isnull=False, zwid_verified=False)
@@ -741,13 +743,13 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     # Check if user can verify records (has permission)
     can_verify = request.user.can_approve_verification or request.user.is_superuser
 
-    # Add can_review flag to each record based on same_gender preference
+    # Add can_review flag to each record based on same_gender preference and power gating
     def user_can_review_record(record: RaceReadyRecord) -> bool:
         """Check if the current user can review a specific record.
 
-        Superusers can always review. If same_gender is False, anyone with
-        permission can review. If same_gender is True, only same-gender
-        reviewers can review.
+        Superusers can always review. Power records require performance_verification_team
+        permission when POWER_REQUIRES_PER_VER is enabled. If same_gender is False, anyone
+        with permission can review. If same_gender is True, only same-gender reviewers can.
 
         Returns:
             True if the user can review this record, False otherwise.
@@ -755,6 +757,12 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         """
         if request.user.is_superuser:
             return True
+        if (
+            record.verify_type == "power"
+            and config.POWER_REQUIRES_PER_VER
+            and not request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+        ):
+            return False
         if not record.same_gender:
             return True
         return record.user.gender == request.user.gender
@@ -1318,11 +1326,60 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
         "height_date": lambda r: r.height_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
         "zp_result_date": lambda r: r.zp_result_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
         "zp_height_date": lambda r: r.zp_height_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
+        "height_diff": lambda r: abs(r.height_diff) if r.height_diff is not None else -1,
         "ftp": lambda r: r.ftp_current or 0,
         "wkg": lambda r: r.wkg or 0,
     }
     if sort_by in sort_keys:
         riders = sorted(riders, key=sort_keys[sort_by], reverse=reverse)
+
+    # Build histogram of weight diff (1kg bins)
+    diff_bins: dict[int, int] = {}
+    for r in riders:
+        diff = r.weight_diff
+        if diff is None:
+            continue
+        diff_f = float(diff)
+        bin_start = int(diff_f) if diff_f >= 0 else int(diff_f) - 1
+        diff_bins[bin_start] = diff_bins.get(bin_start, 0) + 1
+    all_diff_bins = sorted(diff_bins)
+    diff_bin_range = range(all_diff_bins[0], all_diff_bins[-1] + 1) if all_diff_bins else range(0)
+    diff_dist_max = max(
+        [diff_bins.get(b, 0) for b in diff_bin_range],
+        default=0,
+    )
+    diff_distribution = []
+    for b in diff_bin_range:
+        count = diff_bins.get(b, 0)
+        diff_distribution.append({
+            "label": str(b),
+            "count": count,
+            "bar_h": f"{count / diff_dist_max * 3:.2f}" if diff_dist_max else "0",
+            "is_concern": b < -2,
+            "is_severe": b < -5,
+        })
+
+    # Build histogram of height diff (1cm bins)
+    hdiff_bins: dict[int, int] = {}
+    for r in riders:
+        hdiff = r.height_diff
+        if hdiff is None:
+            continue
+        hdiff_bins[hdiff] = hdiff_bins.get(hdiff, 0) + 1
+    all_hdiff_bins = sorted(hdiff_bins)
+    hdiff_bin_range = range(all_hdiff_bins[0], all_hdiff_bins[-1] + 1) if all_hdiff_bins else range(0)
+    hdiff_dist_max = max(
+        [hdiff_bins.get(b, 0) for b in hdiff_bin_range],
+        default=0,
+    )
+    hdiff_distribution = []
+    for b in hdiff_bin_range:
+        count = hdiff_bins.get(b, 0)
+        hdiff_distribution.append({
+            "label": str(b),
+            "count": count,
+            "bar_h": f"{count / hdiff_dist_max * 3:.2f}" if hdiff_dist_max else "0",
+        })
 
     return render(
         request,
@@ -1335,6 +1392,10 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
             "zp_categories": zp_categories,
             "sort_by": sort_by,
             "sort_dir": sort_dir,
+            "diff_distribution": diff_distribution,
+            "diff_dist_max": diff_dist_max,
+            "hdiff_distribution": hdiff_distribution,
+            "hdiff_dist_max": hdiff_dist_max,
         },
     )
 

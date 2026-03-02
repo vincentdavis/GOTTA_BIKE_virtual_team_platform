@@ -480,6 +480,11 @@ CONSTANCE_CONFIG = {
         int,
     ),
     "POWER_VERIFICATION_DAYS": (365, "Days a power verification is valid", int),
+    "POWER_REQUIRES_PER_VER": (
+        False,
+        "Require PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES to review power records",
+        bool,
+    ),
     "EXPIRE_WARNING_DAYS": (
         "[15, 7, 3, 1]",
         "Days before expiration to warn users. JSON list of integers.",
@@ -776,6 +781,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "WEIGHT_LIGHT_DAYS",
         "HEIGHT_VERIFICATION_DAYS",
         "POWER_VERIFICATION_DAYS",
+        "POWER_REQUIRES_PER_VER",
         "EXPIRE_WARNING_DAYS",
         "VERIFICATION_FORM_MESSAGE",
         "VERIFICATION_CHECK_LIST",
