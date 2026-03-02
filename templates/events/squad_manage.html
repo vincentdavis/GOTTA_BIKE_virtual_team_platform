@@ -150,6 +150,38 @@
           {% endif %}
         </div>
 
+        {# Availability section #}
+        <div class="card bg-base-300 p-3 mb-2">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Availability</p>
+            <a href="{% url 'events:squad_availability' event.pk squad.pk %}" class="btn btn-primary btn-xs">Manage Availability</a>
+          </div>
+          {% if squad.active_grids %}
+          <div class="space-y-1">
+            {% for grid in squad.active_grids %}
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-sm">{{ grid.title }}</span>
+                {% if grid.is_published %}
+                <span class="badge badge-success badge-xs">Open</span>
+                {% elif grid.is_closed %}
+                <span class="badge badge-neutral badge-xs">Closed</span>
+                {% endif %}
+              </div>
+              <div class="flex items-center gap-1">
+                {% if grid.is_published %}
+                <a href="{% url 'events:availability_respond' event.pk squad.pk grid.pk %}" class="btn btn-ghost btn-xs">Form</a>
+                {% endif %}
+                <a href="{% url 'events:availability_results' event.pk squad.pk grid.pk %}" class="btn btn-ghost btn-xs">Resp. {{ grid.response_count }}</a>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="text-sm text-base-content/50">No availability grids yet.</p>
+          {% endif %}
+        </div>
+
         {# Footer: timestamps #}
         <div class="text-xs text-base-content/50 mt-1 flex gap-4">
           <span>Created {{ squad.created_at|date:"M j, Y" }}</span>

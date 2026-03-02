@@ -589,10 +589,19 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
     ) if role_ids else {}
 
+    # Attach availability grids (published/closed) grouped by squad
+    grids_by_squad: dict[int, list] = {}
+    for grid in AvailabilityGrid.objects.filter(
+        squad__event=event,
+        status__in=[AvailabilityGrid.Status.PUBLISHED, AvailabilityGrid.Status.CLOSED],
+    ):
+        grids_by_squad.setdefault(grid.squad_id, []).append(grid)
+
     for s in squads:
         s.channel_name = channel_names.get(str(s.discord_channel_id), "") if s.discord_channel_id else ""
         s.audio_name = channel_names.get(str(s.audio_channel_id), "") if s.audio_channel_id else ""
         s.role_name = role_names.get(str(s.team_discord_role), "") if s.team_discord_role else ""
+        s.active_grids = grids_by_squad.get(s.pk, [])
 
     return render(
         request,
@@ -911,8 +920,6 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
     else:
         form = SquadForm(instance=squad)
 
-    availability_grids = squad.availability_grids.all()
-
     return render(
         request,
         "events/squad_form.html",
@@ -920,9 +927,48 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             "form": form,
             "event": event,
             "squad": squad,
-            "availability_grids": availability_grids,
             "page_title": "Edit Squad",
             "submit_label": "Save Changes",
+        },
+    )
+
+
+@login_required
+@team_member_required()
+def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
+    """Manage availability grids for a squad.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        Rendered availability management page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized squad availability access attempt",
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    availability_grids = squad.availability_grids.all()
+
+    return render(
+        request,
+        "events/squad_availability.html",
+        {
+            "event": event,
+            "squad": squad,
+            "availability_grids": availability_grids,
         },
     )
 
@@ -1282,6 +1328,15 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
     if grid_tz != "UTC" and grid_tz not in available_timezones():
         return JsonResponse({"error": f"Invalid timezone: {grid_tz}"}, status=400)
 
+    # --- Optional expires date ---
+    expires = None
+    raw_expires = data.get("expires")
+    if raw_expires:
+        try:
+            expires = date.fromisoformat(str(raw_expires))
+        except (ValueError, TypeError):
+            return JsonResponse({"error": "Invalid expires date."}, status=400)
+
     if grid_tz != "UTC":
         start_date, end_date, start_time, end_time = convert_local_to_utc(
             start_date,
@@ -1302,6 +1357,7 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
         slot_duration=slot_duration,
         grid_timezone=grid_tz,
         blocked_cells=blocked_cells,
+        expires=expires,
         status=AvailabilityGrid.Status.DRAFT,
         created_by=request.user,
     )

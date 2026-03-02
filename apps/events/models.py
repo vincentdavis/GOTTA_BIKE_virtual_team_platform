@@ -508,6 +508,7 @@ class AvailabilityGrid(models.Model):
         slot_duration: Minutes per slot (15, 30, or 60).
         blocked_cells: JSON list of blocked cell dicts.
         status: Grid lifecycle status (draft/published/closed).
+        expires: Optional date when this grid expires.
         created_by: User who created this grid.
         created_at: When the grid was created.
         updated_at: When the grid was last modified.
@@ -552,6 +553,7 @@ class AvailabilityGrid(models.Model):
         default=Status.DRAFT,
         help_text="Grid lifecycle status",
     )
+    expires = models.DateField(null=True, blank=True, help_text="Date when this grid expires and is no longer visible")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

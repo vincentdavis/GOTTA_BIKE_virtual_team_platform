@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Availability - {{ squad.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-ghost btn-sm mb-4">&larr; Back to Squads</a>
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl mb-1">Manage Availability</h2>
+      <p class="text-sm text-base-content/70 mb-4">{{ squad.name }} &mdash; {{ event.title }}</p>
+
+      {% if availability_grids %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Dates</th>
+              <th>Time</th>
+              <th>Slot</th>
+              <th>Responses</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for grid in availability_grids %}
+            <tr>
+              <td class="font-medium">{{ grid.title }}</td>
+              <td class="text-sm">{{ grid.start_date }} &mdash; {{ grid.end_date }}</td>
+              <td class="text-sm">{{ grid.start_time }} &ndash; {{ grid.end_time }}</td>
+              <td class="text-sm">{{ grid.slot_duration }}m</td>
+              <td class="text-sm">{{ grid.response_count }}</td>
+              <td>
+                {% if grid.is_draft %}
+                <span class="badge badge-ghost badge-sm">Draft</span>
+                {% elif grid.is_published %}
+                <span class="badge badge-success badge-sm">Published</span>
+                {% elif grid.is_closed %}
+                <span class="badge badge-neutral badge-sm">Closed</span>
+                {% endif %}
+              </td>
+              <td class="text-right space-x-1">
+                {% if grid.is_published %}
+                <a href="{% url 'events:availability_respond' event.pk squad.pk grid.pk %}" class="btn btn-primary btn-xs btn-outline">Respond</a>
+                {% endif %}
+                {% if grid.is_published or grid.is_closed %}
+                <a href="{% url 'events:availability_results' event.pk squad.pk grid.pk %}" class="btn btn-secondary btn-xs btn-outline">Results</a>
+                {% endif %}
+                {% if grid.is_draft %}
+                <form method="post" action="{% url 'events:availability_status' event.pk squad.pk grid.pk %}" class="inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="status" value="published">
+                  <button type="submit" class="btn btn-success btn-xs">Publish</button>
+                </form>
+                {% elif grid.is_published %}
+                <form method="post" action="{% url 'events:availability_status' event.pk squad.pk grid.pk %}" class="inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="status" value="closed">
+                  <button type="submit" class="btn btn-neutral btn-xs btn-outline">Close</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/50">No availability grids yet.</p>
+      {% endif %}
+
+      <div class="divider"></div>
+      <div class="flex justify-between items-center">
+        <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary">Back to Squads</a>
+        <a href="{% url 'events:availability_create' event.pk squad.pk %}"
+           class="btn btn-secondary btn-sm btn-outline">New Availability</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

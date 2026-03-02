@@ -25,7 +25,7 @@
 {% block content %}
 <div class="max-w-7xl mx-auto">
   <div class="mb-4">
-    <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="link link-primary text-sm">&larr; Back to Squad</a>
+    <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary text-sm">&larr; Back to Manage Squads</a>
   </div>
 
   <h1 class="text-2xl font-bold mb-1">Availability Builder</h1>
@@ -36,6 +36,10 @@
     <div class="card-body p-4">
       <h2 class="card-title text-lg mb-3">Grid Settings</h2>
       <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        <div class="form-control">
+          <label class="label py-0"><span class="label-text text-xs">Grid Title (optional)</span></label>
+          <input type="text" id="cfg-title" class="input input-bordered input-sm w-full" placeholder="Auto-generated if blank">
+        </div>
         <div class="form-control">
           <label class="label py-0"><span class="label-text text-xs">Start Date</span></label>
           <input type="date" id="cfg-start-date" class="input input-bordered input-sm w-full">
@@ -65,8 +69,8 @@
           </select>
         </div>
         <div class="form-control">
-          <label class="label py-0"><span class="label-text text-xs">Grid Title (optional)</span></label>
-          <input type="text" id="cfg-title" class="input input-bordered input-sm w-full" placeholder="Auto-generated if blank">
+          <label class="label py-0"><span class="label-text text-xs">Expires (optional)</span></label>
+          <input type="date" id="cfg-expires" class="input input-bordered input-sm w-full">
         </div>
         <div class="form-control justify-end">
           <button id="btn-generate" class="btn btn-primary btn-sm w-full">Generate Grid</button>
@@ -595,6 +599,7 @@
   var CSRF_TOKEN = '{{ csrf_token }}';
   var btnSave = document.getElementById('btn-save');
   var titleEl = document.getElementById('cfg-title');
+  var expiresEl = document.getElementById('cfg-expires');
 
   function showToast(msg, isError) {
     var toast = document.getElementById('save-toast');
@@ -629,7 +634,8 @@
       end_time: endTimeEl.value,
       slot_duration: parseInt(slotDurationEl.value),
       timezone: timezoneEl.value || 'UTC',
-      blocked_cells: blockedCells
+      blocked_cells: blockedCells,
+      expires: expiresEl.value || null
     };
 
     btnSave.disabled = true;
@@ -648,7 +654,7 @@
     })
     .then(function(result) {
       if (result.ok) {
-        window.location.href = '{% url "events:squad_edit" event.pk squad.pk %}';
+        window.location.href = '{% url "events:squad_availability" event.pk squad.pk %}';
       } else {
         showToast(result.data.error || 'Save failed.', true);
         btnSave.disabled = false;
