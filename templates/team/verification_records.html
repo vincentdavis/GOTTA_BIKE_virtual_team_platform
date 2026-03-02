@@ -183,9 +183,34 @@
         </table>
       </div>
 
-      <!-- Stats -->
-      <div class="mt-6 text-sm text-base-content/50">
-        Showing {{ records_with_review_status|length }} record{{ records_with_review_status|length|pluralize }}
+      <!-- Stats & Pagination -->
+      <div class="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div class="text-sm text-base-content/50">
+          Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }} record{{ page_obj.paginator.count|pluralize }}
+        </div>
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="join">
+          {% if page_obj.has_previous %}
+            <a href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ page_obj.previous_page_number }}" class="join-item btn btn-sm">«</a>
+          {% else %}
+            <span class="join-item btn btn-sm btn-disabled">«</span>
+          {% endif %}
+          {% for num in page_obj.paginator.page_range %}
+            {% if num == page_obj.number %}
+              <span class="join-item btn btn-sm btn-active">{{ num }}</span>
+            {% elif num == 1 or num == page_obj.paginator.num_pages or num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
+              <a href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ num }}" class="join-item btn btn-sm">{{ num }}</a>
+            {% elif num == page_obj.number|add:"-3" or num == page_obj.number|add:"3" %}
+              <span class="join-item btn btn-sm btn-disabled">…</span>
+            {% endif %}
+          {% endfor %}
+          {% if page_obj.has_next %}
+            <a href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ page_obj.next_page_number }}" class="join-item btn btn-sm">»</a>
+          {% else %}
+            <span class="join-item btn btn-sm btn-disabled">»</span>
+          {% endif %}
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>

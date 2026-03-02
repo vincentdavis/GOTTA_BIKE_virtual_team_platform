@@ -703,7 +703,7 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         .order_by("discord_username", "username")
     )
 
-    records = RaceReadyRecord.objects.select_related("user", "reviewed_by").order_by("-date_created")
+    records = RaceReadyRecord.objects.select_related("user", "reviewed_by")
 
     # Get filter parameters
     search_query = request.GET.get("q", "").strip()
@@ -738,6 +738,26 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     if gender_filter:
         records = records.filter(user__gender=gender_filter)
 
+    # Sort by status (pending first), then newest within each status
+    from django.db.models import Case, IntegerField, Value, When
+
+    records = records.annotate(
+        status_order=Case(
+            When(status="pending", then=Value(0)),
+            When(status="verified", then=Value(1)),
+            When(status="rejected", then=Value(2)),
+            default=Value(3),
+            output_field=IntegerField(),
+        )
+    ).order_by("status_order", "-date_created")
+
+    # Paginate
+    from django.core.paginator import Paginator
+
+    page_number = request.GET.get("page", "1")
+    paginator = Paginator(records, 25)
+    page_obj = paginator.get_page(page_number)
+
     # Check if user can verify records (has permission)
     can_verify = request.user.can_approve_verification or request.user.is_superuser
 
@@ -760,7 +780,7 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         return record.user.gender == request.user.gender
 
     # Create list of (record, can_review) tuples for template
-    records_list = list(records)
+    records_list = list(page_obj)
     records_with_review_status = [(record, user_can_review_record(record)) for record in records_list]
 
     # Batch-fetch ZP/ZR data for user tooltip display
@@ -784,6 +804,7 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         "team/verification_records.html",
         {
             "records_with_review_status": records_with_review_status,
+            "page_obj": page_obj,
             "search_query": search_query,
             "type_filter": type_filter,
             "status_filter": status_filter,
