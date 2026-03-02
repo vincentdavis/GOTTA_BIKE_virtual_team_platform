@@ -232,10 +232,14 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             members_by_squad.setdefault(sm.squad_id, []).append({
                 "user": user,
                 "zwid": zwid,
+                "is_race_ready": user.is_race_ready,
+                "in_zwiftpower": zp is not None,
                 "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
                 "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
+                "in_zwiftracing": zr is not None,
                 "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
                 "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+                "zr_age": getattr(zr, "age", "") or "" if zr else "",
                 "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
             })
 
@@ -561,7 +565,9 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         messages.error(request, "You don't have permission to manage squads.")
         return redirect("events:event_detail", pk=event_pk)
 
-    squads = event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+    squads = list(
+        event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+    )
 
     # Build ID→name lookups for Discord channels and roles
     channel_ids = set()
@@ -1801,7 +1807,7 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
         )
         messages.info(request, f"You're already a member of squad {squad.name}.")
 
-    return redirect("events:event_detail", pk=event.pk)
+    return redirect("events:my_events")
 
 
 @discord_permission_required("event_admin", raise_exception=True)
