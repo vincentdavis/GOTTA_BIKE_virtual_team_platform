@@ -2524,16 +2524,6 @@
     }
   }
   @layer daisyui.l1.l2 {
-    .dropdown-top {
-      --anchor-v: top;
-    }
-    .dropdown-top .dropdown-content {
-      top: auto;
-      bottom: 100%;
-      transform-origin: bottom;
-    }
-  }
-  @layer daisyui.l1.l2 {
     .toast-bottom {
       top: auto;
       bottom: calc(0.25rem * 4);
@@ -5004,9 +4994,6 @@
     margin-inline-start: calc(calc(var(--spacing) * 1) * var(--tw-space-x-reverse));
     margin-inline-end: calc(calc(var(--spacing) * 1) * calc(1 - var(--tw-space-x-reverse)));
   }
-  .gap-y-1 {
-    row-gap: calc(var(--spacing) * 1);
-  }
   .gap-y-2 {
     row-gap: calc(var(--spacing) * 2);
   }
@@ -5521,9 +5508,6 @@
       --size: calc(var(--size-selector, 0.25rem) * 4);
       font-size: 0.625rem;
     }
-  }
-  .text-\[10px\] {
-    font-size: 10px;
   }
   @layer daisyui.l1.l2 {
     .textarea-sm {

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load accounts_tags %}
 
 {% block title %}{{ grid.title }} - Results{% endblock %}
 
@@ -12,11 +13,13 @@
   .avail-grid th.row-header { position: sticky; left: 0; z-index: 3; background: var(--color-base-200); }
   .avail-grid thead th { background: var(--color-base-200); }
   .avail-grid thead th:first-child { z-index: 4; }
-  .heatmap-cell { vertical-align: top; padding: 0.2rem 0.3rem; }
+  .heatmap-cell { vertical-align: top; padding: 0.2rem 0.3rem; position: relative; overflow: visible; }
   .heatmap-cell.cell-blocked { background: var(--color-neutral); opacity: 0.4; }
   .heatmap-cell.cell-inactive { background: var(--color-base-200); opacity: 0.3; }
   .heatmap-cell .cell-count { font-size: 0.7rem; font-weight: 700; margin-bottom: 0.1rem; }
-  .heatmap-cell .cell-name { font-size: 0.6rem; font-weight: 400; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .heatmap-cell .cell-name { font-size: 0.6rem; font-weight: 400; line-height: 1.2; }
+  .heatmap-cell .cell-name .dropdown > a > .avatar { display: none; }
+  .heatmap-cell .cell-name .dropdown-content { font-size: 0.75rem; white-space: normal; }
 </style>
 {% endblock %}
 
@@ -47,7 +50,43 @@
   {% endif %}
 
   <!-- Heatmap Grid -->
-  <div id="grid-container" class="avail-grid-wrap mb-6"></div>
+  <div class="avail-grid-wrap mb-6">
+    <table class="avail-grid">
+      <thead>
+        <tr>
+          <th class="row-header">{{ display_timezone }}</th>
+          {% for d in display_dates %}
+          <th>{{ d.day_name }}<br>{{ d.date_str }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in grid_rows %}
+        <tr>
+          <th class="row-header">{{ row.time_slot }}</th>
+          {% for cell in row.cells %}
+          <td class="heatmap-cell{% if cell.is_blocked %} cell-blocked{% endif %}"
+              {% if not cell.is_blocked %}
+              {% if cell.count > 0 %}
+              style="background: oklch(0.75 0.15 145 / {{ cell.opacity }});{% if cell.dark_text %} color: oklch(0.2 0.05 145);{% endif %}"
+              {% else %}
+              style="background: var(--color-base-300);"
+              {% endif %}
+              {% endif %}>
+            {% if not cell.is_blocked %}
+              {% for entry in cell.users %}
+              <div class="cell-name">
+                {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=None zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+              </div>
+              {% endfor %}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
   <!-- Legend -->
   <div class="flex items-center gap-2 mb-6 text-sm">
@@ -71,114 +110,15 @@
   </div>
 
   <!-- Responders -->
-  {% if responder_names %}
+  {% if enriched_responders %}
   <div class="mb-6">
     <h3 class="text-sm font-semibold mb-2">Responders ({{ total_responders }})</h3>
-    <div class="flex flex-wrap gap-1">
-      {% for name in responder_names %}
-      <span class="badge badge-outline badge-sm">{{ name }}</span>
+    <div class="flex flex-wrap gap-2">
+      {% for entry in enriched_responders %}
+      {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
       {% endfor %}
     </div>
   </div>
   {% endif %}
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-(function() {
-  var dates = {{ display_dates_json|safe }};
-  var timeSlots = {{ display_time_slots_json|safe }};
-  var blockedKeys = {{ display_blocked_json|safe }};
-  var cellCounts = {{ cell_counts_json|safe }};
-  var cellNames = {{ cell_names_json|safe }};
-  var totalResponders = {{ total_responders }};
-  var displayTimezone = '{{ display_timezone }}';
-
-  var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  var gridContainer = document.getElementById('grid-container');
-
-  var blockedSet = {};
-  blockedKeys.forEach(function(k) { blockedSet[k] = true; });
-
-  function parseDateStr(s) {
-    var parts = s.split('-');
-    return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-  }
-
-  function buildGrid() {
-    var table = document.createElement('table');
-    table.className = 'avail-grid';
-
-    // Header row
-    var thead = document.createElement('thead');
-    var headerRow = document.createElement('tr');
-    var cornerTh = document.createElement('th');
-    cornerTh.className = 'row-header';
-    cornerTh.textContent = displayTimezone;
-    headerRow.appendChild(cornerTh);
-
-    dates.forEach(function(date) {
-      var th = document.createElement('th');
-      var d = parseDateStr(date);
-      th.innerHTML = DAY_NAMES[d.getDay()] + '<br>' + date.slice(5);
-      headerRow.appendChild(th);
-    });
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-
-    // Body rows
-    var tbody = document.createElement('tbody');
-    timeSlots.forEach(function(time) {
-      var tr = document.createElement('tr');
-      var rowTh = document.createElement('th');
-      rowTh.className = 'row-header';
-      rowTh.textContent = time;
-      tr.appendChild(rowTh);
-
-      dates.forEach(function(date) {
-        var td = document.createElement('td');
-        td.className = 'heatmap-cell';
-        var key = date + '|' + time;
-
-        if (blockedSet[key]) {
-          td.classList.add('cell-blocked');
-        } else {
-          var count = cellCounts[key] || 0;
-          var names = cellNames[key] || [];
-
-          if (totalResponders > 0 && count > 0) {
-            var ratio = count / totalResponders;
-            var opacity = 0.3 + (ratio * 0.7);
-            td.style.background = 'oklch(0.75 0.15 145 / ' + opacity.toFixed(2) + ')';
-            td.style.color = ratio > 0.6 ? 'oklch(0.2 0.05 145)' : '';
-          } else {
-            td.style.background = 'var(--color-base-300)';
-          }
-
-          var countDiv = document.createElement('div');
-          countDiv.className = 'cell-count';
-          countDiv.textContent = count;
-          td.appendChild(countDiv);
-
-          names.forEach(function(name) {
-            var nameDiv = document.createElement('div');
-            nameDiv.className = 'cell-name';
-            nameDiv.textContent = name;
-            td.appendChild(nameDiv);
-          });
-        }
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-
-    gridContainer.innerHTML = '';
-    gridContainer.appendChild(table);
-  }
-
-  buildGrid();
-})();
-</script>
 {% endblock %}

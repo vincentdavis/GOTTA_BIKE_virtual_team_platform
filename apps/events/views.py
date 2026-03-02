@@ -1553,15 +1553,47 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     responses = list(AvailabilityResponse.objects.filter(grid=grid).select_related("user"))
     total_responders = len(responses)
 
-    # Aggregate counts/names keyed by UTC
-    utc_cell_counts: dict[str, int] = {}
-    utc_cell_names: dict[str, list[str]] = {}
+    # Enrich responders with ZP/ZR data
+    responder_users = [r.user for r in responses]
+    zwids = [u.zwid for u in responder_users if u.zwid]
+    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
+    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+
+    enriched_responders = []
+    user_by_id: dict[int, dict] = {}
+    for user in responder_users:
+        zp = zp_by_zwid.get(user.zwid)
+        zr = zr_by_zwid.get(user.zwid)
+        display_name = user.get_full_name() or user.discord_username
+        zp_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
+        zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
+        zr_cat = getattr(zr, "race_current_category", "") or "" if zr else ""
+        zr_rating = getattr(zr, "race_current_rating", None) if zr else None
+        zr_phenotype = getattr(zr, "phenotype_value", "") or "" if zr else ""
+        zr_age = getattr(zr, "age", "") or "" if zr else ""
+        entry = {
+            "user": user,
+            "display_name": display_name,
+            "zwid": user.zwid,
+            "is_race_ready": user.is_race_ready,
+            "in_zwiftpower": zp is not None,
+            "zp_category": zp_cat,
+            "zp_category_w": zp_cat_w,
+            "in_zwiftracing": zr is not None,
+            "zr_category": zr_cat,
+            "zr_rating": zr_rating,
+            "zr_phenotype": zr_phenotype,
+            "zr_age": zr_age,
+        }
+        enriched_responders.append(entry)
+        user_by_id[user.pk] = entry
+
+    # Aggregate user IDs keyed by UTC cell
+    utc_cell_user_ids: dict[str, list[int]] = {}
     for response in responses:
-        name = response.user.get_full_name() or response.user.discord_username
         for cell in response.available_cells:
             key = f"{cell['date']}|{cell['time']}"
-            utc_cell_counts[key] = utc_cell_counts.get(key, 0) + 1
-            utc_cell_names.setdefault(key, []).append(name)
+            utc_cell_user_ids.setdefault(key, []).append(response.user.pk)
 
     # Determine display timezone
     user_tz = getattr(request.user, "timezone", "") or ""
@@ -1570,16 +1602,45 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
 
     grid_data = convert_grid_to_local(grid.dates, grid.time_slots, grid.blocked_cells, display_tz)
 
-    # Re-key counts and names from UTC → local
-    cell_counts: dict[str, int] = {}
-    cell_names: dict[str, list[str]] = {}
+    # Re-key user IDs from UTC → local
+    cell_user_ids: dict[str, list[int]] = {}
     for utc_key, local_key in grid_data["reverse_map"].items():
-        if utc_key in utc_cell_counts:
-            cell_counts[local_key] = utc_cell_counts[utc_key]
-        if utc_key in utc_cell_names:
-            cell_names[local_key] = utc_cell_names[utc_key]
+        if utc_key in utc_cell_user_ids:
+            cell_user_ids[local_key] = utc_cell_user_ids[utc_key]
 
-    responder_names = [r.user.get_full_name() or r.user.discord_username for r in responses]
+    # Build display_dates with day names for header
+    day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    display_dates = []
+    for d_str in grid_data["display_dates"]:
+        d = date.fromisoformat(d_str)
+        display_dates.append({"date_str": d_str[5:], "day_name": day_names[d.weekday()], "full_date": d_str})
+
+    # Build grid_rows for server-side rendering
+    blocked_set = grid_data["display_blocked"]
+    grid_rows = []
+    for time_slot in grid_data["display_time_slots"]:
+        cells = []
+        for d_info in display_dates:
+            key = f"{d_info['full_date']}|{time_slot}"
+            is_blocked = key in blocked_set
+            uids = cell_user_ids.get(key, [])
+            count = len(uids)
+            if total_responders > 0 and count > 0:
+                ratio = count / total_responders
+                opacity = f"{0.3 + ratio * 0.7:.2f}"
+                dark_text = ratio > 0.6
+            else:
+                ratio = 0
+                opacity = "0"
+                dark_text = False
+            cells.append({
+                "is_blocked": is_blocked,
+                "count": count,
+                "opacity": opacity,
+                "dark_text": dark_text,
+                "users": [user_by_id[uid] for uid in uids if uid in user_by_id],
+            })
+        grid_rows.append({"time_slot": time_slot, "cells": cells})
 
     logfire.debug(
         "Availability results viewed",
@@ -1597,13 +1658,10 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "event": event,
             "squad": squad,
             "grid": grid,
-            "display_dates_json": json.dumps(grid_data["display_dates"]),
-            "display_time_slots_json": json.dumps(grid_data["display_time_slots"]),
-            "display_blocked_json": json.dumps(sorted(grid_data["display_blocked"])),
-            "cell_counts_json": json.dumps(cell_counts),
-            "cell_names_json": json.dumps(cell_names),
+            "display_dates": display_dates,
+            "grid_rows": grid_rows,
             "total_responders": total_responders,
-            "responder_names": responder_names,
+            "enriched_responders": enriched_responders,
             "display_timezone": display_tz,
             "tz_is_default": tz_is_default,
         },
