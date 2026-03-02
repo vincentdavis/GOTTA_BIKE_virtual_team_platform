@@ -7,9 +7,152 @@
   <div class="max-w-6xl mx-auto">
     <div class="card bg-base-200 shadow-xl">
       <div class="card-body">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex justify-between items-center mb-4">
           <h2 class="card-title text-2xl">Team Roster</h2>
         </div>
+
+        <details class="collapse collapse-arrow bg-base-100 mb-6">
+          <summary class="collapse-title text-lg font-semibold px-0 min-h-0 py-2">Stats</summary>
+          <div class="collapse-content px-0">
+
+            {% if zp_distribution_max %}
+            <div class="mb-6">
+              <h3 class="text-sm font-semibold text-base-content/70 mb-2">ZwiftPower Category Distribution</h3>
+              <div class="flex items-end gap-1">
+                {% for d in zp_distribution %}
+                <div class="flex flex-col items-center flex-1">
+                  <span class="text-xs font-medium mb-0.5">{% if d.total %}{{ d.total }}{% endif %}</span>
+                  <div class="w-full flex flex-col justify-end">
+                    {% if d.count_w %}
+                    <div class="w-full rounded-t"
+                         style="height: {{ d.bar_h_w }}rem; min-height: 0.25rem; background: oklch(0.75 0.15 330);">
+                    </div>
+                    {% endif %}
+                    {% if d.count_m %}
+                    <div class="w-full {% if not d.count_w %}rounded-t{% endif %}"
+                         style="height: {{ d.bar_h_m }}rem; min-height: 0.25rem; background: oklch(0.75 0.15 145);">
+                    </div>
+                    {% endif %}
+                  </div>
+                  <span class="text-xs font-bold mt-1 text-base-content/70">{{ d.category }}</span>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="flex items-center gap-4 mt-2 text-xs text-base-content/70">
+                <div class="flex items-center gap-1">
+                  <span class="inline-block w-3 h-3 rounded" style="background: oklch(0.75 0.15 145);"></span> Men
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="inline-block w-3 h-3 rounded" style="background: oklch(0.75 0.15 330);"></span> Women
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
+            {% if zr_distribution_max %}
+            <div class="mb-6">
+              <h3 class="text-sm font-semibold text-base-content/70 mb-2">Zwift Racing Category Distribution</h3>
+              <div class="flex items-end gap-1">
+                {% for d in zr_distribution %}
+                <div class="flex flex-col items-center flex-1">
+                  <span class="text-xs font-medium mb-0.5">{% if d.total %}{{ d.total }}{% endif %}</span>
+                  <div class="w-full flex flex-col justify-end">
+                    {% if d.count_w %}
+                    <div class="w-full rounded-t"
+                         style="height: {{ d.bar_h_w }}rem; min-height: 0.25rem; background: oklch(0.75 0.15 330);">
+                    </div>
+                    {% endif %}
+                    {% if d.count_m %}
+                    <div class="w-full {% if not d.count_w %}rounded-t{% endif %}"
+                         style="height: {{ d.bar_h_m }}rem; min-height: 0.25rem; background: oklch(0.65 0.15 260);">
+                    </div>
+                    {% endif %}
+                  </div>
+                  <span class="text-xs font-bold mt-1 text-base-content/70" style="font-size: 0.6rem;">{{ d.category }}</span>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="flex items-center gap-4 mt-2 text-xs text-base-content/70">
+                <div class="flex items-center gap-1">
+                  <span class="inline-block w-3 h-3 rounded" style="background: oklch(0.65 0.15 260);"></span> Men
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="inline-block w-3 h-3 rounded" style="background: oklch(0.75 0.15 330);"></span> Women
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
+            {% if ftp_distribution_max %}
+            <div class="mb-6">
+              <h3 class="text-sm font-semibold text-base-content/70 mb-2">FTP Distribution (watts)</h3>
+              <div class="flex items-end" style="gap: 1px;">
+                {% for d in ftp_distribution %}
+                <div class="flex flex-col items-center flex-1" style="min-width: 0;">
+                  <span class="text-xs font-medium mb-0.5" style="font-size: 0.5rem;">{% if d.total %}{{ d.total }}{% endif %}</span>
+                  <div class="w-full flex flex-col justify-end">
+                    {% if d.count_w %}
+                    <div class="w-full rounded-t"
+                         style="height: {{ d.bar_h_w }}rem; min-height: 0.25rem; background: oklch(0.75 0.15 330);">
+                    </div>
+                    {% endif %}
+                    {% if d.count_m %}
+                    <div class="w-full {% if not d.count_w %}rounded-t{% endif %}"
+                         style="height: {{ d.bar_h_m }}rem; min-height: 0.25rem; background: oklch(0.7 0.12 70);">
+                    </div>
+                    {% endif %}
+                  </div>
+                  <span class="text-xs text-base-content/70 mt-0.5" style="font-size: 0.45rem; writing-mode: vertical-lr; transform: rotate(180deg); height: 1.5rem;">{{ d.label }}</span>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="flex items-center gap-4 mt-2 text-xs text-base-content/70">
+                <div class="flex items-center gap-1">
+                  <span class="inline-block w-3 h-3 rounded" style="background: oklch(0.7 0.12 70);"></span> Men
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="inline-block w-3 h-3 rounded" style="background: oklch(0.75 0.15 330);"></span> Women
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
+            {% if wkg_distribution_max %}
+            <div class="mb-6">
+              <h3 class="text-sm font-semibold text-base-content/70 mb-2">W/kg Distribution</h3>
+              <div class="flex items-end" style="gap: 1px;">
+                {% for d in wkg_distribution %}
+                <div class="flex flex-col items-center flex-1" style="min-width: 0;">
+                  <span class="text-xs font-medium mb-0.5" style="font-size: 0.5rem;">{% if d.total %}{{ d.total }}{% endif %}</span>
+                  <div class="w-full flex flex-col justify-end">
+                    {% if d.count_w %}
+                    <div class="w-full rounded-t"
+                         style="height: {{ d.bar_h_w }}rem; min-height: 0.25rem; background: oklch(0.75 0.15 330);">
+                    </div>
+                    {% endif %}
+                    {% if d.count_m %}
+                    <div class="w-full {% if not d.count_w %}rounded-t{% endif %}"
+                         style="height: {{ d.bar_h_m }}rem; min-height: 0.25rem; background: oklch(0.7 0.15 200);">
+                    </div>
+                    {% endif %}
+                  </div>
+                  <span class="text-xs text-base-content/70 mt-0.5" style="font-size: 0.45rem; writing-mode: vertical-lr; transform: rotate(180deg); height: 1.5rem;">{{ d.label }}</span>
+                </div>
+                {% endfor %}
+              </div>
+              <div class="flex items-center gap-4 mt-2 text-xs text-base-content/70">
+                <div class="flex items-center gap-1">
+                  <span class="inline-block w-3 h-3 rounded" style="background: oklch(0.7 0.15 200);"></span> Men
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="inline-block w-3 h-3 rounded" style="background: oklch(0.75 0.15 330);"></span> Women
+                </div>
+              </div>
+            </div>
+            {% endif %}
+
+          </div>
+        </details>
 
         {% if roster_filter %}
           <div class="alert alert-info mb-6">

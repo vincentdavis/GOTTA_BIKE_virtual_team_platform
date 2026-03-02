@@ -145,6 +145,149 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
         roster = sorted(roster, key=sort_keys[sort_by], reverse=reverse)
 
     total_count = len(roster)
+
+    # Build ZP category distribution from filtered roster (split by gender)
+    zp_m_counts: dict[str, int] = {}
+    zp_w_counts: dict[str, int] = {}
+    for r in roster:
+        if not r.in_zwiftpower:
+            continue
+        div = r.zp_divw or r.zp_div
+        if not div:
+            continue
+        cat = ZP_DIV_TO_CATEGORY.get(div, "")
+        if not cat:
+            continue
+        if r.gender == "F":
+            zp_w_counts[cat] = zp_w_counts.get(cat, 0) + 1
+        else:
+            zp_m_counts[cat] = zp_m_counts.get(cat, 0) + 1
+    category_order = ["A+", "A", "B", "C", "D"]
+    zp_dist_max = max(
+        [zp_m_counts.get(c, 0) + zp_w_counts.get(c, 0) for c in category_order],
+        default=0,
+    )
+    zp_distribution = []
+    for cat in category_order:
+        m = zp_m_counts.get(cat, 0)
+        w = zp_w_counts.get(cat, 0)
+        total = m + w
+        zp_distribution.append({
+            "category": cat,
+            "count_m": m,
+            "count_w": w,
+            "total": total,
+            "bar_h_m": f"{m / zp_dist_max * 3:.2f}" if zp_dist_max else "0",
+            "bar_h_w": f"{w / zp_dist_max * 3:.2f}" if zp_dist_max else "0",
+        })
+    zp_distribution_max = zp_dist_max
+
+    # Build ZR category distribution from filtered roster (split by gender)
+    zr_m_counts: dict[str, int] = {}
+    zr_w_counts: dict[str, int] = {}
+    for r in roster:
+        if r.in_zwiftracing and r.zr_category:
+            if r.gender == "F":
+                zr_w_counts[r.zr_category] = zr_w_counts.get(r.zr_category, 0) + 1
+            else:
+                zr_m_counts[r.zr_category] = zr_m_counts.get(r.zr_category, 0) + 1
+    zr_cat_order = [
+        "Diamond", "Ruby", "Emerald", "Sapphire", "Amethyst",
+        "Platinum", "Gold", "Silver", "Bronze", "Copper",
+    ]
+    zr_dist_max = max(
+        [zr_m_counts.get(c, 0) + zr_w_counts.get(c, 0) for c in zr_cat_order],
+        default=0,
+    )
+    zr_distribution = []
+    for cat in zr_cat_order:
+        m = zr_m_counts.get(cat, 0)
+        w = zr_w_counts.get(cat, 0)
+        total = m + w
+        zr_distribution.append({
+            "category": cat,
+            "count_m": m,
+            "count_w": w,
+            "total": total,
+            "bar_h_m": f"{m / zr_dist_max * 3:.2f}" if zr_dist_max else "0",
+            "bar_h_w": f"{w / zr_dist_max * 3:.2f}" if zr_dist_max else "0",
+        })
+    zr_distribution_max = zr_dist_max
+
+    # Build FTP histogram from filtered roster (10W bins, split by gender)
+    ftp_m_bins: dict[int, int] = {}
+    ftp_w_bins: dict[int, int] = {}
+    for r in roster:
+        ftp = r.zp_ftp
+        if not ftp or ftp <= 0:
+            continue
+        bin_start = (ftp // 15) * 15
+        if r.gender == "F":
+            ftp_w_bins[bin_start] = ftp_w_bins.get(bin_start, 0) + 1
+        else:
+            ftp_m_bins[bin_start] = ftp_m_bins.get(bin_start, 0) + 1
+    all_ftp_bins = sorted(set(ftp_m_bins) | set(ftp_w_bins))
+    ftp_bin_range = range(all_ftp_bins[0], all_ftp_bins[-1] + 15, 15) if all_ftp_bins else range(0)
+    ftp_dist_max = max(
+        [ftp_m_bins.get(b, 0) + ftp_w_bins.get(b, 0) for b in ftp_bin_range],
+        default=0,
+    )
+    ftp_distribution = []
+    for b in ftp_bin_range:
+        m = ftp_m_bins.get(b, 0)
+        w = ftp_w_bins.get(b, 0)
+        ftp_distribution.append({
+            "label": str(b),
+            "count_m": m,
+            "count_w": w,
+            "total": m + w,
+            "bar_h_m": f"{m / ftp_dist_max * 3:.2f}" if ftp_dist_max else "0",
+            "bar_h_w": f"{w / ftp_dist_max * 3:.2f}" if ftp_dist_max else "0",
+        })
+    ftp_distribution_max = ftp_dist_max
+
+    # Build W/kg histogram from filtered roster (0.2 W/kg bins, split by gender)
+    wkg_m_bins: dict[str, int] = {}
+    wkg_w_bins: dict[str, int] = {}
+    for r in roster:
+        wkg = float(r.wkg or 0)
+        if wkg <= 0:
+            continue
+        bin_start = int(wkg / 0.2) * 0.2
+        bin_key = f"{bin_start:.1f}"
+        if r.gender == "F":
+            wkg_w_bins[bin_key] = wkg_w_bins.get(bin_key, 0) + 1
+        else:
+            wkg_m_bins[bin_key] = wkg_m_bins.get(bin_key, 0) + 1
+    all_wkg_keys = sorted(set(wkg_m_bins) | set(wkg_w_bins), key=float)
+    if all_wkg_keys:
+        low = float(all_wkg_keys[0])
+        high = float(all_wkg_keys[-1])
+        wkg_bin_values = []
+        v = low
+        while v <= high + 0.01:
+            wkg_bin_values.append(f"{v:.1f}")
+            v = round(v + 0.2, 1)
+    else:
+        wkg_bin_values = []
+    wkg_dist_max = max(
+        [wkg_m_bins.get(b, 0) + wkg_w_bins.get(b, 0) for b in wkg_bin_values],
+        default=0,
+    )
+    wkg_distribution = []
+    for b in wkg_bin_values:
+        m = wkg_m_bins.get(b, 0)
+        w = wkg_w_bins.get(b, 0)
+        wkg_distribution.append({
+            "label": b,
+            "count_m": m,
+            "count_w": w,
+            "total": m + w,
+            "bar_h_m": f"{m / wkg_dist_max * 3:.2f}" if wkg_dist_max else "0",
+            "bar_h_w": f"{w / wkg_dist_max * 3:.2f}" if wkg_dist_max else "0",
+        })
+    wkg_distribution_max = wkg_dist_max
+
     per_page = request.GET.get("per_page", "100")
     try:
         per_page = int(per_page)
@@ -184,6 +327,14 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
             "race_ready_filter": race_ready_filter,
             "zp_categories": zp_categories,
             "zr_categories": zr_categories,
+            "zp_distribution": zp_distribution,
+            "zp_distribution_max": zp_distribution_max,
+            "zr_distribution": zr_distribution,
+            "zr_distribution_max": zr_distribution_max,
+            "ftp_distribution": ftp_distribution,
+            "ftp_distribution_max": ftp_distribution_max,
+            "wkg_distribution": wkg_distribution,
+            "wkg_distribution_max": wkg_distribution_max,
             "sort_by": sort_by,
             "sort_dir": sort_dir,
             "filter_qs": filter_qs,
