@@ -105,6 +105,9 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - `Race` model - Individual races within an event
     - `RaceRegistration` model - Race-level registrations
     - Views require `team_member` permission; create/edit/delete/squad management require `is_event_admin`
+    - Role Setup: event prefix (`EVENT_ROLE_PREFIXES` constance), head captain role, event role — editable by `assign_roles` or event's head captain
+    - Manage Roles: assign/unassign Discord roles to members — requires `assign_roles` or event's head captain role
+    - Squad Discord roles must match the event's prefix; squad role dropdown disabled if no prefix is set
     - Squad assignment from signup list (event admins can assign users to multiple squads)
     - Expandable squad member list with ZP/ZR data, Discord role checks
     - Markdown rendering for event description and signup instructions
@@ -195,6 +198,7 @@ Permissions are granted via Discord roles configured in Constance. The system ch
 - `data_connection` - Access to Google Sheets data exports
 - `pages_admin` - Can create and manage CMS pages
 - `event_admin` - Create, edit, and manage events, squads, and signups
+- `assign_roles` - Manage Discord role setup and assign/unassign Discord roles on events; event Head Captain Role holders also get this ability per-event
 
 #### Constance Permission Settings
 
@@ -207,6 +211,7 @@ Configure in Django admin at `/admin/constance/config/` under "Permission Mappin
 - `PERM_DATA_CONNECTION_ROLES` - Role IDs that can access data exports
 - `PERM_PAGES_ADMIN_ROLES` - Role IDs that can manage CMS pages
 - `PERM_EVENT_ADMIN_ROLES` - Role IDs that can manage events, squads, and signups
+- `PERM_ASSIGN_ROLES` - Role IDs that can manage Discord role setup and assign/unassign roles on events
 
 #### Usage in Views
 
@@ -321,6 +326,8 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
     - `/events/<id>/squads/<squad_id>/edit/` - Edit squad (event admins)
     - `/events/<id>/squads/<squad_id>/delete/` - Delete squad (event admins, POST)
     - `/events/<id>/squads/assign/` - Assign user to squad (event admins, POST)
+    - `/events/<id>/role-setup/` - Discord role setup (event admins read-only; assign_roles/head captain can edit)
+    - `/events/<id>/manage-roles/` - Assign/unassign Discord roles (assign_roles or head captain)
     - `/events/<id>/availability/<squad_id>/` - Create availability for squad (event admins)
 - `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
@@ -364,7 +371,7 @@ Custom admin buttons are added via:
 
 Runtime-configurable settings stored in database, editable via Django admin at `/admin/constance/config/`.
 
-Settings are grouped: Team Identity, Zwift Credentials, API Keys, Permission Mappings (`PERM_*_ROLES` — JSON arrays of Discord role IDs), Discord Roles/Channels, New Arrival Messages (support `{member}`/`{server}` placeholders), Verification (`CATEGORY_REQUIREMENTS` JSON, `*_DAYS` expiration settings, `VERIFICATION_FORM_MESSAGE` Markdown message shown on verification form), Google, Strava, Site Settings.
+Settings are grouped: Team Identity, Zwift Credentials, API Keys, Permission Mappings (`PERM_*_ROLES` — JSON arrays of Discord role IDs), Discord Guild (`EVENT_ROLE_PREFIXES` — JSON array of allowed event prefix characters), Discord Roles/Channels, New Arrival Messages (support `{member}`/`{server}` placeholders), Verification (`CATEGORY_REQUIREMENTS` JSON, `*_DAYS` expiration settings, `VERIFICATION_FORM_MESSAGE` Markdown message shown on verification form), Google, Strava, Site Settings.
 
 Usage: `from constance import config; config.SETTING_NAME`. Add new settings in `settings.py` under `CONSTANCE_CONFIG`.
 

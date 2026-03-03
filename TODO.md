@@ -28,6 +28,7 @@
 - [x] Role Setup: read-only Role Setup section on event edit page (editable only on dedicated page)
 - [x] Squad form: Discord role requires event prefix, only shows roles matching the prefix
 - [x] Manage Roles: Head Captain Role holders can manage roles (in addition to `PERM_ASSIGN_ROLES`)
+- [x] Role Setup page: accessible by `assign_roles`, head captain role, or event admins (read-only)
 - [x] Availability builder: mobile-responsive grid (smaller cells, scroll arrows, stacked settings, short day labels)
 - [x] Availability respond: mobile-responsive grid (smaller cells, scroll arrows, short day labels)
 - [ ] Availability: backend processing of responses (aggregate results, export)

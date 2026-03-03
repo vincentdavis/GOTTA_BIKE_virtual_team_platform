@@ -1,5 +1,7 @@
 # The Coalition Team Platform
 
+![Events View](docs/screenshots/events%20view.png)
+
 A Django web application for The Coalition Zwift racing team. Manages team members, integrates with ZwiftPower and Zwift Racing APIs, and provides Discord bot integration.
 
 ## Features
