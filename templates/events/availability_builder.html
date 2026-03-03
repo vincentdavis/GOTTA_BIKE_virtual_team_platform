@@ -76,6 +76,16 @@
           <button id="btn-generate" class="btn btn-primary btn-sm w-full">Generate Grid</button>
         </div>
       </div>
+      <div class="flex flex-wrap gap-6 mt-3">
+        <label class="label cursor-pointer gap-2">
+          <input type="checkbox" id="cfg-max-races" class="checkbox checkbox-sm">
+          <span class="label-text text-xs">Ask: Max number of races</span>
+        </label>
+        <label class="label cursor-pointer gap-2">
+          <input type="checkbox" id="cfg-rest-days" class="checkbox checkbox-sm">
+          <span class="label-text text-xs">Ask: Rest days between races</span>
+        </label>
+      </div>
     </div>
   </div>
 
@@ -600,6 +610,8 @@
   var btnSave = document.getElementById('btn-save');
   var titleEl = document.getElementById('cfg-title');
   var expiresEl = document.getElementById('cfg-expires');
+  var maxRacesCheckbox = document.getElementById('cfg-max-races');
+  var restDaysCheckbox = document.getElementById('cfg-rest-days');
 
   function showToast(msg, isError) {
     var toast = document.getElementById('save-toast');
@@ -635,7 +647,9 @@
       slot_duration: parseInt(slotDurationEl.value),
       timezone: timezoneEl.value || 'UTC',
       blocked_cells: blockedCells,
-      expires: expiresEl.value || null
+      expires: expiresEl.value || null,
+      max_races_question: maxRacesCheckbox.checked,
+      rest_days_question: restDaysCheckbox.checked
     };
 
     btnSave.disabled = true;

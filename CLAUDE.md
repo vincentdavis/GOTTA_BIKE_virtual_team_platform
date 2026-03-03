@@ -103,7 +103,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - `SquadMember` model - Links users to squads (member/pending/rejected status, unique on squad+user)
     - `EventSignup` model - Event-level signups with timezone selection and status
     - `Race` model - Individual races within an event
-    - `EventRegistration` model - Race-level registrations
+    - `RaceRegistration` model - Race-level registrations
     - Views require `team_member` permission; create/edit/delete/squad management require `is_event_admin`
     - Squad assignment from signup list (event admins can assign users to multiple squads)
     - Expandable squad member list with ZP/ZR data, Discord role checks

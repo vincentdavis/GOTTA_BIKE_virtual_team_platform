@@ -113,11 +113,40 @@
   {% if enriched_responders %}
   <div class="mb-6">
     <h3 class="text-sm font-semibold mb-2">Responders ({{ total_responders }})</h3>
+    {% if grid.max_races_question or grid.rest_days_question %}
+    <div class="overflow-x-auto mb-3">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Name</th>
+            {% if grid.max_races_question %}<th class="text-center">Max Races</th>{% endif %}
+            {% if grid.rest_days_question %}<th class="text-center">Rest Days</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in enriched_responders %}
+          <tr>
+            <td>
+              {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+            </td>
+            {% if grid.max_races_question %}
+            <td class="text-center font-mono">{% if entry.max_races is not None %}{{ entry.max_races }}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
+            {% endif %}
+            {% if grid.rest_days_question %}
+            <td class="text-center font-mono">{% if entry.rest_days is not None %}{{ entry.rest_days }}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
+            {% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
     <div class="flex flex-wrap gap-2">
       {% for entry in enriched_responders %}
       {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
       {% endfor %}
     </div>
+    {% endif %}
   </div>
   {% endif %}
 </div>

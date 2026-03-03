@@ -8,9 +8,9 @@ from apps.events.models import (
     AvailabilityGrid,
     AvailabilityResponse,
     Event,
-    EventRegistration,
     EventSignup,
     Race,
+    RaceRegistration,
     Squad,
     SquadMember,
 )
@@ -78,9 +78,9 @@ class RaceAdmin(admin.ModelAdmin):
     ordering: ClassVar[list[str]] = ["-start_date"]
 
 
-@admin.register(EventRegistration)
-class EventRegistrationAdmin(admin.ModelAdmin):
-    """Admin for EventRegistration model."""
+@admin.register(RaceRegistration)
+class RaceRegistrationAdmin(admin.ModelAdmin):
+    """Admin for RaceRegistration model."""
 
     list_display: ClassVar[list[str]] = [
         "user",

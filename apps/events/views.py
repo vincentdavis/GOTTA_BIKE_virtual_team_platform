@@ -1357,6 +1357,8 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
         slot_duration=slot_duration,
         grid_timezone=grid_tz,
         blocked_cells=blocked_cells,
+        max_races_question=bool(data.get("max_races_question", False)),
+        rest_days_question=bool(data.get("rest_days_question", False)),
         expires=expires,
         status=AvailabilityGrid.Status.DRAFT,
         created_by=request.user,
@@ -1412,7 +1414,7 @@ def availability_status_view(request: HttpRequest, event_pk: int, squad_pk: int,
     expected = allowed_transitions.get(grid.status)
     if expected is None or new_status != expected:
         messages.error(request, f'Cannot change status from "{grid.get_status_display()}" to "{new_status}".')
-        return redirect("events:squad_edit", event_pk=event_pk, squad_pk=squad_pk)
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
     grid.status = new_status
     grid.save(update_fields=["status", "updated_at"])
@@ -1426,7 +1428,7 @@ def availability_status_view(request: HttpRequest, event_pk: int, squad_pk: int,
         user_id=request.user.id,
     )
     messages.success(request, f'Grid "{grid.title}" is now {grid.get_status_display().lower()}.')
-    return redirect("events:squad_edit", event_pk=event_pk, squad_pk=squad_pk)
+    return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
 
 @require_http_methods(["GET", "POST"])
@@ -1466,10 +1468,36 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
         if not isinstance(available_cells, list):
             return JsonResponse({"error": "available_cells must be a list."}, status=400)
 
+        defaults = {"available_cells": available_cells}
+
+        if grid.max_races_question:
+            raw_max = data.get("max_races")
+            if raw_max is None or raw_max == "":
+                return JsonResponse({"error": "Please answer: max number of races."}, status=400)
+            try:
+                max_races_val = int(raw_max)
+            except (ValueError, TypeError):
+                return JsonResponse({"error": "Max races must be a non-negative integer."}, status=400)
+            if max_races_val < 0:
+                return JsonResponse({"error": "Max races must be a non-negative integer."}, status=400)
+            defaults["max_races"] = max_races_val
+
+        if grid.rest_days_question:
+            raw_rest = data.get("rest_days")
+            if raw_rest is None or raw_rest == "":
+                return JsonResponse({"error": "Please answer: rest days between races."}, status=400)
+            try:
+                rest_days_val = int(raw_rest)
+            except (ValueError, TypeError):
+                return JsonResponse({"error": "Rest days must be a non-negative integer."}, status=400)
+            if rest_days_val < 0:
+                return JsonResponse({"error": "Rest days must be a non-negative integer."}, status=400)
+            defaults["rest_days"] = rest_days_val
+
         AvailabilityResponse.objects.update_or_create(
             grid=grid,
             user=request.user,
-            defaults={"available_cells": available_cells},
+            defaults=defaults,
         )
         logfire.info(
             "Availability response saved",
@@ -1522,6 +1550,8 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
             "valid_cells_json": json.dumps(sorted(grid_data["valid_cells"])),
             "display_timezone": display_tz,
             "tz_is_default": tz_is_default,
+            "existing_max_races": existing_response.max_races if existing_response else None,
+            "existing_rest_days": existing_response.rest_days if existing_response else None,
         },
     )
 
@@ -1561,6 +1591,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
 
     enriched_responders = []
     user_by_id: dict[int, dict] = {}
+    response_by_user: dict[int, AvailabilityResponse] = {r.user.pk: r for r in responses}
     for user in responder_users:
         zp = zp_by_zwid.get(user.zwid)
         zr = zr_by_zwid.get(user.zwid)
@@ -1571,6 +1602,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         zr_rating = getattr(zr, "race_current_rating", None) if zr else None
         zr_phenotype = getattr(zr, "phenotype_value", "") or "" if zr else ""
         zr_age = getattr(zr, "age", "") or "" if zr else ""
+        resp = response_by_user.get(user.pk)
         entry = {
             "user": user,
             "display_name": display_name,
@@ -1584,6 +1616,8 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "zr_rating": zr_rating,
             "zr_phenotype": zr_phenotype,
             "zr_age": zr_age,
+            "max_races": resp.max_races if resp else None,
+            "rest_days": resp.rest_days if resp else None,
         }
         enriched_responders.append(entry)
         user_by_id[user.pk] = entry

@@ -50,6 +50,32 @@
   <!-- Grid Container -->
   <div id="grid-container" class="avail-grid-wrap mb-4"></div>
 
+  <!-- Optional Questions -->
+  {% if grid.max_races_question or grid.rest_days_question %}
+  <div class="card bg-base-200 shadow-md mb-4 p-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {% if grid.max_races_question %}
+      <div class="form-control">
+        <label class="label" for="q-max-races">
+          <span class="label-text">What is the max number of races you would like to do? <span class="text-error">*</span></span>
+        </label>
+        <input type="number" id="q-max-races" min="0" step="1" class="input input-bordered input-sm w-32"
+               {% if existing_max_races is not None %}value="{{ existing_max_races }}"{% endif %}>
+      </div>
+      {% endif %}
+      {% if grid.rest_days_question %}
+      <div class="form-control">
+        <label class="label" for="q-rest-days">
+          <span class="label-text">How many days rest between races do you require? <span class="text-error">*</span></span>
+        </label>
+        <input type="number" id="q-rest-days" min="0" step="1" class="input input-bordered input-sm w-32"
+               {% if existing_rest_days is not None %}value="{{ existing_rest_days }}"{% endif %}>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Actions -->
   <div class="flex flex-wrap items-center gap-2 mb-6">
     <button id="btn-submit" class="btn btn-success btn-sm">Submit Availability</button>
@@ -259,13 +285,32 @@
 
   // Submit — read UTC coordinates from data attributes
   var btnSubmit = document.getElementById('btn-submit');
+  var maxRacesInput = document.getElementById('q-max-races');
+  var restDaysInput = document.getElementById('q-rest-days');
+
   btnSubmit.addEventListener('click', function() {
+    // Validate required questions
+    if (maxRacesInput && maxRacesInput.value === '') {
+      showToast('Please answer: max number of races.', true);
+      maxRacesInput.focus();
+      return;
+    }
+    if (restDaysInput && restDaysInput.value === '') {
+      showToast('Please answer: rest days between races.', true);
+      restDaysInput.focus();
+      return;
+    }
+
     var availableCells = [];
     gridContainer.querySelectorAll('.avail-cell').forEach(function(td) {
       if (td.dataset.state === 'available' && td.dataset.utcDate && td.dataset.utcTime) {
         availableCells.push({ date: td.dataset.utcDate, time: td.dataset.utcTime });
       }
     });
+
+    var payload = { available_cells: availableCells };
+    if (maxRacesInput) payload.max_races = parseInt(maxRacesInput.value);
+    if (restDaysInput) payload.rest_days = parseInt(restDaysInput.value);
 
     btnSubmit.disabled = true;
     btnSubmit.textContent = 'Submitting...';
@@ -276,7 +321,7 @@
         'Content-Type': 'application/json',
         'X-CSRFToken': CSRF_TOKEN
       },
-      body: JSON.stringify({ available_cells: availableCells })
+      body: JSON.stringify(payload)
     })
     .then(function(resp) {
       return resp.json().then(function(data) { return { ok: resp.ok, data: data }; });

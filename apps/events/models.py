@@ -180,7 +180,7 @@ class Race(models.Model):
         return f"{self.event.title} - {self.title}"
 
 
-class EventRegistration(models.Model):
+class RaceRegistration(models.Model):
     """Links a user to a race they have registered for.
 
     A user can register for many races, and a race can have many registered users.
@@ -207,7 +207,7 @@ class EventRegistration(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name="event_registrations",
+        related_name="race_registrations",
         help_text="The registered user",
     )
     race = models.ForeignKey(
@@ -227,12 +227,12 @@ class EventRegistration(models.Model):
     updated_at = models.DateTimeField(auto_now=True, help_text="When the registration was last updated")
 
     class Meta:
-        """Meta options for EventRegistration model."""
+        """Meta options for RaceRegistration model."""
 
         ordering = ["-created_at"]  # noqa: RUF012
         unique_together = [("user", "race")]  # noqa: RUF012
-        verbose_name = "Event Registration"
-        verbose_name_plural = "Event Registrations"
+        verbose_name = "Race Registration"
+        verbose_name_plural = "Race Registrations"
 
     def __str__(self) -> str:
         """Return user and race description.
@@ -553,6 +553,14 @@ class AvailabilityGrid(models.Model):
         default=Status.DRAFT,
         help_text="Grid lifecycle status",
     )
+    max_races_question = models.BooleanField(
+        default=False,
+        help_text="Ask responders: What is the max number of races you would like to do?",
+    )
+    rest_days_question = models.BooleanField(
+        default=False,
+        help_text="Ask responders: How many days rest between races do you require?",
+    )
     expires = models.DateField(null=True, blank=True, help_text="Date when this grid expires and is no longer visible")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -612,12 +620,16 @@ class AvailabilityGrid(models.Model):
     def time_slots(self) -> list[str]:
         """Return list of time slot strings from start_time to end_time by slot_duration.
 
+        Handles wrap-around past midnight (e.g. start_time=15:00, end_time=02:00).
+
         Returns:
             List of "HH:MM" strings for each slot in the time range.
 
         """
         start = datetime.strptime(self.start_time, "%H:%M")
         end = datetime.strptime(self.end_time, "%H:%M")
+        if end <= start:
+            end += timedelta(hours=24)
         delta = timedelta(minutes=self.slot_duration)
         result = []
         current = start
@@ -698,6 +710,16 @@ class AvailabilityResponse(models.Model):
         default=list,
         blank=True,
         help_text='List of available cells, each {"date": "YYYY-MM-DD", "time": "HH:MM"}',
+    )
+    max_races = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Max number of races the responder wants to do",
+    )
+    rest_days = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of rest days required between races",
     )
     created_at = models.DateTimeField(default=timezone.now, help_text="When the response was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the response was last updated")
