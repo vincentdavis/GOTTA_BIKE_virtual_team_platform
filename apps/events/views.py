@@ -579,11 +579,11 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 @team_member_required()
 @require_http_methods(["GET", "POST"])
-@discord_permission_required("event_admin", raise_exception=True)
 def event_role_setup_view(request: HttpRequest, pk: int) -> HttpResponse:
     """View and optionally edit Discord role settings for an event.
 
-    Users with assign_roles permission can edit; others see read-only values.
+    Users with event_admin, assign_roles, or the event's head captain role can view.
+    Users with assign_roles or head captain role can edit.
 
     Args:
         request: The HTTP request.
@@ -592,9 +592,16 @@ def event_role_setup_view(request: HttpRequest, pk: int) -> HttpResponse:
     Returns:
         Rendered role setup form or redirect on success.
 
+    Raises:
+        PermissionDenied: If the user lacks permission.
+
     """
     event = get_object_or_404(Event, pk=pk)
-    can_edit = request.user.has_permission(Permissions.ASSIGN_ROLES)
+    can_edit = _can_manage_event_roles(request.user, event)
+    if not can_edit and not request.user.has_permission(Permissions.EVENT_ADMIN):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
 
     if request.method == "POST" and can_edit:
         form = EventRoleSetupForm(request.POST, instance=event)

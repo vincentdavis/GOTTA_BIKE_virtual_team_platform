@@ -22,6 +22,21 @@
 
 ## P1 - High Priority
 
+### Events & Squads
+
+- [x] Role Setup: configurable `EVENT_ROLE_PREFIXES` constance setting with form validation
+- [x] Role Setup: read-only Role Setup section on event edit page (editable only on dedicated page)
+- [x] Squad form: Discord role requires event prefix, only shows roles matching the prefix
+- [x] Manage Roles: Head Captain Role holders can manage roles (in addition to `PERM_ASSIGN_ROLES`)
+- [x] Availability builder: mobile-responsive grid (smaller cells, scroll arrows, stacked settings, short day labels)
+- [x] Availability respond: mobile-responsive grid (smaller cells, scroll arrows, short day labels)
+- [ ] Availability: backend processing of responses (aggregate results, export)
+
+### Discord Sync
+
+- [x] Add `sync_discord_roles` background task (callable from `/site/config/background_tasks/`)
+- [ ] Auto-sync Discord roles on a schedule (like guild members every 6 hours)
+
 ### Performance Review
 
 - [ ] Add min/max FTP and 120-day min/max FTP
@@ -31,6 +46,7 @@
 
 ### Verifications
 
+- [ ] Add "Extra Verified" tier (`is_extra_verified` — weight_full + height + power all verified, regardless of category)
 - [ ] Add provisional status to verification records
 - [ ] Backfill historical record_date values (some default to 2026-01-01)
 
@@ -95,7 +111,7 @@
 - [ ] Onboarding checklist for new users (profile → verify Zwift → race verification)
 - [x] Help/FAQ page with glossary (race-ready, categories, verification types)
 - [ ] Persistent notification center (beyond auto-dismiss toasts)
-- [ ] Mobile-optimized table views (card layout option for small screens)
+- [ ] Mobile-optimized table views (card layout option for small screens — availability grids done, tables remain)
 
 ### Accessibility
 
