@@ -14,7 +14,7 @@ from apps.accounts.tasks import (
     sync_zr_category_roles,
 )
 from apps.club_strava.tasks import sync_strava_activities
-from apps.team.tasks import sync_discord_channels, warn_expiring_verifications
+from apps.team.tasks import sync_discord_channels, sync_discord_roles, warn_expiring_verifications
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.tasks import sync_zr_riders
 
@@ -100,6 +100,10 @@ TASK_REGISTRY: dict = {
     "sync_discord_channels": {
         "task": sync_discord_channels,
         "description": "Fetch Discord guild channels and sync to database",
+    },
+    "sync_discord_roles": {
+        "task": sync_discord_roles,
+        "description": "Fetch Discord guild roles and sync to database",
     },
     "warn_expiring_verifications": {
         "task": warn_expiring_verifications,

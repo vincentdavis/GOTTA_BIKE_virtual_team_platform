@@ -932,7 +932,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         return redirect("events:event_detail", pk=event_pk)
 
     if request.method == "POST":
-        form = SquadForm(request.POST)
+        form = SquadForm(request.POST, event_prefix=event.prefix or "")
         if form.is_valid():
             squad = form.save(commit=False)
             squad.event = event
@@ -948,7 +948,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             messages.success(request, f'Squad "{squad.name}" created successfully!')
             return redirect("events:event_detail", pk=event_pk)
     else:
-        form = SquadForm()
+        form = SquadForm(event_prefix=event.prefix or "")
 
     return render(
         request,
@@ -991,7 +991,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
         return redirect("events:event_detail", pk=event_pk)
 
     if request.method == "POST":
-        form = SquadForm(request.POST, instance=squad)
+        form = SquadForm(request.POST, instance=squad, event_prefix=event.prefix or "")
         if form.is_valid():
             form.save()
             logfire.info(
@@ -1004,7 +1004,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             messages.success(request, f'Squad "{squad.name}" updated successfully!')
             return redirect("events:squad_manage", event_pk=event_pk)
     else:
-        form = SquadForm(instance=squad)
+        form = SquadForm(instance=squad, event_prefix=event.prefix or "")
 
     return render(
         request,

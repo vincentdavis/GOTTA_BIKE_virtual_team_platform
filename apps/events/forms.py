@@ -412,9 +412,17 @@ class SquadForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, **kwargs) -> None:
-        """Initialize form with Discord channel choices and captain labels."""
+    def __init__(self, *args, event_prefix: str = "", **kwargs) -> None:
+        """Initialize form with Discord channel choices and captain labels.
+
+        Args:
+            *args: Positional arguments passed to ModelForm.
+            event_prefix: The parent event's Discord prefix. When empty, the role field is disabled.
+            **kwargs: Keyword arguments passed to ModelForm.
+
+        """
         super().__init__(*args, **kwargs)
+        self.event_prefix = event_prefix
 
         # Sort captain/vice_captain alphabetically and show full names
         from apps.accounts.models import User
@@ -447,8 +455,12 @@ class SquadForm(forms.ModelForm):
         self.fields["audio_channel_id"].widget.choices = voice_choices
         self.initial["audio_channel_id"] = current_audio
 
-        # Populate Discord role choices
-        role_choices = _get_role_choices()
+        # Populate Discord role choices filtered by event prefix
+        if event_prefix:
+            role_choices = _get_role_choices(prefix=event_prefix)
+        else:
+            role_choices = [("0", "(none — set event prefix first)")]
+            self.fields["team_discord_role"].widget.attrs["disabled"] = True
         current_role = str(self.initial.get("team_discord_role", 0) or 0)
         role_values = {c[0] for c in role_choices}
         if current_role != "0" and current_role not in role_values:
@@ -483,14 +495,29 @@ class SquadForm(forms.ModelForm):
             return 0
 
     def clean_team_discord_role(self) -> int:
-        """Convert selected role ID string back to int for the model.
+        """Convert selected role ID string back to int and validate prefix.
 
         Returns:
             Role ID as integer (0 for none).
 
+        Raises:
+            forms.ValidationError: If a role is selected without a prefix or doesn't match the prefix.
+
         """
         value = self.cleaned_data.get("team_discord_role", "0")
         try:
-            return int(value)
+            role_id = int(value)
         except (ValueError, TypeError):
             return 0
+
+        if role_id and role_id != 0 and not self.event_prefix:
+            raise forms.ValidationError("Set the event's Discord prefix before assigning a role.")
+
+        if role_id and role_id != 0 and self.event_prefix:
+            role = DiscordRole.objects.filter(role_id=str(role_id)).first()
+            if role and not role.name.startswith(self.event_prefix):
+                raise forms.ValidationError(
+                    f'Role "@{role.name}" must start with the event prefix "{self.event_prefix}".'
+                )
+
+        return role_id

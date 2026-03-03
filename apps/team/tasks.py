@@ -8,7 +8,7 @@ from constance import config
 from django.tasks import task  # ty:ignore[unresolved-import]
 
 from apps.accounts.discord_service import send_discord_channel_message, send_discord_dm
-from apps.team.models import DiscordChannel, MembershipApplication, RaceReadyRecord
+from apps.team.models import DiscordChannel, DiscordRole, MembershipApplication, RaceReadyRecord
 
 
 @task
@@ -369,6 +369,82 @@ def sync_discord_channels() -> dict:
             "updated": updated,
             "deleted": deleted,
             "total": len(channels_data),
+        }
+
+
+@task
+def sync_discord_roles() -> dict:
+    """Fetch guild roles from the Discord API and sync to DiscordRole model.
+
+    Requires DISCORD_BOT_TOKEN and GUILD_ID to be configured in constance.
+
+    Returns:
+        dict with sync results (created, updated, deleted, total).
+
+    """
+    with logfire.span("sync_discord_roles"):
+        bot_token = config.DISCORD_BOT_TOKEN
+        guild_id = config.GUILD_ID
+
+        if not bot_token:
+            logfire.warning("DISCORD_BOT_TOKEN not configured, skipping role sync")
+            return {"status": "skipped", "reason": "bot_token_not_configured"}
+
+        if not guild_id:
+            logfire.warning("GUILD_ID not configured, skipping role sync")
+            return {"status": "skipped", "reason": "guild_id_not_configured"}
+
+        response = httpx.get(
+            f"https://discord.com/api/v10/guilds/{guild_id}/roles",
+            headers={"Authorization": f"Bot {bot_token}"},
+            timeout=30,
+        )
+        response.raise_for_status()
+        roles_data = response.json()
+
+        received_role_ids = set()
+        created = 0
+        updated = 0
+
+        for role in roles_data:
+            role_id = str(role["id"])
+            received_role_ids.add(role_id)
+
+            _, was_created = DiscordRole.objects.update_or_create(
+                role_id=role_id,
+                defaults={
+                    "name": role.get("name", ""),
+                    "color": role.get("color", 0),
+                    "position": role.get("position", 0),
+                    "managed": role.get("managed", False),
+                    "mentionable": role.get("mentionable", False),
+                },
+            )
+            if was_created:
+                created += 1
+            else:
+                updated += 1
+
+        existing_ids = set(DiscordRole.objects.values_list("role_id", flat=True))
+        stale_ids = existing_ids - received_role_ids
+        deleted = 0
+        if stale_ids:
+            deleted, _ = DiscordRole.objects.filter(role_id__in=stale_ids).delete()
+
+        logfire.info(
+            "Discord roles synced from API",
+            created=created,
+            updated=updated,
+            deleted=deleted,
+            total_received=len(roles_data),
+        )
+
+        return {
+            "status": "success",
+            "created": created,
+            "updated": updated,
+            "deleted": deleted,
+            "total": len(roles_data),
         }
 
 
