@@ -20,7 +20,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import add_discord_role, remove_discord_role
 from apps.accounts.models import Permissions, User
-from apps.events.forms import EventForm, SquadForm
+from apps.events.forms import EventForm, EventRoleSetupForm, SquadForm
 from apps.events.models import (
     ZR_CATEGORY_ORDER,
     AvailabilityGrid,
@@ -528,6 +528,21 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
     enriched_signups = _enrich_signups(
         event.signups.select_related("user").all(), event=event
     )
+
+    # Build read-only role display names
+    from apps.team.models import DiscordRole
+
+    role_display = {}
+    for field_name, field_value in [
+        ("head_captain_role_id", event.head_captain_role_id),
+        ("event_role", event.event_role),
+    ]:
+        if field_value and field_value != 0:
+            role = DiscordRole.objects.filter(role_id=str(field_value)).first()
+            role_display[field_name] = f"@{role.name}" if role else f"Unknown ({field_value})"
+        else:
+            role_display[field_name] = "(none)"
+
     return render(
         request,
         "events/event_form.html",
@@ -538,6 +553,74 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
             "page_title": "Edit Event",
             "submit_label": "Save Changes",
             "can_assign_roles": request.user.has_permission(Permissions.ASSIGN_ROLES),
+            "role_display": role_display,
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_http_methods(["GET", "POST"])
+@discord_permission_required("event_admin", raise_exception=True)
+def event_role_setup_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """View and optionally edit Discord role settings for an event.
+
+    Users with assign_roles permission can edit; others see read-only values.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+
+    Returns:
+        Rendered role setup form or redirect on success.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    can_edit = request.user.has_permission(Permissions.ASSIGN_ROLES)
+
+    if request.method == "POST" and can_edit:
+        form = EventRoleSetupForm(request.POST, instance=event)
+        if form.is_valid():
+            form.save()
+            logfire.info(
+                "Event role setup updated",
+                event_id=pk,
+                event_title=event.title,
+                user_id=request.user.id,
+            )
+            messages.success(request, "Role setup updated successfully!")
+            return redirect("events:event_role_setup", pk=pk)
+    else:
+        form = EventRoleSetupForm(instance=event)
+
+    # Look up display names for read-only mode
+    from apps.team.models import DiscordRole
+
+    role_display = {}
+    for field_name, field_value in [
+        ("head_captain_role_id", event.head_captain_role_id),
+        ("event_role", event.event_role),
+    ]:
+        if field_value and field_value != 0:
+            role = DiscordRole.objects.filter(role_id=str(field_value)).first()
+            role_display[field_name] = f"@{role.name}" if role else f"Unknown ({field_value})"
+        else:
+            role_display[field_name] = "(none)"
+
+    try:
+        allowed_prefixes = json.loads(config.EVENT_ROLE_PREFIXES)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        allowed_prefixes = ["$", ">", "¡", "~", "^"]
+
+    return render(
+        request,
+        "events/event_role_setup.html",
+        {
+            "form": form,
+            "event": event,
+            "can_edit": can_edit,
+            "role_display": role_display,
+            "allowed_prefixes": "  ".join(allowed_prefixes),
         },
     )
 

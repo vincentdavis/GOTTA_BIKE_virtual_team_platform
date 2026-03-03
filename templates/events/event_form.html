@@ -7,6 +7,7 @@
 <div class="max-w-4xl mx-auto">
   {% if event %}
   <div class="mb-4 flex gap-2">
+    <a href="{% url 'events:event_role_setup' event.pk %}" class="btn btn-primary btn-sm">Role Setup</a>
     <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-primary btn-sm">Manage Squads</a>
     {% if can_assign_roles %}
     <a href="{% url 'events:manage_roles' event.pk %}" class="btn btn-primary btn-sm">Manage Roles</a>
@@ -149,38 +150,6 @@
           </label>
         </div>
 
-        <!-- Head Captain Role ID -->
-        <div class="form-control w-full">
-          <label class="label" for="id_head_captain_role_id">
-            <span class="label-text">Head Captain Role</span>
-          </label>
-          {{ form.head_captain_role_id }}
-          {% if form.head_captain_role_id.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.head_captain_role_id.errors.0 }}</span>
-          </label>
-          {% endif %}
-          <label class="label">
-            <span class="label-text-alt">Discord role for the head captain of this event</span>
-          </label>
-        </div>
-
-        <!-- Event Role -->
-        <div class="form-control w-full">
-          <label class="label" for="id_event_role">
-            <span class="label-text">Event Role</span>
-          </label>
-          {{ form.event_role }}
-          {% if form.event_role.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.event_role.errors.0 }}</span>
-          </label>
-          {% endif %}
-          <label class="label">
-            <span class="label-text-alt">Discord role for this event{% if form.prefix.value %} (filtered by prefix "{{ form.prefix.value }}"){% endif %}</span>
-          </label>
-        </div>
-
         <!-- Visible & Signups Open -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control">
@@ -249,22 +218,6 @@
           </label>
         </div>
 
-        <!-- Discord Prefix -->
-        <div class="form-control w-full">
-          <label class="label" for="id_prefix">
-            <span class="label-text">Discord Prefix</span>
-          </label>
-          {{ form.prefix }}
-          {% if form.prefix.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.prefix.errors.0 }}</span>
-          </label>
-          {% endif %}
-          <label class="label">
-            <span class="label-text-alt">Channel and role prefix, e.g. "$" in $DRS</span>
-          </label>
-        </div>
-
         {% if event %}
         <!-- Metadata (read-only) -->
         <div class="bg-base-300 rounded-lg p-4 text-sm text-base-content/70 space-y-1">
@@ -289,6 +242,20 @@
       </form>
 
       {% if event %}
+      <!-- Role Setup (read-only) -->
+      <div class="divider"></div>
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Role Setup</h3>
+          <a href="{% url 'events:event_role_setup' event.pk %}" class="btn btn-ghost btn-sm">Role Setup</a>
+        </div>
+        <div class="bg-base-300 rounded-lg p-4 text-sm space-y-2">
+          <p><span class="font-semibold">Prefix:</span> {{ event.prefix|default:"(none)" }}</p>
+          <p><span class="font-semibold">Head Captain Role:</span> {{ role_display.head_captain_role_id }}</p>
+          <p><span class="font-semibold">Event Role:</span> {{ role_display.event_role }}</p>
+        </div>
+      </div>
+
       <div class="divider"></div>
       <div class="flex justify-between items-center">
         <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary">Back to Event</a>

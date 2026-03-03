@@ -1,5 +1,6 @@
 """Forms for events app."""
 
+import json
 from typing import ClassVar
 
 from django import forms
@@ -96,24 +97,11 @@ class EventForm(forms.ModelForm):
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
     )
 
-    head_captain_role_id = forms.CharField(
-        required=False,
-        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
-        label="Head Captain Role",
-    )
-
-    event_role = forms.CharField(
-        required=False,
-        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
-        label="Event Role",
-    )
-
     class Meta:
         """Meta options for EventForm."""
 
         model = Event
         fields: ClassVar[list[str]] = [
-            "prefix",
             "title",
             "logo",
             "description",
@@ -121,24 +109,13 @@ class EventForm(forms.ModelForm):
             "end_date",
             "url",
             "discord_channel_id",
-            "head_captain_role_id",
-            "event_role",
             "visible",
             "signups_open",
             "signup_instructions",
             "timezone_options",
             "timezone_required",
         ]
-        labels: ClassVar[dict] = {
-            "prefix": "Discord Prefix",
-        }
-        help_texts: ClassVar[dict] = {
-            "prefix": 'Channel and role prefix, e.g. "$" in $DRS',
-        }
         widgets: ClassVar[dict] = {
-            "prefix": forms.TextInput(
-                attrs={"class": "input input-bordered w-full", "placeholder": "$"},
-            ),
             "title": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "Event title"},
             ),
@@ -198,25 +175,6 @@ class EventForm(forms.ModelForm):
         self.fields["discord_channel_id"].widget.choices = choices
         self.initial["discord_channel_id"] = current_value
 
-        # Populate Discord role choices for head_captain_role_id
-        role_choices = _get_role_choices()
-        current_role = str(self.initial.get("head_captain_role_id", 0) or 0)
-        role_values = {c[0] for c in role_choices}
-        if current_role != "0" and current_role not in role_values:
-            role_choices.append((current_role, f"Unknown Role ({current_role})"))
-        self.fields["head_captain_role_id"].widget.choices = role_choices
-        self.initial["head_captain_role_id"] = current_role
-
-        # Populate Discord role choices for event_role, filtered by prefix if set
-        prefix = self.initial.get("prefix", "") or (self.data.get("prefix", "") if self.is_bound else "")
-        event_role_choices = _get_role_choices(prefix=prefix)
-        current_event_role = str(self.initial.get("event_role", 0) or 0)
-        event_role_values = {c[0] for c in event_role_choices}
-        if current_event_role != "0" and current_event_role not in event_role_values:
-            event_role_choices.append((current_event_role, f"Unknown Role ({current_event_role})"))
-        self.fields["event_role"].widget.choices = event_role_choices
-        self.initial["event_role"] = current_event_role
-
     @staticmethod
     def _flat_choice_values(choices: list) -> set[str]:
         """Extract all values from a choices list including optgroups.
@@ -250,6 +208,65 @@ class EventForm(forms.ModelForm):
         except (ValueError, TypeError):
             return 0
 
+
+class EventRoleSetupForm(forms.ModelForm):
+    """Form for editing event Discord role settings (prefix, head captain role, event role)."""
+
+    head_captain_role_id = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        label="Head Captain Role",
+    )
+
+    event_role = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        label="Event Role",
+    )
+
+    class Meta:
+        """Meta options for EventRoleSetupForm."""
+
+        model = Event
+        fields: ClassVar[list[str]] = [
+            "prefix",
+            "head_captain_role_id",
+            "event_role",
+        ]
+        labels: ClassVar[dict] = {
+            "prefix": "Discord Prefix",
+        }
+        help_texts: ClassVar[dict] = {
+            "prefix": 'Channel and role prefix, e.g. "$" in $DRS',
+        }
+        widgets: ClassVar[dict] = {
+            "prefix": forms.TextInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "$"},
+            ),
+        }
+
+    def __init__(self, *args, **kwargs) -> None:
+        """Initialize form with Discord role choices."""
+        super().__init__(*args, **kwargs)
+
+        # Head captain role: all roles
+        role_choices = _get_role_choices()
+        current_role = str(self.initial.get("head_captain_role_id", 0) or 0)
+        role_values = {c[0] for c in role_choices}
+        if current_role != "0" and current_role not in role_values:
+            role_choices.append((current_role, f"Unknown Role ({current_role})"))
+        self.fields["head_captain_role_id"].widget.choices = role_choices
+        self.initial["head_captain_role_id"] = current_role
+
+        # Event role: all roles (validation checks prefix, not the dropdown filter)
+        event_role_choices = _get_role_choices()
+        current_event_role = str(self.initial.get("event_role", 0) or 0)
+        event_role_values = {c[0] for c in event_role_choices}
+        if current_event_role != "0" and current_event_role not in event_role_values:
+            event_role_choices.append((current_event_role, f"Unknown Role ({current_event_role})"))
+        self.fields["event_role"].widget.choices = event_role_choices
+        self.initial["event_role"] = current_event_role
+
     def clean_head_captain_role_id(self) -> int:
         """Convert selected role ID string back to int for the model.
 
@@ -275,6 +292,52 @@ class EventForm(forms.ModelForm):
             return int(value)
         except (ValueError, TypeError):
             return 0
+
+    def clean(self) -> dict:
+        """Validate that prefix is set and role names start with the prefix.
+
+        Returns:
+            dict: The cleaned form data.
+
+        """
+        from constance import config
+
+        cleaned = super().clean()
+        prefix = (cleaned.get("prefix") or "").strip()
+
+        if not prefix:
+            self.add_error("prefix", "Prefix is required for role setup.")
+            return cleaned
+
+        try:
+            allowed = json.loads(config.EVENT_ROLE_PREFIXES)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            allowed = ["$", ">", "¡", "~", "^"]
+
+        if prefix not in allowed:
+            self.add_error("prefix", f"Prefix must be one of: {', '.join(allowed)}")
+            return cleaned
+
+        head_captain_id = cleaned.get("head_captain_role_id", 0)
+        event_role_id = cleaned.get("event_role", 0)
+
+        if head_captain_id and head_captain_id != 0:
+            role = DiscordRole.objects.filter(role_id=str(head_captain_id)).first()
+            if role and not role.name.startswith(prefix):
+                self.add_error(
+                    "head_captain_role_id",
+                    f'Role name "@{role.name}" must start with the prefix "{prefix}".',
+                )
+
+        if event_role_id and event_role_id != 0:
+            role = DiscordRole.objects.filter(role_id=str(event_role_id)).first()
+            if role and not role.name.startswith(prefix):
+                self.add_error(
+                    "event_role",
+                    f'Role name "@{role.name}" must start with the prefix "{prefix}".',
+                )
+
+        return cleaned
 
 
 class SquadForm(forms.ModelForm):

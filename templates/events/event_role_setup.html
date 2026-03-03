@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Role Setup - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-ghost btn-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Back to Edit Event
+    </a>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl mb-2">Role Setup</h2>
+      <p class="text-base-content/70 text-sm mb-6">{{ event.title }}</p>
+
+      {% if can_edit %}
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-error">
+          {% for error in form.non_field_errors %}
+          <span>{{ error }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Discord Prefix -->
+        <div class="form-control w-full">
+          <label class="label" for="id_prefix">
+            <span class="label-text">Discord Prefix <span class="text-error">*</span></span>
+          </label>
+          {{ form.prefix }}
+          {% if form.prefix.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.prefix.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Allowed prefixes: {{ allowed_prefixes }}. Role names must start with this prefix.</span>
+          </label>
+        </div>
+
+        <!-- Head Captain Role -->
+        <div class="form-control w-full">
+          <label class="label" for="id_head_captain_role_id">
+            <span class="label-text">Head Captain Role</span>
+          </label>
+          {{ form.head_captain_role_id }}
+          {% if form.head_captain_role_id.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.head_captain_role_id.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Discord role for the head captain of this event</span>
+          </label>
+        </div>
+
+        <!-- Event Role -->
+        <div class="form-control w-full">
+          <label class="label" for="id_event_role">
+            <span class="label-text">Event Role</span>
+          </label>
+          {{ form.event_role }}
+          {% if form.event_role.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.event_role.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Discord role for event participants</span>
+          </label>
+        </div>
+
+        <div class="card-actions justify-end mt-6">
+          <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">Save Role Setup</button>
+        </div>
+      </form>
+
+      {% else %}
+      <!-- Read-only display -->
+      <div class="space-y-4">
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">Discord Prefix</span>
+          </label>
+          <p class="px-3 py-2 bg-base-300 rounded-lg">{{ event.prefix|default:"(none)" }}</p>
+        </div>
+
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">Head Captain Role</span>
+          </label>
+          <p class="px-3 py-2 bg-base-300 rounded-lg">{{ role_display.head_captain_role_id }}</p>
+        </div>
+
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">Event Role</span>
+          </label>
+          <p class="px-3 py-2 bg-base-300 rounded-lg">{{ role_display.event_role }}</p>
+        </div>
+
+        <div class="alert alert-info mt-4">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          <span>You need the Assign Roles permission to edit role settings.</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
