@@ -611,7 +611,7 @@
                         </td>
                         {% if squad.team_discord_role %}
                         <td data-col="sq_has_role">
-                          {% if can_assign_roles %}
+                          {% if can_manage_roles %}
                             {% include "events/_squad_role_cell.html" with event_pk=event.pk squad_pk=squad.pk member_user_pk=member.user.pk has_role=member.has_discord_role %}
                           {% else %}
                             {% if member.has_discord_role %}

@@ -43,6 +43,24 @@ from apps.zwiftracing.models import ZRRider
 CATEGORY_COLUMNS = ["A+", "A", "B", "C", "D", "E"]
 
 
+def _can_manage_event_roles(user: User, event: Event) -> bool:
+    """Check if a user can manage Discord roles for an event.
+
+    Allowed if the user has the assign_roles permission OR holds the event's head captain Discord role.
+
+    Args:
+        user: The requesting user.
+        event: The event to check against.
+
+    Returns:
+        True if the user can manage roles for this event.
+
+    """
+    if user.has_permission(Permissions.ASSIGN_ROLES):
+        return True
+    return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
+
+
 def _enrich_squad_members(event):
     """Build enriched member data grouped by squad for an event.
 
@@ -431,7 +449,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "zr_totals": zr_totals,
             "zr_total_all": zr_total_all,
             "zr_avg_rating_all": zr_avg_rating_all,
-            "can_assign_roles": request.user.has_permission(Permissions.ASSIGN_ROLES),
+            "can_manage_roles": _can_manage_event_roles(request.user, event),
         },
     )
 
@@ -552,7 +570,7 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
             "signups": enriched_signups,
             "page_title": "Edit Event",
             "submit_label": "Save Changes",
-            "can_assign_roles": request.user.has_permission(Permissions.ASSIGN_ROLES),
+            "can_manage_roles": _can_manage_event_roles(request.user, event),
             "role_display": role_display,
         },
     )
@@ -1207,12 +1225,13 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
 
 @login_required
-@discord_permission_required("assign_roles", raise_exception=True)
+@team_member_required()
 @require_POST
 def squad_toggle_role_view(request: HttpRequest, event_pk: int, squad_pk: int, user_id: int) -> HttpResponse:
     """Toggle a squad's Discord role for a member.
 
     Adds the role if the member doesn't have it, removes it if they do.
+    Accessible to users with assign_roles permission or the event's head captain role.
 
     Args:
         request: The HTTP request.
@@ -1223,7 +1242,16 @@ def squad_toggle_role_view(request: HttpRequest, event_pk: int, squad_pk: int, u
     Returns:
         Redirect to event detail page.
 
+    Raises:
+        PermissionDenied: If user lacks permission.
+
     """
+    event = get_object_or_404(Event, pk=event_pk)
+    if not _can_manage_event_roles(request.user, event):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied("You need Assign Roles permission or the Head Captain role for this event.")
+
     squad = get_object_or_404(Squad, pk=squad_pk, event_id=event_pk)
     role_id = squad.team_discord_role
     if not role_id:
@@ -1791,11 +1819,12 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
 
 @require_GET
 @login_required
-@discord_permission_required("assign_roles", raise_exception=True)
+@team_member_required()
 def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """Display consolidated Discord role management for all event signups.
 
     Shows a table of all signups with event role and per-squad role toggle buttons.
+    Accessible to users with assign_roles permission or the event's head captain role.
 
     Args:
         request: The HTTP request.
@@ -1804,8 +1833,15 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     Returns:
         Rendered role management page.
 
+    Raises:
+        PermissionDenied: If user lacks permission.
+
     """
     event = get_object_or_404(Event, pk=event_pk)
+    if not _can_manage_event_roles(request.user, event):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied("You need Assign Roles permission or the Head Captain role for this event.")
     signups = event.signups.select_related("user").filter(status=EventSignup.Status.REGISTERED)
     enriched_signups = _enrich_signups(signups, event=event)
 
@@ -1884,12 +1920,13 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
 
 @login_required
-@discord_permission_required("assign_roles", raise_exception=True)
+@team_member_required()
 @require_POST
 def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) -> HttpResponse:
     """Toggle an event's Discord role for a signup user.
 
     Adds the role if the user doesn't have it, removes it if they do.
+    Accessible to users with assign_roles permission or the event's head captain role.
 
     Args:
         request: The HTTP request.
@@ -1899,8 +1936,15 @@ def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) ->
     Returns:
         HTMX partial or redirect to manage roles page.
 
+    Raises:
+        PermissionDenied: If user lacks permission.
+
     """
     event = get_object_or_404(Event, pk=event_pk)
+    if not _can_manage_event_roles(request.user, event):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied("You need Assign Roles permission or the Head Captain role for this event.")
     role_id = event.event_role
     if not role_id:
         messages.error(request, "This event has no Discord role configured.")

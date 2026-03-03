@@ -9,10 +9,10 @@
   <div class="mb-4 flex gap-2">
     <a href="{% url 'events:event_role_setup' event.pk %}" class="btn btn-primary btn-sm">Role Setup</a>
     <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-primary btn-sm">Manage Squads</a>
-    {% if can_assign_roles %}
+    {% if can_manage_roles %}
     <a href="{% url 'events:manage_roles' event.pk %}" class="btn btn-primary btn-sm">Manage Roles</a>
     {% else %}
-    <span class="tooltip" data-tip="Requires Assign Roles permission">
+    <span class="tooltip" data-tip="Requires Assign Roles or Head Captain role">
       <button class="btn btn-sm btn-disabled" disabled>Manage Roles</button>
     </span>
     {% endif %}

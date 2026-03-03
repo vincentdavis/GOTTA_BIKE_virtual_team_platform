@@ -4,15 +4,22 @@
 
 {% block extra_css %}
 <style>
-  .avail-grid-wrap { overflow-x: auto; }
+  .avail-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .avail-grid { border-collapse: collapse; user-select: none; -webkit-user-select: none; }
   .avail-grid th,
-  .avail-grid td { border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent); text-align: center; min-width: 5rem; }
-  .avail-grid th { position: sticky; top: 0; z-index: 2; padding: 0.35rem 0.5rem; font-size: 0.75rem; cursor: pointer; }
-  .avail-grid th.row-header { position: sticky; left: 0; z-index: 3; background: var(--color-base-200); }
+  .avail-grid td { border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent); text-align: center; min-width: 3rem; }
+  .avail-grid th { position: sticky; top: 0; z-index: 2; padding: 0.2rem 0.25rem; font-size: 0.65rem; cursor: pointer; white-space: nowrap; }
+  .avail-grid th.row-header { position: sticky; left: 0; z-index: 3; background: var(--color-base-200); font-size: 0.6rem; padding: 0.15rem 0.3rem; }
   .avail-grid thead th { background: var(--color-base-200); }
   .avail-grid thead th:first-child { z-index: 4; }
-  .avail-cell { width: 5rem; height: 2.25rem; cursor: pointer; transition: background-color 0.05s; }
+  .avail-cell { width: 3rem; height: 2rem; cursor: pointer; transition: background-color 0.05s; }
+  @media (min-width: 768px) {
+    .avail-grid th,
+    .avail-grid td { min-width: 5rem; }
+    .avail-grid th { padding: 0.35rem 0.5rem; font-size: 0.75rem; }
+    .avail-grid th.row-header { font-size: 0.75rem; padding: 0.35rem 0.5rem; }
+    .avail-cell { width: 5rem; height: 2.25rem; }
+  }
   .avail-cell[data-state="open"] { background: var(--color-base-300); }
   .avail-cell[data-state="blocked"] { background: var(--color-neutral); color: var(--color-neutral-content); }
   /* Preview modal cell states */
@@ -35,7 +42,7 @@
   <div class="card bg-base-200 shadow-md mb-6">
     <div class="card-body p-4">
       <h2 class="card-title text-lg mb-3">Grid Settings</h2>
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <div class="form-control">
           <label class="label py-0"><span class="label-text text-xs">Grid Title (optional)</span></label>
           <input type="text" id="cfg-title" class="input input-bordered input-sm w-full" placeholder="Auto-generated if blank">
@@ -72,8 +79,8 @@
           <label class="label py-0"><span class="label-text text-xs">Expires (optional)</span></label>
           <input type="date" id="cfg-expires" class="input input-bordered input-sm w-full">
         </div>
-        <div class="form-control justify-end">
-          <button id="btn-generate" class="btn btn-primary btn-sm w-full">Generate Grid</button>
+        <div class="form-control justify-end hidden lg:block">
+          <button id="btn-generate-desktop" class="btn btn-primary btn-sm w-full">Generate Grid</button>
         </div>
       </div>
       <div class="flex flex-wrap gap-6 mt-3">
@@ -86,14 +93,17 @@
           <span class="label-text text-xs">Ask: Rest days between races</span>
         </label>
       </div>
+      <div class="mt-3 lg:hidden">
+        <button id="btn-generate-mobile" class="btn btn-primary btn-sm w-full">Generate Grid</button>
+      </div>
     </div>
   </div>
 
   <!-- Bulk Actions -->
-  <div id="bulk-actions" class="hidden mb-3 flex gap-2">
+  <div id="bulk-actions" class="hidden mb-3 flex flex-wrap gap-2">
     <button id="btn-block-all" class="btn btn-neutral btn-xs btn-outline">Block All</button>
     <button id="btn-open-all" class="btn btn-ghost btn-xs btn-outline">Open All</button>
-    <button id="btn-preview" class="btn btn-secondary btn-xs btn-outline" onclick="document.getElementById('preview-modal').showModal()">Preview</button>
+    <button id="btn-preview" class="btn btn-secondary btn-xs btn-outline hidden md:inline-flex" onclick="document.getElementById('preview-modal').showModal()">Preview</button>
     <button id="btn-save" class="btn btn-success btn-xs">Save Grid</button>
   </div>
 
@@ -104,25 +114,33 @@
     </div>
   </div>
 
-  <!-- Grid Container -->
-  <div id="grid-container" class="avail-grid-wrap mb-6"></div>
+  <!-- Grid Container with scroll arrows on mobile -->
+  <div id="grid-scroll-wrapper" class="relative hidden">
+    <button id="btn-scroll-left" class="md:hidden absolute left-0 top-1/2 -translate-y-1/2 z-10 btn btn-circle btn-sm btn-neutral opacity-70 active:opacity-100">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    </button>
+    <button id="btn-scroll-right" class="md:hidden absolute right-0 top-1/2 -translate-y-1/2 z-10 btn btn-circle btn-sm btn-neutral opacity-70 active:opacity-100">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </button>
+    <div id="grid-container" class="avail-grid-wrap mb-6"></div>
+  </div>
 
   <!-- JSON Output -->
   <div id="json-panel" class="hidden">
-    <div class="card bg-base-200 shadow-md">
-      <div class="card-body p-4">
-        <div class="flex justify-between items-center mb-2">
-          <h2 class="card-title text-lg">Grid Configuration (JSON)</h2>
-          <button id="btn-copy-json" class="btn btn-ghost btn-sm btn-outline">Copy to Clipboard</button>
-        </div>
+    <details class="collapse collapse-arrow bg-base-200 shadow-md">
+      <summary class="collapse-title text-lg font-medium py-3 min-h-0">
+        Grid Configuration (JSON)
+        <button id="btn-copy-json" class="btn btn-ghost btn-xs btn-outline ml-2" onclick="event.preventDefault();">Copy</button>
+      </summary>
+      <div class="collapse-content">
         <pre id="json-output" class="bg-base-300 p-3 rounded-lg text-xs overflow-x-auto max-h-96 overflow-y-auto"></pre>
       </div>
-    </div>
+    </details>
   </div>
 
   <!-- Preview Modal -->
   <dialog id="preview-modal" class="modal">
-    <div class="modal-box max-w-5xl w-11/12">
+    <div class="modal-box max-w-5xl w-full sm:w-11/12">
       <h3 class="text-lg font-bold">Member Availability Preview</h3>
       <p class="text-base-content/70 text-sm mb-4">{{ event.title }} &mdash; {{ squad.name }}</p>
       <div id="preview-grid-container" class="avail-grid-wrap"></div>
@@ -150,8 +168,12 @@
   var endTimeEl = document.getElementById('cfg-end-time');
   var timezoneEl = document.getElementById('cfg-timezone');
   var slotDurationEl = document.getElementById('cfg-slot-duration');
-  var btnGenerate = document.getElementById('btn-generate');
+  var btnGenerateDesktop = document.getElementById('btn-generate-desktop');
+  var btnGenerateMobile = document.getElementById('btn-generate-mobile');
   var gridContainer = document.getElementById('grid-container');
+  var gridScrollWrapper = document.getElementById('grid-scroll-wrapper');
+  var btnScrollLeft = document.getElementById('btn-scroll-left');
+  var btnScrollRight = document.getElementById('btn-scroll-right');
   var bulkActions = document.getElementById('bulk-actions');
   var jsonPanel = document.getElementById('json-panel');
   var jsonOutput = document.getElementById('json-output');
@@ -201,6 +223,9 @@
   }
 
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var DAY_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  var isMobile = window.innerWidth < 768;
+  window.addEventListener('resize', function() { isMobile = window.innerWidth < 768; });
 
   // Generate date range
   function getDates(startStr, endStr) {
@@ -314,7 +339,9 @@
     dates.forEach(function(date) {
       var th = document.createElement('th');
       var d = parseDateStr(date);
-      th.innerHTML = DAY_NAMES[d.getDay()] + '<br>' + date.slice(5);
+      var dayLabel = isMobile ? DAY_SHORT[d.getDay()] : DAY_NAMES[d.getDay()];
+      var dateLabel = isMobile ? date.slice(8) : date.slice(5);
+      th.innerHTML = dayLabel + '<br>' + dateLabel;
       th.dataset.date = date;
       th.title = 'Click to toggle column';
       th.addEventListener('click', function() { toggleColumn(date); });
@@ -351,8 +378,10 @@
 
     gridContainer.innerHTML = '';
     gridContainer.appendChild(table);
+    gridScrollWrapper.classList.remove('hidden');
     bulkActions.classList.remove('hidden');
     jsonPanel.classList.remove('hidden');
+    updateScrollArrows();
 
     // Attach mouse/touch events to table
     attachGridEvents(table);
@@ -520,7 +549,9 @@
     dates.forEach(function(date) {
       var th = document.createElement('th');
       var d = parseDateStr(date);
-      th.innerHTML = DAY_NAMES[d.getDay()] + '<br>' + date.slice(5);
+      var dayLabel = isMobile ? DAY_SHORT[d.getDay()] : DAY_NAMES[d.getDay()];
+      var dateLabel = isMobile ? date.slice(8) : date.slice(5);
+      th.innerHTML = dayLabel + '<br>' + dateLabel;
       headerRow.appendChild(th);
     });
     thead.appendChild(headerRow);
@@ -683,7 +714,8 @@
   });
 
   // Wire up
-  btnGenerate.addEventListener('click', buildGrid);
+  btnGenerateDesktop.addEventListener('click', buildGrid);
+  btnGenerateMobile.addEventListener('click', buildGrid);
   btnBlockAll.addEventListener('click', function() { setAllCells('blocked'); });
   btnOpenAll.addEventListener('click', function() { setAllCells('open'); });
 
@@ -700,6 +732,27 @@
     var found = TIMEZONE_CHOICES.some(function(tz) { return tz[0] === USER_TIMEZONE; });
     timezoneEl.value = found ? USER_TIMEZONE : 'UTC';
   }
+
+  // --- Scroll arrows ---
+  function getColumnWidth() {
+    var cell = gridContainer.querySelector('.avail-cell');
+    return cell ? cell.offsetWidth : 60;
+  }
+
+  function updateScrollArrows() {
+    var sl = gridContainer.scrollLeft;
+    var maxScroll = gridContainer.scrollWidth - gridContainer.clientWidth;
+    btnScrollLeft.style.display = sl > 0 ? '' : 'none';
+    btnScrollRight.style.display = sl < maxScroll - 1 ? '' : 'none';
+  }
+
+  btnScrollLeft.addEventListener('click', function() {
+    gridContainer.scrollBy({ left: -getColumnWidth(), behavior: 'smooth' });
+  });
+  btnScrollRight.addEventListener('click', function() {
+    gridContainer.scrollBy({ left: getColumnWidth(), behavior: 'smooth' });
+  });
+  gridContainer.addEventListener('scroll', updateScrollArrows);
 
   populateTimezoneSelect();
   populateTimeSelects();
