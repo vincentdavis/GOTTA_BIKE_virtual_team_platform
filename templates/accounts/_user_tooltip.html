@@ -12,7 +12,13 @@
     {% endif %}
     <span>{{ display_name }}</span>
     <span class="inline-flex items-center gap-0.5">
-    {% if is_race_ready %}
+    {% if is_extra_verified %}
+      {% if site_settings.extra_verified_emoji %}
+        <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
+      {% else %}
+        <span class="badge badge-warning badge-sm">EV</span>
+      {% endif %}
+    {% elif is_race_ready %}
       {% if site_settings.verified_emoji %}
         <img src="{{ site_settings.verified_emoji.url }}" alt="Verified" class="h-5 w-5">
       {% else %}
@@ -61,7 +67,7 @@
       {% if not zp_category and not zp_category_w and not zr_category %}
       <p class="text-base-content/40">No ZP/ZR data</p>
       {% endif %}
-      <p>Race Verified: <span class="font-medium text-base-content">{% if is_race_ready %}Yes{% else %}No{% endif %}</span></p>
+      <p>Race Verified: <span class="font-medium text-base-content">{% if is_extra_verified %}Extra{% elif is_race_ready %}Yes{% else %}No{% endif %}</span></p>
     </div>
     <div class="flex flex-wrap gap-2 mt-2">
       {% if user_id %}

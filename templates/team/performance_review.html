@@ -206,7 +206,7 @@
             <tr class="{% if rider.has_severe_weight_concern %}bg-error/20{% elif rider.has_weight_concern %}bg-warning/20{% endif %}">
               <!-- Name with tooltip -->
               <td>
-                {% include "accounts/_user_tooltip.html" with display_name=rider.display_name user_id=rider.user_id discord_id=rider.discord_id discord_avatar_url=rider.discord_avatar_url zwid=rider.zwid zp_category=rider.zp_category zp_category_w=rider.zp_category_w zr_category=rider.zr_category zr_rating=rider.zr_rating zr_phenotype=rider.zr_phenotype zr_age=rider.zr_age is_race_ready=rider.is_race_ready in_zwiftpower=rider.in_zwiftpower in_zwiftracing=rider.in_zwiftracing %}
+                {% include "accounts/_user_tooltip.html" with display_name=rider.display_name user_id=rider.user_id discord_id=rider.discord_id discord_avatar_url=rider.discord_avatar_url zwid=rider.zwid zp_category=rider.zp_category zp_category_w=rider.zp_category_w zr_category=rider.zr_category zr_rating=rider.zr_rating zr_phenotype=rider.zr_phenotype zr_age=rider.zr_age is_race_ready=rider.is_race_ready is_extra_verified=rider.is_extra_verified in_zwiftpower=rider.in_zwiftpower in_zwiftracing=rider.in_zwiftracing %}
               </td>
 
               <!-- Weight Light -->

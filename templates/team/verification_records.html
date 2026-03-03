@@ -112,7 +112,7 @@
             {% for record, can_review in records_with_review_status %}
             <tr class="{% if not can_review %}opacity-50{% endif %}">
               <td class="font-medium">
-                {% include "accounts/_user_tooltip.html" with display_name=record.user.get_full_name|default:record.user.discord_username user_id=record.user.pk discord_id=record.user.discord_id discord_avatar_url=record.user.discord_avatar_url zwid=record.user.zwid zp_category=record.tt_zp_category zp_category_w=record.tt_zp_category_w zr_category=record.tt_zr_category zr_rating=record.tt_zr_rating zr_phenotype=record.tt_zr_phenotype is_race_ready=record.user.is_race_ready in_zwiftpower=record.tt_in_zwiftpower in_zwiftracing=record.tt_in_zwiftracing %}
+                {% include "accounts/_user_tooltip.html" with display_name=record.user.get_full_name|default:record.user.discord_username user_id=record.user.pk discord_id=record.user.discord_id discord_avatar_url=record.user.discord_avatar_url zwid=record.user.zwid zp_category=record.tt_zp_category zp_category_w=record.tt_zp_category_w zr_category=record.tt_zr_category zr_rating=record.tt_zr_rating zr_phenotype=record.tt_zr_phenotype is_race_ready=record.user.is_race_ready is_extra_verified=record.user.is_extra_verified in_zwiftpower=record.tt_in_zwiftpower in_zwiftracing=record.tt_in_zwiftracing %}
               </td>
               <td>
                 <span class="badge badge-sm text-xs whitespace-nowrap {% if record.verify_type == 'weight_full' %}badge-primary{% elif record.verify_type == 'weight_light' %}badge-secondary{% elif record.verify_type == 'height' %}badge-accent{% elif record.verify_type == 'power' %}badge-warning{% else %}badge-outline{% endif %}">{{ record.get_verify_type_display }}</span>

@@ -10,7 +10,19 @@
         <div class="flex items-center justify-between mb-6">
           <h2 class="card-title text-2xl flex items-center gap-2">
             Race Verification
-            {% if user.is_race_ready %}
+            {% if user.is_extra_verified %}
+              <span class="tooltip" data-tip="Extra Verified">
+                {% if site_settings.extra_verified_emoji %}
+                  <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-6 w-6">
+                {% else %}
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-warning" fill="none"
+                       viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                {% endif %}
+              </span>
+            {% elif user.is_race_ready %}
               <span class="tooltip" data-tip="Race Verified">
                 {% if site_settings.verified_emoji %}
                   <img src="{{ site_settings.verified_emoji.url }}" alt="Race Verified" class="h-6 w-6">

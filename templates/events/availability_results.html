@@ -76,7 +76,7 @@
             {% if not cell.is_blocked %}
               {% for entry in cell.users %}
               <div class="cell-name">
-                {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=None zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=None zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
               </div>
               {% endfor %}
             {% endif %}
@@ -127,7 +127,7 @@
           {% for entry in enriched_responders %}
           <tr>
             <td>
-              {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+              {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
             </td>
             {% if grid.max_races_question %}
             <td class="text-center font-mono">{% if entry.max_races is not None %}{{ entry.max_races }}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
@@ -143,7 +143,7 @@
     {% else %}
     <div class="flex flex-wrap gap-2">
       {% for entry in enriched_responders %}
-      {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+      {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
       {% endfor %}
     </div>
     {% endif %}

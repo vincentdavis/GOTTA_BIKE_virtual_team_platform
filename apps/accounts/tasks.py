@@ -245,11 +245,18 @@ def refresh_all_race_ready() -> dict:
         logfire.info("Starting race ready refresh", total_users=total)
 
         updated = 0
-        for user in users.iterator():
-            new_value = user.calculate_race_ready()
-            if user.is_race_ready != new_value:
-                user.is_race_ready = new_value
-                user.save(update_fields=["is_race_ready"])
+        for user in users.iterator(chunk_size=200):
+            new_race_ready = user.calculate_race_ready()
+            new_extra_verified = user.calculate_extra_verified()
+            update_fields = []
+            if user.is_race_ready != new_race_ready:
+                user.is_race_ready = new_race_ready
+                update_fields.append("is_race_ready")
+            if user.is_extra_verified != new_extra_verified:
+                user.is_extra_verified = new_extra_verified
+                update_fields.append("is_extra_verified")
+            if update_fields:
+                user.save(update_fields=update_fields)
                 updated += 1
 
         result = {

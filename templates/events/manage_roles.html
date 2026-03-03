@@ -50,7 +50,7 @@
             {% for entry in enriched_signups %}
             <tr>
               <td class="font-medium">
-                {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype is_race_ready=entry.is_race_ready in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
               </td>
               <td>
                 {% if entry.assigned_squads %}

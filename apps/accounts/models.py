@@ -310,6 +310,10 @@ class User(AbstractUser):
         default=False,
         help_text="Cached race ready status. Updated when verification records change and by periodic cron task.",
     )
+    is_extra_verified = models.BooleanField(
+        default=False,
+        help_text="Cached extra verified status (weight_full + height + power all verified and non-expired).",
+    )
 
     # Roles
     roles = models.JSONField(
@@ -599,9 +603,7 @@ class User(AbstractUser):
         required_types = get_user_required_verification_types(self)
 
         # Get verified records for this user
-        verified_records = self.race_ready_records.filter(
-            status=RaceReadyRecord.Status.VERIFIED
-        )
+        verified_records = self.race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
 
         # Build set of valid (non-expired) verification types
         valid_types = set()
@@ -650,24 +652,66 @@ class User(AbstractUser):
 
         return is_ready
 
-    def refresh_race_ready(self) -> bool:
-        """Recalculate and save the cached is_race_ready field if changed.
+    def calculate_extra_verified(self) -> bool:
+        """Calculate if user has weight_full + height + power all verified and non-expired.
+
+        This is a higher tier than race ready, regardless of the user's ZP category.
 
         Returns:
-            The new is_race_ready value.
+            True if user has all three verification types valid and non-expired.
 
         """
-        new_value = self.calculate_race_ready()
-        if self.is_race_ready != new_value:
-            self.is_race_ready = new_value
-            self.save(update_fields=["is_race_ready"])
+        from apps.team.models import RaceReadyRecord
+
+        required_types = {"weight_full", "height", "power"}
+
+        verified_records = self.race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
+
+        valid_types = set()
+        for record in verified_records:
+            if not record.is_expired:
+                valid_types.add(record.verify_type)
+
+        is_extra = required_types.issubset(valid_types)
+
+        logfire.debug(
+            "Extra verified calculation",
+            user_id=self.id,
+            discord_id=self.discord_id,
+            is_extra_verified=is_extra,
+            valid_types=list(valid_types),
+        )
+
+        return is_extra
+
+    def refresh_race_ready(self) -> tuple[bool, bool]:
+        """Recalculate and save the cached is_race_ready and is_extra_verified fields if changed.
+
+        Returns:
+            Tuple of (new is_race_ready value, new is_extra_verified value).
+
+        """
+        new_race_ready = self.calculate_race_ready()
+        new_extra_verified = self.calculate_extra_verified()
+
+        update_fields = []
+        if self.is_race_ready != new_race_ready:
+            self.is_race_ready = new_race_ready
+            update_fields.append("is_race_ready")
+        if self.is_extra_verified != new_extra_verified:
+            self.is_extra_verified = new_extra_verified
+            update_fields.append("is_extra_verified")
+
+        if update_fields:
+            self.save(update_fields=update_fields)
             logfire.info(
-                "Race ready status updated",
+                "Verification status updated",
                 user_id=self.id,
                 discord_id=self.discord_id,
-                is_race_ready=new_value,
+                is_race_ready=new_race_ready,
+                is_extra_verified=new_extra_verified,
             )
-        return new_value
+        return new_race_ready, new_extra_verified
 
     @property
     def is_any_admin(self) -> bool:

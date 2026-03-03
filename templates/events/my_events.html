@@ -129,7 +129,7 @@
                         {% for m in sq.members %}
                         <div>
                           {% if m.user.pk == sq.squad.captain_id %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif m.user.pk == sq.squad.vice_captain_id %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
-                          {% include "accounts/_user_tooltip.html" with display_name=m.user.get_full_name|default:m.user.discord_username user_id=m.user.pk discord_id=m.user.discord_id discord_avatar_url=m.user.discord_avatar_url zwid=m.zwid zp_category=m.zp_category zp_category_w=m.zp_category_w zr_category=m.zr_category zr_rating=m.zr_rating zr_phenotype=m.zr_phenotype zr_age=m.zr_age is_race_ready=m.is_race_ready in_zwiftpower=m.in_zwiftpower in_zwiftracing=m.in_zwiftracing %}
+                          {% include "accounts/_user_tooltip.html" with display_name=m.user.get_full_name|default:m.user.discord_username user_id=m.user.pk discord_id=m.user.discord_id discord_avatar_url=m.user.discord_avatar_url zwid=m.zwid zp_category=m.zp_category zp_category_w=m.zp_category_w zr_category=m.zr_category zr_rating=m.zr_rating zr_phenotype=m.zr_phenotype zr_age=m.zr_age is_race_ready=m.is_race_ready is_extra_verified=m.is_extra_verified in_zwiftpower=m.in_zwiftpower in_zwiftracing=m.in_zwiftracing %}
                         </div>
                         {% endfor %}
                       </div>

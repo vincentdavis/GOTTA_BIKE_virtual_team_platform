@@ -26,11 +26,17 @@ class UserAdmin(BaseUserAdmin):
         "email",
         "discord_username",
         "zwid",
+        "is_race_ready",
+        "is_extra_verified",
         "date_joined",
         "birth_year",
         "is_staff",
     )
-    list_filter = BaseUserAdmin.list_filter
+    list_filter = (
+        *BaseUserAdmin.list_filter,
+        "is_race_ready",
+        "is_extra_verified",
+    )
     search_fields = (
         *BaseUserAdmin.search_fields,
         "discord_id",
@@ -59,6 +65,8 @@ class UserAdmin(BaseUserAdmin):
                 "fields": (
                     "zwid",
                     "zwid_verified",
+                    "is_race_ready",
+                    "is_extra_verified",
                 ),
             },
         ),

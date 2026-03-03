@@ -138,6 +138,7 @@ class UnifiedRider:
 
     # Race Ready status
     is_race_ready: bool = False
+    is_extra_verified: bool = False
     # Class variable for div mapping
     DIV_TO_CATEGORY: ClassVar[dict[int, str]] = ZP_DIV_TO_CATEGORY
 
@@ -234,7 +235,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     # Query each source with .values() for efficiency
     users = User.objects.filter(zwid__isnull=False).values(
         "id", "zwid", "username", "discord_username", "discord_id", "discord_avatar", "zwid_verified", "gender",
-        "is_race_ready",
+        "is_race_ready", "is_extra_verified",
     )
     zp_riders = ZPTeamRiders.objects.all().values(
         "zwid", "name", "div", "divw", "date_left", "rank", "ftp", "weight"
@@ -275,6 +276,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.zwid_verified = u["zwid_verified"]
             rider.user_gender = u["gender"] or ""
             rider.is_race_ready = u["is_race_ready"]
+            rider.is_extra_verified = u["is_extra_verified"]
 
             if u["discord_id"] and u["discord_avatar"]:
                 rider.discord_avatar_url = (
@@ -355,6 +357,7 @@ class PerformanceRider:
     discord_id: str = ""
     discord_avatar_url: str = ""
     is_race_ready: bool = False
+    is_extra_verified: bool = False
     in_zwiftpower: bool = False
     in_zwiftracing: bool = False
     zr_category: str = ""
@@ -499,6 +502,7 @@ def get_performance_review_data() -> list[PerformanceRider]:
             "discord_id": r.discord_id,
             "discord_avatar_url": r.discord_avatar_url,
             "is_race_ready": r.is_race_ready,
+            "is_extra_verified": r.is_extra_verified,
             "in_zwiftpower": r.in_zwiftpower,
             "in_zwiftracing": r.in_zwiftracing,
             "zr_category": r.zr_category,
@@ -609,6 +613,7 @@ def get_performance_review_data() -> list[PerformanceRider]:
             discord_id=info["discord_id"],
             discord_avatar_url=info["discord_avatar_url"],
             is_race_ready=info["is_race_ready"],
+            is_extra_verified=info["is_extra_verified"],
             in_zwiftpower=info["in_zwiftpower"],
             in_zwiftracing=info["in_zwiftracing"],
             zr_category=info["zr_category"],
