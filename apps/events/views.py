@@ -2204,6 +2204,31 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
         squad=squad, user=request.user, status=SquadMember.Status.MEMBER
     ).exists()
 
+    # Build list of roles the user will receive
+    from apps.team.models import DiscordRole
+
+    pending_roles = []
+    role_ids_to_resolve = set()
+    if event.event_role:
+        role_ids_to_resolve.add(str(event.event_role))
+    if squad.team_discord_role:
+        role_ids_to_resolve.add(str(squad.team_discord_role))
+    role_name_map = (
+        dict(DiscordRole.objects.filter(role_id__in=role_ids_to_resolve).values_list("role_id", "name"))
+        if role_ids_to_resolve
+        else {}
+    )
+    if event.event_role:
+        pending_roles.append({
+            "label": "Event Role",
+            "name": role_name_map.get(str(event.event_role), f"Role {event.event_role}"),
+        })
+    if squad.team_discord_role:
+        pending_roles.append({
+            "label": "Squad Role",
+            "name": role_name_map.get(str(squad.team_discord_role), f"Role {squad.team_discord_role}"),
+        })
+
     if request.method == "GET":
         members = (
             squad.squad_members.filter(status=SquadMember.Status.MEMBER)
@@ -2219,6 +2244,7 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
                 "members": members,
                 "already_member": already_member,
                 "token": token,
+                "pending_roles": pending_roles,
             },
         )
 
@@ -2260,6 +2286,41 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
             user_id=request.user.id,
         )
         messages.info(request, f"You're already a member of squad {squad.name}.")
+
+    # Auto-assign Discord roles if the user has a linked Discord account
+    if request.user.discord_id:
+        roles_updated = dict(request.user.discord_roles or {})
+        roles_to_assign = []
+        if event.event_role and not request.user.has_discord_role(event.event_role):
+            roles_to_assign.append((str(event.event_role), "Event Role"))
+        if squad.team_discord_role and not request.user.has_discord_role(squad.team_discord_role):
+            roles_to_assign.append((str(squad.team_discord_role), squad.name))
+
+        for role_id_str, role_label in roles_to_assign:
+            success = add_discord_role(request.user.discord_id, role_id_str)
+            if success:
+                roles_updated[role_id_str] = role_label
+                logfire.info(
+                    "Discord role auto-assigned via squad invite",
+                    event_id=event.pk,
+                    squad_id=squad.pk,
+                    user_id=request.user.id,
+                    role_id=role_id_str,
+                    role_label=role_label,
+                )
+            else:
+                logfire.error(
+                    "Failed to auto-assign Discord role via squad invite",
+                    event_id=event.pk,
+                    squad_id=squad.pk,
+                    user_id=request.user.id,
+                    role_id=role_id_str,
+                )
+                messages.warning(request, f"Could not assign Discord role: {role_label}. Contact an admin.")
+
+        if roles_to_assign:
+            request.user.discord_roles = roles_updated
+            request.user.save(update_fields=["discord_roles"])
 
     return redirect("events:my_events")
 

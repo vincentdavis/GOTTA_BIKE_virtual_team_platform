@@ -17,6 +17,16 @@
         <a href="{% url 'events:my_events' %}" class="btn btn-primary">Go to My Events</a>
       </div>
       {% else %}
+      {% if pending_roles %}
+      <div class="mt-3">
+        <p class="text-sm text-base-content/60">You will be assigned these Discord roles:</p>
+        <div class="flex flex-wrap gap-2 mt-1">
+          {% for role in pending_roles %}
+          <span class="badge badge-outline badge-sm">{{ role.label }}: @{{ role.name }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
       <form method="post" action="{% url 'events:squad_invite' token %}" class="mt-4">
         {% csrf_token %}
         <button type="submit" class="btn btn-primary btn-wide">Join Squad</button>
