@@ -2171,19 +2171,19 @@ def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) ->
 
 
 @team_member_required(raise_exception=True)
-@require_GET
+@require_http_methods(["GET", "POST"])
 def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
-    """Accept a squad invite link and add the user to the squad.
+    """Show squad invite confirmation page (GET) or accept the invite (POST).
 
-    Looks up squad by invite_token, creates event signup if needed,
-    and adds user as a full squad member.
+    Looks up squad by invite_token. On GET, shows event/squad info and current members.
+    On POST, creates event signup if needed and adds user as a full squad member.
 
     Args:
         request: The HTTP request.
         token: The squad invite UUID token.
 
     Returns:
-        Redirect to event detail page.
+        Rendered confirmation page (GET) or redirect to my events (POST).
 
     """
     squad = get_object_or_404(Squad, invite_token=token)
@@ -2198,6 +2198,34 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
         )
         messages.error(request, "This event is not currently available.")
         return redirect("events:event_list")
+
+    # Check if user is already a member
+    already_member = SquadMember.objects.filter(
+        squad=squad, user=request.user, status=SquadMember.Status.MEMBER
+    ).exists()
+
+    if request.method == "GET":
+        members = (
+            squad.squad_members.filter(status=SquadMember.Status.MEMBER)
+            .select_related("user")
+            .order_by("user__first_name", "user__last_name")
+        )
+        return render(
+            request,
+            "events/squad_invite.html",
+            {
+                "squad": squad,
+                "event": event,
+                "members": members,
+                "already_member": already_member,
+                "token": token,
+            },
+        )
+
+    # POST — accept the invite
+    if already_member:
+        messages.info(request, f"You're already a member of squad {squad.name}.")
+        return redirect("events:my_events")
 
     # Ensure event signup exists and is active
     signup, created = EventSignup.objects.get_or_create(

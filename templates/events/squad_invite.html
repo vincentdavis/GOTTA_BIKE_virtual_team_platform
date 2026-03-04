@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Join {{ squad.name }} - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl">{{ event.title }}</h2>
+      <p class="text-lg">You've been invited to join <span class="font-semibold">{{ squad.name }}</span></p>
+
+      {% if already_member %}
+      <div class="alert alert-info mt-4">
+        <span>You're already a member of this squad.</span>
+      </div>
+      <div class="mt-4">
+        <a href="{% url 'events:my_events' %}" class="btn btn-primary">Go to My Events</a>
+      </div>
+      {% else %}
+      <form method="post" action="{% url 'events:squad_invite' token %}" class="mt-4">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary btn-wide">Join Squad</button>
+      </form>
+      {% endif %}
+
+      {% if members %}
+      <div class="divider"></div>
+      <h3 class="font-semibold text-sm uppercase tracking-wide text-base-content/50">Current Members ({{ members|length }})</h3>
+      <ul class="space-y-1 mt-2">
+        {% for sm in members %}
+        <li class="flex items-center gap-2 text-sm">
+          {% if sm.user.discord_avatar_url %}
+          <img src="{{ sm.user.discord_avatar_url }}" alt="" class="w-6 h-6 rounded-full">
+          {% endif %}
+          <span>{{ sm.user.get_full_name|default:sm.user.discord_username }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
