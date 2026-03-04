@@ -41,6 +41,7 @@
     {% if in_zwiftracing %}
       {% zr_category_badge zr_category %}
     {% endif %}
+    {% if zr_phenotype %}{% phenotype_icon zr_phenotype %}{% endif %}
     </span>
   </a>
   <div tabindex="0" class="dropdown-content bg-base-100 rounded-box shadow-lg z-50 p-3 w-56 border border-base-300">
@@ -59,7 +60,7 @@
       <p>ZR Rating: <span class="font-medium text-base-content">{{ zr_rating }}</span></p>
       {% endif %}
       {% if zr_phenotype %}
-      <p>Phenotype: <span class="font-medium text-base-content">{{ zr_phenotype }}</span></p>
+      <p class="inline-flex items-center gap-1">Phenotype: <span class="font-medium text-base-content">{{ zr_phenotype }}</span> {% phenotype_icon zr_phenotype %}</p>
       {% endif %}
       {% if zr_age %}
       <p>Age: <span class="font-medium text-base-content">{{ zr_age }}</span></p>

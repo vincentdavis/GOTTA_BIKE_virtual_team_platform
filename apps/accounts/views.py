@@ -761,6 +761,7 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "site_settings_obj": site_settings_obj,
                 "zp_emoji_items": _build_zp_emoji_items(site_settings_obj),
                 "zr_emoji_items": _build_zr_emoji_items(site_settings_obj),
+                "phenotype_emoji_items": _build_phenotype_emoji_items(site_settings_obj),
                 "available_roles": [],
             },
         )
@@ -956,6 +957,33 @@ def _build_zr_emoji_items(site_settings_obj) -> list[dict]:
     return items
 
 
+def _build_phenotype_emoji_items(site_settings_obj) -> list[dict]:
+    """Build list of phenotype emoji items for template rendering.
+
+    Args:
+        site_settings_obj: SiteSettings instance.
+
+    Returns:
+        List of dicts with field_name, label, and file for each phenotype emoji.
+
+    """
+    items = []
+    for field_name, label in [
+        ("phenotype_allrounder_emoji", "All-Rounder"),
+        ("phenotype_climber_emoji", "Climber"),
+        ("phenotype_puncheur_emoji", "Puncheur"),
+        ("phenotype_tt_emoji", "Time Trialist"),
+        ("phenotype_sprinter_emoji", "Sprinter"),
+    ]:
+        file_field = getattr(site_settings_obj, field_name, None)
+        items.append({
+            "field_name": field_name,
+            "label": label,
+            "file": file_field if file_field else None,
+        })
+    return items
+
+
 @login_required
 @require_POST
 def config_site_images_update(request: HttpRequest) -> HttpResponse:
@@ -1110,6 +1138,11 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
         ("zr_silver_emoji", "ZR Silver Emoji"),
         ("zr_bronze_emoji", "ZR Bronze Emoji"),
         ("zr_copper_emoji", "ZR Copper Emoji"),
+        ("phenotype_allrounder_emoji", "Phenotype All-Rounder"),
+        ("phenotype_climber_emoji", "Phenotype Climber"),
+        ("phenotype_puncheur_emoji", "Phenotype Puncheur"),
+        ("phenotype_tt_emoji", "Phenotype Time Trialist"),
+        ("phenotype_sprinter_emoji", "Phenotype Sprinter"),
     ]:
         if emoji_field in request.FILES:
             uploaded_file = request.FILES[emoji_field]
@@ -1145,6 +1178,7 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
             "site_settings_obj": site_settings_obj,
             "zp_emoji_items": _build_zp_emoji_items(site_settings_obj),
             "zr_emoji_items": _build_zr_emoji_items(site_settings_obj),
+            "phenotype_emoji_items": _build_phenotype_emoji_items(site_settings_obj),
             "success": success,
             "errors": errors,
         },

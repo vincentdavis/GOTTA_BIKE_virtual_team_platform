@@ -157,6 +157,36 @@ class SiteSettings(models.Model):
         blank=True,
         help_text="Emoji/icon for Zwift Racing Copper category (recommended: 64x64 PNG)",
     )
+    phenotype_allrounder_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for All-Rounder phenotype (recommended: 64x64 PNG)",
+    )
+    phenotype_climber_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Climber phenotype (recommended: 64x64 PNG)",
+    )
+    phenotype_puncheur_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Puncheur phenotype (recommended: 64x64 PNG)",
+    )
+    phenotype_tt_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Time Trialist phenotype (recommended: 64x64 PNG)",
+    )
+    phenotype_sprinter_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Emoji/icon for Sprinter phenotype (recommended: 64x64 PNG)",
+    )
     date_modified = models.DateTimeField(auto_now=True)
 
     class Meta:

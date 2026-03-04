@@ -33,6 +33,14 @@ ZR_CATEGORY_EMOJI_FIELDS = {
     "Copper": "zr_copper_emoji",
 }
 
+PHENOTYPE_EMOJI_FIELDS = {
+    "All-Rounder": "phenotype_allrounder_emoji",
+    "Climber": "phenotype_climber_emoji",
+    "Puncheur": "phenotype_puncheur_emoji",
+    "Time Trialist": "phenotype_tt_emoji",
+    "Sprinter": "phenotype_sprinter_emoji",
+}
+
 
 @register.filter
 def permission_help(constance_key: str) -> dict | None:
@@ -272,3 +280,40 @@ def zr_category_badge(context, category):
                 )
 
     return mark_safe(f'<span class="badge badge-secondary badge-sm">{escaped_category}</span>')  # noqa: S308
+
+
+@register.simple_tag(takes_context=True)
+def phenotype_icon(context, phenotype):
+    """Render a phenotype as an emoji image if a custom icon is uploaded.
+
+    Returns empty string if no custom icon exists for the phenotype.
+
+    Args:
+        context: Template context (for site_settings access).
+        phenotype: The phenotype name (e.g., "Sprinter", "Climber").
+
+    Returns:
+        HTML img tag string, or empty string if no icon uploaded.
+
+    """
+    if not phenotype:
+        return ""
+
+    site_settings = context.get("site_settings")
+    if not site_settings:
+        return ""
+
+    field_name = PHENOTYPE_EMOJI_FIELDS.get(phenotype)
+    if not field_name:
+        return ""
+
+    emoji_file = getattr(site_settings, field_name, None)
+    if not emoji_file:
+        return ""
+
+    from django.utils.html import escape
+
+    return mark_safe(  # noqa: S308
+        f'<img src="{escape(emoji_file.url)}" alt="{escape(phenotype)}" '
+        f'class="h-5 w-5" title="{escape(phenotype)}">'
+    )
