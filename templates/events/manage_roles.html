@@ -44,6 +44,9 @@
               {% for squad in role_squads %}
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">{{ squad.name }}</th>
               {% endfor %}
+              {% for squad in captain_role_squads %}
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">{{ squad.name }} Cpt</th>
+              {% endfor %}
             </tr>
           </thead>
           <tbody>
@@ -68,6 +71,15 @@
               <td>
                 {% if srs.is_member %}
                   {% include "events/_squad_role_cell.html" with event_pk=event.pk squad_pk=srs.squad.pk member_user_pk=entry.user.pk has_role=srs.has_role %}
+                {% else %}
+                  <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              {% endfor %}
+              {% for crs in entry.captain_role_status %}
+              <td>
+                {% if crs.is_member %}
+                  {% include "events/_squad_captain_role_cell.html" with event_pk=event.pk squad_pk=crs.squad.pk member_user_pk=entry.user.pk has_role=crs.has_role %}
                 {% else %}
                   <span class="text-base-content/30">-</span>
                 {% endif %}

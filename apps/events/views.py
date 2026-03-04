@@ -1343,6 +1343,118 @@ def squad_toggle_role_view(request: HttpRequest, event_pk: int, squad_pk: int, u
     return redirect("events:event_detail", pk=event_pk)
 
 
+@login_required
+@team_member_required()
+@require_POST
+def squad_toggle_captain_role_view(request: HttpRequest, event_pk: int, squad_pk: int, user_id: int) -> HttpResponse:
+    """Toggle a squad's captain Discord role for a member.
+
+    Adds the role if the member doesn't have it, removes it if they do.
+    Accessible to users with assign_roles permission or the event's head captain role.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        user_id: The target user primary key.
+
+    Returns:
+        Redirect to manage roles page or HTMX partial.
+
+    Raises:
+        PermissionDenied: If user lacks permission.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    if not _can_manage_event_roles(request.user, event):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied("You need Assign Roles permission or the Head Captain role for this event.")
+
+    squad = get_object_or_404(Squad, pk=squad_pk, event_id=event_pk)
+    role_id = squad.discord_captain_role
+    if not role_id:
+        messages.error(request, "This squad has no captain Discord role configured.")
+        return redirect("events:manage_roles", event_pk=event_pk)
+
+    target_user = get_object_or_404(User, pk=user_id)
+    if not target_user.discord_id:
+        messages.error(request, f"{target_user} has no linked Discord account.")
+        return redirect("events:manage_roles", event_pk=event_pk)
+
+    role_id_str = str(role_id)
+    if target_user.has_discord_role(role_id):
+        success = remove_discord_role(target_user.discord_id, role_id_str)
+        if success:
+            roles = dict(target_user.discord_roles or {})
+            roles.pop(role_id_str, None)
+            target_user.discord_roles = roles
+            target_user.save(update_fields=["discord_roles"])
+            logfire.info(
+                "Captain Discord role removed from squad member",
+                event_id=event_pk,
+                squad_id=squad_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+                admin_user_id=request.user.id,
+            )
+            messages.success(request, f"Removed captain role from {target_user}.")
+        else:
+            logfire.error(
+                "Failed to remove captain Discord role",
+                event_id=event_pk,
+                squad_id=squad_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+            )
+            messages.error(request, "Failed to remove captain role. Check bot token configuration.")
+    else:
+        success = add_discord_role(target_user.discord_id, role_id_str)
+        if success:
+            roles = dict(target_user.discord_roles or {})
+            roles[role_id_str] = f"{squad.name} Captain"
+            target_user.discord_roles = roles
+            target_user.save(update_fields=["discord_roles"])
+            logfire.info(
+                "Captain Discord role added to squad member",
+                event_id=event_pk,
+                squad_id=squad_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+                admin_user_id=request.user.id,
+            )
+            messages.success(request, f"Added captain role to {target_user}.")
+        else:
+            logfire.error(
+                "Failed to add captain Discord role",
+                event_id=event_pk,
+                squad_id=squad_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+            )
+            messages.error(request, "Failed to add captain role. Check bot token configuration.")
+
+    if request.headers.get("HX-Request"):
+        has_role = target_user.has_discord_role(role_id)
+        response = render(
+            request,
+            "events/_squad_captain_role_cell.html",
+            {
+                "event_pk": event_pk,
+                "squad_pk": squad_pk,
+                "member_user_pk": user_id,
+                "has_role": has_role,
+            },
+        )
+        stored = messages.get_messages(request)
+        msg_list = [{"message": str(m), "tags": m.tags} for m in stored]
+        if msg_list:
+            response["HX-Trigger"] = json.dumps({"showToast": msg_list})
+        return response
+
+    return redirect("events:manage_roles", event_pk=event_pk)
+
+
 @require_http_methods(["GET", "POST"])
 @login_required
 @team_member_required()
@@ -1855,6 +1967,9 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     # Squads that have a Discord role configured
     role_squads = list(event.squads.exclude(team_discord_role=0).exclude(team_discord_role__isnull=True))
 
+    # Squads that have a captain Discord role configured
+    captain_role_squads = list(event.squads.exclude(discord_captain_role=0).exclude(discord_captain_role__isnull=True))
+
     # Resolve Discord role IDs to names
     from apps.team.models import DiscordRole
 
@@ -1863,6 +1978,8 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         role_ids.add(str(event.event_role))
     for s in role_squads:
         role_ids.add(str(s.team_discord_role))
+    for s in captain_role_squads:
+        role_ids.add(str(s.discord_captain_role))
     role_names = dict(
         DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
     ) if role_ids else {}
@@ -1881,6 +1998,13 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "label": s.name,
             "name": s.role_name,
             "role_id": s.team_discord_role,
+        })
+    for s in captain_role_squads:
+        s.captain_role_name = role_names.get(str(s.discord_captain_role), "")
+        role_info.append({
+            "label": f"{s.name} Captain",
+            "name": s.captain_role_name,
+            "role_id": s.discord_captain_role,
         })
 
     # Build squad membership lookup: {user_id: set(squad_ids)}
@@ -1907,6 +2031,21 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     "has_role": False,
                 })
         entry["squad_role_status"] = squad_role_status
+        captain_role_status = []
+        for squad in captain_role_squads:
+            if squad.pk in user_squads:
+                captain_role_status.append({
+                    "squad": squad,
+                    "is_member": True,
+                    "has_role": user.has_discord_role(squad.discord_captain_role),
+                })
+            else:
+                captain_role_status.append({
+                    "squad": squad,
+                    "is_member": False,
+                    "has_role": False,
+                })
+        entry["captain_role_status"] = captain_role_status
 
     logfire.info(
         "Manage roles page viewed",
@@ -1921,6 +2060,7 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "event": event,
             "enriched_signups": enriched_signups,
             "role_squads": role_squads,
+            "captain_role_squads": captain_role_squads,
             "role_info": role_info,
         },
     )

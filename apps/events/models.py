@@ -322,6 +322,7 @@ class Squad(models.Model):
         captain: Squad captain.
         vice_captain: Squad vice captain.
         team_discord_role: Discord role ID for the squad.
+        discord_captain_role: Discord role ID for the squad captain.
         min_zwift_category: Minimum Zwift category letter.
         max_zwift_category: Maximum Zwift category letter.
         min_zwift_racing_category: Minimum Zwift Racing category.
@@ -370,6 +371,10 @@ class Squad(models.Model):
     team_discord_role = models.BigIntegerField(
         default=0,
         help_text="Discord role ID for the squad (0 = none)",
+    )
+    discord_captain_role = models.BigIntegerField(
+        default=0,
+        help_text="Discord role ID for the squad captain (0 = none)",
     )
     min_zwift_category = models.CharField(max_length=20, blank=True, help_text="Minimum Zwift category (e.g., A, B, C)")
     max_zwift_category = models.CharField(max_length=20, blank=True, help_text="Maximum Zwift category (e.g., A, B, C)")

@@ -49,6 +49,20 @@
           </div>
 
           <div class="form-control w-full">
+            <label class="label" for="id_discord_captain_role">
+              <span class="label-text">Captain Discord Role</span>
+            </label>
+            {{ form.discord_captain_role }}
+            {% if form.discord_captain_role.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.discord_captain_role.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
             <label class="label">
               <span class="label-text">Vice Captain</span>
             </label>
