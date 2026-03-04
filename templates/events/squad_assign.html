@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+{% load accounts_tags %}
+
+{% block title %}Assign Riders - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
+  </div>
+
+  <h2 class="text-xl font-bold mb-4">Assign Riders &mdash; {{ event.title }}</h2>
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    {# Left column: Signup list with assignment controls #}
+    <div>
+      <div class="card bg-base-200 shadow-md">
+        <div class="card-body p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="card-title text-base">Signups (<span id="visible-count">{{ enriched_signups|length }}</span>/{{ enriched_signups|length }})</h3>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 mb-3">
+            <input type="text" id="signup-search" placeholder="Search name..." class="input input-bordered input-sm w-36" oninput="applyFilters()">
+            <select id="filter-gender" class="select select-bordered select-sm" onchange="applyFilters()">
+              <option value="">All genders</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+            <select id="filter-zp" class="select select-bordered select-sm" onchange="applyFilters()">
+              <option value="">All ZP</option>
+              <option value="A+">A+</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+              <option value="E">E</option>
+            </select>
+            <select id="filter-zr" class="select select-bordered select-sm" onchange="applyFilters()">
+              <option value="">All ZR</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+              <option value="E">E</option>
+            </select>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
+          </div>
+          {% if enriched_signups %}
+          <div class="overflow-x-auto">
+            <table class="table table-xs" id="signup-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Gender</th>
+                  <th>Squads</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for entry in enriched_signups %}
+                <tr data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}" data-gender="{{ entry.gender }}" data-zp="{{ entry.zp_category_w|default:entry.zp_category }}" data-zr="{{ entry.zr_category }}">
+                  <td>
+                    {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                  </td>
+                  <td>
+                    {% if entry.gender == "male" %}
+                    <span class="badge badge-info badge-sm">M</span>
+                    {% elif entry.gender == "female" %}
+                    <span class="badge badge-secondary badge-sm">F</span>
+                    {% else %}
+                    <span class="text-base-content/30">-</span>
+                    {% endif %}
+                  </td>
+                  <td id="squad-cell-{{ entry.signup.pk }}">
+                    {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-sm text-base-content/70">No signups yet.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Right column: Squad panels with member lists #}
+    <div class="space-y-4">
+      {% for squad in squads %}
+      {% include "events/_squad_panel.html" with squad=squad members=squad.enriched_members event_role_name=event.event_role_name event_pk=event.pk oob=False %}
+      {% empty %}
+      <div class="card bg-base-200 shadow-md">
+        <div class="card-body p-4">
+          <p class="text-sm text-base-content/70">No squads yet. <a href="{% url 'events:squad_create' event.pk %}" class="link link-primary">Create one</a>.</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<script>
+function applyFilters() {
+  var q = document.getElementById('signup-search').value.toLowerCase();
+  var gender = document.getElementById('filter-gender').value;
+  var zp = document.getElementById('filter-zp').value;
+  var zr = document.getElementById('filter-zr').value;
+  var rows = document.querySelectorAll('#signup-table tbody tr');
+  var visible = 0;
+  rows.forEach(function(row) {
+    var show = true;
+    if (q && !row.dataset.name.includes(q)) show = false;
+    if (gender && row.dataset.gender !== gender) show = false;
+    if (zp && row.dataset.zp !== zp) show = false;
+    if (zr && row.dataset.zr !== zr) show = false;
+    row.style.display = show ? '' : 'none';
+    if (show) visible++;
+  });
+  document.getElementById('visible-count').textContent = visible;
+}
+function clearFilters() {
+  document.getElementById('signup-search').value = '';
+  document.getElementById('filter-gender').value = '';
+  document.getElementById('filter-zp').value = '';
+  document.getElementById('filter-zr').value = '';
+  applyFilters();
+}
+</script>
+{% endblock %}

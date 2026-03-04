@@ -1,0 +1,38 @@
+{% load accounts_tags %}
+<div class="card bg-base-200 shadow-md" id="squad-panel-{{ squad.pk }}" {% if oob %}hx-swap-oob="true"{% endif %}>
+  <div class="card-body p-4">
+    <div class="flex items-center justify-between mb-2">
+      <h3 class="card-title text-base">{{ squad.name }}</h3>
+      <span class="badge badge-neutral badge-sm">{{ members|length }} member{{ members|length|pluralize }}</span>
+    </div>
+    {% if event_role_name or squad.role_name %}
+    <div class="flex flex-wrap gap-2 text-xs text-base-content/60 mb-2">
+      {% if event_role_name %}<span>Event: @{{ event_role_name }}</span>{% endif %}
+      {% if squad.role_name %}<span>Squad: @{{ squad.role_name }}</span>{% endif %}
+    </div>
+    {% endif %}
+    {% if members %}
+    <ul class="space-y-1.5">
+      {% for member in members %}
+      <li class="flex items-center gap-1 text-sm">
+        {% if member.signup_id %}
+        <form method="post" action="{% url 'events:squad_assign' event_pk %}"
+              hx-post="{% url 'events:squad_assign' event_pk %}" hx-target="#squad-cell-{{ member.signup_id }}" hx-swap="innerHTML"
+              class="inline shrink-0">
+          {% csrf_token %}
+          <input type="hidden" name="signup_id" value="{{ member.signup_id }}">
+          <input type="hidden" name="squad_id" value="0">
+          <input type="hidden" name="remove_squad_id" value="{{ squad.pk }}">
+          <button type="submit" class="text-error hover:text-error/70 font-bold leading-none" title="Remove from {{ squad.name }}">&times;</button>
+        </form>
+        {% endif %}
+        {% if squad.captain and member.user.pk == squad.captain.pk %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif squad.vice_captain and member.user.pk == squad.vice_captain.pk %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
+        {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_id=member.user.discord_id discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready is_extra_verified=member.is_extra_verified in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-base-content/50">No members yet.</p>
+    {% endif %}
+  </div>
+</div>

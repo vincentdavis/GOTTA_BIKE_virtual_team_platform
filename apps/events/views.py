@@ -14,6 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
@@ -1217,8 +1218,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             )
         )
         all_squads = list(event.squads.all())
-        return render(
-            request,
+        cell_html = render_to_string(
             "events/_squad_cell.html",
             {
                 "assigned_squads": assigned_squads,
@@ -1226,7 +1226,49 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 "event_pk": event_pk,
                 "signup_id": signup.pk,
             },
+            request=request,
         )
+
+        # If request came from the assign-riders page, include OOB squad panel updates
+        hx_url = request.headers.get("HX-Current-URL", "")
+        if "assign-riders" in hx_url:
+            squad_members_data = _enrich_squad_members(event)
+            # Map user_id -> signup pk for remove buttons in squad panels
+            signup_by_user = dict(
+                EventSignup.objects.filter(event=event).values_list("user_id", "pk")
+            )
+            for members in squad_members_data.values():
+                for member in members:
+                    member["signup_id"] = signup_by_user.get(member["user"].pk)
+
+            # Resolve role names for squad panels
+            from apps.team.models import DiscordRole
+
+            role_ids = {str(sq.team_discord_role) for sq in all_squads if sq.team_discord_role}
+            if event.event_role:
+                role_ids.add(str(event.event_role))
+            role_names = dict(
+                DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
+            ) if role_ids else {}
+            event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
+
+            oob_html = ""
+            for sq in all_squads:
+                sq.role_name = role_names.get(str(sq.team_discord_role), "") if sq.team_discord_role else ""
+                oob_html += render_to_string(
+                    "events/_squad_panel.html",
+                    {
+                        "squad": sq,
+                        "members": squad_members_data.get(sq.pk, []),
+                        "event_role_name": event_role_name,
+                        "event_pk": event_pk,
+                        "oob": True,
+                    },
+                    request=request,
+                )
+            return HttpResponse(cell_html + oob_html)
+
+        return HttpResponse(cell_html)
 
     return redirect("events:event_detail", pk=event_pk)
 
@@ -2349,3 +2391,61 @@ def squad_regenerate_token_view(request: HttpRequest, event_pk: int, squad_pk: i
     )
     messages.success(request, f"Invite link for {squad.name} has been generated.")
     return redirect("events:squad_manage", event_pk=event_pk)
+
+
+@require_GET
+@login_required
+@discord_permission_required("event_admin", raise_exception=True)
+def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Dedicated two-column page for assigning signups to squads.
+
+    Left column shows enriched signups with inline assignment controls.
+    Right column shows squad panels with current member lists.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+
+    Returns:
+        Rendered squad assignment page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    signups = event.signups.select_related("user").all()
+    enriched_signups = _enrich_signups(signups, event=event)
+    squads = list(
+        event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+    )
+    squad_members_data = _enrich_squad_members(event) if squads else {}
+
+    # Map user_id -> signup pk so squad panels can build remove forms
+    signup_by_user = {s.user_id: s.pk for s in signups}
+    for members in squad_members_data.values():
+        for member in members:
+            member["signup_id"] = signup_by_user.get(member["user"].pk)
+
+    # Resolve Discord role names for event and squads
+    from apps.team.models import DiscordRole
+
+    role_ids = {str(s.team_discord_role) for s in squads if s.team_discord_role}
+    if event.event_role:
+        role_ids.add(str(event.event_role))
+    role_names = dict(
+        DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
+    ) if role_ids else {}
+    event.event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
+
+    for squad in squads:
+        squad.enriched_members = squad_members_data.get(squad.pk, [])
+        squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
+
+    logfire.debug("Squad assign page viewed", user_id=request.user.id, event_id=event_pk)
+    return render(
+        request,
+        "events/squad_assign.html",
+        {
+            "event": event,
+            "enriched_signups": enriched_signups,
+            "squads": squads,
+        },
+    )

@@ -124,6 +124,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/events/{id}/squads/{squad_id}/edit/ - Edit squad",
             "/events/{id}/squads/{squad_id}/delete/ - Delete squad",
             "/events/{id}/squads/assign/ - Assign users to squads",
+            "/events/{id}/assign-riders/ - Dedicated squad assignment page",
             "/events/{id}/squads/{squad_id}/regenerate-token/ - Generate/regenerate squad invite link",
             "/events/{id}/availability/ - Manage availability",
         ],

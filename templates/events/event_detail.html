@@ -7,8 +7,6 @@
 <style>
 .tooltip::before,.tooltip::after{transition-delay:0s!important;transition-duration:75ms!important}
 .squad-assign-ctrl{display:none}
-.assign-mode .squad-assign-ctrl{display:inline}
-.assign-mode .no-squad-dash{display:none}
 @media(max-width:767px){
   [data-signup-table] [data-col="zwid"],
   [data-signup-table] [data-col="ftp"],
@@ -172,9 +170,6 @@
       <div id="signups-content" style="display:none">
       <div class="mt-2">
         <div class="flex items-center gap-2 mb-2">
-          {% if squads %}
-          <button type="button" class="btn btn-outline btn-sm" id="toggle-squad-assign" onclick="toggleSquadAssign()">Assign Squads</button>
-          {% endif %}
           <div class="ml-auto flex items-center gap-2">
             <div class="dropdown dropdown-end">
               <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>
@@ -875,14 +870,6 @@ function switchCategorySource(source) {
     zpBtn.className = 'btn btn-xs btn-primary';
     zrBtn.className = 'btn btn-xs btn-ghost';
   }
-}
-function toggleSquadAssign() {
-  var btn = document.getElementById('toggle-squad-assign');
-  var table = document.querySelector('[data-signup-table="detail"]');
-  var active = table.classList.toggle('assign-mode');
-  btn.textContent = active ? 'Done' : 'Assign Squads';
-  btn.classList.toggle('btn-outline', !active);
-  btn.classList.toggle('btn-primary', active);
 }
 
 // Column toggler for signup table

@@ -10,7 +10,10 @@
 
   <div class="flex justify-between items-center mb-4">
     <h2 class="text-xl font-bold">Squads &mdash; {{ event.title }}</h2>
-    <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">Add Squad</a>
+    <div class="flex gap-2">
+      <a href="{% url 'events:squad_assign_page' event.pk %}" class="btn btn-secondary btn-sm">Assign Riders</a>
+      <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">Add Squad</a>
+    </div>
   </div>
 
   {% if squads %}
