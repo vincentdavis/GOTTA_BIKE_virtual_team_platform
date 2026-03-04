@@ -4,6 +4,9 @@
 {% block title %}Manage Discord Roles - {{ event.title }}{% endblock %}
 
 {% block content %}
+<style>
+details[open] .details-arrow { transform: rotate(90deg); }
+</style>
 <div class="max-w-6xl mx-auto">
   <div class="mb-4">
     <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
@@ -14,9 +17,9 @@
       <h2 class="card-title text-2xl mb-4">Manage Discord Roles &mdash; {{ event.title }}</h2>
 
       {% if role_info %}
-      <div class="bg-base-300 rounded-lg p-4 mb-4">
-        <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Configured Roles</p>
-        <div class="space-y-1">
+      <details class="collapse bg-base-300 rounded-lg mb-4">
+        <summary class="collapse-title text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2 min-h-0 cursor-pointer"><span class="inline-block transition-transform duration-200 details-arrow mr-1">&#9654;</span>Configured Roles</summary>
+        <div class="collapse-content space-y-1">
           {% for ri in role_info %}
           <div class="flex items-center gap-2 text-sm">
             <span class="font-semibold">{{ ri.label }}:</span>
@@ -25,7 +28,7 @@
           </div>
           {% endfor %}
         </div>
-      </div>
+      </details>
       {% endif %}
 
       {% if enriched_signups %}
@@ -33,19 +36,19 @@
         <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-roles-search>
       </div>
       <div class="overflow-x-auto max-h-[70vh] pb-8">
-        <table class="table table-sm" data-roles-table>
+        <table class="table table-xs" data-roles-table>
           <thead class="sticky top-0 bg-base-200 z-10">
             <tr>
-              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none whitespace-nowrap">Name</th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squads</th>
               {% if event.event_role %}
-              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Event Role</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none text-center whitespace-nowrap">Event</th>
               {% endif %}
               {% for squad in role_squads %}
-              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">{{ squad.name }}</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none text-center whitespace-nowrap">{{ squad.name }}</th>
               {% endfor %}
               {% for squad in captain_role_squads %}
-              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">{{ squad.name }} Cpt</th>
+              <th data-sort="text" class="cursor-pointer hover:text-primary select-none text-center whitespace-nowrap">{{ squad.name }} Cpt</th>
               {% endfor %}
             </tr>
           </thead>
@@ -63,12 +66,12 @@
                 {% endif %}
               </td>
               {% if event.event_role %}
-              <td>
+              <td class="text-center">
                 {% include "events/_event_role_cell.html" with event_pk=event.pk member_user_pk=entry.user.pk has_role=entry.has_event_role %}
               </td>
               {% endif %}
               {% for srs in entry.squad_role_status %}
-              <td>
+              <td class="text-center">
                 {% if srs.is_member %}
                   {% include "events/_squad_role_cell.html" with event_pk=event.pk squad_pk=srs.squad.pk member_user_pk=entry.user.pk has_role=srs.has_role %}
                 {% else %}
@@ -77,7 +80,7 @@
               </td>
               {% endfor %}
               {% for crs in entry.captain_role_status %}
-              <td>
+              <td class="text-center">
                 {% if crs.is_member %}
                   {% include "events/_squad_captain_role_cell.html" with event_pk=event.pk squad_pk=crs.squad.pk member_user_pk=entry.user.pk has_role=crs.has_role %}
                 {% else %}

@@ -702,7 +702,7 @@ requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "boto3", specifier = ">=1.42.57" },
     { name = "dj-database-url", specifier = ">=3.1.2" },
-    { name = "django", specifier = ">=6.0.2" },
+    { name = "django", specifier = ">=6.0.3" },
     { name = "django-allauth", extras = ["mfa", "socialaccount"], specifier = ">=65.14.3" },
     { name = "django-constance", specifier = ">=4.3.4" },
     { name = "django-cors-headers", specifier = ">=4.9.0" },

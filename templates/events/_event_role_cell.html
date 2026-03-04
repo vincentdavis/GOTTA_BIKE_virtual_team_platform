@@ -5,11 +5,11 @@
   {% csrf_token %}
   {% if has_role %}
   <button type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to remove role">
-    <span class="text-success">&#10003;</span>
+    <span class="text-success text-xl">&#10003;</span>
   </button>
   {% else %}
   <button type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to add role">
-    <span class="text-error">&#10007;</span>
+    <span class="text-error text-xl">&#10007;</span>
   </button>
   {% endif %}
 </form>
