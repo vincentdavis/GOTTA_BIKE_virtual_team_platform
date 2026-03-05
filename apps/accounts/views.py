@@ -974,6 +974,7 @@ def _build_phenotype_emoji_items(site_settings_obj) -> list[dict]:
         ("phenotype_puncheur_emoji", "Puncheur"),
         ("phenotype_tt_emoji", "Time Trialist"),
         ("phenotype_sprinter_emoji", "Sprinter"),
+        ("phenotype_pursuiter_emoji", "Pursuiter"),
     ]:
         file_field = getattr(site_settings_obj, field_name, None)
         items.append({
@@ -1143,6 +1144,7 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
         ("phenotype_puncheur_emoji", "Phenotype Puncheur"),
         ("phenotype_tt_emoji", "Phenotype Time Trialist"),
         ("phenotype_sprinter_emoji", "Phenotype Sprinter"),
+        ("phenotype_pursuiter_emoji", "Phenotype Pursuiter"),
     ]:
         if emoji_field in request.FILES:
             uploaded_file = request.FILES[emoji_field]

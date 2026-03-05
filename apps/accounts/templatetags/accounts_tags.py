@@ -39,6 +39,7 @@ PHENOTYPE_EMOJI_FIELDS = {
     "Puncheur": "phenotype_puncheur_emoji",
     "Time Trialist": "phenotype_tt_emoji",
     "Sprinter": "phenotype_sprinter_emoji",
+    "Pursuiter": "phenotype_pursuiter_emoji",
 }
 
 
