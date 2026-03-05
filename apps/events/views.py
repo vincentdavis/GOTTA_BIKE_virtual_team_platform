@@ -1160,6 +1160,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
     signup = get_object_or_404(EventSignup, pk=signup_id, event=event)
     squad_id = int(squad_id)
+    is_htmx = bool(request.headers.get("HX-Request"))
 
     if squad_id == 0:
         # Unassign from a specific squad or all squads
@@ -1176,8 +1177,9 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     user_id=signup.user_id,
                     admin_user_id=request.user.id,
                 )
-                messages.success(request, f"{signup.user} removed from {remove_squad.name}.")
-            else:
+                if not is_htmx:
+                    messages.success(request, f"{signup.user} removed from {remove_squad.name}.")
+            elif not is_htmx:
                 messages.info(request, f"{signup.user} was not in {remove_squad.name}.")
         else:
             deleted, _ = SquadMember.objects.filter(squad__event=event, user=signup.user).delete()
@@ -1188,8 +1190,9 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     user_id=signup.user_id,
                     admin_user_id=request.user.id,
                 )
-                messages.success(request, f"{signup.user} removed from all squads.")
-            else:
+                if not is_htmx:
+                    messages.success(request, f"{signup.user} removed from all squads.")
+            elif not is_htmx:
                 messages.info(request, f"{signup.user} was not assigned to any squad.")
     else:
         squad = get_object_or_404(Squad, pk=squad_id, event=event)
@@ -1206,7 +1209,8 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             user_id=signup.user_id,
             admin_user_id=request.user.id,
         )
-        messages.success(request, f"{signup.user} assigned to {squad.name}.")
+        if not is_htmx:
+            messages.success(request, f"{signup.user} assigned to {squad.name}.")
 
     # HTMX: return just the updated squad cell instead of full page reload
     if request.headers.get("HX-Request"):

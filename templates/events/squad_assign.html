@@ -43,6 +43,10 @@
               <option value="D">D</option>
               <option value="E">E</option>
             </select>
+            <label class="label cursor-pointer gap-1.5">
+              <input type="checkbox" id="filter-unassigned" class="checkbox checkbox-sm" onchange="applyFilters()">
+              <span class="label-text text-sm">Unassigned</span>
+            </label>
             <button type="button" class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
           </div>
           {% if enriched_signups %}
@@ -106,6 +110,7 @@ function applyFilters() {
   var gender = document.getElementById('filter-gender').value;
   var zp = document.getElementById('filter-zp').value;
   var zr = document.getElementById('filter-zr').value;
+  var unassigned = document.getElementById('filter-unassigned').checked;
   var rows = document.querySelectorAll('#signup-table tbody tr');
   var visible = 0;
   rows.forEach(function(row) {
@@ -114,6 +119,10 @@ function applyFilters() {
     if (gender && row.dataset.gender !== gender) show = false;
     if (zp && row.dataset.zp !== zp) show = false;
     if (zr && row.dataset.zr !== zr) show = false;
+    if (unassigned) {
+      var cell = row.querySelector('[id^="squad-cell-"]');
+      if (cell && !cell.querySelector('.no-squad-dash')) show = false;
+    }
     row.style.display = show ? '' : 'none';
     if (show) visible++;
   });
@@ -124,6 +133,7 @@ function clearFilters() {
   document.getElementById('filter-gender').value = '';
   document.getElementById('filter-zp').value = '';
   document.getElementById('filter-zr').value = '';
+  document.getElementById('filter-unassigned').checked = false;
   applyFilters();
 }
 </script>

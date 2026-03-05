@@ -23,7 +23,7 @@
           <input type="hidden" name="signup_id" value="{{ member.signup_id }}">
           <input type="hidden" name="squad_id" value="0">
           <input type="hidden" name="remove_squad_id" value="{{ squad.pk }}">
-          <button type="submit" class="text-error hover:text-error/70 font-bold leading-none" title="Remove from {{ squad.name }}">&times;</button>
+          <button type="submit" class="text-error hover:text-error/70 font-bold leading-none text-lg" title="Remove from {{ squad.name }}">&times;</button>
         </form>
         {% endif %}
         {% if squad.captain and member.user.pk == squad.captain.pk %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif squad.vice_captain and member.user.pk == squad.vice_captain.pk %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
