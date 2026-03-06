@@ -1124,6 +1124,7 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
         ("not_verified_emoji", "Not Verified Emoji"),
         ("verified_emoji", "Verified Emoji"),
         ("extra_verified_emoji", "Extra Verified Emoji"),
+        ("zp_a_plus_emoji", "ZP A+ Category Emoji"),
         ("zp_a_emoji", "ZP A Category Emoji"),
         ("zp_b_emoji", "ZP B Category Emoji"),
         ("zp_c_emoji", "ZP C Category Emoji"),
