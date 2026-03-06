@@ -48,6 +48,39 @@
             </div>
         </div>
         {% endif %}
+
+        <!-- Verification Status Summary -->
+        {% if required_summary %}
+        <div class="border-t border-base-content/10 mt-4 pt-4">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-sm font-semibold text-base-content/70">Race Verified:</span>
+                {% for item in required_summary %}
+                    {% if item.status == "valid" %}
+                        <span class="badge badge-success gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            {{ item.label }}
+                        </span>
+                    {% elif item.status == "expired" %}
+                        <span class="badge badge-error gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            {{ item.label }} — Expired
+                        </span>
+                    {% elif item.status == "pending" %}
+                        <span class="badge badge-warning gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            {{ item.label }} — Pending
+                        </span>
+                    {% else %}
+                        <span class="badge badge-outline gap-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            {{ item.label }} — Missing
+                        </span>
+                    {% endif %}
+                {% endfor %}
+                <a href="{% url 'accounts:verification' %}" class="btn btn-xs btn-outline">View Records</a>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <h3 class="text-lg font-semibold mb-3">Profile Information</h3>

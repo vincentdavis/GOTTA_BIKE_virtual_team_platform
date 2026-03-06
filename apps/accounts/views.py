@@ -33,11 +33,34 @@ def profile_view(request: HttpRequest) -> HttpResponse:
         Rendered profile page.
 
     """
-    from apps.team.services import ZP_DIV_TO_CATEGORY
+    from apps.team.models import RaceReadyRecord
+    from apps.team.services import ZP_DIV_TO_CATEGORY, get_user_required_verification_types
     from apps.zwiftpower.models import ZPTeamRiders
     from apps.zwiftracing.models import ZRRider
 
     form = ProfileForm(instance=request.user)
+
+    # Build required verification summary with status
+    required_types = get_user_required_verification_types(request.user)
+    type_labels = {"weight_full": "Weight (Full)", "weight_light": "Weight (Light)", "height": "Height", "power": "Power"}
+    verified_records = request.user.race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
+    pending_records = request.user.race_ready_records.filter(status=RaceReadyRecord.Status.PENDING)
+    latest_verified = {}
+    for record in verified_records:
+        if record.verify_type not in latest_verified:
+            latest_verified[record.verify_type] = record
+    required_summary = []
+    for vtype in required_types:
+        record = latest_verified.get(vtype)
+        if record and not record.is_expired:
+            status = "valid"
+        elif record and record.is_expired:
+            status = "expired"
+        elif pending_records.filter(verify_type=vtype).exists():
+            status = "pending"
+        else:
+            status = "missing"
+        required_summary.append({"type": vtype, "label": type_labels.get(vtype, vtype), "status": status})
 
     # Fetch ZwiftPower and ZwiftRacing data if user is verified
     zp_data = None
@@ -72,6 +95,7 @@ def profile_view(request: HttpRequest) -> HttpResponse:
             "form": form,
             "zp_data": zp_data,
             "zr_data": zr_data,
+            "required_summary": required_summary,
         },
     )
 
