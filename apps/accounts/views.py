@@ -17,7 +17,7 @@ from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm, ZwiftVerificationForm
 from apps.accounts.models import User
 from apps.team.forms import RaceReadyRecordForm
-from apps.team.services import get_user_verification_types
+from apps.team.services import get_user_required_verification_types, get_user_verification_types
 from apps.zwift.utils import fetch_zwift_id
 
 
@@ -105,6 +105,22 @@ def verification_view(request: HttpRequest) -> HttpResponse:
         if record:
             latest_by_type[verify_type] = record
 
+    # Build required verification summary with status for each type
+    required_types = get_user_required_verification_types(request.user)
+    type_labels = {"weight_full": "Weight (Full)", "weight_light": "Weight (Light)", "height": "Height", "power": "Power"}
+    required_summary = []
+    for vtype in required_types:
+        record = latest_by_type.get(vtype)
+        if record and record.is_verified and not record.is_expired:
+            status = "valid"
+        elif record and record.is_verified and record.is_expired:
+            status = "expired"
+        elif record and record.status == "pending":
+            status = "pending"
+        else:
+            status = "missing"
+        required_summary.append({"type": vtype, "label": type_labels.get(vtype, vtype), "status": status})
+
     return render(
         request,
         "accounts/verification.html",
@@ -112,6 +128,7 @@ def verification_view(request: HttpRequest) -> HttpResponse:
             "race_ready_form": race_ready_form,
             "race_ready_records": race_ready_records,
             "latest_by_type": latest_by_type,
+            "required_summary": required_summary,
             "verification_form_message": config.VERIFICATION_FORM_MESSAGE,
             "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
             "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,

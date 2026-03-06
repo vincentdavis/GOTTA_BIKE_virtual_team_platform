@@ -721,7 +721,7 @@ requires-dist = [
     { name = "honcho", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "justhtml", specifier = ">=1.8.0" },
-    { name = "logfire", extras = ["asgi", "django", "psycopg", "httpx"], specifier = ">=4.25.0" },
+    { name = "logfire", extras = ["asgi", "django", "psycopg", "httpx"], specifier = ">=4.26.0" },
     { name = "markdown", specifier = ">=3.10.2" },
     { name = "pillow", specifier = ">=12.1.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.3" },
@@ -740,7 +740,7 @@ dev = [
     { name = "logfire-mcp", specifier = ">=0.6.0" },
     { name = "pytest", specifier = ">=9.0.1" },
     { name = "ruff", specifier = ">=0.15.5" },
-    { name = "ty", specifier = ">=0.0.20" },
+    { name = "ty", specifier = ">=0.0.21" },
 ]
 
 [[package]]
