@@ -130,16 +130,25 @@ def verification_view(request: HttpRequest) -> HttpResponse:
             latest_by_type[verify_type] = record
 
     # Build required verification summary with status for each type
+    # Use latest *verified* record per type (not latest overall, which could be rejected)
+    from apps.team.models import RaceReadyRecord
+
+    verified_records = race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
+    latest_verified = {}
+    for record in verified_records:
+        if record.verify_type not in latest_verified:
+            latest_verified[record.verify_type] = record
+
     required_types = get_user_required_verification_types(request.user)
     type_labels = {"weight_full": "Weight (Full)", "weight_light": "Weight (Light)", "height": "Height", "power": "Power"}
     required_summary = []
     for vtype in required_types:
-        record = latest_by_type.get(vtype)
-        if record and record.is_verified and not record.is_expired:
+        record = latest_verified.get(vtype)
+        if record and not record.is_expired:
             status = "valid"
-        elif record and record.is_verified and record.is_expired:
+        elif record and record.is_expired:
             status = "expired"
-        elif record and record.status == "pending":
+        elif race_ready_records.filter(verify_type=vtype, status=RaceReadyRecord.Status.PENDING).exists():
             status = "pending"
         else:
             status = "missing"
