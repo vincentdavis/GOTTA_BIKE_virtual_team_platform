@@ -1256,6 +1256,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             ) if role_ids else {}
             event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
 
+            is_event_admin = request.user.is_event_admin or request.user.is_superuser
             oob_html = ""
             for sq in all_squads:
                 sq.role_name = role_names.get(str(sq.team_discord_role), "") if sq.team_discord_role else ""
@@ -1267,12 +1268,107 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                         "event_role_name": event_role_name,
                         "event_pk": event_pk,
                         "oob": True,
+                        "is_event_admin": is_event_admin,
                     },
                     request=request,
                 )
             return HttpResponse(cell_html + oob_html)
 
         return HttpResponse(cell_html)
+
+    return redirect("events:event_detail", pk=event_pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
+    """Set or unset a squad's captain or vice-captain.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        Updated squad panel HTML (HTMX) or redirect.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning("Unauthorized squad captain set attempt", event_id=event_pk, user_id=request.user.id)
+        messages.error(request, "You don't have permission to set squad captains.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    user_id = request.POST.get("user_id")
+    role = request.POST.get("role")  # "captain", "vice_captain", or "none"
+
+    if not user_id or role not in ("captain", "vice_captain", "none"):
+        messages.error(request, "Invalid request.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    target_user = get_object_or_404(User, pk=int(user_id))
+
+    if role == "captain":
+        squad.captain = target_user
+        squad.save(update_fields=["captain"])
+        logfire.info("Squad captain set", event_id=event_pk, squad_id=squad_pk, captain_id=target_user.id, admin_user_id=request.user.id)
+    elif role == "vice_captain":
+        squad.vice_captain = target_user
+        squad.save(update_fields=["vice_captain"])
+        logfire.info("Squad vice captain set", event_id=event_pk, squad_id=squad_pk, vice_captain_id=target_user.id, admin_user_id=request.user.id)
+    elif role == "none":
+        updated_fields = []
+        if squad.captain_id == target_user.pk:
+            squad.captain = None
+            updated_fields.append("captain")
+        if squad.vice_captain_id == target_user.pk:
+            squad.vice_captain = None
+            updated_fields.append("vice_captain")
+        if updated_fields:
+            squad.save(update_fields=updated_fields)
+            logfire.info("Squad captain role removed", event_id=event_pk, squad_id=squad_pk, user_id=target_user.id, admin_user_id=request.user.id)
+
+    if request.headers.get("HX-Request"):
+        squad_members_data = _enrich_squad_members(event)
+        signup_by_user = dict(EventSignup.objects.filter(event=event).values_list("user_id", "pk"))
+        for members in squad_members_data.values():
+            for member in members:
+                member["signup_id"] = signup_by_user.get(member["user"].pk)
+
+        from apps.team.models import DiscordRole
+
+        role_ids = set()
+        for sq in event.squads.all():
+            if sq.team_discord_role:
+                role_ids.add(str(sq.team_discord_role))
+        if event.event_role:
+            role_ids.add(str(event.event_role))
+        role_names = dict(
+            DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
+        ) if role_ids else {}
+        event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
+
+        # Refresh squad from DB to get updated captain/vice_captain
+        squad.refresh_from_db()
+        squad = Squad.objects.select_related("captain", "vice_captain").get(pk=squad_pk)
+        squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
+
+        panel_html = render_to_string(
+            "events/_squad_panel.html",
+            {
+                "squad": squad,
+                "members": squad_members_data.get(squad.pk, []),
+                "event_role_name": event_role_name,
+                "event_pk": event_pk,
+                "oob": False,
+                "is_event_admin": True,
+            },
+            request=request,
+        )
+        return HttpResponse(panel_html)
 
     return redirect("events:event_detail", pk=event_pk)
 
@@ -2443,6 +2539,7 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         squad.enriched_members = squad_members_data.get(squad.pk, [])
         squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
 
+    is_event_admin = request.user.is_event_admin or request.user.is_superuser
     logfire.debug("Squad assign page viewed", user_id=request.user.id, event_id=event_pk)
     return render(
         request,
@@ -2451,5 +2548,6 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "event": event,
             "enriched_signups": enriched_signups,
             "squads": squads,
+            "is_event_admin": is_event_admin,
         },
     )

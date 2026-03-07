@@ -721,7 +721,7 @@ requires-dist = [
     { name = "honcho", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "justhtml", specifier = ">=1.8.0" },
-    { name = "logfire", extras = ["asgi", "django", "psycopg", "httpx"], specifier = ">=4.26.0" },
+    { name = "logfire", extras = ["asgi", "django", "psycopg", "httpx"], specifier = ">=4.27.0" },
     { name = "markdown", specifier = ">=3.10.2" },
     { name = "pillow", specifier = ">=12.1.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.3" },
@@ -946,7 +946,7 @@ wheels = [
 
 [[package]]
 name = "logfire"
-version = "4.26.0"
+version = "4.27.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "executing" },
@@ -957,9 +957,9 @@ dependencies = [
     { name = "rich" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a7/84/303c790f51dc96e4bca7c91025a163ad9413857eea6726230d5dc4e8de07/logfire-4.26.0.tar.gz", hash = "sha256:ea9b5fb6ca89c460f391ffc8f23392b5ecb38ea8426c08845cca8ba8a1eb5c85", size = 1055710, upload-time = "2026-03-06T09:29:30.757Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f5/5a/2ce2764fab3a23f1b49a799c1a5ab759c3e8200be300c108755ef5e8b73c/logfire-4.27.0.tar.gz", hash = "sha256:d05366abc4a16acb44b62dc9ca68933591a9755e138fc3e072cb73813db10d45", size = 1055824, upload-time = "2026-03-06T18:24:28.041Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d3/ef/83194d1d6a49f7b2cca843978d6ae29cc5b70f6c77a638443456b4fe848a/logfire-4.26.0-py3-none-any.whl", hash = "sha256:ff8a13ac47542f6280dc847826f78f7e11122057c16d59667344a9e2041fa6e8", size = 301127, upload-time = "2026-03-06T09:29:27.558Z" },
+    { url = "https://files.pythonhosted.org/packages/cb/b1/24eca9932376df4fba6902394c03532a138e87478a5a810799f0a22217a5/logfire-4.27.0-py3-none-any.whl", hash = "sha256:c1db6357d59ed4d58d614bdc9a90fcc46ddb7d1a7410e2bd56fa441e7c61f4e4", size = 301261, upload-time = "2026-03-06T18:24:25.101Z" },
 ]
 
 [package.optional-dependencies]

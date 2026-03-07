@@ -92,7 +92,7 @@
     {# Right column: Squad panels with member lists #}
     <div class="space-y-4">
       {% for squad in squads %}
-      {% include "events/_squad_panel.html" with squad=squad members=squad.enriched_members event_role_name=event.event_role_name event_pk=event.pk oob=False %}
+      {% include "events/_squad_panel.html" with squad=squad members=squad.enriched_members event_role_name=event.event_role_name event_pk=event.pk oob=False is_event_admin=is_event_admin %}
       {% empty %}
       <div class="card bg-base-200 shadow-md">
         <div class="card-body p-4">
