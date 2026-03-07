@@ -14,7 +14,13 @@ details[open] .details-arrow { transform: rotate(90deg); }
 
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <h2 class="card-title text-2xl mb-4">Manage Discord Roles &mdash; {{ event.title }}</h2>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="card-title text-2xl">Manage Discord Roles &mdash; {{ event.title }}</h2>
+        <form method="post" action="{% url 'events:sync_event_roles' event.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline btn-sm" title="Fetch Discord roles for all signups">Sync Roles</button>
+        </form>
+      </div>
 
       {% if role_info %}
       <details class="collapse bg-base-300 rounded-lg mb-4">

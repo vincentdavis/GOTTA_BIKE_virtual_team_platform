@@ -27,6 +27,18 @@
         </form>
         {% endif %}
         {% if squad.captain and member.user.pk == squad.captain.pk %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif squad.vice_captain and member.user.pk == squad.vice_captain.pk %}<span class="tooltip" data-tip="Vice Captain">🏅</span>{% endif %}
+        {% if member.has_discord_role is not None %}
+          <span class="text-xs {% if member.has_discord_role %}text-success{% else %}text-error{% endif %}"
+                title="{% if member.has_discord_role %}Has squad role{% else %}Missing squad role{% endif %}">
+            {% if member.has_discord_role %}&#10003;{% else %}&#10007;{% endif %}
+          </span>
+        {% endif %}
+        {% if member.has_captain_role is not None %}
+          <span class="text-xs {% if member.has_captain_role %}text-success{% else %}text-error{% endif %}"
+                title="{% if member.has_captain_role %}Has captain role{% else %}Missing captain role{% endif %}">
+            C{% if member.has_captain_role %}&#10003;{% else %}&#10007;{% endif %}
+          </span>
+        {% endif %}
         {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_id=member.user.discord_id discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready is_extra_verified=member.is_extra_verified in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
         {% if is_event_admin %}
         <div class="dropdown dropdown-end ml-auto shrink-0">

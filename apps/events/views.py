@@ -19,7 +19,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import discord_permission_required, team_member_required
-from apps.accounts.discord_service import add_discord_role, remove_discord_role
+from apps.accounts.discord_service import add_discord_role, remove_discord_role, sync_user_discord_roles
 from apps.accounts.models import Permissions, User
 from apps.events.forms import EventForm, EventRoleSetupForm, SquadForm
 from apps.events.models import (
@@ -62,6 +62,107 @@ def _can_manage_event_roles(user: User, event: Event) -> bool:
     return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
 
 
+def _assign_discord_role(user, role_id: int, role_display_name: str, *, admin_user_id: int) -> bool | None:
+    """Add a Discord role to a user, updating their local discord_roles cache.
+
+    Args:
+        user: The User to assign the role to.
+        role_id: The Discord role ID to add.
+        role_display_name: Display name for logging.
+        admin_user_id: The admin performing the action.
+
+    Returns:
+        None if skipped (no discord_id or role_id is 0), True if success/already has, False on API failure.
+
+    """
+    if not role_id or not user.discord_id:
+        return None
+    role_id_str = str(role_id)
+    if user.has_discord_role(role_id_str):
+        return True
+    success = add_discord_role(user.discord_id, role_id_str)
+    if success:
+        roles = user.discord_roles or {}
+        roles[role_id_str] = role_display_name
+        user.discord_roles = roles
+        user.save(update_fields=["discord_roles"])
+        logfire.info(
+            "Auto-assigned Discord role",
+            user_id=user.id,
+            role_id=role_id_str,
+            role_name=role_display_name,
+            admin_user_id=admin_user_id,
+        )
+    else:
+        logfire.error(
+            "Failed to auto-assign Discord role",
+            user_id=user.id,
+            role_id=role_id_str,
+            role_name=role_display_name,
+            admin_user_id=admin_user_id,
+        )
+    return success
+
+
+def _unassign_discord_role(user, role_id: int, *, admin_user_id: int) -> bool | None:
+    """Remove a Discord role from a user, updating their local discord_roles cache.
+
+    Args:
+        user: The User to remove the role from.
+        role_id: The Discord role ID to remove.
+        admin_user_id: The admin performing the action.
+
+    Returns:
+        None if skipped (no discord_id or role_id is 0), True if success/already missing, False on API failure.
+
+    """
+    if not role_id or not user.discord_id:
+        return None
+    role_id_str = str(role_id)
+    if not user.has_discord_role(role_id_str):
+        return True
+    success = remove_discord_role(user.discord_id, role_id_str)
+    if success:
+        roles = user.discord_roles or {}
+        roles.pop(role_id_str, None)
+        user.discord_roles = roles
+        user.save(update_fields=["discord_roles"])
+        logfire.info("Auto-unassigned Discord role", user_id=user.id, role_id=role_id_str, admin_user_id=admin_user_id)
+    else:
+        logfire.error(
+            "Failed to auto-unassign Discord role", user_id=user.id, role_id=role_id_str, admin_user_id=admin_user_id
+        )
+    return success
+
+
+def _build_role_badges(user, event):
+    """Build role badge dicts for a single user in the context of an event.
+
+    Args:
+        user: The User instance (must have up-to-date discord_roles).
+        event: The Event instance.
+
+    Returns:
+        List of dicts with 'name' and 'has_role' keys.
+
+    """
+    badges = []
+    if event.event_role:
+        badges.append({"name": "Event", "has_role": user.has_discord_role(event.event_role)})
+
+    user_squads = list(
+        Squad.objects.filter(
+            pk__in=SquadMember.objects.filter(squad__event=event, user=user).values_list("squad_id", flat=True),
+        ).select_related("captain", "vice_captain")
+    )
+    for sq in user_squads:
+        if sq.team_discord_role:
+            badges.append({"name": sq.name, "has_role": user.has_discord_role(sq.team_discord_role)})
+        if sq.discord_captain_role and (sq.captain_id == user.pk or sq.vice_captain_id == user.pk):
+            badges.append({"name": f"{sq.name} Cpt", "has_role": user.has_discord_role(sq.discord_captain_role)})
+    return badges
+
+
 def _enrich_squad_members(event):
     """Build enriched member data grouped by squad for an event.
 
@@ -75,8 +176,7 @@ def _enrich_squad_members(event):
 
     """
     all_sms = list(
-        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER)
-        .select_related("user", "squad")
+        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER).select_related("user", "squad")
     )
     if not all_sms:
         return {}
@@ -97,6 +197,9 @@ def _enrich_squad_members(event):
 
         squad_role_id = sm.squad.team_discord_role
         has_discord_role = user.has_discord_role(squad_role_id) if squad_role_id else None
+        captain_role_id = sm.squad.discord_captain_role
+        is_captain_or_vc = sm.squad.captain_id == user.pk or sm.squad.vice_captain_id == user.pk
+        has_captain_role = user.has_discord_role(captain_role_id) if captain_role_id and is_captain_or_vc else None
 
         entry = {
             "user": user,
@@ -122,6 +225,7 @@ def _enrich_squad_members(event):
             "zr_max90_category": getattr(zr, "race_max90_category", "") or "" if zr else "",
             "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
             "has_discord_role": has_discord_role,
+            "has_captain_role": has_captain_role,
         }
         by_squad.setdefault(sm.squad_id, []).append(entry)
 
@@ -150,6 +254,15 @@ def _enrich_signups(signups, event=None):
 
     event_role_id = str(event.event_role) if event and event.event_role else ""
 
+    # Build captain/VC lookup: user_id -> set of squad PKs where they are captain/VC
+    captain_squads: dict[int, set] = {}
+    if event:
+        for sq in event.squads.select_related("captain", "vice_captain").all():
+            if sq.captain_id:
+                captain_squads.setdefault(sq.captain_id, set()).add(sq.pk)
+            if sq.vice_captain_id:
+                captain_squads.setdefault(sq.vice_captain_id, set()).add(sq.pk)
+
     enriched = []
     for signup in signups:
         user = signup.user
@@ -160,6 +273,21 @@ def _enrich_signups(signups, event=None):
         zp_ftp = zp.ftp if zp else None
         zp_weight = zp.weight if zp else None
         wkg = round(Decimal(zp_ftp) / zp_weight, 2) if zp_ftp and zp_weight and zp_weight > 0 else None
+
+        # Build role badges
+        role_badges = []
+        if event_role_id:
+            role_badges.append({"name": "Event", "has_role": user.has_discord_role(event_role_id)})
+        user_squads = squads_by_user.get(user.pk, [])
+        user_captain_squad_pks = captain_squads.get(user.pk, set())
+        for sq in user_squads:
+            if sq.team_discord_role:
+                role_badges.append({"name": sq.name, "has_role": user.has_discord_role(sq.team_discord_role)})
+            if sq.discord_captain_role and sq.pk in user_captain_squad_pks:
+                role_badges.append({
+                    "name": f"{sq.name} Cpt",
+                    "has_role": user.has_discord_role(sq.discord_captain_role),
+                })
 
         enriched.append({
             "signup": signup,
@@ -185,7 +313,8 @@ def _enrich_signups(signups, event=None):
             "zr_max90_rating": getattr(zr, "race_max90_rating", None) if zr else None,
             "zr_max90_category": getattr(zr, "race_max90_category", "") or "" if zr else "",
             "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
-            "assigned_squads": squads_by_user.get(user.pk, []),
+            "assigned_squads": user_squads,
+            "role_badges": role_badges,
         })
     return enriched
 
@@ -204,13 +333,13 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
 
     """
     signups = (
-        EventSignup.objects.filter(user=request.user, status=EventSignup.Status.REGISTERED)
+        EventSignup.objects
+        .filter(user=request.user, status=EventSignup.Status.REGISTERED)
         .select_related("event")
         .order_by("-event__start_date")
     )
-    squad_memberships = (
-        SquadMember.objects.filter(user=request.user, status=SquadMember.Status.MEMBER)
-        .select_related("squad", "squad__event")
+    squad_memberships = SquadMember.objects.filter(user=request.user, status=SquadMember.Status.MEMBER).select_related(
+        "squad", "squad__event"
     )
     squads_by_event: dict[int, list] = {}
     for sm in squad_memberships:
@@ -238,7 +367,8 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
     members_by_squad: dict[int, list] = {}
     if all_squad_ids:
         all_sms = list(
-            SquadMember.objects.filter(squad_id__in=all_squad_ids, status=SquadMember.Status.MEMBER)
+            SquadMember.objects
+            .filter(squad_id__in=all_squad_ids, status=SquadMember.Status.MEMBER)
             .select_related("user")
             .order_by("user__first_name", "user__last_name")
         )
@@ -544,9 +674,7 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
     else:
         form = EventForm(instance=event)
 
-    enriched_signups = _enrich_signups(
-        event.signups.select_related("user").all(), event=event
-    )
+    enriched_signups = _enrich_signups(event.signups.select_related("user").all(), event=event)
 
     # Build read-only role display names
     from apps.team.models import DiscordRole
@@ -635,7 +763,7 @@ def event_role_setup_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     try:
         allowed_prefixes = json.loads(config.EVENT_ROLE_PREFIXES)
-    except (json.JSONDecodeError, ValueError, TypeError):
+    except json.JSONDecodeError, ValueError, TypeError:
         allowed_prefixes = ["$", ">", "¡", "~", "^"]
 
     return render(
@@ -694,12 +822,14 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
     from apps.team.models import DiscordChannel, DiscordRole
 
-    channel_names = dict(
-        DiscordChannel.objects.filter(channel_id__in=channel_ids).values_list("channel_id", "name")
-    ) if channel_ids else {}
-    role_names = dict(
-        DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
-    ) if role_ids else {}
+    channel_names = (
+        dict(DiscordChannel.objects.filter(channel_id__in=channel_ids).values_list("channel_id", "name"))
+        if channel_ids
+        else {}
+    )
+    role_names = (
+        dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
+    )
 
     # Attach availability grids (published/closed) grouped by squad
     grids_by_squad: dict[int, list] = {}
@@ -1177,11 +1307,29 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     user_id=signup.user_id,
                     admin_user_id=request.user.id,
                 )
+                _unassign_discord_role(signup.user, remove_squad.team_discord_role, admin_user_id=request.user.id)
+                # If user was captain/VC, clear references and remove captain role
+                updated_fields = []
+                if remove_squad.captain_id == signup.user_id:
+                    remove_squad.captain = None
+                    updated_fields.append("captain")
+                if remove_squad.vice_captain_id == signup.user_id:
+                    remove_squad.vice_captain = None
+                    updated_fields.append("vice_captain")
+                if updated_fields:
+                    remove_squad.save(update_fields=updated_fields)
+                    _unassign_discord_role(
+                        signup.user, remove_squad.discord_captain_role, admin_user_id=request.user.id
+                    )
                 if not is_htmx:
                     messages.success(request, f"{signup.user} removed from {remove_squad.name}.")
             elif not is_htmx:
                 messages.info(request, f"{signup.user} was not in {remove_squad.name}.")
         else:
+            # Collect squads before deleting so we can remove roles
+            user_squad_members = list(
+                SquadMember.objects.filter(squad__event=event, user=signup.user).select_related("squad")
+            )
             deleted, _ = SquadMember.objects.filter(squad__event=event, user=signup.user).delete()
             if deleted:
                 logfire.info(
@@ -1190,6 +1338,19 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     user_id=signup.user_id,
                     admin_user_id=request.user.id,
                 )
+                for sm in user_squad_members:
+                    sq = sm.squad
+                    _unassign_discord_role(signup.user, sq.team_discord_role, admin_user_id=request.user.id)
+                    updated_fields = []
+                    if sq.captain_id == signup.user_id:
+                        sq.captain = None
+                        updated_fields.append("captain")
+                    if sq.vice_captain_id == signup.user_id:
+                        sq.vice_captain = None
+                        updated_fields.append("vice_captain")
+                    if updated_fields:
+                        sq.save(update_fields=updated_fields)
+                        _unassign_discord_role(signup.user, sq.discord_captain_role, admin_user_id=request.user.id)
                 if not is_htmx:
                     messages.success(request, f"{signup.user} removed from all squads.")
             elif not is_htmx:
@@ -1201,6 +1362,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             user=signup.user,
             defaults={"status": SquadMember.Status.MEMBER},
         )
+        _assign_discord_role(signup.user, squad.team_discord_role, squad.name, admin_user_id=request.user.id)
         logfire.info(
             "Squad assignment created",
             event_id=event_pk,
@@ -1238,9 +1400,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         if "assign-riders" in hx_url:
             squad_members_data = _enrich_squad_members(event)
             # Map user_id -> signup pk for remove buttons in squad panels
-            signup_by_user = dict(
-                EventSignup.objects.filter(event=event).values_list("user_id", "pk")
-            )
+            signup_by_user = dict(EventSignup.objects.filter(event=event).values_list("user_id", "pk"))
             for members in squad_members_data.values():
                 for member in members:
                     member["signup_id"] = signup_by_user.get(member["user"].pk)
@@ -1251,9 +1411,11 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             role_ids = {str(sq.team_discord_role) for sq in all_squads if sq.team_discord_role}
             if event.event_role:
                 role_ids.add(str(event.event_role))
-            role_names = dict(
-                DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
-            ) if role_ids else {}
+            role_names = (
+                dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name"))
+                if role_ids
+                else {}
+            )
             event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
 
             is_event_admin = request.user.is_event_admin or request.user.is_superuser
@@ -1272,6 +1434,15 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     },
                     request=request,
                 )
+            # OOB update for role badges of the affected user
+            signup.user.refresh_from_db(fields=["discord_roles"])
+            role_badges = _build_role_badges(signup.user, event)
+            oob_html += render_to_string(
+                "events/_role_badges.html",
+                {"signup_id": signup.pk, "role_badges": role_badges, "oob": True},
+                request=request,
+            )
+
             return HttpResponse(cell_html + oob_html)
 
         return HttpResponse(cell_html)
@@ -1314,11 +1485,29 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
     if role == "captain":
         squad.captain = target_user
         squad.save(update_fields=["captain"])
-        logfire.info("Squad captain set", event_id=event_pk, squad_id=squad_pk, captain_id=target_user.id, admin_user_id=request.user.id)
+        logfire.info(
+            "Squad captain set",
+            event_id=event_pk,
+            squad_id=squad_pk,
+            captain_id=target_user.id,
+            admin_user_id=request.user.id,
+        )
+        _assign_discord_role(
+            target_user, squad.discord_captain_role, f"{squad.name} Captain", admin_user_id=request.user.id
+        )
     elif role == "vice_captain":
         squad.vice_captain = target_user
         squad.save(update_fields=["vice_captain"])
-        logfire.info("Squad vice captain set", event_id=event_pk, squad_id=squad_pk, vice_captain_id=target_user.id, admin_user_id=request.user.id)
+        logfire.info(
+            "Squad vice captain set",
+            event_id=event_pk,
+            squad_id=squad_pk,
+            vice_captain_id=target_user.id,
+            admin_user_id=request.user.id,
+        )
+        _assign_discord_role(
+            target_user, squad.discord_captain_role, f"{squad.name} Captain", admin_user_id=request.user.id
+        )
     elif role == "none":
         updated_fields = []
         if squad.captain_id == target_user.pk:
@@ -1329,7 +1518,14 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
             updated_fields.append("vice_captain")
         if updated_fields:
             squad.save(update_fields=updated_fields)
-            logfire.info("Squad captain role removed", event_id=event_pk, squad_id=squad_pk, user_id=target_user.id, admin_user_id=request.user.id)
+            logfire.info(
+                "Squad captain role removed",
+                event_id=event_pk,
+                squad_id=squad_pk,
+                user_id=target_user.id,
+                admin_user_id=request.user.id,
+            )
+            _unassign_discord_role(target_user, squad.discord_captain_role, admin_user_id=request.user.id)
 
     if request.headers.get("HX-Request"):
         squad_members_data = _enrich_squad_members(event)
@@ -1346,9 +1542,9 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
                 role_ids.add(str(sq.team_discord_role))
         if event.event_role:
             role_ids.add(str(event.event_role))
-        role_names = dict(
-            DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
-        ) if role_ids else {}
+        role_names = (
+            dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
+        )
         event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
 
         # Refresh squad from DB to get updated captain/vice_captain
@@ -1368,6 +1564,18 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
             },
             request=request,
         )
+
+        # OOB update for role badges of the affected user
+        target_user.refresh_from_db(fields=["discord_roles"])
+        role_badges = _build_role_badges(target_user, event)
+        signup_pk = signup_by_user.get(target_user.pk)
+        if signup_pk:
+            panel_html += render_to_string(
+                "events/_role_badges.html",
+                {"signup_id": signup_pk, "role_badges": role_badges, "oob": True},
+                request=request,
+            )
+
         return HttpResponse(panel_html)
 
     return redirect("events:event_detail", pk=event_pk)
@@ -1663,7 +1871,7 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
 
     try:
         data = json.loads(request.body)
-    except (json.JSONDecodeError, ValueError):
+    except json.JSONDecodeError, ValueError:
         return JsonResponse({"error": "Invalid JSON body."}, status=400)
 
     # --- Parse & validate fields ---
@@ -1672,7 +1880,7 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
     try:
         start_date = date.fromisoformat(str(data.get("start_date", "")))
         end_date = date.fromisoformat(str(data.get("end_date", "")))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return JsonResponse({"error": "Invalid or missing start_date / end_date."}, status=400)
 
     if start_date > end_date:
@@ -1689,7 +1897,7 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
 
     try:
         slot_duration = int(data.get("slot_duration", 0))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return JsonResponse({"error": "slot_duration must be an integer."}, status=400)
     if slot_duration not in (15, 30, 60):
         return JsonResponse({"error": "slot_duration must be 15, 30, or 60."}, status=400)
@@ -1709,7 +1917,7 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
     if raw_expires:
         try:
             expires = date.fromisoformat(str(raw_expires))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return JsonResponse({"error": "Invalid expires date."}, status=400)
 
     if grid_tz != "UTC":
@@ -1836,7 +2044,7 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
     if request.method == "POST":
         try:
             data = json.loads(request.body)
-        except (json.JSONDecodeError, ValueError):
+        except json.JSONDecodeError, ValueError:
             return JsonResponse({"error": "Invalid JSON body."}, status=400)
 
         available_cells = data.get("available_cells", [])
@@ -1851,7 +2059,7 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
                 return JsonResponse({"error": "Please answer: max number of races."}, status=400)
             try:
                 max_races_val = int(raw_max)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return JsonResponse({"error": "Max races must be a non-negative integer."}, status=400)
             if max_races_val < 0:
                 return JsonResponse({"error": "Max races must be a non-negative integer."}, status=400)
@@ -1863,7 +2071,7 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
                 return JsonResponse({"error": "Please answer: rest days between races."}, status=400)
             try:
                 rest_days_val = int(raw_rest)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return JsonResponse({"error": "Rest days must be a non-negative integer."}, status=400)
             if rest_days_val < 0:
                 return JsonResponse({"error": "Rest days must be a non-negative integer."}, status=400)
@@ -2078,6 +2286,64 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     )
 
 
+@login_required
+@team_member_required()
+@require_POST
+def sync_event_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Sync Discord roles from server for all users signed up to an event.
+
+    Fetches each signup user's actual Discord roles and updates the local cache.
+    Redirects back to the referring page.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+
+    Returns:
+        Redirect to the referring page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+
+    # Require event admin or assign_roles/head captain permission
+    if not (request.user.is_event_admin or request.user.is_superuser or _can_manage_event_roles(request.user, event)):
+        messages.error(request, "You don't have permission to sync roles.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    users = User.objects.filter(
+        pk__in=event.signups.filter(status=EventSignup.Status.REGISTERED).values_list("user_id", flat=True),
+        discord_id__isnull=False,
+    ).exclude(discord_id="")
+
+    synced = 0
+    failed = 0
+    for user in users:
+        if sync_user_discord_roles(user):
+            synced += 1
+        else:
+            failed += 1
+
+    logfire.info(
+        "Event roles synced from Discord",
+        event_id=event_pk,
+        synced=synced,
+        failed=failed,
+        admin_user_id=request.user.id,
+    )
+    if failed:
+        messages.warning(request, f"Synced roles for {synced} users, {failed} failed.")
+    else:
+        messages.success(request, f"Synced Discord roles for {synced} users.")
+
+    # Redirect back to referring page
+    referer = request.META.get("HTTP_REFERER", "")
+    if "assign-riders" in referer:
+        return redirect("events:squad_assign_page", event_pk=event_pk)
+    if "manage-roles" in referer:
+        return redirect("events:manage_roles", event_pk=event_pk)
+    return redirect("events:event_detail", pk=event_pk)
+
+
 @require_GET
 @login_required
 @team_member_required()
@@ -2122,9 +2388,9 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         role_ids.add(str(s.team_discord_role))
     for s in captain_role_squads:
         role_ids.add(str(s.discord_captain_role))
-    role_names = dict(
-        DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
-    ) if role_ids else {}
+    role_names = (
+        dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
+    )
 
     # Build role info list for display
     role_info = []
@@ -2373,7 +2639,8 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
 
     if request.method == "GET":
         members = (
-            squad.squad_members.filter(status=SquadMember.Status.MEMBER)
+            squad.squad_members
+            .filter(status=SquadMember.Status.MEMBER)
             .select_related("user")
             .order_by("user__first_name", "user__last_name")
         )
@@ -2530,9 +2797,9 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     role_ids = {str(s.team_discord_role) for s in squads if s.team_discord_role}
     if event.event_role:
         role_ids.add(str(event.event_role))
-    role_names = dict(
-        DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")
-    ) if role_ids else {}
+    role_names = (
+        dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
+    )
     event.event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
 
     for squad in squads:

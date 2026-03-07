@@ -9,7 +9,13 @@
     <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
   </div>
 
-  <h2 class="text-xl font-bold mb-4">Assign Riders &mdash; {{ event.title }}</h2>
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-xl font-bold">Assign Riders &mdash; {{ event.title }}</h2>
+    <form method="post" action="{% url 'events:sync_event_roles' event.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline btn-sm" title="Fetch Discord roles for all signups">Sync Roles</button>
+    </form>
+  </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     {# Left column: Signup list with assignment controls #}
@@ -64,6 +70,7 @@
                 <tr data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}" data-gender="{{ entry.gender }}" data-zp="{{ entry.zp_category_w|default:entry.zp_category }}" data-zr="{{ entry.zr_category }}">
                   <td>
                     {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                    {% include "events/_role_badges.html" with signup_id=entry.signup.pk role_badges=entry.role_badges oob=False %}
                   </td>
                   <td>
                     {% if entry.gender == "male" %}

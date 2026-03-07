@@ -1,0 +1,11 @@
+<div id="role-badges-{{ signup_id }}" {% if oob %}hx-swap-oob="true"{% endif %}>
+{% if role_badges %}
+<div class="flex flex-wrap gap-0.5 mt-0.5">
+  {% for rb in role_badges %}
+  <span class="badge badge-xs {% if rb.has_role %}badge-success{% else %}badge-ghost text-base-content/30{% endif %}">
+    {% if rb.has_role %}&#10003;{% else %}&#10007;{% endif %} {{ rb.name }}
+  </span>
+  {% endfor %}
+</div>
+{% endif %}
+</div>
