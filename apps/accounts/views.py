@@ -1273,7 +1273,8 @@ def _enrich_tasks_with_last_run(tasks: dict) -> None:
 
         last_run = (
             DBTaskResult.objects.filter(
-                Q(task_path=task_path) | Q(task_path=task_name)
+                Q(task_path=task_path) | Q(task_path=task_name),
+                finished_at__isnull=False,
             )
             .order_by("-finished_at")
             .values("status", "finished_at")
