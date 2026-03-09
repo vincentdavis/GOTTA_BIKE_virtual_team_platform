@@ -819,6 +819,7 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
     # Handle special "background_tasks" section
     if section_key == "background_tasks":
         tasks = _get_task_registry()
+        _enrich_tasks_with_last_run(tasks)
         return render(
             request,
             "accounts/config_section_page.html",
@@ -1248,6 +1249,45 @@ def _get_task_registry() -> dict:
     from apps.dbot_api.cron_api import TASK_REGISTRY
 
     return TASK_REGISTRY
+
+
+def _enrich_tasks_with_last_run(tasks: dict) -> None:
+    """Add last_run info to each task in the registry.
+
+    Queries DBTaskResult for the most recent run of each task and adds
+    ``last_status``, ``last_finished_at``, and ``time_since_last_run`` keys.
+
+    Args:
+        tasks: The task registry dict (mutated in place).
+
+    """
+    from django.apps import apps
+    from django.utils import timezone
+
+    DBTaskResult = apps.get_model("django_tasks_database", "DBTaskResult")
+
+    for task_info in tasks.values():
+        task_func = task_info["task"]
+        task_path = task_func.module_path
+
+        last_run = (
+            DBTaskResult.objects.filter(task_path=task_path)
+            .order_by("-finished_at")
+            .values("status", "finished_at")
+            .first()
+        )
+
+        if last_run and last_run["finished_at"]:
+            task_info["last_status"] = last_run["status"]
+            task_info["last_finished_at"] = last_run["finished_at"]
+            delta = timezone.now() - last_run["finished_at"]
+            total_minutes = int(delta.total_seconds() // 60)
+            hours, minutes = divmod(total_minutes, 60)
+            task_info["time_since_last_run"] = f"{hours}h {minutes}m ago"
+        else:
+            task_info["last_status"] = None
+            task_info["last_finished_at"] = None
+            task_info["time_since_last_run"] = "Never"
 
 
 @login_required

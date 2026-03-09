@@ -19,6 +19,10 @@ uv run manage.py migrate
 echo "Starting background task worker..."
 uv run manage.py db_worker &
 
+# Start the scheduler (replaces external cron service)
+echo "Starting scheduler..."
+uv run manage.py scheduler &
+
 # Start the server with Granian.
 echo "Starting server with Granian..."
 uv run granian gotta_bike_platform.wsgi:application --interface wsgi --host 0.0.0.0 --port "${PORT:-8000}" --workers 4

@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "App and discord bot for managing zwift virtual cycling teams."
 requires-python = ">=3.14"
 dependencies = [
+    "apscheduler>=3.11.2",
     "beautifulsoup4>=4.14.3",
     "boto3>=1.42.57",
     "dj-database-url>=3.1.2",

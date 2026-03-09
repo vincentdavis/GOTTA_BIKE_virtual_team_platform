@@ -26,6 +26,8 @@
             <tr>
                 <th>Task</th>
                 <th>Description</th>
+                <th>Last Run</th>
+                <th>Status</th>
                 <th class="w-32">Action</th>
             </tr>
         </thead>
@@ -34,6 +36,16 @@
             <tr>
                 <td class="font-mono text-sm">{{ task_name }}</td>
                 <td class="text-base-content/70">{{ task_info.description }}</td>
+                <td class="text-sm text-base-content/70 whitespace-nowrap">{{ task_info.time_since_last_run }}</td>
+                <td class="text-sm">
+                    {% if task_info.last_status == "SUCCESSFUL" %}
+                    <span class="badge badge-success badge-sm">Success</span>
+                    {% elif task_info.last_status == "FAILED" %}
+                    <span class="badge badge-error badge-sm">Failed</span>
+                    {% else %}
+                    <span class="badge badge-ghost badge-sm">—</span>
+                    {% endif %}
+                </td>
                 <td>
                     <form hx-post="{% url 'config_trigger_task' %}"
                           hx-target="#tasks-container"
@@ -68,7 +80,7 @@
             </tr>
             {% if dry_run_result and triggered_task == task_name %}
             <tr>
-                <td colspan="3" class="bg-info/10 p-4">
+                <td colspan="5" class="bg-info/10 p-4">
                     <h4 class="font-semibold text-sm mb-1">Dry Run Results</h4>
                     <p class="text-sm">Checked {{ dry_run_result.total_checked }} record{{ dry_run_result.total_checked|pluralize }} — {{ dry_run_result.users_warned|length }} expiring in {{ dry_run_result.days }} day{{ dry_run_result.days|pluralize }}.</p>
                     {% if dry_run_result.users_warned %}
@@ -85,7 +97,7 @@
             {% endif %}
             {% empty %}
             <tr>
-                <td colspan="3" class="text-center text-base-content/50">
+                <td colspan="5" class="text-center text-base-content/50">
                     No background tasks available.
                 </td>
             </tr>

@@ -695,6 +695,12 @@ CONSTANCE_CONFIG = {
     "STRAVA_CLIENT_SECRET": ("", "Strava API client secret", "password_field"),
     "STRAVA_ACCESS_TOKEN": ("", "Strava API access token", "password_field"),
     "STRAVA_REFRESH_TOKEN": ("", "Strava API refresh token", "password_field"),
+    # Scheduler intervals
+    "SCHEDULER_UPDATE_TEAM_RIDERS_HOURS": (
+        6,
+        "How often to fetch team riders from ZwiftPower (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -819,6 +825,9 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "STRAVA_CLIENT_SECRET",
         "STRAVA_ACCESS_TOKEN",
         "STRAVA_REFRESH_TOKEN",
+    ),
+    "Scheduler": (
+        "SCHEDULER_UPDATE_TEAM_RIDERS_HOURS",
     ),
 }
 
