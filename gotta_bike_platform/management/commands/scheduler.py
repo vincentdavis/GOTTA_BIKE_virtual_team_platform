@@ -37,12 +37,12 @@ def _get_scheduled_jobs() -> list[dict]:
             "hours": config.SCHEDULER_UPDATE_TEAM_RIDERS_HOURS,
             "description": "Fetch team riders from ZwiftPower",
         },
-        # {
-        #     "task": "apps.zwiftpower.tasks.update_team_results",
-        #     "id": "update_team_results",
-        #     "hours": EVERY_6H,
-        #     "description": "Fetch team results from ZwiftPower",
-        # },
+        {
+            "task": "apps.zwiftpower.tasks.update_team_results",
+            "id": "update_team_results",
+            "hours": config.SCHEDULER_UPDATE_TEAM_RESULTS_HOURS,
+            "description": "Fetch team results from ZwiftPower",
+        },
         # {
         #     "task": "apps.zwiftracing.tasks.sync_zr_riders",
         #     "id": "sync_zr_riders",
@@ -55,30 +55,30 @@ def _get_scheduled_jobs() -> list[dict]:
         #     "hours": EVERY_6H,
         #     "description": "Check guild member sync health",
         # },
-        # {
-        #     "task": "apps.accounts.tasks.refresh_all_race_ready",
-        #     "id": "refresh_all_race_ready",
-        #     "hours": EVERY_6H,
-        #     "description": "Refresh cached is_race_ready",
-        # },
+        {
+            "task": "apps.accounts.tasks.refresh_all_race_ready",
+            "id": "refresh_all_race_ready",
+            "hours": config.SCHEDULER_REFRESH_ALL_RACE_READY_HOURS,
+            "description": "Refresh cached is_race_ready",
+        },
         # {
         #     "task": "apps.accounts.tasks.sync_race_ready_roles",
         #     "id": "sync_race_ready_roles",
         #     "hours": EVERY_6H,
         #     "description": "Sync race ready Discord roles",
         # },
-        # {
-        #     "task": "apps.accounts.tasks.sync_youtube_channel_ids",
-        #     "id": "sync_youtube_channel_ids",
-        #     "hours": EVERY_6H,
-        #     "description": "Extract YouTube channel IDs",
-        # },
-        # {
-        #     "task": "apps.accounts.tasks.sync_youtube_videos",
-        #     "id": "sync_youtube_videos",
-        #     "hours": EVERY_6H,
-        #     "description": "Fetch YouTube videos",
-        # },
+        {
+            "task": "apps.accounts.tasks.sync_youtube_channel_ids",
+            "id": "sync_youtube_channel_ids",
+            "hours": config.SCHEDULER_SYNC_YOUTUBE_CHANNEL_IDS_HOURS,
+            "description": "Extract YouTube channel IDs",
+        },
+        {
+            "task": "apps.accounts.tasks.sync_youtube_videos",
+            "id": "sync_youtube_videos",
+            "hours": config.SCHEDULER_SYNC_YOUTUBE_VIDEOS_HOURS,
+            "description": "Fetch YouTube videos",
+        },
         # {
         #     "task": "apps.club_strava.tasks.sync_strava_activities",
         #     "id": "sync_strava_activities",

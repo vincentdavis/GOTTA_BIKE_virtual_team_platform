@@ -701,6 +701,26 @@ CONSTANCE_CONFIG = {
         "How often to fetch team riders from ZwiftPower (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_UPDATE_TEAM_RESULTS_HOURS": (
+        6,
+        "How often to fetch team results from ZwiftPower (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
+    "SCHEDULER_REFRESH_ALL_RACE_READY_HOURS": (
+        6,
+        "How often to refresh cached is_race_ready status (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
+    "SCHEDULER_SYNC_YOUTUBE_CHANNEL_IDS_HOURS": (
+        6,
+        "How often to extract YouTube channel IDs (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
+    "SCHEDULER_SYNC_YOUTUBE_VIDEOS_HOURS": (
+        6,
+        "How often to fetch YouTube videos (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -828,6 +848,10 @@ CONSTANCE_CONFIG_FIELDSETS = {
     ),
     "Scheduler": (
         "SCHEDULER_UPDATE_TEAM_RIDERS_HOURS",
+        "SCHEDULER_UPDATE_TEAM_RESULTS_HOURS",
+        "SCHEDULER_REFRESH_ALL_RACE_READY_HOURS",
+        "SCHEDULER_SYNC_YOUTUBE_CHANNEL_IDS_HOURS",
+        "SCHEDULER_SYNC_YOUTUBE_VIDEOS_HOURS",
     ),
 }
 
