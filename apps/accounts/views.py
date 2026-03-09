@@ -1262,16 +1262,19 @@ def _enrich_tasks_with_last_run(tasks: dict) -> None:
 
     """
     from django.apps import apps
+    from django.db.models import Q
     from django.utils import timezone
 
     DBTaskResult = apps.get_model("django_tasks_database", "DBTaskResult")
 
-    for task_info in tasks.values():
+    for task_name, task_info in tasks.items():
         task_func = task_info["task"]
         task_path = task_func.module_path
 
         last_run = (
-            DBTaskResult.objects.filter(task_path=task_path)
+            DBTaskResult.objects.filter(
+                Q(task_path=task_path) | Q(task_path=task_name)
+            )
             .order_by("-finished_at")
             .values("status", "finished_at")
             .first()
