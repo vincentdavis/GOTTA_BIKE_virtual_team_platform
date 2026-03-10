@@ -721,6 +721,21 @@ CONSTANCE_CONFIG = {
         "How often to fetch YouTube videos (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_WARN_EXPIRING_VERIFICATIONS_HOURS": (
+        24,
+        "How often to check for expiring verifications and send DMs (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
+    "SCHEDULER_SYNC_DISCORD_ROLES_HOURS": (
+        6,
+        "How often to sync Discord roles (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
+    "SCHEDULER_SYNC_DISCORD_CHANNELS_HOURS": (
+        6,
+        "How often to sync Discord channels (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -852,6 +867,9 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_REFRESH_ALL_RACE_READY_HOURS",
         "SCHEDULER_SYNC_YOUTUBE_CHANNEL_IDS_HOURS",
         "SCHEDULER_SYNC_YOUTUBE_VIDEOS_HOURS",
+        "SCHEDULER_WARN_EXPIRING_VERIFICATIONS_HOURS",
+        "SCHEDULER_SYNC_DISCORD_ROLES_HOURS",
+        "SCHEDULER_SYNC_DISCORD_CHANNELS_HOURS",
     ),
 }
 

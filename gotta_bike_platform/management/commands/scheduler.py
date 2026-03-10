@@ -91,27 +91,35 @@ def _get_scheduled_jobs() -> list[dict]:
         #     "hours": EVERY_6H,
         #     "description": "Sync ZR category Discord roles",
         # },
-        # {
-        #     "task": "apps.team.tasks.sync_discord_channels",
-        #     "id": "sync_discord_channels",
-        #     "hours": EVERY_6H,
-        #     "description": "Sync Discord channels",
-        # },
-        # {
-        #     "task": "apps.team.tasks.sync_discord_roles",
-        #     "id": "sync_discord_roles",
-        #     "hours": EVERY_6H,
-        #     "description": "Sync Discord roles",
-        # },
+        {
+            "task": "apps.team.tasks.sync_discord_channels",
+            "id": "sync_discord_channels",
+            "hours": config.SCHEDULER_SYNC_DISCORD_CHANNELS_HOURS,
+            "description": "Sync Discord channels",
+        },
+        {
+            "task": "apps.team.tasks.sync_discord_roles",
+            "id": "sync_discord_roles",
+            "hours": config.SCHEDULER_SYNC_DISCORD_ROLES_HOURS,
+            "description": "Sync Discord roles",
+        },
+        {
+            "task": "apps.team.tasks.warn_expiring_verifications",
+            "id": "warn_expiring_verifications",
+            "hours": config.SCHEDULER_WARN_EXPIRING_VERIFICATIONS_HOURS,
+            "description": "Send DMs for expiring verifications",
+            "kwargs": {"days": 15, "dry_run": False},
+        },
     ]
 
 
-def _enqueue_task(import_path: str, job_id: str) -> None:
+def _enqueue_task(import_path: str, job_id: str, kwargs: dict | None = None) -> None:
     """Import a task function and enqueue it via django-tasks.
 
     Args:
         import_path: Dotted path to the task function.
         job_id: Identifier for logging.
+        kwargs: Optional keyword arguments to pass to the task.
 
     """
     try:
@@ -120,7 +128,7 @@ def _enqueue_task(import_path: str, job_id: str) -> None:
 
         module = import_module(module_path)
         task_func = getattr(module, func_name)
-        task_func.enqueue()
+        task_func.enqueue(**(kwargs or {}))
         logfire.info("Scheduler enqueued task", job_id=job_id)
     except Exception as e:
         logfire.error(
@@ -145,7 +153,7 @@ class Command(BaseCommand):
             scheduler.add_job(
                 _enqueue_task,
                 trigger=IntervalTrigger(hours=job["hours"]),
-                args=[job["task"], job["id"]],
+                args=[job["task"], job["id"], job.get("kwargs")],
                 id=job["id"],
                 name=job["description"],
                 replace_existing=True,
