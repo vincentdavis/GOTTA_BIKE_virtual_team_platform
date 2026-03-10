@@ -49,24 +49,24 @@ def _get_scheduled_jobs() -> list[dict]:
             "hours": config.SCHEDULER_SYNC_ZR_RIDERS_HOURS,
             "description": "Sync riders from Zwift Racing API",
         },
-        # {
-        #     "task": "apps.accounts.tasks.guild_member_sync_status",
-        #     "id": "guild_member_sync_status",
-        #     "hours": EVERY_6H,
-        #     "description": "Check guild member sync health",
-        # },
+        {
+            "task": "apps.accounts.tasks.guild_member_sync_status",
+            "id": "guild_member_sync_status",
+            "hours": config.SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS,
+            "description": "Check guild member sync health",
+        },
         {
             "task": "apps.accounts.tasks.refresh_all_race_ready",
             "id": "refresh_all_race_ready",
             "hours": config.SCHEDULER_REFRESH_ALL_RACE_READY_HOURS,
             "description": "Refresh cached is_race_ready",
         },
-        # {
-        #     "task": "apps.accounts.tasks.sync_race_ready_roles",
-        #     "id": "sync_race_ready_roles",
-        #     "hours": EVERY_6H,
-        #     "description": "Sync race ready Discord roles",
-        # },
+        {
+            "task": "apps.accounts.tasks.sync_race_ready_roles",
+            "id": "sync_race_ready_roles",
+            "hours": config.SCHEDULER_SYNC_RACE_READY_ROLES_HOURS,
+            "description": "Sync race ready Discord roles",
+        },
         {
             "task": "apps.accounts.tasks.sync_youtube_channel_ids",
             "id": "sync_youtube_channel_ids",

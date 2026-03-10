@@ -746,6 +746,16 @@ CONSTANCE_CONFIG = {
         "How often to sync Strava club activities (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_SYNC_RACE_READY_ROLES_HOURS": (
+        6,
+        "How often to sync race ready Discord roles (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
+    "SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS": (
+        6,
+        "How often to check guild member sync health (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -882,6 +892,8 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_DISCORD_CHANNELS_HOURS",
         "SCHEDULER_SYNC_ZR_RIDERS_HOURS",
         "SCHEDULER_SYNC_STRAVA_ACTIVITIES_HOURS",
+        "SCHEDULER_SYNC_RACE_READY_ROLES_HOURS",
+        "SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS",
     ),
 }
 
