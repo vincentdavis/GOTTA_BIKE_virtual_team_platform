@@ -736,6 +736,16 @@ CONSTANCE_CONFIG = {
         "How often to sync Discord channels (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_SYNC_ZR_RIDERS_HOURS": (
+        6,
+        "How often to sync riders from Zwift Racing API (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
+    "SCHEDULER_SYNC_STRAVA_ACTIVITIES_HOURS": (
+        6,
+        "How often to sync Strava club activities (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -870,6 +880,8 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_WARN_EXPIRING_VERIFICATIONS_HOURS",
         "SCHEDULER_SYNC_DISCORD_ROLES_HOURS",
         "SCHEDULER_SYNC_DISCORD_CHANNELS_HOURS",
+        "SCHEDULER_SYNC_ZR_RIDERS_HOURS",
+        "SCHEDULER_SYNC_STRAVA_ACTIVITIES_HOURS",
     ),
 }
 

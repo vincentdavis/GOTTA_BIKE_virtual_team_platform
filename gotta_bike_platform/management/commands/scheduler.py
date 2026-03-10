@@ -43,12 +43,12 @@ def _get_scheduled_jobs() -> list[dict]:
             "hours": config.SCHEDULER_UPDATE_TEAM_RESULTS_HOURS,
             "description": "Fetch team results from ZwiftPower",
         },
-        # {
-        #     "task": "apps.zwiftracing.tasks.sync_zr_riders",
-        #     "id": "sync_zr_riders",
-        #     "hours": EVERY_6H,
-        #     "description": "Sync riders from Zwift Racing API",
-        # },
+        {
+            "task": "apps.zwiftracing.tasks.sync_zr_riders",
+            "id": "sync_zr_riders",
+            "hours": config.SCHEDULER_SYNC_ZR_RIDERS_HOURS,
+            "description": "Sync riders from Zwift Racing API",
+        },
         # {
         #     "task": "apps.accounts.tasks.guild_member_sync_status",
         #     "id": "guild_member_sync_status",
@@ -79,12 +79,12 @@ def _get_scheduled_jobs() -> list[dict]:
             "hours": config.SCHEDULER_SYNC_YOUTUBE_VIDEOS_HOURS,
             "description": "Fetch YouTube videos",
         },
-        # {
-        #     "task": "apps.club_strava.tasks.sync_strava_activities",
-        #     "id": "sync_strava_activities",
-        #     "hours": EVERY_6H,
-        #     "description": "Fetch Strava activities",
-        # },
+        {
+            "task": "apps.club_strava.tasks.sync_strava_activities",
+            "id": "sync_strava_activities",
+            "hours": config.SCHEDULER_SYNC_STRAVA_ACTIVITIES_HOURS,
+            "description": "Fetch Strava activities",
+        },
         # {
         #     "task": "apps.accounts.tasks.sync_zr_category_roles",
         #     "id": "sync_zr_category_roles",
