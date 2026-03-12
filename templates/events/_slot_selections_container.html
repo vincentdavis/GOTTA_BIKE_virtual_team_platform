@@ -1,0 +1,44 @@
+{% load accounts_tags %}
+
+{% for item in enriched_selections %}
+<div class="card bg-base-100 shadow-sm border border-base-300 mb-3" id="slot-selection-{{ item.selection.pk }}">
+  <div class="card-body p-4">
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <div>
+        <h4 class="font-bold text-sm">{{ item.selection.name }}</h4>
+        <p class="text-xs text-base-content/60">{{ item.local_day }} {{ item.local_date }} {{ item.local_time }} ({{ display_timezone }})</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="badge badge-sm badge-primary">{{ item.enriched_users|length }} rider{{ item.enriched_users|pluralize }}</span>
+        {% if is_event_admin %}
+        <button class="btn btn-ghost btn-xs"
+                onclick="openSlotModal('{{ item.selection.slot_date|date:'Y-m-d' }}', '{{ item.selection.slot_time }}')"
+                title="Edit">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+        </button>
+        <form hx-post="{% url 'events:slot_selection_delete' event.pk squad.pk grid.pk item.selection.pk %}"
+              hx-target="#slot-selections-container"
+              hx-swap="innerHTML"
+              hx-confirm="Delete '{{ item.selection.name }}'?">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost btn-xs text-error" title="Delete">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    {% if item.enriched_users %}
+    <div class="flex flex-wrap gap-1">
+      {% for entry in item.enriched_users %}
+      {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-xs text-base-content/50">No riders selected</p>
+    {% endif %}
+  </div>
+</div>
+{% empty %}
+<p class="text-sm text-base-content/50">No slot selections yet.{% if is_event_admin %} Click a cell in the heatmap to create one.{% endif %}</p>
+{% endfor %}

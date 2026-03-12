@@ -26,6 +26,7 @@ from apps.events.models import (
     ZR_CATEGORY_ORDER,
     AvailabilityGrid,
     AvailabilityResponse,
+    AvailabilitySlotSelection,
     Event,
     EventSignup,
     Squad,
@@ -581,6 +582,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "zr_total_all": zr_total_all,
             "zr_avg_rating_all": zr_avg_rating_all,
             "can_manage_roles": _can_manage_event_roles(request.user, event),
+            "can_add_members": _can_add_members(request.user, event),
         },
     )
 
@@ -2233,6 +2235,18 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         d = date.fromisoformat(d_str)
         display_dates.append({"date_str": d_str[5:], "day_name": day_names[d.weekday()], "full_date": d_str})
 
+    # Build local→UTC mapping for each cell (so JS can send UTC back)
+    cell_map = grid_data["cell_map"]  # local_key → {"date": utc_date, "time": utc_time}
+
+    # Load existing slot selections
+    slot_selections = list(grid.slot_selections.prefetch_related("selected_users"))
+    slot_selection_by_utc_key = {}
+    for sel in slot_selections:
+        utc_key = f"{sel.slot_date.isoformat()}|{sel.slot_time}"
+        slot_selection_by_utc_key[utc_key] = sel
+
+    is_event_admin = request.user.is_event_admin or request.user.is_superuser
+
     # Build grid_rows for server-side rendering
     blocked_set = grid_data["display_blocked"]
     grid_rows = []
@@ -2251,14 +2265,81 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
                 ratio = 0
                 opacity = "0"
                 dark_text = False
+            # Look up UTC coordinates for this local cell
+            utc_info = cell_map.get(key, {})
+            utc_date = utc_info.get("date", "")
+            utc_time = utc_info.get("time", "")
+            utc_key = f"{utc_date}|{utc_time}" if utc_date else ""
+            selection = slot_selection_by_utc_key.get(utc_key)
             cells.append({
                 "is_blocked": is_blocked,
                 "count": count,
                 "opacity": opacity,
                 "dark_text": dark_text,
                 "users": [user_by_id[uid] for uid in uids if uid in user_by_id],
+                "utc_date": utc_date,
+                "utc_time": utc_time,
+                "selection_name": selection.name if selection else "",
+                "selection_id": selection.pk if selection else None,
             })
         grid_rows.append({"time_slot": time_slot, "cells": cells})
+
+    # Build JSON data for JS modal (keyed by UTC coords)
+    utc_cell_users_json = dict(utc_cell_user_ids)
+    user_data_json = {}
+    for uid, entry in user_by_id.items():
+        user_data_json[uid] = {
+            "display_name": entry["display_name"],
+            "zr_category": entry["zr_category"],
+            "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
+            "is_race_ready": entry["is_race_ready"],
+        }
+    # Slot selections with selected user IDs for pre-filling the modal
+    selections_json = {}
+    for sel in slot_selections:
+        utc_key = f"{sel.slot_date.isoformat()}|{sel.slot_time}"
+        selections_json[utc_key] = {
+            "id": sel.pk,
+            "name": sel.name,
+            "selected_user_ids": list(sel.selected_users.values_list("pk", flat=True)),
+        }
+
+    # Build enriched slot selections for initial render
+    enriched_selections = []
+    for sel in slot_selections:
+        enriched_sel_users = []
+        for user in sel.selected_users.all():
+            zp = zp_by_zwid.get(user.zwid)
+            zr = zr_by_zwid.get(user.zwid)
+            zp_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
+            zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
+            enriched_sel_users.append({
+                "user": user,
+                "display_name": user.get_full_name() or user.discord_username,
+                "zwid": user.zwid,
+                "is_race_ready": user.is_race_ready,
+                "is_extra_verified": user.is_extra_verified,
+                "in_zwiftpower": zp is not None,
+                "zp_category": zp_cat,
+                "zp_category_w": zp_cat_w,
+                "in_zwiftracing": zr is not None,
+                "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+                "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+                "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+                "zr_age": getattr(zr, "age", "") or "" if zr else "",
+            })
+        from datetime import datetime as dt
+        from zoneinfo import ZoneInfo
+
+        utc_dt = dt.combine(sel.slot_date, dt.strptime(sel.slot_time, "%H:%M").time(), tzinfo=ZoneInfo("UTC"))
+        local_dt = utc_dt.astimezone(ZoneInfo(display_tz))
+        enriched_selections.append({
+            "selection": sel,
+            "enriched_users": enriched_sel_users,
+            "local_date": local_dt.strftime("%Y-%m-%d"),
+            "local_time": local_dt.strftime("%H:%M"),
+            "local_day": local_dt.strftime("%a"),
+        })
 
     logfire.debug(
         "Availability results viewed",
@@ -2282,6 +2363,11 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "enriched_responders": enriched_responders,
             "display_timezone": display_tz,
             "tz_is_default": tz_is_default,
+            "is_event_admin": is_event_admin,
+            "slot_selections_enriched": enriched_selections,
+            "utc_cell_users_json": json.dumps(utc_cell_users_json),
+            "user_data_json": json.dumps(user_data_json),
+            "selections_json": json.dumps(selections_json),
         },
     )
 
@@ -2820,3 +2906,356 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "is_event_admin": is_event_admin,
         },
     )
+
+
+@login_required
+@team_member_required()
+@require_POST
+def slot_selection_create_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str
+) -> HttpResponse:
+    """Create or update an availability slot selection for a specific cell.
+
+    Args:
+        request: The HTTP request with name, slot_date, slot_time, selected_users[].
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+
+    Returns:
+        HTMX partial with updated slot selections container.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+
+    if not (request.user.is_event_admin or request.user.is_superuser):
+        return HttpResponse("Permission denied", status=403)
+
+    name = request.POST.get("name", "").strip()
+    slot_date = request.POST.get("slot_date", "")
+    slot_time = request.POST.get("slot_time", "")
+    selected_user_ids = request.POST.getlist("selected_users")
+
+    if not name or not slot_date or not slot_time:
+        return HttpResponse("Name, date, and time are required.", status=400)
+
+    selection, created = AvailabilitySlotSelection.objects.update_or_create(
+        grid=grid,
+        slot_date=slot_date,
+        slot_time=slot_time,
+        defaults={"name": name, "created_by": request.user},
+    )
+    selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
+
+    logfire.info(
+        "Slot selection created" if created else "Slot selection updated",
+        grid_id=str(grid.id),
+        selection_id=selection.pk,
+        slot_date=slot_date,
+        slot_time=slot_time,
+        user_id=request.user.id,
+        selected_count=len(selected_user_ids),
+    )
+
+    return _render_slot_selections_partial(request, event, squad, grid)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def slot_selection_update_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int
+) -> HttpResponse:
+    """Update an existing slot selection's name and selected users.
+
+    Args:
+        request: The HTTP request with name, selected_users[].
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+        slot_pk: The slot selection primary key.
+
+    Returns:
+        HTMX partial with updated slot selections container.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
+
+    if not (request.user.is_event_admin or request.user.is_superuser):
+        return HttpResponse("Permission denied", status=403)
+
+    name = request.POST.get("name", "").strip()
+    selected_user_ids = request.POST.getlist("selected_users")
+
+    if not name:
+        return HttpResponse("Name is required.", status=400)
+
+    selection.name = name
+    selection.save(update_fields=["name", "updated_at"])
+    selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
+
+    logfire.info(
+        "Slot selection updated",
+        grid_id=str(grid.id),
+        selection_id=selection.pk,
+        user_id=request.user.id,
+        selected_count=len(selected_user_ids),
+    )
+
+    return _render_slot_selections_partial(request, event, squad, grid)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def slot_selection_delete_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int
+) -> HttpResponse:
+    """Delete a slot selection.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+        slot_pk: The slot selection primary key.
+
+    Returns:
+        HTMX partial with updated slot selections container.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
+
+    if not (request.user.is_event_admin or request.user.is_superuser):
+        return HttpResponse("Permission denied", status=403)
+
+    logfire.info(
+        "Slot selection deleted",
+        grid_id=str(grid.id),
+        selection_id=selection.pk,
+        slot_date=str(selection.slot_date),
+        slot_time=selection.slot_time,
+        user_id=request.user.id,
+    )
+    selection.delete()
+
+    return _render_slot_selections_partial(request, event, squad, grid)
+
+
+def _render_slot_selections_partial(
+    request: HttpRequest, event: Event, squad: Squad, grid: AvailabilityGrid
+) -> HttpResponse:
+    """Render the slot selections partial for HTMX responses.
+
+    Args:
+        request: The HTTP request.
+        event: The parent event.
+        squad: The squad.
+        grid: The availability grid.
+
+    Returns:
+        Rendered HTML partial of all slot selection cards.
+
+    """
+    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftracing.models import ZRRider
+
+    selections = list(grid.slot_selections.prefetch_related("selected_users"))
+    is_event_admin = request.user.is_event_admin or request.user.is_superuser
+
+    # Determine display timezone
+    user_tz = getattr(request.user, "timezone", "") or ""
+    display_tz = user_tz or grid.grid_timezone or "UTC"
+
+    # Enrich selected users with ZP/ZR data
+    all_selected_users = set()
+    for sel in selections:
+        all_selected_users.update(sel.selected_users.all())
+    zwids = [u.zwid for u in all_selected_users if u.zwid]
+    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
+    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+
+    enriched_selections = []
+    for sel in selections:
+        enriched_users = []
+        for user in sel.selected_users.all():
+            zp = zp_by_zwid.get(user.zwid)
+            zr = zr_by_zwid.get(user.zwid)
+            zp_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
+            zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
+            enriched_users.append({
+                "user": user,
+                "display_name": user.get_full_name() or user.discord_username,
+                "zwid": user.zwid,
+                "is_race_ready": user.is_race_ready,
+                "is_extra_verified": user.is_extra_verified,
+                "in_zwiftpower": zp is not None,
+                "zp_category": zp_cat,
+                "zp_category_w": zp_cat_w,
+                "in_zwiftracing": zr is not None,
+                "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+                "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+                "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+                "zr_age": getattr(zr, "age", "") or "" if zr else "",
+            })
+        # Convert slot time to display timezone
+        from datetime import datetime as dt
+        from zoneinfo import ZoneInfo
+
+        utc_dt = dt.combine(sel.slot_date, dt.strptime(sel.slot_time, "%H:%M").time(), tzinfo=ZoneInfo("UTC"))
+        local_dt = utc_dt.astimezone(ZoneInfo(display_tz))
+        enriched_selections.append({
+            "selection": sel,
+            "enriched_users": enriched_users,
+            "local_date": local_dt.strftime("%Y-%m-%d"),
+            "local_time": local_dt.strftime("%H:%M"),
+            "local_day": local_dt.strftime("%a"),
+        })
+
+    html = render_to_string(
+        "events/_slot_selections_container.html",
+        {
+            "enriched_selections": enriched_selections,
+            "event": event,
+            "squad": squad,
+            "grid": grid,
+            "is_event_admin": is_event_admin,
+            "display_timezone": display_tz,
+        },
+        request=request,
+    )
+    return HttpResponse(html)
+
+
+def _can_add_members(user: User, event: Event) -> bool:
+    """Check if user can add members to an event.
+
+    Allowed for head captains, event admins, app admins, and superusers.
+
+    Args:
+        user: The requesting user.
+        event: The event.
+
+    Returns:
+        True if the user can add members.
+
+    """
+    if user.is_superuser or user.has_permission(Permissions.APP_ADMIN) or user.is_event_admin:
+        return True
+    return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
+
+
+@require_GET
+@login_required
+@team_member_required()
+def add_members_search_view(request: HttpRequest, event_pk: int) -> JsonResponse:
+    """Search team members for the Add Members modal.
+
+    Returns JSON list of users matching the query who are not already signed up.
+
+    Args:
+        request: The HTTP request with 'q' query parameter.
+        event_pk: The event primary key.
+
+    Returns:
+        JSON response with matching users.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    if not _can_add_members(request.user, event):
+        return JsonResponse({"results": []}, status=403)
+
+    q = request.GET.get("q", "").strip()
+    if len(q) < 2:
+        return JsonResponse({"results": []})
+
+    existing_user_ids = set(EventSignup.objects.filter(event=event).values_list("user_id", flat=True))
+
+    users = User.objects.filter(
+        Q(first_name__icontains=q)
+        | Q(last_name__icontains=q)
+        | Q(discord_username__icontains=q)
+        | Q(discord_nickname__icontains=q)
+    ).exclude(pk__in=existing_user_ids).filter(discord_id__isnull=False).exclude(discord_id="")[:20]
+
+    results = []
+    for u in users:
+        display = u.get_full_name() or u.discord_username or u.discord_nickname or str(u.pk)
+        results.append({
+            "id": u.pk,
+            "display_name": display,
+            "discord_username": u.discord_username or "",
+        })
+    return JsonResponse({"results": results})
+
+
+@login_required
+@team_member_required()
+@require_POST
+def add_members_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Add selected members to event: create signup and assign event Discord role.
+
+    Only accessible to head captains and event admins.
+
+    Args:
+        request: The HTTP request with 'user_ids' POST data.
+        event_pk: The event primary key.
+
+    Returns:
+        Redirect to event detail page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    if not _can_add_members(request.user, event):
+        messages.error(request, "You don't have permission to add members.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    user_ids = request.POST.getlist("user_ids")
+    if not user_ids:
+        messages.warning(request, "No members selected.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    existing_user_ids = set(EventSignup.objects.filter(event=event).values_list("user_id", flat=True))
+    users_to_add = User.objects.filter(pk__in=user_ids).exclude(pk__in=existing_user_ids)
+
+    added_count = 0
+    role_count = 0
+    from apps.team.models import DiscordRole
+
+    event_role_name = ""
+    if event.event_role:
+        dr = DiscordRole.objects.filter(role_id=str(event.event_role)).first()
+        event_role_name = dr.name if dr else "Event Role"
+
+    for user in users_to_add:
+        EventSignup.objects.create(event=event, user=user)
+        added_count += 1
+
+        if event.event_role:
+            result = _assign_discord_role(
+                user, event.event_role, event_role_name, admin_user_id=request.user.id
+            )
+            if result is True:
+                role_count += 1
+
+    logfire.info(
+        "Members added to event by head captain",
+        event_id=event_pk,
+        event_title=event.title,
+        admin_user_id=request.user.id,
+        added_count=added_count,
+        role_assigned_count=role_count,
+    )
+    msg = f"Added {added_count} member{'s' if added_count != 1 else ''} to the event."
+    if event.event_role and role_count:
+        msg += f" Assigned event role to {role_count}."
+    messages.success(request, msg)
+    return redirect("events:event_detail", pk=event_pk)

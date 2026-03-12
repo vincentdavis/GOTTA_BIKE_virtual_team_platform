@@ -3,6 +3,8 @@
 from django.urls import path
 
 from apps.events.views import (
+    add_members_search_view,
+    add_members_view,
     availability_create_view,
     availability_respond_view,
     availability_results_view,
@@ -20,6 +22,9 @@ from apps.events.views import (
     event_toggle_role_view,
     manage_roles_view,
     my_events_view,
+    slot_selection_create_view,
+    slot_selection_delete_view,
+    slot_selection_update_view,
     squad_assign_page_view,
     squad_assign_view,
     squad_availability_view,
@@ -47,6 +52,8 @@ urlpatterns = [
     path("<int:pk>/role-setup/", event_role_setup_view, name="event_role_setup"),
     path("<int:pk>/delete/", event_delete_view, name="event_delete"),
     path("<int:pk>/signup/", event_signup_view, name="event_signup"),
+    path("<int:event_pk>/add-members/", add_members_view, name="add_members"),
+    path("<int:event_pk>/add-members/search/", add_members_search_view, name="add_members_search"),
     path("<int:pk>/signup/edit/", event_signup_edit_view, name="event_signup_edit"),
     path("<int:pk>/signup/delete/", event_signup_delete_view, name="event_signup_delete"),
     path("<int:event_pk>/signups/<int:signup_pk>/withdraw/", event_signup_withdraw_view, name="event_signup_withdraw"),
@@ -99,5 +106,20 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/results/",
         availability_results_view,
         name="availability_results",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/",
+        slot_selection_create_view,
+        name="slot_selection_create",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/<int:slot_pk>/",
+        slot_selection_update_view,
+        name="slot_selection_update",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/<int:slot_pk>/delete/",
+        slot_selection_delete_view,
+        name="slot_selection_delete",
     ),
 ]

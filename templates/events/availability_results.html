@@ -20,6 +20,9 @@
   .heatmap-cell .cell-name { font-size: 0.6rem; font-weight: 400; line-height: 1.2; }
   .heatmap-cell .cell-name .dropdown > a > .avatar { display: none; }
   .heatmap-cell .cell-name .dropdown-content { font-size: 0.75rem; white-space: normal; }
+  .heatmap-cell.cell-clickable { cursor: pointer; }
+  .heatmap-cell.cell-clickable:hover { outline: 2px solid oklch(0.6 0.15 250); outline-offset: -2px; }
+  .slot-badge { font-size: 0.55rem; font-weight: 700; background: oklch(0.55 0.2 250); color: white; border-radius: 0.2rem; padding: 0 0.2rem; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.1rem; }
 </style>
 {% endblock %}
 
@@ -65,8 +68,11 @@
         <tr>
           <th class="row-header">{{ row.time_slot }}</th>
           {% for cell in row.cells %}
-          <td class="heatmap-cell{% if cell.is_blocked %} cell-blocked{% endif %}"
+          <td class="heatmap-cell{% if cell.is_blocked %} cell-blocked{% endif %}{% if is_event_admin and not cell.is_blocked %} cell-clickable{% endif %}"
               {% if not cell.is_blocked %}
+              data-utc-date="{{ cell.utc_date }}"
+              data-utc-time="{{ cell.utc_time }}"
+              {% if is_event_admin %}onclick="openSlotModal('{{ cell.utc_date }}', '{{ cell.utc_time }}')"{% endif %}
               {% if cell.count > 0 %}
               style="background: oklch(0.75 0.15 145 / {{ cell.opacity }});{% if cell.dark_text %} color: oklch(0.2 0.05 145);{% endif %}"
               {% else %}
@@ -74,6 +80,7 @@
               {% endif %}
               {% endif %}>
             {% if not cell.is_blocked %}
+              {% if cell.selection_name %}<div class="slot-badge" title="{{ cell.selection_name }}">{{ cell.selection_name }}</div>{% endif %}
               {% for entry in cell.users %}
               <div class="cell-name">
                 {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=None zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
@@ -106,6 +113,20 @@
     <div class="flex items-center gap-1 ml-2">
       <span class="inline-block w-6 h-4 rounded" style="background: var(--color-neutral); opacity: 0.4;"></span>
       <span>Blocked</span>
+    </div>
+    {% if is_event_admin %}
+    <div class="flex items-center gap-1 ml-2">
+      <span class="slot-badge">Name</span>
+      <span>Named slot</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Slot Selections -->
+  <div class="mb-6">
+    <h3 class="text-sm font-semibold mb-2">Slot Selections</h3>
+    <div id="slot-selections-container">
+      {% include "events/_slot_selections_container.html" with enriched_selections=slot_selections_enriched %}
     </div>
   </div>
 
@@ -150,4 +171,115 @@
   </div>
   {% endif %}
 </div>
+
+{% if is_event_admin %}
+<!-- Slot Selection Modal -->
+<dialog id="slot-modal" class="modal">
+  <div class="modal-box max-w-md">
+    <h3 class="font-bold text-lg mb-3" id="slot-modal-title">Name This Slot</h3>
+    <form id="slot-modal-form" method="post"
+          hx-target="#slot-selections-container"
+          hx-swap="innerHTML">
+      {% csrf_token %}
+      <input type="hidden" name="slot_date" id="slot-modal-date">
+      <input type="hidden" name="slot_time" id="slot-modal-time">
+
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text">Name</span></label>
+        <input type="text" name="name" id="slot-modal-name" class="input input-bordered input-sm w-full" placeholder="e.g. Race 1" required>
+      </div>
+
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text">Select Riders</span></label>
+        <div class="mb-2 flex gap-2">
+          <button type="button" class="btn btn-xs btn-outline" onclick="toggleAllRiders(true)">Select All</button>
+          <button type="button" class="btn btn-xs btn-outline" onclick="toggleAllRiders(false)">Deselect All</button>
+        </div>
+        <div id="slot-modal-riders" class="max-h-60 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
+        </div>
+      </div>
+
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('slot-modal').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="slot-modal-submit">Save</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+
+<!-- JS data for modal -->
+<script>
+  const utcCellUsers = {{ utc_cell_users_json|safe }};
+  const userData = {{ user_data_json|safe }};
+  const existingSelections = {{ selections_json|safe }};
+  const createUrl = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}";
+  const updateUrlBase = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}".replace(/slots\/$/, "slots/");
+
+  function openSlotModal(utcDate, utcTime) {
+    const modal = document.getElementById('slot-modal');
+    const form = document.getElementById('slot-modal-form');
+    const nameInput = document.getElementById('slot-modal-name');
+    const dateInput = document.getElementById('slot-modal-date');
+    const timeInput = document.getElementById('slot-modal-time');
+    const ridersDiv = document.getElementById('slot-modal-riders');
+    const title = document.getElementById('slot-modal-title');
+
+    const utcKey = utcDate + '|' + utcTime;
+    const available = utcCellUsers[utcKey] || [];
+    const existing = existingSelections[utcKey];
+
+    dateInput.value = utcDate;
+    timeInput.value = utcTime;
+
+    if (existing) {
+      title.textContent = 'Edit Slot Selection';
+      nameInput.value = existing.name;
+      form.setAttribute('hx-post', updateUrlBase + existing.id + '/');
+    } else {
+      title.textContent = 'Name This Slot';
+      nameInput.value = '';
+      form.setAttribute('hx-post', createUrl);
+    }
+
+    // Build rider checkboxes
+    ridersDiv.innerHTML = '';
+    if (available.length === 0) {
+      ridersDiv.innerHTML = '<p class="text-xs text-base-content/50">No riders available at this slot</p>';
+    } else {
+      available.forEach(function(uid) {
+        const u = userData[uid];
+        if (!u) return;
+        const checked = existing && existing.selected_user_ids.includes(uid);
+        const label = document.createElement('label');
+        label.className = 'flex items-center gap-2 cursor-pointer text-sm py-0.5';
+        let extra = '';
+        if (u.zr_category) extra += ' <span class="badge badge-xs badge-outline">' + u.zr_category + '</span>';
+        if (u.zr_rating) extra += ' <span class="text-xs text-base-content/50">' + u.zr_rating + '</span>';
+        label.innerHTML = '<input type="checkbox" name="selected_users" value="' + uid + '" class="checkbox checkbox-xs checkbox-primary rider-cb"' + (checked ? ' checked' : '') + '> ' + u.display_name + extra;
+        ridersDiv.appendChild(label);
+      });
+    }
+
+    // Re-process HTMX attributes after changing hx-post
+    htmx.process(form);
+    modal.showModal();
+  }
+
+  function toggleAllRiders(selectAll) {
+    document.querySelectorAll('#slot-modal-riders .rider-cb').forEach(function(cb) {
+      cb.checked = selectAll;
+    });
+  }
+
+  // After HTMX swap, update existingSelections and cell badges by reloading
+  document.body.addEventListener('htmx:afterSwap', function(e) {
+    if (e.detail.target.id === 'slot-selections-container') {
+      document.getElementById('slot-modal').close();
+      // Refresh the full page to update cell badges and JS data
+      window.location.reload();
+    }
+  });
+</script>
+{% endif %}
 {% endblock %}

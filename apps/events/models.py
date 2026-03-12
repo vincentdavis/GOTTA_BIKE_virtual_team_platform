@@ -745,3 +745,65 @@ class AvailabilityResponse(models.Model):
 
         """
         return f"{self.user} - {self.grid}"
+
+
+class AvailabilitySlotSelection(models.Model):
+    """A named selection of riders for a specific date/time slot in an availability grid.
+
+    Event admins create these from the results heatmap to plan races.
+    Stores UTC coordinates consistent with AvailabilityResponse.available_cells.
+
+    Attributes:
+        grid: The availability grid this selection belongs to.
+        name: Display name for this slot (e.g., "Race 1").
+        slot_date: UTC date of the selected cell.
+        slot_time: UTC time of the selected cell as "HH:MM".
+        selected_users: Users selected for this slot.
+        created_by: User who created this selection.
+        created_at: When the selection was created.
+        updated_at: When the selection was last modified.
+
+    """
+
+    grid = models.ForeignKey(
+        AvailabilityGrid,
+        on_delete=models.CASCADE,
+        related_name="slot_selections",
+        help_text="The availability grid this selection belongs to",
+    )
+    name = models.CharField(max_length=200, help_text="Display name for this slot selection")
+    slot_date = models.DateField(help_text="UTC date of the selected cell")
+    slot_time = models.CharField(max_length=5, help_text='UTC time as "HH:MM"')
+    selected_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="availability_selections",
+        help_text="Users selected for this slot",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_slot_selections",
+        help_text="User who created this selection",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, help_text="When the selection was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the selection was last modified")
+
+    class Meta:
+        """Meta options for AvailabilitySlotSelection model."""
+
+        ordering = ["slot_date", "slot_time"]  # noqa: RUF012
+        unique_together = [("grid", "slot_date", "slot_time")]  # noqa: RUF012
+        verbose_name = "Availability Slot Selection"
+        verbose_name_plural = "Availability Slot Selections"
+
+    def __str__(self) -> str:
+        """Return name and slot description.
+
+        Returns:
+            String in format "Name (date time)".
+
+        """
+        return f"{self.name} ({self.slot_date} {self.slot_time})"
