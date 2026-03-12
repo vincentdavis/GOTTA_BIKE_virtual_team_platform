@@ -3148,7 +3148,7 @@ def _can_add_members(user: User, event: Event) -> bool:
         True if the user can add members.
 
     """
-    if user.is_superuser or user.has_permission(Permissions.APP_ADMIN) or user.is_event_admin:
+    if user.is_superuser or user.has_permission(Permissions.APP_ADMIN):
         return True
     return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
 
