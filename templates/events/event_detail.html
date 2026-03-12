@@ -365,6 +365,37 @@
       </div>
       {% endif %}
 
+      {% if can_add_members %}
+      <div class="mt-3">
+        <div class="tooltip" data-tip="Add team members to this event and assign the event Discord role">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('add_members_modal').showModal()">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+            Add Members
+          </button>
+        </div>
+      </div>
+
+      <dialog id="add_members_modal" class="modal">
+        <div class="modal-box max-w-lg">
+          <h3 class="text-lg font-bold mb-4">Add Members to Event</h3>
+          <p class="text-sm text-base-content/70 mb-4">Search for team members to add to this event{% if event.event_role %} and assign the event Discord role{% endif %}.</p>
+          <div class="form-control mb-4">
+            <input type="text" id="add-members-search" class="input input-bordered w-full" placeholder="Search by name (min 2 characters)..." autocomplete="off">
+          </div>
+          <div id="add-members-results" class="max-h-60 overflow-y-auto mb-4"></div>
+          <form method="post" action="{% url 'events:add_members' event.pk %}" id="add-members-form">
+            {% csrf_token %}
+            <div id="add-members-selected" class="flex flex-wrap gap-2 mb-4"></div>
+            <div class="modal-action">
+              <button type="button" class="btn btn-ghost" onclick="document.getElementById('add_members_modal').close()">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="add-members-submit" disabled>Add Selected</button>
+            </div>
+          </form>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+      </dialog>
+      {% endif %}
+
       {% if races %}
       <div class="divider mt-6"></div>
       <h3 class="text-lg font-semibold mb-4">Races</h3>
@@ -1117,4 +1148,89 @@ function switchCategorySource(source) {
   });
 })();
 </script>
+{% if can_add_members %}
+<script>
+(function() {
+  var searchInput = document.getElementById('add-members-search');
+  var resultsDiv = document.getElementById('add-members-results');
+  var selectedDiv = document.getElementById('add-members-selected');
+  var submitBtn = document.getElementById('add-members-submit');
+  if (!searchInput) return;
+
+  var selected = {};
+  var searchTimeout = null;
+  var searchUrl = '{% url "events:add_members_search" event.pk %}';
+
+  searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    var q = this.value.trim();
+    if (q.length < 2) { resultsDiv.innerHTML = ''; return; }
+    searchTimeout = setTimeout(function() {
+      fetch(searchUrl + '?q=' + encodeURIComponent(q))
+        .then(function(r) { return r.json(); })
+        .then(function(data) { renderResults(data.results || []); });
+    }, 300);
+  });
+
+  function renderResults(results) {
+    if (!results.length) {
+      resultsDiv.innerHTML = '<p class="text-sm text-base-content/50 p-2">No matching members found.</p>';
+      return;
+    }
+    var html = '<ul class="menu menu-sm bg-base-200 rounded-lg">';
+    results.forEach(function(u) {
+      var isSelected = u.id in selected;
+      html += '<li><button type="button" class="' + (isSelected ? 'opacity-50' : '') + '" data-user-id="' + u.id + '" data-name="' + u.display_name.replace(/"/g, '&quot;') + '"' + (isSelected ? ' disabled' : '') + '>' +
+        '<span>' + u.display_name + '</span>' +
+        (u.discord_username ? '<span class="text-xs text-base-content/50">' + u.discord_username + '</span>' : '') +
+        '</button></li>';
+    });
+    html += '</ul>';
+    resultsDiv.innerHTML = html;
+
+    resultsDiv.querySelectorAll('button[data-user-id]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var uid = this.getAttribute('data-user-id');
+        var name = this.getAttribute('data-name');
+        if (!(uid in selected)) {
+          selected[uid] = name;
+          updateSelected();
+          this.classList.add('opacity-50');
+          this.disabled = true;
+        }
+      });
+    });
+  }
+
+  function updateSelected() {
+    var html = '';
+    var keys = Object.keys(selected);
+    keys.forEach(function(uid) {
+      html += '<div class="badge badge-primary gap-1">' +
+        '<input type="hidden" name="user_ids" value="' + uid + '">' +
+        selected[uid] +
+        '<button type="button" class="btn btn-ghost btn-xs !p-0 !min-h-0" data-remove="' + uid + '">&times;</button>' +
+        '</div>';
+    });
+    selectedDiv.innerHTML = html;
+    submitBtn.disabled = keys.length === 0;
+
+    selectedDiv.querySelectorAll('button[data-remove]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        delete selected[this.getAttribute('data-remove')];
+        updateSelected();
+      });
+    });
+  }
+
+  // Clear state when modal opens
+  document.getElementById('add_members_modal').addEventListener('close', function() {
+    searchInput.value = '';
+    resultsDiv.innerHTML = '';
+    selected = {};
+    updateSelected();
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}
