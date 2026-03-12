@@ -18,6 +18,7 @@ def _get_field_value(
     zp: dict | None,
     zr: dict | None,
     race_ready_by_zwid: dict[int, bool] | None = None,
+    verification_by_zwid: dict[int, dict[str, bool]] | None = None,
 ) -> str:
     """Get value for a field key from the appropriate source.
 
@@ -27,6 +28,7 @@ def _get_field_value(
         zp: ZwiftPower data dict (or None).
         zr: Zwift Racing data dict (or None).
         race_ready_by_zwid: Mapping of zwid to race_ready status (for computed property).
+        verification_by_zwid: Mapping of zwid to dict of verification type booleans.
 
     Returns:
         String value for the field, or empty string if not found.
@@ -44,6 +46,8 @@ def _get_field_value(
         return ""
     if field_key == "discord_username":
         return str(user.get("discord_username", "") or "") if user else ""
+    if field_key == "discord_nickname":
+        return str(user.get("discord_nickname", "") or "") if user else ""
     if field_key == "discord_id":
         return str(user.get("discord_id", "") or "") if user else ""
 
@@ -68,6 +72,12 @@ def _get_field_value(
             zwid = user.get("zwid")
             if zwid and zwid in race_ready_by_zwid:
                 return "Yes" if race_ready_by_zwid[zwid] else "No"
+        return ""
+    if field_key in ("verified_weight", "verified_height", "verified_power"):
+        if user and verification_by_zwid:
+            zwid = user.get("zwid")
+            if zwid and zwid in verification_by_zwid:
+                return "Yes" if verification_by_zwid[zwid].get(field_key, False) else "No"
         return ""
 
     # ZwiftPower fields (zp_ prefix)
@@ -184,6 +194,7 @@ def sync_connection(connection: DataConnection) -> int:
         field_display_map: dict[str, str] = {
             "zwid": "Zwift ID",
             "discord_username": "Discord Username",
+            "discord_nickname": "Discord Nickname",
             "discord_id": "Discord ID",
         }
         field_display_map.update(dict(DataConnection.USER_FIELDS))
@@ -196,6 +207,7 @@ def sync_connection(connection: DataConnection) -> int:
         users = User.objects.filter(zwid__isnull=False).values(
             "zwid",
             "discord_username",
+            "discord_nickname",
             "discord_id",
             "first_name",
             "last_name",
@@ -207,10 +219,28 @@ def sync_connection(connection: DataConnection) -> int:
         )
 
         # Get race ready status (computed property requires full objects)
+        verification_fields = {"race_ready", "verified_weight", "verified_height", "verified_power"}
+        needs_verification = bool(verification_fields & set(all_fields))
         race_ready_by_zwid: dict[int, bool] = {}
-        if "race_ready" in all_fields:
+        verification_by_zwid: dict[int, dict[str, bool]] = {}
+        if needs_verification:
             user_objects = User.objects.filter(zwid__isnull=False).prefetch_related("race_ready_records")
-            race_ready_by_zwid = {u.zwid: u.is_race_ready for u in user_objects}
+            for u in user_objects:
+                if "race_ready" in all_fields:
+                    race_ready_by_zwid[u.zwid] = u.is_race_ready
+                if verification_fields - {"race_ready"} & set(all_fields):
+                    verified_records = u.race_ready_records.filter(
+                        status="verified",
+                    )
+                    valid_types: set[str] = set()
+                    for record in verified_records:
+                        if not record.is_expired:
+                            valid_types.add(record.verify_type)
+                    verification_by_zwid[u.zwid] = {
+                        "verified_weight": "weight_full" in valid_types or "weight_light" in valid_types,
+                        "verified_height": "height" in valid_types,
+                        "verified_power": "power" in valid_types,
+                    }
         zp_riders = ZPTeamRiders.objects.all().values(
             "zwid",
             "aid",
@@ -330,7 +360,10 @@ def sync_connection(connection: DataConnection) -> int:
             if not _passes_filters(filters, user, zp, zr):
                 continue
 
-            row = [_get_field_value(field, user, zp, zr, race_ready_by_zwid) for field in all_fields]
+            row = [
+                _get_field_value(field, user, zp, zr, race_ready_by_zwid, verification_by_zwid)
+                for field in all_fields
+            ]
             rows.append(row)
 
         # Write to Google Sheets
