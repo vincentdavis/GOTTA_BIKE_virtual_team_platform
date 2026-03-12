@@ -2,7 +2,11 @@
 <div class="card bg-base-200 shadow-md" id="squad-panel-{{ squad.pk }}" {% if oob %}hx-swap-oob="true"{% endif %}>
   <div class="card-body p-4">
     <div class="flex items-center justify-between mb-2">
-      <h3 class="card-title text-base">{{ squad.name }}</h3>
+      <div class="flex items-center gap-2">
+        <h3 class="card-title text-base">{{ squad.name }}</h3>
+        {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category %}<span class="badge badge-outline badge-sm">ZR: {{ squad.min_zwift_racing_category }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %}-{% endif %}{{ squad.max_zwift_racing_category }}</span>{% endif %}
+        {% if squad.min_zwift_category or squad.max_zwift_category %}<span class="badge badge-outline badge-sm">ZP: {{ squad.min_zwift_category }}{% if squad.min_zwift_category and squad.max_zwift_category %}-{% endif %}{{ squad.max_zwift_category }}</span>{% endif %}
+      </div>
       <span class="badge badge-neutral badge-sm">{{ members|length }} member{{ members|length|pluralize }}</span>
     </div>
     {% if event_role_name or squad.role_name %}

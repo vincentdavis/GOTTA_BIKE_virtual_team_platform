@@ -98,6 +98,7 @@
 
     {# Right column: Squad panels with member lists #}
     <div class="space-y-4">
+      <input type="text" id="squad-search" placeholder="Search squad name..." class="input input-bordered input-sm w-full" oninput="filterSquads()">
       {% for squad in squads %}
       {% include "events/_squad_panel.html" with squad=squad members=squad.enriched_members event_role_name=event.event_role_name event_pk=event.pk oob=False is_event_admin=is_event_admin %}
       {% empty %}
@@ -134,6 +135,14 @@ function applyFilters() {
     if (show) visible++;
   });
   document.getElementById('visible-count').textContent = visible;
+}
+function filterSquads() {
+  var q = document.getElementById('squad-search').value.toLowerCase();
+  var panels = document.querySelectorAll('[id^="squad-panel-"]');
+  panels.forEach(function(panel) {
+    var name = panel.querySelector('.card-title').textContent.toLowerCase();
+    panel.style.display = (!q || name.includes(q)) ? '' : 'none';
+  });
 }
 function clearFilters() {
   document.getElementById('signup-search').value = '';

@@ -2781,7 +2781,9 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     signups = event.signups.select_related("user").all()
     enriched_signups = _enrich_signups(signups, event=event)
     squads = list(
-        event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+        event.squads.select_related("captain", "vice_captain")
+        .annotate(member_count=Count("squad_members"))
+        .order_by("name")
     )
     squad_members_data = _enrich_squad_members(event) if squads else {}
 
