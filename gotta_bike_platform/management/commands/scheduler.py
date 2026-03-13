@@ -85,12 +85,12 @@ def _get_scheduled_jobs() -> list[dict]:
             "hours": config.SCHEDULER_SYNC_STRAVA_ACTIVITIES_HOURS,
             "description": "Fetch Strava activities",
         },
-        # {
-        #     "task": "apps.accounts.tasks.sync_zr_category_roles",
-        #     "id": "sync_zr_category_roles",
-        #     "hours": EVERY_6H,
-        #     "description": "Sync ZR category Discord roles",
-        # },
+        {
+            "task": "apps.accounts.tasks.sync_zr_category_roles",
+            "id": "sync_zr_category_roles",
+            "hours": config.SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS,
+            "description": "Sync ZR category Discord roles",
+        },
         {
             "task": "apps.team.tasks.sync_discord_channels",
             "id": "sync_discord_channels",
@@ -109,6 +109,12 @@ def _get_scheduled_jobs() -> list[dict]:
             "hours": config.SCHEDULER_WARN_EXPIRING_VERIFICATIONS_HOURS,
             "description": "Send DMs for expiring verifications",
             "kwargs": {"days": 15, "dry_run": False},
+        },
+        {
+            "task": "apps.accounts.tasks.sync_new_member_roles",
+            "id": "sync_new_member_roles",
+            "hours": config.SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS,
+            "description": "Sync New Member Discord role based on join date",
         },
     ]
 
