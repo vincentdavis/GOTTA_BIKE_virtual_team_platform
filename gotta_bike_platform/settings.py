@@ -511,6 +511,16 @@ CONSTANCE_CONFIG = {
         "Discord role ID to assign when user meets verification requirements (0 = disabled)",
         int,
     ),
+    "NEW_MEMBER_ROLE_ID": (
+        0,
+        "Discord role ID for new members (0 = disabled)",
+        int,
+    ),
+    "NEW_MEMBER_DAYS": (
+        30,
+        "Number of days a member is considered new",
+        int,
+    ),
     # New arrival messages (sent by Discord bot)
     # Use {member} for member mention/name, {server} for server name
     "NEW_ARRIVAL_MESSAGE_PUBLIC": (
@@ -792,6 +802,8 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "DBOT_AUTH_KEY",
         "TEAM_MEMBER_ROLE_ID",
         "RACE_READY_ROLE_ID",
+        "NEW_MEMBER_ROLE_ID",
+        "NEW_MEMBER_DAYS",
         "NEW_ARRIVAL_MESSAGE_PUBLIC",
         "NEW_ARRIVAL_MESSAGE_PRIVATE",
         "SEND_NEW_ARRIVAL_DM",
