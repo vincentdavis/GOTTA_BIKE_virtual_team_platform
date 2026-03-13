@@ -484,6 +484,107 @@ def sync_zr_category_roles() -> dict:
 
 
 @task
+def sync_new_member_roles() -> dict:
+    """Sync New Member Discord role for all guild members.
+
+    Adds the role to members who joined within NEW_MEMBER_DAYS,
+    and removes it from members who have been around longer.
+    Works on GuildMember records directly — no User account needed.
+
+    Returns:
+        dict with sync results summary.
+
+    """
+    with logfire.span("sync_new_member_roles"):
+        new_member_role_id = config.NEW_MEMBER_ROLE_ID
+        if not new_member_role_id or new_member_role_id == 0:
+            logfire.info("NEW_MEMBER_ROLE_ID not configured, skipping sync")
+            return {"status": "skipped", "reason": "role_not_configured"}
+
+        role_id_str = str(new_member_role_id)
+        new_member_days = config.NEW_MEMBER_DAYS
+        now = timezone.now()
+
+        members = GuildMember.objects.filter(date_left__isnull=True, is_bot=False)
+        total = members.count()
+
+        logfire.info("Starting new member role sync", total_members=total, new_member_days=new_member_days)
+
+        added = 0
+        removed = 0
+        unchanged = 0
+        errors = 0
+        skipped_no_join_date = 0
+
+        for member in members.iterator():
+            if not member.joined_at:
+                skipped_no_join_date += 1
+                continue
+
+            days = (now - member.joined_at).days
+            roles = member.roles or []
+            has_role = role_id_str in roles
+
+            try:
+                if days < new_member_days and not has_role:
+                    success = add_discord_role(member.discord_id, role_id_str)
+                    if success:
+                        added += 1
+                        roles.append(role_id_str)
+                        member.roles = roles
+                        member.save(update_fields=["roles"])
+                        # Also update User.discord_roles if linked
+                        if member.user:
+                            user_roles = member.user.discord_roles or {}
+                            user_roles[role_id_str] = "New Member"
+                            member.user.discord_roles = user_roles
+                            member.user.save(update_fields=["discord_roles"])
+                    else:
+                        errors += 1
+                    time.sleep(0.5)
+
+                elif days >= new_member_days and has_role:
+                    success = remove_discord_role(member.discord_id, role_id_str)
+                    if success:
+                        removed += 1
+                        roles.remove(role_id_str)
+                        member.roles = roles
+                        member.save(update_fields=["roles"])
+                        # Also update User.discord_roles if linked
+                        if member.user and role_id_str in (member.user.discord_roles or {}):
+                            del member.user.discord_roles[role_id_str]
+                            member.user.save(update_fields=["discord_roles"])
+                    else:
+                        errors += 1
+                    time.sleep(0.5)
+
+                else:
+                    unchanged += 1
+
+            except Exception as e:
+                errors += 1
+                logfire.error(
+                    "Error syncing new member role",
+                    discord_id=member.discord_id,
+                    error=str(e),
+                )
+
+        result = {
+            "status": "completed",
+            "total_members": total,
+            "added": added,
+            "removed": removed,
+            "unchanged": unchanged,
+            "errors": errors,
+            "skipped_no_join_date": skipped_no_join_date,
+        }
+
+        logfire.info("New member role sync completed", **result)
+
+        return result
+
+
+@task
 def sync_youtube_channel_ids() -> dict:
     """Extract YouTube channel IDs from user YouTube URLs.
 
