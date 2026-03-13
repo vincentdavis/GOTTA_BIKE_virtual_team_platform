@@ -270,6 +270,7 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # Account settings (allauth 65.x format)
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https" if not DEBUG else "http"
 ACCOUNT_EMAIL_VERIFICATION = "none"  # Discord emails are pre-verified
 ACCOUNT_USER_MODEL_USERNAME_FIELD = "username"
 ACCOUNT_LOGIN_METHODS = {"email"}  # Use email as identifier
