@@ -3,7 +3,7 @@
   <table class="table table-zebra table-sm">
     <thead>
     <tr>
-      {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&gender="|add:gender_filter|add:"&country="|add:country_filter|add:"&status="|add:status_filter|add:"&view=member" %}
+      {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&gender="|add:gender_filter|add:"&country="|add:country_filter|add:"&status="|add:status_filter|add:"&guild_duration="|add:guild_duration_filter|add:"&view=member" %}
       <th>
         <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
           Full Name
@@ -24,6 +24,14 @@
         <a href="{{ base_url }}&sort=guild_nickname&dir={% if sort_by == 'guild_nickname' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
           Guild Nickname
           {% if sort_by == "guild_nickname" %}
+            <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+          {% endif %}
+        </a>
+      </th>
+      <th>
+        <a href="{{ base_url }}&sort=guild_duration&dir={% if sort_by == 'guild_duration' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+          Guild Membr.
+          {% if sort_by == "guild_duration" %}
             <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
           {% endif %}
         </a>
@@ -115,6 +123,13 @@
           {% endif %}
         </td>
         <td>
+          {% if rider.guild_membership_duration %}
+            <span class="text-sm">{{ rider.guild_membership_duration }}</span>
+          {% else %}
+            <span class="text-base-content/30">-</span>
+          {% endif %}
+        </td>
+        <td>
           {% if rider.zp_name %}
             <a href="https://zwiftpower.com/profile.php?z={{ rider.zwid }}" target="_blank" rel="noopener" class="link link-hover inline-flex items-center gap-1">
               {{ rider.zp_name }}
@@ -201,7 +216,7 @@
       </tr>
     {% empty %}
       <tr>
-        <td colspan="13" class="text-center text-base-content/50">
+        <td colspan="14" class="text-center text-base-content/50">
           No members found.
         </td>
       </tr>

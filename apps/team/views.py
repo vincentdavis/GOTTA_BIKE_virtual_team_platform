@@ -1456,6 +1456,7 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     zp_category_filter = request.GET.get("zp_category", "")
     country_filter = request.GET.get("country", "")
     status_filter = request.GET.get("status", "active")  # Default to showing active members
+    guild_duration_filter = request.GET.get("guild_duration", "")
 
     # Get sort parameters (default: name ascending)
     sort_by = request.GET.get("sort", "name")
@@ -1508,6 +1509,27 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     elif status_filter in ("both", "zp_only", "zr_only", "left", "none"):
         riders = [r for r in riders if r.membership_status == status_filter]
 
+    # Apply guild duration filter
+    guild_duration_bounds = {
+        "lt30": (None, 30),
+        "lt60": (None, 60),
+        "lt90": (None, 90),
+        "lt120": (None, 120),
+        "lt1y": (None, 365),
+        "gt1y": (365, None),
+        "gt2y": (730, None),
+        "gt3y": (1095, None),
+        "gt4y": (1460, None),
+    }
+    if guild_duration_filter in guild_duration_bounds:
+        min_days, max_days = guild_duration_bounds[guild_duration_filter]
+        riders = [
+            r for r in riders
+            if r.guild_membership_days is not None
+            and (min_days is None or r.guild_membership_days >= min_days)
+            and (max_days is None or r.guild_membership_days < max_days)
+        ]
+
     # Apply sorting
     reverse = sort_dir == "desc"
     sort_keys = {
@@ -1530,6 +1552,7 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
         "trainer": lambda r: r.trainer.lower(),
         "zp_left": lambda r: r.zp_date_left or datetime(1970, 1, 1, tzinfo=UTC),
         "guild_nickname": lambda r: r.guild_nickname.lower(),
+        "guild_duration": lambda r: r.guild_membership_days if r.guild_membership_days is not None else -1,
     }
     if sort_by in sort_keys:
         riders = sorted(riders, key=sort_keys[sort_by], reverse=reverse)
@@ -1544,6 +1567,7 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
             "zp_category_filter": zp_category_filter,
             "country_filter": country_filter,
             "status_filter": status_filter,
+            "guild_duration_filter": guild_duration_filter,
             "zp_categories": zp_categories,
             "countries": countries_present,
             "sort_by": sort_by,

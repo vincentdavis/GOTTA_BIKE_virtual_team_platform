@@ -677,6 +677,7 @@ class MembershipReviewRider:
     # Guild data
     guild_nickname: str = ""
     in_guild: bool = False
+    guild_joined_at: datetime | None = None
 
     # ZP/ZR names
     zp_name: str = ""
@@ -742,6 +743,28 @@ class MembershipReviewRider:
         from django.utils import timezone
         delta = timezone.now() - self.zp_date_left
         return delta.days
+
+    @property
+    def guild_membership_duration(self) -> str:
+        """Return formatted guild membership duration as 'Xy Xd'."""
+        if not self.guild_joined_at:
+            return ""
+        from django.utils import timezone
+        delta = timezone.now() - self.guild_joined_at
+        total_days = delta.days
+        years = total_days // 365
+        days = total_days % 365
+        if years > 0:
+            return f"{years}y {days}d"
+        return f"{days}d"
+
+    @property
+    def guild_membership_days(self) -> int | None:
+        """Return total days of guild membership, or None if unknown."""
+        if not self.guild_joined_at:
+            return None
+        from django.utils import timezone
+        return (timezone.now() - self.guild_joined_at).days
 
     @property
     def discord_profile_url(self) -> str:
@@ -908,7 +931,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
     # Enrich with guild member data and add guild-only members
     guild_members = GuildMember.objects.filter(
         date_left__isnull=True, is_bot=False,
-    ).values("discord_id", "nickname", "username", "display_name", "user_id")
+    ).values("discord_id", "nickname", "username", "display_name", "user_id", "joined_at")
     guild_by_discord_id: dict[str, dict] = {gm["discord_id"]: gm for gm in guild_members}
 
     # Build set of discord_ids already represented
@@ -917,6 +940,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
         if rider.discord_id and rider.discord_id in guild_by_discord_id:
             gm = guild_by_discord_id[rider.discord_id]
             rider.guild_nickname = gm["nickname"] or ""
+            rider.guild_joined_at = gm["joined_at"]
             rider.in_guild = True
             seen_discord_ids.add(rider.discord_id)
 
@@ -942,6 +966,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
         rider = MembershipReviewRider(zwid=0, has_account=False, in_guild=True)
         rider.discord_id = discord_id
         rider.guild_nickname = gm["nickname"] or ""
+        rider.guild_joined_at = gm["joined_at"]
         rider.discord_nickname = gm["display_name"] or gm["username"] or ""
 
         # Check if there's a user without ZWID linked to this guild member

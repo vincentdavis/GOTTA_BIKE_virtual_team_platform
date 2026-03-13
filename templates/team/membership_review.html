@@ -81,6 +81,24 @@
               </select>
             </div>
 
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Guild Member For</span>
+              </label>
+              <select name="guild_duration" class="select select-bordered select-sm">
+                <option value="">All</option>
+                <option value="lt30" {% if guild_duration_filter == "lt30" %}selected{% endif %}>&lt; 30 days</option>
+                <option value="lt60" {% if guild_duration_filter == "lt60" %}selected{% endif %}>&lt; 60 days</option>
+                <option value="lt90" {% if guild_duration_filter == "lt90" %}selected{% endif %}>&lt; 90 days</option>
+                <option value="lt120" {% if guild_duration_filter == "lt120" %}selected{% endif %}>&lt; 120 days</option>
+                <option value="lt1y" {% if guild_duration_filter == "lt1y" %}selected{% endif %}>&lt; 1 year</option>
+                <option value="gt1y" {% if guild_duration_filter == "gt1y" %}selected{% endif %}>&gt; 1 year</option>
+                <option value="gt2y" {% if guild_duration_filter == "gt2y" %}selected{% endif %}>&gt; 2 years</option>
+                <option value="gt3y" {% if guild_duration_filter == "gt3y" %}selected{% endif %}>&gt; 3 years</option>
+                <option value="gt4y" {% if guild_duration_filter == "gt4y" %}selected{% endif %}>&gt; 4 years</option>
+              </select>
+            </div>
+
             <button type="submit" class="btn btn-primary btn-sm">Filter</button>
             <a href="{% url 'team:membership_review' %}" class="btn btn-ghost btn-sm">Reset</a>
           </div>
@@ -89,11 +107,11 @@
         {# View Toggle #}
         <div class="flex justify-between items-center mb-4">
           <div class="join">
-            <a href="?q={{ search_query }}&zp_category={{ zp_category_filter }}&gender={{ gender_filter }}&country={{ country_filter }}&status={{ status_filter }}&view=race&sort={{ sort_by }}&dir={{ sort_dir }}"
+            <a href="?q={{ search_query }}&zp_category={{ zp_category_filter }}&gender={{ gender_filter }}&country={{ country_filter }}&status={{ status_filter }}&guild_duration={{ guild_duration_filter }}&view=race&sort={{ sort_by }}&dir={{ sort_dir }}"
                class="join-item btn btn-sm {% if current_view == 'race' %}btn-primary{% else %}btn-ghost{% endif %}">
               Race Profile
             </a>
-            <a href="?q={{ search_query }}&zp_category={{ zp_category_filter }}&gender={{ gender_filter }}&country={{ country_filter }}&status={{ status_filter }}&view=member&sort={{ sort_by }}&dir={{ sort_dir }}"
+            <a href="?q={{ search_query }}&zp_category={{ zp_category_filter }}&gender={{ gender_filter }}&country={{ country_filter }}&status={{ status_filter }}&guild_duration={{ guild_duration_filter }}&view=member&sort={{ sort_by }}&dir={{ sort_dir }}"
                class="join-item btn btn-sm {% if current_view == 'member' %}btn-primary{% else %}btn-ghost{% endif %}">
               Member Profile
             </a>
