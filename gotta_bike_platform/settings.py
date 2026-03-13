@@ -406,7 +406,7 @@ CONSTANCE_CONFIG = {
     "NEW_ARRIVALS_CHANNEL_ID": (0, "Discord channel ID for new arrival welcome messages", int),
     "USER_CHANGE_LOG": (0, "Member status changes posted to this channel", int),
     "REGISTRATION_UPDATES_CHANNEL_ID": (0, "Discord channel for membership registration updates", int),
-    "EVENT_ROLE_PREFIXES": ('["$", ">", "¡", "~", "^"]', "Allowed event role prefixes (JSON list)", "json_list_field"),
+    "EVENT_ROLE_PREFIXES": ('["$", ">", "¡", "~", "^"]', "Allowed event role prefixes", "string_list_field"),
     "ZWIFTPOWER_TEAM_ID": (0, "ZwiftPower team ID for fetching team data", int),
     # Zwift credentials (for ZwiftPower API access)
     "ZWIFT_USERNAME": ("", "Zwift account username/email for API access", str),
