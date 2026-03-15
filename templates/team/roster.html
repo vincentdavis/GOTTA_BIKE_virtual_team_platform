@@ -282,6 +282,15 @@
                   </a>
                 </th>
                 <th>
+                  <a href="?{{ bq }}{% if bq %}&{% endif %}sort=member_since&dir={% if sort_by == 'member_since' and sort_dir == 'desc' %}asc{% else %}desc{% endif %}&per_page={{ per_page }}"
+                     class="flex items-center gap-1 hover:text-primary">
+                    Member Since
+                    {% if sort_by == "member_since" %}
+                      <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
+                    {% endif %}
+                  </a>
+                </th>
+                <th>
                   <a href="?{{ bq }}{% if bq %}&{% endif %}sort=rank&dir={% if sort_by == 'rank' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&per_page={{ per_page }}"
                      class="flex items-center gap-1 hover:text-primary">
                     Rank
@@ -334,6 +343,9 @@
                   {% else %}
                     <span class="text-base-content/30">-</span>
                   {% endif %}
+                </td>
+                <td>
+                  <span class="font-mono text-sm text-base-content/60">{{ rider.member_since }}</span>
                 </td>
                 <td>
                   {% if rider.zp_rank %}

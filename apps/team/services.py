@@ -136,6 +136,9 @@ class UnifiedRider:
     has_results: bool = False
     result_count: int = 0
 
+    # Guild data
+    guild_joined_at: datetime | None = None
+
     # Race Ready status
     is_race_ready: bool = False
     is_extra_verified: bool = False
@@ -224,6 +227,36 @@ class UnifiedRider:
             return round(Decimal(self.zp_ftp) / self.zp_weight, 2)
         return None
 
+    @property
+    def member_since(self) -> str:
+        """Return human-readable duration since guild join.
+
+        Returns:
+            String like '2y 3m' or '--' if no join date.
+
+        """
+        if not self.guild_joined_at:
+            return "--"
+        from django.utils import timezone
+
+        now = timezone.now()
+        delta = now - self.guild_joined_at
+        total_months = delta.days // 30
+        years = total_months // 12
+        months = total_months % 12
+        if years > 0:
+            return f"{years}y {months}m"
+        return f"{months}m"
+
+    @property
+    def member_since_sort_key(self) -> int:
+        """Return sortable value for member since (days since join, 0 if unknown)."""
+        if not self.guild_joined_at:
+            return 0
+        from django.utils import timezone
+
+        return (timezone.now() - self.guild_joined_at).days
+
 
 def get_unified_team_roster() -> list[UnifiedRider]:
     """Get unified team roster from all data sources.
@@ -246,6 +279,10 @@ def get_unified_team_roster() -> list[UnifiedRider]:
 
     # Get result counts per rider
     result_counts = ZPRiderResults.objects.values("zwid").annotate(count=Count("id"))
+
+    # Get guild member join dates (keyed by user_id)
+    guild_members = GuildMember.objects.filter(user__isnull=False).values("user_id", "joined_at")
+    guild_joined_by_user_id: dict[int, datetime | None] = {gm["user_id"]: gm["joined_at"] for gm in guild_members}
 
     # Build lookup dicts
     user_by_zwid: dict[int, dict] = {u["zwid"]: u for u in users}
@@ -282,6 +319,8 @@ def get_unified_team_roster() -> list[UnifiedRider]:
                 rider.discord_avatar_url = (
                     f"https://cdn.discordapp.com/avatars/{u['discord_id']}/{u['discord_avatar']}.png"
                 )
+
+            rider.guild_joined_at = guild_joined_by_user_id.get(u["id"])
 
         # ZwiftPower data
         if zwid in zp_by_zwid:
