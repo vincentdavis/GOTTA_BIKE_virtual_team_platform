@@ -193,6 +193,12 @@ class SiteSettings(models.Model):
         blank=True,
         help_text="Emoji/icon for Pursuiter phenotype (recommended: 64x64 PNG)",
     )
+    new_member_icon = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for New Member status (recommended: 64x64 PNG)",
+    )
     date_modified = models.DateTimeField(auto_now=True)
 
     class Meta:

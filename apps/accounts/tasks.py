@@ -503,6 +503,8 @@ def sync_new_member_roles() -> dict:
 
         role_id_str = str(new_member_role_id)
         new_member_days = config.NEW_MEMBER_DAYS
+        team_member_role_id = config.TEAM_MEMBER_ROLE_ID
+        team_member_role_str = str(team_member_role_id) if team_member_role_id else None
         now = timezone.now()
 
         members = GuildMember.objects.filter(date_left__isnull=True, is_bot=False)
@@ -524,9 +526,10 @@ def sync_new_member_roles() -> dict:
             days = (now - member.joined_at).days
             roles = member.roles or []
             has_role = role_id_str in roles
+            has_team_member_role = team_member_role_str and team_member_role_str in roles
 
             try:
-                if days < new_member_days and not has_role:
+                if days < new_member_days and has_team_member_role and not has_role:
                     success = add_discord_role(member.discord_id, role_id_str)
                     if success:
                         added += 1
