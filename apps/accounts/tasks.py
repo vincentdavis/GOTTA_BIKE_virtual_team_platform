@@ -546,7 +546,7 @@ def sync_new_member_roles() -> dict:
                         errors += 1
                     time.sleep(0.5)
 
-                elif days >= new_member_days and has_role:
+                elif (days >= new_member_days or not has_team_member_role) and has_role:
                     success = remove_discord_role(member.discord_id, role_id_str)
                     if success:
                         removed += 1
