@@ -15,6 +15,7 @@ from apps.accounts.tasks import (
     sync_zr_category_roles,
 )
 from apps.club_strava.tasks import sync_strava_activities
+from apps.data_connection.tasks import sync_all_data_connections
 from apps.team.tasks import sync_discord_channels, sync_discord_roles, warn_expiring_verifications
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.tasks import sync_zr_riders
@@ -117,6 +118,10 @@ TASK_REGISTRY: dict = {
             {"name": "days", "type": "number", "label": "Days until expiration", "default": 15, "required": True},
             {"name": "dry_run", "type": "checkbox", "label": "Dry run (don't send DMs)", "default": True},
         ],
+    },
+    "sync_data_connections": {
+        "task": sync_all_data_connections,
+        "description": "Sync all data connections with auto_sync enabled to Google Sheets",
     },
 }
 

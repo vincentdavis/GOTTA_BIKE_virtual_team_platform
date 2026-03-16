@@ -777,6 +777,11 @@ CONSTANCE_CONFIG = {
         "How often to sync ZR category Discord roles (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS": (
+        6,
+        "How often to sync data connections with auto_sync enabled (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -919,6 +924,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS",
         "SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS",
         "SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS",
+        "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
     ),
 }
 

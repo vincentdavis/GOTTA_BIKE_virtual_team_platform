@@ -104,6 +104,10 @@ class DataConnection(models.Model):
         default=False,
         help_text="True if the linked spreadsheet no longer exists or is inaccessible",
     )
+    auto_sync = models.BooleanField(
+        default=False,
+        help_text="Enable automatic scheduled sync",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

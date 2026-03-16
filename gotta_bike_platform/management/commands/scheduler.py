@@ -116,6 +116,12 @@ def _get_scheduled_jobs() -> list[dict]:
             "hours": config.SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS,
             "description": "Sync New Member Discord role based on join date",
         },
+        {
+            "task": "apps.data_connection.tasks.sync_all_data_connections",
+            "id": "sync_data_connections",
+            "hours": config.SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS,
+            "description": "Sync data connections with auto_sync enabled",
+        },
     ]
 
 

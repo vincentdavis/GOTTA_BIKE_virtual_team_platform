@@ -78,6 +78,7 @@
                     <th>Created By</th>
                     <th>Fields</th>
                     <th>Last Synced</th>
+                    <th>Auto Sync</th>
                     <th>Expires</th>
                     <th>Actions</th>
                 </tr>
@@ -108,6 +109,13 @@
                         {{ conn.date_last_synced|date:"M d, Y H:i" }}
                         {% else %}
                         <span class="text-base-content/50">Never</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if conn.auto_sync %}
+                        <span class="badge badge-success badge-sm">On</span>
+                        {% else %}
+                        <span class="badge badge-ghost badge-sm">Off</span>
                         {% endif %}
                     </td>
                     <td>

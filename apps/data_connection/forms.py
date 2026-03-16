@@ -86,7 +86,7 @@ class DataConnectionForm(forms.ModelForm):
         """Meta options for DataConnectionForm."""
 
         model = DataConnection
-        fields = ["title", "description", "spreadsheet_url", "data_sheet", "date_expires"]
+        fields = ["title", "description", "spreadsheet_url", "data_sheet", "date_expires", "auto_sync"]
         widgets = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full"}),
             "description": forms.Textarea(attrs={"class": "textarea textarea-bordered w-full", "rows": 3}),
@@ -95,6 +95,7 @@ class DataConnectionForm(forms.ModelForm):
             "date_expires": forms.DateInput(
                 attrs={"class": "input input-bordered w-full", "type": "date"}
             ),
+            "auto_sync": forms.CheckboxInput(attrs={"class": "checkbox"}),
         }
 
     def __init__(self, *args, **kwargs) -> None:
