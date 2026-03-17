@@ -637,6 +637,14 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
     """
     # Get allowed verification types to validate and filter form choices
     allowed_types = get_user_verification_types(request.user)
+    logfire.info(
+        "Race ready form submission attempt",
+        user_id=request.user.id,
+        discord_username=request.user.discord_username,
+        verify_type=request.POST.get("verify_type"),
+        has_media_file=bool(request.FILES.get("media_file")),
+        has_url=bool(request.POST.get("url")),
+    )
     form = RaceReadyRecordForm(
         request.POST,
         request.FILES,
@@ -648,6 +656,13 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
         record = form.save(commit=False)
         record.user = request.user
         record.save()
+        logfire.info(
+            "Race ready record created",
+            user_id=request.user.id,
+            discord_username=request.user.discord_username,
+            record_id=record.id,
+            verify_type=record.verify_type,
+        )
         messages.success(request, "Race ready record submitted successfully.")
 
         if request.headers.get("HX-Request"):
@@ -676,6 +691,13 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
             )
         return redirect("accounts:verification")
     else:
+        logfire.warning(
+            "Race ready form validation failed",
+            user_id=request.user.id,
+            discord_username=request.user.discord_username,
+            verify_type=request.POST.get("verify_type"),
+            form_errors=dict(form.errors),
+        )
         if request.headers.get("HX-Request"):
             return render(
                 request,

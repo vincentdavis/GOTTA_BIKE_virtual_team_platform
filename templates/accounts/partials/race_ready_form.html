@@ -60,7 +60,7 @@
 
     <!-- Instruction Links (shown based on verification type) -->
     {% if weight_instructions_url %}
-      <div id="weight-instructions" class="alert alert-info hidden">
+      <div id="weight-instructions" class="alert alert-info {% if race_ready_form.verify_type.value != 'weight_full' and race_ready_form.verify_type.value != 'weight_light' %}hidden{% endif %}">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -80,7 +80,7 @@
     {% endif %}
 
     {% if height_instructions_url %}
-      <div id="height-instructions" class="alert alert-info hidden">
+      <div id="height-instructions" class="alert alert-info {% if race_ready_form.verify_type.value != 'height' %}hidden{% endif %}">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -100,7 +100,7 @@
     {% endif %}
 
     <!-- Weight Field (shown for weight_full/weight_light) -->
-    <div id="weight-field" class="form-control w-full hidden">
+    <div id="weight-field" class="form-control w-full {% if race_ready_form.verify_type.value != 'weight_full' and race_ready_form.verify_type.value != 'weight_light' %}hidden{% endif %}">
       <label class="label" for="id_weight">
         <span class="label-text">{{ race_ready_form.weight.label }}</span>
       </label>
@@ -116,7 +116,7 @@
     </div>
 
     <!-- Height Field (shown for height) -->
-    <div id="height-field" class="form-control w-full hidden">
+    <div id="height-field" class="form-control w-full {% if race_ready_form.verify_type.value != 'height' %}hidden{% endif %}">
       <label class="label" for="id_height">
         <span class="label-text">{{ race_ready_form.height.label }}</span>
       </label>
@@ -204,11 +204,20 @@
       {% endif %}
     </div>
 
-    {% if race_ready_form.non_field_errors %}
+    {% if race_ready_form.errors %}
       <div class="alert alert-error">
-        {% for error in race_ready_form.non_field_errors %}
-          <span>{{ error }}</span>
-        {% endfor %}
+        <div>
+          {% for error in race_ready_form.non_field_errors %}
+            <p>{{ error }}</p>
+          {% endfor %}
+          {% for field in race_ready_form %}
+            {% if field.errors and field.name != "verify_type" and field.name != "media_type" and field.name != "record_date" and field.name != "media_file" and field.name != "url" and field.name != "notes" %}
+              {% for error in field.errors %}
+                <p>{{ field.label }}: {{ error }}</p>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </div>
       </div>
     {% endif %}
 
@@ -380,6 +389,26 @@
               });
               form.addEventListener('htmx:afterRequest', function () {
                   progressEl.classList.add('hidden');
+              });
+              form.addEventListener('htmx:responseError', function () {
+                  submitBtn.disabled = false;
+                  submitBtn.classList.remove('btn-disabled');
+                  submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Submit Record';
+                  progressEl.classList.add('hidden');
+                  const errDiv = document.createElement('div');
+                  errDiv.className = 'alert alert-error mb-4';
+                  errDiv.innerHTML = '<span>Something went wrong submitting your record. Please try again or refresh the page.</span>';
+                  form.parentNode.insertBefore(errDiv, form);
+              });
+              form.addEventListener('htmx:sendError', function () {
+                  submitBtn.disabled = false;
+                  submitBtn.classList.remove('btn-disabled');
+                  submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Submit Record';
+                  progressEl.classList.add('hidden');
+                  const errDiv = document.createElement('div');
+                  errDiv.className = 'alert alert-error mb-4';
+                  errDiv.innerHTML = '<span>Network error. Please check your connection and try again.</span>';
+                  form.parentNode.insertBefore(errDiv, form);
               });
           }
       })();
