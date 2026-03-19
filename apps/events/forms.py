@@ -385,6 +385,7 @@ class SquadForm(forms.ModelForm):
             "max_zwift_racing_category",
             "url",
             "invite_url",
+            "captain_notifications",
         ]
         widgets: ClassVar[dict] = {
             "name": forms.TextInput(
@@ -416,6 +417,9 @@ class SquadForm(forms.ModelForm):
             ),
             "invite_url": forms.URLInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},
+            ),
+            "captain_notifications": forms.CheckboxInput(
+                attrs={"class": "toggle toggle-primary"},
             ),
         }
 

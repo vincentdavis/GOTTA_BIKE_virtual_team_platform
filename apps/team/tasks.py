@@ -10,6 +10,13 @@ from django.tasks import task  # ty:ignore[unresolved-import]
 from apps.accounts.discord_service import send_discord_channel_message, send_discord_dm
 from apps.team.models import DiscordChannel, DiscordRole, MembershipApplication, RaceReadyRecord
 
+VERIFICATION_TYPE_LABELS = {
+    "weight_full": "Weight (Full)",
+    "weight_light": "Weight (Light)",
+    "height": "Height",
+    "power": "Power",
+}
+
 
 @task
 def notify_application_update(
@@ -545,5 +552,124 @@ def warn_expiring_verifications(days: int = 15, dry_run: bool = False) -> dict:
             "total_checked": total_checked,
             "warnings_sent": warnings_sent,
             "users_warned": users_warned,
+            "errors": errors,
+        }
+
+
+@task
+def notify_captains_verification(
+    user_id: int,
+    record_id: int,
+    notification_type: str,
+) -> dict:
+    """Notify squad captains/vice-captains when a member's verification record changes.
+
+    Sends Discord DMs to captains of squads (with captain_notifications=True) in
+    current/upcoming events where the user is a squad member.
+
+    Args:
+        user_id: ID of the user whose verification record changed.
+        record_id: ID of the RaceReadyRecord.
+        notification_type: One of "submitted", "verified", "rejected".
+
+    Returns:
+        dict with notification status and counts.
+
+    """
+    from apps.accounts.models import User
+    from apps.events.models import SquadMember
+
+    with logfire.span(
+        "notify_captains_verification",
+        user_id=user_id,
+        record_id=record_id,
+        notification_type=notification_type,
+    ):
+        try:
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            logfire.error("User not found for captain notification", user_id=user_id)
+            return {"status": "error", "reason": "user_not_found"}
+
+        try:
+            record = RaceReadyRecord.objects.get(pk=record_id)
+        except RaceReadyRecord.DoesNotExist:
+            logfire.error("RaceReadyRecord not found for captain notification", record_id=record_id)
+            return {"status": "error", "reason": "record_not_found"}
+
+        from django.utils import timezone as tz
+
+        today = tz.now().date()
+
+        # Find squads where this user is a member in active/upcoming events with notifications on
+        squad_memberships = (
+            SquadMember.objects.filter(
+                user=user,
+                status=SquadMember.Status.MEMBER,
+                squad__captain_notifications=True,
+                squad__event__visible=True,
+                squad__event__end_date__gte=today,
+            )
+            .select_related("squad__captain", "squad__vice_captain", "squad__event")
+        )
+
+        # Collect unique captains (deduplicate, skip None, skip the user themselves)
+        captains_to_notify: dict[int, User] = {}
+        for membership in squad_memberships:
+            squad = membership.squad
+            for leader in (squad.captain, squad.vice_captain):
+                if leader and leader.pk != user.pk and leader.discord_id and leader.pk not in captains_to_notify:
+                    captains_to_notify[leader.pk] = leader
+
+        if not captains_to_notify:
+            logfire.info(
+                "No captains to notify for verification change",
+                user_id=user_id,
+                record_id=record_id,
+                notification_type=notification_type,
+            )
+            return {"status": "no_captains", "notified": 0}
+
+        # Build message
+        user_name = _get_user_display_name(user)
+        verify_label = VERIFICATION_TYPE_LABELS.get(record.verify_type, record.verify_type)
+
+        if notification_type == "submitted":
+            message = f"{user_name} submitted a **{verify_label}** verification record (pending review)."
+        elif notification_type == "verified":
+            message = f"{user_name}'s **{verify_label}** verification has been approved."
+        elif notification_type == "rejected":
+            message = f"{user_name}'s **{verify_label}** verification has been rejected."
+        else:
+            logfire.warning("Unknown notification_type for captain verification", notification_type=notification_type)
+            return {"status": "error", "reason": "unknown_notification_type"}
+
+        # Send DMs
+        sent = 0
+        errors = []
+        for captain in captains_to_notify.values():
+            success = send_discord_dm(captain.discord_id, message)
+            if success:
+                sent += 1
+                logfire.info(
+                    "Captain verification DM sent",
+                    captain_id=captain.id,
+                    captain_discord_id=captain.discord_id,
+                    user_id=user_id,
+                    notification_type=notification_type,
+                )
+            else:
+                errors.append(f"Failed to DM {_get_user_display_name(captain)} ({captain.discord_id})")
+                logfire.warning(
+                    "Failed to send captain verification DM",
+                    captain_id=captain.id,
+                    captain_discord_id=captain.discord_id,
+                )
+            time.sleep(0.5)
+
+        return {
+            "status": "complete",
+            "notified": sent,
+            "total_captains": len(captains_to_notify),
             "errors": errors,
         }

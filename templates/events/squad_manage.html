@@ -58,6 +58,14 @@
               <span class="text-sm">{{ squad.vice_captain.get_full_name|default:squad.vice_captain.discord_username }}</span>
             </div>
             {% endif %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Notifications</span>
+              {% if squad.captain_notifications %}
+              <span class="badge badge-success badge-sm">On</span>
+              {% else %}
+              <span class="badge badge-neutral badge-sm">Off</span>
+              {% endif %}
+            </div>
           </div>
         </div>
         {% endif %}

@@ -392,6 +392,10 @@ class Squad(models.Model):
     )
     url = models.URLField(max_length=500, blank=True, help_text="External URL for squad details")
     invite_url = models.URLField(max_length=500, blank=True, help_text="Invite URL for joining the squad")
+    captain_notifications = models.BooleanField(
+        default=True,
+        help_text="Notify captain/vice-captain via Discord DM when squad members' verification records change",
+    )
     invite_token = models.UUIDField(
         null=True,
         blank=True,

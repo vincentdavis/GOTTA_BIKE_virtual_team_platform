@@ -665,6 +665,15 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
         )
         messages.success(request, "Race ready record submitted successfully.")
 
+        # Notify squad captains about new submission
+        from apps.team.tasks import notify_captains_verification
+
+        notify_captains_verification.enqueue(
+            user_id=request.user.id,
+            record_id=record.id,
+            notification_type="submitted",
+        )
+
         if request.headers.get("HX-Request"):
             # Return updated race ready section
             race_ready_records = request.user.race_ready_records.all()

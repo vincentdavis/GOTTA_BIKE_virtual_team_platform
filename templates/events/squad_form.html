@@ -61,6 +61,22 @@
           </div>
         </div>
 
+        <!-- Captain Notifications -->
+        <div class="form-control w-full">
+          <label class="label cursor-pointer justify-start gap-3">
+            {{ form.captain_notifications }}
+            <span class="label-text">Captain Notifications</span>
+          </label>
+          <label class="label pt-0">
+            <span class="label-text-alt">Notify captain/vice-captain when squad members' verification records change</span>
+          </label>
+          {% if form.captain_notifications.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.captain_notifications.errors.0 }}</span>
+          </label>
+          {% endif %}
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control w-full">
             <label class="label">

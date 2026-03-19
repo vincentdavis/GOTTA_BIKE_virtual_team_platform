@@ -32,7 +32,7 @@ from apps.team.services import (
     get_performance_review_data,
     get_unified_team_roster,
 )
-from apps.team.tasks import notify_application_update, notify_race_ready_change
+from apps.team.tasks import notify_application_update, notify_captains_verification, notify_race_ready_change
 from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -1033,6 +1033,13 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     verification_type=record.verify_type,
                 )
 
+            # Notify squad captains about verification
+            notify_captains_verification.enqueue(
+                user_id=record.user.id,
+                record_id=record.id,
+                notification_type="verified",
+            )
+
             messages.success(request, f"Record for {record.user.username} has been verified.")
         elif action == "reject":
             # Capture race ready status before rejection
@@ -1072,6 +1079,13 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     changed_by_user_id=request.user.id,
                     verification_type=record.verify_type,
                 )
+
+            # Notify squad captains about rejection
+            notify_captains_verification.enqueue(
+                user_id=record.user.id,
+                record_id=record.id,
+                notification_type="rejected",
+            )
 
             messages.warning(request, f"Record for {record.user.username} has been rejected.")
         elif action == "reset_pending" and can_change_status:
