@@ -44,7 +44,7 @@ class RaceReadyRecord(models.Model):
         status: Review status (pending, verified, rejected).
         reviewed_by: Team captain who reviewed the record.
         reviewed_date: When the record was reviewed.
-        rejection_reason: Explanation if rejected.
+        review_note: Optional reviewer note (for any status change).
         notes: Optional notes from the user about the measurement.
         date_created: When the record was submitted.
 
@@ -126,7 +126,7 @@ class RaceReadyRecord(models.Model):
         help_text="User who reviewed this record",
     )
     reviewed_date = models.DateTimeField(null=True, blank=True, help_text="When this record was reviewed")
-    rejection_reason = models.TextField(blank=True, help_text="Reason for rejection (if rejected)")
+    review_note = models.TextField(blank=True, help_text="Reviewer note (for any status change)")
     notes = models.TextField(blank=True, help_text="Notes about the measurement")
     record_date = models.DateField(
         null=True,

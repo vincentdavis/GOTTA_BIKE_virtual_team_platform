@@ -1005,6 +1005,8 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             record.status = RaceReadyRecord.Status.VERIFIED
             record.reviewed_by = request.user
             record.reviewed_date = timezone.now()
+            review_note = request.POST.get("review_note", "").strip()
+            record.review_note = review_note
             record.save()
             logfire.info(
                 "Verification record approved",
@@ -1014,6 +1016,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                 target_username=record.user.username,
                 reviewer_id=request.user.id,
                 reviewer_username=request.user.username,
+                review_note=review_note or None,
             )
             # Send Discord DM notification
             if record.user.discord_id:
@@ -1021,6 +1024,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     discord_id=record.user.discord_id,
                     is_verified=True,
                     verify_type=record.verify_type,
+                    review_note=review_note or None,
                 )
 
             # Recalculate and save cached race ready status
@@ -1048,8 +1052,8 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             record.status = RaceReadyRecord.Status.REJECTED
             record.reviewed_by = request.user
             record.reviewed_date = timezone.now()
-            rejection_reason = request.POST.get("rejection_reason", "").strip()
-            record.rejection_reason = rejection_reason
+            review_note = request.POST.get("review_note", "").strip()
+            record.review_note = review_note
             record.save()
             logfire.info(
                 "Verification record rejected",
@@ -1059,7 +1063,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                 target_username=record.user.username,
                 reviewer_id=request.user.id,
                 reviewer_username=request.user.username,
-                rejection_reason=rejection_reason or None,
+                review_note=review_note or None,
             )
             # Send Discord DM notification
             if record.user.discord_id:
@@ -1067,7 +1071,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     discord_id=record.user.discord_id,
                     is_verified=False,
                     verify_type=record.verify_type,
-                    rejection_reason=rejection_reason or None,
+                    review_note=review_note or None,
                 )
 
             # Recalculate and save cached race ready status
@@ -1095,7 +1099,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             record.status = RaceReadyRecord.Status.PENDING
             record.reviewed_by = None
             record.reviewed_date = None
-            record.rejection_reason = ""
+            record.review_note = ""
             record.save()
             logfire.info(
                 "Verification record reset to pending",
@@ -1139,6 +1143,11 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         except (json.JSONDecodeError, TypeError):
             pass
 
+    # Get other verification records for the same user (excluding current)
+    other_records = (
+        RaceReadyRecord.objects.filter(user=record.user).exclude(pk=pk).order_by("-record_date", "-date_created")
+    )
+
     return render(
         request,
         "team/verification_record_detail.html",
@@ -1151,6 +1160,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             "can_delete": can_delete,
             "checklist_items": checklist_items,
             "zp_rider": zp_rider,
+            "other_records": other_records,
         },
     )
 

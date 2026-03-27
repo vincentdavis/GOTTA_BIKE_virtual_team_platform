@@ -225,6 +225,12 @@
         <div class="text-sm text-base-content/70">
           {{ record.reviewed_date|date:"F d, Y H:i" }}
         </div>
+        {% if record.review_note %}
+        <div class="text-sm mt-2">
+          <span class="font-medium">Note: </span>
+          <span>{{ record.review_note }}</span>
+        </div>
+        {% endif %}
         {% if can_change_status %}
         <div class="mt-3 pt-3 border-t border-success/30 flex gap-2">
           <form method="post">
@@ -268,10 +274,10 @@
         <div class="text-sm text-base-content/70 mb-2">
           {{ record.reviewed_date|date:"F d, Y H:i" }}
         </div>
-        {% if record.rejection_reason %}
+        {% if record.review_note %}
         <div class="text-sm mt-2">
-          <span class="font-medium">Reason: </span>
-          <span>{{ record.rejection_reason }}</span>
+          <span class="font-medium">Note: </span>
+          <span>{{ record.review_note }}</span>
         </div>
         {% endif %}
         {% if can_change_status %}
@@ -299,7 +305,7 @@
           <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
           <span>This record is pending review. Review the media before verifying or rejecting.</span>
         </div>
-        <p class="text-sm text-base-content/70 mb-4">The team member will be sent a DM with the review status change. If rejecting you will be able to add a message with the reason.</p>
+        <p class="text-sm text-base-content/70 mb-4">The team member will be sent a DM with the review status change. You can add an optional note with your review.</p>
         <div class="flex gap-4">
           {% if record.user == user %}
           <div class="tooltip" data-tip="You cannot approve your own record">
@@ -311,19 +317,14 @@
             </button>
           </div>
           {% else %}
-          <form method="post">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="verify">
-            <input type="hidden" name="record_date" class="js-record-date-hidden">
-            <button type="submit" class="btn btn-success">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              Verify Record
-            </button>
-          </form>
+          <button type="button" class="btn btn-success" onclick="openReviewModal('verify')">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Verify Record
+          </button>
           {% endif %}
-          <button type="button" class="btn btn-error btn-outline" onclick="document.getElementById('reject-modal').showModal()">
+          <button type="button" class="btn btn-error btn-outline" onclick="openReviewModal('reject')">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -331,23 +332,23 @@
           </button>
         </div>
       </div>
-      <!-- Reject Modal -->
-      <dialog id="reject-modal" class="modal">
+      <!-- Review Note Modal -->
+      <dialog id="review-note-modal" class="modal">
         <div class="modal-box">
-          <h3 class="font-bold text-lg">Reject Verification Record</h3>
+          <h3 class="font-bold text-lg" id="review-modal-title">Review Verification Record</h3>
           <form method="post" class="mt-4">
             {% csrf_token %}
-            <input type="hidden" name="action" value="reject">
+            <input type="hidden" name="action" id="review-modal-action" value="">
             <input type="hidden" name="record_date" class="js-record-date-hidden">
             <div class="form-control">
               <label class="label">
-                <span class="label-text">Reason for rejection (optional)</span>
+                <span class="label-text">Review note to Member (optional)</span>
               </label>
-              <textarea name="rejection_reason" class="textarea textarea-bordered h-24" placeholder="Explain why this record is being rejected..."></textarea>
+              <textarea name="review_note" class="textarea textarea-bordered h-24" placeholder="Add a message for the Member..."></textarea>
             </div>
             <div class="modal-action">
-              <button type="button" class="btn" onclick="document.getElementById('reject-modal').close()">Cancel</button>
-              <button type="submit" class="btn btn-error">Reject</button>
+              <button type="button" class="btn" onclick="document.getElementById('review-note-modal').close()">Cancel</button>
+              <button type="submit" id="review-modal-submit" class="btn">Submit</button>
             </div>
           </form>
         </div>
@@ -355,6 +356,25 @@
           <button>close</button>
         </form>
       </dialog>
+      <script>
+        function openReviewModal(action) {
+          const modal = document.getElementById('review-note-modal');
+          const actionInput = document.getElementById('review-modal-action');
+          const title = document.getElementById('review-modal-title');
+          const submitBtn = document.getElementById('review-modal-submit');
+          actionInput.value = action;
+          if (action === 'verify') {
+            title.textContent = 'Verify Verification Record';
+            submitBtn.textContent = 'Verify';
+            submitBtn.className = 'btn btn-success';
+          } else {
+            title.textContent = 'Reject Verification Record';
+            submitBtn.textContent = 'Reject';
+            submitBtn.className = 'btn btn-error';
+          }
+          modal.showModal();
+        }
+      </script>
       {% else %}
       <div class="alert mb-6">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -385,6 +405,47 @@
         </form>
         {% endif %}
       </div>
+
+      <!-- Other Verification Records -->
+      {% if other_records %}
+      <div class="divider"></div>
+      <h3 class="text-lg font-semibold mb-3">Other Records for {{ record.user.first_name }} {{ record.user.last_name }}</h3>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Review Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for other in other_records %}
+            <tr>
+              <td>
+                <a href="{% url 'team:verification_record_detail' pk=other.pk %}" class="link link-primary">
+                  {{ other.record_date|date:"M d, Y"|default:"—" }}
+                </a>
+              </td>
+              <td>{{ other.get_verify_type_display }}</td>
+              <td>
+                {% if other.is_verified %}
+                <span class="badge badge-success badge-sm">Verified</span>
+                {% elif other.is_rejected %}
+                <span class="badge badge-error badge-sm">Rejected</span>
+                {% else %}
+                <span class="badge badge-warning badge-sm">Pending</span>
+                {% endif %}
+              </td>
+              <td class="max-w-xs truncate">{{ other.review_note|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
     </div>
   </div>
 </div>

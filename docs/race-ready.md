@@ -183,7 +183,7 @@ IDs:
 | `status`           | CharField            | `pending`, `verified`, `rejected`                      |
 | `reviewed_by`      | ForeignKey           | User who reviewed the record                           |
 | `reviewed_date`    | DateTimeField        | When the record was reviewed                           |
-| `rejection_reason` | TextField            | Explanation if rejected                                |
+| `review_note`      | TextField            | Optional reviewer note (for any status change)         |
 | `notes`            | TextField            | Optional notes from user                               |
 | `date_created`     | DateTimeField        | When the record was submitted                          |
 

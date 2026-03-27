@@ -138,7 +138,7 @@ def send_verification_notification(
     discord_id: str,
     is_verified: bool,
     verify_type: str,
-    rejection_reason: str | None = None,
+    review_note: str | None = None,
 ) -> bool:
     """Send a verification status notification to a user.
 
@@ -146,7 +146,7 @@ def send_verification_notification(
         discord_id: The Discord user ID to notify.
         is_verified: True if verified, False if rejected.
         verify_type: The type of verification (e.g., "weight_full", "height").
-        rejection_reason: Optional reason for rejection.
+        review_note: Optional reviewer note.
 
     Returns:
         True if the message was sent successfully, False otherwise.
@@ -161,13 +161,15 @@ def send_verification_notification(
             f"Your **{type_display}** verification record has been approved.\n\n"
             f"Thank you for completing the verification process!"
         )
+        if review_note:
+            message += f"\n\n**Note:** {review_note}"
     else:
         message = (
             f"❌ **Verification Rejected**\n\n"
             f"Your **{type_display}** verification record has been rejected."
         )
-        if rejection_reason:
-            message += f"\n\n**Reason:** {rejection_reason}"
+        if review_note:
+            message += f"\n\n**Reason:** {review_note}"
         message += "\n\nPlease submit a new verification record with the required corrections."
 
     return send_discord_dm(discord_id, message)
