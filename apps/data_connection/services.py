@@ -19,6 +19,7 @@ def _get_field_value(
     zr: dict | None,
     race_ready_by_zwid: dict[int, bool] | None = None,
     verification_by_zwid: dict[int, dict[str, bool]] | None = None,
+    sync_timestamp: str = "",
 ) -> str:
     """Get value for a field key from the appropriate source.
 
@@ -50,6 +51,8 @@ def _get_field_value(
         return str(user.get("discord_nickname", "") or "") if user else ""
     if field_key == "discord_id":
         return str(user.get("discord_id", "") or "") if user else ""
+    if field_key == "sync_timestamp":
+        return sync_timestamp
 
     # User fields
     if field_key == "first_name":
@@ -190,12 +193,16 @@ def sync_connection(connection: DataConnection) -> int:
         # Build list of all fields to export
         all_fields = list(DataConnection.BASE_FIELDS) + connection.selected_fields
 
+        # Generate sync timestamp (same for all rows in this sync)
+        sync_timestamp = timezone.now().isoformat()
+
         # Build display name mapping for headers
         field_display_map: dict[str, str] = {
             "zwid": "Zwift ID",
             "discord_username": "Discord Username",
             "discord_nickname": "Discord Nickname",
             "discord_id": "Discord ID",
+            "sync_timestamp": "Sync Timestamp",
         }
         field_display_map.update(dict(DataConnection.USER_FIELDS))
         field_display_map.update(dict(DataConnection.ZWIFTPOWER_FIELDS))
@@ -361,7 +368,10 @@ def sync_connection(connection: DataConnection) -> int:
                 continue
 
             row = [
-                _get_field_value(field, user, zp, zr, race_ready_by_zwid, verification_by_zwid)
+                _get_field_value(
+                    field, user, zp, zr, race_ready_by_zwid, verification_by_zwid,
+                    sync_timestamp=sync_timestamp,
+                )
                 for field in all_fields
             ]
             rows.append(row)

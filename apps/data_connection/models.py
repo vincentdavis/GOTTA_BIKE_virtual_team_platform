@@ -185,7 +185,7 @@ class DataConnection(models.Model):
         return delta.days
 
     # Base fields always included in exports
-    BASE_FIELDS: ClassVar[list[str]] = ["zwid", "discord_username", "discord_nickname", "discord_id"]
+    BASE_FIELDS: ClassVar[list[str]] = ["zwid", "discord_username", "discord_nickname", "discord_id", "sync_timestamp"]
 
     # Available fields for selection
     USER_FIELDS: ClassVar[list[tuple[str, str]]] = [
