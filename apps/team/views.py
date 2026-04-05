@@ -1372,11 +1372,11 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
     sort_keys = {
         "name": lambda r: r.display_name.lower(),
         "weight_diff": lambda r: r.weight_diff_abs if r.weight_diff_abs is not None else -1,
-        "weight_light_date": lambda r: r.weight_light_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
-        "weight_full_date": lambda r: r.weight_full_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
-        "height_date": lambda r: r.height_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
-        "zp_result_date": lambda r: r.zp_result_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
-        "zp_height_date": lambda r: r.zp_height_date or timezone.datetime.min.replace(tzinfo=timezone.utc),
+        "weight_light_date": lambda r: r.weight_light_date or timezone.datetime.min.replace(tzinfo=timezone.UTC),
+        "weight_full_date": lambda r: r.weight_full_date or timezone.datetime.min.replace(tzinfo=timezone.UTC),
+        "height_date": lambda r: r.height_date or timezone.datetime.min.replace(tzinfo=timezone.UTC),
+        "zp_result_date": lambda r: r.zp_result_date or timezone.datetime.min.replace(tzinfo=timezone.UTC),
+        "zp_height_date": lambda r: r.zp_height_date or timezone.datetime.min.replace(tzinfo=timezone.UTC),
         "height_diff": lambda r: abs(r.height_diff) if r.height_diff is not None else -1,
         "ftp": lambda r: r.ftp_current or 0,
         "wkg": lambda r: r.wkg or 0,
@@ -2140,14 +2140,14 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
     # Apply join date range filters
     if join_from:
         try:
-            from_date = datetime.strptime(join_from, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            from_date = datetime.strptime(join_from, "%Y-%m-%d").replace(tzinfo=timezone.UTC)
             members = members.filter(joined_at__gte=from_date)
         except ValueError:
             pass
 
     if join_to:
         try:
-            to_date = datetime.strptime(join_to, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            to_date = datetime.strptime(join_to, "%Y-%m-%d").replace(tzinfo=timezone.UTC)
             # Include the entire day by adding 1 day
             to_date = to_date.replace(hour=23, minute=59, second=59)
             members = members.filter(joined_at__lte=to_date)
