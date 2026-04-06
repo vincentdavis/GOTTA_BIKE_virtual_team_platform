@@ -228,7 +228,7 @@
 
                       {{ account_status }}{% for r in role_filters %}&role={{ r }}{% endfor %}{% for er in exclude_roles %}&exclude_roles={{ er }}{% endfor %}&sort=date_left&dir={% if sort_by == 'date_left' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
                      class="flex items-center gap-1">
-                    Left
+                    Status
                     {% if sort_by == "date_left" %}
                       {% if sort_dir == "asc" %}
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
@@ -356,16 +356,7 @@
                   </td>
                   <td>
                     {% if member.user %}
-                      <a href="{% url 'accounts:public_profile' member.user.id %}" target="_blank"
-                         rel="noopener noreferrer"
-                         class="badge badge-success badge-sm inline-flex items-center gap-1 hover:opacity-80">
-                        Linked
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24"
-                             stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-                        </svg>
-                      </a>
+                      {% include "accounts/_user_tooltip.html" with display_name=member.tooltip_display_name user_id=member.tooltip_user_id discord_id=member.tooltip_discord_id discord_avatar_url=member.tooltip_discord_avatar_url zwid=member.tooltip_zwid zp_category=member.tooltip_zp_category zp_category_w=member.tooltip_zp_category_w zr_category=member.tooltip_zr_category zr_rating=member.tooltip_zr_rating zr_phenotype=member.tooltip_zr_phenotype is_race_ready=member.tooltip_is_race_ready is_extra_verified=member.tooltip_is_extra_verified in_zwiftpower=member.tooltip_in_zwiftpower in_zwiftracing=member.tooltip_in_zwiftracing %}
                     {% else %}
                       <span class="badge badge-ghost badge-sm">None</span>
                     {% endif %}

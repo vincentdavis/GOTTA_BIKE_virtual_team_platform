@@ -2201,6 +2201,19 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
 
     # Convert to list and add role_names_display for each member
     members_list = list(members)
+
+    # Build ZP/ZR lookup by zwid for linked users
+    from apps.team.services import ZP_DIV_TO_CATEGORY
+    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftracing.models import ZRRider
+
+    linked_zwids = [m.user.zwid for m in members_list if m.user and m.user.zwid]
+    zp_by_zwid = {}
+    zr_by_zwid = {}
+    if linked_zwids:
+        zp_by_zwid = {zp.zwid: zp for zp in ZPTeamRiders.objects.filter(zwid__in=linked_zwids)}
+        zr_by_zwid = {zr.zwid: zr for zr in ZRRider.objects.filter(zwid__in=linked_zwids)}
+
     for member in members_list:
         role_names = []
         for role_id in member.roles or []:
@@ -2211,6 +2224,47 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
                 role_names.append(f"Unknown ({role_id})")
         member.role_names_display = ", ".join(role_names) if role_names else "No roles"
         member.role_count = len(member.roles or [])
+
+        # Enrich linked users with ZP/ZR tooltip data
+        if member.user and member.user.zwid:
+            zwid = member.user.zwid
+            zp = zp_by_zwid.get(zwid)
+            zr = zr_by_zwid.get(zwid)
+            user = member.user
+            member.tooltip_display_name = (
+                user.discord_nickname or user.get_full_name() or user.discord_username or member.username
+            )
+            member.tooltip_user_id = member.user.id
+            member.tooltip_discord_id = member.user.discord_id
+            member.tooltip_discord_avatar_url = member.user.discord_avatar_url
+            member.tooltip_zwid = zwid
+            member.tooltip_is_race_ready = member.user.is_race_ready
+            member.tooltip_is_extra_verified = member.user.is_extra_verified
+            member.tooltip_in_zwiftpower = zp is not None
+            member.tooltip_in_zwiftracing = zr is not None
+            member.tooltip_zp_category = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp else ""
+            member.tooltip_zp_category_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and hasattr(zp, "divw") else ""
+            member.tooltip_zr_category = (zr.race_current_category or "") if zr else ""
+            member.tooltip_zr_rating = zr.race_current_rating if zr else ""
+            member.tooltip_zr_phenotype = (zr.phenotype_value or "") if zr else ""
+        elif member.user:
+            user = member.user
+            member.tooltip_display_name = (
+                user.discord_nickname or user.get_full_name() or user.discord_username or member.username
+            )
+            member.tooltip_user_id = member.user.id
+            member.tooltip_discord_id = member.user.discord_id
+            member.tooltip_discord_avatar_url = member.user.discord_avatar_url
+            member.tooltip_zwid = None
+            member.tooltip_is_race_ready = member.user.is_race_ready
+            member.tooltip_is_extra_verified = member.user.is_extra_verified
+            member.tooltip_in_zwiftpower = False
+            member.tooltip_in_zwiftracing = False
+            member.tooltip_zp_category = ""
+            member.tooltip_zp_category_w = ""
+            member.tooltip_zr_category = ""
+            member.tooltip_zr_rating = ""
+            member.tooltip_zr_phenotype = ""
 
     # Handle role_count sorting in Python (since it's computed)
     if sort_by == "role_count":

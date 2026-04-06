@@ -6184,11 +6184,6 @@
     }
   }
   @media (hover: hover) {
-    .hover\:opacity-80:hover {
-      opacity: 80%;
-    }
-  }
-  @media (hover: hover) {
     .hover\:opacity-90:hover {
       opacity: 90%;
     }
