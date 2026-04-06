@@ -2090,46 +2090,35 @@ def application_manual_zwift_verify(request: HttpRequest, pk: uuid.UUID) -> Http
     )
 
 
-@login_required
-@discord_permission_required("membership_admin", raise_exception=True)
-@require_GET
-def discord_review_view(request: HttpRequest) -> HttpResponse:
-    """Review and audit Discord guild members.
+def _get_filtered_guild_members(request: HttpRequest) -> dict:
+    """Filter and enrich guild members based on request query parameters.
 
     Args:
-        request: The HTTP request.
+        request: The HTTP request with filter/sort query params.
 
     Returns:
-        Rendered Discord review page.
+        Dict with members_list and all filter/sort context values.
 
     """
-    from datetime import datetime
-
     from apps.accounts.models import GuildMember
     from apps.team.models import DiscordRole
 
-    # Get all guild members
     members = GuildMember.objects.select_related("user").all()
 
-    # Build role lookup dict: {role_id: role}
     all_roles = DiscordRole.objects.all()
     role_lookup = {role.role_id: role for role in all_roles}
 
-    # Get filter parameters
     search_query = request.GET.get("q", "").strip()
     join_from = request.GET.get("join_from", "").strip()
     join_to = request.GET.get("join_to", "").strip()
     left_status = request.GET.get("left_status", "")
     is_bot_filter = request.GET.get("is_bot", "")
-    role_filters = request.GET.getlist("role")  # Multiple values for Roles filter (OR logic)
-    exclude_roles = request.GET.getlist("exclude_roles")  # Multiple values for ~Roles filter
+    role_filters = request.GET.getlist("role")
+    exclude_roles = request.GET.getlist("exclude_roles")
     account_status = request.GET.get("account_status", "")
-
-    # Get sort parameters
     sort_by = request.GET.get("sort", "joined_at")
     sort_dir = request.GET.get("dir", "desc")
 
-    # Apply search filter (by username, display_name, or nickname)
     if search_query:
         members = members.filter(
             Q(username__icontains=search_query)
@@ -2137,7 +2126,6 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
             | Q(nickname__icontains=search_query)
         )
 
-    # Apply join date range filters
     if join_from:
         try:
             from_date = datetime.strptime(join_from, "%Y-%m-%d").replace(tzinfo=timezone.UTC)
@@ -2148,44 +2136,36 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
     if join_to:
         try:
             to_date = datetime.strptime(join_to, "%Y-%m-%d").replace(tzinfo=timezone.UTC)
-            # Include the entire day by adding 1 day
             to_date = to_date.replace(hour=23, minute=59, second=59)
             members = members.filter(joined_at__lte=to_date)
         except ValueError:
             pass
 
-    # Apply left status filter
     if left_status == "active":
         members = members.filter(date_left__isnull=True)
     elif left_status == "left":
         members = members.filter(date_left__isnull=False)
 
-    # Apply is_bot filter
     if is_bot_filter == "yes":
         members = members.filter(is_bot=True)
     elif is_bot_filter == "no":
         members = members.filter(is_bot=False)
 
-    # Apply account status filter (linked/unlinked)
     if account_status == "linked":
         members = members.filter(user__isnull=False)
     elif account_status == "unlinked":
         members = members.filter(user__isnull=True)
 
-    # Apply role filter (members must have ANY of the selected roles - OR logic)
     if role_filters:
         role_q = Q()
         for role_id in role_filters:
             role_q |= Q(roles__contains=role_id)
         members = members.filter(role_q)
 
-    # Apply exclude roles filter (~Roles) - exclude members who have ANY of the selected roles
-    # This is NOT(role1 OR role2 OR role3) logic
     if exclude_roles:
         for excluded_role_id in exclude_roles:
             members = members.exclude(roles__contains=excluded_role_id)
 
-    # Apply sorting
     sort_mapping = {
         "username": "username",
         "nickname": "nickname",
@@ -2199,14 +2179,9 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
             order_field = f"-{order_field}"
         members = members.order_by(order_field)
 
-    # Convert to list and add role_names_display for each member
     members_list = list(members)
 
     # Build ZP/ZR lookup by zwid for linked users
-    from apps.team.services import ZP_DIV_TO_CATEGORY
-    from apps.zwiftpower.models import ZPTeamRiders
-    from apps.zwiftracing.models import ZRRider
-
     linked_zwids = [m.user.zwid for m in members_list if m.user and m.user.zwid]
     zp_by_zwid = {}
     zr_by_zwid = {}
@@ -2266,45 +2241,143 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
             member.tooltip_zr_rating = ""
             member.tooltip_zr_phenotype = ""
 
-    # Handle role_count sorting in Python (since it's computed)
     if sort_by == "role_count":
         reverse = sort_dir == "desc"
         members_list = sorted(members_list, key=lambda m: m.role_count, reverse=reverse)
 
+    return {
+        "members": members_list,
+        "search_query": search_query,
+        "join_from": join_from,
+        "join_to": join_to,
+        "left_status": left_status,
+        "is_bot_filter": is_bot_filter,
+        "account_status": account_status,
+        "role_filters": role_filters,
+        "exclude_roles": exclude_roles,
+        "all_roles": all_roles.order_by("position"),
+        "sort_by": sort_by,
+        "sort_dir": sort_dir,
+    }
+
+
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_GET
+def discord_review_view(request: HttpRequest) -> HttpResponse:
+    """Review and audit Discord guild members.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered Discord review page.
+
+    """
+    context = _get_filtered_guild_members(request)
+
     logfire.debug(
         "Discord review page loaded",
         user_id=request.user.id,
-        total_members=len(members_list),
+        total_members=len(context["members"]),
         filters={
-            "search": search_query,
-            "join_from": join_from,
-            "join_to": join_to,
-            "left_status": left_status,
-            "is_bot": is_bot_filter,
-            "account_status": account_status,
-            "roles": role_filters,
-            "exclude_roles": exclude_roles,
+            "search": context["search_query"],
+            "join_from": context["join_from"],
+            "join_to": context["join_to"],
+            "left_status": context["left_status"],
+            "is_bot": context["is_bot_filter"],
+            "account_status": context["account_status"],
+            "roles": context["role_filters"],
+            "exclude_roles": context["exclude_roles"],
         },
     )
 
-    return render(
-        request,
-        "team/discord_review.html",
-        {
-            "members": members_list,
-            "search_query": search_query,
-            "join_from": join_from,
-            "join_to": join_to,
-            "left_status": left_status,
-            "is_bot_filter": is_bot_filter,
-            "account_status": account_status,
-            "role_filters": role_filters,
-            "exclude_roles": exclude_roles,
-            "all_roles": all_roles.order_by("position"),
-            "sort_by": sort_by,
-            "sort_dir": sort_dir,
-        },
+    return render(request, "team/discord_review.html", context)
+
+
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_GET
+def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
+    """Export filtered Discord guild members as CSV.
+
+    Args:
+        request: The HTTP request with filter/sort query params.
+
+    Returns:
+        CSV file response.
+
+    """
+    import csv
+
+    context = _get_filtered_guild_members(request)
+    members_list = context["members"]
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = 'attachment; filename="discord_review.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "Username",
+        "Display Name",
+        "Nickname",
+        "Discord ID",
+        "Joined",
+        "Status",
+        "Date Left",
+        "Type",
+        "Roles",
+        "Account",
+        "ZWID",
+        "Race Verified",
+        "ZP Category",
+        "ZP Category (W)",
+        "ZR Category",
+        "ZR Rating",
+        "ZR Phenotype",
+    ])
+
+    for member in members_list:
+        status = "Left" if member.date_left else "Active"
+        member_type = "Bot" if member.is_bot else "User"
+        account_name = getattr(member, "tooltip_display_name", "") if member.user else ""
+        zwid = getattr(member, "tooltip_zwid", "") or ""
+        race_verified = ""
+        if member.user:
+            if getattr(member, "tooltip_is_extra_verified", False):
+                race_verified = "Extra"
+            elif getattr(member, "tooltip_is_race_ready", False):
+                race_verified = "Yes"
+            else:
+                race_verified = "No"
+
+        writer.writerow([
+            member.username,
+            member.display_name,
+            member.nickname,
+            member.discord_id,
+            member.joined_at.strftime("%Y-%m-%d") if member.joined_at else "",
+            status,
+            member.date_left.strftime("%Y-%m-%d") if member.date_left else "",
+            member_type,
+            member.role_names_display,
+            account_name,
+            zwid,
+            race_verified,
+            getattr(member, "tooltip_zp_category", ""),
+            getattr(member, "tooltip_zp_category_w", ""),
+            getattr(member, "tooltip_zr_category", ""),
+            getattr(member, "tooltip_zr_rating", ""),
+            getattr(member, "tooltip_zr_phenotype", ""),
+        ])
+
+    logfire.info(
+        "Discord review CSV exported",
+        user_id=request.user.id,
+        row_count=len(members_list),
     )
+
+    return response
 
 
 @require_POST

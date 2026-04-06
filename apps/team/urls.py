@@ -26,6 +26,7 @@ urlpatterns = [
     path("team-feed/", views.team_feed_view, name="team_feed"),
     # Membership
     path("discord-review/", views.discord_review_view, name="discord_review"),
+    path("discord-review/export/", views.discord_review_export_csv, name="discord_review_export"),
     path("membership-review/", views.membership_review_view, name="membership_review"),
     path("applications/", views.membership_application_list_view, name="application_list"),
     path("applications/<uuid:pk>/", views.membership_application_admin_view, name="application_admin"),
