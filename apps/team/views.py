@@ -1709,13 +1709,34 @@ def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
             {"error": "No valid rows found in CSV.", "invalid_rows": invalid_rows},
         )
 
-    # Look up users
+    # Look up users and related data
+    from apps.accounts.models import GuildMember
+
     zwid_list = [z for z, _ in parsed_rows]
     users_by_zwid = {
         u.zwid: u
         for u in User.objects.filter(zwid__in=zwid_list).only(
-            "id", "zwid", "first_name", "last_name", "discord_nickname", "has_jersey",
+            "id", "zwid", "first_name", "last_name",
+            "discord_id", "discord_nickname", "discord_avatar",
+            "has_jersey", "is_race_ready", "is_extra_verified",
         )
+    }
+
+    # Look up guild join dates by discord_id
+    discord_ids = [u.discord_id for u in users_by_zwid.values() if u.discord_id]
+    guild_by_discord_id = {
+        gm["discord_id"]: gm["joined_at"]
+        for gm in GuildMember.objects.filter(discord_id__in=discord_ids).values("discord_id", "joined_at")
+    }
+
+    # Look up ZP/ZR data for tooltips
+    zp_by_zwid = {
+        r["zwid"]: r
+        for r in ZPTeamRiders.objects.filter(zwid__in=zwid_list).values("zwid", "div", "divw")
+    }
+    zr_by_zwid = {
+        r["zwid"]: r
+        for r in ZRRider.objects.filter(zwid__in=zwid_list).values("zwid", "phenotype_value")
     }
 
     changes: list[dict] = []
@@ -1726,17 +1747,42 @@ def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
             unmatched_zwids.append(zwid)
             continue
         if user.has_jersey != new_val:
-            display_name = f"{user.first_name} {user.last_name}".strip() or user.discord_nickname or f"User #{user.id}"
+            display_name = (
+                f"{user.first_name} {user.last_name}".strip() or user.discord_nickname or f"User #{user.id}"
+            )
+            guild_joined = guild_by_discord_id.get(user.discord_id)
+            avatar_url = ""
+            if user.discord_id and user.discord_avatar:
+                avatar_url = (
+                    f"https://cdn.discordapp.com/avatars/{user.discord_id}/{user.discord_avatar}.png"
+                )
+            zp = zp_by_zwid.get(zwid, {})
+            zr = zr_by_zwid.get(zwid, {})
+            zp_cat = ZP_DIV_TO_CATEGORY.get(zp.get("div", 0), "")
+            zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.get("divw", 0), "") if zp.get("divw") else ""
             changes.append({
                 "user_id": user.id,
                 "zwid": zwid,
                 "username": display_name,
+                "discord_nickname": user.discord_nickname or "",
+                "discord_id": user.discord_id or "",
+                "discord_avatar_url": avatar_url,
+                "guild_joined": guild_joined.strftime("%Y-%m-%d") if guild_joined else "",
+                "is_race_ready": user.is_race_ready,
+                "is_extra_verified": user.is_extra_verified,
+                "in_zwiftpower": bool(zp),
+                "in_zwiftracing": bool(zr),
+                "zp_category": zp_cat,
+                "zp_category_w": zp_cat_w,
+                "zr_phenotype": zr.get("phenotype_value", ""),
                 "current": user.has_jersey,
                 "new": new_val,
             })
 
-    # Store in session for confirm step
-    request.session["jersey_csv_preview"] = changes
+    # Store minimal data in session for confirm step
+    request.session["jersey_csv_preview"] = [
+        {"user_id": c["user_id"], "new": c["new"]} for c in changes
+    ]
 
     return render(
         request, "team/partials/_jersey_csv_preview.html",

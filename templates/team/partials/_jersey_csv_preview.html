@@ -1,4 +1,5 @@
 {# Jersey CSV upload preview/result partial — injected via HTMX into the modal #}
+{% load accounts_tags %}
 
 {% if error %}
   <div class="alert alert-error mb-4">
@@ -58,7 +59,7 @@
       <thead>
         <tr>
           <th>Name</th>
-          <th>ZWID</th>
+          <th>Guild Joined</th>
           <th>Current</th>
           <th>New</th>
         </tr>
@@ -66,8 +67,10 @@
       <tbody>
         {% for change in changes %}
           <tr>
-            <td>{{ change.username }}</td>
-            <td>{{ change.zwid }}</td>
+            <td class="font-medium">
+              {% include "accounts/_user_tooltip.html" with display_name=change.username user_id=change.user_id discord_id=change.discord_id discord_avatar_url=change.discord_avatar_url zwid=change.zwid zp_category=change.zp_category zp_category_w=change.zp_category_w zr_phenotype=change.zr_phenotype is_race_ready=change.is_race_ready is_extra_verified=change.is_extra_verified in_zwiftpower=change.in_zwiftpower in_zwiftracing=change.in_zwiftracing %}
+            </td>
+            <td>{{ change.guild_joined|default:"-" }}</td>
             <td>
               {% if change.current %}
                 <span class="badge badge-success badge-sm">Yes</span>
