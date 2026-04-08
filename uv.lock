@@ -733,7 +733,7 @@ requires-dist = [
     { name = "honcho", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "justhtml", specifier = ">=1.13.0" },
-    { name = "logfire", extras = ["asgi", "django", "psycopg", "httpx"], specifier = ">=4.29.0" },
+    { name = "logfire", extras = ["asgi", "django", "psycopg", "httpx"], specifier = ">=4.31.0" },
     { name = "markdown", specifier = ">=3.10.2" },
     { name = "pillow", specifier = ">=12.1.1" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.3" },

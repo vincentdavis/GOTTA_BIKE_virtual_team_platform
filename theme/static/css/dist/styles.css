@@ -4714,6 +4714,9 @@
   .max-h-72 {
     max-height: calc(var(--spacing) * 72);
   }
+  .max-h-80 {
+    max-height: calc(var(--spacing) * 80);
+  }
   .max-h-96 {
     max-height: calc(var(--spacing) * 96);
   }
@@ -5579,6 +5582,16 @@
   }
   .font-mono {
     font-family: var(--font-mono);
+  }
+  @layer daisyui.l1.l2 {
+    .file-input-sm {
+      --size: calc(var(--size-field, 0.25rem) * 8);
+      font-size: 0.75rem;
+      line-height: 1.5rem;
+    }
+    .file-input-sm::file-selector-button {
+      font-size: 0.75rem;
+    }
   }
   .text-2xl {
     font-size: var(--text-2xl);
