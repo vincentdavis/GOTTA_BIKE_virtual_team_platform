@@ -279,6 +279,10 @@ class User(AbstractUser):
         default="",
         help_text="Heart rate monitor brand (options from HEARTRATE_MONITOR_OPTIONS)",
     )
+    has_jersey = models.BooleanField(
+        default=False,
+        help_text="User has a team jersey",
+    )
 
     # Emergency Contact
     emergency_contact_name = models.CharField(
@@ -437,7 +441,7 @@ class User(AbstractUser):
         try:
             role_ids = json.loads(role_ids_json)
             return [int(rid) for rid in role_ids]
-        except (json.JSONDecodeError, ValueError, TypeError):
+        except json.JSONDecodeError, ValueError, TypeError:
             return []
 
     def has_permission(self, permission_name: str) -> bool:

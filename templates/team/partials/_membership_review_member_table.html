@@ -3,7 +3,7 @@
   <table class="table table-zebra table-sm">
     <thead>
     <tr>
-      {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&gender="|add:gender_filter|add:"&country="|add:country_filter|add:"&status="|add:status_filter|add:"&guild_duration="|add:guild_duration_filter|add:"&view=member" %}
+      {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&gender="|add:gender_filter|add:"&country="|add:country_filter|add:"&status="|add:status_filter|add:"&guild_duration="|add:guild_duration_filter|add:"&jersey="|add:jersey_filter|add:"&view=member" %}
       <th>
         <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
           Full Name
@@ -87,6 +87,14 @@
       <th>Power Meter</th>
       <th>Dual Rec</th>
       <th>HR Monitor</th>
+      <th>
+        <a href="{{ base_url }}&sort=jersey&dir={% if sort_by == 'jersey' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
+          Jersey
+          {% if sort_by == "jersey" %}
+            <span class="text-primary">{% if sort_dir == "asc" %}▲{% else %}▼{% endif %}</span>
+          {% endif %}
+        </a>
+      </th>
       <th>Emergency Contact</th>
       {% endwith %}
     </tr>
@@ -202,6 +210,13 @@
           {% endif %}
         </td>
         <td>
+          {% if rider.has_jersey %}
+            <span class="badge badge-success badge-sm">Yes</span>
+          {% else %}
+            <span class="badge badge-ghost badge-sm">No</span>
+          {% endif %}
+        </td>
+        <td>
           {% if rider.emergency_contact_name %}
             <div class="text-sm">
               <div class="font-medium">{{ rider.emergency_contact_name }}</div>
@@ -216,7 +231,7 @@
       </tr>
     {% empty %}
       <tr>
-        <td colspan="14" class="text-center text-base-content/50">
+        <td colspan="15" class="text-center text-base-content/50">
           No members found.
         </td>
       </tr>

@@ -99,19 +99,50 @@
               </select>
             </div>
 
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Jersey</span>
+              </label>
+              <select name="jersey" class="select select-bordered select-sm">
+                <option value="">All</option>
+                <option value="yes" {% if jersey_filter == "yes" %}selected{% endif %}>Yes</option>
+                <option value="no" {% if jersey_filter == "no" %}selected{% endif %}>No</option>
+              </select>
+            </div>
+
             <button type="submit" class="btn btn-primary btn-sm">Filter</button>
             <a href="{% url 'team:membership_review' %}" class="btn btn-ghost btn-sm">Reset</a>
           </div>
         </form>
 
+        {# Jersey CSV Upload #}
+        <div class="flex items-end gap-2 mb-4">
+          <form hx-post="{% url 'team:membership_jersey_csv_upload' %}"
+                hx-target="#jersey-preview-content"
+                hx-swap="innerHTML"
+                hx-on::after-request="if(event.detail.successful) document.getElementById('jersey-upload-modal').showModal()"
+                hx-encoding="multipart/form-data"
+                class="flex items-end gap-2">
+            {% csrf_token %}
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Bulk Update Jerseys</span>
+              </label>
+              <input type="file" name="csv_file" accept=".csv"
+                     class="file-input file-input-bordered file-input-sm w-64" required />
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Upload CSV</button>
+          </form>
+        </div>
+
         {# View Toggle #}
         <div class="flex justify-between items-center mb-4">
           <div class="join">
-            <a href="?q={{ search_query }}&zp_category={{ zp_category_filter }}&gender={{ gender_filter }}&country={{ country_filter }}&status={{ status_filter }}&guild_duration={{ guild_duration_filter }}&view=race&sort={{ sort_by }}&dir={{ sort_dir }}"
+            <a href="?q={{ search_query }}&zp_category={{ zp_category_filter }}&gender={{ gender_filter }}&country={{ country_filter }}&status={{ status_filter }}&guild_duration={{ guild_duration_filter }}&jersey={{ jersey_filter }}&view=race&sort={{ sort_by }}&dir={{ sort_dir }}"
                class="join-item btn btn-sm {% if current_view == 'race' %}btn-primary{% else %}btn-ghost{% endif %}">
               Race Profile
             </a>
-            <a href="?q={{ search_query }}&zp_category={{ zp_category_filter }}&gender={{ gender_filter }}&country={{ country_filter }}&status={{ status_filter }}&guild_duration={{ guild_duration_filter }}&view=member&sort={{ sort_by }}&dir={{ sort_dir }}"
+            <a href="?q={{ search_query }}&zp_category={{ zp_category_filter }}&gender={{ gender_filter }}&country={{ country_filter }}&status={{ status_filter }}&guild_duration={{ guild_duration_filter }}&jersey={{ jersey_filter }}&view=member&sort={{ sort_by }}&dir={{ sort_dir }}"
                class="join-item btn btn-sm {% if current_view == 'member' %}btn-primary{% else %}btn-ghost{% endif %}">
               Member Profile
             </a>
@@ -134,4 +165,20 @@
       </div>
     </div>
   </div>
+
+  {# Jersey Upload Preview Modal #}
+  <dialog id="jersey-upload-modal" class="modal">
+    <div class="modal-box max-w-3xl">
+      <form method="dialog">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">X</button>
+      </form>
+      <h3 class="font-bold text-lg mb-4">Jersey Update Preview</h3>
+      <div id="jersey-preview-content">
+        {# HTMX injects preview content here #}
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
 {% endblock %}

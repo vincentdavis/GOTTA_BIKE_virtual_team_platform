@@ -1,0 +1,101 @@
+{# Jersey CSV upload preview/result partial — injected via HTMX into the modal #}
+
+{% if error %}
+  <div class="alert alert-error mb-4">
+    <span>{{ error }}</span>
+  </div>
+  {% if invalid_rows %}
+    <div class="text-sm mt-2">
+      <p class="font-semibold mb-1">Invalid rows:</p>
+      <ul class="list-disc list-inside">
+        {% for row in invalid_rows %}
+          <li>Row {{ row.row }}: ZWID {{ row.zwid }} — {{ row.reason }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+{% elif no_changes %}
+  <div class="alert alert-info">
+    <span>All users already have the specified jersey status. No changes needed.</span>
+  </div>
+
+{% elif result %}
+  <div class="alert alert-success mb-4">
+    <span>Updated {{ result.updated }} user{{ result.updated|pluralize }}.</span>
+  </div>
+  <div class="modal-action">
+    <button class="btn btn-sm" onclick="this.closest('dialog').close(); location.reload();">Close</button>
+  </div>
+
+{% elif changes %}
+  {% if invalid_rows %}
+    <div class="alert alert-warning mb-4 text-sm">
+      <div>
+        <p class="font-semibold">Skipped {{ invalid_rows|length }} invalid row{{ invalid_rows|length|pluralize }}:</p>
+        <ul class="list-disc list-inside">
+          {% for row in invalid_rows %}
+            <li>Row {{ row.row }}: ZWID {{ row.zwid }} — {{ row.reason }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if unmatched_zwids %}
+    <div class="alert alert-warning mb-4 text-sm">
+      <div>
+        <p class="font-semibold">{{ unmatched_zwids|length }} ZWID{{ unmatched_zwids|length|pluralize }} not found:</p>
+        <p>{{ unmatched_zwids|join:", " }}</p>
+      </div>
+    </div>
+  {% endif %}
+
+  <p class="mb-3 font-semibold">{{ changes|length }} user{{ changes|length|pluralize }} will be updated:</p>
+
+  <div class="overflow-x-auto max-h-80">
+    <table class="table table-zebra table-sm table-pin-rows">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>ZWID</th>
+          <th>Current</th>
+          <th>New</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for change in changes %}
+          <tr>
+            <td>{{ change.username }}</td>
+            <td>{{ change.zwid }}</td>
+            <td>
+              {% if change.current %}
+                <span class="badge badge-success badge-sm">Yes</span>
+              {% else %}
+                <span class="badge badge-ghost badge-sm">No</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if change.new %}
+                <span class="badge badge-success badge-sm">Yes</span>
+              {% else %}
+                <span class="badge badge-ghost badge-sm">No</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="modal-action">
+    <button class="btn btn-ghost btn-sm" onclick="this.closest('dialog').close();">Cancel</button>
+    <button class="btn btn-primary btn-sm"
+            hx-post="{% url 'team:membership_jersey_csv_confirm' %}"
+            hx-target="#jersey-preview-content"
+            hx-swap="innerHTML">
+      Confirm Update
+      <span class="htmx-indicator loading loading-spinner loading-sm"></span>
+    </button>
+  </div>
+{% endif %}

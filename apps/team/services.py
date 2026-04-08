@@ -752,6 +752,7 @@ class MembershipReviewRider:
     powermeter: str = ""
     dual_recording: bool | None = None
     heartrate_monitor: str = ""
+    has_jersey: bool = False
 
     # Emergency contact
     emergency_contact_name: str = ""
@@ -866,7 +867,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
         # Member profile fields
         "birth_year", "city", "country", "timezone",
         # Equipment
-        "trainer", "powermeter", "dual_recording", "heartrate_monitor",
+        "trainer", "powermeter", "dual_recording", "heartrate_monitor", "has_jersey",
         # Emergency contact
         "emergency_contact_name", "emergency_contact_phone",
     )
@@ -935,6 +936,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
             rider.powermeter = u["powermeter"] or ""
             rider.dual_recording = u["dual_recording"]
             rider.heartrate_monitor = u["heartrate_monitor"] or ""
+            rider.has_jersey = u["has_jersey"]
 
             # Emergency contact
             rider.emergency_contact_name = u["emergency_contact_name"] or ""
@@ -992,7 +994,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
             "id", "first_name", "last_name", "discord_id", "discord_nickname", "discord_username",
             "gender", "zwid_verified",
             "birth_year", "city", "country", "timezone",
-            "trainer", "powermeter", "dual_recording", "heartrate_monitor",
+            "trainer", "powermeter", "dual_recording", "heartrate_monitor", "has_jersey",
             "emergency_contact_name", "emergency_contact_phone",
         )
         if u["discord_id"]
@@ -1030,6 +1032,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
             rider.powermeter = u["powermeter"] or ""
             rider.dual_recording = u["dual_recording"]
             rider.heartrate_monitor = u["heartrate_monitor"] or ""
+            rider.has_jersey = u["has_jersey"]
             rider.emergency_contact_name = u["emergency_contact_name"] or ""
             rider.emergency_contact_phone = u["emergency_contact_phone"] or ""
             rider.zwid_verified = u["zwid_verified"]

@@ -762,3 +762,13 @@ class ApplicationZwiftVerificationForm(forms.Form):
         ),
         help_text="Your Zwift account password (not stored)",
     )
+
+
+class JerseyCSVUploadForm(forms.Form):
+    """Form for uploading a CSV to bulk-update has_jersey field."""
+
+    csv_file = forms.FileField(
+        widget=forms.FileInput(attrs={"class": "file-input file-input-bordered file-input-sm w-64", "accept": ".csv"}),
+        label="CSV File",
+        help_text="CSV must contain 'zwid' and 'has_jersey' columns.",
+    )

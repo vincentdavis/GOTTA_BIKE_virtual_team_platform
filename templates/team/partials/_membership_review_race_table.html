@@ -4,7 +4,7 @@
   <table class="table table-zebra table-sm">
     <thead>
     <tr>
-      {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&gender="|add:gender_filter|add:"&country="|add:country_filter|add:"&status="|add:status_filter|add:"&guild_duration="|add:guild_duration_filter|add:"&view=race" %}
+      {% with base_url="?q="|add:search_query|add:"&zp_category="|add:zp_category_filter|add:"&gender="|add:gender_filter|add:"&country="|add:country_filter|add:"&status="|add:status_filter|add:"&guild_duration="|add:guild_duration_filter|add:"&jersey="|add:jersey_filter|add:"&view=race" %}
       <th>
         <a href="{{ base_url }}&sort=name&dir={% if sort_by == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-primary">
           Full Name
