@@ -2351,6 +2351,7 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
     role_filters = request.GET.getlist("role")
     exclude_roles = request.GET.getlist("exclude_roles")
     account_status = request.GET.get("account_status", "")
+    has_jersey_filter = request.GET.get("has_jersey", "")
     sort_by = request.GET.get("sort", "joined_at")
     sort_dir = request.GET.get("dir", "desc")
 
@@ -2390,6 +2391,11 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
         members = members.filter(user__isnull=False)
     elif account_status == "unlinked":
         members = members.filter(user__isnull=True)
+
+    if has_jersey_filter == "yes":
+        members = members.filter(user__has_jersey=True)
+    elif has_jersey_filter == "no":
+        members = members.filter(user__has_jersey=False)
 
     if role_filters:
         role_q = Q()
@@ -2488,6 +2494,7 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
         "left_status": left_status,
         "is_bot_filter": is_bot_filter,
         "account_status": account_status,
+        "has_jersey_filter": has_jersey_filter,
         "role_filters": role_filters,
         "exclude_roles": exclude_roles,
         "all_roles": all_roles.order_by("position"),
@@ -2522,6 +2529,7 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
             "left_status": context["left_status"],
             "is_bot": context["is_bot_filter"],
             "account_status": context["account_status"],
+            "has_jersey": context["has_jersey_filter"],
             "roles": context["role_filters"],
             "exclude_roles": context["exclude_roles"],
         },
@@ -2570,6 +2578,7 @@ def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
         "ZR Category",
         "ZR Rating",
         "ZR Phenotype",
+        "Has Jersey",
     ])
 
     for member in members_list:
@@ -2585,6 +2594,10 @@ def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
                 race_verified = "Yes"
             else:
                 race_verified = "No"
+
+        has_jersey = ""
+        if member.user:
+            has_jersey = "Yes" if member.user.has_jersey else "No"
 
         writer.writerow([
             member.username,
@@ -2604,6 +2617,7 @@ def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
             getattr(member, "tooltip_zr_category", ""),
             getattr(member, "tooltip_zr_rating", ""),
             getattr(member, "tooltip_zr_phenotype", ""),
+            has_jersey,
         ])
 
     logfire.info(

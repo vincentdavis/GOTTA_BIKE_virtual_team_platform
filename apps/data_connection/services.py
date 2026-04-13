@@ -70,6 +70,16 @@ def _get_field_value(
         return str(user.get("gender", "") or "") if user else ""
     if field_key == "youtube_channel":
         return str(user.get("youtube_channel", "") or "") if user else ""
+    if field_key == "has_jersey":
+        if user:
+            val = user.get("has_jersey")
+            return "Yes" if val else "No"
+        return ""
+    if field_key == "guild_join_date":
+        if user:
+            val = user.get("guild_member__joined_at")
+            return val.date().isoformat() if val else ""
+        return ""
     if field_key == "race_ready":
         if user and race_ready_by_zwid:
             zwid = user.get("zwid")
@@ -223,6 +233,8 @@ def sync_connection(connection: DataConnection) -> int:
             "country",
             "gender",
             "youtube_channel",
+            "has_jersey",
+            "guild_member__joined_at",
         )
 
         # Get race ready status (computed property requires full objects)
