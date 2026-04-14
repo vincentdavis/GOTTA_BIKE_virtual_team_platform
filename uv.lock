@@ -106,6 +106,7 @@ dependencies = [
     { name = "jmespath" },
     { name = "s3transfer" },
 ]
+sdist = { url = "https://files.pythonhosted.org/packages/4e/f6/b280afd91b2284744c0bb26afa1272bd60270726b4d3999fc27b68200854/boto3-1.42.77.tar.gz", hash = "sha256:c6d9b05e5b86767d4c6ef762f155c891366e5951162f71d030e109fe531f4fd9", size = 112773, upload-time = "2026-03-26T19:25:35.365Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ac/e6/e27fb0956bd52e6ac222d47eaa04d267887ca1d52a6b3c25d2006c8dc9e6/boto3-1.42.77-py3-none-any.whl", hash = "sha256:95eb3ef693068586f70ca3f29c43701c34a9a73d0df413ea7eaff138efa4a6b9", size = 140555, upload-time = "2026-03-26T19:25:32.069Z" },
 ]
@@ -731,7 +732,7 @@ requires-dist = [
     { name = "gspread", specifier = ">=6.2.1" },
     { name = "honcho", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "justhtml", specifier = ">=1.13.0" },
+    { name = "justhtml", specifier = ">=1.16.0" },
     { name = "logfire", extras = ["asgi", "django", "psycopg", "httpx"], specifier = ">=4.29.0" },
     { name = "markdown", specifier = ">=3.10.2" },
     { name = "pillow", specifier = ">=12.1.1" },
@@ -948,11 +949,11 @@ wheels = [
 
 [[package]]
 name = "justhtml"
-version = "1.13.0"
+version = "1.16.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fb/17/cba367880227009c6f0e385c0ef9162ca34b1250834ed3ee5fba7febadb3/justhtml-1.13.0.tar.gz", hash = "sha256:6538a8b54a51d99fc11574a11afe968b64b002247045c8b3f46f1b6f64d8ce78", size = 379802, upload-time = "2026-03-21T20:47:09.413Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/98/d531132d2a710bf4de32bc2f1aa3ffe71972de6e78d0c55b231baba28a72/justhtml-1.16.0.tar.gz", hash = "sha256:c57a6772191200d3820cccf47a38274841925eff2166bc3f3f277312d6b11193", size = 392015, upload-time = "2026-04-12T20:14:25.361Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/28/b8/f60e28f237f17917710d1eb4b7760f05186b96f5b393c53364a512b038b9/justhtml-1.13.0-py3-none-any.whl", hash = "sha256:9a10d606bbf9185d53cdf940528c80d8d8e13c714e4c0c2a8d66ef5ffefed99c", size = 135318, upload-time = "2026-03-21T20:47:08.185Z" },
+    { url = "https://files.pythonhosted.org/packages/de/de/8a793ecf826d2964e8bf945a174ab1dfc9cb282b031329a666b12cc930ff/justhtml-1.16.0-py3-none-any.whl", hash = "sha256:8a7165d10119fda05ec6b6e0886f4343a35c9b2cda54615dd64b05e81e38d5f1", size = 138548, upload-time = "2026-04-12T20:14:23.617Z" },
 ]
 
 [[package]]
