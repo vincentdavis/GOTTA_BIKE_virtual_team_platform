@@ -456,8 +456,11 @@ def event_list_view(request: HttpRequest) -> HttpResponse:
         .order_by("start_date")
     )
     search_query = request.GET.get("q", "").strip()
+    show_past = request.GET.get("show_past") == "on"
     if search_query:
         events = events.filter(Q(title__icontains=search_query) | Q(description__icontains=search_query))
+    if not show_past:
+        events = events.filter(end_date__gte=timezone.now().date())
     user_signup_event_ids = set(
         EventSignup.objects.filter(user=request.user, status=EventSignup.Status.REGISTERED).values_list(
             "event_id", flat=True
@@ -470,6 +473,7 @@ def event_list_view(request: HttpRequest) -> HttpResponse:
         {
             "events": events,
             "search_query": search_query,
+            "show_past": show_past,
             "is_event_admin": request.user.is_event_admin,
             "user_signup_event_ids": user_signup_event_ids,
             "today": timezone.now().date(),

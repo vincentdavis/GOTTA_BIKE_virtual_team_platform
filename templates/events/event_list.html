@@ -27,8 +27,12 @@
                    value="{{ search_query }}"
             />
           </div>
+          <label class="label cursor-pointer gap-2">
+            <input type="checkbox" name="show_past" class="checkbox checkbox-sm" {% if show_past %}checked{% endif %} />
+            <span class="label-text">Show past</span>
+          </label>
           <button type="submit" class="btn btn-primary btn-sm">Search</button>
-          {% if search_query %}
+          {% if search_query or show_past %}
           <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">Reset</a>
           {% endif %}
         </div>
