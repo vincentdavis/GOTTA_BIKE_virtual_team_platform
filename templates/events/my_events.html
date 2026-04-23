@@ -9,7 +9,15 @@
     <div class="card-body">
       <div class="flex justify-between items-center mb-6">
         <h2 class="card-title text-2xl">My Events</h2>
-        <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">All Events</a>
+        <div class="flex items-center gap-2">
+          <form method="get" class="flex items-center gap-2">
+            <label class="label cursor-pointer gap-2">
+              <input type="checkbox" name="show_past" class="checkbox checkbox-sm" {% if show_past %}checked{% endif %} onchange="this.form.submit()" />
+              <span class="label-text">Show past</span>
+            </label>
+          </form>
+          <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">All Events</a>
+        </div>
       </div>
 
       {% if events_data %}

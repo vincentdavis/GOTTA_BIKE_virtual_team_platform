@@ -333,12 +333,15 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
         Rendered my events page.
 
     """
+    show_past = request.GET.get("show_past") == "on"
     signups = (
         EventSignup.objects
         .filter(user=request.user, status=EventSignup.Status.REGISTERED)
         .select_related("event")
         .order_by("-event__start_date")
     )
+    if not show_past:
+        signups = signups.filter(event__end_date__gte=timezone.now().date())
     squad_memberships = SquadMember.objects.filter(user=request.user, status=SquadMember.Status.MEMBER).select_related(
         "squad", "squad__event"
     )
@@ -429,6 +432,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
         "events/my_events.html",
         {
             "events_data": events_data,
+            "show_past": show_past,
             "guild_id": config.GUILD_ID,
         },
     )
