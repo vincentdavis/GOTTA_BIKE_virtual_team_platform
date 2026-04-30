@@ -44,7 +44,7 @@ dev = [
     "django-reset-migrations>=0.4.0",
     "django-stubs>=5.2.8",
     "pytest>=9.0.3",
-    "ruff>=0.15.10",
-    "ty>=0.0.28",
+    "ruff>=0.15.12",
+    "ty>=0.0.33",
     "logfire-mcp>=0.6.0"
 ]
