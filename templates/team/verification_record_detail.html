@@ -85,7 +85,19 @@
           <div class="text-sm text-base-content/60 mb-1">Submitted Value</div>
           <div class="font-medium font-mono text-lg">
             {% if record.weight %}
+              {% if can_edit_weight %}
+              <form method="post" class="flex items-center gap-2 flex-wrap">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="update_weight">
+                <input type="number" step="0.01" min="0" name="weight"
+                       value="{{ record.weight }}"
+                       class="input input-bordered input-sm w-24 font-mono">
+                <span class="text-sm">kg</span>
+                <button type="submit" class="btn btn-xs btn-primary">Save</button>
+              </form>
+              {% else %}
               {{ record.weight|weight_dual }}
+              {% endif %}
             {% elif record.height %}
               {{ record.height|height_dual }}
             {% elif record.ftp %}

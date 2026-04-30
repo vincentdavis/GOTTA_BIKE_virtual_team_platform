@@ -944,9 +944,44 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     is_app_admin = request.user.has_permission(Permissions.APP_ADMIN)
     can_delete = is_pvt or is_app_admin or request.user.is_superuser
     can_change_status = is_pvt or is_app_admin or request.user.is_superuser
+    can_edit_weight = is_pvt or request.user.is_superuser
     can_view_media = record.is_pending or is_pvt
     # Submitted values/ZP data: hide on reviewed records unless own record or PVT member
     can_view_values = record.is_pending or is_own_record or is_pvt
+
+    # Handle weight edit action (PVT only, weight verifications, any status)
+    if (
+        request.method == "POST"
+        and request.POST.get("action") == "update_weight"
+        and can_edit_weight
+        and record.verify_type in ("weight_full", "weight_light")
+    ):
+        from decimal import Decimal, InvalidOperation
+
+        new_weight_str = request.POST.get("weight", "").strip()
+        if new_weight_str:
+            try:
+                new_weight = Decimal(new_weight_str)
+            except (InvalidOperation, ValueError):
+                messages.error(request, "Invalid weight value.")
+                return redirect("team:verification_record_detail", pk=pk)
+            if new_weight != record.weight:
+                old_weight = record.weight
+                record.weight = new_weight
+                record.save(update_fields=["weight"])
+                logfire.info(
+                    "Verification record weight edited",
+                    record_id=pk,
+                    verify_type=record.verify_type,
+                    target_user_id=record.user.id,
+                    target_username=record.user.username,
+                    old_weight=str(old_weight) if old_weight is not None else None,
+                    new_weight=str(new_weight),
+                    edited_by_id=request.user.id,
+                    edited_by_username=request.user.username,
+                )
+                messages.success(request, f"Weight updated to {new_weight} kg.")
+        return redirect("team:verification_record_detail", pk=pk)
 
     # Handle delete action (any record status, requires PVT or app_admin)
     if request.method == "POST" and request.POST.get("action") == "delete" and can_delete:
@@ -1159,6 +1194,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             "can_view_values": can_view_values,
             "can_change_status": can_change_status,
             "can_delete": can_delete,
+            "can_edit_weight": can_edit_weight,
             "checklist_items": checklist_items,
             "zp_rider": zp_rider,
             "other_records": other_records,
