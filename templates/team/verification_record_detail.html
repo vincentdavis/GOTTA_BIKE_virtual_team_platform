@@ -82,7 +82,11 @@
         {% if can_view_values %}
         <!-- Bottom Left: Submitted Value -->
         <div class="bg-base-300 rounded-lg p-4">
-          <div class="text-sm text-base-content/60 mb-1">Submitted Value</div>
+          <div class="text-sm text-base-content/60 mb-1">
+            Submitted Value{% if record.weight and can_edit_weight %}
+            <span class="font-mono text-base-content/80 ml-1">&mdash; {{ record.weight|weight_dual }}</span>
+            {% endif %}
+          </div>
           <div class="font-medium font-mono text-lg">
             {% if record.weight %}
               {% if can_edit_weight %}
