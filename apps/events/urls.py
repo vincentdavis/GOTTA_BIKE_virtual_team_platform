@@ -37,6 +37,7 @@ from apps.events.views import (
     squad_set_captain_view,
     squad_toggle_captain_role_view,
     squad_toggle_role_view,
+    squad_v_report_view,
     sync_event_roles_view,
 )
 
@@ -61,6 +62,7 @@ urlpatterns = [
     path("<int:event_pk>/sync-roles/", sync_event_roles_view, name="sync_event_roles"),
     path("<int:event_pk>/toggle-event-role/<int:user_id>/", event_toggle_role_view, name="event_toggle_role"),
     path("<int:event_pk>/squads/manage/", squad_manage_view, name="squad_manage"),
+    path("<int:event_pk>/squads/v-report/", squad_v_report_view, name="squad_v_report"),
     path("<int:event_pk>/squads/assign/", squad_assign_view, name="squad_assign"),
     path("<int:event_pk>/assign-riders/", squad_assign_page_view, name="squad_assign_page"),
     path("<int:event_pk>/squads/add/", squad_create_view, name="squad_create"),

@@ -482,6 +482,9 @@
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zr_phenotype"> Phenotype</label></li>
             </ul>
           </div>
+          {% if can_view_v_report %}
+          <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-info btn-sm">V Report</a>
+          {% endif %}
           {% if is_event_admin %}
           <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-primary btn-sm">Manage Squads</a>
           {% endif %}
