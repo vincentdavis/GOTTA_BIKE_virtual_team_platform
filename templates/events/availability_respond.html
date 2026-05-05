@@ -103,6 +103,7 @@
 <script>
 (function() {
   var CSRF_TOKEN = '{{ csrf_token }}';
+  var EVENT_DETAIL_URL = '{% url "events:event_detail" event.pk %}';
   var dates = {{ display_dates_json|safe }};
   var timeSlots = {{ display_time_slots_json|safe }};
   var blockedKeys = {{ display_blocked_json|safe }};
@@ -352,11 +353,12 @@
     .then(function(result) {
       if (result.ok) {
         showToast('Availability saved!', false);
+        setTimeout(function() { window.location.href = EVENT_DETAIL_URL; }, 800);
       } else {
         showToast(result.data.error || 'Save failed.', true);
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = 'Submit Availability';
       }
-      btnSubmit.disabled = false;
-      btnSubmit.textContent = 'Submit Availability';
     })
     .catch(function() {
       showToast('Network error. Please try again.', true);
