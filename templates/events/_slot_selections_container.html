@@ -5,15 +5,25 @@
   <div class="card-body p-4">
     <div class="flex items-center justify-between gap-2 mb-2">
       <div>
-        <h4 class="font-bold text-sm">{{ item.selection.name }}</h4>
+        <div class="flex items-center gap-2">
+          <h4 class="font-bold text-sm">{{ item.selection.name }}</h4>
+          {% if item.selection.status == "confirmed" %}
+          <span class="badge badge-success badge-xs">Confirmed</span>
+          {% elif item.selection.status == "pending" %}
+          <span class="badge badge-warning badge-xs">Pending</span>
+          {% endif %}
+        </div>
         <p class="text-xs text-base-content/60">{{ item.local_day }} {{ item.local_date }} {{ item.local_time }} ({{ display_timezone }})</p>
-        {% if item.selection.event_invite_url or item.selection.course_url %}
+        {% if item.selection.event_invite_url or item.selection.course_url or item.selection.thread_link %}
         <p class="text-xs mt-1 flex flex-wrap gap-x-3">
           {% if item.selection.event_invite_url %}
           <a href="{{ item.selection.event_invite_url }}" target="_blank" rel="noopener" class="link link-primary">Event invite</a>
           {% endif %}
           {% if item.selection.course_url %}
           <a href="{{ item.selection.course_url }}" target="_blank" rel="noopener" class="link link-primary">Course</a>
+          {% endif %}
+          {% if item.selection.thread_link %}
+          <a href="{{ item.selection.thread_link }}" target="_blank" rel="noopener" class="link link-primary">Discord thread</a>
           {% endif %}
         </p>
         {% endif %}

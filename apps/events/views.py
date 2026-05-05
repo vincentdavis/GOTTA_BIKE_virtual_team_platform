@@ -480,6 +480,12 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             for u in sel.selected_users.all()
             if u.pk in enriched_by_user_id
         ]
+        if sel.status == AvailabilitySlotSelection.Status.CONFIRMED:
+            status_class = "badge-success"
+        elif sel.status == AvailabilitySlotSelection.Status.PENDING:
+            status_class = "badge-warning"
+        else:
+            status_class = ""
         slot_selections_by_squad.setdefault(sel.grid.squad_id, []).append({
             "selection": sel,
             "grid_title": sel.grid.title or "Availability Grid",
@@ -490,6 +496,9 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             "days_until": days_until,
             "days_label": days_label,
             "days_class": days_class,
+            "status_label": sel.get_status_display(),
+            "status_class": status_class,
+            "is_status_visible": sel.status != AvailabilitySlotSelection.Status.NONE,
             "riders": riders,
         })
 
@@ -2570,8 +2579,10 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         selections_json[utc_key] = {
             "id": sel.pk,
             "name": sel.name,
+            "status": sel.status,
             "event_invite_url": sel.event_invite_url,
             "course_url": sel.course_url,
+            "thread_link": sel.thread_link,
             "selected_user_ids": list(sel.selected_users.values_list("pk", flat=True)),
         }
 
@@ -3209,6 +3220,10 @@ def slot_selection_create_view(
     slot_time = request.POST.get("slot_time", "")
     event_invite_url = request.POST.get("event_invite_url", "").strip()
     course_url = request.POST.get("course_url", "").strip()
+    thread_link = request.POST.get("thread_link", "").strip()
+    raw_status = request.POST.get("status", AvailabilitySlotSelection.Status.NONE)
+    valid_statuses = {s.value for s in AvailabilitySlotSelection.Status}
+    status = raw_status if raw_status in valid_statuses else AvailabilitySlotSelection.Status.NONE
     selected_user_ids = request.POST.getlist("selected_users")
 
     if not name or not slot_date or not slot_time:
@@ -3220,8 +3235,10 @@ def slot_selection_create_view(
         slot_time=slot_time,
         defaults={
             "name": name,
+            "status": status,
             "event_invite_url": event_invite_url,
             "course_url": course_url,
+            "thread_link": thread_link,
             "created_by": request.user,
         },
     )
@@ -3270,15 +3287,21 @@ def slot_selection_update_view(
     name = request.POST.get("name", "").strip()
     event_invite_url = request.POST.get("event_invite_url", "").strip()
     course_url = request.POST.get("course_url", "").strip()
+    thread_link = request.POST.get("thread_link", "").strip()
+    raw_status = request.POST.get("status", selection.status)
+    valid_statuses = {s.value for s in AvailabilitySlotSelection.Status}
+    status = raw_status if raw_status in valid_statuses else selection.status
     selected_user_ids = request.POST.getlist("selected_users")
 
     if not name:
         return HttpResponse("Name is required.", status=400)
 
     selection.name = name
+    selection.status = status
     selection.event_invite_url = event_invite_url
     selection.course_url = course_url
-    selection.save(update_fields=["name", "event_invite_url", "course_url", "updated_at"])
+    selection.thread_link = thread_link
+    selection.save(update_fields=["name", "status", "event_invite_url", "course_url", "thread_link", "updated_at"])
     selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
 
     logfire.info(

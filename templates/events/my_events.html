@@ -159,6 +159,9 @@
                               </svg>
                             </button>
                             <span class="badge badge-primary badge-sm">{{ slot.selection.name }}</span>
+                            {% if slot.is_status_visible %}
+                            <span class="badge {{ slot.status_class }} badge-xs">{{ slot.status_label }}</span>
+                            {% endif %}
                             <span class="text-base-content/80">{{ slot.local_day }} {{ slot.local_date }} &middot; {{ slot.local_time }}</span>
                             <span class="text-xs text-base-content/50">({{ slot.display_timezone }})</span>
                             <span class="badge {{ slot.days_class }} badge-xs">{{ slot.days_label }}</span>
@@ -168,13 +171,16 @@
                             {% endif %}
                           </div>
                           <div id="slot-riders-{{ item.event.pk }}-{{ sq.squad.pk }}-{{ slot.selection.pk }}" style="display:none" class="mt-2">
-                            {% if slot.selection.event_invite_url or slot.selection.course_url %}
+                            {% if slot.selection.event_invite_url or slot.selection.course_url or slot.selection.thread_link %}
                             <p class="text-xs mb-2 flex flex-wrap gap-x-3">
                               {% if slot.selection.event_invite_url %}
                               <a href="{{ slot.selection.event_invite_url }}" target="_blank" rel="noopener" class="link link-primary">Event invite</a>
                               {% endif %}
                               {% if slot.selection.course_url %}
                               <a href="{{ slot.selection.course_url }}" target="_blank" rel="noopener" class="link link-primary">Course</a>
+                              {% endif %}
+                              {% if slot.selection.thread_link %}
+                              <a href="{{ slot.selection.thread_link }}" target="_blank" rel="noopener" class="link link-primary">Discord thread</a>
                               {% endif %}
                             </p>
                             {% endif %}

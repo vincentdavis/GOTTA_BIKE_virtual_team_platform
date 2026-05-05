@@ -211,6 +211,15 @@
       </div>
 
       <div class="form-control mb-3">
+        <label class="label"><span class="label-text">Status</span></label>
+        <select name="status" id="slot-modal-status" class="select select-bordered select-sm w-full">
+          <option value="none">None</option>
+          <option value="pending">Pending</option>
+          <option value="confirmed">Confirmed</option>
+        </select>
+      </div>
+
+      <div class="form-control mb-3">
         <label class="label"><span class="label-text">Event invite URL</span></label>
         <input type="url" name="event_invite_url" id="slot-modal-event-invite-url" class="input input-bordered input-sm w-full" placeholder="https://www.zwift.com/events/view/...">
       </div>
@@ -218,6 +227,11 @@
       <div class="form-control mb-3">
         <label class="label"><span class="label-text">Course URL</span></label>
         <input type="url" name="course_url" id="slot-modal-course-url" class="input input-bordered input-sm w-full" placeholder="https://zwiftinsider.com/route/...">
+      </div>
+
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text">Discord thread link</span></label>
+        <input type="url" name="thread_link" id="slot-modal-thread-link" class="input input-bordered input-sm w-full" placeholder="https://discord.com/channels/.../...">
       </div>
 
       <div class="form-control mb-3">
@@ -251,8 +265,10 @@
     const modal = document.getElementById('slot-modal');
     const form = document.getElementById('slot-modal-form');
     const nameInput = document.getElementById('slot-modal-name');
+    const statusInput = document.getElementById('slot-modal-status');
     const eventInviteInput = document.getElementById('slot-modal-event-invite-url');
     const courseInput = document.getElementById('slot-modal-course-url');
+    const threadInput = document.getElementById('slot-modal-thread-link');
     const dateInput = document.getElementById('slot-modal-date');
     const timeInput = document.getElementById('slot-modal-time');
     const ridersDiv = document.getElementById('slot-modal-riders');
@@ -268,14 +284,18 @@
     if (existing) {
       title.textContent = 'Edit Scheduled Race';
       nameInput.value = existing.name;
+      statusInput.value = existing.status || 'none';
       eventInviteInput.value = existing.event_invite_url || '';
       courseInput.value = existing.course_url || '';
+      threadInput.value = existing.thread_link || '';
       form.setAttribute('hx-post', updateUrlBase + existing.id + '/');
     } else {
       title.textContent = 'Schedule Race';
       nameInput.value = '';
+      statusInput.value = 'none';
       eventInviteInput.value = '';
       courseInput.value = '';
+      threadInput.value = '';
       form.setAttribute('hx-post', createUrl);
     }
 

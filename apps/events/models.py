@@ -769,6 +769,13 @@ class AvailabilitySlotSelection(models.Model):
 
     """
 
+    class Status(models.TextChoices):
+        """Scheduling status for a named slot."""
+
+        NONE = "none", "None"
+        PENDING = "pending", "Pending"
+        CONFIRMED = "confirmed", "Confirmed"
+
     grid = models.ForeignKey(
         AvailabilityGrid,
         on_delete=models.CASCADE,
@@ -778,6 +785,12 @@ class AvailabilitySlotSelection(models.Model):
     name = models.CharField(max_length=200, help_text="Display name for this slot selection")
     slot_date = models.DateField(help_text="UTC date of the selected cell")
     slot_time = models.CharField(max_length=5, help_text='UTC time as "HH:MM"')
+    status = models.CharField(
+        max_length=10,
+        choices=Status.choices,
+        default=Status.NONE,
+        help_text="Scheduling status (none, pending, confirmed)",
+    )
     event_invite_url = models.URLField(
         blank=True,
         default="",
@@ -787,6 +800,11 @@ class AvailabilitySlotSelection(models.Model):
         blank=True,
         default="",
         help_text="Optional link to the course/route page",
+    )
+    thread_link = models.URLField(
+        blank=True,
+        default="",
+        help_text="Optional URL to a Discord thread for this race",
     )
     selected_users = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
