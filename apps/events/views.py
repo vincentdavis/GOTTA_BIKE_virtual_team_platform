@@ -390,39 +390,19 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
 
     all_squad_ids = [sq.pk for squads in squads_by_event.values() for sq in squads]
 
-    # Slot selections that include the requesting user, grouped by squad
     user_tz = getattr(request.user, "timezone", "") or ""
-    slot_selections_by_squad: dict[int, list] = {}
+
+    user_selections = []
     if all_squad_ids:
-        user_selections = (
+        user_selections = list(
             AvailabilitySlotSelection.objects
             .filter(selected_users=request.user, grid__squad_id__in=all_squad_ids)
             .select_related("grid", "grid__squad")
+            .prefetch_related("selected_users")
             .order_by("slot_date", "slot_time")
         )
-        for sel in user_selections:
-            display_tz = user_tz or sel.grid.grid_timezone or "UTC"
-            try:
-                tz_obj = ZoneInfo(display_tz)
-            except Exception:
-                tz_obj = ZoneInfo("UTC")
-                display_tz = "UTC"
-            utc_dt = datetime.combine(
-                sel.slot_date,
-                datetime.strptime(sel.slot_time, "%H:%M").time(),
-                tzinfo=ZoneInfo("UTC"),
-            )
-            local_dt = utc_dt.astimezone(tz_obj)
-            slot_selections_by_squad.setdefault(sel.grid.squad_id, []).append({
-                "selection": sel,
-                "grid_title": sel.grid.title or "Availability Grid",
-                "local_day": local_dt.strftime("%a"),
-                "local_date": local_dt.strftime("%b %-d"),
-                "local_time": local_dt.strftime("%H:%M"),
-                "display_timezone": display_tz,
-            })
 
-    members_by_squad: dict[int, list] = {}
+    all_sms: list = []
     if all_squad_ids:
         all_sms = list(
             SquadMember.objects
@@ -430,28 +410,88 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             .select_related("user")
             .order_by("user__first_name", "user__last_name")
         )
-        zwids = [sm.user.zwid for sm in all_sms if sm.user.zwid]
-        zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
-        zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
-        for sm in all_sms:
-            user = sm.user
-            zwid = user.zwid
-            zp = zp_by_zwid.get(zwid)
-            zr = zr_by_zwid.get(zwid)
-            members_by_squad.setdefault(sm.squad_id, []).append({
-                "user": user,
-                "zwid": zwid,
-                "is_race_ready": user.is_race_ready,
-                "is_extra_verified": user.is_extra_verified,
-                "in_zwiftpower": zp is not None,
-                "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
-                "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
-                "in_zwiftracing": zr is not None,
-                "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-                "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
-                "zr_age": getattr(zr, "age", "") or "" if zr else "",
-                "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
-            })
+
+    users_for_lookup: dict[int, User] = {sm.user.pk: sm.user for sm in all_sms}
+    for sel in user_selections:
+        for u in sel.selected_users.all():
+            users_for_lookup.setdefault(u.pk, u)
+
+    zwids = [u.zwid for u in users_for_lookup.values() if u.zwid]
+    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
+    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+
+    def _enrich(user: User) -> dict:
+        zwid = user.zwid
+        zp = zp_by_zwid.get(zwid) if zwid else None
+        zr = zr_by_zwid.get(zwid) if zwid else None
+        return {
+            "user": user,
+            "zwid": zwid,
+            "is_race_ready": user.is_race_ready,
+            "is_extra_verified": user.is_extra_verified,
+            "in_zwiftpower": zp is not None,
+            "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
+            "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
+            "in_zwiftracing": zr is not None,
+            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+            "zr_age": getattr(zr, "age", "") or "" if zr else "",
+            "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+        }
+
+    enriched_by_user_id = {pk: _enrich(u) for pk, u in users_for_lookup.items()}
+
+    members_by_squad: dict[int, list] = {}
+    for sm in all_sms:
+        members_by_squad.setdefault(sm.squad_id, []).append(enriched_by_user_id[sm.user.pk])
+
+    # Slot selections that include the requesting user, grouped by squad
+    slot_selections_by_squad: dict[int, list] = {}
+    now_utc = timezone.now()
+    today_local = now_utc.astimezone(ZoneInfo(user_tz) if user_tz else now_utc.tzinfo).date()
+    for sel in user_selections:
+        display_tz = user_tz or sel.grid.grid_timezone or "UTC"
+        try:
+            tz_obj = ZoneInfo(display_tz)
+        except Exception:
+            tz_obj = ZoneInfo("UTC")
+            display_tz = "UTC"
+        utc_dt = datetime.combine(
+            sel.slot_date,
+            datetime.strptime(sel.slot_time, "%H:%M").time(),
+            tzinfo=ZoneInfo("UTC"),
+        )
+        local_dt = utc_dt.astimezone(tz_obj)
+        days_until = (local_dt.date() - today_local).days
+        if days_until > 1:
+            days_label = f"in {days_until} days"
+            days_class = "badge-info"
+        elif days_until == 1:
+            days_label = "tomorrow"
+            days_class = "badge-warning"
+        elif days_until == 0:
+            days_label = "today"
+            days_class = "badge-warning"
+        else:
+            days_label = f"{abs(days_until)} day{'s' if abs(days_until) != 1 else ''} ago"
+            days_class = "badge-ghost"
+        riders = [
+            enriched_by_user_id[u.pk]
+            for u in sel.selected_users.all()
+            if u.pk in enriched_by_user_id
+        ]
+        slot_selections_by_squad.setdefault(sel.grid.squad_id, []).append({
+            "selection": sel,
+            "grid_title": sel.grid.title or "Availability Grid",
+            "local_day": local_dt.strftime("%a"),
+            "local_date": local_dt.strftime("%b %-d"),
+            "local_time": local_dt.strftime("%H:%M"),
+            "display_timezone": display_tz,
+            "days_until": days_until,
+            "days_label": days_label,
+            "days_class": days_class,
+            "riders": riders,
+        })
 
     events_data = []
     for signup in signups:
@@ -2530,6 +2570,8 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         selections_json[utc_key] = {
             "id": sel.pk,
             "name": sel.name,
+            "event_invite_url": sel.event_invite_url,
+            "course_url": sel.course_url,
             "selected_user_ids": list(sel.selected_users.values_list("pk", flat=True)),
         }
 
@@ -3165,6 +3207,8 @@ def slot_selection_create_view(
     name = request.POST.get("name", "").strip()
     slot_date = request.POST.get("slot_date", "")
     slot_time = request.POST.get("slot_time", "")
+    event_invite_url = request.POST.get("event_invite_url", "").strip()
+    course_url = request.POST.get("course_url", "").strip()
     selected_user_ids = request.POST.getlist("selected_users")
 
     if not name or not slot_date or not slot_time:
@@ -3174,7 +3218,12 @@ def slot_selection_create_view(
         grid=grid,
         slot_date=slot_date,
         slot_time=slot_time,
-        defaults={"name": name, "created_by": request.user},
+        defaults={
+            "name": name,
+            "event_invite_url": event_invite_url,
+            "course_url": course_url,
+            "created_by": request.user,
+        },
     )
     selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
 
@@ -3219,13 +3268,17 @@ def slot_selection_update_view(
         return HttpResponse("Permission denied", status=403)
 
     name = request.POST.get("name", "").strip()
+    event_invite_url = request.POST.get("event_invite_url", "").strip()
+    course_url = request.POST.get("course_url", "").strip()
     selected_user_ids = request.POST.getlist("selected_users")
 
     if not name:
         return HttpResponse("Name is required.", status=400)
 
     selection.name = name
-    selection.save(update_fields=["name", "updated_at"])
+    selection.event_invite_url = event_invite_url
+    selection.course_url = course_url
+    selection.save(update_fields=["name", "event_invite_url", "course_url", "updated_at"])
     selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
 
     logfire.info(

@@ -23,6 +23,27 @@
   .heatmap-cell.cell-clickable { cursor: pointer; }
   .heatmap-cell.cell-clickable:hover { outline: 2px solid oklch(0.6 0.15 250); outline-offset: -2px; }
   .slot-badge { font-size: 0.55rem; font-weight: 700; background: oklch(0.55 0.2 250); color: white; border-radius: 0.2rem; padding: 0 0.2rem; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.1rem; }
+  .heatmap-cell.cell-clickable.cell-empty::after {
+    content: "+ SCHEDULE";
+    position: absolute;
+    top: 0.15rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: oklch(0.55 0.2 250);
+    background: var(--color-base-100);
+    border: 1px dashed oklch(0.55 0.2 250);
+    border-radius: 0.2rem;
+    padding: 0 0.25rem;
+    line-height: 1.1;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease-in;
+    white-space: nowrap;
+  }
+  .heatmap-cell.cell-clickable.cell-empty:hover::after { opacity: 1; }
 </style>
 {% endblock %}
 
@@ -68,7 +89,7 @@
         <tr>
           <th class="row-header">{{ row.time_slot }}</th>
           {% for cell in row.cells %}
-          <td class="heatmap-cell{% if cell.is_blocked %} cell-blocked{% endif %}{% if is_event_admin and not cell.is_blocked %} cell-clickable{% endif %}"
+          <td class="heatmap-cell{% if cell.is_blocked %} cell-blocked{% endif %}{% if is_event_admin and not cell.is_blocked %} cell-clickable{% if not cell.selection_name %} cell-empty{% endif %}{% endif %}"
               {% if not cell.is_blocked %}
               data-utc-date="{{ cell.utc_date }}"
               data-utc-time="{{ cell.utc_time }}"
@@ -117,14 +138,14 @@
     {% if is_event_admin %}
     <div class="flex items-center gap-1 ml-2">
       <span class="slot-badge">Name</span>
-      <span>Named slot</span>
+      <span>Scheduled race</span>
     </div>
     {% endif %}
   </div>
 
   <!-- Slot Selections -->
   <div class="mb-6">
-    <h3 class="text-sm font-semibold mb-2">Slot Selections</h3>
+    <h3 class="text-sm font-semibold mb-2">Scheduled Races</h3>
     <div id="slot-selections-container">
       {% include "events/_slot_selections_container.html" with enriched_selections=slot_selections_enriched %}
     </div>
@@ -176,7 +197,7 @@
 <!-- Slot Selection Modal -->
 <dialog id="slot-modal" class="modal">
   <div class="modal-box max-w-md">
-    <h3 class="font-bold text-lg mb-3" id="slot-modal-title">Name This Slot</h3>
+    <h3 class="font-bold text-lg mb-3" id="slot-modal-title">Schedule Race</h3>
     <form id="slot-modal-form" method="post"
           hx-target="#slot-selections-container"
           hx-swap="innerHTML">
@@ -185,8 +206,18 @@
       <input type="hidden" name="slot_time" id="slot-modal-time">
 
       <div class="form-control mb-3">
-        <label class="label"><span class="label-text">Name</span></label>
+        <label class="label"><span class="label-text">Race name</span></label>
         <input type="text" name="name" id="slot-modal-name" class="input input-bordered input-sm w-full" placeholder="e.g. Race 1" required>
+      </div>
+
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text">Event invite URL</span></label>
+        <input type="url" name="event_invite_url" id="slot-modal-event-invite-url" class="input input-bordered input-sm w-full" placeholder="https://www.zwift.com/events/view/...">
+      </div>
+
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text">Course URL</span></label>
+        <input type="url" name="course_url" id="slot-modal-course-url" class="input input-bordered input-sm w-full" placeholder="https://zwiftinsider.com/route/...">
       </div>
 
       <div class="form-control mb-3">
@@ -201,7 +232,7 @@
 
       <div class="modal-action">
         <button type="button" class="btn btn-sm" onclick="document.getElementById('slot-modal').close()">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm" id="slot-modal-submit">Save</button>
+        <button type="submit" class="btn btn-primary btn-sm" id="slot-modal-submit">Save Race</button>
       </div>
     </form>
   </div>
@@ -220,6 +251,8 @@
     const modal = document.getElementById('slot-modal');
     const form = document.getElementById('slot-modal-form');
     const nameInput = document.getElementById('slot-modal-name');
+    const eventInviteInput = document.getElementById('slot-modal-event-invite-url');
+    const courseInput = document.getElementById('slot-modal-course-url');
     const dateInput = document.getElementById('slot-modal-date');
     const timeInput = document.getElementById('slot-modal-time');
     const ridersDiv = document.getElementById('slot-modal-riders');
@@ -233,12 +266,16 @@
     timeInput.value = utcTime;
 
     if (existing) {
-      title.textContent = 'Edit Slot Selection';
+      title.textContent = 'Edit Scheduled Race';
       nameInput.value = existing.name;
+      eventInviteInput.value = existing.event_invite_url || '';
+      courseInput.value = existing.course_url || '';
       form.setAttribute('hx-post', updateUrlBase + existing.id + '/');
     } else {
-      title.textContent = 'Name This Slot';
+      title.textContent = 'Schedule Race';
       nameInput.value = '';
+      eventInviteInput.value = '';
+      courseInput.value = '';
       form.setAttribute('hx-post', createUrl);
     }
 
@@ -264,6 +301,9 @@
     // Re-process HTMX attributes after changing hx-post
     htmx.process(form);
     modal.showModal();
+    if (!existing) {
+      setTimeout(function() { nameInput.focus(); }, 0);
+    }
   }
 
   function toggleAllRiders(selectAll) {

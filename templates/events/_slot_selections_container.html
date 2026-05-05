@@ -7,6 +7,16 @@
       <div>
         <h4 class="font-bold text-sm">{{ item.selection.name }}</h4>
         <p class="text-xs text-base-content/60">{{ item.local_day }} {{ item.local_date }} {{ item.local_time }} ({{ display_timezone }})</p>
+        {% if item.selection.event_invite_url or item.selection.course_url %}
+        <p class="text-xs mt-1 flex flex-wrap gap-x-3">
+          {% if item.selection.event_invite_url %}
+          <a href="{{ item.selection.event_invite_url }}" target="_blank" rel="noopener" class="link link-primary">Event invite</a>
+          {% endif %}
+          {% if item.selection.course_url %}
+          <a href="{{ item.selection.course_url }}" target="_blank" rel="noopener" class="link link-primary">Course</a>
+          {% endif %}
+        </p>
+        {% endif %}
       </div>
       <div class="flex items-center gap-2">
         <span class="badge badge-sm badge-primary">{{ item.enriched_users|length }} rider{{ item.enriched_users|pluralize }}</span>
@@ -40,5 +50,5 @@
   </div>
 </div>
 {% empty %}
-<p class="text-sm text-base-content/50">No slot selections yet.{% if is_event_admin %} Click a cell in the heatmap to create one.{% endif %}</p>
+<p class="text-sm text-base-content/50">No races scheduled yet.{% if is_event_admin %} Click a cell in the heatmap to schedule one.{% endif %}</p>
 {% endfor %}

@@ -778,6 +778,16 @@ class AvailabilitySlotSelection(models.Model):
     name = models.CharField(max_length=200, help_text="Display name for this slot selection")
     slot_date = models.DateField(help_text="UTC date of the selected cell")
     slot_time = models.CharField(max_length=5, help_text='UTC time as "HH:MM"')
+    event_invite_url = models.URLField(
+        blank=True,
+        default="",
+        help_text="Optional invite link to the scheduled event/race",
+    )
+    course_url = models.URLField(
+        blank=True,
+        default="",
+        help_text="Optional link to the course/route page",
+    )
     selected_users = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         blank=True,
