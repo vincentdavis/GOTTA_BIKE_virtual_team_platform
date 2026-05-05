@@ -554,6 +554,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
                 "pending_availability_count": pending_count,
                 "members": members_by_squad.get(squad.pk, []),
                 "user_slot_selections": slot_selections_by_squad.get(squad.pk, []),
+                "can_manage_availability": _can_manage_squad_availability(request.user, squad),
             })
         event_pending = sum(sq["pending_availability_count"] for sq in squad_data)
         has_grids = any(sq["grids"] for sq in squad_data)
