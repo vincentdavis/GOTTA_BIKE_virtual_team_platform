@@ -147,7 +147,8 @@
         </div>
         <div class="dropdown dropdown-end">
           <div tabindex="0" role="button"
-               class="btn btn-ghost btn-circle avatar {% if not user.discord_avatar_url %}placeholder{% endif %}">
+               class="btn btn-ghost btn-circle avatar {% if not user.discord_avatar_url %}placeholder{% endif %}"
+               {% if pending_availability_count %}aria-label="{{ pending_availability_count }} availability response(s) pending" title="{{ pending_availability_count }} availability response(s) pending"{% endif %}>
             {% if user.discord_avatar_url %}
               <div class="w-10 rounded-full">
                 <img src="{{ user.discord_avatar_url }}" alt="{{ user.username }}"/>
@@ -156,6 +157,9 @@
               <div class="bg-neutral text-neutral-content w-10 rounded-full">
                 <span class="text-sm">{{ user.username|slice:":2"|upper }}</span>
               </div>
+            {% endif %}
+            {% if pending_availability_count %}
+              <span class="absolute top-1 right-1 inline-block w-2.5 h-2.5 bg-warning rounded-full ring-2 ring-base-100"></span>
             {% endif %}
           </div>
           <ul tabindex="0"
@@ -209,6 +213,9 @@
                         d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
                 </svg>
                 My Events
+                {% if pending_availability_count %}
+                <span class="badge badge-warning badge-xs ml-auto">{{ pending_availability_count }}</span>
+                {% endif %}
               </a>
             </li>
             <li>
