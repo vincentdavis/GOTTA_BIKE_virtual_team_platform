@@ -69,6 +69,34 @@ def _can_manage_event_roles(user: User, event: Event) -> bool:
     return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
 
 
+def _can_manage_squad_availability(user: User, squad: Squad) -> bool:
+    """Check if a user can manage availability for a specific squad.
+
+    Allowed for:
+    - Superusers
+    - Users with the ``event_admin`` permission
+    - The squad's captain or vice-captain
+    - Users holding the squad's Discord captain role
+    - Users holding the parent event's head captain Discord role
+
+    Args:
+        user: The requesting user.
+        squad: The squad whose availability is being managed.
+
+    Returns:
+        True if the user can manage availability for this squad.
+
+    """
+    if user.is_event_admin or user.is_superuser:
+        return True
+    if squad.captain_id == user.pk or squad.vice_captain_id == user.pk:
+        return True
+    if squad.discord_captain_role and user.has_discord_role(squad.discord_captain_role):
+        return True
+    event = squad.event
+    return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
+
+
 def _can_view_v_report(user: User, event: Event) -> bool:
     """Check if a user can view the V Report for an event.
 
@@ -1428,7 +1456,7 @@ def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) 
     event = get_object_or_404(Event, pk=event_pk)
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_squad_availability(request.user, squad):
         logfire.warning(
             "Unauthorized squad availability access attempt",
             squad_id=squad_pk,
@@ -2062,7 +2090,7 @@ def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int)
     event = get_object_or_404(Event, pk=event_pk)
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_squad_availability(request.user, squad):
         logfire.warning(
             "Unauthorized availability builder access",
             squad_id=squad_pk,
@@ -2213,7 +2241,7 @@ def availability_status_view(request: HttpRequest, event_pk: int, squad_pk: int,
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
     grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_squad_availability(request.user, squad):
         logfire.warning(
             "Unauthorized availability status change",
             grid_id=str(grid.id),
@@ -2270,7 +2298,7 @@ def availability_delete_view(request: HttpRequest, event_pk: int, squad_pk: int,
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
     grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_squad_availability(request.user, squad):
         logfire.warning(
             "Unauthorized availability delete attempt",
             grid_id=str(grid.id),
@@ -2558,7 +2586,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         utc_key = f"{sel.slot_date.isoformat()}|{sel.slot_time}"
         slot_selection_by_utc_key[utc_key] = sel
 
-    is_event_admin = request.user.is_event_admin or request.user.is_superuser
+    is_event_admin = _can_manage_squad_availability(request.user, squad)
 
     # Build grid_rows for server-side rendering
     blocked_set = grid_data["display_blocked"]
@@ -3248,7 +3276,7 @@ def slot_selection_create_view(
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
     grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
 
-    if not (request.user.is_event_admin or request.user.is_superuser):
+    if not _can_manage_squad_availability(request.user, squad):
         return HttpResponse("Permission denied", status=403)
 
     name = request.POST.get("name", "").strip()
@@ -3317,7 +3345,7 @@ def slot_selection_update_view(
     grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
     selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
 
-    if not (request.user.is_event_admin or request.user.is_superuser):
+    if not _can_manage_squad_availability(request.user, squad):
         return HttpResponse("Permission denied", status=403)
 
     name = request.POST.get("name", "").strip()
@@ -3375,7 +3403,7 @@ def slot_selection_delete_view(
     grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
     selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
 
-    if not (request.user.is_event_admin or request.user.is_superuser):
+    if not _can_manage_squad_availability(request.user, squad):
         return HttpResponse("Permission denied", status=403)
 
     logfire.info(
@@ -3419,7 +3447,7 @@ def slot_selection_create_thread_view(
     grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
     selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
 
-    if not (request.user.is_event_admin or request.user.is_superuser):
+    if not _can_manage_squad_availability(request.user, squad):
         return HttpResponse("Permission denied", status=403)
 
     if selection.thread_link:
@@ -3519,7 +3547,7 @@ def _render_slot_selections_partial(
     from apps.zwiftracing.models import ZRRider
 
     selections = list(grid.slot_selections.prefetch_related("selected_users"))
-    is_event_admin = request.user.is_event_admin or request.user.is_superuser
+    is_event_admin = _can_manage_squad_availability(request.user, squad)
 
     # Determine display timezone
     user_tz = getattr(request.user, "timezone", "") or ""
