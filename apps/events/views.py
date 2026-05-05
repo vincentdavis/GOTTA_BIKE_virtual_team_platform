@@ -19,7 +19,13 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import discord_permission_required, team_member_required
-from apps.accounts.discord_service import add_discord_role, remove_discord_role, sync_user_discord_roles
+from apps.accounts.discord_service import (
+    add_discord_role,
+    create_discord_thread,
+    remove_discord_role,
+    send_discord_channel_message,
+    sync_user_discord_roles,
+)
 from apps.accounts.models import Permissions, User
 from apps.events.forms import EventForm, EventRoleSetupForm, SquadForm
 from apps.events.models import (
@@ -2446,9 +2452,18 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     responses = list(AvailabilityResponse.objects.filter(grid=grid).select_related("user"))
     total_responders = len(responses)
 
-    # Enrich responders with ZP/ZR data
     responder_users = [r.user for r in responses]
-    zwids = [u.zwid for u in responder_users if u.zwid]
+    responder_user_ids = {u.pk for u in responder_users}
+
+    squad_member_users = list(
+        User.objects
+        .filter(squad_memberships__squad=squad, squad_memberships__status=SquadMember.Status.MEMBER)
+        .order_by("first_name", "last_name")
+    )
+    non_responder_users = [u for u in squad_member_users if u.pk not in responder_user_ids]
+
+    # Enrich responders + non-responders with ZP/ZR data (shared lookup)
+    zwids = list({u.zwid for u in responder_users + non_responder_users if u.zwid})
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
     zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
 
@@ -2485,6 +2500,26 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         }
         enriched_responders.append(entry)
         user_by_id[user.pk] = entry
+
+    enriched_non_responders = []
+    for user in non_responder_users:
+        zp = zp_by_zwid.get(user.zwid)
+        zr = zr_by_zwid.get(user.zwid)
+        enriched_non_responders.append({
+            "user": user,
+            "display_name": user.get_full_name() or user.discord_username,
+            "zwid": user.zwid,
+            "is_race_ready": user.is_race_ready,
+            "is_extra_verified": user.is_extra_verified,
+            "in_zwiftpower": zp is not None,
+            "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
+            "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
+            "in_zwiftracing": zr is not None,
+            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+            "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+            "zr_age": getattr(zr, "age", "") or "" if zr else "",
+        })
 
     # Aggregate user IDs keyed by UTC cell
     utc_cell_user_ids: dict[str, list[int]] = {}
@@ -2643,6 +2678,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "grid_rows": grid_rows,
             "total_responders": total_responders,
             "enriched_responders": enriched_responders,
+            "enriched_non_responders": enriched_non_responders,
             "display_timezone": display_tz,
             "tz_is_default": tz_is_default,
             "is_event_admin": is_event_admin,
@@ -3351,6 +3387,115 @@ def slot_selection_delete_view(
         user_id=request.user.id,
     )
     selection.delete()
+
+    return _render_slot_selections_partial(request, event, squad, grid)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def slot_selection_create_thread_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int
+) -> HttpResponse:
+    """Create a Discord thread in the squad's channel for a confirmed scheduled race.
+
+    Posts a starting message that names the race, lists the date/time, and @-mentions
+    the selected riders. Saves the resulting thread URL onto the slot selection.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+        slot_pk: The slot selection primary key.
+
+    Returns:
+        HTMX partial with updated slot selections container, or 400 with an error
+        message if validation fails or the Discord API call errors out.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
+
+    if not (request.user.is_event_admin or request.user.is_superuser):
+        return HttpResponse("Permission denied", status=403)
+
+    if selection.thread_link:
+        return HttpResponse("A thread already exists for this race.", status=400)
+    if not squad.discord_channel_id:
+        return HttpResponse("Squad has no Discord channel configured.", status=400)
+    if selection.status != AvailabilitySlotSelection.Status.CONFIRMED:
+        return HttpResponse("Race status must be Confirmed before creating a thread.", status=400)
+    selected_users_qs = selection.selected_users.all()
+    if not selected_users_qs.exists():
+        return HttpResponse("Select at least one rider before creating a thread.", status=400)
+
+    guild_id = config.GUILD_ID
+    if not guild_id:
+        return HttpResponse("Discord guild is not configured.", status=400)
+
+    user_tz = getattr(request.user, "timezone", "") or ""
+    display_tz = user_tz or grid.grid_timezone or "UTC"
+    try:
+        tz_obj = ZoneInfo(display_tz)
+    except Exception:
+        tz_obj = ZoneInfo("UTC")
+        display_tz = "UTC"
+    utc_dt = datetime.combine(
+        selection.slot_date,
+        datetime.strptime(selection.slot_time, "%H:%M").time(),
+        tzinfo=ZoneInfo("UTC"),
+    )
+    local_dt = utc_dt.astimezone(tz_obj)
+
+    thread_name = f"{selection.name} {local_dt.strftime('%b %-d')}"
+
+    discord_ids = [u.discord_id for u in selected_users_qs if u.discord_id]
+    mentions = " ".join(f"<@{did}>" for did in discord_ids)
+    full_datetime = local_dt.strftime("%A, %B %-d, %Y · %H:%M")
+    message_lines = [
+        f"**{selection.name}**",
+        f"{full_datetime} ({display_tz})",
+    ]
+    if mentions:
+        message_lines.extend(["", mentions])
+    message_body = "\n".join(message_lines)
+
+    thread_id, error = create_discord_thread(squad.discord_channel_id, thread_name)
+    if thread_id is None:
+        logfire.error(
+            "Failed to create Discord thread for scheduled race",
+            selection_id=selection.pk,
+            channel_id=str(squad.discord_channel_id),
+            error=error,
+        )
+        return HttpResponse(f"Failed to create thread: {error}", status=400)
+
+    posted = send_discord_channel_message(
+        thread_id,
+        message_body,
+        allowed_user_ids=discord_ids or None,
+    )
+    if not posted:
+        logfire.warning(
+            "Discord thread created but starter message failed to post",
+            selection_id=selection.pk,
+            thread_id=str(thread_id),
+        )
+
+    selection.thread_link = f"https://discord.com/channels/{guild_id}/{thread_id}"
+    selection.save(update_fields=["thread_link", "updated_at"])
+
+    logfire.info(
+        "Scheduled race Discord thread created",
+        selection_id=selection.pk,
+        thread_id=str(thread_id),
+        channel_id=str(squad.discord_channel_id),
+        rider_count=len(discord_ids),
+        user_id=request.user.id,
+    )
 
     return _render_slot_selections_partial(request, event, squad, grid)
 

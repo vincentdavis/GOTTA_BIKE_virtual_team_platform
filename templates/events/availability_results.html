@@ -191,6 +191,18 @@
     {% endif %}
   </div>
   {% endif %}
+
+  <!-- Waiting Response -->
+  {% if enriched_non_responders %}
+  <div class="mb-6">
+    <h3 class="text-sm font-semibold mb-2">Waiting Response ({{ enriched_non_responders|length }})</h3>
+    <div class="flex flex-wrap gap-2">
+      {% for entry in enriched_non_responders %}
+      {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {% if is_event_admin %}
@@ -244,7 +256,21 @@
         </div>
       </div>
 
+      <div id="slot-modal-error" class="alert alert-error py-2 mb-3 text-xs hidden"></div>
+
       <div class="modal-action">
+        <a id="slot-modal-thread-open" href="#" target="_blank" rel="noopener" class="btn btn-outline btn-sm hidden mr-auto">
+          Open thread
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+          </svg>
+        </a>
+        <button type="button" id="slot-modal-create-thread" class="btn btn-info btn-sm hidden mr-auto"
+                hx-target="#slot-selections-container" hx-swap="innerHTML"
+                hx-indicator="#slot-modal-thread-spinner">
+          <span id="slot-modal-thread-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+          Create Discord Thread
+        </button>
         <button type="button" class="btn btn-sm" onclick="document.getElementById('slot-modal').close()">Cancel</button>
         <button type="submit" class="btn btn-primary btn-sm" id="slot-modal-submit">Save Race</button>
       </div>
@@ -260,6 +286,8 @@
   const existingSelections = {{ selections_json|safe }};
   const createUrl = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}";
   const updateUrlBase = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}".replace(/slots\/$/, "slots/");
+  const squadDiscordChannelId = {{ squad.discord_channel_id|default:0 }};
+  const csrfToken = "{{ csrf_token }}";
 
   function openSlotModal(utcDate, utcTime) {
     const modal = document.getElementById('slot-modal');
@@ -273,6 +301,9 @@
     const timeInput = document.getElementById('slot-modal-time');
     const ridersDiv = document.getElementById('slot-modal-riders');
     const title = document.getElementById('slot-modal-title');
+    const threadBtn = document.getElementById('slot-modal-create-thread');
+    const threadOpenLink = document.getElementById('slot-modal-thread-open');
+    const errorBox = document.getElementById('slot-modal-error');
 
     const utcKey = utcDate + '|' + utcTime;
     const available = utcCellUsers[utcKey] || [];
@@ -280,6 +311,8 @@
 
     dateInput.value = utcDate;
     timeInput.value = utcTime;
+    errorBox.classList.add('hidden');
+    errorBox.textContent = '';
 
     if (existing) {
       title.textContent = 'Edit Scheduled Race';
@@ -289,6 +322,7 @@
       courseInput.value = existing.course_url || '';
       threadInput.value = existing.thread_link || '';
       form.setAttribute('hx-post', updateUrlBase + existing.id + '/');
+      configureThreadButton(existing);
     } else {
       title.textContent = 'Schedule Race';
       nameInput.value = '';
@@ -297,6 +331,8 @@
       courseInput.value = '';
       threadInput.value = '';
       form.setAttribute('hx-post', createUrl);
+      threadBtn.classList.add('hidden');
+      threadOpenLink.classList.add('hidden');
     }
 
     // Build rider checkboxes
@@ -331,6 +367,50 @@
       cb.checked = selectAll;
     });
   }
+
+  function configureThreadButton(existing) {
+    const threadBtn = document.getElementById('slot-modal-create-thread');
+    const threadOpenLink = document.getElementById('slot-modal-thread-open');
+
+    if (existing.thread_link) {
+      threadBtn.classList.add('hidden');
+      threadOpenLink.href = existing.thread_link;
+      threadOpenLink.classList.remove('hidden');
+      return;
+    }
+
+    threadOpenLink.classList.add('hidden');
+    threadBtn.classList.remove('hidden');
+
+    const reasons = [];
+    if (!squadDiscordChannelId) reasons.push("Squad has no Discord channel set");
+    if ((existing.selected_user_ids || []).length === 0) reasons.push("Select at least one rider");
+    if ((existing.status || 'none') !== 'confirmed') reasons.push("Set status to Confirmed");
+
+    if (reasons.length > 0) {
+      threadBtn.disabled = true;
+      threadBtn.title = reasons.join("; ") + ". Save changes first if you just edited those fields.";
+      threadBtn.removeAttribute('hx-post');
+      threadBtn.removeAttribute('hx-headers');
+      htmx.process(threadBtn);
+    } else {
+      threadBtn.disabled = false;
+      threadBtn.title = '';
+      const url = updateUrlBase + existing.id + '/create-thread/';
+      threadBtn.setAttribute('hx-post', url);
+      threadBtn.setAttribute('hx-headers', JSON.stringify({"X-CSRFToken": csrfToken}));
+      htmx.process(threadBtn);
+    }
+  }
+
+  // Show server errors from the create-thread endpoint inline
+  document.body.addEventListener('htmx:responseError', function(e) {
+    if (e.detail.elt && e.detail.elt.id === 'slot-modal-create-thread') {
+      const errorBox = document.getElementById('slot-modal-error');
+      errorBox.textContent = (e.detail.xhr && e.detail.xhr.responseText) || 'Failed to create thread.';
+      errorBox.classList.remove('hidden');
+    }
+  });
 
   // After HTMX swap, update existingSelections and cell badges by reloading
   document.body.addEventListener('htmx:afterSwap', function(e) {

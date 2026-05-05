@@ -23,6 +23,7 @@ from apps.events.views import (
     event_toggle_role_view,
     manage_roles_view,
     my_events_view,
+    slot_selection_create_thread_view,
     slot_selection_create_view,
     slot_selection_delete_view,
     slot_selection_update_view,
@@ -129,5 +130,10 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/<int:slot_pk>/delete/",
         slot_selection_delete_view,
         name="slot_selection_delete",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/<int:slot_pk>/create-thread/",
+        slot_selection_create_thread_view,
+        name="slot_selection_create_thread",
     ),
 ]

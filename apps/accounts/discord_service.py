@@ -74,13 +74,23 @@ def send_discord_dm(discord_id: str, message: str) -> bool:
         return False
 
 
-def send_discord_channel_message(channel_id: str | int, message: str, *, silent: bool = False) -> bool:
+def send_discord_channel_message(
+    channel_id: str | int,
+    message: str,
+    *,
+    silent: bool = False,
+    allowed_user_ids: list[str] | None = None,
+) -> bool:
     """Send a message to a Discord channel.
 
     Args:
         channel_id: The Discord channel ID to send the message to.
         message: The message content to send.
         silent: If True, suppress push/desktop notifications for this message.
+        allowed_user_ids: Optional list of Discord user IDs whose @mentions should
+            actually trigger notifications. When provided, sets `allowed_mentions`
+            to restrict pings to exactly those users (everyone/role mentions are
+            disabled).
 
     Returns:
         True if the message was sent successfully, False otherwise.
@@ -105,6 +115,8 @@ def send_discord_channel_message(channel_id: str | int, message: str, *, silent:
     if silent:
         # Flag 4096 (1 << 12) = SUPPRESS_NOTIFICATIONS
         payload["flags"] = 4096
+    if allowed_user_ids is not None:
+        payload["allowed_mentions"] = {"parse": [], "users": allowed_user_ids}
 
     try:
         with httpx.Client(timeout=10.0) as client:
@@ -132,6 +144,82 @@ def send_discord_channel_message(channel_id: str | int, message: str, *, silent:
             error=str(e),
         )
         return False
+
+
+def create_discord_thread(
+    channel_id: str | int,
+    name: str,
+    auto_archive_minutes: int = 1440,
+) -> tuple[int | None, str | None]:
+    """Create a public thread in a Discord text channel.
+
+    POSTs to ``/channels/{channel_id}/threads`` with ``type=11`` (GUILD_PUBLIC_THREAD).
+    Discord caps thread names at 100 characters; the name is truncated if longer.
+
+    Args:
+        channel_id: The parent Discord channel ID.
+        name: The thread name. Truncated to 100 characters.
+        auto_archive_minutes: Auto-archive duration in minutes. Allowed: 60, 1440, 4320, 10080.
+
+    Returns:
+        Tuple of (thread_id, error_message). On success, error_message is None.
+        On failure, thread_id is None and error_message describes the problem.
+
+    """
+    if not channel_id or channel_id == 0:
+        return None, "No Discord channel configured."
+
+    bot_token = config.DISCORD_BOT_TOKEN
+    if not bot_token:
+        return None, "Discord bot token is not configured."
+
+    truncated_name = name[:100]
+    headers = {
+        "Authorization": f"Bot {bot_token}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "name": truncated_name,
+        "type": 11,
+        "auto_archive_duration": auto_archive_minutes,
+    }
+
+    with logfire.span("create_discord_thread", channel_id=str(channel_id), name=truncated_name):
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.post(
+                    f"{DISCORD_API_BASE}/channels/{channel_id}/threads",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                thread_id = int(response.json()["id"])
+                logfire.info(
+                    "Discord thread created",
+                    channel_id=str(channel_id),
+                    thread_id=str(thread_id),
+                )
+                return thread_id, None
+        except httpx.HTTPStatusError as e:
+            try:
+                err_body = e.response.json()
+                err_msg = err_body.get("message") or str(e)
+            except ValueError:
+                err_msg = e.response.text or str(e)
+            logfire.error(
+                "Failed to create Discord thread",
+                channel_id=str(channel_id),
+                status_code=e.response.status_code,
+                error=err_msg,
+            )
+            return None, err_msg
+        except httpx.RequestError as e:
+            logfire.error(
+                "Discord API request failed for thread creation",
+                channel_id=str(channel_id),
+                error=str(e),
+            )
+            return None, f"Discord API request failed: {e}"
 
 
 def send_verification_notification(
