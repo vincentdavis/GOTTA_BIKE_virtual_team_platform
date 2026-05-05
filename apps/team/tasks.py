@@ -1,5 +1,6 @@
 """Background tasks for team app."""
 
+import json
 import time
 
 import httpx
@@ -456,37 +457,54 @@ def sync_discord_roles() -> dict:
 
 
 @task
-def warn_expiring_verifications(days: int = 15, dry_run: bool = False) -> dict:
+def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bool = False) -> dict:
     """Send Discord DMs to users whose verification records expire in exactly N days.
 
     Args:
-        days: Exact number of days until expiration to match (strict equality).
+        days: Exact number(s) of days until expiration to match. May be a single
+            int (legacy), a list of ints, or ``None`` to read the
+            ``EXPIRE_WARNING_DAYS`` Constance setting (JSON list of ints).
         dry_run: If True, return the list of matching users/records without sending DMs.
 
     Returns:
         Summary dict with status, counts, and user list.
 
     """
-    with logfire.span("warn_expiring_verifications", days=days, dry_run=dry_run):
+    if days is None:
+        try:
+            parsed = json.loads(config.EXPIRE_WARNING_DAYS)
+        except (json.JSONDecodeError, TypeError) as e:
+            logfire.error("Failed to parse EXPIRE_WARNING_DAYS config", error=str(e))
+            parsed = [15]
+        days_list = [int(d) for d in parsed if isinstance(d, int) or str(d).strip().lstrip("-").isdigit()]
+    elif isinstance(days, int):
+        days_list = [days]
+    else:
+        days_list = [int(d) for d in days]
+
+    days_set = set(days_list)
+
+    with logfire.span("warn_expiring_verifications", days=days_list, dry_run=dry_run):
         verified_records = RaceReadyRecord.objects.filter(
             status=RaceReadyRecord.Status.VERIFIED,
             user__discord_id__isnull=False,
         ).exclude(user__discord_id="").select_related("user")
 
         total_checked = 0
-        matching_records = []
+        # List of (record, days_remaining) so the DM can quote the actual threshold hit.
+        matching_records: list[tuple[RaceReadyRecord, int]] = []
 
         for record in verified_records:
             total_checked += 1
             remaining = record.days_remaining
             if remaining is None:
                 continue
-            if remaining == days:
-                matching_records.append(record)
+            if remaining in days_set:
+                matching_records.append((record, remaining))
 
         logfire.info(
             "Expiring verification scan complete",
-            days=days,
+            days=days_list,
             total_checked=total_checked,
             matching=len(matching_records),
             dry_run=dry_run,
@@ -494,12 +512,13 @@ def warn_expiring_verifications(days: int = 15, dry_run: bool = False) -> dict:
 
         if dry_run:
             users_warned = [
-                f"{_get_user_display_name(r.user)} ({r.get_verify_type_display()}, expires {r.expires_date})"
-                for r in matching_records
+                f"{_get_user_display_name(r.user)} ({r.get_verify_type_display()}, "
+                f"{remaining}d remaining, expires {r.expires_date})"
+                for r, remaining in matching_records
             ]
             return {
                 "status": "dry_run",
-                "days": days,
+                "days": days_list,
                 "dry_run": True,
                 "total_checked": total_checked,
                 "warnings_sent": 0,
@@ -511,7 +530,7 @@ def warn_expiring_verifications(days: int = 15, dry_run: bool = False) -> dict:
         users_warned = []
         errors = []
 
-        for record in matching_records:
+        for record, remaining in matching_records:
             user = record.user
             verify_label = record.get_verify_type_display()
             expires = record.expires_date
@@ -519,7 +538,7 @@ def warn_expiring_verifications(days: int = 15, dry_run: bool = False) -> dict:
 
             message = (
                 f"\u23f0 **Verification Expiring Soon**\n\n"
-                f"Your **{verify_label}** verification expires in **{days} days** ({expires_str}).\n\n"
+                f"Your **{verify_label}** verification expires in **{remaining} days** ({expires_str}).\n\n"
                 f"Please submit a new verification record to maintain your Race Ready status."
             )
 
@@ -532,7 +551,7 @@ def warn_expiring_verifications(days: int = 15, dry_run: bool = False) -> dict:
                     user_id=user.id,
                     discord_id=user.discord_id,
                     verify_type=record.verify_type,
-                    days_remaining=days,
+                    days_remaining=remaining,
                 )
             else:
                 errors.append(f"Failed to DM {_get_user_display_name(user)} ({user.discord_id})")
@@ -547,7 +566,7 @@ def warn_expiring_verifications(days: int = 15, dry_run: bool = False) -> dict:
 
         return {
             "status": "complete",
-            "days": days,
+            "days": days_list,
             "dry_run": False,
             "total_checked": total_checked,
             "warnings_sent": warnings_sent,

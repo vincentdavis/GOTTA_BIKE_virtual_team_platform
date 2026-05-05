@@ -113,11 +113,10 @@ TASK_REGISTRY: dict = {
     },
     "warn_expiring_verifications": {
         "task": warn_expiring_verifications,
-        "description": "Send DMs to users whose verifications expire in exactly N days",
-        "params": [
-            {"name": "days", "type": "number", "label": "Days until expiration", "default": 15, "required": True},
-            {"name": "dry_run", "type": "checkbox", "label": "Dry run (don't send DMs)", "default": True},
-        ],
+        "description": (
+            "Send DMs to users whose verifications expire in any of the days listed in "
+            "the EXPIRE_WARNING_DAYS Constance setting"
+        ),
     },
     "sync_data_connections": {
         "task": sync_all_data_connections,
