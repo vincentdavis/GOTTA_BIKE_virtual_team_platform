@@ -3,9 +3,9 @@
 import json
 import re
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
-from zoneinfo import available_timezones
+from zoneinfo import ZoneInfo, available_timezones
 
 import logfire
 from constance import config
@@ -389,6 +389,39 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
     )
 
     all_squad_ids = [sq.pk for squads in squads_by_event.values() for sq in squads]
+
+    # Slot selections that include the requesting user, grouped by squad
+    user_tz = getattr(request.user, "timezone", "") or ""
+    slot_selections_by_squad: dict[int, list] = {}
+    if all_squad_ids:
+        user_selections = (
+            AvailabilitySlotSelection.objects
+            .filter(selected_users=request.user, grid__squad_id__in=all_squad_ids)
+            .select_related("grid", "grid__squad")
+            .order_by("slot_date", "slot_time")
+        )
+        for sel in user_selections:
+            display_tz = user_tz or sel.grid.grid_timezone or "UTC"
+            try:
+                tz_obj = ZoneInfo(display_tz)
+            except Exception:
+                tz_obj = ZoneInfo("UTC")
+                display_tz = "UTC"
+            utc_dt = datetime.combine(
+                sel.slot_date,
+                datetime.strptime(sel.slot_time, "%H:%M").time(),
+                tzinfo=ZoneInfo("UTC"),
+            )
+            local_dt = utc_dt.astimezone(tz_obj)
+            slot_selections_by_squad.setdefault(sel.grid.squad_id, []).append({
+                "selection": sel,
+                "grid_title": sel.grid.title or "Availability Grid",
+                "local_day": local_dt.strftime("%a"),
+                "local_date": local_dt.strftime("%b %-d"),
+                "local_time": local_dt.strftime("%H:%M"),
+                "display_timezone": display_tz,
+            })
+
     members_by_squad: dict[int, list] = {}
     if all_squad_ids:
         all_sms = list(
@@ -437,6 +470,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
                 "grids": squad_grids,
                 "pending_availability_count": pending_count,
                 "members": members_by_squad.get(squad.pk, []),
+                "user_slot_selections": slot_selections_by_squad.get(squad.pk, []),
             })
         event_pending = sum(sq["pending_availability_count"] for sq in squad_data)
         has_grids = any(sq["grids"] for sq in squad_data)
