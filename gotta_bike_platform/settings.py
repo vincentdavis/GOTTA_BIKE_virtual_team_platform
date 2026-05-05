@@ -149,6 +149,7 @@ TEMPLATES = [
                 "constance.context_processors.config",
                 "gotta_bike_platform.context_processors.site_settings",
                 "apps.cms.context_processors.cms_nav_pages",
+                "apps.team.context_processors.pending_verification_count",
             ],
         },
     },
