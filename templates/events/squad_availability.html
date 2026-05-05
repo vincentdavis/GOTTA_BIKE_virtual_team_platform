@@ -61,6 +61,11 @@
                   <button type="submit" class="btn btn-neutral btn-xs btn-outline">Close</button>
                 </form>
                 {% endif %}
+                <form method="post" action="{% url 'events:availability_delete' event.pk squad.pk grid.pk %}" class="inline"
+                      onsubmit="return confirm('Delete availability grid &quot;{{ grid.title|escapejs }}&quot;? This will remove the grid and all {{ grid.response_count }} response(s). This cannot be undone.');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-error btn-xs btn-outline">Delete</button>
+                </form>
               </td>
             </tr>
             {% endfor %}

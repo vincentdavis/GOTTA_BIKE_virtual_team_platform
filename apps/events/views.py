@@ -2161,6 +2161,56 @@ def availability_status_view(request: HttpRequest, event_pk: int, squad_pk: int,
     return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
 
+@login_required
+@team_member_required()
+@require_POST
+def availability_delete_view(request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str) -> HttpResponse:
+    """Delete an availability grid along with all its responses and slot selections.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+
+    Returns:
+        Redirect to squad availability page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+
+    if not request.user.is_event_admin and not request.user.is_superuser:
+        logfire.warning(
+            "Unauthorized availability delete attempt",
+            grid_id=str(grid.id),
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    grid_title = grid.title or "Availability Grid"
+    response_count = grid.responses.count()
+    selection_count = grid.slot_selections.count()
+    grid.delete()
+
+    logfire.info(
+        "Availability grid deleted",
+        grid_id=str(grid_pk),
+        grid_title=grid_title,
+        response_count=response_count,
+        selection_count=selection_count,
+        squad_id=squad_pk,
+        event_id=event_pk,
+        user_id=request.user.id,
+    )
+    messages.success(request, f'Availability grid "{grid_title}" deleted.')
+    return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+
 @require_http_methods(["GET", "POST"])
 @login_required
 @team_member_required()

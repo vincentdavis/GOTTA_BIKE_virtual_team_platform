@@ -6,6 +6,7 @@ from apps.events.views import (
     add_members_search_view,
     add_members_view,
     availability_create_view,
+    availability_delete_view,
     availability_respond_view,
     availability_results_view,
     availability_status_view,
@@ -98,6 +99,11 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/status/",
         availability_status_view,
         name="availability_status",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/delete/",
+        availability_delete_view,
+        name="availability_delete",
     ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/",
