@@ -26,6 +26,7 @@ Welcome to the documentation for The Coalition Team Platform, a Django web appli
 - **Guild Member Sync** - Sync Discord guild members with Django to compare membership vs accounts
 - **Data Connections** - Export team data to Google Sheets with configurable fields and filters
 - **Events & Squads** - Event management with signups, squads, and squad member assignment
+- **Squad Availability & Scheduled Races** - Heatmap-driven availability, named race slots with status/links, and one-click Discord thread creation for confirmed races
 - **Strava Integration** - Sync and display Strava club activities
 - **Analytics** - Server-side page visit tracking with admin dashboard
 - **Help Page** - Admin-editable help page backed by constance setting

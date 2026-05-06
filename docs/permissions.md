@@ -28,6 +28,7 @@ The system checks permissions in this order:
 | `data_connection` | Access to Google Sheets data exports |
 | `pages_admin` | Can create and manage CMS pages |
 | `event_admin` | Create, edit, and manage events, squads, and signups |
+| `assign_roles` | Manage Discord role setup and assign/unassign Discord roles on events; event head captain role holders also get this ability per-event |
 
 ## Configuration
 
@@ -48,6 +49,7 @@ Configure permission mappings in Django admin at `/admin/constance/config/` unde
 | `PERM_DATA_CONNECTION_ROLES` | Discord role IDs that can access data exports |
 | `PERM_PAGES_ADMIN_ROLES` | Discord role IDs that can manage CMS pages |
 | `PERM_EVENT_ADMIN_ROLES` | Discord role IDs that can manage events, squads, and signups |
+| `PERM_ASSIGN_ROLES` | Discord role IDs that can manage Discord role setup and assign/unassign roles on events |
 
 **Format**: JSON array of Discord role IDs, e.g., `["1234567890123456789", "9876543210987654321"]`
 
@@ -88,6 +90,22 @@ if request.user.is_team_captain:
 if request.user.is_app_admin:
     ...
 ```
+
+## Captain-or-Admin Pattern (per-squad / per-event)
+
+Some features expand the gate beyond a single permission to also include squad captains, vice-captains, and Discord
+captain-role holders for the relevant squad or event. These helpers live in `apps/events/views.py`:
+
+- `_can_manage_squad_availability(user, squad)` — manage availability grids, build scheduled races, create Discord
+  threads. Allows `event_admin`, superusers, the squad's captain/vice-captain, holders of `Squad.discord_captain_role`,
+  and holders of the parent `Event.head_captain_role_id`.
+- `_can_view_v_report(user, event)` — view the V Report for an event. Allows `event_admin`, superusers, captains/
+  vice-captains of any squad in the event, and holders of `Event.head_captain_role_id`.
+- `_can_manage_event_roles(user, event)` — manage Discord role setup for an event. Allows `assign_roles` permission
+  holders and holders of `Event.head_captain_role_id`.
+
+When adding a new feature scoped to a single squad/event, prefer extending or copying these helpers rather than
+introducing a new global permission.
 
 ## Manual Permission Overrides
 

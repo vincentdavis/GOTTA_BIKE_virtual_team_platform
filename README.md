@@ -17,6 +17,7 @@ A Django web application for The Coalition Zwift racing team. Manages team membe
 - **Data Connections** - Export team data to Google Sheets
 - **Role-Based Permissions** - Discord role-based access control
 - **Events & Squads** - Event management with signups, squads, and squad member assignment
+- **Squad Availability & Scheduled Races** - Squad captains build availability heatmaps, schedule races (named slots) directly from the heatmap, attach Zwift event/course links, and create Discord threads with @-mentioned riders in one click
 - **Strava Integration** - Sync and display Strava club activities
 - **Analytics** - Server-side page visit tracking with dashboard
 - **Help Page** - Admin-editable help page with markdown support

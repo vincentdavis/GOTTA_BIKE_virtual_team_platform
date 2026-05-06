@@ -10,28 +10,37 @@ while the backend code uses "Race Ready" (e.g., `is_race_ready`, `RaceReadyRecor
 
 ## Race Ready Requirements
 
-A user is race ready (`User.is_race_ready` property) when they have **ALL** verification types required for their
-ZwiftPower category (see Category-Based Requirements below). The `is_race_ready` property dynamically checks:
+`User.is_race_ready` is a **cached `BooleanField`** (not a dynamic property). The live calculation lives in
+`User.calculate_race_ready()` and looks up the user's required verification types based on their ZwiftPower category
+(see Category-Based Requirements below):
 
 1. Looks up the user's required verification types based on their ZwiftPower division
 2. Checks that the user has a verified, non-expired `RaceReadyRecord` for **each** required type
 3. Returns `True` only if all required types are satisfied
 
+The cache is updated by:
+- `User.refresh_race_ready()` — call after any change that affects a user's verification state
+- `refresh_all_race_ready` cron task — periodic full sweep, also handles expiration
+
+There is no Django signal updating this field — code paths that mutate `RaceReadyRecord` must call
+`refresh_race_ready()` themselves (see existing call sites in `apps/team/views.py`).
+
 ## Verification Types
 
 | Type           | Description                               | Default Validity |
 |----------------|-------------------------------------------|------------------|
-| `weight_full`  | Full weight verification with scale photo | 180 days         |
+| `weight_full`  | Full weight verification with scale photo | 120 days         |
 | `weight_light` | Light weight verification                 | 30 days          |
 | `height`       | Height verification                       | Forever (0 days) |
 | `power`        | Power verification                        | 365 days         |
 
 Validity periods are configurable via Constance settings:
 
-- `WEIGHT_FULL_DAYS` (default: 180)
+- `WEIGHT_FULL_DAYS` (default: 120)
 - `WEIGHT_LIGHT_DAYS` (default: 30)
 - `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)
 - `POWER_VERIFICATION_DAYS` (default: 365)
+- `EXPIRE_WARNING_DAYS` (JSON list of int days, default `[15, 7, 3, 1]`) — drives the `warn_expiring_verifications` cron task; users get a Discord DM on each matching threshold day
 
 A configurable Markdown message can be displayed at the top of the verification form via the `VERIFICATION_FORM_MESSAGE` Constance setting (in the "Verification Settings" group). When set, it renders below the card title on `/user/verification/`.
 
@@ -104,7 +113,7 @@ via the `CATEGORY_REQUIREMENTS` Constance setting.
 
 The `get_user_verification_types(user)` function in `apps/team/services.py` returns the required types.
 This function is used by:
-- `User.is_race_ready` property to check if user meets all requirements
+- `User.calculate_race_ready()` (the live calculation backing the cached `is_race_ready` field)
 - `RaceReadyRecordForm` to filter the dropdown choices when submitting
 
 ## Record Status
