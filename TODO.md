@@ -9,7 +9,6 @@
 - [ ] Race ready verification logic tests (expiration, category requirements, is_race_ready)
 - [ ] Membership application workflow tests (status transitions, form validation)
 - [ ] Discord bot API endpoint tests (auth, sync, CRUD operations)
-- [ ] Cron API endpoint tests
 - [ ] Background task tests (ZP sync, ZR sync, Strava sync, notifications)
 - [ ] User model tests (profile completion, properties, social account reconnection)
 - [ ] CMS page tests (access control, publishing, navigation)
@@ -24,19 +23,16 @@
 
 ### Events & Squads
 
-- [x] Role Setup: configurable `EVENT_ROLE_PREFIXES` constance setting with form validation
-- [x] Role Setup: read-only Role Setup section on event edit page (editable only on dedicated page)
-- [x] Squad form: Discord role requires event prefix, only shows roles matching the prefix
-- [x] Manage Roles: Head Captain Role holders can manage roles (in addition to `PERM_ASSIGN_ROLES`)
-- [x] Role Setup page: accessible by `assign_roles`, head captain role, or event admins (read-only)
-- [x] Availability builder: mobile-responsive grid (smaller cells, scroll arrows, stacked settings, short day labels)
-- [x] Availability respond: mobile-responsive grid (smaller cells, scroll arrows, short day labels)
-- [ ] Availability: backend processing of responses (aggregate results, export)
+- [ ] Availability: CSV export of responses
+- [ ] Surface "Manage Availability" link on event detail page for squad captains (currently only on /events/my-events/)
+- [ ] Document Discord bot channel permissions required for "Create Discord Thread" (View Channel + Create Public
+  Threads + Send Messages in Threads); investigate startup preflight check
 
 ### Discord Sync
 
 - [x] Add `sync_discord_roles` background task (callable from `/site/config/background_tasks/`)
-- [ ] Auto-sync Discord roles on a schedule (like guild members every 6 hours)
+- [ ] Confirm the external cron service is calling `sync_discord_roles` on a schedule (task is registered; scheduling
+  lives outside the repo)
 
 ### Performance Review
 
@@ -47,7 +43,9 @@
 
 ### Verifications
 
-- [ ] Add "Extra Verified" tier (`is_extra_verified` — weight_full + height + power all verified, regardless of category)
+- [x] Add "Extra Verified" tier (`is_extra_verified` — weight_full + height + power all verified, regardless of
+  category)
+- [ ] Group `warn_expiring_verifications` DMs by user (currently one DM per matching record per day; consolidate)
 - [ ] Add provisional status to verification records
 - [ ] Backfill historical record_date values (some default to 2026-01-01)
 
@@ -108,9 +106,15 @@
 
 ### UX Improvements
 
-- [ ] Reusable user tooltip partial (`templates/accounts/_user_tooltip.html`). A single `{% include %}` that wraps any user name with a hover tooltip showing avatar, Discord username, race ready status, ZP/ZR category, rating, phenotype, and profile links. Accepts optional enriched ZP/ZR context; gracefully omits fields not provided. Replace existing per-page tooltip implementations (my_events squad members, event_detail squad members, roster, etc.) with this shared partial.
+- [x] Reusable user tooltip partial (`templates/accounts/_user_tooltip.html`). A single `{% include %}` that wraps any
+  user name with a hover tooltip showing avatar, Discord username, race ready status, ZP/ZR category, rating, phenotype,
+  and profile links. Accepts optional enriched ZP/ZR context; gracefully omits fields not provided. Replace existing
+  per-page tooltip implementations (my_events squad members, event_detail squad members, roster, etc.) with this shared
+  partial.
 - [ ] Onboarding checklist for new users (profile → verify Zwift → race verification)
 - [x] Help/FAQ page with glossary (race-ready, categories, verification types)
+- [ ] Full notification center (bell icon + dropdown). Sidebar/avatar badges for pending verifications and pending
+  availability already shipped via context processors; this would consolidate them and add new sources.
 - [ ] Persistent notification center (beyond auto-dismiss toasts)
 - [ ] Mobile-optimized table views (card layout option for small screens — availability grids done, tables remain)
 
