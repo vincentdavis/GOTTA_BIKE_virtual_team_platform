@@ -98,13 +98,19 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - Configurable filters (gender, division, rating, phenotype)
     - Manual sync clears sheet and rewrites all data
 - `events` - Event management with squads and signups:
-    - `Event` model - Team events with title, description (Markdown), dates, Discord channel/role IDs, signup settings
-    - `Squad` model - Squads within an event with captain/vice-captain, ZR category range, Discord text/audio channels, Discord role, URL, invite URL
+    - `Event` model - Team events with title, description (Markdown), dates, Discord channel/role IDs (`head_captain_role_id` for the event's head captain), signup settings
+    - `Squad` model - Squads within an event with captain/vice-captain, ZR category range, Discord text/audio channels, URL, invite URL
+        - Discord role fields: `team_discord_role` (squad role), `discord_captain_role` (squad captain role), `captain_notifications` (bool — DM captains on member events)
     - `SquadMember` model - Links users to squads (member/pending/rejected status, unique on squad+user)
+    - `AvailabilityGrid` - Date/time grid for collecting squad availability (status: draft/published/closed). Stores all times in UTC; converted to user/grid timezone at render
+    - `AvailabilityResponse` - One per (grid, user); stores `available_cells` JSON of UTC date/time pairs
+    - `AvailabilitySlotSelection` ("Scheduled Race") - Named race slot built from heatmap by captains/admins. Fields: `name`, `slot_date/slot_time` (UTC), `status` (none/pending/confirmed), `event_invite_url`, `course_url`, `thread_link`, `selected_users` M2M
     - `EventSignup` model - Event-level signups with timezone selection and status
     - `Race` model - Individual races within an event
     - `RaceRegistration` model - Race-level registrations
-    - Views require `team_member` permission; create/edit/delete/squad management require `is_event_admin`
+    - Views require `team_member` permission; create/edit/delete event/squad require `event_admin`
+    - **Manage availability** (grids, scheduled races, Discord thread creation) is gated by `_can_manage_squad_availability(user, squad)` — allows event admins, superusers, the squad's captain/vice-captain, holders of the squad's `discord_captain_role`, and holders of the parent event's `head_captain_role_id`. Same captain-or-admin pattern is used by `_can_view_v_report`
+    - **Discord thread creation** for a confirmed scheduled race is wired through `apps/accounts/discord_service.py:create_discord_thread`; saves the resulting URL onto `slot.thread_link`. Requires status=confirmed, riders selected, squad has `discord_channel_id`
     - Role Setup: event prefix (`EVENT_ROLE_PREFIXES` constance), head captain role, event role — editable by `assign_roles` or event's head captain
     - Manage Roles: assign/unassign Discord roles to members — requires `assign_roles` or event's head captain role
     - Squad Discord roles must match the event's prefix; squad role dropdown disabled if no prefix is set
@@ -254,6 +260,7 @@ Uses Django 6.0's built-in `django-tasks` with database backend. Define with `@t
     - `get_club_activities()` - Fetch activities with automatic token refresh on 401
     - `sync_club_activities()` - Bulk fetch and database sync with transaction support
     - Returns `(status_code, response)` tuple; handles 429 rate limits gracefully
+- `apps/accounts/discord_service.py` - Direct Discord REST client (httpx, sync). Bot token from `config.DISCORD_BOT_TOKEN`. Functions: `send_discord_dm`, `send_discord_channel_message` (supports `allowed_user_ids` for proper @-mention notifications), `send_verification_notification`, `add_discord_role`, `remove_discord_role`, `sync_user_discord_roles`, `create_discord_thread` (returns `(thread_id, error)`). The Discord bot has no HTTP server — all web→Discord calls go through this module.
 
 ### Discord Bot API (`apps/dbot_api`)
 
@@ -285,11 +292,8 @@ REST API for triggering scheduled tasks via external cron service:
 - Endpoints:
     - `GET /api/cron/tasks` - List available tasks
     - `POST /api/cron/task/{task_name}` - Trigger a task by name
-- Available tasks:
-    - `update_team_riders` - Fetch team riders from ZwiftPower
-    - `update_team_results` - Fetch team results from ZwiftPower
-    - `sync_zr_riders` - Sync riders from Zwift Racing API
-    - `guild_member_sync_status` - Report guild member sync health (actual sync done by Discord bot)
+- Available tasks: see `TASK_REGISTRY` in `apps/dbot_api/cron_api.py` — covers ZP/ZR/Strava/YouTube/Discord
+  syncs, race-ready cache refresh, expiry warning DMs, data-connection exports, and more.
 
 To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
 
@@ -318,6 +322,7 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
 - `/page/<slug>/` - CMS pages (`apps.cms.urls`)
 - `/events/` - Events management (`apps.events.urls`):
     - `/events/` - Event list
+    - `/events/my-events/` - Authenticated user's signed-up events with squad/availability state
     - `/events/create/` - Create event (event admins)
     - `/events/<id>/` - Event detail with signups, squads, and squad assignment
     - `/events/<id>/edit/` - Edit event (event admins)
@@ -328,7 +333,10 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
     - `/events/<id>/squads/assign/` - Assign user to squad (event admins, POST)
     - `/events/<id>/role-setup/` - Discord role setup (event admins read-only; assign_roles/head captain can edit)
     - `/events/<id>/manage-roles/` - Assign/unassign Discord roles (assign_roles or head captain)
-    - `/events/<id>/availability/<squad_id>/` - Create availability for squad (event admins)
+    - `/events/<id>/squads/<squad_id>/availability/` - Manage availability grids for a squad (captain/admin gate)
+    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/` - Member response form (published grids)
+    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/results/` - Heatmap + scheduled race editor
+    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/slots/<slot_pk>/create-thread/` - Create Discord thread for a confirmed scheduled race
 - `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
 - `/strava/` - Strava club activities (`apps.club_strava.urls`)
@@ -389,6 +397,14 @@ Home page (`gotta_bike_platform/views.py: home()`): uses `HOME_PAGE_SLUG_AUTHENT
 
 Client-side JS in `base.html` sends page data to `/api/analytics/track/` (Django Ninja). `PageVisit` model stores combined server+client data. Dashboard at `/analytics/` (requires `app_admin`). Key files in `apps/analytics/`.
 
+## Notification Badges
+
+Sidebar/avatar badges are driven by context processors with short per-user caches:
+- `apps.team.context_processors.pending_verification_count` — count of `RaceReadyRecord.status=PENDING` the current user can review (mirrors same-gender gate from `verification_records_view`). Sidebar badge on "Verification Records".
+- `apps.events.context_processors.pending_availability_count` — count of published `AvailabilityGrid` rows in the user's squads with no response yet. Drives the warning dot on the avatar and the count next to "My Events" in the user-menu dropdown.
+
+Both gate on permission/auth before any DB call, then cache the count for 60 s per user. New badges should follow this pattern (skip the query when the user can't act on it; cache short).
+
 ## Strava Integration
 
 `apps/club_strava/` - Strava club activity sync. Token refresh is automatic on 401 (tokens saved to Constance). Activity list at `/strava/`, manual sync at `/strava/sync/`. Constance settings: `STRAVA_CLUB_ID`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_ACCESS_TOKEN`, `STRAVA_REFRESH_TOKEN` (tokens auto-updated).
@@ -444,8 +460,13 @@ while the backend code uses "Race Ready" (e.g., `is_race_ready`, `RaceReadyRecor
 
 ### Requirements
 
-A user is race ready (`User.is_race_ready` property) when they have **ALL** verification types required for their
-ZwiftPower category. The property dynamically checks requirements based on `CATEGORY_REQUIREMENTS`.
+`User.is_race_ready` is a **cached BooleanField** (not a property). The live calculation lives in
+`User.calculate_race_ready()` and uses `CATEGORY_REQUIREMENTS`. The cache is updated by:
+- `User.refresh_race_ready()` — call after any change that affects a user's verification state
+- `refresh_all_race_ready` cron task — periodic full sweep, also handles expiration
+
+There is no Django signal — code paths that mutate `RaceReadyRecord` must call `refresh_race_ready()` themselves
+(see existing call sites in `apps/team/views.py`).
 
 ### Category-Based Verification Types
 
@@ -498,10 +519,11 @@ Falls back to original badges/SVGs when no emoji image is uploaded.
 4. Users with `approve_verification` permission review and verify/reject records; reviewers can edit `record_date` before acting
 5. Users with `performance_verification_team` or `app_admin` permission can change the status of or delete any verification record (any status)
 6. Verified records expire based on `record_date` (not submission date) and Constance settings:
-   - `WEIGHT_FULL_DAYS` (default: 180 days)
+   - `WEIGHT_FULL_DAYS` (default: 120 days)
    - `WEIGHT_LIGHT_DAYS` (default: 30 days)
    - `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)
    - `POWER_VERIFICATION_DAYS` (default: 365 days)
+   - `EXPIRE_WARNING_DAYS` (JSON list of int days, default `[15, 7, 3, 1]`) — the `warn_expiring_verifications` cron task DMs each owner once per matching threshold day
 7. `RaceReadyRecord.days_remaining` property returns days until expiration (or None)
 
 ### Race Ready Role Assignment
