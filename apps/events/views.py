@@ -3451,6 +3451,26 @@ def slot_selection_create_thread_view(
     if not _can_manage_squad_availability(request.user, squad):
         return HttpResponse("Permission denied", status=403)
 
+    # Persist any unsaved edits from the modal before reading state below.
+    # The button posts the full form so the user does not have to "Save Race"
+    # before "Create Discord Thread".
+    posted_name = request.POST.get("name", "").strip()
+    if posted_name:
+        valid_statuses = {s.value for s in AvailabilitySlotSelection.Status}
+        raw_status = request.POST.get("status", selection.status)
+        new_status = raw_status if raw_status in valid_statuses else selection.status
+        selection.name = posted_name
+        selection.status = new_status
+        selection.event_invite_url = request.POST.get("event_invite_url", "").strip()
+        selection.course_url = request.POST.get("course_url", "").strip()
+        # thread_link is intentionally NOT overwritten here — it's set below
+        # once the thread is created. Letting the form's stale value land would
+        # break the idempotence guard on the next click.
+        selection.save(update_fields=["name", "status", "event_invite_url", "course_url", "updated_at"])
+        if "selected_users" in request.POST:
+            selected_user_ids = request.POST.getlist("selected_users")
+            selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
+
     if selection.thread_link:
         return HttpResponse("A thread already exists for this race.", status=400)
     if not squad.discord_channel_id:
