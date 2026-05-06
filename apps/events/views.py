@@ -3465,28 +3465,31 @@ def slot_selection_create_thread_view(
     if not guild_id:
         return HttpResponse("Discord guild is not configured.", status=400)
 
-    user_tz = getattr(request.user, "timezone", "") or ""
-    display_tz = user_tz or grid.grid_timezone or "UTC"
-    try:
-        tz_obj = ZoneInfo(display_tz)
-    except Exception:
-        tz_obj = ZoneInfo("UTC")
-        display_tz = "UTC"
     utc_dt = datetime.combine(
         selection.slot_date,
         datetime.strptime(selection.slot_time, "%H:%M").time(),
         tzinfo=ZoneInfo("UTC"),
     )
-    local_dt = utc_dt.astimezone(tz_obj)
 
-    thread_name = f"{selection.name} {local_dt.strftime('%b %-d')}"
+    # Thread name has to be a static string (Discord doesn't render markdown in
+    # thread titles), so use the grid's authoring timezone — it's tied to the
+    # squad rather than to whoever clicked the button.
+    try:
+        grid_tz = ZoneInfo(grid.grid_timezone) if grid.grid_timezone else ZoneInfo("UTC")
+    except Exception:
+        grid_tz = ZoneInfo("UTC")
+    grid_local_dt = utc_dt.astimezone(grid_tz)
+    thread_name = f"{selection.name} {grid_local_dt.strftime('%b %-d')}"
 
+    # Body uses Discord native timestamp markdown so each viewer sees the date
+    # and time rendered in their own Discord client timezone. <t:unix:F> = full
+    # date and time, <t:unix:R> = relative ("in 3 days").
+    unix_ts = int(utc_dt.timestamp())
     discord_ids = [u.discord_id for u in selected_users_qs if u.discord_id]
     mentions = " ".join(f"<@{did}>" for did in discord_ids)
-    full_datetime = local_dt.strftime("%A, %B %-d, %Y · %H:%M")
     message_lines = [
         f"**{selection.name}**",
-        f"{full_datetime} ({display_tz})",
+        f"<t:{unix_ts}:F> (<t:{unix_ts}:R>)",
     ]
     if mentions:
         message_lines.extend(["", mentions])
