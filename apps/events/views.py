@@ -3510,7 +3510,12 @@ def slot_selection_create_thread_view(
     message_lines = [
         f"**{selection.name}**",
         f"<t:{unix_ts}:F> (<t:{unix_ts}:R>)",
+        f"**Status:** {selection.get_status_display()}",
     ]
+    if selection.event_invite_url:
+        message_lines.append(f"**Event invite:** {selection.event_invite_url}")
+    if selection.course_url:
+        message_lines.append(f"**Course:** {selection.course_url}")
     if mentions:
         message_lines.extend(["", mentions])
     message_body = "\n".join(message_lines)
