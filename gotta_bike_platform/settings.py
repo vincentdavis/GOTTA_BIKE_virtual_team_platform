@@ -93,6 +93,7 @@ INSTALLED_APPS = [
     "apps.analytics.apps.AnalyticsConfig",
     "apps.club_strava.apps.ClubStravaConfig",
     "apps.events.apps.EventsConfig",
+    "apps.user_api.apps.UserApiConfig",
     "django_tasks",
     "django_tasks_db",
 ]
@@ -422,6 +423,23 @@ CONSTANCE_CONFIG = {
         str,
     ),
     "ZRAPP_API_KEY": ("", "Zwift Racing App API key", "password_field"),
+    # User-facing API (per-user keys at /user/api-keys/)
+    "USER_API_RATE_LIMIT": (
+        "60/m",
+        "django-ratelimit rate string applied per API key on /api/user/ endpoints (e.g. '60/m', '1000/h')",
+        str,
+    ),
+    "USER_API_MAX_KEYS_PER_USER": (
+        3,
+        "Maximum active (non-revoked, non-expired) API keys a user may hold at one time",
+        int,
+    ),
+    "PERM_ROLES_REQUIRED_USE_API": (
+        "[]",
+        "Discord role IDs required (in addition to team_member and an active user) to create or use an API key. "
+        "JSON array of role IDs; user must hold ALL of them. Empty list = no extra role restriction.",
+        "json_list_field",
+    ),
     # TrainingPeaks Virtual
     "TPV_CLUB_URL": (
         "",
@@ -831,6 +849,11 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "ZWIFT_USERNAME",
         "ZWIFT_PASSWORD",
         "ZWIFTPOWER_TEAM_ID",
+    ),
+    "User API": (
+        "USER_API_RATE_LIMIT",
+        "USER_API_MAX_KEYS_PER_USER",
+        "PERM_ROLES_REQUIRED_USE_API",
     ),
     "Zwift Racing App": (
         "ZRAPP_API_URL",

@@ -17,6 +17,7 @@ from apps.accounts.tasks import (
 from apps.club_strava.tasks import sync_strava_activities
 from apps.data_connection.tasks import sync_all_data_connections
 from apps.team.tasks import sync_discord_channels, sync_discord_roles, warn_expiring_verifications
+from apps.user_api.tasks import purge_expired_api_keys
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.tasks import sync_zr_riders
 
@@ -121,6 +122,10 @@ TASK_REGISTRY: dict = {
     "sync_data_connections": {
         "task": sync_all_data_connections,
         "description": "Sync all data connections with auto_sync enabled to Google Sheets",
+    },
+    "purge_expired_api_keys": {
+        "task": purge_expired_api_keys,
+        "description": "Hard-delete user API keys that expired more than 90 days ago",
     },
 }
 

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}API Keys{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl mb-1">API Keys</h2>
+      <p class="text-sm text-base-content/70 mb-4">
+        Personal 30-day API keys for scripting against your team data. Each key inherits your account's permissions.
+      </p>
+
+      {% if new_raw_key %}
+      <div class="alert alert-warning mb-4">
+        <div>
+          <p class="font-bold">Save this key now &mdash; this is the only time you'll see it.</p>
+          <p class="text-xs mt-1">If you lose it, revoke this entry and create a new key.</p>
+          <pre class="bg-base-100 rounded p-2 mt-2 text-xs overflow-x-auto" id="new-key-block">{{ new_raw_key }}</pre>
+          <button type="button" class="btn btn-xs btn-outline mt-2"
+                  onclick="navigator.clipboard.writeText(document.getElementById('new-key-block').textContent.trim()); this.textContent='Copied';">
+            Copy
+          </button>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="card bg-base-300 mb-4">
+        <div class="card-body p-4">
+          <h3 class="font-semibold text-sm mb-2">Create a new key</h3>
+          {% if can_create %}
+          <form method="post" action="{% url 'user_api:api_keys_create' %}" class="flex flex-wrap items-end gap-2">
+            {% csrf_token %}
+            <div class="form-control flex-1 min-w-[200px]">
+              <label class="label py-1"><span class="label-text text-xs">Name</span></label>
+              <input type="text" name="name" required maxlength="80" placeholder="e.g. ZR Sync Script"
+                     class="input input-bordered input-sm w-full">
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Create Key</button>
+          </form>
+          <p class="text-xs text-base-content/60 mt-2">
+            You can have up to {{ max_keys }} active keys ({{ active_count }} used). Each key expires 30 days after creation.
+          </p>
+          {% else %}
+          <p class="text-sm">
+            You already have the maximum {{ max_keys }} active keys. Revoke one below before creating another.
+          </p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if keys %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Prefix &middot; Last4</th>
+              <th>Created</th>
+              <th>Expires</th>
+              <th>Last used</th>
+              <th>Status</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for k in keys %}
+            <tr {% if new_key_id and new_key_id|stringformat:"s" == k.pk|stringformat:"s" %}class="bg-success/10"{% endif %}>
+              <td class="font-medium">{{ k.name }}</td>
+              <td class="font-mono text-xs">{{ k.prefix }}…{{ k.last4 }}</td>
+              <td class="text-xs">{{ k.created_at|date:"M j, Y" }}</td>
+              <td class="text-xs">{{ k.expires_at|date:"M j, Y" }}</td>
+              <td class="text-xs">{% if k.last_used_at %}{{ k.last_used_at|date:"M j, Y H:i" }}{% else %}<span class="text-base-content/30">never</span>{% endif %}</td>
+              <td>
+                {% if k.is_revoked %}
+                  <span class="badge badge-error badge-sm">Revoked</span>
+                {% elif k.is_expired %}
+                  <span class="badge badge-neutral badge-sm">Expired</span>
+                {% else %}
+                  <span class="badge badge-success badge-sm">Active</span>
+                {% endif %}
+              </td>
+              <td class="text-right">
+                {% if k.is_active %}
+                <form method="post" action="{% url 'user_api:api_keys_revoke' k.pk %}" class="inline"
+                      onsubmit="return confirm('Revoke key &quot;{{ k.name|escapejs }}&quot;? This cannot be undone.');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-error btn-xs btn-outline">Revoke</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/50">No API keys yet.</p>
+      {% endif %}
+
+      <div class="divider"></div>
+      <div class="text-xs text-base-content/60">
+        <p class="mb-1">Use a key by sending the header <code class="text-xs">Authorization: Bearer coal_…</code> on requests to <code class="text-xs">/api/user/</code>.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
