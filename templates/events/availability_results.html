@@ -56,6 +56,10 @@
     white-space: nowrap;
   }
   .heatmap-cell.cell-clickable.cell-empty:hover::after { opacity: 1; }
+  /* Filter: cells below the chosen rider-count threshold dim out so the
+     captain can spot the popular slots at a glance. The cells stay clickable
+     so the admin can still create scheduled races on them if they want. */
+  .heatmap-cell.cell-below-min { opacity: 0.18; }
 </style>
 {% endblock %}
 
@@ -90,6 +94,7 @@
           {% for cell in row.cells %}
           <td class="heatmap-cell{% if cell.is_blocked %} cell-blocked{% endif %}{% if is_event_admin and not cell.is_blocked %} cell-clickable{% if not cell.selection_name %} cell-empty{% endif %}{% endif %}"
               {% if not cell.is_blocked %}
+              data-count="{{ cell.count }}"
               data-utc-date="{{ cell.utc_date }}"
               data-utc-time="{{ cell.utc_time }}"
               {% if is_event_admin %}onclick="openSlotModal('{{ cell.utc_date }}', '{{ cell.utc_time }}')"{% endif %}
@@ -140,6 +145,15 @@
       <span>Scheduled race</span>
     </div>
     {% endif %}
+  </div>
+
+  <!-- Filter: minimum rider count -->
+  <div class="flex items-center gap-2 mb-6 text-sm">
+    <label for="min-rider-filter" class="text-base-content/70">Show cells with at least:</label>
+    <select id="min-rider-filter" class="select select-bordered select-sm">
+      <option value="0" selected>All cells</option>
+    </select>
+    <span class="text-base-content/50 text-xs" id="min-rider-filter-hint"></span>
   </div>
 
   <!-- Slot Selections -->
@@ -203,6 +217,51 @@
   </div>
   {% endif %}
 </div>
+
+<!-- Min-rider filter (available to anyone viewing the results page) -->
+<script>
+(function() {
+  var select = document.getElementById('min-rider-filter');
+  var hint = document.getElementById('min-rider-filter-hint');
+  if (!select) return;
+
+  var cells = document.querySelectorAll('.heatmap-cell[data-count]');
+  var maxCount = 0;
+  cells.forEach(function(td) {
+    var n = parseInt(td.dataset.count, 10) || 0;
+    if (n > maxCount) maxCount = n;
+  });
+
+  for (var i = 1; i <= maxCount; i++) {
+    var opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = '≥ ' + i + ' rider' + (i === 1 ? '' : 's');
+    select.appendChild(opt);
+  }
+
+  function applyFilter() {
+    var threshold = parseInt(select.value, 10) || 0;
+    var visibleCount = 0;
+    cells.forEach(function(td) {
+      var n = parseInt(td.dataset.count, 10) || 0;
+      if (threshold > 0 && n < threshold) {
+        td.classList.add('cell-below-min');
+      } else {
+        td.classList.remove('cell-below-min');
+        visibleCount++;
+      }
+    });
+    if (hint) {
+      hint.textContent = threshold > 0
+        ? '(' + visibleCount + ' cell' + (visibleCount === 1 ? '' : 's') + ' shown)'
+        : '';
+    }
+  }
+
+  select.addEventListener('change', applyFilter);
+  applyFilter();
+})();
+</script>
 
 {% if is_event_admin %}
 <!-- Slot Selection Modal -->
