@@ -22,8 +22,21 @@
   }
   .avail-cell[data-state="available"] { background: var(--color-success); opacity: 0.6; }
   .avail-cell[data-state="unselected"] { background: var(--color-base-300); }
-  .avail-cell.cell-blocked { background: var(--color-neutral); opacity: 0.4; cursor: not-allowed; }
-  .avail-cell.cell-inactive { background: var(--color-base-200); opacity: 0.3; cursor: not-allowed; }
+  /* Unselectable cells get a diagonal-stripe overlay so they remain
+     unmistakable from "unselected" cells in both light and dark themes. */
+  .avail-cell.cell-blocked,
+  .avail-cell.cell-inactive {
+    cursor: not-allowed;
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent 0,
+      transparent 4px,
+      color-mix(in oklch, var(--color-base-content) 30%, transparent) 4px,
+      color-mix(in oklch, var(--color-base-content) 30%, transparent) 5px
+    );
+  }
+  .avail-cell.cell-blocked { background-color: color-mix(in oklch, var(--color-error) 20%, var(--color-base-100)); }
+  .avail-cell.cell-inactive { background-color: var(--color-base-100); }
 </style>
 {% endblock %}
 
@@ -36,33 +49,11 @@
   <h1 class="text-2xl font-bold mb-1">{{ grid.title }}</h1>
   <p class="text-base-content/70 mb-2">{{ event.title }} &mdash; {{ squad.name }}</p>
 
-  <!-- Timezone banner -->
-  <div class="alert alert-info mb-4 py-2">
-    <span class="text-sm">
-      Times shown in <strong>{{ display_timezone }}</strong>{% if tz_is_default %} (grid default &mdash; <a href="{% url 'accounts:profile_edit' %}" class="link link-primary">set your timezone in profile</a>){% endif %}
-    </span>
-  </div>
-
-  <p class="text-sm text-base-content/50 mb-6">
-    Click cells to mark when you are available. Blocked cells (dark) cannot be selected.
-  </p>
-
   <!-- Toast -->
   <div id="save-toast" class="toast toast-end toast-top hidden z-50">
     <div id="save-toast-inner" class="alert">
       <span id="save-toast-msg"></span>
     </div>
-  </div>
-
-  <!-- Grid Container with scroll arrows on mobile -->
-  <div class="relative">
-    <button id="btn-scroll-left" class="md:hidden absolute left-0 top-1/2 -translate-y-1/2 z-10 btn btn-circle btn-sm btn-neutral opacity-70 active:opacity-100" style="display:none;">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
-    </button>
-    <button id="btn-scroll-right" class="md:hidden absolute right-0 top-1/2 -translate-y-1/2 z-10 btn btn-circle btn-sm btn-neutral opacity-70 active:opacity-100" style="display:none;">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-    </button>
-    <div id="grid-container" class="avail-grid-wrap mb-4"></div>
   </div>
 
   <!-- Optional Questions -->
@@ -90,6 +81,21 @@
     </div>
   </div>
   {% endif %}
+
+  <p class="text-sm text-base-content/50 mb-4">
+    Click cells to mark when you are available. Blocked cells (dark) cannot be selected.
+  </p>
+
+  <!-- Grid Container with scroll arrows on mobile -->
+  <div class="relative">
+    <button id="btn-scroll-left" class="md:hidden absolute left-0 top-1/2 -translate-y-1/2 z-10 btn btn-circle btn-sm btn-neutral opacity-70 active:opacity-100" style="display:none;">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    </button>
+    <button id="btn-scroll-right" class="md:hidden absolute right-0 top-1/2 -translate-y-1/2 z-10 btn btn-circle btn-sm btn-neutral opacity-70 active:opacity-100" style="display:none;">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </button>
+    <div id="grid-container" class="avail-grid-wrap mb-4"></div>
+  </div>
 
   <!-- Actions -->
   <div class="flex flex-wrap items-center gap-2 mb-6">
@@ -184,7 +190,7 @@
       btnAll.addEventListener('click', function() { selectColumn(date, true); });
       var btnNone = document.createElement('button');
       btnNone.className = 'btn btn-ghost btn-xs px-1';
-      btnNone.textContent = 'None';
+      btnNone.textContent = 'Clear';
       btnNone.style.minHeight = '0';
       btnNone.style.height = '1.25rem';
       btnNone.style.fontSize = '0.65rem';

@@ -42,6 +42,30 @@
   <div class="card bg-base-200 shadow-md mb-6">
     <div class="card-body p-4">
       <h2 class="card-title text-lg mb-3">Grid Settings</h2>
+      <div class="flex flex-wrap gap-6 mb-3">
+        <div class="flex items-center gap-3">
+          <span class="label-text text-xs">Ask: Max number of races <span class="text-error">*</span></span>
+          <label class="label cursor-pointer gap-1 py-0">
+            <input type="radio" name="cfg-max-races" value="yes" class="radio radio-xs">
+            <span class="label-text text-xs">Yes</span>
+          </label>
+          <label class="label cursor-pointer gap-1 py-0">
+            <input type="radio" name="cfg-max-races" value="no" class="radio radio-xs">
+            <span class="label-text text-xs">No</span>
+          </label>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="label-text text-xs">Ask: Rest days between races <span class="text-error">*</span></span>
+          <label class="label cursor-pointer gap-1 py-0">
+            <input type="radio" name="cfg-rest-days" value="yes" class="radio radio-xs">
+            <span class="label-text text-xs">Yes</span>
+          </label>
+          <label class="label cursor-pointer gap-1 py-0">
+            <input type="radio" name="cfg-rest-days" value="no" class="radio radio-xs">
+            <span class="label-text text-xs">No</span>
+          </label>
+        </div>
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <div class="form-control">
           <label class="label py-0"><span class="label-text text-xs">Grid Title (optional)</span></label>
@@ -82,16 +106,6 @@
         <div class="form-control justify-end hidden lg:block">
           <button id="btn-generate-desktop" class="btn btn-primary btn-sm w-full">Generate Grid</button>
         </div>
-      </div>
-      <div class="flex flex-wrap gap-6 mt-3">
-        <label class="label cursor-pointer gap-2">
-          <input type="checkbox" id="cfg-max-races" class="checkbox checkbox-sm">
-          <span class="label-text text-xs">Ask: Max number of races</span>
-        </label>
-        <label class="label cursor-pointer gap-2">
-          <input type="checkbox" id="cfg-rest-days" class="checkbox checkbox-sm">
-          <span class="label-text text-xs">Ask: Rest days between races</span>
-        </label>
       </div>
       <div class="mt-3 lg:hidden">
         <button id="btn-generate-mobile" class="btn btn-primary btn-sm w-full">Generate Grid</button>
@@ -641,8 +655,10 @@
   var btnSave = document.getElementById('btn-save');
   var titleEl = document.getElementById('cfg-title');
   var expiresEl = document.getElementById('cfg-expires');
-  var maxRacesCheckbox = document.getElementById('cfg-max-races');
-  var restDaysCheckbox = document.getElementById('cfg-rest-days');
+  function getRadioValue(name) {
+    var el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : null;
+  }
 
   function showToast(msg, isError) {
     var toast = document.getElementById('save-toast');
@@ -657,6 +673,13 @@
   btnSave.addEventListener('click', function() {
     if (dates.length === 0 || timeSlots.length === 0) {
       showToast('Generate a grid first.', true);
+      return;
+    }
+
+    var maxRacesAnswer = getRadioValue('cfg-max-races');
+    var restDaysAnswer = getRadioValue('cfg-rest-days');
+    if (maxRacesAnswer === null || restDaysAnswer === null) {
+      showToast('Please answer both Ask questions (Yes or No).', true);
       return;
     }
 
@@ -679,8 +702,8 @@
       timezone: timezoneEl.value || 'UTC',
       blocked_cells: blockedCells,
       expires: expiresEl.value || null,
-      max_races_question: maxRacesCheckbox.checked,
-      rest_days_question: restDaysCheckbox.checked
+      max_races_question: maxRacesAnswer === 'yes',
+      rest_days_question: restDaysAnswer === 'yes'
     };
 
     btnSave.disabled = true;
