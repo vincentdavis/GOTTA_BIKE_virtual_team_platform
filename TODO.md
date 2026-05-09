@@ -117,6 +117,7 @@
   availability already shipped via context processors; this would consolidate them and add new sources.
 - [ ] Persistent notification center (beyond auto-dismiss toasts)
 - [ ] Mobile-optimized table views (card layout option for small screens — availability grids done, tables remain)
+- [ ] Drive the Configuration submenu in `theme/templates/sidebar.html` off `CONSTANCE_CONFIG_FIELDSETS` instead of the hardcoded `<li>` list, so adding a new fieldset group automatically appears in the menu (currently a two-step change is needed — fieldset entry + manual sidebar `<li>`)
 
 ### Accessibility
 
