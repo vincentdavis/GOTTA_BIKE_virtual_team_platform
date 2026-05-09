@@ -80,6 +80,7 @@ def send_discord_channel_message(
     *,
     silent: bool = False,
     allowed_user_ids: list[str] | None = None,
+    allowed_role_ids: list[str] | None = None,
 ) -> bool:
     """Send a message to a Discord channel.
 
@@ -88,9 +89,13 @@ def send_discord_channel_message(
         message: The message content to send.
         silent: If True, suppress push/desktop notifications for this message.
         allowed_user_ids: Optional list of Discord user IDs whose @mentions should
-            actually trigger notifications. When provided, sets `allowed_mentions`
+            actually trigger notifications. When provided, sets ``allowed_mentions``
             to restrict pings to exactly those users (everyone/role mentions are
-            disabled).
+            disabled unless ``allowed_role_ids`` is also provided).
+        allowed_role_ids: Optional list of Discord role IDs whose @mentions should
+            actually trigger notifications. When provided, ``allowed_mentions``
+            includes the listed roles so ``<@&role_id>`` syntax pings members of
+            those roles.
 
     Returns:
         True if the message was sent successfully, False otherwise.
@@ -115,8 +120,12 @@ def send_discord_channel_message(
     if silent:
         # Flag 4096 (1 << 12) = SUPPRESS_NOTIFICATIONS
         payload["flags"] = 4096
-    if allowed_user_ids is not None:
-        payload["allowed_mentions"] = {"parse": [], "users": allowed_user_ids}
+    if allowed_user_ids is not None or allowed_role_ids is not None:
+        payload["allowed_mentions"] = {
+            "parse": [],
+            "users": allowed_user_ids or [],
+            "roles": allowed_role_ids or [],
+        }
 
     try:
         with httpx.Client(timeout=10.0) as client:

@@ -3,7 +3,7 @@
 import json
 import re
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 from zoneinfo import ZoneInfo, available_timezones
 
@@ -15,6 +15,7 @@ from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
@@ -2222,6 +2223,91 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
     return JsonResponse({"id": str(grid.id), "status": "ok"})
 
 
+def _post_grid_published_notification(
+    request: HttpRequest,
+    event: Event,
+    squad: Squad,
+    grid: AvailabilityGrid,
+) -> bool | str:
+    """Post a Discord channel message announcing that a grid is now published.
+
+    Returns ``True`` on success or a short error string on failure. Failures are
+    logged via Logfire; the caller decides whether to surface the error to the
+    user. The grid's publish state is independent of this call.
+
+    Date markdown uses ``<t:UNIX:D>`` so each Discord viewer sees the calendar
+    day rendered in their own client locale. To avoid date drift across
+    timezones, the unix timestamp is anchored at noon in the grid's authoring
+    timezone.
+
+    Args:
+        request: The HTTP request (used for ``build_absolute_uri``).
+        event: Parent event.
+        squad: Squad whose Discord channel/role we post to.
+        grid: The just-published availability grid.
+
+    Returns:
+        ``True`` on success, otherwise a string describing the failure.
+
+    """
+    if not squad.discord_channel_id:
+        return "Squad has no Discord channel"
+
+    try:
+        grid_tz = ZoneInfo(grid.grid_timezone) if grid.grid_timezone else ZoneInfo("UTC")
+    except Exception:
+        grid_tz = ZoneInfo("UTC")
+
+    start_unix = int(datetime.combine(grid.start_date, time(12, 0), tzinfo=grid_tz).timestamp())
+    end_unix = int(datetime.combine(grid.end_date, time(12, 0), tzinfo=grid_tz).timestamp())
+
+    response_url = request.build_absolute_uri(
+        reverse(
+            "events:availability_respond",
+            kwargs={"event_pk": event.pk, "squad_pk": squad.pk, "grid_pk": grid.pk},
+        )
+    )
+
+    title = grid.title or "Availability Grid"
+    role_mention = f"<@&{squad.team_discord_role}>" if squad.team_discord_role else ""
+    lines = [
+        "**New Availability Requested**",
+        title,
+        f"<t:{start_unix}:D> – <t:{end_unix}:D>",  # noqa: RUF001
+        response_url,
+    ]
+    if grid.expires:
+        expires_unix = int(datetime.combine(grid.expires, time(12, 0), tzinfo=grid_tz).timestamp())
+        lines.append(f"Respond by: <t:{expires_unix}:D>")
+    if role_mention:
+        lines.extend(["", role_mention])
+    body = "\n".join(lines)
+
+    allowed_role_ids = [str(squad.team_discord_role)] if squad.team_discord_role else None
+
+    with logfire.span(
+        "availability_publish_notify",
+        grid_id=str(grid.id),
+        squad_id=squad.pk,
+        channel_id=str(squad.discord_channel_id),
+        role_id=str(squad.team_discord_role) if squad.team_discord_role else None,
+    ):
+        ok = send_discord_channel_message(
+            squad.discord_channel_id,
+            body,
+            allowed_role_ids=allowed_role_ids,
+        )
+    if ok:
+        logfire.info(
+            "Availability grid publish notification posted",
+            grid_id=str(grid.id),
+            squad_id=squad.pk,
+            channel_id=str(squad.discord_channel_id),
+        )
+        return True
+    return "Discord API call failed (see Logfire)"
+
+
 @login_required
 @team_member_required()
 @require_POST
@@ -2275,6 +2361,23 @@ def availability_status_view(request: HttpRequest, event_pk: int, squad_pk: int,
         event_id=event_pk,
         user_id=request.user.id,
     )
+
+    notify = request.POST.get("notify") == "1"
+    if notify and new_status == AvailabilityGrid.Status.PUBLISHED:
+        notification_result = _post_grid_published_notification(request, event, squad, grid)
+        if notification_result is True:
+            messages.success(
+                request,
+                f'Grid "{grid.title}" is now published. Squad notified in Discord.',
+            )
+        else:
+            messages.warning(
+                request,
+                f'Grid "{grid.title}" is now published, but the Discord notification failed: '
+                f'{notification_result}.',
+            )
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
     messages.success(request, f'Grid "{grid.title}" is now {grid.get_status_display().lower()}.')
     return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 

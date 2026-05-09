@@ -52,11 +52,41 @@
               </td>
               <td class="text-right space-x-1">
                 {% if grid.is_draft %}
-                <form method="post" action="{% url 'events:availability_status' event.pk squad.pk grid.pk %}" class="inline">
-                  {% csrf_token %}
-                  <input type="hidden" name="status" value="published">
-                  <button type="submit" class="btn btn-success btn-xs">Publish</button>
-                </form>
+                <button type="button" class="btn btn-success btn-xs"
+                        onclick="document.getElementById('publish-modal-{{ grid.pk }}').showModal()">
+                  Publish
+                </button>
+                <dialog id="publish-modal-{{ grid.pk }}" class="modal">
+                  <div class="modal-box">
+                    <h3 class="font-bold text-lg">Publish "{{ grid.title|default:'Availability Grid' }}"?</h3>
+                    <p class="py-2 text-sm">
+                      Riders will be able to respond once published. You can optionally notify the squad in
+                      Discord with a link to the response page.
+                    </p>
+                    {% if not squad.discord_channel_id %}
+                    <p class="text-xs text-warning">Squad has no Discord channel set — notify option disabled.</p>
+                    {% endif %}
+                    <div class="modal-action flex flex-wrap gap-2">
+                      <form method="dialog" class="inline">
+                        <button class="btn btn-sm">Cancel</button>
+                      </form>
+                      <form method="post" action="{% url 'events:availability_status' event.pk squad.pk grid.pk %}" class="inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="published">
+                        <button type="submit" class="btn btn-sm">Publish only</button>
+                      </form>
+                      {% if squad.discord_channel_id %}
+                      <form method="post" action="{% url 'events:availability_status' event.pk squad.pk grid.pk %}" class="inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="published">
+                        <input type="hidden" name="notify" value="1">
+                        <button type="submit" class="btn btn-sm btn-primary">Publish &amp; Notify Squad</button>
+                      </form>
+                      {% endif %}
+                    </div>
+                  </div>
+                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                </dialog>
                 {% elif grid.is_published %}
                 <form method="post" action="{% url 'events:availability_status' event.pk squad.pk grid.pk %}" class="inline">
                   {% csrf_token %}
