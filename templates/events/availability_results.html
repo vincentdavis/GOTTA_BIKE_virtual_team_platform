@@ -194,13 +194,13 @@
   <div class="mb-6">
     <h3 class="text-sm font-semibold mb-2">Responders ({{ total_responders }})</h3>
     <div class="overflow-x-auto mb-3">
-      <table class="table table-sm">
+      <table class="table table-sm" data-responders-table>
         <thead>
           <tr>
-            <th>Name</th>
-            {% if grid.max_races_question %}<th class="text-center">Max Races</th>{% endif %}
-            {% if grid.rest_days_question %}<th class="text-center">Rest Days</th>{% endif %}
-            <th class="text-center">Scheduled</th>
+            <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+            {% if grid.max_races_question %}<th data-sort="num" class="text-center cursor-pointer hover:text-primary select-none">Max Races</th>{% endif %}
+            {% if grid.rest_days_question %}<th data-sort="num" class="text-center cursor-pointer hover:text-primary select-none">Rest Days</th>{% endif %}
+            <th data-sort="num" class="text-center cursor-pointer hover:text-primary select-none">Scheduled</th>
           </tr>
         </thead>
         <tbody>
@@ -297,6 +297,47 @@
       try { window.localStorage.setItem(ICON_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* ignore */ }
     });
   }
+})();
+</script>
+
+<!-- Responders table column sorting -->
+<script>
+(function() {
+  document.querySelectorAll('[data-responders-table]').forEach(function(table) {
+    var headers = table.querySelectorAll('th[data-sort]');
+    headers.forEach(function(th, colIdx) {
+      th.addEventListener('click', function() {
+        var sortType = th.getAttribute('data-sort');
+        var asc = th.getAttribute('data-dir') !== 'asc';
+        headers.forEach(function(h) {
+          h.removeAttribute('data-dir');
+          var ind = h.querySelector('.sort-indicator');
+          if (ind) ind.remove();
+        });
+        th.setAttribute('data-dir', asc ? 'asc' : 'desc');
+        var indicator = document.createElement('span');
+        indicator.className = 'sort-indicator text-primary ml-1';
+        indicator.textContent = asc ? '▲' : '▼';
+        th.appendChild(indicator);
+
+        var tbody = table.querySelector('tbody');
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+        rows.sort(function(a, b) {
+          var aText = a.cells[colIdx].textContent.trim();
+          var bText = b.cells[colIdx].textContent.trim();
+          if (sortType === 'num') {
+            var aNum = parseFloat(aText);
+            var bNum = parseFloat(bText);
+            if (isNaN(aNum)) aNum = 0;
+            if (isNaN(bNum)) bNum = 0;
+            return asc ? aNum - bNum : bNum - aNum;
+          }
+          return asc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+        });
+        rows.forEach(function(row) { tbody.appendChild(row); });
+      });
+    });
+  });
 })();
 </script>
 
