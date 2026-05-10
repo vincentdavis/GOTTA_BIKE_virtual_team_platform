@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}All Races - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+    <h2 class="text-xl font-bold">All Races &mdash; {{ event.title }}</h2>
+    <span class="badge badge-ghost">{{ slots|length }} race{{ slots|length|pluralize }}</span>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
+    <a href="?start={{ prev_start|date:'Y-m-d' }}" class="btn btn-outline btn-xs">&larr; Earlier</a>
+    <span class="text-base-content/70">{{ start|date:"M j, Y" }} &ndash; {{ end|date:"M j, Y" }}</span>
+    <a href="?start={{ next_start|date:'Y-m-d' }}" class="btn btn-outline btn-xs">Later &rarr;</a>
+    {% if start != today %}
+    <a href="{% url 'events:event_all_races' event.pk %}" class="btn btn-ghost btn-xs">Today</a>
+    {% endif %}
+  </div>
+
+  {% if slots %}
+  <div class="flex flex-col gap-2">
+    {% for slot in slots %}
+    <div class="bg-base-200 rounded-md p-2 border border-base-300">
+      <div class="flex flex-wrap items-center gap-2 text-sm">
+        <button type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleAllRacesRiders('{{ slot.selection.pk }}')" title="Show riders">
+          <svg id="all-races-arrow-{{ slot.selection.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+        <span class="badge badge-neutral badge-sm">{{ slot.squad_name }}</span>
+        <span class="badge badge-primary badge-sm">{{ slot.selection.name }}</span>
+        {% if slot.is_status_visible %}
+        <span class="badge {{ slot.status_class }} badge-xs">{{ slot.status_label }}</span>
+        {% endif %}
+        <span class="text-base-content/80">{{ slot.local_day }} {{ slot.local_date }} &middot; {{ slot.local_time }}</span>
+        <span class="text-xs text-base-content/50">({{ slot.display_timezone }})</span>
+        <span class="badge {{ slot.days_class }} badge-xs">{{ slot.days_label }}</span>
+        <span class="badge badge-neutral badge-xs">{{ slot.riders|length }} rider{{ slot.riders|pluralize }}</span>
+        {% if slot.grid_title %}
+        <span class="text-xs text-base-content/50">&middot; {{ slot.grid_title }}</span>
+        {% endif %}
+      </div>
+      <div id="all-races-riders-{{ slot.selection.pk }}" style="display:none" class="mt-2">
+        {% if slot.selection.event_invite_url or slot.selection.course_url or slot.selection.thread_link %}
+        <p class="text-xs mb-2 flex flex-wrap gap-x-3">
+          {% if slot.selection.event_invite_url %}
+          <a href="{{ slot.selection.event_invite_url }}" target="_blank" rel="noopener" class="link link-primary">Event invite</a>
+          {% endif %}
+          {% if slot.selection.course_url %}
+          <a href="{{ slot.selection.course_url }}" target="_blank" rel="noopener" class="link link-primary">Course</a>
+          {% endif %}
+          {% if slot.selection.thread_link %}
+          <a href="{{ slot.selection.thread_link }}" target="_blank" rel="noopener" class="link link-primary">Discord thread</a>
+          {% endif %}
+        </p>
+        {% endif %}
+        {% if slot.riders %}
+        <div class="flex flex-wrap gap-x-3 gap-y-2 text-sm">
+          {% for r in slot.riders %}
+          <div>
+            {% if r.user.pk == slot.squad.captain_id %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif r.user.pk == slot.squad.vice_captain_id %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
+            {% include "accounts/_user_tooltip.html" with display_name=r.user.get_full_name|default:r.user.discord_username user_id=r.user.pk discord_id=r.user.discord_id discord_avatar_url=r.user.discord_avatar_url zwid=r.zwid zp_category=r.zp_category zp_category_w=r.zp_category_w zr_category=r.zr_category zr_rating=r.zr_rating zr_phenotype=r.zr_phenotype zr_age=r.zr_age is_race_ready=r.is_race_ready is_extra_verified=r.is_extra_verified in_zwiftpower=r.in_zwiftpower in_zwiftracing=r.in_zwiftracing %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-base-content/50">No riders selected.</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-base-content/50">No races scheduled in this window.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleAllRacesRiders(key) {
+  var row = document.getElementById('all-races-riders-' + key);
+  var arrow = document.getElementById('all-races-arrow-' + key);
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    arrow.style.transform = 'rotate(90deg)';
+  } else {
+    row.style.display = 'none';
+    arrow.style.transform = '';
+  }
+}
+</script>
+{% endblock %}

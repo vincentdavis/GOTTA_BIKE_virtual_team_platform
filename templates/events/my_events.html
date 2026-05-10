@@ -43,6 +43,7 @@
                     {{ item.event.start_date|date:"M j, Y" }} &ndash; {{ item.event.end_date|date:"M j, Y" }}
                   </p>
                 </div>
+                <a href="{% url 'events:event_all_races' item.event.pk %}" class="btn btn-outline btn-xs shrink-0 self-start">All Races</a>
                 {% if item.has_availability_grids %}
                 <div class="dropdown dropdown-end shrink-0">
                   <label tabindex="0" class="btn btn-outline btn-xs gap-1">

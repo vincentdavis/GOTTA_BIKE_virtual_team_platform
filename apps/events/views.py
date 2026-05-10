@@ -3,7 +3,7 @@
 import json
 import re
 from collections import defaultdict
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo, available_timezones
 
@@ -1060,6 +1060,159 @@ def _get_verification_days(user: User) -> dict:
         "race_ready_days": race_ready_days,
         "has_height": has_height,
     }
+
+
+@login_required
+@team_member_required()
+@require_GET
+def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """List every scheduled race in the event across all squads, in an 8-day window.
+
+    Default window starts at "today" in the requesting user's timezone (or UTC
+    if unset). The ``?start=YYYY-MM-DD`` query parameter shifts the window;
+    invalid values fall back to today.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+
+    Returns:
+        Rendered all-races page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+
+    user_tz = getattr(request.user, "timezone", "") or ""
+    now_utc = timezone.now()
+    today_local = now_utc.astimezone(ZoneInfo(user_tz) if user_tz else now_utc.tzinfo).date()
+
+    raw_start = request.GET.get("start", "")
+    try:
+        start = date.fromisoformat(raw_start) if raw_start else today_local
+    except ValueError:
+        start = today_local
+    end = start + timedelta(days=7)
+    prev_start = start - timedelta(days=8)
+    next_start = start + timedelta(days=8)
+
+    selections = list(
+        AvailabilitySlotSelection.objects
+        .filter(grid__squad__event=event, slot_date__gte=start, slot_date__lte=end)
+        .select_related("grid", "grid__squad")
+        .prefetch_related("selected_users")
+        .order_by("slot_date", "slot_time", "grid__squad__name")
+    )
+
+    # Collect every selected user across the visible window for one zp/zr lookup
+    users_for_lookup: dict[int, User] = {}
+    for sel in selections:
+        for u in sel.selected_users.all():
+            users_for_lookup.setdefault(u.pk, u)
+
+    zwids = [u.zwid for u in users_for_lookup.values() if u.zwid]
+    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
+    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+
+    def _enrich(user: User) -> dict:
+        zwid = user.zwid
+        zp = zp_by_zwid.get(zwid) if zwid else None
+        zr = zr_by_zwid.get(zwid) if zwid else None
+        return {
+            "user": user,
+            "zwid": zwid,
+            "is_race_ready": user.is_race_ready,
+            "is_extra_verified": user.is_extra_verified,
+            "in_zwiftpower": zp is not None,
+            "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
+            "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
+            "in_zwiftracing": zr is not None,
+            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
+            "zr_age": getattr(zr, "age", "") or "" if zr else "",
+            "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+        }
+
+    enriched_by_user_id = {pk: _enrich(u) for pk, u in users_for_lookup.items()}
+
+    slots: list[dict] = []
+    for sel in selections:
+        display_tz = user_tz or sel.grid.grid_timezone or "UTC"
+        try:
+            tz_obj = ZoneInfo(display_tz)
+        except Exception:
+            tz_obj = ZoneInfo("UTC")
+            display_tz = "UTC"
+        utc_dt = datetime.combine(
+            sel.slot_date,
+            datetime.strptime(sel.slot_time, "%H:%M").time(),
+            tzinfo=ZoneInfo("UTC"),
+        )
+        local_dt = utc_dt.astimezone(tz_obj)
+        days_until = (local_dt.date() - today_local).days
+        if days_until > 1:
+            days_label = f"in {days_until} days"
+            days_class = "badge-info"
+        elif days_until == 1:
+            days_label = "tomorrow"
+            days_class = "badge-warning"
+        elif days_until == 0:
+            days_label = "today"
+            days_class = "badge-warning"
+        else:
+            days_label = f"{abs(days_until)} day{'s' if abs(days_until) != 1 else ''} ago"
+            days_class = "badge-ghost"
+        if sel.status == AvailabilitySlotSelection.Status.CONFIRMED:
+            status_class = "badge-success"
+        elif sel.status == AvailabilitySlotSelection.Status.PENDING:
+            status_class = "badge-warning"
+        else:
+            status_class = ""
+        riders = [
+            enriched_by_user_id[u.pk]
+            for u in sel.selected_users.all()
+            if u.pk in enriched_by_user_id
+        ]
+        slots.append({
+            "selection": sel,
+            "squad": sel.grid.squad,
+            "squad_name": sel.grid.squad.name,
+            "grid_title": sel.grid.title or "Availability Grid",
+            "local_day": local_dt.strftime("%a"),
+            "local_date": local_dt.strftime("%b %-d"),
+            "local_time": local_dt.strftime("%H:%M"),
+            "display_timezone": display_tz,
+            "days_until": days_until,
+            "days_label": days_label,
+            "days_class": days_class,
+            "status_label": sel.get_status_display(),
+            "status_class": status_class,
+            "is_status_visible": sel.status != AvailabilitySlotSelection.Status.NONE,
+            "riders": riders,
+        })
+
+    logfire.debug(
+        "Event all races viewed",
+        event_id=event_pk,
+        user_id=request.user.id,
+        start=start.isoformat(),
+        end=end.isoformat(),
+        slot_count=len(slots),
+    )
+
+    return render(
+        request,
+        "events/event_all_races.html",
+        {
+            "event": event,
+            "slots": slots,
+            "start": start,
+            "end": end,
+            "prev_start": prev_start,
+            "next_start": next_start,
+            "today": today_local,
+            "guild_id": config.GUILD_ID,
+        },
+    )
 
 
 @login_required
