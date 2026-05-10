@@ -2686,9 +2686,18 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     # Load existing slot selections
     slot_selections = list(grid.slot_selections.prefetch_related("selected_users"))
     slot_selection_by_utc_key = {}
+    scheduled_count_by_user_id: dict[int, int] = {}
     for sel in slot_selections:
         utc_key = f"{sel.slot_date.isoformat()}|{sel.slot_time}"
         slot_selection_by_utc_key[utc_key] = sel
+        for selected_user in sel.selected_users.all():
+            scheduled_count_by_user_id[selected_user.pk] = (
+                scheduled_count_by_user_id.get(selected_user.pk, 0) + 1
+            )
+
+    # Annotate the responders table with each rider's scheduled-race count.
+    for entry in enriched_responders:
+        entry["scheduled_count"] = scheduled_count_by_user_id.get(entry["user"].pk, 0)
 
     is_event_admin = _can_manage_squad_availability(request.user, squad)
 
