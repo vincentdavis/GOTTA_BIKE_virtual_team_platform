@@ -545,9 +545,11 @@
   // --- Preview Modal ---
   var previewModal = document.getElementById('preview-modal');
   var previewContainer = document.getElementById('preview-grid-container');
+  var PREVIEW_URL = "{% url 'events:availability_preview' event.pk squad.pk %}";
 
-  function buildPreviewGrid() {
-    if (dates.length === 0 || timeSlots.length === 0) return;
+  function renderPreviewGrid(displayDates, displayTimeSlots, displayBlocked, displayTimezone) {
+    var blockedSet = {};
+    (displayBlocked || []).forEach(function(k) { blockedSet[k] = true; });
 
     var table = document.createElement('table');
     table.className = 'avail-grid';
@@ -557,10 +559,10 @@
     var headerRow = document.createElement('tr');
     var cornerTh = document.createElement('th');
     cornerTh.className = 'row-header';
-    cornerTh.textContent = timezoneEl.value || 'UTC';
+    cornerTh.textContent = displayTimezone;
     headerRow.appendChild(cornerTh);
 
-    dates.forEach(function(date) {
+    displayDates.forEach(function(date) {
       var th = document.createElement('th');
       var d = parseDateStr(date);
       var dayLabel = isMobile ? DAY_SHORT[d.getDay()] : DAY_NAMES[d.getDay()];
@@ -576,7 +578,7 @@
     quickCorner.className = 'row-header';
     quickRow.appendChild(quickCorner);
 
-    dates.forEach(function(date) {
+    displayDates.forEach(function(date) {
       var th = document.createElement('th');
       th.style.padding = '0.2rem 0.25rem';
       var btnAll = document.createElement('button');
@@ -602,21 +604,21 @@
 
     // Body rows
     var tbody = document.createElement('tbody');
-    timeSlots.forEach(function(time) {
+    displayTimeSlots.forEach(function(time) {
       var tr = document.createElement('tr');
       var rowTh = document.createElement('th');
       rowTh.className = 'row-header';
       rowTh.textContent = time;
       tr.appendChild(rowTh);
 
-      dates.forEach(function(date) {
+      displayDates.forEach(function(date) {
         var td = document.createElement('td');
-        var key = cellKey(date, time);
+        var key = date + '|' + time;
         td.className = 'avail-cell';
         td.dataset.date = date;
         td.dataset.time = time;
 
-        if (cellStates[key] === 'blocked') {
+        if (blockedSet[key]) {
           td.classList.add('preview-blocked');
           td.dataset.state = 'blocked';
         } else {
@@ -633,6 +635,57 @@
 
     previewContainer.innerHTML = '';
     previewContainer.appendChild(table);
+  }
+
+  function buildPreviewGrid() {
+    if (dates.length === 0 || timeSlots.length === 0) return;
+
+    // Render a small placeholder while the server converts.
+    previewContainer.innerHTML = '<p class="text-sm text-base-content/60 p-4">Loading preview…</p>';
+
+    var blockedCells = [];
+    dates.forEach(function(date) {
+      timeSlots.forEach(function(time) {
+        if (cellStates[cellKey(date, time)] === 'blocked') {
+          blockedCells.push({ date: date, time: time });
+        }
+      });
+    });
+
+    var payload = {
+      start_date: startDateEl.value,
+      end_date: endDateEl.value,
+      start_time: startTimeEl.value,
+      end_time: endTimeEl.value,
+      slot_duration: parseInt(slotDurationEl.value),
+      timezone: timezoneEl.value || 'UTC',
+      blocked_cells: blockedCells,
+    };
+
+    fetch(PREVIEW_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify(payload),
+    })
+      .then(function(resp) {
+        return resp.json().then(function(data) { return { ok: resp.ok, data: data }; });
+      })
+      .then(function(result) {
+        if (!result.ok) {
+          previewContainer.innerHTML = '<p class="text-sm text-error p-4">Preview failed: '
+            + (result.data && result.data.error ? result.data.error : 'unknown error') + '</p>';
+          return;
+        }
+        renderPreviewGrid(
+          result.data.display_dates || [],
+          result.data.display_time_slots || [],
+          result.data.display_blocked || [],
+          result.data.display_timezone || 'UTC',
+        );
+      })
+      .catch(function() {
+        previewContainer.innerHTML = '<p class="text-sm text-error p-4">Preview failed: network error.</p>';
+      });
   }
 
   function previewSelectColumn(date, selectAll) {

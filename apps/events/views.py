@@ -2376,6 +2376,137 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
     return JsonResponse({"id": str(grid.id), "status": "ok"})
 
 
+def _expand_utc_dates(start_date: date, end_date: date) -> list[str]:
+    """Return an inclusive list of ``YYYY-MM-DD`` strings between two dates.
+
+    Args:
+        start_date: First day in the range.
+        end_date: Last day in the range (inclusive).
+
+    Returns:
+        Sorted list of ISO date strings spanning the range.
+
+    """
+    out: list[str] = []
+    cur = start_date
+    while cur <= end_date:
+        out.append(cur.isoformat())
+        cur += timedelta(days=1)
+    return out
+
+
+def _expand_time_slots(start_time: str, end_time: str, slot_duration: int) -> list[str]:
+    """Return an ordered list of ``HH:MM`` slot strings, handling midnight wrap.
+
+    Args:
+        start_time: ``HH:MM`` start of the slot range.
+        end_time: ``HH:MM`` end of the slot range (exclusive). If less than or
+            equal to ``start_time``, wraps past midnight.
+        slot_duration: Slot length in minutes.
+
+    Returns:
+        List of ``HH:MM`` strings.
+
+    """
+    start = datetime.strptime(start_time, "%H:%M")
+    end = datetime.strptime(end_time, "%H:%M")
+    if end <= start:
+        end += timedelta(hours=24)
+    delta = timedelta(minutes=slot_duration)
+    out: list[str] = []
+    cur = start
+    while cur < end:
+        out.append(cur.strftime("%H:%M"))
+        cur += delta
+    return out
+
+
+@login_required
+@team_member_required()
+@require_POST
+def availability_preview_view(request: HttpRequest, event_pk: int, squad_pk: int) -> JsonResponse:
+    """Return a draft grid converted to the requesting user's local timezone.
+
+    Used by the builder's Preview modal so the captain sees the same view a
+    rider would. Accepts the same JSON payload shape as the save view; runs
+    through the same UTC conversion + ``convert_grid_to_local`` pipeline but
+    targets ``request.user.timezone`` instead of the grid's authoring tz.
+
+    Args:
+        request: The HTTP request with the draft grid JSON.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        JSON with ``display_dates``, ``display_time_slots``, ``display_blocked``
+        (list of ``date|time`` keys), and ``display_timezone``.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        return JsonResponse({"error": "Permission denied."}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "Invalid JSON body."}, status=400)
+
+    try:
+        start_date = date.fromisoformat(str(data.get("start_date", "")))
+        end_date = date.fromisoformat(str(data.get("end_date", "")))
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "Invalid start_date / end_date."}, status=400)
+    start_time = str(data.get("start_time", ""))
+    end_time = str(data.get("end_time", ""))
+    try:
+        slot_duration = int(data.get("slot_duration", 30))
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "Invalid slot_duration."}, status=400)
+    if slot_duration not in (15, 30, 60):
+        return JsonResponse({"error": "slot_duration must be 15, 30, or 60."}, status=400)
+
+    grid_tz = str(data.get("timezone", "UTC")).strip() or "UTC"
+    if grid_tz != "UTC" and grid_tz not in available_timezones():
+        return JsonResponse({"error": f"Invalid timezone: {grid_tz}"}, status=400)
+
+    blocked_cells = data.get("blocked_cells", [])
+    if not isinstance(blocked_cells, list):
+        return JsonResponse({"error": "blocked_cells must be a list."}, status=400)
+
+    # 1. Round-trip the grid's local-tz definition into UTC, matching the
+    #    save view's flow so the preview matches what a rider would see.
+    if grid_tz != "UTC":
+        utc_start_date, utc_end_date, utc_start_time, utc_end_time = convert_local_to_utc(
+            start_date, end_date, start_time, end_time, grid_tz,
+        )
+        utc_blocked = convert_blocked_cells_to_utc(blocked_cells, grid_tz, slot_duration)
+    else:
+        utc_start_date, utc_end_date, utc_start_time, utc_end_time = (
+            start_date, end_date, start_time, end_time,
+        )
+        utc_blocked = list(blocked_cells)
+
+    utc_dates = _expand_utc_dates(utc_start_date, utc_end_date)
+    utc_time_slots = _expand_time_slots(utc_start_time, utc_end_time, slot_duration)
+
+    # 2. Convert UTC → display timezone (preferring the user's profile tz).
+    user_tz = (getattr(request.user, "timezone", "") or "").strip()
+    display_tz = user_tz or grid_tz or "UTC"
+    if display_tz != "UTC" and display_tz not in available_timezones():
+        display_tz = "UTC"
+
+    grid_data = convert_grid_to_local(utc_dates, utc_time_slots, utc_blocked, display_tz)
+
+    return JsonResponse({
+        "display_dates": list(grid_data["display_dates"]),
+        "display_time_slots": list(grid_data["display_time_slots"]),
+        "display_blocked": sorted(grid_data["display_blocked"]),
+        "display_timezone": display_tz,
+    })
+
+
 def _post_grid_published_notification(
     request: HttpRequest,
     event: Event,
@@ -2429,9 +2560,6 @@ def _post_grid_published_notification(
         f"<t:{start_unix}:D> – <t:{end_unix}:D>",  # noqa: RUF001
         response_url,
     ]
-    if grid.expires:
-        expires_unix = int(datetime.combine(grid.expires, time(12, 0), tzinfo=grid_tz).timestamp())
-        lines.append(f"Respond by: <t:{expires_unix}:D>")
     if role_mention:
         lines.extend(["", role_mention])
     body = "\n".join(lines)
