@@ -32,6 +32,25 @@
   .heatmap-cell .cell-name { font-size: 0.6rem; font-weight: 400; line-height: 1.2; }
   .heatmap-cell .cell-name .dropdown > a > .avatar { display: none; }
   .heatmap-cell .cell-name .dropdown-content { font-size: 0.75rem; white-space: normal; }
+  /* Shrink the inline profile icons (race-verified emoji, ZP/ZR category
+     badges, phenotype icon) so multiple riders fit per heatmap cell without
+     wrapping or crowding. Scoped to .heatmap-cell so other pages (roster,
+     profile, my_events) keep the larger, more readable defaults. */
+  .heatmap-cell .cell-name .dropdown > a { gap: 0.15rem; }
+  .heatmap-cell .cell-name .dropdown > a > span:first-of-type { gap: 0.1rem; }
+  .heatmap-cell .cell-name img { width: 0.8rem; height: 0.8rem; }
+  .heatmap-cell .cell-name .badge {
+    font-size: 0.55rem;
+    line-height: 1;
+    height: 0.85rem;
+    min-height: 0.85rem;
+    padding: 0 0.25rem;
+  }
+  /* Toggle: hide the profile icons inside cells when the table is .icons-hidden. */
+  .avail-grid.icons-hidden .heatmap-cell .cell-name img,
+  .avail-grid.icons-hidden .heatmap-cell .cell-name .badge {
+    display: none;
+  }
   .heatmap-cell.cell-clickable { cursor: pointer; }
   .heatmap-cell.cell-clickable:hover { outline: 2px solid oklch(0.6 0.15 250); outline-offset: -2px; }
   .slot-badge { font-size: 0.55rem; font-weight: 700; background: oklch(0.55 0.2 250); color: white; border-radius: 0.2rem; padding: 0 0.2rem; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.1rem; }
@@ -78,7 +97,7 @@
 
   <!-- Heatmap Grid -->
   <div class="avail-grid-wrap mb-6">
-    <table class="avail-grid">
+    <table class="avail-grid" id="avail-grid">
       <thead>
         <tr>
           <th class="row-header">{{ display_timezone }}</th>
@@ -147,13 +166,19 @@
     {% endif %}
   </div>
 
-  <!-- Filter: minimum rider count -->
-  <div class="flex items-center gap-2 mb-6 text-sm">
-    <label for="min-rider-filter" class="text-base-content/70">Show cells with at least:</label>
-    <select id="min-rider-filter" class="select select-bordered select-sm">
-      <option value="0" selected>All cells</option>
-    </select>
-    <span class="text-base-content/50 text-xs" id="min-rider-filter-hint"></span>
+  <!-- Filter: minimum rider count + icon toggle -->
+  <div class="flex flex-wrap items-center gap-4 mb-6 text-sm">
+    <div class="flex items-center gap-2">
+      <label for="min-rider-filter" class="text-base-content/70">Show cells with at least:</label>
+      <select id="min-rider-filter" class="select select-bordered select-sm">
+        <option value="0" selected>All cells</option>
+      </select>
+      <span class="text-base-content/50 text-xs" id="min-rider-filter-hint"></span>
+    </div>
+    <label class="label cursor-pointer gap-2 py-0">
+      <input type="checkbox" id="show-icons-toggle" class="checkbox checkbox-sm">
+      <span class="label-text text-sm">Show icons in cells</span>
+    </label>
   </div>
 
   <!-- Slot Selections -->
@@ -260,6 +285,24 @@
 
   select.addEventListener('change', applyFilter);
   applyFilter();
+
+  // Show/hide profile icons in cells. Persist the choice in localStorage so a
+  // captain who prefers the compact view keeps it across visits.
+  var ICON_STORAGE_KEY = 'availability_results.show_icons';
+  var iconToggle = document.getElementById('show-icons-toggle');
+  var grid = document.getElementById('avail-grid');
+  if (iconToggle && grid) {
+    var stored = null;
+    try { stored = window.localStorage.getItem(ICON_STORAGE_KEY); } catch (e) { /* private mode */ }
+    var showIcons = stored === null ? false : stored === '1';
+    iconToggle.checked = showIcons;
+    grid.classList.toggle('icons-hidden', !showIcons);
+    iconToggle.addEventListener('change', function() {
+      var on = iconToggle.checked;
+      grid.classList.toggle('icons-hidden', !on);
+      try { window.localStorage.setItem(ICON_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* ignore */ }
+    });
+  }
 })();
 </script>
 
