@@ -5,7 +5,13 @@
 
 {% block extra_css %}
 <style>
-  .avail-grid-wrap { overflow-x: auto; }
+  /* On mobile, the wrapper becomes the scroll container so the sticky-top
+     date header stays visible while scrolling through hours. Desktop keeps
+     its natural height (page handles scrolling). */
+  .avail-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 767px) {
+    .avail-grid-wrap { max-height: calc(100vh - 8rem); overflow-y: auto; }
+  }
   .avail-grid { border-collapse: collapse; user-select: none; -webkit-user-select: none; }
   .avail-grid th,
   .avail-grid td { border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent); text-align: center; min-width: 7rem; }

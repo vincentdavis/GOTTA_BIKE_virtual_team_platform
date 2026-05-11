@@ -4,12 +4,22 @@
 
 {% block extra_css %}
 <style>
+  /* Wrapper becomes the scroll container on mobile so the sticky-top thead
+     stays visible while the user scrolls through hours. On desktop the grid
+     keeps its natural height (page handles scrolling). */
   .avail-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 767px) {
+    .avail-grid-wrap { max-height: calc(100vh - 8rem); overflow-y: auto; }
+  }
   .avail-grid { border-collapse: collapse; user-select: none; -webkit-user-select: none; }
   .avail-grid th,
   .avail-grid td { border: 1px solid color-mix(in oklch, var(--color-base-content) 20%, transparent); text-align: center; min-width: 3rem; }
-  .avail-grid th { position: sticky; top: 0; z-index: 2; padding: 0.2rem 0.25rem; font-size: 0.65rem; white-space: nowrap; }
-  .avail-grid th.row-header { position: sticky; left: 0; z-index: 3; background: var(--color-base-200); font-size: 0.6rem; padding: 0.15rem 0.3rem; }
+  .avail-grid th { position: sticky; z-index: 2; padding: 0.2rem 0.25rem; font-size: 0.65rem; white-space: nowrap; }
+  /* Two-row thead: dates stick to the top, the All/Clear quick-select row
+     stays directly under them. Approximations match the th paddings. */
+  .avail-grid thead tr:first-child th { top: 0; }
+  .avail-grid thead tr:nth-child(2) th { top: 1.6rem; }
+  .avail-grid th.row-header { left: 0; z-index: 3; background: var(--color-base-200); font-size: 0.6rem; padding: 0.15rem 0.3rem; }
   .avail-grid thead th { background: var(--color-base-200); }
   .avail-grid thead th:first-child { z-index: 4; }
   .avail-cell { width: 3rem; height: 2rem; cursor: pointer; transition: background-color 0.05s; }
@@ -17,6 +27,7 @@
     .avail-grid th,
     .avail-grid td { min-width: 5rem; }
     .avail-grid th { padding: 0.35rem 0.5rem; font-size: 0.75rem; }
+    .avail-grid thead tr:nth-child(2) th { top: 2rem; }
     .avail-grid th.row-header { font-size: 0.75rem; padding: 0.35rem 0.5rem; }
     .avail-cell { width: 5rem; height: 2.25rem; }
   }
