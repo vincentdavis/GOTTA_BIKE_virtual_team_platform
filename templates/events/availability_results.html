@@ -246,6 +246,27 @@
     </div>
   </div>
   {% endif %}
+
+  <!-- Copy Availability (shareable image) -->
+  <div class="mt-8 pt-6 border-t border-base-300">
+    <p class="text-sm text-base-content/70 mb-2">
+      Copy a simplified availability image to share with opponents. Slots with at least 4 riders show their count
+      (capped at &ge;5); already-scheduled slots show &ldquo;Racing&rdquo;.
+    </p>
+    <button type="button"
+            id="copy-availability-btn"
+            class="btn btn-primary btn-sm"
+            data-grid-title="{{ grid.title }}"
+            data-event-title="{{ event.title }}"
+            data-squad-name="{{ squad.name }}"
+            data-tz-label="{{ display_timezone }}">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+      </svg>
+      <span data-copy-label>Copy Availability</span>
+    </button>
+    <span id="copy-availability-status" class="ml-3 text-sm" aria-live="polite"></span>
+  </div>
 </div>
 
 <!-- Min-rider filter (available to anyone viewing the results page) -->
@@ -341,6 +362,262 @@
       applyTimeFormat();
     });
   }
+})();
+</script>
+
+<!-- Copy Availability: render simplified grid to canvas and write to clipboard -->
+<script>
+(function() {
+  var btn = document.getElementById('copy-availability-btn');
+  var status = document.getElementById('copy-availability-status');
+  if (!btn) return;
+
+  function setStatus(text, cls) {
+    if (!status) return;
+    status.textContent = text || '';
+    status.className = 'ml-3 text-sm ' + (cls || 'text-base-content/70');
+  }
+
+  function currentTimeFormat() {
+    var t = document.getElementById('time-format-toggle');
+    return t && t.checked ? '12' : '24';
+  }
+
+  function formatTime(hhmm) {
+    if (currentTimeFormat() !== '12') return hhmm;
+    var parts = hhmm.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1];
+    var period = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12 === 0 ? 12 : h % 12;
+    return h12 + ':' + m + ' ' + period;
+  }
+
+  function readGridData() {
+    var grid = document.getElementById('avail-grid');
+    if (!grid) return null;
+
+    var headerThs = grid.querySelectorAll('thead th');
+    var dayHeaders = [];
+    for (var i = 1; i < headerThs.length; i++) {
+      var html = headerThs[i].innerHTML || '';
+      var lines = html.split(/<br\s*\/?>/i).map(function(s) {
+        var div = document.createElement('div');
+        div.innerHTML = s;
+        return (div.textContent || '').trim();
+      }).filter(function(s) { return s.length > 0; });
+      dayHeaders.push(lines);
+    }
+
+    var rows = [];
+    grid.querySelectorAll('tbody tr').forEach(function(tr) {
+      var rh = tr.querySelector('.row-header');
+      var rawTime = rh && rh.dataset.rawTime ? rh.dataset.rawTime : (rh ? rh.textContent.trim() : '');
+      var cells = [];
+      tr.querySelectorAll('td.heatmap-cell').forEach(function(td) {
+        var blocked = td.classList.contains('cell-blocked');
+        var hasRace = !!td.querySelector('.slot-badge');
+        var count = parseInt(td.dataset.count || '0', 10);
+        var kind = 'empty';
+        var label = '';
+        if (hasRace) { kind = 'race'; label = 'Racing'; }
+        else if (!blocked && count >= 5) { kind = 'high'; label = '≥5'; } // ≥5
+        else if (!blocked && count === 4) { kind = 'low'; label = '4'; }
+        cells.push({ kind: kind, label: label });
+      });
+      rows.push({ time: formatTime(rawTime), cells: cells });
+    });
+
+    return { dayHeaders: dayHeaders, rows: rows };
+  }
+
+  function buildCanvas(data) {
+    var dpr = window.devicePixelRatio || 1;
+    var cols = data.dayHeaders.length;
+    var nRows = data.rows.length;
+
+    var cellW = 96;
+    var cellH = 30;
+    var rowHeaderW = 84;
+    var colHeaderH = 46;
+    var padding = 20;
+    var titleH = 78;
+    var footerH = 28;
+
+    var width = padding * 2 + rowHeaderW + cols * cellW;
+    var height = padding * 2 + titleH + colHeaderH + nRows * cellH + footerH;
+
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    var ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    // Background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+
+    // Header text
+    var gridTitle = btn.dataset.gridTitle || '';
+    var eventTitle = btn.dataset.eventTitle || '';
+    var squadName = btn.dataset.squadName || '';
+    var tzLabel = btn.dataset.tzLabel || '';
+    var fmt = currentTimeFormat() === '12' ? '12-hour' : '24-hour';
+
+    ctx.fillStyle = '#0f172a';
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 20px system-ui, -apple-system, "Segoe UI", Arial, sans-serif';
+    ctx.fillText(gridTitle, padding, padding);
+
+    ctx.fillStyle = '#475569';
+    ctx.font = '13px system-ui, -apple-system, "Segoe UI", Arial, sans-serif';
+    var sub = eventTitle + (squadName ? '  —  ' + squadName : '');
+    ctx.fillText(sub, padding, padding + 28);
+    ctx.fillText('Timezone: ' + tzLabel + '  ·  Times shown in ' + fmt, padding, padding + 48);
+
+    var gridX = padding;
+    var gridY = padding + titleH;
+    var totalW = rowHeaderW + cols * cellW;
+    var totalH = colHeaderH + nRows * cellH;
+
+    // Column header strip
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillRect(gridX, gridY, totalW, colHeaderH);
+
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 12px system-ui, -apple-system, "Segoe UI", Arial, sans-serif';
+    data.dayHeaders.forEach(function(lines, ci) {
+      var x = gridX + rowHeaderW + ci * cellW + cellW / 2;
+      var midY = gridY + colHeaderH / 2;
+      var lineH = 14;
+      var startY = midY - ((lines.length - 1) * lineH) / 2;
+      lines.forEach(function(line, li) {
+        ctx.fillText(line, x, startY + li * lineH);
+      });
+    });
+
+    // Rows
+    data.rows.forEach(function(row, ri) {
+      var y = gridY + colHeaderH + ri * cellH;
+
+      // Row header
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fillRect(gridX, y, rowHeaderW, cellH);
+      ctx.fillStyle = '#0f172a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 11px system-ui, -apple-system, "Segoe UI", Arial, sans-serif';
+      ctx.fillText(row.time, gridX + rowHeaderW / 2, y + cellH / 2);
+
+      // Cells
+      row.cells.forEach(function(cell, ci) {
+        var x = gridX + rowHeaderW + ci * cellW;
+        var bg = '#ffffff';
+        var fg = '#0f172a';
+        var font = 'bold 13px system-ui, -apple-system, "Segoe UI", Arial, sans-serif';
+        if (cell.kind === 'race') { bg = '#2563eb'; fg = '#ffffff'; font = 'bold 12px system-ui, -apple-system, "Segoe UI", Arial, sans-serif'; }
+        else if (cell.kind === 'high') { bg = '#16a34a'; fg = '#ffffff'; }
+        else if (cell.kind === 'low') { bg = '#bbf7d0'; fg = '#14532d'; }
+        ctx.fillStyle = bg;
+        ctx.fillRect(x, y, cellW, cellH);
+        if (cell.label) {
+          ctx.fillStyle = fg;
+          ctx.font = font;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(cell.label, x + cellW / 2, y + cellH / 2);
+        }
+      });
+    });
+
+    // Grid lines
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 1;
+    // Vertical
+    for (var i = 0; i <= cols + 1; i++) {
+      var vx = gridX + (i === 0 ? 0 : rowHeaderW + (i - 1) * cellW);
+      ctx.beginPath();
+      ctx.moveTo(vx + 0.5, gridY);
+      ctx.lineTo(vx + 0.5, gridY + totalH);
+      ctx.stroke();
+    }
+    // Horizontal
+    for (var j = 0; j <= nRows + 1; j++) {
+      var hy = gridY + (j === 0 ? 0 : colHeaderH + (j - 1) * cellH);
+      ctx.beginPath();
+      ctx.moveTo(gridX, hy + 0.5);
+      ctx.lineTo(gridX + totalW, hy + 0.5);
+      ctx.stroke();
+    }
+
+    // Legend in footer
+    var legendY = gridY + totalH + 8;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    var lx = padding;
+    function drawSwatch(color, text) {
+      var boxW = 14, boxH = 12;
+      ctx.fillStyle = color;
+      ctx.fillRect(lx, legendY - boxH / 2, boxW, boxH);
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.strokeRect(lx + 0.5, legendY - boxH / 2 + 0.5, boxW - 1, boxH - 1);
+      lx += boxW + 6;
+      ctx.fillStyle = '#334155';
+      ctx.font = '11px system-ui, -apple-system, "Segoe UI", Arial, sans-serif';
+      ctx.fillText(text, lx, legendY);
+      lx += ctx.measureText(text).width + 14;
+    }
+    drawSwatch('#bbf7d0', '4 riders');
+    drawSwatch('#16a34a', '≥5 riders');
+    drawSwatch('#2563eb', 'Racing');
+    drawSwatch('#ffffff', 'Fewer than 4');
+
+    return canvas;
+  }
+
+  async function copyToClipboard(canvas) {
+    var blob = await new Promise(function(resolve) { canvas.toBlob(resolve, 'image/png'); });
+    if (!blob) throw new Error('toBlob returned null');
+    if (!navigator.clipboard || typeof window.ClipboardItem === 'undefined') {
+      throw new Error('clipboard-image-unsupported');
+    }
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  }
+
+  function downloadCanvas(canvas) {
+    var url = canvas.toDataURL('image/png');
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'availability.png';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  btn.addEventListener('click', async function() {
+    setStatus('Building image…', 'text-base-content/70');
+    btn.disabled = true;
+    try {
+      var data = readGridData();
+      if (!data) { setStatus('Grid not found.', 'text-error'); return; }
+      var canvas = buildCanvas(data);
+      try {
+        await copyToClipboard(canvas);
+        setStatus('Copied to clipboard.', 'text-success');
+      } catch (err) {
+        downloadCanvas(canvas);
+        setStatus('Clipboard unavailable — downloaded instead.', 'text-warning');
+      }
+    } catch (e) {
+      setStatus('Could not build image: ' + (e && e.message ? e.message : e), 'text-error');
+    } finally {
+      btn.disabled = false;
+      setTimeout(function() { setStatus(''); }, 4000);
+    }
+  });
 })();
 </script>
 
