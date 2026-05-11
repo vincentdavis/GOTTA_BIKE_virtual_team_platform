@@ -109,7 +109,7 @@
       <tbody>
         {% for row in grid_rows %}
         <tr>
-          <th class="row-header">{{ row.time_slot }}</th>
+          <th class="row-header" data-time-24="{{ row.time_slot }}">{{ row.time_slot }}</th>
           {% for cell in row.cells %}
           <td class="heatmap-cell{% if cell.is_blocked %} cell-blocked{% endif %}{% if is_event_admin and not cell.is_blocked %} cell-clickable{% if not cell.selection_name %} cell-empty{% endif %}{% endif %}"
               {% if not cell.is_blocked %}
@@ -179,6 +179,13 @@
       <input type="checkbox" id="show-icons-toggle" class="checkbox checkbox-sm">
       <span class="label-text text-sm">Show icons in cells</span>
     </label>
+    <div class="flex items-center gap-2">
+      <span class="text-base-content/70">Time:</span>
+      <div class="join" id="time-format-toggle">
+        <button type="button" data-tf="24" class="btn btn-sm join-item">24 h</button>
+        <button type="button" data-tf="12" class="btn btn-sm join-item">12 h</button>
+      </div>
+    </div>
   </div>
 
   <!-- Slot Selections -->
@@ -295,6 +302,48 @@
       var on = iconToggle.checked;
       grid.classList.toggle('icons-hidden', !on);
       try { window.localStorage.setItem(ICON_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* ignore */ }
+    });
+  }
+
+  // Time format toggle (24h / 12h) for row headers — persists in localStorage.
+  var TIME_FORMAT_KEY = 'availability.time_format';
+  function currentTimeFormat() {
+    try {
+      var stored = window.localStorage.getItem(TIME_FORMAT_KEY);
+      return stored === '12' ? '12' : '24';
+    } catch (e) { return '24'; }
+  }
+  function formatTimeForDisplay(hhmm) {
+    if (currentTimeFormat() !== '12') return hhmm;
+    var parts = hhmm.split(':');
+    var h = parseInt(parts[0], 10);
+    var m = parts[1];
+    var period = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12 === 0 ? 12 : h % 12;
+    return h12 + ':' + m + ' ' + period;
+  }
+  function applyTimeFormat() {
+    document.querySelectorAll('.row-header[data-time-24]').forEach(function(th) {
+      th.textContent = formatTimeForDisplay(th.dataset.time24);
+    });
+  }
+  var timeFormatToggle = document.getElementById('time-format-toggle');
+  function refreshTimeFormatToggleUI() {
+    if (!timeFormatToggle) return;
+    var active = currentTimeFormat();
+    timeFormatToggle.querySelectorAll('button[data-tf]').forEach(function(btn) {
+      btn.classList.toggle('btn-active', btn.dataset.tf === active);
+    });
+  }
+  if (timeFormatToggle) {
+    refreshTimeFormatToggleUI();
+    applyTimeFormat();
+    timeFormatToggle.addEventListener('click', function(e) {
+      var btn = e.target.closest('button[data-tf]');
+      if (!btn) return;
+      try { window.localStorage.setItem(TIME_FORMAT_KEY, btn.dataset.tf); } catch (e2) {}
+      refreshTimeFormatToggleUI();
+      applyTimeFormat();
     });
   }
 })();

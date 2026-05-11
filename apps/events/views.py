@@ -2959,7 +2959,11 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     display_dates = []
     for d_str in grid_data["display_dates"]:
         d = date.fromisoformat(d_str)
-        display_dates.append({"date_str": d_str[5:], "day_name": day_names[d.weekday()], "full_date": d_str})
+        display_dates.append({
+            "date_str": d.strftime("%b %-d"),
+            "day_name": day_names[d.weekday()],
+            "full_date": d_str,
+        })
 
     # Build local→UTC mapping for each cell (so JS can send UTC back)
     cell_map = grid_data["cell_map"]  # local_key → {"date": utc_date, "time": utc_time}

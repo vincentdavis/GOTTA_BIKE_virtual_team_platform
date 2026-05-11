@@ -238,6 +238,7 @@
 
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var DAY_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+  var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   var isMobile = window.innerWidth < 768;
   window.addEventListener('resize', function() { isMobile = window.innerWidth < 768; });
 
@@ -354,7 +355,7 @@
       var th = document.createElement('th');
       var d = parseDateStr(date);
       var dayLabel = isMobile ? DAY_SHORT[d.getDay()] : DAY_NAMES[d.getDay()];
-      var dateLabel = isMobile ? date.slice(8) : date.slice(5);
+      var dateLabel = MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
       th.innerHTML = dayLabel + '<br>' + dateLabel;
       th.dataset.date = date;
       th.title = 'Click to toggle column';
@@ -566,7 +567,7 @@
       var th = document.createElement('th');
       var d = parseDateStr(date);
       var dayLabel = isMobile ? DAY_SHORT[d.getDay()] : DAY_NAMES[d.getDay()];
-      var dateLabel = isMobile ? date.slice(8) : date.slice(5);
+      var dateLabel = MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
       th.innerHTML = dayLabel + '<br>' + dateLabel;
       headerRow.appendChild(th);
     });
