@@ -11,6 +11,7 @@ import logfire
 from constance import config
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -1066,11 +1067,10 @@ def _get_verification_days(user: User) -> dict:
 @team_member_required()
 @require_GET
 def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
-    """List every scheduled race in the event across all squads, in an 8-day window.
+    """Paginated list of every scheduled race in the event from today forward.
 
-    Default window starts at "today" in the requesting user's timezone (or UTC
-    if unset). The ``?start=YYYY-MM-DD`` query parameter shifts the window;
-    invalid values fall back to today.
+    25 races per page, ordered chronologically. ``?page=N`` selects a page
+    (out-of-range falls back to the last available page).
 
     Args:
         request: The HTTP request.
@@ -1086,22 +1086,21 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     now_utc = timezone.now()
     today_local = now_utc.astimezone(ZoneInfo(user_tz) if user_tz else now_utc.tzinfo).date()
 
-    raw_start = request.GET.get("start", "")
-    try:
-        start = date.fromisoformat(raw_start) if raw_start else today_local
-    except ValueError:
-        start = today_local
-    end = start + timedelta(days=7)
-    prev_start = start - timedelta(days=8)
-    next_start = start + timedelta(days=8)
-
-    selections = list(
+    all_selections = (
         AvailabilitySlotSelection.objects
-        .filter(grid__squad__event=event, slot_date__gte=start, slot_date__lte=end)
+        .filter(grid__squad__event=event, slot_date__gte=today_local)
         .select_related("grid", "grid__squad")
         .prefetch_related("selected_users")
         .order_by("slot_date", "slot_time", "grid__squad__name")
     )
+
+    paginator = Paginator(all_selections, 25)
+    page_number = request.GET.get("page") or 1
+    try:
+        page_obj = paginator.page(page_number)
+    except Exception:
+        page_obj = paginator.page(paginator.num_pages or 1)
+    selections = list(page_obj.object_list)
 
     # Collect every selected user across the visible window for one zp/zr lookup
     users_for_lookup: dict[int, User] = {}
@@ -1194,9 +1193,10 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         "Event all races viewed",
         event_id=event_pk,
         user_id=request.user.id,
-        start=start.isoformat(),
-        end=end.isoformat(),
+        page=page_obj.number,
+        total_pages=paginator.num_pages,
         slot_count=len(slots),
+        total_count=paginator.count,
     )
 
     return render(
@@ -1205,10 +1205,8 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         {
             "event": event,
             "slots": slots,
-            "start": start,
-            "end": end,
-            "prev_start": prev_start,
-            "next_start": next_start,
+            "page_obj": page_obj,
+            "paginator": paginator,
             "today": today_local,
             "guild_id": config.GUILD_ID,
         },
