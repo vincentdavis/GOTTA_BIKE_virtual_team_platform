@@ -6191,6 +6191,11 @@
       --input-color: var(--color-primary);
     }
   }
+  @layer daisyui.l1.l2 {
+    .toggle-sm:is([type="checkbox"]), .toggle-sm:has([type="checkbox"]) {
+      --size: calc(var(--size-selector, 0.25rem) * 5);
+    }
+  }
   @media (hover: hover) {
     .group-hover\:text-primary:is(:where(.group):hover *) {
       color: var(--color-primary);

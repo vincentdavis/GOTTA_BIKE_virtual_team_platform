@@ -97,13 +97,11 @@
     Click cells to mark when you are available. Blocked cells (dark) cannot be selected.
   </p>
 
-  <div class="flex items-center gap-2 mb-3 text-sm">
-    <span class="text-base-content/70">Time format:</span>
-    <div class="join" id="time-format-toggle">
-      <button type="button" data-tf="24" class="btn btn-sm join-item">24 h</button>
-      <button type="button" data-tf="12" class="btn btn-sm join-item">12 h</button>
-    </div>
-  </div>
+  <label class="label cursor-pointer gap-2 mb-3 py-0 justify-start">
+    <span class="text-base-content/70 text-sm">24 h</span>
+    <input type="checkbox" id="time-format-toggle" class="toggle toggle-sm" aria-label="Time format toggle (24 h / 12 h)">
+    <span class="text-base-content/70 text-sm">12 h</span>
+  </label>
 
   <!-- Grid Container with scroll arrows on mobile -->
   <div class="relative">
@@ -163,25 +161,16 @@
     return h12 + ':' + m + ' ' + period;
   }
   function applyTimeFormat() {
-    document.querySelectorAll('.row-header[data-time-24]').forEach(function(th) {
-      th.textContent = formatTimeForDisplay(th.dataset.time24);
+    document.querySelectorAll('.row-header[data-raw-time]').forEach(function(th) {
+      th.textContent = formatTimeForDisplay(th.dataset.rawTime);
     });
   }
   var timeFormatToggle = document.getElementById('time-format-toggle');
-  function refreshTimeFormatToggleUI() {
-    if (!timeFormatToggle) return;
-    var active = currentTimeFormat();
-    timeFormatToggle.querySelectorAll('button[data-tf]').forEach(function(btn) {
-      btn.classList.toggle('btn-active', btn.dataset.tf === active);
-    });
-  }
   if (timeFormatToggle) {
-    refreshTimeFormatToggleUI();
-    timeFormatToggle.addEventListener('click', function(e) {
-      var btn = e.target.closest('button[data-tf]');
-      if (!btn) return;
-      try { window.localStorage.setItem(TIME_FORMAT_KEY, btn.dataset.tf); } catch (e2) {}
-      refreshTimeFormatToggleUI();
+    timeFormatToggle.checked = currentTimeFormat() === '12';
+    timeFormatToggle.addEventListener('change', function() {
+      var v = timeFormatToggle.checked ? '12' : '24';
+      try { window.localStorage.setItem(TIME_FORMAT_KEY, v); } catch (e2) {}
       applyTimeFormat();
     });
   }
@@ -271,7 +260,7 @@
       var tr = document.createElement('tr');
       var rowTh = document.createElement('th');
       rowTh.className = 'row-header';
-      rowTh.dataset.time24 = time;
+      rowTh.dataset.rawTime = time;
       rowTh.textContent = formatTimeForDisplay(time);
       tr.appendChild(rowTh);
 

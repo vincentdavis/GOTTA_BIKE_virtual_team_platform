@@ -115,7 +115,7 @@
       <tbody>
         {% for row in grid_rows %}
         <tr>
-          <th class="row-header" data-time-24="{{ row.time_slot }}">{{ row.time_slot }}</th>
+          <th class="row-header" data-raw-time="{{ row.time_slot }}">{{ row.time_slot }}</th>
           {% for cell in row.cells %}
           <td class="heatmap-cell{% if cell.is_blocked %} cell-blocked{% endif %}{% if is_event_admin and not cell.is_blocked %} cell-clickable{% if not cell.selection_name %} cell-empty{% endif %}{% endif %}"
               {% if not cell.is_blocked %}
@@ -185,13 +185,11 @@
       <input type="checkbox" id="show-icons-toggle" class="checkbox checkbox-sm">
       <span class="label-text text-sm">Show icons in cells</span>
     </label>
-    <div class="flex items-center gap-2">
-      <span class="text-base-content/70">Time:</span>
-      <div class="join" id="time-format-toggle">
-        <button type="button" data-tf="24" class="btn btn-sm join-item">24 h</button>
-        <button type="button" data-tf="12" class="btn btn-sm join-item">12 h</button>
-      </div>
-    </div>
+    <label class="label cursor-pointer gap-2 py-0">
+      <span class="text-base-content/70 text-sm">24 h</span>
+      <input type="checkbox" id="time-format-toggle" class="toggle toggle-sm" aria-label="Time format toggle (24 h / 12 h)">
+      <span class="text-base-content/70 text-sm">12 h</span>
+    </label>
   </div>
 
   <!-- Slot Selections -->
@@ -329,26 +327,17 @@
     return h12 + ':' + m + ' ' + period;
   }
   function applyTimeFormat() {
-    document.querySelectorAll('.row-header[data-time-24]').forEach(function(th) {
-      th.textContent = formatTimeForDisplay(th.dataset.time24);
+    document.querySelectorAll('.row-header[data-raw-time]').forEach(function(th) {
+      th.textContent = formatTimeForDisplay(th.dataset.rawTime);
     });
   }
   var timeFormatToggle = document.getElementById('time-format-toggle');
-  function refreshTimeFormatToggleUI() {
-    if (!timeFormatToggle) return;
-    var active = currentTimeFormat();
-    timeFormatToggle.querySelectorAll('button[data-tf]').forEach(function(btn) {
-      btn.classList.toggle('btn-active', btn.dataset.tf === active);
-    });
-  }
   if (timeFormatToggle) {
-    refreshTimeFormatToggleUI();
+    timeFormatToggle.checked = currentTimeFormat() === '12';
     applyTimeFormat();
-    timeFormatToggle.addEventListener('click', function(e) {
-      var btn = e.target.closest('button[data-tf]');
-      if (!btn) return;
-      try { window.localStorage.setItem(TIME_FORMAT_KEY, btn.dataset.tf); } catch (e2) {}
-      refreshTimeFormatToggleUI();
+    timeFormatToggle.addEventListener('change', function() {
+      var v = timeFormatToggle.checked ? '12' : '24';
+      try { window.localStorage.setItem(TIME_FORMAT_KEY, v); } catch (e2) {}
       applyTimeFormat();
     });
   }
