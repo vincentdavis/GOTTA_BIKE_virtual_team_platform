@@ -50,6 +50,12 @@ def _get_scheduled_jobs() -> list[dict]:
             "description": "Sync riders from Zwift Racing API",
         },
         {
+            "task": "apps.accounts.tasks.sync_guild_members",
+            "id": "sync_guild_members",
+            "hours": config.SCHEDULER_SYNC_GUILD_MEMBERS_HOURS,
+            "description": "Sync Discord guild members from Discord API",
+        },
+        {
             "task": "apps.accounts.tasks.guild_member_sync_status",
             "id": "guild_member_sync_status",
             "hours": config.SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS,

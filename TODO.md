@@ -33,6 +33,9 @@
 - [x] Add `sync_discord_roles` background task (callable from `/site/config/background_tasks/`)
 - [ ] Confirm the external cron service is calling `sync_discord_roles` on a schedule (task is registered; scheduling
   lives outside the repo)
+- [ ] Decide what to do with `guild_member_sync_status` now that `sync_guild_members` runs on the platform.
+  Options: keep both (defensive), remove the status task and its `SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS`
+  setting as redundant, or repurpose it to post a Discord alert when `hours_since_last_sync` exceeds a threshold.
 
 ### Performance Review
 
