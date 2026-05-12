@@ -8,6 +8,7 @@ from ninja.security import APIKeyHeader
 from apps.accounts.tasks import (
     guild_member_sync_status,
     refresh_all_race_ready,
+    sync_guild_members,
     sync_new_member_roles,
     sync_race_ready_roles,
     sync_youtube_channel_ids,
@@ -72,9 +73,13 @@ TASK_REGISTRY: dict = {
         "task": sync_zr_riders,
         "description": "Sync riders from Zwift Racing API",
     },
+    "sync_guild_members": {
+        "task": sync_guild_members,
+        "description": "Fetch Discord guild members and sync to database (files ticket on departure)",
+    },
     "guild_member_sync_status": {
         "task": guild_member_sync_status,
-        "description": "Check guild member sync health (actual sync done by Discord bot)",
+        "description": "Report guild member sync health metrics",
     },
     "sync_race_ready_roles": {
         "task": sync_race_ready_roles,

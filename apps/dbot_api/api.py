@@ -1,7 +1,6 @@
 """Discord Bot API endpoints."""
 
-import contextlib
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import logfire
 from constance import config as constance_config
@@ -11,7 +10,7 @@ from django.utils import timezone
 from ninja import NinjaAPI, Schema
 from ninja.security import APIKeyHeader
 
-from apps.accounts.models import GuildMember, User, YouTubeVideo
+from apps.accounts.models import User, YouTubeVideo
 from apps.dbot_api.models import BotStats
 from apps.magic_links.models import MagicLink
 from apps.team.models import DiscordChannel, DiscordRole, MembershipApplication, RosterFilter
@@ -598,11 +597,13 @@ def sync_user_roles(request: HttpRequest, discord_id: str, payload: SyncUserRole
 
 @api.post("/sync_guild_members")
 def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -> dict:
-    """Sync all guild members from Discord bot.
+    """Sync all guild members from the Discord bot's webhook push.
 
-    The bot should call this endpoint with all members from the guild.
-    Members not in the payload will be marked as left (date_left set).
-    Members are linked to User accounts by matching discord_id.
+    Most of the work is delegated to :func:`apps.accounts.services.apply_guild_member_sync`;
+    the platform can also drive the same reconciliation directly via the
+    ``sync_guild_members`` background task without involving the bot. Members
+    not present in the payload are marked left and a low-priority Membership
+    ticket is filed for each departure.
 
     NOTE: This only affects GuildMember records and links to User accounts
     that have a discord_id. Regular Django accounts (staff, admin) without
@@ -616,122 +617,35 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
         JSON object with sync results.
 
     """
-    received_discord_ids = {member.discord_id for member in payload.members}
-    existing_discord_ids = set(
-        GuildMember.objects.filter(date_left__isnull=True).values_list("discord_id", flat=True)
-    )
+    from apps.accounts.services import apply_guild_member_sync
 
-    created = 0
-    updated = 0
-    rejoined = 0
-    left = 0
-    linked = 0
-
-    # Build a lookup of discord_id -> User for linking
-    users_by_discord_id = {u.discord_id: u for u in User.objects.filter(discord_id__in=received_discord_ids)}
-
-    # Create or update members
-    for member_data in payload.members:
-        # Parse joined_at if provided
-        joined_at = None
-        if member_data.joined_at:
-            with contextlib.suppress(ValueError):
-                joined_at = datetime.fromisoformat(member_data.joined_at.replace("Z", "+00:00"))
-
-        # Try to find existing member (including those who left)
-        existing = GuildMember.objects.filter(discord_id=member_data.discord_id).first()
-
-        if existing:
-            # Update existing member
-            was_left = existing.date_left is not None
-            existing.username = member_data.username
-            existing.display_name = member_data.display_name or ""
-            existing.nickname = member_data.nickname or ""
-            existing.avatar_hash = member_data.avatar_hash or ""
-            existing.roles = member_data.roles
-            existing.joined_at = joined_at
-            existing.is_bot = member_data.is_bot
-            existing.date_left = None  # Clear date_left if they're back
-
-            # Link to user if not already linked
-            if not existing.user and member_data.discord_id in users_by_discord_id:
-                existing.user = users_by_discord_id[member_data.discord_id]
-                linked += 1
-
-            existing.save()
-
-            if was_left:
-                rejoined += 1
-            else:
-                updated += 1
-        else:
-            # Create new member
-            user = users_by_discord_id.get(member_data.discord_id)
-            GuildMember.objects.create(
-                discord_id=member_data.discord_id,
-                username=member_data.username,
-                display_name=member_data.display_name or "",
-                nickname=member_data.nickname or "",
-                avatar_hash=member_data.avatar_hash or "",
-                roles=member_data.roles,
-                joined_at=joined_at,
-                is_bot=member_data.is_bot,
-                user=user,
-            )
-            created += 1
-            if user:
-                linked += 1
-
-    # Mark members not in payload as left. Iterate so we can generate a ticket
-    # for each freshly-departed member; the underlying UPDATE would be faster
-    # but would skip the audit-trail ticket creation that admins rely on.
-    from apps.tickets.services import create_member_left_ticket
-
-    members_to_mark_left = existing_discord_ids - received_discord_ids
-    if members_to_mark_left:
-        now = timezone.now()
-        departed = list(
-            GuildMember.objects.filter(
-                discord_id__in=members_to_mark_left,
-                date_left__isnull=True,
-            )
-        )
-        for gm in departed:
-            gm.date_left = now
-            gm.save(update_fields=["date_left", "date_modified"])
-            try:
-                create_member_left_ticket(gm)
-            except Exception as e:
-                logfire.error(
-                    "Failed to create member-left ticket",
-                    guild_member_id=gm.pk,
-                    discord_id=gm.discord_id,
-                    error=str(e),
-                )
-        left = len(departed)
-
-    total_active = GuildMember.objects.filter(date_left__isnull=True).count()
-
-    logfire.info(
-        "Guild members synced",
-        created=created,
-        updated=updated,
-        rejoined=rejoined,
-        left=left,
-        linked=linked,
-        total_received=len(payload.members),
-        total_active=total_active,
+    members = [
+        {
+            "discord_id": m.discord_id,
+            "username": m.username,
+            "display_name": m.display_name or "",
+            "nickname": m.nickname or "",
+            "avatar_hash": m.avatar_hash or "",
+            "roles": m.roles,
+            "joined_at": m.joined_at,
+            "is_bot": m.is_bot,
+        }
+        for m in payload.members
+    ]
+    result = apply_guild_member_sync(members, source="bot_webhook")
+    logfire.debug(
+        "Bot-driven guild_members sync completed",
         discord_user_id=request.auth["discord_user_id"],  # ty:ignore[unresolved-attribute]
+        **result,
     )
-
     return {
-        "created": created,
-        "updated": updated,
-        "rejoined": rejoined,
-        "left": left,
-        "linked": linked,
-        "total_received": len(payload.members),
-        "total_active": total_active,
+        "created": result["created"],
+        "updated": result["updated"],
+        "rejoined": result["rejoined"],
+        "left": result["left"],
+        "linked": result["linked"],
+        "total_received": result["total_received"],
+        "total_active": result["total_active"],
     }
 
 

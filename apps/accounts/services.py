@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import contextlib
+import time
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+import httpx
 import logfire
+from django.utils import timezone
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from apps.accounts.models import User
     from apps.team.models import MembershipApplication
+
+DISCORD_API_BASE = "https://discord.com/api/v10"
+GUILD_MEMBER_PAGE_SIZE = 1000
 
 
 def get_approved_application(discord_id: str) -> MembershipApplication | None:
@@ -171,3 +179,208 @@ def import_application_to_user(user: User, application: MembershipApplication) -
         )
 
     return imported_fields
+
+
+def fetch_guild_members_from_discord(guild_id: str | int, bot_token: str) -> list[dict[str, Any]]:
+    """Pull the full guild-member roster from Discord's REST API.
+
+    Iterates ``GET /guilds/{id}/members`` with ``after`` pagination until the
+    final page is reached, transparently retrying on 429s by honoring Discord's
+    ``retry_after`` body. Returns each member in the normalized dict shape that
+    :func:`apply_guild_member_sync` consumes, so the platform-side fetcher and
+    the bot's inbound POST share the same downstream pipeline.
+
+    Args:
+        guild_id: The Discord guild ID to fetch members from.
+        bot_token: A Discord bot token with the ``GUILD_MEMBERS`` privileged intent.
+
+    Returns:
+        List of normalized member dicts. Raises ``httpx.HTTPStatusError`` on
+        any non-429 error response from Discord.
+
+    """
+    headers = {"Authorization": f"Bot {bot_token}"}
+    members: list[dict[str, Any]] = []
+    after: str | None = None
+
+    with httpx.Client(timeout=30.0) as client:
+        while True:
+            params: dict[str, str | int] = {"limit": GUILD_MEMBER_PAGE_SIZE}
+            if after:
+                params["after"] = after
+
+            response = client.get(
+                f"{DISCORD_API_BASE}/guilds/{guild_id}/members",
+                headers=headers,
+                params=params,
+            )
+            if response.status_code == 429:
+                retry_after = float(response.json().get("retry_after", 1.0))
+                logfire.warning(
+                    "Discord rate limit on guild members fetch",
+                    retry_after=retry_after,
+                    fetched_so_far=len(members),
+                )
+                time.sleep(retry_after)
+                continue
+
+            response.raise_for_status()
+            page = response.json()
+            if not page:
+                break
+
+            for raw in page:
+                user = raw.get("user") or {}
+                members.append(
+                    {
+                        "discord_id": str(user.get("id", "")),
+                        "username": user.get("username") or "",
+                        "display_name": user.get("global_name") or "",
+                        "nickname": raw.get("nick") or "",
+                        "avatar_hash": user.get("avatar") or "",
+                        "roles": list(raw.get("roles") or []),
+                        "joined_at": raw.get("joined_at"),
+                        "is_bot": bool(user.get("bot", False)),
+                    }
+                )
+
+            if len(page) < GUILD_MEMBER_PAGE_SIZE:
+                break
+            after = str(page[-1].get("user", {}).get("id", ""))
+            if not after:
+                break
+
+    return members
+
+
+def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unknown") -> dict[str, int]:
+    """Reconcile the GuildMember table against an authoritative member list.
+
+    Members present in ``members`` are upserted (and linked to a ``User`` by
+    ``discord_id`` when possible); members previously active but missing from
+    the input are marked left and trigger a low-priority Membership ticket via
+    :func:`apps.tickets.services.create_member_left_ticket`. Idempotent: re-running
+    with the same input is a no-op apart from refreshing ``date_modified``.
+
+    Args:
+        members: Normalized list of member dicts (see :func:`fetch_guild_members_from_discord`).
+        source: Free-form label captured in the audit log to identify which
+            caller drove the sync (``"discord_api"``, ``"bot_webhook"``, etc.).
+
+    Returns:
+        Dict with ``created``, ``updated``, ``rejoined``, ``left``, ``linked``,
+        ``total_received``, and ``total_active`` counts.
+
+    """
+    # Local imports avoid a circular dependency at module import time.
+    from apps.accounts.models import GuildMember, User
+    from apps.tickets.services import create_member_left_ticket
+
+    received_discord_ids = {m["discord_id"] for m in members if m.get("discord_id")}
+    existing_discord_ids = set(
+        GuildMember.objects.filter(date_left__isnull=True).values_list("discord_id", flat=True)
+    )
+    users_by_discord_id = {u.discord_id: u for u in User.objects.filter(discord_id__in=received_discord_ids)}
+
+    created = 0
+    updated = 0
+    rejoined = 0
+    linked = 0
+
+    for member_data in members:
+        joined_at: datetime | None = None
+        raw_joined = member_data.get("joined_at")
+        if raw_joined:
+            with contextlib.suppress(ValueError):
+                joined_at = datetime.fromisoformat(str(raw_joined).replace("Z", "+00:00"))
+
+        existing = GuildMember.objects.filter(discord_id=member_data["discord_id"]).first()
+
+        if existing:
+            was_left = existing.date_left is not None
+            existing.username = member_data.get("username", "")
+            existing.display_name = member_data.get("display_name") or ""
+            existing.nickname = member_data.get("nickname") or ""
+            existing.avatar_hash = member_data.get("avatar_hash") or ""
+            existing.roles = member_data.get("roles") or []
+            existing.joined_at = joined_at
+            existing.is_bot = bool(member_data.get("is_bot", False))
+            existing.date_left = None  # Clear when they're back
+
+            if not existing.user and member_data["discord_id"] in users_by_discord_id:
+                existing.user = users_by_discord_id[member_data["discord_id"]]
+                linked += 1
+
+            existing.save()
+
+            if was_left:
+                rejoined += 1
+            else:
+                updated += 1
+        else:
+            user = users_by_discord_id.get(member_data["discord_id"])
+            GuildMember.objects.create(
+                discord_id=member_data["discord_id"],
+                username=member_data.get("username", ""),
+                display_name=member_data.get("display_name") or "",
+                nickname=member_data.get("nickname") or "",
+                avatar_hash=member_data.get("avatar_hash") or "",
+                roles=member_data.get("roles") or [],
+                joined_at=joined_at,
+                is_bot=bool(member_data.get("is_bot", False)),
+                user=user,
+            )
+            created += 1
+            if user:
+                linked += 1
+
+    # Mark members not in payload as left. Iterate so we can generate a ticket
+    # for each freshly-departed member; a bulk UPDATE would skip the audit trail
+    # admins rely on.
+    members_to_mark_left = existing_discord_ids - received_discord_ids
+    left = 0
+    if members_to_mark_left:
+        now = timezone.now()
+        departed = list(
+            GuildMember.objects.filter(
+                discord_id__in=members_to_mark_left,
+                date_left__isnull=True,
+            )
+        )
+        for gm in departed:
+            gm.date_left = now
+            gm.save(update_fields=["date_left", "date_modified"])
+            try:
+                create_member_left_ticket(gm)
+            except Exception as exc:
+                logfire.error(
+                    "Failed to create member-left ticket",
+                    guild_member_id=gm.pk,
+                    discord_id=gm.discord_id,
+                    error=str(exc),
+                )
+        left = len(departed)
+
+    total_active = GuildMember.objects.filter(date_left__isnull=True).count()
+
+    logfire.info(
+        "Guild members synced",
+        source=source,
+        created=created,
+        updated=updated,
+        rejoined=rejoined,
+        left=left,
+        linked=linked,
+        total_received=len(members),
+        total_active=total_active,
+    )
+
+    return {
+        "created": created,
+        "updated": updated,
+        "rejoined": rejoined,
+        "left": left,
+        "linked": linked,
+        "total_received": len(members),
+        "total_active": total_active,
+    }

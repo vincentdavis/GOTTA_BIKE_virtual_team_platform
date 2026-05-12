@@ -60,11 +60,44 @@ def notify_rider_left_team(zwid: int, rider_name: str, source: str) -> dict:
 
 
 @task
+def sync_guild_members() -> dict:
+    """Fetch the full guild roster from Discord and reconcile GuildMember.
+
+    Replaces the bot-side polling job: the platform calls the Discord REST API
+    directly with ``DISCORD_BOT_TOKEN`` (requires the ``GUILD_MEMBERS`` privileged
+    intent, which the existing bot already uses) and feeds the result through
+    :func:`apps.accounts.services.apply_guild_member_sync`. Members who fell
+    out of the roster have ``date_left`` stamped and a Membership ticket filed.
+
+    Returns:
+        dict with sync results, or ``{"status": "skipped", "reason": ...}`` if
+        ``DISCORD_BOT_TOKEN`` or ``GUILD_ID`` is unset.
+
+    """
+    from apps.accounts.services import apply_guild_member_sync, fetch_guild_members_from_discord
+
+    with logfire.span("sync_guild_members"):
+        bot_token = config.DISCORD_BOT_TOKEN
+        guild_id = config.GUILD_ID
+
+        if not bot_token:
+            logfire.warning("DISCORD_BOT_TOKEN not configured, skipping guild member sync")
+            return {"status": "skipped", "reason": "bot_token_not_configured"}
+        if not guild_id:
+            logfire.warning("GUILD_ID not configured, skipping guild member sync")
+            return {"status": "skipped", "reason": "guild_id_not_configured"}
+
+        members = fetch_guild_members_from_discord(guild_id, bot_token)
+        result = apply_guild_member_sync(members, source="discord_api")
+        return {"status": "ok", **result}
+
+
+@task
 def guild_member_sync_status() -> dict:
     """Report on guild member sync health and statistics.
 
     This task checks the GuildMember table for sync health metrics.
-    The actual sync is performed by the Discord bot on a schedule.
+    The actual sync is performed by the ``sync_guild_members`` background task.
 
     Returns:
         dict with sync status and statistics.
@@ -97,8 +130,8 @@ def guild_member_sync_status() -> dict:
             "bot_accounts": bot_members,
             "last_sync": last_modified.isoformat() if last_modified else None,
             "hours_since_sync": hours_since_sync,
-            "sync_source": "discord_bot",
-            "note": "Guild member sync is performed by the Discord bot every 6 hours",
+            "sync_source": "platform",
+            "note": "Guild member sync is performed by the sync_guild_members background task",
         }
 
         logfire.info("Guild member sync status", **status)
