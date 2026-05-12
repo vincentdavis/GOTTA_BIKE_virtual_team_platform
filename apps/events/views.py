@@ -3689,6 +3689,200 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     )
 
 
+def _extract_thread_id(thread_link: str) -> str | None:
+    """Pull the thread (channel) id from a Discord thread URL.
+
+    Discord stores thread/channel URLs as ``https://discord.com/channels/{guild_id}/{thread_id}``.
+    The Discord messages API treats the thread id the same as a channel id.
+
+    Args:
+        thread_link: A Discord thread URL.
+
+    Returns:
+        The thread id as a string of digits, or None if the link can't be parsed.
+
+    """
+    if not thread_link:
+        return None
+    candidate = thread_link.rstrip("/").rsplit("/", 1)[-1]
+    return candidate if candidate.isdigit() else None
+
+
+def _build_slot_thread_message(
+    selection: AvailabilitySlotSelection,
+    *,
+    header: str | None = None,
+) -> tuple[str, list[str]]:
+    """Build the Discord message body for a scheduled race thread.
+
+    Used for both the starter message when a thread is created and for "updated"
+    messages posted later. The body uses Discord's native timestamp markdown so
+    each viewer sees the date/time in their own client timezone.
+
+    Args:
+        selection: The slot selection record.
+        header: Optional first line (e.g. "**🔄 Race details updated**").
+
+    Returns:
+        Tuple of (message body, list of Discord IDs to mention).
+
+    """
+    utc_dt = datetime.combine(
+        selection.slot_date,
+        datetime.strptime(selection.slot_time, "%H:%M").time(),
+        tzinfo=ZoneInfo("UTC"),
+    )
+    unix_ts = int(utc_dt.timestamp())
+    discord_ids = [u.discord_id for u in selection.selected_users.all() if u.discord_id]
+    mentions = " ".join(f"<@{did}>" for did in discord_ids)
+
+    lines: list[str] = []
+    if header:
+        lines.append(header)
+    lines.extend(
+        [
+            f"**{selection.name}**",
+            f"<t:{unix_ts}:F> (<t:{unix_ts}:R>)",
+            f"**Status:** {selection.get_status_display()}",
+        ]
+    )
+    if selection.event_invite_url:
+        lines.append(f"**Event invite:** {selection.event_invite_url}")
+    if selection.course_url:
+        lines.append(f"**Course:** {selection.course_url}")
+    if mentions:
+        lines.extend(["", mentions])
+    return "\n".join(lines), discord_ids
+
+
+def _create_slot_thread(
+    selection: AvailabilitySlotSelection,
+    squad: Squad,
+    grid: AvailabilityGrid,
+    user: User,
+) -> str | None:
+    """Create the Discord thread for a confirmed scheduled race.
+
+    Validates the same prerequisites the standalone endpoint enforces (confirmed
+    status, riders selected, squad channel, guild configured, no existing thread),
+    posts the starter message, and persists the resulting thread URL onto the
+    selection.
+
+    Args:
+        selection: The slot selection record (must be persisted).
+        squad: The parent squad.
+        grid: The parent availability grid.
+        user: The acting user (recorded in logs).
+
+    Returns:
+        None on success, or an error message string suitable for displaying to
+        the admin.
+
+    """
+    if selection.thread_link:
+        return "A thread already exists for this race."
+    if not squad.discord_channel_id:
+        return "Squad has no Discord channel configured."
+    if selection.status != AvailabilitySlotSelection.Status.CONFIRMED:
+        return "Race status must be Confirmed before creating a thread."
+    if not selection.selected_users.exists():
+        return "Select at least one rider before creating a thread."
+
+    guild_id = config.GUILD_ID
+    if not guild_id:
+        return "Discord guild is not configured."
+
+    utc_dt = datetime.combine(
+        selection.slot_date,
+        datetime.strptime(selection.slot_time, "%H:%M").time(),
+        tzinfo=ZoneInfo("UTC"),
+    )
+    try:
+        grid_tz = ZoneInfo(grid.grid_timezone) if grid.grid_timezone else ZoneInfo("UTC")
+    except Exception:
+        grid_tz = ZoneInfo("UTC")
+    grid_local_dt = utc_dt.astimezone(grid_tz)
+    thread_name = f"{selection.name} {grid_local_dt.strftime('%b %-d')}"
+
+    message_body, discord_ids = _build_slot_thread_message(selection)
+
+    thread_id, error = create_discord_thread(squad.discord_channel_id, thread_name)
+    if thread_id is None:
+        logfire.error(
+            "Failed to create Discord thread for scheduled race",
+            selection_id=selection.pk,
+            channel_id=str(squad.discord_channel_id),
+            error=error,
+        )
+        return f"Failed to create thread: {error}"
+
+    posted = send_discord_channel_message(
+        thread_id,
+        message_body,
+        allowed_user_ids=discord_ids or None,
+    )
+    if not posted:
+        logfire.warning(
+            "Discord thread created but starter message failed to post",
+            selection_id=selection.pk,
+            thread_id=str(thread_id),
+        )
+
+    selection.thread_link = f"https://discord.com/channels/{guild_id}/{thread_id}"
+    selection.save(update_fields=["thread_link", "updated_at"])
+
+    logfire.info(
+        "Scheduled race Discord thread created",
+        selection_id=selection.pk,
+        thread_id=str(thread_id),
+        channel_id=str(squad.discord_channel_id),
+        rider_count=len(discord_ids),
+        user_id=user.id,
+    )
+    return None
+
+
+def _post_slot_thread_update(selection: AvailabilitySlotSelection, user: User) -> str | None:
+    """Post an "updated" message to the existing thread for a scheduled race.
+
+    Args:
+        selection: The slot selection record (must already have ``thread_link`` set).
+        user: The acting user (recorded in logs).
+
+    Returns:
+        None on success, or an error message string.
+
+    """
+    thread_id = _extract_thread_id(selection.thread_link or "")
+    if not thread_id:
+        return "Could not determine the Discord thread id from the saved link."
+
+    message_body, discord_ids = _build_slot_thread_message(
+        selection, header="**🔄 Race details updated**"
+    )
+    posted = send_discord_channel_message(
+        thread_id,
+        message_body,
+        allowed_user_ids=discord_ids or None,
+    )
+    if not posted:
+        logfire.error(
+            "Failed to post update message to scheduled race thread",
+            selection_id=selection.pk,
+            thread_id=thread_id,
+        )
+        return "Failed to post update message to the thread."
+
+    logfire.info(
+        "Scheduled race update posted to thread",
+        selection_id=selection.pk,
+        thread_id=thread_id,
+        rider_count=len(discord_ids),
+        user_id=user.id,
+    )
+    return None
+
+
 @login_required
 @team_member_required()
 @require_POST
@@ -3697,6 +3891,10 @@ def slot_selection_create_view(
 ) -> HttpResponse:
     """Create or update an availability slot selection for a specific cell.
 
+    When ``create_thread=1`` is included in the POST body, the view also creates
+    the Discord thread immediately after persisting the slot. This powers the
+    "Save & Create Thread" button on new (unsaved) cells.
+
     Args:
         request: The HTTP request with name, slot_date, slot_time, selected_users[].
         event_pk: The parent event primary key.
@@ -3704,7 +3902,8 @@ def slot_selection_create_view(
         grid_pk: The availability grid UUID.
 
     Returns:
-        HTMX partial with updated slot selections container.
+        HTMX partial with updated slot selections container, or 400 when
+        ``create_thread`` is requested but thread creation fails.
 
     """
     event = get_object_or_404(Event, pk=event_pk)
@@ -3724,6 +3923,7 @@ def slot_selection_create_view(
     valid_statuses = {s.value for s in AvailabilitySlotSelection.Status}
     status = raw_status if raw_status in valid_statuses else AvailabilitySlotSelection.Status.NONE
     selected_user_ids = request.POST.getlist("selected_users")
+    also_create_thread = request.POST.get("create_thread") == "1"
 
     if not name or not slot_date or not slot_time:
         return HttpResponse("Name, date, and time are required.", status=400)
@@ -3752,6 +3952,11 @@ def slot_selection_create_view(
         user_id=request.user.id,
         selected_count=len(selected_user_ids),
     )
+
+    if also_create_thread and not selection.thread_link:
+        error = _create_slot_thread(selection, squad, grid, request.user)
+        if error:
+            return HttpResponse(error, status=400)
 
     return _render_slot_selections_partial(request, event, squad, grid)
 
@@ -3905,88 +4110,70 @@ def slot_selection_create_thread_view(
             selected_user_ids = request.POST.getlist("selected_users")
             selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
 
-    if selection.thread_link:
-        return HttpResponse("A thread already exists for this race.", status=400)
-    if not squad.discord_channel_id:
-        return HttpResponse("Squad has no Discord channel configured.", status=400)
-    if selection.status != AvailabilitySlotSelection.Status.CONFIRMED:
-        return HttpResponse("Race status must be Confirmed before creating a thread.", status=400)
-    selected_users_qs = selection.selected_users.all()
-    if not selected_users_qs.exists():
-        return HttpResponse("Select at least one rider before creating a thread.", status=400)
+    error = _create_slot_thread(selection, squad, grid, request.user)
+    if error:
+        return HttpResponse(error, status=400)
 
-    guild_id = config.GUILD_ID
-    if not guild_id:
-        return HttpResponse("Discord guild is not configured.", status=400)
+    return _render_slot_selections_partial(request, event, squad, grid)
 
-    utc_dt = datetime.combine(
-        selection.slot_date,
-        datetime.strptime(selection.slot_time, "%H:%M").time(),
-        tzinfo=ZoneInfo("UTC"),
-    )
 
-    # Thread name has to be a static string (Discord doesn't render markdown in
-    # thread titles), so use the grid's authoring timezone — it's tied to the
-    # squad rather than to whoever clicked the button.
-    try:
-        grid_tz = ZoneInfo(grid.grid_timezone) if grid.grid_timezone else ZoneInfo("UTC")
-    except Exception:
-        grid_tz = ZoneInfo("UTC")
-    grid_local_dt = utc_dt.astimezone(grid_tz)
-    thread_name = f"{selection.name} {grid_local_dt.strftime('%b %-d')}"
+@login_required
+@team_member_required()
+@require_POST
+def slot_selection_post_update_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int
+) -> HttpResponse:
+    """Persist edits to a scheduled race and post an update message to its thread.
 
-    # Body uses Discord native timestamp markdown so each viewer sees the date
-    # and time rendered in their own Discord client timezone. <t:unix:F> = full
-    # date and time, <t:unix:R> = relative ("in 3 days").
-    unix_ts = int(utc_dt.timestamp())
-    discord_ids = [u.discord_id for u in selected_users_qs if u.discord_id]
-    mentions = " ".join(f"<@{did}>" for did in discord_ids)
-    message_lines = [
-        f"**{selection.name}**",
-        f"<t:{unix_ts}:F> (<t:{unix_ts}:R>)",
-        f"**Status:** {selection.get_status_display()}",
-    ]
-    if selection.event_invite_url:
-        message_lines.append(f"**Event invite:** {selection.event_invite_url}")
-    if selection.course_url:
-        message_lines.append(f"**Course:** {selection.course_url}")
-    if mentions:
-        message_lines.extend(["", mentions])
-    message_body = "\n".join(message_lines)
+    Powers the "Save & Post Update" button on existing slots that already have a
+    Discord thread. Saves the form values the same way ``slot_selection_update_view``
+    does, then posts a Discord message into the thread summarizing the latest details.
 
-    thread_id, error = create_discord_thread(squad.discord_channel_id, thread_name)
-    if thread_id is None:
-        logfire.error(
-            "Failed to create Discord thread for scheduled race",
-            selection_id=selection.pk,
-            channel_id=str(squad.discord_channel_id),
-            error=error,
-        )
-        return HttpResponse(f"Failed to create thread: {error}", status=400)
+    Args:
+        request: The HTTP request with the full slot form payload.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+        slot_pk: The slot selection primary key.
 
-    posted = send_discord_channel_message(
-        thread_id,
-        message_body,
-        allowed_user_ids=discord_ids or None,
-    )
-    if not posted:
-        logfire.warning(
-            "Discord thread created but starter message failed to post",
-            selection_id=selection.pk,
-            thread_id=str(thread_id),
-        )
+    Returns:
+        HTMX partial with updated slot selections container, or 400 if validation
+        fails or the Discord post errors out.
 
-    selection.thread_link = f"https://discord.com/channels/{guild_id}/{thread_id}"
-    selection.save(update_fields=["thread_link", "updated_at"])
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
 
-    logfire.info(
-        "Scheduled race Discord thread created",
-        selection_id=selection.pk,
-        thread_id=str(thread_id),
-        channel_id=str(squad.discord_channel_id),
-        rider_count=len(discord_ids),
-        user_id=request.user.id,
-    )
+    if not _can_manage_squad_availability(request.user, squad):
+        return HttpResponse("Permission denied", status=403)
+
+    if not selection.thread_link:
+        return HttpResponse("This race has no Discord thread yet — create one first.", status=400)
+
+    name = request.POST.get("name", "").strip()
+    if not name:
+        return HttpResponse("Name is required.", status=400)
+
+    valid_statuses = {s.value for s in AvailabilitySlotSelection.Status}
+    raw_status = request.POST.get("status", selection.status)
+    status = raw_status if raw_status in valid_statuses else selection.status
+
+    selection.name = name
+    selection.status = status
+    selection.event_invite_url = request.POST.get("event_invite_url", "").strip()
+    selection.course_url = request.POST.get("course_url", "").strip()
+    # thread_link is preserved — the form value can be stale, but the saved one
+    # is what we trust for posting back into the thread.
+    selection.save(update_fields=["name", "status", "event_invite_url", "course_url", "updated_at"])
+    if "selected_users" in request.POST:
+        selected_user_ids = request.POST.getlist("selected_users")
+        selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
+
+    error = _post_slot_thread_update(selection, request.user)
+    if error:
+        return HttpResponse(error, status=400)
 
     return _render_slot_selections_partial(request, event, squad, grid)
 

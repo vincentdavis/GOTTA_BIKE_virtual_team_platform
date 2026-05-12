@@ -673,6 +673,7 @@
       {% csrf_token %}
       <input type="hidden" name="slot_date" id="slot-modal-date">
       <input type="hidden" name="slot_time" id="slot-modal-time">
+      <input type="hidden" name="create_thread" id="slot-modal-create-thread-flag" value="">
 
       <div class="form-control mb-3">
         <label class="label"><span class="label-text">Race name</span></label>
@@ -727,7 +728,14 @@
                 hx-include="#slot-modal-form"
                 hx-indicator="#slot-modal-thread-spinner">
           <span id="slot-modal-thread-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
-          Create Discord Thread
+          Save &amp; Create Thread
+        </button>
+        <button type="button" id="slot-modal-post-update" class="btn btn-info btn-sm hidden mr-auto"
+                hx-target="#slot-selections-container" hx-swap="innerHTML"
+                hx-include="#slot-modal-form"
+                hx-indicator="#slot-modal-update-spinner">
+          <span id="slot-modal-update-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+          Save &amp; Post Update
         </button>
         <button type="button" class="btn btn-sm" onclick="document.getElementById('slot-modal').close()">Cancel</button>
         <button type="submit" class="btn btn-primary btn-sm" id="slot-modal-submit">Save Race</button>
@@ -772,6 +780,11 @@
     errorBox.classList.add('hidden');
     errorBox.textContent = '';
 
+    // Reset the "submit form with create_thread=1" flag every time the modal
+    // opens so a previous click does not leak into a fresh save.
+    const flagInput = document.getElementById('slot-modal-create-thread-flag');
+    if (flagInput) flagInput.value = '';
+
     if (existing) {
       title.textContent = 'Edit Scheduled Race';
       nameInput.value = existing.name;
@@ -780,7 +793,6 @@
       courseInput.value = existing.course_url || '';
       threadInput.value = existing.thread_link || '';
       form.setAttribute('hx-post', updateUrlBase + existing.id + '/');
-      configureThreadButton(existing);
     } else {
       title.textContent = 'Schedule Race';
       nameInput.value = '';
@@ -789,9 +801,8 @@
       courseInput.value = '';
       threadInput.value = '';
       form.setAttribute('hx-post', createUrl);
-      threadBtn.classList.add('hidden');
-      threadOpenLink.classList.add('hidden');
     }
+    window.__slotModalExisting = existing || null;
 
     // Build rider checkboxes
     ridersDiv.innerHTML = '';
@@ -814,6 +825,7 @@
 
     // Re-process HTMX attributes after changing hx-post
     htmx.process(form);
+    updateActionButtons();
     modal.showModal();
     if (!existing) {
       setTimeout(function() { nameInput.focus(); }, 0);
@@ -824,48 +836,104 @@
     document.querySelectorAll('#slot-modal-riders .rider-cb').forEach(function(cb) {
       cb.checked = selectAll;
     });
+    updateActionButtons();
   }
 
-  function configureThreadButton(existing) {
+  function selectedRiderCount() {
+    return document.querySelectorAll('#slot-modal-riders .rider-cb:checked').length;
+  }
+
+  // Drive the action buttons (Save & Create Thread / Save & Post Update / Open
+  // thread) based on the current form state and whether the slot already has
+  // a thread. Called on modal open and whenever inputs that affect eligibility
+  // change (status, rider checkboxes).
+  function updateActionButtons() {
     const threadBtn = document.getElementById('slot-modal-create-thread');
     const threadOpenLink = document.getElementById('slot-modal-thread-open');
+    const postUpdateBtn = document.getElementById('slot-modal-post-update');
+    const existing = window.__slotModalExisting;
+    const currentStatus = document.getElementById('slot-modal-status').value;
 
-    if (existing.thread_link) {
+    // Existing slot WITH a thread → show "Save & Post Update" and the Open link.
+    if (existing && existing.thread_link) {
       threadBtn.classList.add('hidden');
       threadOpenLink.href = existing.thread_link;
       threadOpenLink.classList.remove('hidden');
+      postUpdateBtn.classList.remove('hidden');
+      postUpdateBtn.disabled = false;
+      postUpdateBtn.title = '';
+      const url = updateUrlBase + existing.id + '/post-update/';
+      postUpdateBtn.setAttribute('hx-post', url);
+      postUpdateBtn.setAttribute('hx-headers', JSON.stringify({"X-CSRFToken": csrfToken}));
+      htmx.process(postUpdateBtn);
       return;
     }
 
+    // No thread yet (new or existing slot) → show "Save & Create Thread" with
+    // eligibility-based disable state.
     threadOpenLink.classList.add('hidden');
+    postUpdateBtn.classList.add('hidden');
     threadBtn.classList.remove('hidden');
 
     const reasons = [];
     if (!squadDiscordChannelId) reasons.push("Squad has no Discord channel set");
-    if ((existing.selected_user_ids || []).length === 0) reasons.push("Select at least one rider");
-    if ((existing.status || 'none') !== 'confirmed') reasons.push("Set status to Confirmed");
+    if (selectedRiderCount() === 0) reasons.push("Select at least one rider");
+    if (currentStatus !== 'confirmed') reasons.push("Set status to Confirmed");
 
     if (reasons.length > 0) {
       threadBtn.disabled = true;
-      threadBtn.title = reasons.join("; ") + ". Save changes first if you just edited those fields.";
+      threadBtn.title = reasons.join("; ") + ".";
       threadBtn.removeAttribute('hx-post');
       threadBtn.removeAttribute('hx-headers');
       htmx.process(threadBtn);
-    } else {
-      threadBtn.disabled = false;
-      threadBtn.title = '';
+      return;
+    }
+
+    threadBtn.disabled = false;
+    threadBtn.title = '';
+    if (existing) {
+      // Existing slot → POST to the standalone create-thread endpoint; the
+      // server-side handler persists any unsaved form edits first.
       const url = updateUrlBase + existing.id + '/create-thread/';
       threadBtn.setAttribute('hx-post', url);
       threadBtn.setAttribute('hx-headers', JSON.stringify({"X-CSRFToken": csrfToken}));
-      htmx.process(threadBtn);
+    } else {
+      // New slot → no hx-post; the click handler below toggles the
+      // create_thread flag and submits the regular form.
+      threadBtn.removeAttribute('hx-post');
+      threadBtn.removeAttribute('hx-headers');
     }
+    htmx.process(threadBtn);
   }
 
-  // Show server errors from the create-thread endpoint inline
+  // Status change / rider toggle → re-evaluate button eligibility live.
+  document.getElementById('slot-modal-status').addEventListener('change', updateActionButtons);
+  document.getElementById('slot-modal-riders').addEventListener('change', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('rider-cb')) {
+      updateActionButtons();
+    }
+  });
+
+  // For NEW slots the Save & Create Thread button has no hx-post. Intercept
+  // the click, toggle the create_thread flag, and submit the form normally so
+  // the server creates the slot and the thread in a single request.
+  document.getElementById('slot-modal-create-thread').addEventListener('click', function(e) {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    if (btn.hasAttribute('hx-post')) return; // existing-slot path
+    e.preventDefault();
+    const flag = document.getElementById('slot-modal-create-thread-flag');
+    if (flag) flag.value = '1';
+    document.getElementById('slot-modal-submit').click();
+  });
+
+  // Surface server errors from any of the modal's HTMX buttons inline.
   document.body.addEventListener('htmx:responseError', function(e) {
-    if (e.detail.elt && e.detail.elt.id === 'slot-modal-create-thread') {
+    const elt = e.detail.elt;
+    if (!elt) return;
+    if (elt.id === 'slot-modal-create-thread' || elt.id === 'slot-modal-post-update') {
       const errorBox = document.getElementById('slot-modal-error');
-      errorBox.textContent = (e.detail.xhr && e.detail.xhr.responseText) || 'Failed to create thread.';
+      errorBox.textContent = (e.detail.xhr && e.detail.xhr.responseText) || 'Request failed.';
       errorBox.classList.remove('hidden');
     }
   });
