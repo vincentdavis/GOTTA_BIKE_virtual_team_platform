@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load accounts_tags %}
+
+{% block title %}Ticket #{{ ticket.pk }} — {{ ticket.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'tickets:ticket_list' %}" class="link link-primary text-sm">&larr; Back to Tickets</a>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex items-start justify-between gap-4 mb-2">
+        <div>
+          <h1 class="text-2xl font-bold">
+            <span class="text-base-content/40 font-mono text-lg mr-1">#{{ ticket.pk }}</span>
+            {{ ticket.title }}
+          </h1>
+        </div>
+        <a href="{% url 'tickets:ticket_edit' ticket.pk %}" class="btn btn-primary btn-sm">Edit</a>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
+        {% if ticket.status == 'new' %}<span class="badge badge-info">{{ ticket.get_status_display }}</span>
+        {% elif ticket.status == 'in_progress' %}<span class="badge badge-warning">{{ ticket.get_status_display }}</span>
+        {% else %}<span class="badge badge-success">{{ ticket.get_status_display }}</span>
+        {% endif %}
+        <span class="badge badge-outline">{{ ticket.get_category_display }}</span>
+        {% if ticket.priority == 'urgent' %}<span class="badge badge-error">Urgent</span>
+        {% elif ticket.priority == 'high' %}<span class="badge badge-warning">High</span>
+        {% elif ticket.priority == 'low' %}<span class="badge badge-ghost">Low</span>
+        {% else %}<span class="badge badge-neutral">Normal</span>
+        {% endif %}
+      </div>
+
+      <div class="card bg-base-300 p-4 mb-4">
+        <div class="prose prose-sm max-w-none">{{ ticket.details|render_markdown }}</div>
+      </div>
+
+      {% if ticket.resolution %}
+      <div class="card bg-base-300 p-4 mb-4 border-l-4 border-success">
+        <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">Resolution</p>
+        <div class="prose prose-sm max-w-none">{{ ticket.resolution|render_markdown }}</div>
+      </div>
+      {% endif %}
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        <div class="flex justify-between bg-base-300 px-3 py-2 rounded">
+          <span class="text-base-content/60">Submitted by</span>
+          <span>{{ ticket.submitted_by.get_full_name|default:ticket.submitted_by.discord_username }}</span>
+        </div>
+        <div class="flex justify-between bg-base-300 px-3 py-2 rounded">
+          <span class="text-base-content/60">Assigned to</span>
+          <span>
+            {% if ticket.assigned_to %}{{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.discord_username }}
+            {% else %}<span class="text-base-content/30">Unassigned</span>{% endif %}
+          </span>
+        </div>
+        <div class="flex justify-between bg-base-300 px-3 py-2 rounded">
+          <span class="text-base-content/60">Created</span>
+          <span>{{ ticket.created_at|date:"M j, Y g:i A" }}</span>
+        </div>
+        <div class="flex justify-between bg-base-300 px-3 py-2 rounded">
+          <span class="text-base-content/60">Updated</span>
+          <span>{{ ticket.updated_at|date:"M j, Y g:i A" }}</span>
+        </div>
+        {% if ticket.closed_at %}
+        <div class="flex justify-between bg-base-300 px-3 py-2 rounded">
+          <span class="text-base-content/60">Closed</span>
+          <span>{{ ticket.closed_at|date:"M j, Y g:i A" }}</span>
+        </div>
+        {% if ticket.closed_by %}
+        <div class="flex justify-between bg-base-300 px-3 py-2 rounded">
+          <span class="text-base-content/60">Closed by</span>
+          <span>{{ ticket.closed_by.get_full_name|default:ticket.closed_by.discord_username }}</span>
+        </div>
+        {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

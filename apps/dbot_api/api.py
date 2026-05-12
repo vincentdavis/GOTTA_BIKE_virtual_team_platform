@@ -682,13 +682,33 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
             if user:
                 linked += 1
 
-    # Mark members not in payload as left
+    # Mark members not in payload as left. Iterate so we can generate a ticket
+    # for each freshly-departed member; the underlying UPDATE would be faster
+    # but would skip the audit-trail ticket creation that admins rely on.
+    from apps.tickets.services import create_member_left_ticket
+
     members_to_mark_left = existing_discord_ids - received_discord_ids
     if members_to_mark_left:
-        left = GuildMember.objects.filter(
-            discord_id__in=members_to_mark_left,
-            date_left__isnull=True,
-        ).update(date_left=timezone.now())
+        now = timezone.now()
+        departed = list(
+            GuildMember.objects.filter(
+                discord_id__in=members_to_mark_left,
+                date_left__isnull=True,
+            )
+        )
+        for gm in departed:
+            gm.date_left = now
+            gm.save(update_fields=["date_left", "date_modified"])
+            try:
+                create_member_left_ticket(gm)
+            except Exception as e:
+                logfire.error(
+                    "Failed to create member-left ticket",
+                    guild_member_id=gm.pk,
+                    discord_id=gm.discord_id,
+                    error=str(e),
+                )
+        left = len(departed)
 
     total_active = GuildMember.objects.filter(date_left__isnull=True).count()
 

@@ -94,6 +94,7 @@ INSTALLED_APPS = [
     "apps.club_strava.apps.ClubStravaConfig",
     "apps.events.apps.EventsConfig",
     "apps.user_api.apps.UserApiConfig",
+    "apps.tickets.apps.TicketsConfig",
     "django_tasks",
     "django_tasks_db",
 ]

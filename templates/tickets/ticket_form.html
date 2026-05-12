@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="mb-4">
+    {% if ticket %}
+    <a href="{% url 'tickets:ticket_detail' ticket.pk %}" class="link link-primary text-sm">&larr; Back to Ticket</a>
+    {% else %}
+    <a href="{% url 'tickets:ticket_list' %}" class="link link-primary text-sm">&larr; Back to Tickets</a>
+    {% endif %}
+  </div>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl mb-4">{{ page_title }}</h2>
+
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+
+        <div class="form-control w-full">
+          <label class="label" for="{{ form.title.id_for_label }}">
+            <span class="label-text">Title</span>
+          </label>
+          {{ form.title }}
+          {% if form.title.errors %}
+          <label class="label"><span class="label-text-alt text-error">{{ form.title.errors.0 }}</span></label>
+          {% endif %}
+        </div>
+
+        <div class="form-control w-full">
+          <label class="label" for="{{ form.details.id_for_label }}">
+            <span class="label-text">Details</span>
+            <span class="label-text-alt">Markdown supported</span>
+          </label>
+          {{ form.details }}
+          {% if form.details.errors %}
+          <label class="label"><span class="label-text-alt text-error">{{ form.details.errors.0 }}</span></label>
+          {% endif %}
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="{{ form.category.id_for_label }}">
+              <span class="label-text">Category</span>
+            </label>
+            {{ form.category }}
+            {% if form.category.errors %}
+            <label class="label"><span class="label-text-alt text-error">{{ form.category.errors.0 }}</span></label>
+            {% endif %}
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="{{ form.priority.id_for_label }}">
+              <span class="label-text">Priority</span>
+            </label>
+            {{ form.priority }}
+            {% if form.priority.errors %}
+            <label class="label"><span class="label-text-alt text-error">{{ form.priority.errors.0 }}</span></label>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if form.status %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="{{ form.status.id_for_label }}">
+              <span class="label-text">Status</span>
+            </label>
+            {{ form.status }}
+            {% if form.status.errors %}
+            <label class="label"><span class="label-text-alt text-error">{{ form.status.errors.0 }}</span></label>
+            {% endif %}
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="{{ form.assigned_to.id_for_label }}">
+              <span class="label-text">Assigned to</span>
+            </label>
+            {{ form.assigned_to }}
+            {% if form.assigned_to.errors %}
+            <label class="label"><span class="label-text-alt text-error">{{ form.assigned_to.errors.0 }}</span></label>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if form.resolution %}
+        <div class="form-control w-full">
+          <label class="label" for="{{ form.resolution.id_for_label }}">
+            <span class="label-text">Resolution</span>
+            <span class="label-text-alt">Shown when the ticket is closed</span>
+          </label>
+          {{ form.resolution }}
+          {% if form.resolution.errors %}
+          <label class="label"><span class="label-text-alt text-error">{{ form.resolution.errors.0 }}</span></label>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-error">
+          {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="form-control mt-6">
+          <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

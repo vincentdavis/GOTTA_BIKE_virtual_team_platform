@@ -54,6 +54,7 @@ urlpatterns = [
     path("analytics/", include("apps.analytics.urls")),
     path("strava/", include("apps.club_strava.urls")),
     path("events/", include("apps.events.urls")),
+    path("tickets/", include("apps.tickets.urls")),
     # Site-level configuration
     path("site/config/", config_settings, name="config_settings"),
     # Note: specific routes must come before the generic <str:section_key> pattern

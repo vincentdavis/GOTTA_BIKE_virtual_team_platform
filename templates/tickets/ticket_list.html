@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Tickets{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto">
+  <div class="flex items-center justify-between mb-4">
+    <h1 class="text-2xl font-bold">Tickets</h1>
+    <a href="{% url 'tickets:ticket_create' %}" class="btn btn-primary btn-sm">New Ticket</a>
+  </div>
+
+  <form method="get" class="card bg-base-200 shadow-sm mb-4">
+    <div class="card-body p-4 grid grid-cols-1 md:grid-cols-5 gap-3">
+      <div class="form-control">
+        <label class="label py-1"><span class="label-text text-xs">Status</span></label>
+        <select name="status" class="select select-bordered select-sm">
+          <option value="">All</option>
+          {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if filter_status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-control">
+        <label class="label py-1"><span class="label-text text-xs">Category</span></label>
+        <select name="category" class="select select-bordered select-sm">
+          <option value="">All</option>
+          {% for value, label in category_choices %}
+          <option value="{{ value }}" {% if filter_category == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-control md:col-span-2">
+        <label class="label py-1"><span class="label-text text-xs">Search</span></label>
+        <input type="text" name="q" value="{{ filter_q }}" placeholder="Title or details" class="input input-bordered input-sm">
+      </div>
+      <div class="form-control justify-end">
+        <label class="label cursor-pointer gap-2 py-1">
+          <input type="checkbox" name="mine" value="1" class="checkbox checkbox-sm" {% if filter_mine %}checked{% endif %}>
+          <span class="label-text text-xs">Mine only</span>
+        </label>
+        <div class="flex gap-2">
+          <button type="submit" class="btn btn-primary btn-sm flex-1">Filter</button>
+          <a href="{% url 'tickets:ticket_list' %}" class="btn btn-ghost btn-sm">Reset</a>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  {% if tickets %}
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Title</th>
+          <th>Status</th>
+          <th>Category</th>
+          <th>Priority</th>
+          <th>Submitted by</th>
+          <th>Assigned to</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tickets %}
+        <tr>
+          <td class="font-mono text-xs">
+            <a href="{% url 'tickets:ticket_detail' t.pk %}" class="link link-primary">#{{ t.pk }}</a>
+          </td>
+          <td>
+            <a href="{% url 'tickets:ticket_detail' t.pk %}" class="link link-hover">{{ t.title }}</a>
+          </td>
+          <td>
+            {% if t.status == 'new' %}<span class="badge badge-info badge-sm">{{ t.get_status_display }}</span>
+            {% elif t.status == 'in_progress' %}<span class="badge badge-warning badge-sm">{{ t.get_status_display }}</span>
+            {% else %}<span class="badge badge-success badge-sm">{{ t.get_status_display }}</span>
+            {% endif %}
+          </td>
+          <td><span class="badge badge-outline badge-sm">{{ t.get_category_display }}</span></td>
+          <td>
+            {% if t.priority == 'urgent' %}<span class="badge badge-error badge-sm">Urgent</span>
+            {% elif t.priority == 'high' %}<span class="badge badge-warning badge-sm">High</span>
+            {% elif t.priority == 'low' %}<span class="badge badge-ghost badge-sm">Low</span>
+            {% else %}<span class="badge badge-neutral badge-sm">Normal</span>
+            {% endif %}
+          </td>
+          <td class="text-sm">{{ t.submitted_by.get_full_name|default:t.submitted_by.discord_username }}</td>
+          <td class="text-sm">
+            {% if t.assigned_to %}{{ t.assigned_to.get_full_name|default:t.assigned_to.discord_username }}
+            {% else %}<span class="text-base-content/30">—</span>{% endif %}
+          </td>
+          <td class="text-sm whitespace-nowrap">{{ t.created_at|date:"M j, Y" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-center py-12 text-base-content/70">
+    <p>No tickets match the current filters.</p>
+    <a href="{% url 'tickets:ticket_create' %}" class="link link-primary">Submit one</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
