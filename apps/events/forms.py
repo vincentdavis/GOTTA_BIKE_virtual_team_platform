@@ -114,6 +114,8 @@ class EventForm(forms.ModelForm):
             "signup_instructions",
             "timezone_options",
             "timezone_required",
+            "squad_gender_options",
+            "squad_gender_required",
         ]
         widgets: ClassVar[dict] = {
             "title": forms.TextInput(
@@ -155,6 +157,10 @@ class EventForm(forms.ModelForm):
             ),
             "timezone_options": forms.HiddenInput(),
             "timezone_required": forms.CheckboxInput(
+                attrs={"class": "checkbox"},
+            ),
+            "squad_gender_options": forms.HiddenInput(),
+            "squad_gender_required": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
         }
@@ -366,6 +372,12 @@ class SquadForm(forms.ModelForm):
         label="Captain Discord Role",
     )
 
+    gender = forms.ChoiceField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        label="Gender",
+    )
+
     class Meta:
         """Meta options for SquadForm."""
 
@@ -373,6 +385,7 @@ class SquadForm(forms.ModelForm):
         fields: ClassVar[list[str]] = [
             "name",
             "squad_timezone",
+            "gender",
             "discord_channel_id",
             "audio_channel_id",
             "captain",
@@ -423,17 +436,28 @@ class SquadForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, event_prefix: str = "", **kwargs) -> None:
+    def __init__(self, *args, event_prefix: str = "", gender_options: list[str] | None = None, **kwargs) -> None:
         """Initialize form with Discord channel choices and captain labels.
 
         Args:
             *args: Positional arguments passed to ModelForm.
             event_prefix: The parent event's Discord prefix. When empty, the role field is disabled.
+            gender_options: The parent event's allowed squad-gender options. When empty, the gender field is disabled.
             **kwargs: Keyword arguments passed to ModelForm.
 
         """
         super().__init__(*args, **kwargs)
         self.event_prefix = event_prefix
+        self.gender_options = list(gender_options or [])
+
+        # Populate gender choices from the parent event's options
+        gender_choices = [("", "—")] + [(g, g) for g in self.gender_options]
+        current_gender = self.initial.get("gender") or ""
+        if current_gender and current_gender not in self.gender_options:
+            gender_choices.append((current_gender, f"{current_gender} (not in event options)"))
+        self.fields["gender"].choices = gender_choices
+        if not self.gender_options:
+            self.fields["gender"].widget.attrs["disabled"] = True
 
         # Sort captain/vice_captain alphabetically and show full names
         from apps.accounts.models import User

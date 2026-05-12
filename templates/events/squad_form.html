@@ -162,6 +162,28 @@
           {% endif %}
         </div>
 
+        <!-- Gender -->
+        <div class="form-control w-full">
+          <label class="label" for="id_gender">
+            <span class="label-text">Gender</span>
+          </label>
+          {{ form.gender }}
+          {% if form.gender.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.gender.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">
+              {% if event.squad_gender_options %}
+                Optional. Options come from the event's Squad Gender Preference Options.
+              {% else %}
+                Add Squad Gender Preference Options on the event first to enable this field.
+              {% endif %}
+            </span>
+          </label>
+        </div>
+
         <!-- URL -->
         <div class="form-control w-full">
           <label class="label" for="id_url">

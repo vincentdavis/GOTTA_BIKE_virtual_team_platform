@@ -23,6 +23,7 @@ ZR_CATEGORY_CHOICES = [(cat, cat) for cat in ZR_CATEGORY_ORDER]
 
 
 DEFAULT_TIMEZONE_OPTIONS = ["US EAST", "US WEST", "Atlantic", "EMEA Central", "EMEA West"]
+DEFAULT_SQUAD_GENDER_OPTIONS = ["Male", "Female", "COED"]
 
 
 def _default_timezone_options() -> list[str]:
@@ -33,6 +34,16 @@ def _default_timezone_options() -> list[str]:
 
     """
     return list(DEFAULT_TIMEZONE_OPTIONS)
+
+
+def _default_squad_gender_options() -> list[str]:
+    """Return a copy of the default squad gender options list.
+
+    Returns:
+        List of default squad gender option strings.
+
+    """
+    return list(DEFAULT_SQUAD_GENDER_OPTIONS)
 
 
 class Event(models.Model):
@@ -67,6 +78,15 @@ class Event(models.Model):
         help_text="Timezone options available at signup",
     )
     timezone_required = models.BooleanField(default=False, help_text="Whether timezone selection is required at signup")
+    squad_gender_options = models.JSONField(
+        default=_default_squad_gender_options,
+        blank=True,
+        help_text="Squad gender preference options available at signup",
+    )
+    squad_gender_required = models.BooleanField(
+        default=False,
+        help_text="Require squad gender preference at signup (also gates whether the field appears)",
+    )
     logo = models.ImageField(upload_to="event_logos/", blank=True, help_text="Optional logo image for the event")
     url = models.URLField(max_length=500, blank=True, help_text="External URL for event details or signup")
     discord_channel_id = models.BigIntegerField(
@@ -280,6 +300,11 @@ class EventSignup(models.Model):
         help_text="The signed-up user",
     )
     signup_timezone = models.JSONField(default=list, blank=True, help_text="Selected timezones from event options")
+    signup_squad_gender = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Selected squad gender preferences from event options",
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -344,6 +369,11 @@ class Squad(models.Model):
     )
     name = models.CharField(max_length=200, help_text="Squad name")
     squad_timezone = models.CharField(max_length=50, blank=True, help_text="Optional timezone string")
+    gender = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Optional squad gender; must be one of the parent event's squad_gender_options when set",
+    )
     discord_channel_id = models.BigIntegerField(
         default=0,
         help_text="Discord channel ID for squad coordination (0 = none)",

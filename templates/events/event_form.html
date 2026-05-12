@@ -189,10 +189,10 @@
           </label>
         </div>
 
-        <!-- Timezone Options (chip/tag input) -->
+        <!-- Timezones or Regions (chip/tag input) -->
         <div class="form-control w-full">
           <label class="label">
-            <span class="label-text">Timezone Options</span>
+            <span class="label-text">TimesZones or Regions</span>
           </label>
           {{ form.timezone_options }}
           <div id="tz-chips" class="flex flex-wrap gap-2 mb-2 min-h-[2rem]"></div>
@@ -214,7 +214,36 @@
         <div class="form-control">
           <label class="label cursor-pointer justify-start gap-2">
             {{ form.timezone_required }}
-            <span class="label-text">Require timezone selection at signup</span>
+            <span class="label-text">Require timezone, region selection at signup</span>
+          </label>
+        </div>
+
+        <!-- Squad Gender Options (chip/tag input) -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Squad Gender Preference Options</span>
+          </label>
+          {{ form.squad_gender_options }}
+          <div id="sg-chips" class="flex flex-wrap gap-2 mb-2 min-h-[2rem]"></div>
+          <div class="join w-full">
+            <input type="text" id="sg-input" class="input input-bordered join-item w-full" placeholder="e.g. Male, Female, COED">
+            <button type="button" id="sg-add-btn" class="btn btn-primary join-item">Add</button>
+          </div>
+          {% if form.squad_gender_options.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.squad_gender_options.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Type a label and press Enter or click Add. Only shown on the signup form when required.</span>
+          </label>
+        </div>
+
+        <!-- Squad Gender Required -->
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-2">
+            {{ form.squad_gender_required }}
+            <span class="label-text">Require squad gender preference at signup</span>
           </label>
         </div>
 
@@ -519,6 +548,73 @@
     if (e.key === 'Enter') {
       e.preventDefault();
       addTimezone();
+    }
+  });
+
+  sync();
+  render();
+})();
+
+(function() {
+  const hiddenInput = document.getElementById('id_squad_gender_options');
+  const chipsContainer = document.getElementById('sg-chips');
+  const textInput = document.getElementById('sg-input');
+  const addBtn = document.getElementById('sg-add-btn');
+  if (!hiddenInput || !chipsContainer || !textInput || !addBtn) return;
+
+  let genders = [];
+  try {
+    const val = hiddenInput.value;
+    if (val) genders = JSON.parse(val);
+  } catch(e) {
+    genders = [];
+  }
+  if (!Array.isArray(genders)) genders = [];
+
+  function sync() {
+    hiddenInput.value = JSON.stringify(genders);
+  }
+
+  function render() {
+    chipsContainer.innerHTML = '';
+    genders.forEach(function(g, i) {
+      const chip = document.createElement('span');
+      chip.className = 'badge badge-lg gap-1';
+      chip.textContent = g;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn btn-ghost btn-xs btn-circle';
+      removeBtn.innerHTML = '&times;';
+      removeBtn.setAttribute('aria-label', 'Remove ' + g);
+      removeBtn.addEventListener('click', function() {
+        genders.splice(i, 1);
+        sync();
+        render();
+      });
+      chip.appendChild(removeBtn);
+      chipsContainer.appendChild(chip);
+    });
+  }
+
+  function addGender() {
+    const val = textInput.value.trim();
+    if (!val) return;
+    if (genders.indexOf(val) !== -1) {
+      textInput.value = '';
+      return;
+    }
+    genders.push(val);
+    sync();
+    render();
+    textInput.value = '';
+    textInput.focus();
+  }
+
+  addBtn.addEventListener('click', addGender);
+  textInput.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addGender();
     }
   });
 

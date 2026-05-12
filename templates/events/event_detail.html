@@ -106,6 +106,21 @@
                 </div>
               </div>
               {% endif %}
+              {% if event.squad_gender_required and event.squad_gender_options %}
+              <div class="form-control w-full">
+                <label class="label">
+                  <span class="label-text">Squad Gender Preference <span class="text-error">*</span></span>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  {% for g in event.squad_gender_options %}
+                  <label class="label cursor-pointer gap-2">
+                    <input type="checkbox" name="signup_squad_gender" value="{{ g }}" class="checkbox checkbox-sm"{% if g in user_signup.signup_squad_gender %} checked{% endif %}>
+                    <span class="label-text">{{ g }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
               <div class="form-control w-full">
                 <label class="label" for="edit_signup_notes">
                   <span class="label-text">Notes</span>
@@ -144,6 +159,21 @@
                   <label class="label cursor-pointer gap-2">
                     <input type="checkbox" name="signup_timezone" value="{{ tz }}" class="checkbox checkbox-sm">
                     <span class="label-text">{{ tz }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              {% if event.squad_gender_required and event.squad_gender_options %}
+              <div class="form-control w-full">
+                <label class="label">
+                  <span class="label-text">Squad Gender Preference <span class="text-error">*</span></span>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  {% for g in event.squad_gender_options %}
+                  <label class="label cursor-pointer gap-2">
+                    <input type="checkbox" name="signup_squad_gender" value="{{ g }}" class="checkbox checkbox-sm">
+                    <span class="label-text">{{ g }}</span>
                   </label>
                   {% endfor %}
                 </div>

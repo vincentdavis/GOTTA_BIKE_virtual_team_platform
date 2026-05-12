@@ -1346,12 +1346,24 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, "Invalid timezone selection.")
             return redirect("events:event_detail", pk=pk)
 
+    signup_squad_gender = []
+    if event.squad_gender_required and event.squad_gender_options:
+        signup_squad_gender = request.POST.getlist("signup_squad_gender")
+        if not signup_squad_gender:
+            messages.error(request, "Please select at least one squad gender preference.")
+            return redirect("events:event_detail", pk=pk)
+        invalid = [g for g in signup_squad_gender if g not in event.squad_gender_options]
+        if invalid:
+            messages.error(request, "Invalid squad gender preference selection.")
+            return redirect("events:event_detail", pk=pk)
+
     notes = request.POST.get("notes", "").strip()
 
     EventSignup.objects.create(
         event=event,
         user=request.user,
         signup_timezone=signup_timezone,
+        signup_squad_gender=signup_squad_gender,
         notes=notes,
     )
     logfire.info(
@@ -1360,6 +1372,7 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
         event_title=event.title,
         user_id=request.user.id,
         signup_timezone=signup_timezone,
+        signup_squad_gender=signup_squad_gender,
     )
     messages.success(request, "You have signed up for this event!")
     return redirect("events:event_detail", pk=pk)
@@ -1393,15 +1406,28 @@ def event_signup_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, "Invalid timezone selection.")
             return redirect("events:event_detail", pk=pk)
 
+    signup_squad_gender = []
+    if event.squad_gender_required and event.squad_gender_options:
+        signup_squad_gender = request.POST.getlist("signup_squad_gender")
+        if not signup_squad_gender:
+            messages.error(request, "Please select at least one squad gender preference.")
+            return redirect("events:event_detail", pk=pk)
+        invalid = [g for g in signup_squad_gender if g not in event.squad_gender_options]
+        if invalid:
+            messages.error(request, "Invalid squad gender preference selection.")
+            return redirect("events:event_detail", pk=pk)
+
     signup.signup_timezone = signup_timezone
+    signup.signup_squad_gender = signup_squad_gender
     signup.notes = request.POST.get("notes", "").strip()
-    signup.save(update_fields=["signup_timezone", "notes", "updated_at"])
+    signup.save(update_fields=["signup_timezone", "signup_squad_gender", "notes", "updated_at"])
     logfire.info(
         "Event signup updated",
         event_id=pk,
         event_title=event.title,
         user_id=request.user.id,
         signup_timezone=signup_timezone,
+        signup_squad_gender=signup_squad_gender,
     )
     messages.success(request, "Your signup has been updated.")
     return redirect("events:event_detail", pk=pk)
@@ -1505,7 +1531,11 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         return redirect("events:event_detail", pk=event_pk)
 
     if request.method == "POST":
-        form = SquadForm(request.POST, event_prefix=event.prefix or "")
+        form = SquadForm(
+            request.POST,
+            event_prefix=event.prefix or "",
+            gender_options=event.squad_gender_options or [],
+        )
         if form.is_valid():
             squad = form.save(commit=False)
             squad.event = event
@@ -1521,7 +1551,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             messages.success(request, f'Squad "{squad.name}" created successfully!')
             return redirect("events:event_detail", pk=event_pk)
     else:
-        form = SquadForm(event_prefix=event.prefix or "")
+        form = SquadForm(event_prefix=event.prefix or "", gender_options=event.squad_gender_options or [])
 
     return render(
         request,
@@ -1564,7 +1594,12 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
         return redirect("events:event_detail", pk=event_pk)
 
     if request.method == "POST":
-        form = SquadForm(request.POST, instance=squad, event_prefix=event.prefix or "")
+        form = SquadForm(
+            request.POST,
+            instance=squad,
+            event_prefix=event.prefix or "",
+            gender_options=event.squad_gender_options or [],
+        )
         if form.is_valid():
             form.save()
             logfire.info(
@@ -1577,7 +1612,11 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             messages.success(request, f'Squad "{squad.name}" updated successfully!')
             return redirect("events:squad_manage", event_pk=event_pk)
     else:
-        form = SquadForm(instance=squad, event_prefix=event.prefix or "")
+        form = SquadForm(
+            instance=squad,
+            event_prefix=event.prefix or "",
+            gender_options=event.squad_gender_options or [],
+        )
 
     return render(
         request,

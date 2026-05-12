@@ -40,6 +40,9 @@
           {% if squad.squad_timezone %}
           <span>{{ squad.squad_timezone }}</span>
           {% endif %}
+          {% if squad.gender %}
+          <span class="badge badge-outline badge-sm">{{ squad.gender }}</span>
+          {% endif %}
         </div>
 
         {# Leadership section #}
