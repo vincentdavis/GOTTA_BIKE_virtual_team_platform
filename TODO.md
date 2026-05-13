@@ -9,7 +9,7 @@
   data migration imports the live `User` model, so a fresh `migrate` fails with `no such column:
   accounts_user.has_jersey` (added later in 0017). Pytest currently bypasses this via `--no-migrations`.
 - [ ] Permission system tests (has_permission, decorators, role checks)
-- [ ] Race ready verification logic tests (expiration, category requirements, is_race_ready)
+- [x] Race ready verification logic tests (expiration, category requirements, is_race_ready)
 - [ ] Membership application workflow tests (status transitions, form validation)
 - [ ] Discord bot API endpoint tests (auth, sync, CRUD operations)
 - [ ] Background task tests (ZP sync, ZR sync, Strava sync, notifications)

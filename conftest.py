@@ -105,3 +105,70 @@ def admin_authed_client(client, app_admin):
     """Test client logged in as an app_admin."""
     client.force_login(app_admin)
     return client
+
+
+# --- Race-ready / verification fixtures -------------------------------------
+
+
+@pytest.fixture
+def zp_team_rider_factory(db):
+    """Build a ZPTeamRiders row. Defaults to a Cat B (div=20) male rider."""
+    from apps.zwiftpower.models import ZPTeamRiders
+
+    counter = {"n": 9_000_000}
+
+    def _make(
+        *,
+        zwid: int | None = None,
+        div: int = 20,
+        divw: int = 0,
+        name: str = "Test Rider",
+    ):
+        if zwid is None:
+            counter["n"] += 1
+            zwid = counter["n"]
+        return ZPTeamRiders.objects.create(zwid=zwid, div=div, divw=divw, name=name)
+
+    return _make
+
+
+@pytest.fixture
+def verification_factory(db):
+    """Build a RaceReadyRecord for a given user.
+
+    Defaults: status=verified, record_date=today, url set so clean() would pass.
+    """
+    from datetime import date, timedelta
+
+    from django.utils import timezone
+
+    from apps.team.models import RaceReadyRecord
+
+    def _make(
+        user,
+        verify_type: str,
+        *,
+        status: str = RaceReadyRecord.Status.VERIFIED,
+        record_date: date | None = None,
+        days_ago: int | None = None,
+        url: str = "https://example.test/evidence",
+        weight: float | None = None,
+        height: int | None = None,
+        ftp: int | None = None,
+    ):
+        if record_date is None:
+            anchor = timezone.now().date()
+            record_date = anchor - timedelta(days=days_ago) if days_ago is not None else anchor
+        return RaceReadyRecord.objects.create(
+            user=user,
+            verify_type=verify_type,
+            media_type="link",
+            url=url,
+            status=status,
+            record_date=record_date,
+            weight=weight,
+            height=height,
+            ftp=ftp,
+        )
+
+    return _make
