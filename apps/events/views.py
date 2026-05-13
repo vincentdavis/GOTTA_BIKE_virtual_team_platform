@@ -2432,32 +2432,6 @@ def _expand_utc_dates(start_date: date, end_date: date) -> list[str]:
     return out
 
 
-def _expand_time_slots(start_time: str, end_time: str, slot_duration: int) -> list[str]:
-    """Return an ordered list of ``HH:MM`` slot strings, handling midnight wrap.
-
-    Args:
-        start_time: ``HH:MM`` start of the slot range.
-        end_time: ``HH:MM`` end of the slot range (exclusive). If less than or
-            equal to ``start_time``, wraps past midnight.
-        slot_duration: Slot length in minutes.
-
-    Returns:
-        List of ``HH:MM`` strings.
-
-    """
-    start = datetime.strptime(start_time, "%H:%M")
-    end = datetime.strptime(end_time, "%H:%M")
-    if end <= start:
-        end += timedelta(hours=24)
-    delta = timedelta(minutes=slot_duration)
-    out: list[str] = []
-    cur = start
-    while cur < end:
-        out.append(cur.strftime("%H:%M"))
-        cur += delta
-    return out
-
-
 @login_required
 @team_member_required()
 @require_POST
@@ -2526,7 +2500,6 @@ def availability_preview_view(request: HttpRequest, event_pk: int, squad_pk: int
         utc_blocked = list(blocked_cells)
 
     utc_dates = _expand_utc_dates(utc_start_date, utc_end_date)
-    utc_time_slots = _expand_time_slots(utc_start_time, utc_end_time, slot_duration)
 
     # 2. Convert UTC → display timezone (preferring the user's profile tz).
     user_tz = (getattr(request.user, "timezone", "") or "").strip()
@@ -2534,7 +2507,7 @@ def availability_preview_view(request: HttpRequest, event_pk: int, squad_pk: int
     if display_tz != "UTC" and display_tz not in available_timezones():
         display_tz = "UTC"
 
-    grid_data = convert_grid_to_local(utc_dates, utc_time_slots, utc_blocked, display_tz)
+    grid_data = convert_grid_to_local(utc_dates, utc_start_time, utc_end_time, slot_duration, utc_blocked, display_tz)
 
     return JsonResponse({
         "display_dates": list(grid_data["display_dates"]),
@@ -2835,7 +2808,7 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
     display_tz = user_tz or grid.grid_timezone or "UTC"
     tz_is_default = not user_tz
 
-    grid_data = convert_grid_to_local(grid.dates, grid.time_slots, grid.blocked_cells, display_tz)
+    grid_data = convert_grid_to_local(grid.dates, grid.start_time, grid.end_time, grid.slot_duration, grid.blocked_cells, display_tz)
 
     # Convert existing response UTC keys → local keys
     existing_local_keys: list[str] = []
@@ -2983,7 +2956,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     display_tz = user_tz or grid.grid_timezone or "UTC"
     tz_is_default = not user_tz
 
-    grid_data = convert_grid_to_local(grid.dates, grid.time_slots, grid.blocked_cells, display_tz)
+    grid_data = convert_grid_to_local(grid.dates, grid.start_time, grid.end_time, grid.slot_duration, grid.blocked_cells, display_tz)
 
     # Re-key user IDs from UTC → local
     cell_user_ids: dict[str, list[int]] = {}
