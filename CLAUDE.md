@@ -435,6 +435,46 @@ Both gate on permission/auth before any DB call, then cache the count for 60 s p
 
 `apps/club_strava/` - Strava club activity sync. Token refresh is automatic on 401 (tokens saved to Constance). Activity list at `/strava/`, manual sync at `/strava/sync/`. Constance settings: `STRAVA_CLUB_ID`, `STRAVA_CLIENT_ID`, `STRAVA_CLIENT_SECRET`, `STRAVA_ACCESS_TOKEN`, `STRAVA_REFRESH_TOKEN` (tokens auto-updated).
 
+## Testing
+
+Tests use **pytest + pytest-django**. Config lives in `[tool.pytest.ini_options]` in `pyproject.toml`; shared fixtures in the top-level `conftest.py`.
+
+- Discovery: `tests.py`, `test_*.py`, `*_tests.py` under `apps/` and `gotta_bike_platform/`.
+- Test DB is built from current model state via `--no-migrations` (migrations are **not** replayed). `--reuse-db` keeps the test DB between runs — pass `--create-db` after a model change to force regeneration.
+- Why `--no-migrations`: a latent bug in `apps/accounts/migrations/0013_add_is_race_ready_cached_field.py` makes fresh migrations fail (the data migration imports the live `User` model, which selects columns added in 0017). Production missed this because 0013 ran before 0017 was created. Tracked in TODO.md P0; remove `--no-migrations` once fixed.
+
+### Shared fixtures (`conftest.py`)
+
+All user fixtures depend on `db` and grant permissions via `User.permission_overrides`, so tests don't depend on Constance or Discord roles.
+
+- `user_model` — the active User class
+- `user` — plain user, no permissions
+- `team_member` — `team_member` permission
+- `app_admin` — `app_admin` + `team_member`
+- `event_admin` — `event_admin` + `team_member`
+- `superuser` — `is_superuser=True` (bypasses all checks)
+- `auth_client` — `pytest-django`'s `client` force-logged-in as `team_member`
+- `admin_authed_client` — `client` force-logged-in as `app_admin`
+
+Add new permission fixtures in `conftest.py` following the same pattern (`_make_user(..., permissions={...})`). Use feature-local `conftest.py` files for app-specific fixtures (e.g. an `event_factory` in `apps/events/conftest.py`).
+
+### Writing tests
+
+- Tag DB-touching tests with `@pytest.mark.django_db` (built-in `db` fixture also works).
+- Per-file ruff ignores are configured for `**/tests.py`, `**/test_*.py`, and `conftest.py` — `assert`, missing module/function docstrings, and `DOC201` are allowed.
+- For new tests, prefer the shared fixtures over rolling your own User in each test. If you need a variant (different gender, ZP category, etc.) build it from a fixture rather than calling `create_user` directly.
+- Avoid making real HTTP calls — patch `httpx` clients (`apps/zwiftpower/zp_client.py`, `apps/zwiftracing/zr_client.py`, `apps/accounts/discord_service.py`, etc.) at the client boundary.
+
+### Running
+
+```bash
+uv run pytest                               # full suite
+uv run pytest apps/events                   # one app
+uv run pytest apps/accounts/tests.py::test_app_admin_has_app_admin_permission
+uv run pytest -k permission                 # by keyword
+uv run pytest --create-db                   # rebuild test DB
+```
+
 ## Code Style
 
 Ruff configuration in `ruff.toml`:

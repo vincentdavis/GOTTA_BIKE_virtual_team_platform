@@ -45,7 +45,25 @@ dev = [
     "django-reset-migrations>=0.4.0",
     "django-stubs>=5.2.8",
     "pytest>=9.0.3",
+    "pytest-django>=4.11.1",
     "ruff>=0.15.12",
     "ty>=0.0.34",
     "logfire-mcp>=0.6.0"
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "gotta_bike_platform.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = ["apps", "gotta_bike_platform"]
+addopts = [
+    "--strict-markers",
+    "--reuse-db",
+    # Tables are created from current model state instead of replaying migrations.
+    # Bypasses a latent fresh-DB bug in apps/accounts/migrations/0013 (the data
+    # migration loads the live User model, which selects columns added in later
+    # migrations). See TODO.md.
+    "--no-migrations",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:allauth.*",
 ]

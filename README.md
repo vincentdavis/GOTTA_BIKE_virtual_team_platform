@@ -102,7 +102,28 @@ uv run python manage.py runserver     # Dev server
 uv run python manage.py migrate       # Apply migrations
 uv run python manage.py db_worker     # Run background task worker
 uv run pytest                         # Run tests
+uv run pytest apps/accounts/tests.py  # Run a single test file
+uv run pytest -k permission           # Run tests matching keyword
 uv run ruff check .                   # Lint
+```
+
+## Testing
+
+Tests use **pytest + pytest-django**. Configuration lives in `[tool.pytest.ini_options]` in `pyproject.toml`; shared fixtures live in the top-level `conftest.py`.
+
+- Test discovery: any `tests.py`, `test_*.py`, or `*_tests.py` under `apps/` or `gotta_bike_platform/`.
+- The test DB is built from current model state via `--no-migrations` (Django migrations are not replayed for tests). `--reuse-db` keeps the test DB between runs — pass `--create-db` after a model change to force regeneration.
+- Available fixtures: `user`, `team_member`, `app_admin`, `event_admin`, `superuser`, `auth_client`, `admin_authed_client`. Permission fixtures grant via `User.permission_overrides`, so tests don't depend on Constance or Discord roles.
+
+Example:
+
+```python
+import pytest
+
+@pytest.mark.django_db
+def test_team_member_can_see_roster(auth_client):
+    response = auth_client.get("/team/roster/")
+    assert response.status_code == 200
 ```
 
 ## License
