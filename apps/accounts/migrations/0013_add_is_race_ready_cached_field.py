@@ -5,7 +5,7 @@ from django.db import migrations, models
 
 def populate_race_ready(apps, schema_editor):
     """Populate is_race_ready for existing users using the live model's calculate_race_ready()."""
-    from apps.accounts.models import User
+    User = apps.get_model('accounts', 'User')
 
     users = (
         User.objects
