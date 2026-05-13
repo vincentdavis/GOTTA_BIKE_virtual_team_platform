@@ -656,28 +656,6 @@ class AvailabilityGrid(models.Model):
         return result
 
     @property
-    def time_slots(self) -> list[str]:
-        """Return list of time slot strings from start_time to end_time by slot_duration.
-
-        Handles wrap-around past midnight (e.g. start_time=15:00, end_time=02:00).
-
-        Returns:
-            List of "HH:MM" strings for each slot in the time range.
-
-        """
-        start = datetime.strptime(self.start_time, "%H:%M")
-        end = datetime.strptime(self.end_time, "%H:%M")
-        if end <= start:
-            end += timedelta(hours=24)
-        delta = timedelta(minutes=self.slot_duration)
-        result = []
-        current = start
-        while current < end:
-            result.append(current.strftime("%H:%M"))
-            current += delta
-        return result
-
-    @property
     def response_count(self) -> int:
         """Return the number of responses for this grid.
 

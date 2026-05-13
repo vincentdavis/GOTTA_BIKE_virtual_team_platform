@@ -42,14 +42,16 @@ def convert_local_to_utc(
     local_end_time = time.fromisoformat(end_time)
 
     local_start_dt = datetime.combine(start_date, local_start_time, tzinfo=tz)
+    local_last_day_start_dt = datetime.combine(end_date, local_start_time, tzinfo=tz)
     local_end_dt = datetime.combine(end_date, local_end_time, tzinfo=tz)
 
     utc_start_dt = local_start_dt.astimezone(utc)
+    utc_last_day_start_dt = local_last_day_start_dt.astimezone(utc)
     utc_end_dt = local_end_dt.astimezone(utc)
 
     return (
         utc_start_dt.date(),
-        utc_end_dt.date(),
+        utc_last_day_start_dt.date(),
         utc_start_dt.strftime("%H:%M"),
         utc_end_dt.strftime("%H:%M"),
     )
@@ -96,7 +98,9 @@ def convert_blocked_cells_to_utc(
 
 def convert_grid_to_local(
     utc_dates: list[str],
-    utc_time_slots: list[str],
+    start_time: time,
+    end_time: time,
+    slot_duration: int,
     blocked_cells: list[dict],
     target_tz: str,
 ) -> dict:
@@ -108,6 +112,9 @@ def convert_grid_to_local(
 
     Args:
         utc_dates: List of UTC date strings ("YYYY-MM-DD").
+        start_time: First race time on each day.
+        end_time: End of race availability on each day.
+        slot_duration: Minutes per availability slot.
         utc_time_slots: List of UTC time strings ("HH:MM").
         blocked_cells: List of {"date": ..., "time": ...} dicts in UTC.
         target_tz: IANA timezone string for display.
@@ -149,13 +156,23 @@ def convert_grid_to_local(
     reverse_map: dict[str, str] = {}
 
     for d_str in utc_dates:
-        for t_str in utc_time_slots:
-            utc_dt = datetime.combine(
-                date.fromisoformat(d_str),
-                time.fromisoformat(t_str),
-                tzinfo=utc,
+        start = datetime.combine(
+            date.fromisoformat(d_str),
+            start_time,
+            tzinfo=utc,
             )
-            local_dt = utc_dt.astimezone(tz)
+        end = datetime.combine(
+            date.fromisoformat(d_str),
+            end_time,
+            tzinfo=utc,
+            )
+        if end <= start:
+            end += timedelta(days=1)
+        current = start
+        delta = timedelta(minutes=slot_duration)
+        while current < end:
+            t_str = current.strftime("%H:%M")
+            local_dt = current.astimezone(tz)
             local_d = local_dt.strftime("%Y-%m-%d")
             local_t = local_dt.strftime("%H:%M")
             local_dates_set.add(local_d)
@@ -165,6 +182,8 @@ def convert_grid_to_local(
             utc_key = f"{d_str}|{t_str}"
             cell_map[local_key] = {"date": d_str, "time": t_str}
             reverse_map[utc_key] = local_key
+
+            current += delta
 
     blocked_utc_set = {f"{c['date']}|{c['time']}" for c in blocked_cells}
     display_blocked: set[str] = set()
