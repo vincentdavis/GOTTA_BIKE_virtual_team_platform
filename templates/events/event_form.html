@@ -279,7 +279,7 @@
           <a href="{% url 'events:event_role_setup' event.pk %}" class="btn btn-ghost btn-sm">Role Setup</a>
         </div>
         <div class="bg-base-300 rounded-lg p-4 text-sm space-y-2">
-          <p><span class="font-semibold">Prefix:</span> {{ event.prefix|default:"(none)" }}</p>
+          <p><span class="font-semibold">Prefixes:</span> {% if event.prefixes %}<span class="font-mono">{% for p in event.prefixes %}{{ p }}{% if not forloop.last %}  {% endif %}{% endfor %}</span>{% else %}(none){% endif %}</p>
           <p><span class="font-semibold">Head Captain Role:</span> {{ role_display.head_captain_role_id }}</p>
           <p><span class="font-semibold">Event Role:</span> {{ role_display.event_role }}</p>
         </div>

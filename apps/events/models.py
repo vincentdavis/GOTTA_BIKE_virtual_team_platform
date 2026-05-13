@@ -64,7 +64,14 @@ class Event(models.Model):
 
     """
 
-    prefix = models.CharField(max_length=50, blank=True, help_text='Channel/role prefix, e.g. "$" in $DRS')
+    prefixes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            'Channel/role prefixes (list), e.g. ["$", "~"]. '
+            "Roles matching any of these prefixes appear in event/squad selectors."
+        ),
+    )
     title = models.CharField(max_length=200, help_text="Event title")
     description = models.TextField(blank=True, help_text="Event description (supports Markdown)")
     start_date = models.DateField(help_text="Event start date")

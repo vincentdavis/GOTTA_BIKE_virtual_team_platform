@@ -71,21 +71,43 @@ def _get_voice_channel_choices() -> list:
     return choices
 
 
-def _get_role_choices(prefix: str = "") -> list[tuple[str, str]]:
+def _get_role_choices(prefixes: list[str] | None = None) -> list:
     """Build choices list for Discord role Select widget.
 
+    When multiple prefixes are supplied, the resulting list is structured as
+    Django optgroups — one group per prefix — so the admin can scan a long
+    dropdown without losing track of which prefix a role belongs to. When the
+    list is empty/None, all roles are returned flat.
+
     Args:
-        prefix: If provided, only include roles whose name starts with this prefix.
+        prefixes: If provided, only include roles whose name starts with one
+            of these prefixes.
 
     Returns:
-        List of (role_id, name) tuples ordered by position (highest first).
+        Mixed list of ``("0", "(none)")`` tuple followed by either flat
+        ``(role_id, label)`` tuples or ``(group_label, [(role_id, label), ...])``
+        optgroup tuples.
 
     """
-    choices: list[tuple[str, str]] = [("0", "(none)")]
+    choices: list = [("0", "(none)")]
     qs = DiscordRole.objects.order_by("-position")
-    if prefix:
-        qs = qs.filter(name__startswith=prefix)
-    choices.extend((role.role_id, f"@{role.name}") for role in qs)
+
+    if not prefixes:
+        choices.extend((role.role_id, f"@{role.name}") for role in qs)
+        return choices
+
+    # Group by prefix; preserve admin-chosen prefix order.
+    from django.db.models import Q
+
+    prefix_q = Q()
+    for p in prefixes:
+        prefix_q |= Q(name__startswith=p)
+    filtered = list(qs.filter(prefix_q))
+
+    for p in prefixes:
+        group_roles = [(role.role_id, f"@{role.name}") for role in filtered if role.name.startswith(p)]
+        if group_roles:
+            choices.append((f"Prefix: {p}", group_roles))
     return choices
 
 
@@ -215,8 +237,33 @@ class EventForm(forms.ModelForm):
             return 0
 
 
+def _allowed_event_prefixes() -> list[str]:
+    """Load the Constance allowed-prefixes list with a sensible fallback.
+
+    Returns:
+        List of allowed prefix strings.
+
+    """
+    from constance import config
+
+    try:
+        value = json.loads(config.EVENT_ROLE_PREFIXES)
+        if isinstance(value, list):
+            return [str(p) for p in value]
+    except (json.JSONDecodeError, ValueError, TypeError):
+        pass
+    return ["$", ">", "¡", "~", "^"]
+
+
 class EventRoleSetupForm(forms.ModelForm):
-    """Form for editing event Discord role settings (prefix, head captain role, event role)."""
+    """Form for editing event Discord role settings (prefixes, head captain role, event role)."""
+
+    prefixes = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-sm"}),
+        label="Discord Prefixes",
+        help_text="One or more channel/role prefixes. Roles matching any selected prefix appear in role pickers.",
+    )
 
     head_captain_role_id = forms.CharField(
         required=False,
@@ -235,25 +282,18 @@ class EventRoleSetupForm(forms.ModelForm):
 
         model = Event
         fields: ClassVar[list[str]] = [
-            "prefix",
+            "prefixes",
             "head_captain_role_id",
             "event_role",
         ]
-        labels: ClassVar[dict] = {
-            "prefix": "Discord Prefix",
-        }
-        help_texts: ClassVar[dict] = {
-            "prefix": 'Channel and role prefix, e.g. "$" in $DRS',
-        }
-        widgets: ClassVar[dict] = {
-            "prefix": forms.TextInput(
-                attrs={"class": "input input-bordered w-full", "placeholder": "$"},
-            ),
-        }
 
     def __init__(self, *args, **kwargs) -> None:
-        """Initialize form with Discord role choices."""
+        """Initialize form with prefix choices and Discord role choices."""
         super().__init__(*args, **kwargs)
+
+        # Prefix checkboxes — choices come from the Constance allowed list.
+        allowed = _allowed_event_prefixes()
+        self.fields["prefixes"].choices = [(p, p) for p in allowed]
 
         # Head captain role: all roles
         role_choices = _get_role_choices()
@@ -299,48 +339,56 @@ class EventRoleSetupForm(forms.ModelForm):
         except (ValueError, TypeError):
             return 0
 
+    def clean_prefixes(self) -> list[str]:
+        """Coerce the MultipleChoiceField output into a clean list of strings.
+
+        Returns:
+            Deduplicated list of valid prefix strings, preserving submitted order.
+
+        """
+        raw = self.cleaned_data.get("prefixes") or []
+        allowed = set(_allowed_event_prefixes())
+        seen: list[str] = []
+        for item in raw:
+            value = str(item).strip()
+            if value and value in allowed and value not in seen:
+                seen.append(value)
+        return seen
+
     def clean(self) -> dict:
-        """Validate that prefix is set and role names start with the prefix.
+        """Validate that at least one prefix is set and role names match.
 
         Returns:
             dict: The cleaned form data.
 
         """
-        from constance import config
-
         cleaned = super().clean()
-        prefix = (cleaned.get("prefix") or "").strip()
+        prefixes: list[str] = cleaned.get("prefixes") or []
 
-        if not prefix:
-            self.add_error("prefix", "Prefix is required for role setup.")
-            return cleaned
-
-        try:
-            allowed = json.loads(config.EVENT_ROLE_PREFIXES)
-        except (json.JSONDecodeError, ValueError, TypeError):
-            allowed = ["$", ">", "¡", "~", "^"]
-
-        if prefix not in allowed:
-            self.add_error("prefix", f"Prefix must be one of: {', '.join(allowed)}")
+        if not prefixes:
+            self.add_error("prefixes", "At least one prefix is required for role setup.")
             return cleaned
 
         head_captain_id = cleaned.get("head_captain_role_id", 0)
         event_role_id = cleaned.get("event_role", 0)
 
+        def _role_matches(role_name: str) -> bool:
+            return any(role_name.startswith(p) for p in prefixes)
+
         if head_captain_id and head_captain_id != 0:
             role = DiscordRole.objects.filter(role_id=str(head_captain_id)).first()
-            if role and not role.name.startswith(prefix):
+            if role and not _role_matches(role.name):
                 self.add_error(
                     "head_captain_role_id",
-                    f'Role name "@{role.name}" must start with the prefix "{prefix}".',
+                    f'Role name "@{role.name}" must start with one of: {", ".join(prefixes)}.',
                 )
 
         if event_role_id and event_role_id != 0:
             role = DiscordRole.objects.filter(role_id=str(event_role_id)).first()
-            if role and not role.name.startswith(prefix):
+            if role and not _role_matches(role.name):
                 self.add_error(
                     "event_role",
-                    f'Role name "@{role.name}" must start with the prefix "{prefix}".',
+                    f'Role name "@{role.name}" must start with one of: {", ".join(prefixes)}.',
                 )
 
         return cleaned
@@ -436,18 +484,24 @@ class SquadForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, event_prefix: str = "", gender_options: list[str] | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        *args,
+        event_prefixes: list[str] | None = None,
+        gender_options: list[str] | None = None,
+        **kwargs,
+    ) -> None:
         """Initialize form with Discord channel choices and captain labels.
 
         Args:
             *args: Positional arguments passed to ModelForm.
-            event_prefix: The parent event's Discord prefix. When empty, the role field is disabled.
+            event_prefixes: The parent event's Discord prefixes. When empty, the role field is disabled.
             gender_options: The parent event's allowed squad-gender options. When empty, the gender field is disabled.
             **kwargs: Keyword arguments passed to ModelForm.
 
         """
         super().__init__(*args, **kwargs)
-        self.event_prefix = event_prefix
+        self.event_prefixes = list(event_prefixes or [])
         self.gender_options = list(gender_options or [])
 
         # Populate gender choices from the parent event's options
@@ -490,27 +544,29 @@ class SquadForm(forms.ModelForm):
         self.fields["audio_channel_id"].widget.choices = voice_choices
         self.initial["audio_channel_id"] = current_audio
 
-        # Populate Discord role choices filtered by event prefix
-        if event_prefix:
-            role_choices = _get_role_choices(prefix=event_prefix)
+        # Populate Discord role choices filtered by event prefixes (any-of match).
+        # When prefixes is empty, the field is shown but disabled and presents a
+        # placeholder, matching the pre-multi-prefix behavior.
+        if self.event_prefixes:
+            role_choices = _get_role_choices(prefixes=self.event_prefixes)
         else:
-            role_choices = [("0", "(none — set event prefix first)")]
+            role_choices = [("0", "(none — set event prefixes first)")]
             self.fields["team_discord_role"].widget.attrs["disabled"] = True
         current_role = str(self.initial.get("team_discord_role", 0) or 0)
-        role_values = {c[0] for c in role_choices}
+        role_values = EventForm._flat_choice_values(role_choices)
         if current_role != "0" and current_role not in role_values:
             role_choices.append((current_role, f"Unknown Role ({current_role})"))
         self.fields["team_discord_role"].widget.choices = role_choices
         self.initial["team_discord_role"] = current_role
 
-        # Populate captain role choices (same prefix filtering)
-        if event_prefix:
-            captain_role_choices = _get_role_choices(prefix=event_prefix)
+        # Captain role: same filtering rules as team role.
+        if self.event_prefixes:
+            captain_role_choices = _get_role_choices(prefixes=self.event_prefixes)
         else:
-            captain_role_choices = [("0", "(none — set event prefix first)")]
+            captain_role_choices = [("0", "(none — set event prefixes first)")]
             self.fields["discord_captain_role"].widget.attrs["disabled"] = True
         current_captain_role = str(self.initial.get("discord_captain_role", 0) or 0)
-        captain_role_values = {c[0] for c in captain_role_choices}
+        captain_role_values = EventForm._flat_choice_values(captain_role_choices)
         if current_captain_role != "0" and current_captain_role not in captain_role_values:
             captain_role_choices.append((current_captain_role, f"Unknown Role ({current_captain_role})"))
         self.fields["discord_captain_role"].widget.choices = captain_role_choices
@@ -558,14 +614,14 @@ class SquadForm(forms.ModelForm):
         except (ValueError, TypeError):
             return 0
 
-        if role_id and role_id != 0 and not self.event_prefix:
-            raise forms.ValidationError("Set the event's Discord prefix before assigning a role.")
+        if role_id and role_id != 0 and not self.event_prefixes:
+            raise forms.ValidationError("Set at least one event prefix before assigning a role.")
 
-        if role_id and role_id != 0 and self.event_prefix:
+        if role_id and role_id != 0 and self.event_prefixes:
             role = DiscordRole.objects.filter(role_id=str(role_id)).first()
-            if role and not role.name.startswith(self.event_prefix):
+            if role and not any(role.name.startswith(p) for p in self.event_prefixes):
                 raise forms.ValidationError(
-                    f'Role "@{role.name}" must start with the event prefix "{self.event_prefix}".'
+                    f'Role "@{role.name}" must start with one of: {", ".join(self.event_prefixes)}.'
                 )
 
         return role_id
@@ -586,14 +642,14 @@ class SquadForm(forms.ModelForm):
         except (ValueError, TypeError):
             return 0
 
-        if role_id and role_id != 0 and not self.event_prefix:
-            raise forms.ValidationError("Set the event's Discord prefix before assigning a role.")
+        if role_id and role_id != 0 and not self.event_prefixes:
+            raise forms.ValidationError("Set at least one event prefix before assigning a role.")
 
-        if role_id and role_id != 0 and self.event_prefix:
+        if role_id and role_id != 0 and self.event_prefixes:
             role = DiscordRole.objects.filter(role_id=str(role_id)).first()
-            if role and not role.name.startswith(self.event_prefix):
+            if role and not any(role.name.startswith(p) for p in self.event_prefixes):
                 raise forms.ValidationError(
-                    f'Role "@{role.name}" must start with the event prefix "{self.event_prefix}".'
+                    f'Role "@{role.name}" must start with one of: {", ".join(self.event_prefixes)}.'
                 )
 
         return role_id
