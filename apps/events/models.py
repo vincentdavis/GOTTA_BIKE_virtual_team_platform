@@ -108,6 +108,11 @@ class Event(models.Model):
         default=0,
         help_text="Discord role ID for the event (0 = none)",
     )
+    coordinator_role_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of Discord role IDs (strings) for regional/group coordinators",
+    )
     created_at = models.DateTimeField(default=timezone.now, help_text="When the event was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the event was last updated")
     created_by = models.ForeignKey(

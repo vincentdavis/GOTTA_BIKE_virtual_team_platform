@@ -53,6 +53,27 @@ from apps.zwiftracing.models import ZRRider
 CATEGORY_COLUMNS = ["A+", "A", "B", "C", "D", "E"]
 
 
+def _can_manage_event_squads(user: User, event: Event) -> bool:
+    """Check if a user can create, edit, or delete squads for an event.
+
+    Allowed for:
+    - Superusers
+    - Users with the ``event_admin`` permission
+    - Users holding the event's head captain Discord role
+
+    Args:
+        user: The requesting user.
+        event: The event to check against.
+
+    Returns:
+        True if the user can manage squads for this event.
+
+    """
+    if user.is_event_admin or user.is_superuser:
+        return True
+    return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
+
+
 def _can_manage_event_roles(user: User, event: Event) -> bool:
     """Check if a user can manage Discord roles for an event.
 
@@ -731,6 +752,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "zr_total_all": zr_total_all,
             "zr_avg_rating_all": zr_avg_rating_all,
             "can_manage_roles": _can_manage_event_roles(request.user, event),
+            "can_manage_squads": _can_manage_event_squads(request.user, event),
             "can_add_members": _can_add_members(request.user, event),
             "can_view_v_report": _can_view_v_report(request.user, event),
         },
@@ -913,6 +935,18 @@ def event_role_setup_view(request: HttpRequest, pk: int) -> HttpResponse:
         else:
             role_display[field_name] = "(none)"
 
+    # Resolve coordinator role IDs to names for the read-only display.
+    coord_ids = [str(rid) for rid in (event.coordinator_role_ids or [])]
+    if coord_ids:
+        coord_names_by_id = dict(
+            DiscordRole.objects.filter(role_id__in=coord_ids).values_list("role_id", "name")
+        )
+        role_display["coordinator_names"] = [
+            coord_names_by_id.get(rid, f"Unknown ({rid})") for rid in coord_ids
+        ]
+    else:
+        role_display["coordinator_names"] = []
+
     try:
         allowed_prefixes = json.loads(config.EVENT_ROLE_PREFIXES)
     except json.JSONDecodeError, ValueError, TypeError:
@@ -947,7 +981,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """
     event = get_object_or_404(Event, pk=event_pk)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_event_squads(request.user, event):
         logfire.warning(
             "Unauthorized squad manage attempt",
             event_id=event_pk,
@@ -1521,7 +1555,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """
     event = get_object_or_404(Event, pk=event_pk)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_event_squads(request.user, event):
         logfire.warning(
             "Unauthorized squad creation attempt",
             event_id=event_pk,
@@ -1583,7 +1617,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
     event = get_object_or_404(Event, pk=event_pk)
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_event_squads(request.user, event):
         logfire.warning(
             "Unauthorized squad edit attempt",
             squad_id=squad_pk,
@@ -1689,7 +1723,7 @@ def squad_delete_view(request: HttpRequest, event_pk: int, squad_pk: int) -> Htt
     event = get_object_or_404(Event, pk=event_pk)
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_event_squads(request.user, event):
         logfire.warning(
             "Unauthorized squad delete attempt",
             squad_id=squad_pk,

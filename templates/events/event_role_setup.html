@@ -85,6 +85,34 @@
           </label>
         </div>
 
+        <!-- Regional/Group Coordinators (searchable, prefix-filtered checkbox list) -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Regional/Group Coordinators</span>
+            <span class="label-text-alt"><span id="coord-count">0</span> selected</span>
+          </label>
+          <input type="text" id="coord-search" class="input input-bordered input-sm mb-2" placeholder="Search role names…">
+          <div id="coord-list" class="max-h-64 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
+            {% for choice in form.coordinator_role_ids %}
+            <label class="coord-item label cursor-pointer gap-2 py-0.5 justify-start">
+              {{ choice.tag }}
+              <span class="coord-name label-text font-mono text-sm">@{{ choice.choice_label }}</span>
+            </label>
+            {% endfor %}
+            {% if not form.coordinator_role_ids.field.choices %}
+            <p class="text-base-content/50 text-sm px-1 py-2">No Discord roles match the allowed prefixes yet.</p>
+            {% endif %}
+          </div>
+          {% if form.coordinator_role_ids.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.coordinator_role_ids.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Only roles whose name starts with a currently-selected prefix above are shown. Type to filter.</span>
+          </label>
+        </div>
+
         <div class="card-actions justify-end mt-6">
           <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-ghost">Cancel</a>
           <button type="submit" class="btn btn-primary">Save Role Setup</button>
@@ -117,6 +145,19 @@
           <p class="px-3 py-2 bg-base-300 rounded-lg">{{ role_display.event_role }}</p>
         </div>
 
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text font-semibold">Regional/Group Coordinators</span>
+          </label>
+          <div class="px-3 py-2 bg-base-300 rounded-lg flex flex-wrap gap-2">
+            {% if role_display.coordinator_names %}
+              {% for name in role_display.coordinator_names %}<span class="badge badge-outline badge-sm">@{{ name }}</span>{% endfor %}
+            {% else %}
+              <span class="text-base-content/50">(none)</span>
+            {% endif %}
+          </div>
+        </div>
+
         <div class="alert alert-info mt-4">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -128,4 +169,45 @@
     </div>
   </div>
 </div>
+
+{% if can_edit %}
+<script>
+(function() {
+  const search = document.getElementById('coord-search');
+  const list = document.getElementById('coord-list');
+  const countEl = document.getElementById('coord-count');
+  if (!list) return;
+
+  function checkedPrefixes() {
+    return Array.from(document.querySelectorAll('input[name="prefixes"]:checked')).map(cb => cb.value);
+  }
+
+  function updateCount() {
+    if (countEl) {
+      countEl.textContent = String(list.querySelectorAll('.coord-role-cb:checked').length);
+    }
+  }
+
+  function applyFilter() {
+    const q = (search && search.value || '').trim().toLowerCase();
+    const prefixes = checkedPrefixes();
+    list.querySelectorAll('.coord-item').forEach(function(item) {
+      const nameEl = item.querySelector('.coord-name');
+      const raw = (nameEl.textContent || '').trim().replace(/^@/, '');
+      const matchesSearch = !q || raw.toLowerCase().indexOf(q) !== -1;
+      const matchesPrefix = !prefixes.length || prefixes.some(p => raw.indexOf(p) === 0);
+      item.style.display = (matchesSearch && matchesPrefix) ? '' : 'none';
+    });
+  }
+
+  if (search) search.addEventListener('input', applyFilter);
+  document.querySelectorAll('input[name="prefixes"]').forEach(cb => cb.addEventListener('change', applyFilter));
+  list.addEventListener('change', function(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('coord-role-cb')) updateCount();
+  });
+  applyFilter();
+  updateCount();
+})();
+</script>
+{% endif %}
 {% endblock %}
