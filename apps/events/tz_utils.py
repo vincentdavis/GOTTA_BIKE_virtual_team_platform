@@ -43,13 +43,19 @@ def convert_local_to_utc(
 
     local_start_dt = datetime.combine(start_date, local_start_time, tzinfo=tz)
     local_end_dt = datetime.combine(end_date, local_end_time, tzinfo=tz)
+    # Anchor the saved utc_end_date to the *start* of the last local day, not
+    # its end. When local end_time crosses midnight UTC (e.g. 23:30 PDT →
+    # 06:30 UTC next day), using utc_end_dt.date() pushes end_date forward by
+    # a day, and grid.dates x grid.time_slots produces an extra day of slots.
+    local_end_anchor_dt = datetime.combine(end_date, local_start_time, tzinfo=tz)
 
     utc_start_dt = local_start_dt.astimezone(utc)
     utc_end_dt = local_end_dt.astimezone(utc)
+    utc_end_anchor_dt = local_end_anchor_dt.astimezone(utc)
 
     return (
         utc_start_dt.date(),
-        utc_end_dt.date(),
+        utc_end_anchor_dt.date(),
         utc_start_dt.strftime("%H:%M"),
         utc_end_dt.strftime("%H:%M"),
     )
