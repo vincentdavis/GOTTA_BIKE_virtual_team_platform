@@ -277,6 +277,12 @@ class EventRoleSetupForm(forms.ModelForm):
         label="Event Role",
     )
 
+    coordinator_role_ids = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-sm coord-role-cb"}),
+        label="Regional/Group Coordinators",
+    )
+
     class Meta:
         """Meta options for EventRoleSetupForm."""
 
@@ -285,6 +291,7 @@ class EventRoleSetupForm(forms.ModelForm):
             "prefixes",
             "head_captain_role_id",
             "event_role",
+            "coordinator_role_ids",
         ]
 
     def __init__(self, *args, **kwargs) -> None:
@@ -313,6 +320,29 @@ class EventRoleSetupForm(forms.ModelForm):
         self.fields["event_role"].widget.choices = event_role_choices
         self.initial["event_role"] = current_event_role
 
+        # Regional/Group Coordinators: choices are all roles whose name starts
+        # with any allowed prefix from Constance. The template filters this
+        # set further by the event's currently-checked prefixes via JS so the
+        # admin can save prefixes and coordinator picks in a single submit.
+        # Security: the choices list is the authoritative server-side gate.
+        # No fallback "Unknown Role" entries are included — previously-saved
+        # IDs that no longer match an allowed prefix (e.g. a Discord role was
+        # renamed off-prefix) silently drop out and cannot be re-submitted.
+        from django.db.models import Q
+
+        prefix_q = Q()
+        for p in allowed:
+            prefix_q |= Q(name__startswith=p)
+        coord_roles = list(DiscordRole.objects.filter(prefix_q).order_by("name"))
+        coord_choices: list[tuple[str, str]] = [(r.role_id, r.name) for r in coord_roles]
+        self.fields["coordinator_role_ids"].choices = coord_choices
+        # Initial is only the saved IDs that intersect the live choices — any
+        # stale IDs are dropped on re-render rather than re-checked by default.
+        valid_ids = {c[0] for c in coord_choices}
+        self.initial["coordinator_role_ids"] = [
+            str(rid) for rid in (self.initial.get("coordinator_role_ids") or []) if str(rid) in valid_ids
+        ]
+
     def clean_head_captain_role_id(self) -> int:
         """Convert selected role ID string back to int for the model.
 
@@ -338,6 +368,59 @@ class EventRoleSetupForm(forms.ModelForm):
             return int(value)
         except (ValueError, TypeError):
             return 0
+
+    def clean_coordinator_role_ids(self) -> list[str]:
+        """Validate each submitted coordinator role ID server-side.
+
+        Defense in depth: even though the field's ``choices`` list is built
+        from roles whose names start with an allowed prefix, this method
+        re-resolves each submitted ID against ``DiscordRole`` and rejects any
+        role that no longer exists or whose name no longer starts with one of
+        the Constance-allowed prefixes (``EVENT_ROLE_PREFIXES``). Prevents
+        bypassing the UI gate via crafted POST payloads.
+
+        Returns:
+            Deduplicated list of validated role-ID strings.
+
+        Raises:
+            forms.ValidationError: If any submitted ID is unknown, no longer
+                in the DiscordRole table, or no longer starts with an allowed
+                prefix.
+
+        """
+        raw = self.cleaned_data.get("coordinator_role_ids") or []
+        if not raw:
+            return []
+
+        submitted_ids = [str(rid).strip() for rid in raw if str(rid).strip()]
+        roles_by_id = {r.role_id: r for r in DiscordRole.objects.filter(role_id__in=submitted_ids)}
+        allowed = _allowed_event_prefixes()
+
+        unknown: list[str] = []
+        off_prefix: list[str] = []
+        seen: list[str] = []
+        for rid in submitted_ids:
+            if rid in seen:
+                continue
+            role = roles_by_id.get(rid)
+            if role is None:
+                unknown.append(rid)
+                continue
+            if not any(role.name.startswith(p) for p in allowed):
+                off_prefix.append(f'"@{role.name}"')
+                continue
+            seen.append(rid)
+
+        if unknown:
+            raise forms.ValidationError(
+                f"Unknown Discord role ID{'s' if len(unknown) > 1 else ''}: {', '.join(unknown)}"
+            )
+        if off_prefix:
+            raise forms.ValidationError(
+                f"Role{'s' if len(off_prefix) > 1 else ''} must start with an allowed prefix "
+                f"({', '.join(allowed)}): {', '.join(off_prefix)}"
+            )
+        return seen
 
     def clean_prefixes(self) -> list[str]:
         """Coerce the MultipleChoiceField output into a clean list of strings.
@@ -389,6 +472,22 @@ class EventRoleSetupForm(forms.ModelForm):
                 self.add_error(
                     "event_role",
                     f'Role name "@{role.name}" must start with one of: {", ".join(prefixes)}.',
+                )
+
+        coordinator_ids = cleaned.get("coordinator_role_ids") or []
+        if coordinator_ids:
+            roles_by_id = {
+                r.role_id: r for r in DiscordRole.objects.filter(role_id__in=[str(i) for i in coordinator_ids])
+            }
+            invalid = [
+                f'"@{roles_by_id[str(rid)].name}"'
+                for rid in coordinator_ids
+                if str(rid) in roles_by_id and not _role_matches(roles_by_id[str(rid)].name)
+            ]
+            if invalid:
+                self.add_error(
+                    "coordinator_role_ids",
+                    f"These roles do not match any selected prefix: {', '.join(invalid)}.",
                 )
 
         return cleaned

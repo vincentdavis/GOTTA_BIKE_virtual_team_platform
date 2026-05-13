@@ -207,6 +207,7 @@
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="name" checked> Name</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zwid" checked> ZWID</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="timezone" checked> Timezone</label></li>
+                {% if event.squad_gender_required %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad_gender" checked> Squad Gender</label></li>{% endif %}
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="gender" checked> Gender</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="category" checked> ZP Category</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="rating" checked> ZR Category</label></li>
@@ -236,6 +237,7 @@
                 <th data-col="name" data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
                 <th data-col="zwid" data-sort="num" class="cursor-pointer hover:text-primary select-none">ZWID</th>
                 <th data-col="timezone" data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
+                {% if event.squad_gender_required %}<th data-col="squad_gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>{% endif %}
                 <th data-col="gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Gender</th>
                 <th data-col="category" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZP Category</th>
                 <th data-col="rating" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZR Category</th>
@@ -269,6 +271,7 @@
                   {% endif %}
                 </td>
                 <td data-col="timezone">{% if entry.signup.signup_timezone %}{% for tz in entry.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
+                {% if event.squad_gender_required %}<td data-col="squad_gender">{% if entry.signup.signup_squad_gender %}{% for g in entry.signup.signup_squad_gender %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ g }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
                 <td data-col="gender">
                   {% if entry.gender == "male" %}
                   <span class="badge badge-info badge-sm">M</span>
@@ -515,7 +518,7 @@
           {% if can_view_v_report %}
           <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-info btn-sm">V Report</a>
           {% endif %}
-          {% if is_event_admin %}
+          {% if can_manage_squads %}
           <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-primary btn-sm">Manage Squads</a>
           {% endif %}
         </div>
@@ -528,6 +531,7 @@
               <th class="!px-0 !w-6"></th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
+              {% if event.squad_gender_required %}<th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>{% endif %}
               <th data-sort="num" class="cursor-pointer hover:text-primary select-none">Members</th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Captain</th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Vice Captain</th>
@@ -546,6 +550,7 @@
               </td>
               <td class="font-semibold">{{ squad.name }}</td>
               <td>{{ squad.squad_timezone|default:"-" }}</td>
+              {% if event.squad_gender_required %}<td>{% if squad.gender %}<span class="badge badge-outline badge-sm">{{ squad.gender }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
               <td>
                 {% if squad.enriched_members %}
                 <div class="tooltip tooltip-right" data-tip="{{ squad.member_names_tooltip }}">
@@ -566,7 +571,7 @@
               </td>
             </tr>
             <tr id="squad-members-{{ squad.pk }}" style="display:none">
-              <td colspan="7" class="p-0">
+              <td colspan="{% if event.squad_gender_required %}8{% else %}7{% endif %}" class="p-0">
                 <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2">
                   <div class="flex flex-wrap items-center gap-2 mb-2 relative">
                     {% if squad.discord_channel_id %}

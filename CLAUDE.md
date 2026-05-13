@@ -98,26 +98,36 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - Configurable filters (gender, division, rating, phenotype)
     - Manual sync clears sheet and rewrites all data
 - `events` - Event management with squads and signups:
-    - `Event` model - Team events with title, description (Markdown), dates, Discord channel/role IDs (`head_captain_role_id` for the event's head captain), signup settings
-    - `Squad` model - Squads within an event with captain/vice-captain, ZR category range, Discord text/audio channels, URL, invite URL
+    - `Event` model - Team events with title, description (Markdown), dates, Discord channel/role IDs (`head_captain_role_id` for the event's head captain), signup settings, `prefixes` (JSONField list of allowed Discord role/channel prefixes), `squad_gender_options` (JSONField list, default `["Male", "Female", "COED"]`), `squad_gender_required` (bool — gates whether the field appears in the signup form)
+    - `Squad` model - Squads within an event with captain/vice-captain, ZR category range, Discord text/audio channels, URL, invite URL, optional `gender` (single value drawn from the parent event's `squad_gender_options`)
         - Discord role fields: `team_discord_role` (squad role), `discord_captain_role` (squad captain role), `captain_notifications` (bool — DM captains on member events)
     - `SquadMember` model - Links users to squads (member/pending/rejected status, unique on squad+user)
     - `AvailabilityGrid` - Date/time grid for collecting squad availability (status: draft/published/closed). Stores all times in UTC; converted to user/grid timezone at render
     - `AvailabilityResponse` - One per (grid, user); stores `available_cells` JSON of UTC date/time pairs
     - `AvailabilitySlotSelection` ("Scheduled Race") - Named race slot built from heatmap by captains/admins. Fields: `name`, `slot_date/slot_time` (UTC), `status` (none/pending/confirmed), `event_invite_url`, `course_url`, `thread_link`, `selected_users` M2M
-    - `EventSignup` model - Event-level signups with timezone selection and status
+    - `EventSignup` model - Event-level signups with status, optional multi-select `signup_timezone` and `signup_squad_gender` (only saved when the event has the corresponding `*_required` flag set)
     - `Race` model - Individual races within an event
     - `RaceRegistration` model - Race-level registrations
     - Views require `team_member` permission; create/edit/delete event/squad require `event_admin`
     - **Manage availability** (grids, scheduled races, Discord thread creation) is gated by `_can_manage_squad_availability(user, squad)` — allows event admins, superusers, the squad's captain/vice-captain, holders of the squad's `discord_captain_role`, and holders of the parent event's `head_captain_role_id`. Same captain-or-admin pattern is used by `_can_view_v_report`
-    - **Discord thread creation** for a confirmed scheduled race is wired through `apps/accounts/discord_service.py:create_discord_thread`; saves the resulting URL onto `slot.thread_link`. Requires status=confirmed, riders selected, squad has `discord_channel_id`
-    - Role Setup: event prefix (`EVENT_ROLE_PREFIXES` constance), head captain role, event role — editable by `assign_roles` or event's head captain
+    - **Discord thread actions** for a confirmed scheduled race: "Save & Create Thread" (creates the thread + posts a starter message) and "Save & Post Update" (posts a "Race details updated" message into the existing thread). Both go through `apps/accounts/discord_service.py:create_discord_thread` / `send_discord_channel_message`; the resulting URL lands on `slot.thread_link`. Requires status=confirmed, riders selected, squad has `discord_channel_id`
+    - Role Setup: event prefixes (multi-select from `EVENT_ROLE_PREFIXES` constance), head captain role, event role — editable by `assign_roles` or event's head captain
     - Manage Roles: assign/unassign Discord roles to members — requires `assign_roles` or event's head captain role
-    - Squad Discord roles must match the event's prefix; squad role dropdown disabled if no prefix is set
+    - Squad Discord roles must start with **any** of the event's prefixes; the squad role dropdown is disabled when the event has no prefixes set
     - Squad assignment from signup list (event admins can assign users to multiple squads)
     - Expandable squad member list with ZP/ZR data, Discord role checks
     - Markdown rendering for event description and signup instructions
 - `magic_links` - Passwordless authentication (legacy)
+- `user_api` - Per-user API keys with bearer auth (Django Ninja):
+    - `ApiKey` model — 30-day default expiry, hashed at rest, scoped to a single user
+    - `/user/api-keys/` — UI for creating/revoking the current user's keys
+    - `/api/user/` — bearer-authenticated endpoints (e.g. `zr_profile`)
+    - `purge_expired_api_keys` background task (in `apps/dbot_api/cron_api.py` task registry) hard-deletes keys expired > 90 days
+- `tickets` - **Internal only** (sidebar link intentionally disabled). Member-support and team-management ticket queue:
+    - `Ticket` model — `title`, `details` (Markdown), `status` (new/in_progress/closed), `category` (support/membership/verification/equipment/discord/event/squad/other), `priority` (low/normal/high/urgent), `submitted_by` (nullable for system-generated tickets), `assigned_to`, `closed_by`, `resolution`, `guild_member` (FK to `accounts.GuildMember` for system-generated tickets)
+    - `closed_at` is auto-managed by `Ticket.save()` when status transitions to/from `closed`; `closed_by` is set in the view that triggered the close
+    - `apps/tickets/services.py:create_member_left_ticket` is called by the guild-member sync when a member's `date_left` is freshly stamped — files a low-priority Membership ticket with a Markdown summary, idempotent while a non-closed ticket exists for the same `GuildMember`
+    - Routes at `/tickets/` (list with filters, create, detail, edit) — gated by `team_member_required`; no finer-grained permissions yet
 - `cms` - Dynamic CMS pages:
     - `Page` model - Content pages with markdown, hero sections, card layouts, and accordion sections
     - Publishing workflow (draft/published status)
@@ -248,6 +258,14 @@ When adding a view with `@discord_permission_required` or `@team_member_required
 Uses Django 6.0's built-in `django-tasks` with database backend. Define with `@task` decorator, enqueue with `.enqueue()`.
 **Gotcha**: `run_after` must be a `datetime`, not `timedelta` — use `my_task.using(run_after=timezone.now() + timedelta(seconds=60)).enqueue()`.
 
+### Scheduler (in-process APScheduler)
+
+`gotta_bike_platform/management/commands/scheduler.py` runs a `BlockingScheduler` with one `IntervalTrigger` per job. Run as a separate service via `uv run python manage.py scheduler`; jobs enqueue Django tasks (the `db_worker` still executes them).
+
+- **Job registry** — `_get_scheduled_jobs()` lists each task path and reads its cadence from a `SCHEDULER_*_HOURS` Constance setting (default 6h). Interval changes require a scheduler restart to take effect (the docstring at the top of the file is authoritative).
+- **UI** — `/site/config/scheduler/` (driven by the `Scheduler` group in `CONSTANCE_CONFIG_FIELDSETS`) lets admins adjust the cadences.
+- **When adding a new scheduled task**: add a `SCHEDULER_*_HOURS` setting, add the task to `_get_scheduled_jobs()`, and add it to the `Scheduler` fieldset so it appears on the config page.
+
 ### External API Clients
 
 - `apps/zwiftpower/zp_client.py` - ZwiftPower session-based client using httpx (requires Zwift OAuth login)
@@ -276,7 +294,7 @@ REST API using Django Ninja for Discord bot integration:
     - `GET /api/dbot/team_links` - Get magic link to team links page
     - `POST /api/dbot/sync_guild_roles` - Sync all Discord roles
     - `POST /api/dbot/sync_guild_channels` - Sync all Discord channels
-    - `POST /api/dbot/sync_guild_members` - Sync all guild members (see Guild Member Sync)
+    - `POST /api/dbot/sync_guild_members` - Bot-driven sync fallback; the platform now drives this itself (see Guild Member Sync)
     - `POST /api/dbot/sync_user_roles/{discord_id}` - Sync a user's roles
     - `POST /api/dbot/roster_filter` - Create filtered roster link from Discord channel members
     - `POST /api/dbot/membership_application` - Create new membership registration from Discord
@@ -286,7 +304,7 @@ REST API using Django Ninja for Discord bot integration:
 
 ### Cron API (`apps/dbot_api/cron_api.py`)
 
-REST API for triggering scheduled tasks via external cron service:
+REST API for triggering tasks by name (used by the in-process Scheduler above, by `/site/config/background_tasks/`, and historically by an external cron service):
 
 - Auth: `X-Cron-Key` header (uses same `DBOT_AUTH_KEY` from constance)
 - Endpoints:
@@ -307,6 +325,7 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
     - `/user/profile/` - User's own profile (private)
     - `/user/profile/edit/` - Edit profile
     - `/user/profile/<int:user_id>/` - Public profile (team members only)
+- `/user/api-keys/` - Per-user API key management (`apps.user_api.urls`)
 - `/team/` - Team management (`apps.team.urls`):
     - `/team/roster/` - Team roster view
     - `/team/roster/f/{uuid}/` - Filtered roster view (temporary, 5-min expiration)
@@ -336,13 +355,20 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
     - `/events/<id>/squads/<squad_id>/availability/` - Manage availability grids for a squad (captain/admin gate)
     - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/` - Member response form (published grids)
     - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/results/` - Heatmap + scheduled race editor
-    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/slots/<slot_pk>/create-thread/` - Create Discord thread for a confirmed scheduled race
+    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/slots/<slot_pk>/create-thread/` - Create Discord thread for a confirmed scheduled race (powers "Save & Create Thread")
+    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/slots/<slot_pk>/post-update/` - Persist edits and post an update message into the slot's existing thread (powers "Save & Post Update")
 - `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
 - `/strava/` - Strava club activities (`apps.club_strava.urls`)
 - `/analytics/` - Analytics dashboard (`apps.analytics.urls`, requires `app_admin`)
+- `/tickets/` - Member-support / team-management tickets (`apps.tickets.urls`) — **internal only**, sidebar link disabled
+    - `/tickets/` - List with status/category/mine/search filters
+    - `/tickets/new/` - Create
+    - `/tickets/<int:pk>/` - Detail
+    - `/tickets/<int:pk>/edit/` - Edit (assignee / status / resolution)
 - `/api/dbot/` - Discord bot API
 - `/api/cron/` - Cron task API
+- `/api/user/` - Per-user API keys (Django Ninja), bearer-authenticated
 - `/api/analytics/` - Analytics tracking API (`apps.analytics.api`)
 - `/robots.txt` - Dynamic robots.txt (see Robots.txt section)
 - `/m/` - Magic links (legacy)
@@ -440,7 +466,14 @@ Levels: `error` (failures/exceptions), `warning` (rate limits/fallbacks), `info`
 
 Syncs Discord guild members with Django to track membership status.
 
-`GuildMember` model (`apps/accounts/models.py`) stores Discord member data with OneToOne link to User (matched by `discord_id`). Bot POSTs to `/api/dbot/sync_guild_members`; members not in payload get `date_left` set. Auto-syncs every 6 hours.
+`GuildMember` model (`apps/accounts/models.py`) stores Discord member data with OneToOne link to User (matched by `discord_id`).
+
+**Sync drivers** (both go through `apps/accounts/services.py:apply_guild_member_sync`, which owns the upsert/depart logic):
+
+- **Primary**: `sync_guild_members` background task (`apps/accounts/tasks.py`) calls Discord's REST API directly via `apps/accounts/services.py:fetch_guild_members_from_discord` (paginated, 429-aware). Scheduled by the in-process APScheduler — cadence is `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS` Constance setting (default 6h). Also triggerable from `/site/config/background_tasks/` and via the cron API.
+- **Fallback**: `POST /api/dbot/sync_guild_members` — Discord-bot push, accepts the same normalized payload and delegates to the same service.
+
+When a previously-active member is missing from a sync, `date_left` is stamped and `apps/tickets/services.py:create_member_left_ticket` files a low-priority Membership ticket (idempotent while a non-closed ticket exists for that member). See the `tickets` app section.
 
 **Important**: Only affects Discord OAuth users — regular Django accounts without `discord_id` are not modified.
 

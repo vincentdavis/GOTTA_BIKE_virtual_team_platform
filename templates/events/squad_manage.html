@@ -37,12 +37,23 @@
         {# Subtitle badges #}
         <div class="flex flex-wrap gap-3 text-sm text-base-content/70 mb-3">
           <span>{{ squad.member_count }} member{{ squad.member_count|pluralize }}</span>
-          {% if squad.squad_timezone %}
-          <span>{{ squad.squad_timezone }}</span>
-          {% endif %}
-          {% if squad.gender %}
-          <span class="badge badge-outline badge-sm">{{ squad.gender }}</span>
-          {% endif %}
+        </div>
+
+        {# Profile section: timezone + squad gender #}
+        <div class="card bg-base-300 p-3 mb-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Profile</p>
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Timezone</span>
+              <span class="text-sm">{{ squad.squad_timezone|default:"—" }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Squad Gender</span>
+              <span class="text-sm">
+                {% if squad.gender %}<span class="badge badge-outline badge-sm">{{ squad.gender }}</span>{% else %}—{% endif %}
+              </span>
+            </div>
+          </div>
         </div>
 
         {# Leadership section #}

@@ -114,6 +114,27 @@
     <div id="grid-container" class="avail-grid-wrap mb-4"></div>
   </div>
 
+  <!-- Legend -->
+  <div class="flex flex-wrap items-center gap-3 mb-4 text-sm">
+    <span class="text-base-content/70">Legend:</span>
+    <div class="flex items-center gap-1">
+      <span class="inline-block rounded avail-cell" data-state="available" style="width: 1.5rem; height: 1rem; cursor: default;"></span>
+      <span>Available</span>
+    </div>
+    <div class="flex items-center gap-1">
+      <span class="inline-block rounded avail-cell" data-state="unselected" style="width: 1.5rem; height: 1rem; cursor: default;"></span>
+      <span>Unselected</span>
+    </div>
+    <div class="flex items-center gap-1">
+      <span class="inline-block rounded avail-cell cell-blocked" style="width: 1.5rem; height: 1rem; cursor: default;"></span>
+      <span>Blocked</span>
+    </div>
+    <div class="flex items-center gap-1">
+      <span class="inline-block rounded avail-cell cell-inactive" style="width: 1.5rem; height: 1rem; cursor: default;"></span>
+      <span>Not in your timezone</span>
+    </div>
+  </div>
+
   <!-- Actions -->
   <div class="flex flex-wrap items-center gap-2 mb-6">
     <button id="btn-submit" class="btn btn-success btn-sm">Submit Availability</button>
