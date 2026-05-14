@@ -192,6 +192,27 @@
     </label>
   </div>
 
+  <!-- Copy Availability (shareable image) -->
+  <div class="mb-6">
+    <p class="text-sm text-base-content/70 mb-2">
+      Copy a simplified availability image to share with opponents. Slots with at least 4 riders show their count
+      (capped at &ge;5); already-scheduled slots show &ldquo;Racing&rdquo;.
+    </p>
+    <button type="button"
+            id="copy-availability-btn"
+            class="btn btn-primary btn-sm"
+            data-grid-title="{{ grid.title }}"
+            data-event-title="{{ event.title }}"
+            data-squad-name="{{ squad.name }}"
+            data-tz-label="{{ display_timezone }}">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+      </svg>
+      <span data-copy-label>Copy Availability</span>
+    </button>
+    <span id="copy-availability-status" class="ml-3 text-sm" aria-live="polite"></span>
+  </div>
+
   <!-- Slot Selections -->
   <div class="mb-6">
     <h3 class="text-sm font-semibold mb-2">Scheduled Races</h3>
@@ -247,26 +268,6 @@
   </div>
   {% endif %}
 
-  <!-- Copy Availability (shareable image) -->
-  <div class="mt-8 pt-6 border-t border-base-300">
-    <p class="text-sm text-base-content/70 mb-2">
-      Copy a simplified availability image to share with opponents. Slots with at least 4 riders show their count
-      (capped at &ge;5); already-scheduled slots show &ldquo;Racing&rdquo;.
-    </p>
-    <button type="button"
-            id="copy-availability-btn"
-            class="btn btn-primary btn-sm"
-            data-grid-title="{{ grid.title }}"
-            data-event-title="{{ event.title }}"
-            data-squad-name="{{ squad.name }}"
-            data-tz-label="{{ display_timezone }}">
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-      </svg>
-      <span data-copy-label>Copy Availability</span>
-    </button>
-    <span id="copy-availability-status" class="ml-3 text-sm" aria-live="polite"></span>
-  </div>
 </div>
 
 <!-- Min-rider filter (available to anyone viewing the results page) -->

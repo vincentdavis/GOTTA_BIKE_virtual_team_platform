@@ -27,7 +27,6 @@
 ### Events & Squads
 
 - [ ] Availability: CSV export of responses
-- [ ] Surface "Manage Availability" link on event detail page for squad captains (currently only on /events/my-events/)
 - [ ] Document Discord bot channel permissions required for "Create Discord Thread" (View Channel + Create Public
   Threads + Send Messages in Threads); investigate startup preflight check
 
@@ -49,15 +48,9 @@
 
 ### Verifications
 
-- [x] Add "Extra Verified" tier (`is_extra_verified` — weight_full + height + power all verified, regardless of
-  category)
 - [ ] Group `warn_expiring_verifications` DMs by user (currently one DM per matching record per day; consolidate)
-- [ ] Add provisional status to verification records
-- [ ] Backfill historical record_date values (some default to 2026-01-01)
 
 ### User Profile
-
-- [x] Show ZP and ZR stats on profile page
 
 ### Membership
 
@@ -123,7 +116,9 @@
   availability already shipped via context processors; this would consolidate them and add new sources.
 - [ ] Persistent notification center (beyond auto-dismiss toasts)
 - [ ] Mobile-optimized table views (card layout option for small screens — availability grids done, tables remain)
-- [ ] Drive the Configuration submenu in `theme/templates/sidebar.html` off `CONSTANCE_CONFIG_FIELDSETS` instead of the hardcoded `<li>` list, so adding a new fieldset group automatically appears in the menu (currently a two-step change is needed — fieldset entry + manual sidebar `<li>`)
+- [ ] Drive the Configuration submenu in `theme/templates/sidebar.html` off `CONSTANCE_CONFIG_FIELDSETS` instead of the
+  hardcoded `<li>` list, so adding a new fieldset group automatically appears in the menu (currently a two-step change
+  is needed — fieldset entry + manual sidebar `<li>`)
 
 ### Accessibility
 
