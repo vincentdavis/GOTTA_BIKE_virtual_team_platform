@@ -5,7 +5,7 @@ from django.db import migrations, models
 
 def populate_extra_verified(apps, schema_editor):
     """Populate is_extra_verified for existing users using the live model's calculate_extra_verified()."""
-    from apps.accounts.models import User
+    User = apps.get_model('accounts', 'User')
 
     users = User.objects.exclude(discord_id="").exclude(discord_id__isnull=True).prefetch_related("race_ready_records")
     to_update = []
