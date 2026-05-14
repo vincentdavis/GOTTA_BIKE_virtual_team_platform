@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}{{ event.title }} - Results{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+
+  <div class="mb-4">
+    <a href="{% url 'zwiftpower:team_results' %}" class="btn btn-ghost btn-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Back to Team Results
+    </a>
+  </div>
+
+  <div class="card bg-base-200 mb-6">
+    <div class="card-body p-4">
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-bold">{{ event.title }}</h1>
+          <p class="text-base-content/70 text-sm mt-1">
+            {{ event.event_date|date:"l, F j, Y · g:i A" }}
+            <span class="mx-1">·</span>
+            {{ finishers }} team finisher{{ finishers|pluralize }}
+          </p>
+        </div>
+        <a href="https://zwiftpower.com/events.php?zid={{ event.zid }}" target="_blank" rel="noopener"
+           class="btn btn-primary btn-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+          </svg>
+          Open on ZwiftPower
+        </a>
+      </div>
+
+      {% if podium %}
+      <div class="mt-4 flex flex-wrap gap-2">
+        {% for p in podium %}
+        <span class="badge badge-outline gap-1">
+          {% if p.pos == 1 %}🥇{% elif p.pos == 2 %}🥈{% elif p.pos == 3 %}🥉{% endif %}
+          {{ p.name }}{% if p.category %} ({{ p.category }}){% endif %}
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if results %}
+  <div class="overflow-x-auto">
+    <table class="table table-zebra table-sm">
+      <thead>
+        <tr>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="pos" label="Pos" base_qs="" default_dir="asc" %}</th>
+          <th>{% include "zwiftpower/_sort_link.html" with key="name" label="Rider" base_qs="" default_dir="asc" %}</th>
+          <th class="text-center">{% include "zwiftpower/_sort_link.html" with key="category" label="Cat" base_qs="" default_dir="asc" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="pos_cat" label="Pos (Cat)" base_qs="" default_dir="asc" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="time" label="Time" base_qs="" default_dir="asc" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="gap" label="Gap" base_qs="" default_dir="asc" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="avg_power" label="Avg W" base_qs="" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="avg_wkg" label="Avg W/kg" base_qs="" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="np" label="NP" base_qs="" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="w1200" label="20-min W" base_qs="" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="ftp" label="FTP" base_qs="" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="weight" label="Wt (kg)" base_qs="" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="avg_hr" label="Avg HR" base_qs="" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td class="text-right font-mono">{{ r.pos|default:"-" }}</td>
+          <td>
+            {% if r.enriched %}
+              {% include "accounts/_user_tooltip.html" with display_name=r.enriched.display_name user_id=r.enriched.user_id discord_id=r.enriched.discord_id discord_avatar_url=r.enriched.discord_avatar_url zwid=r.enriched.zwid zp_category=r.enriched.zp_category zp_category_w=r.enriched.zp_category_w zr_category=r.enriched.zr_category zr_rating=r.enriched.zr_rating zr_phenotype=r.enriched.zr_phenotype zr_age=r.enriched.zr_age is_race_ready=r.enriched.is_race_ready is_extra_verified=r.enriched.is_extra_verified in_zwiftpower=r.enriched.in_zwiftpower in_zwiftracing=r.enriched.in_zwiftracing %}
+            {% else %}
+              {{ r.name }}
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if r.category %}<span class="badge badge-outline badge-sm">{{ r.category }}</span>{% endif %}
+          </td>
+          <td class="text-right font-mono">{{ r.position_in_cat|default:"-" }}</td>
+          <td class="text-right font-mono">{% if r.time_seconds %}{{ r.time_seconds|floatformat:1 }}s{% else %}-{% endif %}</td>
+          <td class="text-right font-mono">{% if r.gap %}+{{ r.gap|floatformat:1 }}s{% else %}-{% endif %}</td>
+          <td class="text-right font-mono">{{ r.avg_power|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.avg_wkg|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.np|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.w1200|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.ftp|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.weight|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.avg_hr|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card bg-base-200">
+    <div class="card-body text-center py-12">
+      <p class="text-base-content/70">No results recorded for this event.</p>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

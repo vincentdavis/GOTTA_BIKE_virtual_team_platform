@@ -1,0 +1,14 @@
+{% comment %}
+Sortable column link. Renders an <a> with the next sort state + arrow.
+Required: key, label, sort_key, sort_dir, base_qs (current querystring sans sort/dir).
+Optional: default_dir (asc|desc, default desc) for first click.
+{% endcomment %}
+{% if key == sort_key %}
+  {% if sort_dir == "asc" %}
+  <a class="link link-hover" href="?{% if base_qs %}{{ base_qs }}&{% endif %}sort={{ key }}&dir=desc">{{ label }} ▲</a>
+  {% else %}
+  <a class="link link-hover" href="?{% if base_qs %}{{ base_qs }}&{% endif %}sort={{ key }}&dir=asc">{{ label }} ▼</a>
+  {% endif %}
+{% else %}
+<a class="link link-hover" href="?{% if base_qs %}{{ base_qs }}&{% endif %}sort={{ key }}&dir={{ default_dir|default:'desc' }}">{{ label }}</a>
+{% endif %}

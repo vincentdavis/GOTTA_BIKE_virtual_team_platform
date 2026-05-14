@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}Team Results - {{ config.TEAM_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-4">
+    <h1 class="text-3xl font-bold">Team Race Results</h1>
+  </div>
+
+  <!-- Filters -->
+  <div class="card bg-base-200 mb-6">
+    <div class="card-body p-4">
+      <form method="get" class="flex flex-wrap gap-3 items-end">
+        <div class="form-control flex-1 min-w-[12rem]">
+          <label class="label py-1"><span class="label-text text-xs">Search</span></label>
+          <input type="text" name="q" value="{{ search_query }}"
+                 placeholder="Rider or event title…"
+                 class="input input-bordered input-sm w-full">
+        </div>
+        <div class="form-control">
+          <label class="label py-1"><span class="label-text text-xs">Type</span></label>
+          <select name="event_type" class="select select-bordered select-sm">
+            <option value="">All</option>
+            {% for value, label in event_type_choices %}
+            <option value="{{ value }}" {% if value == event_type_filter %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-control">
+          <label class="label py-1"><span class="label-text text-xs">Category</span></label>
+          <select name="category" class="select select-bordered select-sm">
+            <option value="">All</option>
+            {% for cat in category_choices %}
+            <option value="{{ cat }}" {% if cat == category_filter %}selected{% endif %}>{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-control">
+          <label class="label py-1"><span class="label-text text-xs">From</span></label>
+          <input type="date" name="date_from" value="{{ date_from }}" class="input input-bordered input-sm">
+        </div>
+        <div class="form-control">
+          <label class="label py-1"><span class="label-text text-xs">To</span></label>
+          <input type="date" name="date_to" value="{{ date_to }}" class="input input-bordered input-sm">
+        </div>
+        <div class="flex gap-2">
+          <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+          {% if has_filters %}
+          <a href="{% url 'zwiftpower:team_results' %}" class="btn btn-sm btn-ghost">Clear</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if results %}
+  <p class="text-sm text-base-content/70 mb-3">
+    Showing {{ results.start_index }}&ndash;{{ results.end_index }} of {{ total_count }} results
+  </p>
+
+  <div class="overflow-x-auto">
+    <table class="table table-zebra table-sm">
+      <thead>
+        <tr>
+          <th class="whitespace-nowrap">{% include "zwiftpower/_sort_link.html" with key="date" label="Date" base_qs=filter_qs %}</th>
+          <th>{% include "zwiftpower/_sort_link.html" with key="event" label="Event" base_qs=filter_qs default_dir="asc" %}</th>
+          <th>{% include "zwiftpower/_sort_link.html" with key="name" label="Rider" base_qs=filter_qs default_dir="asc" %}</th>
+          <th class="text-center">{% include "zwiftpower/_sort_link.html" with key="category" label="Cat" base_qs=filter_qs default_dir="asc" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="pos" label="Pos" base_qs=filter_qs default_dir="asc" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="pos_cat" label="Pos (Cat)" base_qs=filter_qs default_dir="asc" %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="avg_power" label="Avg W" base_qs=filter_qs %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="avg_wkg" label="Avg W/kg" base_qs=filter_qs %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="w1200" label="20-min W" base_qs=filter_qs %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="ftp" label="FTP" base_qs=filter_qs %}</th>
+          <th class="text-right">{% include "zwiftpower/_sort_link.html" with key="weight" label="Wt (kg)" base_qs=filter_qs %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in results %}
+        <tr>
+          <td class="whitespace-nowrap">{{ r.event.event_date|date:"Y-m-d" }}</td>
+          <td>
+            <a href="{% url 'zwiftpower:event_results' r.zid %}" class="link link-hover">{{ r.event.title }}</a>
+          </td>
+          <td>
+            {% if r.enriched %}
+              {% include "accounts/_user_tooltip.html" with display_name=r.enriched.display_name user_id=r.enriched.user_id discord_id=r.enriched.discord_id discord_avatar_url=r.enriched.discord_avatar_url zwid=r.enriched.zwid zp_category=r.enriched.zp_category zp_category_w=r.enriched.zp_category_w zr_category=r.enriched.zr_category zr_rating=r.enriched.zr_rating zr_phenotype=r.enriched.zr_phenotype zr_age=r.enriched.zr_age is_race_ready=r.enriched.is_race_ready is_extra_verified=r.enriched.is_extra_verified in_zwiftpower=r.enriched.in_zwiftpower in_zwiftracing=r.enriched.in_zwiftracing %}
+            {% else %}
+              {{ r.name }}
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if r.category %}<span class="badge badge-outline badge-sm">{{ r.category }}</span>{% endif %}
+          </td>
+          <td class="text-right font-mono">{{ r.pos|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.position_in_cat|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.avg_power|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.avg_wkg|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.w1200|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.ftp|default:"-" }}</td>
+          <td class="text-right font-mono">{{ r.weight|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if results.has_other_pages %}
+  <div class="flex justify-center mt-6">
+    <div class="join">
+      {% if results.has_previous %}
+      <a href="?{% if base_qs %}{{ base_qs }}&{% endif %}page={{ results.previous_page_number }}"
+         class="join-item btn btn-sm">«</a>
+      {% else %}
+      <button class="join-item btn btn-sm btn-disabled">«</button>
+      {% endif %}
+      <button class="join-item btn btn-sm">
+        Page {{ results.number }} of {{ results.paginator.num_pages }}
+      </button>
+      {% if results.has_next %}
+      <a href="?{% if base_qs %}{{ base_qs }}&{% endif %}page={{ results.next_page_number }}"
+         class="join-item btn btn-sm">»</a>
+      {% else %}
+      <button class="join-item btn btn-sm btn-disabled">»</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="card bg-base-200">
+    <div class="card-body text-center py-12">
+      <p class="text-base-content/70">
+        {% if has_filters %}
+        No results match the current filters.
+        {% else %}
+        No race results have been synced yet.
+        {% endif %}
+      </p>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

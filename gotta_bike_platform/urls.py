@@ -53,6 +53,7 @@ urlpatterns = [
     path("page/", include("apps.cms.urls")),
     path("analytics/", include("apps.analytics.urls")),
     path("strava/", include("apps.club_strava.urls")),
+    path("zp/", include("apps.zwiftpower.urls")),
     path("events/", include("apps.events.urls")),
     path("tickets/", include("apps.tickets.urls")),
     # Site-level configuration

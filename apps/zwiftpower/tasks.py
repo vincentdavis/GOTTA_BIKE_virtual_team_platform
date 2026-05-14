@@ -3,6 +3,7 @@
 Uses Django 6.0 background tasks feature with django-tasks database backend.
 """
 
+import html
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 
@@ -12,6 +13,26 @@ from django.utils import timezone
 
 from apps.zwiftpower.models import ZPEvent, ZPRiderResults, ZPTeamRiders
 from apps.zwiftpower.zp_client import ZPClient
+
+
+def _clean_str(value: object) -> str:
+    """Normalize a string from the ZP API.
+
+    Decodes HTML numeric/named entities (e.g. ``&#128545;`` → ``😡``) and trims
+    whitespace. ZwiftPower stores names and titles with HTML entities; without
+    decoding them at ingestion they are auto-escaped on render and the user
+    sees the literal entity.
+
+    Args:
+        value: The raw API value.
+
+    Returns:
+        A clean string (empty string if ``value`` is None or empty).
+
+    """
+    if value is None:
+        return ""
+    return html.unescape(str(value)).strip()
 
 
 def _parse_decimal(value: str | int | float | None) -> Decimal | None:
@@ -96,7 +117,7 @@ def update_team_riders() -> dict:
 
             defaults = {
                 "aid": str(rider.get("aid", "") or ""),
-                "name": rider.get("name", "").strip(),
+                "name": _clean_str(rider.get("name")),
                 "flag": rider.get("flag", ""),
                 "age": rider.get("age", ""),
                 "div": rider.get("div", 0) or 0,
@@ -204,7 +225,7 @@ def update_team_results() -> dict:
             event, created = ZPEvent.objects.update_or_create(
                 zid=zid,
                 defaults={
-                    "title": event_info.get("title", ""),
+                    "title": _clean_str(event_info.get("title")),
                     "event_date": event_date,
                 },
             )
@@ -266,12 +287,12 @@ def update_team_results() -> dict:
             defaults = {
                 "event": event,
                 "res_id": result.get("res_id", "") or "",
-                "name": (result.get("name", "") or "").strip(),
+                "name": _clean_str(result.get("name")),
                 "flag": result.get("flag", "") or "",
                 "age": result.get("age", "") or "",
                 "male": bool(result.get("male", 1)),
                 "tid": str(result.get("tid", "") or ""),
-                "tname": result.get("tname", "") or "",
+                "tname": _clean_str(result.get("tname")),
                 "pos": _parse_int(result.get("pos")),
                 "position_in_cat": _parse_int(result.get("position_in_cat")),
                 "category": result.get("category", "") or "",

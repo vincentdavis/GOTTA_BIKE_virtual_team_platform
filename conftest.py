@@ -20,6 +20,27 @@ if TYPE_CHECKING:
     from apps.accounts.models import User as UserType
 
 
+@pytest.fixture(autouse=True)
+def _use_plain_static_storage(settings):
+    """Swap WhiteNoise manifest storage for plain storage during tests.
+
+    `CompressedManifestStaticFilesStorage` reads a manifest produced by
+    ``collectstatic``; that file doesn't exist in CI / pytest runs, so any
+    test that renders ``base.html`` would otherwise fail when it resolves
+    static asset URLs.
+    """
+    from django.utils.functional import empty
+
+    settings.STORAGES = {
+        **settings.STORAGES,
+        "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    }
+    # Reset the LazyObject so the next access rebuilds with the new backend.
+    from django.contrib.staticfiles.storage import staticfiles_storage
+
+    staticfiles_storage._wrapped = empty
+
+
 @pytest.fixture
 def user_model() -> type[AbstractUser]:
     """Return the active User model class."""

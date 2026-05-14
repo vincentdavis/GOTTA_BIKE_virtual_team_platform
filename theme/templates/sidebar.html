@@ -74,6 +74,14 @@
                 Strava Activities
             </a>
         </li>
+        <li>
+            <a href="{% url 'zwiftpower:team_results' %}" class="{% if request.resolver_match.url_name == 'team_results' %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6a1 1 0 011-1h4a1 1 0 011 1v6m-4 0V7m-6 10h16" />
+                </svg>
+                Team Results
+            </a>
+        </li>
 
         <!-- CMS Pages (dynamic) -->
         {% if cms_nav_pages %}
