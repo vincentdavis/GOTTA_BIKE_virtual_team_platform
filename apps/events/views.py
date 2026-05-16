@@ -1393,7 +1393,7 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     notes = request.POST.get("notes", "").strip()
 
-    EventSignup.objects.create(
+    signup = EventSignup.objects.create(
         event=event,
         user=request.user,
         signup_timezone=signup_timezone,
@@ -1408,6 +1408,9 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
         signup_timezone=signup_timezone,
         signup_squad_gender=signup_squad_gender,
     )
+    from apps.events.tasks import enqueue_signup_notification
+
+    enqueue_signup_notification(signup, request=request)
     messages.success(request, "You have signed up for this event!")
     return redirect("events:event_detail", pk=pk)
 
@@ -4370,9 +4373,12 @@ def add_members_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         dr = DiscordRole.objects.filter(role_id=str(event.event_role)).first()
         event_role_name = dr.name if dr else "Event Role"
 
+    from apps.events.tasks import enqueue_signup_notification
+
     for user in users_to_add:
-        EventSignup.objects.create(event=event, user=user)
+        signup = EventSignup.objects.create(event=event, user=user)
         added_count += 1
+        enqueue_signup_notification(signup, request=request)
 
         if event.event_role:
             result = _assign_discord_role(

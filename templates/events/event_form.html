@@ -150,6 +150,22 @@
           </label>
         </div>
 
+        <!-- Signup Notification Channel -->
+        <div class="form-control w-full">
+          <label class="label" for="id_signup_notification_channel_id">
+            <span class="label-text">Signup Notification Channel</span>
+          </label>
+          {{ form.signup_notification_channel_id }}
+          {% if form.signup_notification_channel_id.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.signup_notification_channel_id.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Optional. When set, a message is posted here each time a rider signs up.</span>
+          </label>
+        </div>
+
         <!-- Visible & Signups Open -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control">

@@ -118,6 +118,10 @@ class EventForm(forms.ModelForm):
         required=False,
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
     )
+    signup_notification_channel_id = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+    )
 
     class Meta:
         """Meta options for EventForm."""
@@ -131,6 +135,7 @@ class EventForm(forms.ModelForm):
             "end_date",
             "url",
             "discord_channel_id",
+            "signup_notification_channel_id",
             "visible",
             "signups_open",
             "signup_instructions",
@@ -191,17 +196,15 @@ class EventForm(forms.ModelForm):
         """Initialize form with Discord channel choices."""
         super().__init__(*args, **kwargs)
         choices = _get_channel_choices()
-
-        # Convert current model value (int) to string for the Select widget
-        current_value = str(self.initial.get("discord_channel_id", 0) or 0)
-
-        # If current value isn't in choices, add a fallback
         all_values = self._flat_choice_values(choices)
-        if current_value != "0" and current_value not in all_values:
-            choices.append((current_value, f"Unknown Channel ({current_value})"))
 
-        self.fields["discord_channel_id"].widget.choices = choices
-        self.initial["discord_channel_id"] = current_value
+        for field_name in ("discord_channel_id", "signup_notification_channel_id"):
+            current_value = str(self.initial.get(field_name, 0) or 0)
+            field_choices = list(choices)
+            if current_value != "0" and current_value not in all_values:
+                field_choices.append((current_value, f"Unknown Channel ({current_value})"))
+            self.fields[field_name].widget.choices = field_choices
+            self.initial[field_name] = current_value
 
     @staticmethod
     def _flat_choice_values(choices: list) -> set[str]:
@@ -231,6 +234,19 @@ class EventForm(forms.ModelForm):
 
         """
         value = self.cleaned_data.get("discord_channel_id", "0")
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return 0
+
+    def clean_signup_notification_channel_id(self) -> int:
+        """Convert selected signup-notification channel ID string back to int.
+
+        Returns:
+            Channel ID as integer (0 for none).
+
+        """
+        value = self.cleaned_data.get("signup_notification_channel_id", "0")
         try:
             return int(value)
         except (ValueError, TypeError):

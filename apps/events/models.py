@@ -100,6 +100,10 @@ class Event(models.Model):
         default=0,
         help_text="Discord channel ID for event coordination (0 = none)",
     )
+    signup_notification_channel_id = models.BigIntegerField(
+        default=0,
+        help_text="Discord channel ID for rider signup notifications (0 = disabled)",
+    )
     head_captain_role_id = models.BigIntegerField(
         default=0,
         help_text="Discord role ID for the head captain of this event (0 = none)",
