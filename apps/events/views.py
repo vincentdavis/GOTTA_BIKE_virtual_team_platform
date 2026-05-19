@@ -2760,6 +2760,102 @@ def availability_delete_view(request: HttpRequest, event_pk: int, squad_pk: int,
     return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
 
+@login_required
+@team_member_required()
+@require_POST
+def availability_copy_view(request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str) -> HttpResponse:
+    """Clone an availability grid with new start/end dates.
+
+    All other fields (times, slot duration, timezone, questions, blocked cells)
+    are copied verbatim. Blocked cells are shifted by the delta between the
+    source grid's start date and the new start date; cells whose shifted date
+    falls outside the new range are dropped. The new grid is always created as
+    a draft with ``expires=None`` and an auto-generated title.
+
+    Args:
+        request: The HTTP request with ``start_date`` and ``end_date`` POST fields.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The source availability grid UUID.
+
+    Returns:
+        Redirect to squad availability page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    source = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        logfire.warning(
+            "Unauthorized availability copy attempt",
+            grid_id=str(source.id),
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    try:
+        new_start_date = date.fromisoformat(request.POST.get("start_date", ""))
+        new_end_date = date.fromisoformat(request.POST.get("end_date", ""))
+    except (ValueError, TypeError):
+        messages.error(request, "Invalid or missing start/end date.")
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+    if new_start_date > new_end_date:
+        messages.error(request, "Start date must be on or before end date.")
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+    if (new_end_date - new_start_date).days > 31:
+        messages.error(request, "Date range cannot exceed 31 days.")
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+    delta_days = (new_start_date - source.start_date).days
+    shifted_blocked: list[dict] = []
+    for cell in source.blocked_cells or []:
+        raw_date = cell.get("date") if isinstance(cell, dict) else None
+        if not raw_date:
+            continue
+        try:
+            shifted_date = date.fromisoformat(str(raw_date)) + timedelta(days=delta_days)
+        except (ValueError, TypeError):
+            continue
+        if new_start_date <= shifted_date <= new_end_date:
+            shifted_blocked.append({"date": shifted_date.isoformat(), "time": cell.get("time", "")})
+
+    new_grid = AvailabilityGrid.objects.create(
+        squad=squad,
+        title="",
+        start_date=new_start_date,
+        end_date=new_end_date,
+        start_time=source.start_time,
+        end_time=source.end_time,
+        slot_duration=source.slot_duration,
+        grid_timezone=source.grid_timezone,
+        blocked_cells=shifted_blocked,
+        max_races_question=source.max_races_question,
+        rest_days_question=source.rest_days_question,
+        expires=None,
+        status=AvailabilityGrid.Status.DRAFT,
+        created_by=request.user,
+    )
+
+    logfire.info(
+        "Availability grid copied",
+        source_grid_id=str(source.id),
+        new_grid_id=str(new_grid.id),
+        squad_id=squad_pk,
+        event_id=event_pk,
+        user_id=request.user.id,
+        delta_days=delta_days,
+        blocked_cells_kept=len(shifted_blocked),
+        blocked_cells_source=len(source.blocked_cells or []),
+    )
+    messages.success(request, f'Created copy "{new_grid.title}" as a draft.')
+    return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+
 @require_http_methods(["GET", "POST"])
 @login_required
 @team_member_required()

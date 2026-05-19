@@ -1,7 +1,7 @@
 """Models for events app."""
 
 import uuid
-from datetime import datetime, timedelta
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.db import models
@@ -710,6 +710,29 @@ class AvailabilityGrid(models.Model):
 
         """
         return self.status == self.Status.CLOSED
+
+    @property
+    def next_period_start_date(self) -> date:
+        """Default start date for a copy of this grid: shifted by the grid's length.
+
+        For a 7-day grid this lands on the day after ``end_date`` — i.e. the start
+        of the next equivalent period.
+
+        Returns:
+            Suggested start date for a copy.
+
+        """
+        return self.start_date + timedelta(days=(self.end_date - self.start_date).days + 1)
+
+    @property
+    def next_period_end_date(self) -> date:
+        """Default end date for a copy of this grid: shifted by the grid's length.
+
+        Returns:
+            Suggested end date for a copy.
+
+        """
+        return self.end_date + timedelta(days=(self.end_date - self.start_date).days + 1)
 
 
 class AvailabilityResponse(models.Model):

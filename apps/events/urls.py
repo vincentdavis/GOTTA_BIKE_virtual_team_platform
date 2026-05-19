@@ -5,6 +5,7 @@ from django.urls import path
 from apps.events.views import (
     add_members_search_view,
     add_members_view,
+    availability_copy_view,
     availability_create_view,
     availability_delete_view,
     availability_preview_view,
@@ -114,6 +115,11 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/delete/",
         availability_delete_view,
         name="availability_delete",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/copy/",
+        availability_copy_view,
+        name="availability_copy",
     ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/",

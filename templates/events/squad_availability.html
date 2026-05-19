@@ -94,6 +94,46 @@
                   <button type="submit" class="btn btn-neutral btn-xs btn-outline">Close</button>
                 </form>
                 {% endif %}
+                <button type="button" class="btn btn-info btn-xs btn-outline"
+                        onclick="document.getElementById('copy-modal-{{ grid.pk }}').showModal()">
+                  Copy
+                </button>
+                <dialog id="copy-modal-{{ grid.pk }}" class="modal">
+                  <div class="modal-box">
+                    <h3 class="font-bold text-lg">Copy "{{ grid.title|default:'Availability Grid' }}"</h3>
+                    <p class="py-2 text-sm">
+                      Creates a new <strong>draft</strong> grid with the same times, duration, timezone, and
+                      questions. Blocked cells shift forward by the same number of days as the date change;
+                      cells that fall outside the new range are dropped.
+                    </p>
+                    <p class="text-xs text-base-content/60 mb-3">
+                      Source dates: {{ grid.start_date|date:"M j, Y" }} &mdash; {{ grid.end_date|date:"M j, Y" }}
+                    </p>
+                    <form method="post" action="{% url 'events:availability_copy' event.pk squad.pk grid.pk %}" class="space-y-3">
+                      {% csrf_token %}
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="form-control">
+                          <label class="label py-1"><span class="label-text text-xs">New start date</span></label>
+                          <input type="date" name="start_date" required
+                                 value="{{ grid.next_period_start_date|date:'Y-m-d' }}"
+                                 class="input input-bordered input-sm w-full">
+                        </div>
+                        <div class="form-control">
+                          <label class="label py-1"><span class="label-text text-xs">New end date</span></label>
+                          <input type="date" name="end_date" required
+                                 value="{{ grid.next_period_end_date|date:'Y-m-d' }}"
+                                 class="input input-bordered input-sm w-full">
+                        </div>
+                      </div>
+                      <div class="modal-action">
+                        <button type="button" class="btn btn-sm"
+                                onclick="this.closest('dialog').close()">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary">Create Copy</button>
+                      </div>
+                    </form>
+                  </div>
+                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                </dialog>
                 <form method="post" action="{% url 'events:availability_delete' event.pk squad.pk grid.pk %}" class="inline"
                       onsubmit="return confirm('Delete availability grid &quot;{{ grid.title|escapejs }}&quot;? This will remove the grid and all {{ grid.response_count }} response(s). This cannot be undone.');">
                   {% csrf_token %}
