@@ -838,6 +838,12 @@ class AvailabilitySlotSelection(models.Model):
         default=Status.NONE,
         help_text="Scheduling status (none, pending, confirmed)",
     )
+    opponent = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="Optional opponent team or rider name for this scheduled race",
+    )
     event_invite_url = models.URLField(
         blank=True,
         default="",
@@ -858,6 +864,14 @@ class AvailabilitySlotSelection(models.Model):
         blank=True,
         related_name="availability_selections",
         help_text="Users selected for this slot",
+    )
+    substitute = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="substitute_slot_selections",
+        help_text="Optional substitute rider available to step in",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

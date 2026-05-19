@@ -3184,10 +3184,12 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "id": sel.pk,
             "name": sel.name,
             "status": sel.status,
+            "opponent": sel.opponent,
             "event_invite_url": sel.event_invite_url,
             "course_url": sel.course_url,
             "thread_link": sel.thread_link,
             "selected_user_ids": list(sel.selected_users.values_list("pk", flat=True)),
+            "substitute_id": sel.substitute_id,
         }
 
     # Build enriched slot selections for initial render
@@ -3814,6 +3816,25 @@ def _extract_thread_id(thread_link: str) -> str | None:
     return candidate if candidate.isdigit() else None
 
 
+def _resolve_substitute_id(raw_value: str) -> int | None:
+    """Coerce a posted ``substitute`` form value to a User PK or ``None``.
+
+    Args:
+        raw_value: The raw POST value (may be empty string, a numeric PK, or junk).
+
+    Returns:
+        Integer PK if the value is a valid existing user id, else ``None``.
+
+    """
+    if not raw_value:
+        return None
+    try:
+        pk = int(raw_value)
+    except ValueError:
+        return None
+    return pk if User.objects.filter(pk=pk).exists() else None
+
+
 def _build_slot_thread_message(
     selection: AvailabilitySlotSelection,
     *,
@@ -3823,14 +3844,18 @@ def _build_slot_thread_message(
 
     Used for both the starter message when a thread is created and for "updated"
     messages posted later. The body uses Discord's native timestamp markdown so
-    each viewer sees the date/time in their own client timezone.
+    each viewer sees the date/time in their own client timezone. Selected
+    riders are pinged on one line, followed directly by the substitute (if
+    set); the squad's captain and vice captain are appended below in their own
+    block. All three role mentions are added to the mention list so they are
+    notified even when not in the racing checkboxes.
 
     Args:
         selection: The slot selection record.
         header: Optional first line (e.g. "**🔄 Race details updated**").
 
     Returns:
-        Tuple of (message body, list of Discord IDs to mention).
+        Tuple of (message body, deduped list of Discord IDs to mention).
 
     """
     utc_dt = datetime.combine(
@@ -3839,8 +3864,16 @@ def _build_slot_thread_message(
         tzinfo=ZoneInfo("UTC"),
     )
     unix_ts = int(utc_dt.timestamp())
-    discord_ids = [u.discord_id for u in selection.selected_users.all() if u.discord_id]
-    mentions = " ".join(f"<@{did}>" for did in discord_ids)
+    rider_discord_ids = [u.discord_id for u in selection.selected_users.all() if u.discord_id]
+    mentions = " ".join(f"<@{did}>" for did in rider_discord_ids)
+
+    squad = selection.grid.squad
+    captain = squad.captain
+    vice_captain = squad.vice_captain
+    substitute = selection.substitute
+    captain_did = captain.discord_id if captain and captain.discord_id else ""
+    vice_captain_did = vice_captain.discord_id if vice_captain and vice_captain.discord_id else ""
+    substitute_did = substitute.discord_id if substitute and substitute.discord_id else ""
 
     lines: list[str] = []
     if header:
@@ -3852,12 +3885,33 @@ def _build_slot_thread_message(
             f"**Status:** {selection.get_status_display()}",
         ]
     )
+    if selection.opponent:
+        lines.append(f"**Opponent:** {selection.opponent}")
     if selection.event_invite_url:
         lines.append(f"**Event invite:** {selection.event_invite_url}")
     if selection.course_url:
         lines.append(f"**Course:** {selection.course_url}")
-    if mentions:
-        lines.extend(["", mentions])
+    if mentions or substitute_did:
+        lines.append("")
+        if mentions:
+            lines.append(mentions)
+        if substitute_did:
+            lines.append(f"**SUB:** <@{substitute_did}>")
+    if captain_did or vice_captain_did:
+        lines.append("")
+        if captain_did:
+            lines.append(f"**Captain:** <@{captain_did}>")
+        if vice_captain_did:
+            lines.append(f"**Vice Captain:** <@{vice_captain_did}>")
+
+    # Discord IDs to include in allowed_user_ids — dedup while preserving order
+    # so captain/vice-captain/substitute actually get pinged even if they aren't racing.
+    seen: set[str] = set()
+    discord_ids: list[str] = []
+    for did in (*rider_discord_ids, substitute_did, captain_did, vice_captain_did):
+        if did and did not in seen:
+            seen.add(did)
+            discord_ids.append(did)
     return "\n".join(lines), discord_ids
 
 
@@ -3942,7 +3996,7 @@ def _create_slot_thread(
         selection_id=selection.pk,
         thread_id=str(thread_id),
         channel_id=str(squad.discord_channel_id),
-        rider_count=len(discord_ids),
+        mention_count=len(discord_ids),
         user_id=user.id,
     )
     return None
@@ -3983,7 +4037,7 @@ def _post_slot_thread_update(selection: AvailabilitySlotSelection, user: User) -
         "Scheduled race update posted to thread",
         selection_id=selection.pk,
         thread_id=thread_id,
-        rider_count=len(discord_ids),
+        mention_count=len(discord_ids),
         user_id=user.id,
     )
     return None
@@ -4022,6 +4076,7 @@ def slot_selection_create_view(
     name = request.POST.get("name", "").strip()
     slot_date = request.POST.get("slot_date", "")
     slot_time = request.POST.get("slot_time", "")
+    opponent = request.POST.get("opponent", "").strip()
     event_invite_url = request.POST.get("event_invite_url", "").strip()
     course_url = request.POST.get("course_url", "").strip()
     thread_link = request.POST.get("thread_link", "").strip()
@@ -4029,6 +4084,7 @@ def slot_selection_create_view(
     valid_statuses = {s.value for s in AvailabilitySlotSelection.Status}
     status = raw_status if raw_status in valid_statuses else AvailabilitySlotSelection.Status.NONE
     selected_user_ids = request.POST.getlist("selected_users")
+    substitute_id = _resolve_substitute_id(request.POST.get("substitute", ""))
     also_create_thread = request.POST.get("create_thread") == "1"
 
     if not name or not slot_date or not slot_time:
@@ -4041,9 +4097,11 @@ def slot_selection_create_view(
         defaults={
             "name": name,
             "status": status,
+            "opponent": opponent,
             "event_invite_url": event_invite_url,
             "course_url": course_url,
             "thread_link": thread_link,
+            "substitute_id": substitute_id,
             "created_by": request.user,
         },
     )
@@ -4095,6 +4153,7 @@ def slot_selection_update_view(
         return HttpResponse("Permission denied", status=403)
 
     name = request.POST.get("name", "").strip()
+    opponent = request.POST.get("opponent", "").strip()
     event_invite_url = request.POST.get("event_invite_url", "").strip()
     course_url = request.POST.get("course_url", "").strip()
     thread_link = request.POST.get("thread_link", "").strip()
@@ -4108,10 +4167,23 @@ def slot_selection_update_view(
 
     selection.name = name
     selection.status = status
+    selection.opponent = opponent
     selection.event_invite_url = event_invite_url
     selection.course_url = course_url
     selection.thread_link = thread_link
-    selection.save(update_fields=["name", "status", "event_invite_url", "course_url", "thread_link", "updated_at"])
+    selection.substitute_id = _resolve_substitute_id(request.POST.get("substitute", ""))
+    selection.save(
+        update_fields=[
+            "name",
+            "status",
+            "opponent",
+            "event_invite_url",
+            "course_url",
+            "thread_link",
+            "substitute",
+            "updated_at",
+        ]
+    )
     selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
 
     logfire.info(
@@ -4206,12 +4278,24 @@ def slot_selection_create_thread_view(
         new_status = raw_status if raw_status in valid_statuses else selection.status
         selection.name = posted_name
         selection.status = new_status
+        selection.opponent = request.POST.get("opponent", "").strip()
         selection.event_invite_url = request.POST.get("event_invite_url", "").strip()
         selection.course_url = request.POST.get("course_url", "").strip()
+        selection.substitute_id = _resolve_substitute_id(request.POST.get("substitute", ""))
         # thread_link is intentionally NOT overwritten here — it's set below
         # once the thread is created. Letting the form's stale value land would
         # break the idempotence guard on the next click.
-        selection.save(update_fields=["name", "status", "event_invite_url", "course_url", "updated_at"])
+        selection.save(
+            update_fields=[
+                "name",
+                "status",
+                "opponent",
+                "event_invite_url",
+                "course_url",
+                "substitute",
+                "updated_at",
+            ]
+        )
         if "selected_users" in request.POST:
             selected_user_ids = request.POST.getlist("selected_users")
             selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
@@ -4268,11 +4352,23 @@ def slot_selection_post_update_view(
 
     selection.name = name
     selection.status = status
+    selection.opponent = request.POST.get("opponent", "").strip()
     selection.event_invite_url = request.POST.get("event_invite_url", "").strip()
     selection.course_url = request.POST.get("course_url", "").strip()
+    selection.substitute_id = _resolve_substitute_id(request.POST.get("substitute", ""))
     # thread_link is preserved — the form value can be stale, but the saved one
     # is what we trust for posting back into the thread.
-    selection.save(update_fields=["name", "status", "event_invite_url", "course_url", "updated_at"])
+    selection.save(
+        update_fields=[
+            "name",
+            "status",
+            "opponent",
+            "event_invite_url",
+            "course_url",
+            "substitute",
+            "updated_at",
+        ]
+    )
     if "selected_users" in request.POST:
         selected_user_ids = request.POST.getlist("selected_users")
         selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))

@@ -691,6 +691,11 @@
       </div>
 
       <div class="form-control mb-3">
+        <label class="label"><span class="label-text">Opponent</span></label>
+        <input type="text" name="opponent" id="slot-modal-opponent" class="input input-bordered input-sm w-full" placeholder="e.g. Team Vegan, ZRL Div 1A">
+      </div>
+
+      <div class="form-control mb-3">
         <label class="label"><span class="label-text">Event invite URL</span></label>
         <input type="url" name="event_invite_url" id="slot-modal-event-invite-url" class="input input-bordered input-sm w-full" placeholder="https://www.zwift.com/events/view/...">
       </div>
@@ -713,6 +718,13 @@
         </div>
         <div id="slot-modal-riders" class="max-h-60 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
         </div>
+      </div>
+
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text">SUB (optional)</span></label>
+        <select name="substitute" id="slot-modal-substitute" class="select select-bordered select-sm w-full">
+          <option value="">— No substitute —</option>
+        </select>
       </div>
 
       <div id="slot-modal-error" class="alert alert-error py-2 mb-3 text-xs hidden"></div>
@@ -761,12 +773,14 @@
     const form = document.getElementById('slot-modal-form');
     const nameInput = document.getElementById('slot-modal-name');
     const statusInput = document.getElementById('slot-modal-status');
+    const opponentInput = document.getElementById('slot-modal-opponent');
     const eventInviteInput = document.getElementById('slot-modal-event-invite-url');
     const courseInput = document.getElementById('slot-modal-course-url');
     const threadInput = document.getElementById('slot-modal-thread-link');
     const dateInput = document.getElementById('slot-modal-date');
     const timeInput = document.getElementById('slot-modal-time');
     const ridersDiv = document.getElementById('slot-modal-riders');
+    const substituteSelect = document.getElementById('slot-modal-substitute');
     const title = document.getElementById('slot-modal-title');
     const threadBtn = document.getElementById('slot-modal-create-thread');
     const threadOpenLink = document.getElementById('slot-modal-thread-open');
@@ -790,6 +804,7 @@
       title.textContent = 'Edit Scheduled Race';
       nameInput.value = existing.name;
       statusInput.value = existing.status || 'none';
+      opponentInput.value = existing.opponent || '';
       eventInviteInput.value = existing.event_invite_url || '';
       courseInput.value = existing.course_url || '';
       threadInput.value = existing.thread_link || '';
@@ -798,6 +813,7 @@
       title.textContent = 'Schedule Race';
       nameInput.value = '';
       statusInput.value = 'none';
+      opponentInput.value = '';
       eventInviteInput.value = '';
       courseInput.value = '';
       threadInput.value = '';
@@ -823,6 +839,29 @@
         ridersDiv.appendChild(label);
       });
     }
+
+    // Populate substitute dropdown from the same available pool. Pre-select the
+    // saved value (if any). Renders even when that user is no longer in the
+    // available list, so the existing choice is still visible/editable.
+    substituteSelect.innerHTML = '<option value="">— No substitute —</option>';
+    const subId = existing && existing.substitute_id ? String(existing.substitute_id) : '';
+    const seenSubIds = new Set();
+    available.forEach(function(uid) {
+      const u = userData[uid];
+      if (!u) return;
+      seenSubIds.add(String(uid));
+      const opt = document.createElement('option');
+      opt.value = uid;
+      opt.textContent = u.display_name + (u.zr_category ? ' (' + u.zr_category + ')' : '');
+      substituteSelect.appendChild(opt);
+    });
+    if (subId && !seenSubIds.has(subId) && userData[subId]) {
+      const opt = document.createElement('option');
+      opt.value = subId;
+      opt.textContent = userData[subId].display_name + ' (not available this slot)';
+      substituteSelect.appendChild(opt);
+    }
+    substituteSelect.value = subId;
 
     // Re-process HTMX attributes after changing hx-post
     htmx.process(form);
