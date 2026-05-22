@@ -21,6 +21,7 @@ uv run python manage.py check                  # Validate config
 uv run python manage.py makemigrations         # Create migrations
 uv run python manage.py migrate                # Apply migrations
 uv run python manage.py createsuperuser        # Create admin user
+uv run python manage.py ensuresuperuser        # Idempotent bootstrap: no-op if a superuser exists, otherwise creates one from SUPERUSER_USERNAME / SUPERUSER_PASSWORD / SUPERUSER_EMAIL env vars (used on Railway deploys)
 
 # Background Tasks (Django 6.0 built-in)
 uv run python manage.py db_worker              # Run task worker
@@ -50,6 +51,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 - Required env vars: `SECRET_KEY`, `DATABASE_URL` (defaults exist for local dev only — must be set in production)
 - Optional env vars: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` (OAuth)
 - Optional env vars: `LOGFIRE_TOKEN`, `LOGFIRE_ENVIRONMENT` (observability)
+- Optional env vars: `SUPERUSER_USERNAME`, `SUPERUSER_PASSWORD`, `SUPERUSER_EMAIL` (read by `manage.py ensuresuperuser` for first-deploy bootstrap)
 - Runtime settings (via constance): API credentials and team settings (see Dynamic Settings below). **Note**: code that does `from constance import config` (e.g. `config.DISCORD_BOT_TOKEN`, `config.GUILD_ID`) reads from constance, *not* from `gotta_bike_platform/config.py` — the two `config` objects are unrelated.
 
 ### Static Files & Storage
@@ -235,6 +237,7 @@ Configure in Django admin at `/admin/constance/config/` under "Permission Mappin
 - Decorator: `@discord_permission_required("team_captain", raise_exception=True)` — raises 403, not redirect (prevents loops)
 - Multiple permissions (OR logic): `@discord_permission_required(["team_captain", "vice_captain"])`
 - Direct check: `request.user.has_permission("team_captain")` or `request.user.is_team_captain`
+- Shortcut for the common "must be a team_member" case: `@team_member_required()` (from `apps.accounts.decorators`) — wraps `discord_permission_required("team_member")` and is what most app views use (tickets, zwiftpower, user_api, events, etc.)
 
 #### Manual Permission Overrides
 
