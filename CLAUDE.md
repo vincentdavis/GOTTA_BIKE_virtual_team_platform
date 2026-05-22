@@ -47,9 +47,10 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 
 - `gotta_bike_platform/config.py` - pydantic-settings for environment variables (loaded from `.env`)
 - `gotta_bike_platform/settings.py` - Django settings, imports config values from `config.py`
+- Required env vars: `SECRET_KEY`, `DATABASE_URL` (defaults exist for local dev only — must be set in production)
 - Optional env vars: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` (OAuth)
 - Optional env vars: `LOGFIRE_TOKEN`, `LOGFIRE_ENVIRONMENT` (observability)
-- Runtime settings (via constance): API credentials and team settings (see Dynamic Settings below)
+- Runtime settings (via constance): API credentials and team settings (see Dynamic Settings below). **Note**: code that does `from constance import config` (e.g. `config.DISCORD_BOT_TOKEN`, `config.GUILD_ID`) reads from constance, *not* from `gotta_bike_platform/config.py` — the two `config` objects are unrelated.
 
 ### Static Files & Storage
 
@@ -72,7 +73,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - `DiscordChannel` - Discord channels synced from server for Select dropdowns in Event/Squad forms
     - `services.py` - `get_unified_team_roster()` merges data from ZwiftPower, Zwift Racing, and User accounts;
       `get_user_verification_types(user)` returns allowed verification types based on ZP category
-- `zwift` - Zwift integration (placeholder)
+- `zwift` - Zwift integration. `utils.fetch_zwift_id(username, password)` calls the Sauce mod API to resolve a Zwift account to a `zwid` (used during onboarding/profile linking); models/views are stubs.
 - `zwiftpower` - ZwiftPower API integration:
     - `ZPTeamRiders` - Team roster data from admin API
     - `ZPEvent` - Event metadata
@@ -104,7 +105,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - `SquadMember` model - Links users to squads (member/pending/rejected status, unique on squad+user)
     - `AvailabilityGrid` - Date/time grid for collecting squad availability (status: draft/published/closed). Stores all times in UTC; converted to user/grid timezone at render
     - `AvailabilityResponse` - One per (grid, user); stores `available_cells` JSON of UTC date/time pairs
-    - `AvailabilitySlotSelection` ("Scheduled Race") - Named race slot built from heatmap by captains/admins. Fields: `name`, `slot_date/slot_time` (UTC), `status` (none/pending/confirmed), `event_invite_url`, `course_url`, `thread_link`, `selected_users` M2M
+    - `AvailabilitySlotSelection` ("Scheduled Race") - Named race slot built from heatmap by captains/admins. Fields: `name`, `slot_date/slot_time` (UTC), `status` (none/pending/confirmed), `event_invite_url`, `course_url`, `thread_link`, `selected_users` M2M, `opponent` (CharField, optional, free text), `substitute` (FK to User, optional — dropdown is populated from the same available-rider pool as the racing checkboxes, plus a "not available this slot" fallback so a saved sub stays editable). The thread-message builder appends the squad's captain/vice-captain in their own labelled block beneath the rider mentions and includes the SUB on its own line; captain, vice-captain, and substitute are all added to `allowed_user_ids` so they get pinged even when not racing
     - `EventSignup` model - Event-level signups with status, optional multi-select `signup_timezone` and `signup_squad_gender` (only saved when the event has the corresponding `*_required` flag set)
     - `Race` model - Individual races within an event
     - `RaceRegistration` model - Race-level registrations
@@ -360,6 +361,9 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
 - `/site/config/` - Site configuration (Constance settings UI)
 - `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
 - `/strava/` - Strava club activities (`apps.club_strava.urls`)
+- `/zp/` - ZwiftPower team-wide results (`apps.zwiftpower.urls`):
+    - `/zp/results/` - Team results landing page
+    - `/zp/results/<int:zid>/` - Per-event results detail
 - `/analytics/` - Analytics dashboard (`apps.analytics.urls`, requires `app_admin`)
 - `/tickets/` - Member-support / team-management tickets (`apps.tickets.urls`) — **internal only**, sidebar link disabled
     - `/tickets/` - List with status/category/mine/search filters
