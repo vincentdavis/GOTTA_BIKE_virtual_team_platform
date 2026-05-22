@@ -99,7 +99,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - Configurable filters (gender, division, rating, phenotype)
     - Manual sync clears sheet and rewrites all data
 - `events` - Event management with squads and signups:
-    - `Event` model - Team events with title, description (Markdown), dates, Discord channel/role IDs (`head_captain_role_id` for the event's head captain), signup settings, `prefixes` (JSONField list of allowed Discord role/channel prefixes), `squad_gender_options` (JSONField list, default `["Male", "Female", "COED"]`), `squad_gender_required` (bool — gates whether the field appears in the signup form)
+    - `Event` model - Team events with title, description (Markdown), dates, Discord channel/role IDs (`head_captain_role_id` for the event's head captain, `signup_notification_channel_id` for posting per-rider signup notifications — `0` disables), signup settings, `prefixes` (JSONField list of allowed Discord role/channel prefixes), `squad_gender_options` (JSONField list, default `["Male", "Female", "COED"]`), `squad_gender_required` (bool — gates whether the field appears in the signup form), `coordinator_role_ids` (JSONField list of Discord role IDs for "Regional/Group Coordinators" — role setup page renders a filterable multi-select restricted to roles whose name starts with one of `EVENT_ROLE_PREFIXES`; the form re-resolves every submitted ID against `DiscordRole` and rejects off-prefix or unknown IDs even if the choices list is tampered with)
     - `Squad` model - Squads within an event with captain/vice-captain, ZR category range, Discord text/audio channels, URL, invite URL, optional `gender` (single value drawn from the parent event's `squad_gender_options`)
         - Discord role fields: `team_discord_role` (squad role), `discord_captain_role` (squad captain role), `captain_notifications` (bool — DM captains on member events)
     - `SquadMember` model - Links users to squads (member/pending/rejected status, unique on squad+user)
@@ -109,7 +109,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - `EventSignup` model - Event-level signups with status, optional multi-select `signup_timezone` and `signup_squad_gender` (only saved when the event has the corresponding `*_required` flag set)
     - `Race` model - Individual races within an event
     - `RaceRegistration` model - Race-level registrations
-    - Views require `team_member` permission; create/edit/delete event/squad require `event_admin`
+    - Views require `team_member` permission; create/edit/delete event require `event_admin`. Squad CRUD (`/events/<id>/squads/manage/`, add, edit, delete) is gated by `_can_manage_event_squads(user, event)` — allows event admins, superusers, and holders of the event's `head_captain_role_id` Discord role. The "Manage Squads" button on `event_detail` shows for the same set
     - **Manage availability** (grids, scheduled races, Discord thread creation) is gated by `_can_manage_squad_availability(user, squad)` — allows event admins, superusers, the squad's captain/vice-captain, holders of the squad's `discord_captain_role`, and holders of the parent event's `head_captain_role_id`. Same captain-or-admin pattern is used by `_can_view_v_report`
     - **Discord thread actions** for a confirmed scheduled race: "Save & Create Thread" (creates the thread + posts a starter message) and "Save & Post Update" (posts a "Race details updated" message into the existing thread). Both go through `apps/accounts/discord_service.py:create_discord_thread` / `send_discord_channel_message`; the resulting URL lands on `slot.thread_link`. Requires status=confirmed, riders selected, squad has `discord_channel_id`
     - Role Setup: event prefixes (multi-select from `EVENT_ROLE_PREFIXES` constance), head captain role, event role — editable by `assign_roles` or event's head captain
@@ -288,6 +288,8 @@ REST API using Django Ninja for Discord bot integration:
 - Auth: `X-API-Key` header (matches constance `DBOT_AUTH_KEY`) + `X-Guild-Id` header (must match constance `GUILD_ID`) +
   `X-Discord-User-Id` header
 - Key endpoints:
+    - `GET /api/dbot/bot_config` - Bot configuration (constance values the bot needs on startup / hourly refresh)
+    - `GET /api/dbot/recent_videos` - 5 most recent team-feed YouTube videos + team-feed URL
     - `GET /api/dbot/zwiftpower_profile/{zwid}` - ZwiftPower rider data
     - `GET /api/dbot/my_profile` - Combined profile for requesting Discord user
     - `GET /api/dbot/teammate_profile/{zwid}` - Combined profile for any teammate
@@ -347,14 +349,16 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
     - `/events/<id>/` - Event detail with signups, squads, and squad assignment
     - `/events/<id>/edit/` - Edit event (event admins)
     - `/events/<id>/signup/` - Sign up for event
-    - `/events/<id>/squads/add/` - Create squad (event admins)
-    - `/events/<id>/squads/<squad_id>/edit/` - Edit squad (event admins)
-    - `/events/<id>/squads/<squad_id>/delete/` - Delete squad (event admins, POST)
+    - `/events/<id>/squads/manage/` - Squad management dashboard (event admins / head captain — see `_can_manage_event_squads`)
+    - `/events/<id>/squads/add/` - Create squad (event admins / head captain)
+    - `/events/<id>/squads/<squad_id>/edit/` - Edit squad (event admins / head captain)
+    - `/events/<id>/squads/<squad_id>/delete/` - Delete squad (event admins / head captain, POST)
     - `/events/<id>/squads/assign/` - Assign user to squad (event admins, POST)
     - `/events/<id>/role-setup/` - Discord role setup (event admins read-only; assign_roles/head captain can edit)
     - `/events/<id>/manage-roles/` - Assign/unassign Discord roles (assign_roles or head captain)
     - `/events/<id>/squads/<squad_id>/availability/` - Manage availability grids for a squad (captain/admin gate)
     - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/` - Member response form (published grids)
+    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/copy/` - Clone an existing grid (incl. time slots) onto a new date — `availability_copy_view`, same captain/admin gate
     - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/results/` - Heatmap + scheduled race editor
     - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/slots/<slot_pk>/create-thread/` - Create Discord thread for a confirmed scheduled race (powers "Save & Create Thread")
     - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/slots/<slot_pk>/post-update/` - Persist edits and post an update message into the slot's existing thread (powers "Save & Post Update")
