@@ -158,7 +158,7 @@ def send_discord_channel_message(
 def create_discord_thread(
     channel_id: str | int,
     name: str,
-    auto_archive_minutes: int = 1440,
+    auto_archive_minutes: int = 4320,
 ) -> tuple[int | None, str | None]:
     """Create a public thread in a Discord text channel.
 
