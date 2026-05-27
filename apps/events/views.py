@@ -520,6 +520,8 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
         )
         local_dt = utc_dt.astimezone(tz_obj)
         days_until = (local_dt.date() - today_local).days
+        if days_until < 0 and not show_past:
+            continue
         if days_until > 1:
             days_label = f"in {days_until} days"
             days_class = "badge-info"
