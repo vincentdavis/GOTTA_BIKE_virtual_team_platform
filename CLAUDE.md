@@ -120,7 +120,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
     - Squad assignment from signup list (event admins can assign users to multiple squads)
     - Expandable squad member list with ZP/ZR data, Discord role checks
     - Markdown rendering for event description and signup instructions
-- `magic_links` - Passwordless authentication (legacy)
+- `magic_links` - Passwordless authentication (legacy — kept so old DMed links still resolve at `/m/`; do not extend)
 - `user_api` - Per-user API keys with bearer auth (Django Ninja):
     - `ApiKey` model — 30-day default expiry, hashed at rest, scoped to a single user
     - `/user/api-keys/` — UI for creating/revoking the current user's keys
@@ -149,10 +149,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
   `facebook_url`, `twitter_url`, `tiktok_url`, `bluesky_url`, `mastodon_url`, `garmin_url`, `tpv_profile_url`),
   equipment fields (`trainer`, `powermeter`, `dual_recording`, `heartrate_monitor`)
 - TOTP two-factor authentication via `allauth.mfa`
-- Custom adapter (`apps/accounts/adapters.py`):
-    - Verifies guild membership via Discord API before allowing login/signup
-    - Syncs Discord profile data on login
-    - Redirects rejected users to `DISCORD_URL` (invite link)
+- Custom adapter at `apps/accounts/adapters.py` verifies guild membership, syncs Discord profile data, redirects rejected users to `DISCORD_URL` — see "Discord OAuth Adapter" below for the load-bearing gotchas
 - OAuth scopes: `identify`, `email`, `guilds`
 - URLs at `/accounts/` (login, logout, 2fa management)
 
@@ -436,9 +433,10 @@ Client-side JS in `base.html` sends page data to `/api/analytics/track/` (Django
 
 ## Notification Badges
 
-Sidebar/avatar badges are driven by context processors with short per-user caches:
-- `apps.team.context_processors.pending_verification_count` — count of `RaceReadyRecord.status=PENDING` the current user can review (mirrors same-gender gate from `verification_records_view`). Sidebar badge on "Verification Records".
-- `apps.events.context_processors.pending_availability_count` — count of published `AvailabilityGrid` rows in the user's squads with no response yet. Drives the warning dot on the avatar and the count next to "My Events" in the user-menu dropdown.
+Sidebar/avatar badges are driven by context processors with short per-user caches. Source files: `apps/team/context_processors.py`, `apps/events/context_processors.py`. Both are registered in `TEMPLATES["OPTIONS"]["context_processors"]` in `gotta_bike_platform/settings.py`.
+
+- `pending_verification_count` (team) — count of `RaceReadyRecord.status=PENDING` the current user can review (mirrors same-gender gate from `verification_records_view`). Sidebar badge on "Verification Records".
+- `pending_availability_count` (events) — count of published `AvailabilityGrid` rows in the user's squads with no response yet. Drives the warning dot on the avatar and the count next to "My Events" in the user-menu dropdown.
 
 Both gate on permission/auth before any DB call, then cache the count for 60 s per user. New badges should follow this pattern (skip the query when the user can't act on it; cache short).
 
