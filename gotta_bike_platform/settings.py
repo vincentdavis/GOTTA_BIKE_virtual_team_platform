@@ -808,6 +808,11 @@ CONSTANCE_CONFIG = {
         "How often to sync data connections with auto_sync enabled (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS": (
+        24,
+        "How often to purge user API keys that expired more than 90 days ago (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -957,6 +962,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS",
         "SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS",
         "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
+        "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS",
     ),
 }
 

@@ -30,7 +30,6 @@ from apps.accounts.views import (
 )
 from apps.analytics.api import api as analytics_api
 from apps.dbot_api.api import api as dbot_api
-from apps.dbot_api.cron_api import cron_api
 from apps.user_api.api import api as user_api
 from gotta_bike_platform.views import about, block_social_signup, home, robots_txt
 
@@ -41,7 +40,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/analytics/", analytics_api.urls),
     path("api/dbot/", dbot_api.urls),
-    path("api/cron/", cron_api.urls),
     path("api/user/", user_api.urls),
     path("accounts/3rdparty/signup/", block_social_signup, name="block_social_signup"),
     path("accounts/", include("allauth.urls")),

@@ -279,89 +279,31 @@ Trigger the ZwiftPower team results update task.
 
 ---
 
-## Cron API
+## Background Tasks
 
-Base URL: `/api/cron/`
+Scheduled and manually-triggerable tasks live in `gotta_bike_platform/task_registry.py`. There is no public HTTP API for triggering tasks — the previous `/api/cron/` endpoints were removed.
 
-REST API for triggering scheduled tasks via external cron service.
+- **Scheduled execution**: the in-process APScheduler (`uv run python manage.py scheduler`) reads `TASK_REGISTRY`, filters entries with `scheduled=True`, and registers each with its `SCHEDULER_*_HOURS` Constance interval.
+- **Manual execution**: admins can fire any registry entry from `/site/config/background_tasks/` (requires `app_admin` or superuser).
+- Both paths enqueue via django-tasks; the `db_worker` process executes the queued task.
 
-### Authentication
-
-| Header | Description |
-|--------|-------------|
-| `X-Cron-Key` | Must match `DBOT_AUTH_KEY` constance setting |
-
-### Endpoints
-
-#### GET /api/cron/tasks
-
-List all available tasks.
-
-**Response:**
-```json
-{
-  "tasks": [
-    {
-      "name": "update_team_riders",
-      "description": "Fetch team riders from ZwiftPower"
-    },
-    {
-      "name": "update_team_results",
-      "description": "Fetch team results from ZwiftPower"
-    },
-    {
-      "name": "sync_zr_riders",
-      "description": "Sync riders from Zwift Racing API"
-    }
-  ]
-}
-```
-
-#### POST /api/cron/task/{task_name}
-
-Trigger a task by name.
-
-**Parameters:**
-- `task_name` (path) - Name of the task to run
-
-**Response:**
-```json
-{
-  "status": "enqueued",
-  "task": "update_team_riders"
-}
-```
-
-### Available Tasks
-
-| Task | Description |
-|------|-------------|
-| `update_team_riders` | Fetch team riders from ZwiftPower |
-| `update_team_results` | Fetch team results from ZwiftPower |
-| `sync_zr_riders` | Sync riders from Zwift Racing API |
-
-### Example Cron Call
-
-```bash
-curl -X POST \
-  -H "X-Cron-Key: your-key" \
-  https://your-domain.com/api/cron/task/update_team_riders
-```
-
-### Adding New Tasks
-
-Update `TASK_REGISTRY` in `apps/dbot_api/cron_api.py`:
+To add a new task, import it in `task_registry.py` and add an entry:
 
 ```python
 from apps.your_app.tasks import your_task
 
-TASK_REGISTRY: dict = {
+TASK_REGISTRY: dict[str, dict[str, Any]] = {
     "your_task_name": {
         "task": your_task,
         "description": "What the task does",
+        "scheduled": True,                                  # omit for manual-only
+        "hours_setting": "SCHEDULER_YOUR_TASK_HOURS",       # only if scheduled
+        # "kwargs": {...},                                  # optional
     },
 }
 ```
+
+If scheduled, also add the matching `SCHEDULER_*_HOURS` Constance setting in `settings.py` and list it in the `Scheduler` fieldset.
 
 ---
 
@@ -388,5 +330,4 @@ TASK_REGISTRY: dict = {
 | `/data-connections/` | Google Sheets exports |
 | `/site/config/` | Site configuration (admin) |
 | `/api/dbot/` | Discord bot API |
-| `/api/cron/` | Cron task API |
 | `/m/` | Magic links (legacy) |

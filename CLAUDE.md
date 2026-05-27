@@ -71,11 +71,11 @@ Read each app's `models.py` for full field lists. Bullets below capture purpose 
 - `zwiftracing` - Zwift Racing API integration. `ZRRider` stores per-discipline `seed_*` and `velo_*` rating fields. Client in `zr_client.py` returns `(status_code, json)` tuples; 429s return data with `retryAfter` instead of raising
 - `analytics` - Server-side page-visit tracking enriched by a client-side JS snippet in `base.html`. Dashboard at `/analytics/` (`app_admin` only). Tracking endpoint: `POST /api/analytics/track/` (Django Ninja)
 - `club_strava` - Strava club activity sync. See Strava Integration section
-- `dbot_api` - Discord bot REST API + cron task API using Django Ninja (see Discord Bot API and Cron API sections)
+- `dbot_api` - Discord bot REST API using Django Ninja (see Discord Bot API section). The task registry it used to host has moved to `gotta_bike_platform/task_registry.py`.
 - `data_connection` - Configurable Google Sheets exports via service account. Field selection across User/ZP/ZR, filters by gender/division/rating/phenotype. **Manual sync clears the sheet and rewrites all data**
 - `events` - Event management with squads, signups, availability grids, scheduled races, and Discord thread integration. See Event Permission Gates below for the load-bearing behavior
 - `magic_links` - Passwordless authentication (legacy — kept so old DMed links still resolve at `/m/`; do not extend)
-- `user_api` - Per-user API keys with bearer auth (Django Ninja). `ApiKey`: 30-day default expiry, hashed at rest, scoped to one user. `purge_expired_api_keys` cron task hard-deletes keys expired > 90 days
+- `user_api` - Per-user API keys with bearer auth (Django Ninja). `ApiKey`: 30-day default expiry, hashed at rest, scoped to one user. `purge_expired_api_keys` scheduled task hard-deletes keys expired > 90 days
 - `tickets` - **Internal only** (sidebar link intentionally disabled). Member-support / team-management ticket queue. Non-obvious: `Ticket.closed_at` is auto-managed by `save()` on status transitions to/from `closed`; `apps/tickets/services.py:create_member_left_ticket` fires from the guild-member sync when `date_left` is freshly stamped (idempotent while a non-closed ticket exists for that `GuildMember`). Gated by `team_member_required`; no finer-grained permissions yet
 - `cms` - Dynamic CMS pages (`Page` model) with markdown body, draft/published workflow, sidebar/user-menu placement (`nav_location` = `main_nav` or `user_menu`), per-page `require_login` / `require_team_member`. Context processor exposes `cms_nav_pages` + `cms_user_menu_pages`
 
@@ -216,9 +216,9 @@ Uses Django 6.0's built-in `django-tasks` with database backend. Define with `@t
 
 `gotta_bike_platform/management/commands/scheduler.py` runs a `BlockingScheduler` with one `IntervalTrigger` per job. Run as a separate service via `uv run python manage.py scheduler`; jobs enqueue Django tasks (the `db_worker` still executes them).
 
-- **Job registry** — `_get_scheduled_jobs()` lists each task path and reads its cadence from a `SCHEDULER_*_HOURS` Constance setting (default 6h). Interval changes require a scheduler restart to take effect (the docstring at the top of the file is authoritative).
-- **UI** — `/site/config/scheduler/` (driven by the `Scheduler` group in `CONSTANCE_CONFIG_FIELDSETS`) lets admins adjust the cadences.
-- **When adding a new scheduled task**: add a `SCHEDULER_*_HOURS` setting, add the task to `_get_scheduled_jobs()`, and add it to the `Scheduler` fieldset so it appears on the config page.
+- **Task registry** — `gotta_bike_platform/task_registry.py:TASK_REGISTRY` is the single source of truth for scheduled and manually-triggerable tasks. The scheduler calls `get_scheduled_tasks()` (filters `scheduled=True`, resolves each `hours_setting` Constance value). The admin "Run Now" UI at `/site/config/background_tasks/` reads the same dict via `_get_task_registry()` in `apps/accounts/views.py`.
+- **UI** — `/site/config/scheduler/` (driven by the `Scheduler` group in `CONSTANCE_CONFIG_FIELDSETS`) lets admins adjust the cadences. Interval changes require a scheduler restart.
+- **When adding a new scheduled task**: import the task in `task_registry.py`, add an entry with `scheduled=True` and a `hours_setting` pointing at a new `SCHEDULER_*_HOURS` Constance setting, then add that key to the `Scheduler` fieldset. For a manual-trigger-only task (no schedule), omit `scheduled` (or set to `False`); no Constance setting needed.
 
 ### External API Clients
 
@@ -258,19 +258,6 @@ REST API using Django Ninja for Discord bot integration:
     - `POST /api/dbot/update_zp_team` - Trigger ZwiftPower team update task
     - `POST /api/dbot/update_zp_results` - Trigger ZwiftPower results update task
 
-### Cron API (`apps/dbot_api/cron_api.py`)
-
-REST API for triggering tasks by name (used by the in-process Scheduler above, by `/site/config/background_tasks/`, and historically by an external cron service):
-
-- Auth: `X-Cron-Key` header (uses same `DBOT_AUTH_KEY` from constance)
-- Endpoints:
-    - `GET /api/cron/tasks` - List available tasks
-    - `POST /api/cron/task/{task_name}` - Trigger a task by name
-- Available tasks: see `TASK_REGISTRY` in `apps/dbot_api/cron_api.py` — covers ZP/ZR/Strava/YouTube/Discord
-  syncs, race-ready cache refresh, expiry warning DMs, data-connection exports, and more.
-
-To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
-
 ### URL Routes (`gotta_bike_platform/urls.py`)
 
 Mount points — read each app's `urls.py` for the full pattern list:
@@ -280,7 +267,7 @@ Mount points — read each app's `urls.py` for the full pattern list:
 - `/user/`, `/user/api-keys/` — `apps.accounts.urls`, `apps.user_api.urls`
 - `/team/`, `/events/`, `/tickets/`, `/page/<slug>/` — feature apps (`tickets` is **internal only**, sidebar link disabled)
 - `/strava/`, `/zp/`, `/analytics/`, `/data-connections/` — feature apps
-- `/api/dbot/`, `/api/cron/`, `/api/user/`, `/api/analytics/` — Django Ninja APIs
+- `/api/dbot/`, `/api/user/`, `/api/analytics/` — Django Ninja APIs
 - `/m/` — magic links (legacy — see Apps section)
 
 Non-obvious gates / behavior not visible from the URL pattern alone:
@@ -432,7 +419,7 @@ Syncs Discord guild members with Django to track membership status.
 
 **Sync drivers** (both go through `apps/accounts/services.py:apply_guild_member_sync`, which owns the upsert/depart logic):
 
-- **Primary**: `sync_guild_members` background task (`apps/accounts/tasks.py`) calls Discord's REST API directly via `apps/accounts/services.py:fetch_guild_members_from_discord` (paginated, 429-aware). Scheduled by the in-process APScheduler — cadence is `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS` Constance setting (default 6h). Also triggerable from `/site/config/background_tasks/` and via the cron API.
+- **Primary**: `sync_guild_members` background task (`apps/accounts/tasks.py`) calls Discord's REST API directly via `apps/accounts/services.py:fetch_guild_members_from_discord` (paginated, 429-aware). Scheduled by the in-process APScheduler — cadence is `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS` Constance setting (default 6h). Also triggerable manually from `/site/config/background_tasks/`.
 - **Fallback**: `POST /api/dbot/sync_guild_members` — Discord-bot push, accepts the same normalized payload and delegates to the same service.
 
 When a previously-active member is missing from a sync, `date_left` is stamped and `apps/tickets/services.py:create_member_left_ticket` files a low-priority Membership ticket (idempotent while a non-closed ticket exists for that member). See the `tickets` app section.
@@ -458,7 +445,7 @@ while the backend code uses "Race Ready" (e.g., `is_race_ready`, `RaceReadyRecor
 `User.is_race_ready` is a **cached BooleanField** (not a property). The live calculation lives in
 `User.calculate_race_ready()` and uses `CATEGORY_REQUIREMENTS`. The cache is updated by:
 - `User.refresh_race_ready()` — call after any change that affects a user's verification state
-- `refresh_all_race_ready` cron task — periodic full sweep, also handles expiration
+- `refresh_all_race_ready` scheduled task — periodic full sweep, also handles expiration
 
 There is no Django signal — code paths that mutate `RaceReadyRecord` must call `refresh_race_ready()` themselves
 (see existing call sites in `apps/team/views.py`).
@@ -518,7 +505,7 @@ Falls back to original badges/SVGs when no emoji image is uploaded.
    - `WEIGHT_LIGHT_DAYS` (default: 30 days)
    - `HEIGHT_VERIFICATION_DAYS` (default: 0 = never expires)
    - `POWER_VERIFICATION_DAYS` (default: 365 days)
-   - `EXPIRE_WARNING_DAYS` (JSON list of int days, default `[15, 7, 3, 1]`) — the `warn_expiring_verifications` cron task DMs each owner once per matching threshold day
+   - `EXPIRE_WARNING_DAYS` (JSON list of int days, default `[15, 7, 3, 1]`) — the `warn_expiring_verifications` scheduled task DMs each record's owner at most once per calendar day, enforced by `RaceReadyRecord.last_warned_at`. Each DM also includes the user's other verified records and their days-remaining. Lives in `gotta_bike_platform/task_registry.py`; also manually triggerable from `/site/config/background_tasks/`.
 7. `RaceReadyRecord.days_remaining` property returns days until expiration (or None)
 
 ### Race Ready Role Assignment

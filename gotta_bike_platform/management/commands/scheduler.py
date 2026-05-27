@@ -3,149 +3,34 @@
 Replaces the external cron service by running scheduled tasks in-process.
 Tasks are enqueued via django-tasks (db_worker still executes them).
 
-To migrate a task from the external cron:
-1. Add it to _get_scheduled_jobs() below
-2. Add a SCHEDULER_*_HOURS Constance setting for its interval
-3. Remove it from the external cron service's TASKS_TO_RUN list
-4. Deploy both changes together
+The list of scheduled tasks lives in ``gotta_bike_platform.task_registry.TASK_REGISTRY``.
+To schedule a new task: add an entry there with ``scheduled=True`` and a matching
+``SCHEDULER_*_HOURS`` Constance setting (also list it in the ``Scheduler`` fieldset
+in ``settings.py``). Interval changes require a scheduler restart to take effect.
 """
 
 import signal
 import sys
+from typing import Any
 
 import logfire
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from constance import config
 from django.core.management.base import BaseCommand
 
-# --- Default interval ---
-EVERY_6H = 6
+from gotta_bike_platform.task_registry import get_scheduled_tasks
 
 
-def _get_scheduled_jobs() -> list[dict]:
-    """Build the list of scheduled jobs, reading intervals from Constance.
-
-    Returns:
-        List of job dicts with task, id, hours, and description keys.
-
-    """
-    return [
-        {
-            "task": "apps.zwiftpower.tasks.update_team_riders",
-            "id": "update_team_riders",
-            "hours": config.SCHEDULER_UPDATE_TEAM_RIDERS_HOURS,
-            "description": "Fetch team riders from ZwiftPower",
-        },
-        {
-            "task": "apps.zwiftpower.tasks.update_team_results",
-            "id": "update_team_results",
-            "hours": config.SCHEDULER_UPDATE_TEAM_RESULTS_HOURS,
-            "description": "Fetch team results from ZwiftPower",
-        },
-        {
-            "task": "apps.zwiftracing.tasks.sync_zr_riders",
-            "id": "sync_zr_riders",
-            "hours": config.SCHEDULER_SYNC_ZR_RIDERS_HOURS,
-            "description": "Sync riders from Zwift Racing API",
-        },
-        {
-            "task": "apps.accounts.tasks.sync_guild_members",
-            "id": "sync_guild_members",
-            "hours": config.SCHEDULER_SYNC_GUILD_MEMBERS_HOURS,
-            "description": "Sync Discord guild members from Discord API",
-        },
-        {
-            "task": "apps.accounts.tasks.guild_member_sync_status",
-            "id": "guild_member_sync_status",
-            "hours": config.SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS,
-            "description": "Check guild member sync health",
-        },
-        {
-            "task": "apps.accounts.tasks.refresh_all_race_ready",
-            "id": "refresh_all_race_ready",
-            "hours": config.SCHEDULER_REFRESH_ALL_RACE_READY_HOURS,
-            "description": "Refresh cached is_race_ready",
-        },
-        {
-            "task": "apps.accounts.tasks.sync_race_ready_roles",
-            "id": "sync_race_ready_roles",
-            "hours": config.SCHEDULER_SYNC_RACE_READY_ROLES_HOURS,
-            "description": "Sync race ready Discord roles",
-        },
-        {
-            "task": "apps.accounts.tasks.sync_youtube_channel_ids",
-            "id": "sync_youtube_channel_ids",
-            "hours": config.SCHEDULER_SYNC_YOUTUBE_CHANNEL_IDS_HOURS,
-            "description": "Extract YouTube channel IDs",
-        },
-        {
-            "task": "apps.accounts.tasks.sync_youtube_videos",
-            "id": "sync_youtube_videos",
-            "hours": config.SCHEDULER_SYNC_YOUTUBE_VIDEOS_HOURS,
-            "description": "Fetch YouTube videos",
-        },
-        {
-            "task": "apps.club_strava.tasks.sync_strava_activities",
-            "id": "sync_strava_activities",
-            "hours": config.SCHEDULER_SYNC_STRAVA_ACTIVITIES_HOURS,
-            "description": "Fetch Strava activities",
-        },
-        {
-            "task": "apps.accounts.tasks.sync_zr_category_roles",
-            "id": "sync_zr_category_roles",
-            "hours": config.SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS,
-            "description": "Sync ZR category Discord roles",
-        },
-        {
-            "task": "apps.team.tasks.sync_discord_channels",
-            "id": "sync_discord_channels",
-            "hours": config.SCHEDULER_SYNC_DISCORD_CHANNELS_HOURS,
-            "description": "Sync Discord channels",
-        },
-        {
-            "task": "apps.team.tasks.sync_discord_roles",
-            "id": "sync_discord_roles",
-            "hours": config.SCHEDULER_SYNC_DISCORD_ROLES_HOURS,
-            "description": "Sync Discord roles",
-        },
-        {
-            "task": "apps.team.tasks.warn_expiring_verifications",
-            "id": "warn_expiring_verifications",
-            "hours": config.SCHEDULER_WARN_EXPIRING_VERIFICATIONS_HOURS,
-            "description": "Send DMs for expiring verifications",
-            "kwargs": {"days": 15, "dry_run": False},
-        },
-        {
-            "task": "apps.accounts.tasks.sync_new_member_roles",
-            "id": "sync_new_member_roles",
-            "hours": config.SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS,
-            "description": "Sync New Member Discord role based on join date",
-        },
-        {
-            "task": "apps.data_connection.tasks.sync_all_data_connections",
-            "id": "sync_data_connections",
-            "hours": config.SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS,
-            "description": "Sync data connections with auto_sync enabled",
-        },
-    ]
-
-
-def _enqueue_task(import_path: str, job_id: str, kwargs: dict | None = None) -> None:
-    """Import a task function and enqueue it via django-tasks.
+def _enqueue_task(task_func: Any, job_id: str, kwargs: dict | None = None) -> None:
+    """Enqueue a task via django-tasks.
 
     Args:
-        import_path: Dotted path to the task function.
+        task_func: The ``@task``-decorated callable from the registry.
         job_id: Identifier for logging.
         kwargs: Optional keyword arguments to pass to the task.
 
     """
     try:
-        module_path, func_name = import_path.rsplit(".", 1)
-        from importlib import import_module
-
-        module = import_module(module_path)
-        task_func = getattr(module, func_name)
         task_func.enqueue(**(kwargs or {}))
         logfire.info("Scheduler enqueued task", job_id=job_id)
     except Exception as e:
@@ -164,7 +49,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         """Start the scheduler and block until interrupted."""
         scheduler = BlockingScheduler()
-        scheduled_jobs = _get_scheduled_jobs()
+        scheduled_jobs = get_scheduled_tasks()
 
         active_count = 0
         for job in scheduled_jobs:
@@ -184,7 +69,7 @@ class Command(BaseCommand):
         if active_count == 0:
             self.stdout.write(self.style.WARNING(
                 "No scheduled jobs enabled. "
-                "Add entries in _get_scheduled_jobs() to activate."
+                "Add entries to TASK_REGISTRY (scheduled=True) to activate."
             ))
             self.stdout.write(
                 "Scheduler running (idle) - "

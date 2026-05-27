@@ -1271,13 +1271,13 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
 
 
 def _get_task_registry() -> dict:
-    """Get the task registry from cron_api.
+    """Get the unified task registry.
 
     Returns:
         Dictionary mapping task names to task info (task function and description).
 
     """
-    from apps.dbot_api.cron_api import TASK_REGISTRY
+    from gotta_bike_platform.task_registry import TASK_REGISTRY
 
     return TASK_REGISTRY
 
