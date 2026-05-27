@@ -7,6 +7,7 @@ import httpx
 import logfire
 from constance import config
 from django.tasks import task  # ty:ignore[unresolved-import]
+from django.utils import timezone
 
 from apps.accounts.discord_service import send_discord_channel_message, send_discord_dm
 from apps.team.models import DiscordChannel, DiscordRole, MembershipApplication, RaceReadyRecord
@@ -484,6 +485,8 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
 
     days_set = set(days_list)
 
+    today = timezone.now().date()
+
     with logfire.span("warn_expiring_verifications", days=days_list, dry_run=dry_run):
         verified_records = RaceReadyRecord.objects.filter(
             status=RaceReadyRecord.Status.VERIFIED,
@@ -493,13 +496,21 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
         total_checked = 0
         # List of (record, days_remaining) so the DM can quote the actual threshold hit.
         matching_records: list[tuple[RaceReadyRecord, int]] = []
+        # Per-user map of all verified records with a meaningful days_remaining, used
+        # to enrich the DM with the user's other verifications.
+        verified_by_user: dict[int, list[tuple[RaceReadyRecord, int]]] = {}
+        skipped_already_warned = 0
 
         for record in verified_records:
             total_checked += 1
             remaining = record.days_remaining
             if remaining is None:
                 continue
+            verified_by_user.setdefault(record.user_id, []).append((record, remaining))
             if remaining in days_set:
+                if record.last_warned_at == today:
+                    skipped_already_warned += 1
+                    continue
                 matching_records.append((record, remaining))
 
         logfire.info(
@@ -507,6 +518,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             days=days_list,
             total_checked=total_checked,
             matching=len(matching_records),
+            skipped_already_warned=skipped_already_warned,
             dry_run=dry_run,
         )
 
@@ -536,14 +548,35 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             expires = record.expires_date
             expires_str = expires.strftime("%B %d, %Y") if expires else "unknown"
 
-            message = (
-                f"\u23f0 **Verification Expiring Soon**\n\n"
-                f"Your **{verify_label}** verification expires in **{remaining} days** ({expires_str}).\n\n"
-                f"Please submit a new verification record to maintain your Race Ready status."
+            lines = [
+                "\u23f0 **Verification Expiring Soon**",
+                "",
+                f"Your **{verify_label}** verification expires in **{remaining} days** ({expires_str}).",
+            ]
+            others = sorted(
+                (
+                    (r, rem)
+                    for (r, rem) in verified_by_user.get(record.user_id, [])
+                    if r.pk != record.pk and rem >= 0
+                ),
+                key=lambda item: item[1],
             )
+            if others:
+                lines.append("")
+                lines.append("Your other verifications:")
+                for r, rem in others:
+                    r_label = r.get_verify_type_display()
+                    r_expires = r.expires_date.strftime("%B %d, %Y") if r.expires_date else "unknown"
+                    day_word = "day" if rem == 1 else "days"
+                    lines.append(f"\u2022 **{r_label}**: {rem} {day_word} remaining ({r_expires})")
+            lines.append("")
+            lines.append("Please submit a new verification record to maintain your Race Ready status.")
+            message = "\n".join(lines)
 
             success = send_discord_dm(user.discord_id, message)
             if success:
+                record.last_warned_at = today
+                record.save(update_fields=["last_warned_at"])
                 warnings_sent += 1
                 users_warned.append(_get_user_display_name(user))
                 logfire.info(

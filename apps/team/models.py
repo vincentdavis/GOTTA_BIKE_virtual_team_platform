@@ -141,6 +141,12 @@ class RaceReadyRecord(models.Model):
         default=timezone.now,
         help_text="When this record was created",
     )
+    last_warned_at = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date of the most recent expiring-verification DM for this record. "
+        "Used by warn_expiring_verifications to enforce one DM per record per day.",
+    )
 
     class Meta:
         """Meta options for RaceReadyRecord model."""
