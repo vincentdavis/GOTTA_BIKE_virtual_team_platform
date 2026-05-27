@@ -62,82 +62,35 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 
 ### Apps (in `apps/`)
 
-- `accounts` - Custom User model with Discord/Zwift fields, django-allauth adapters, role-based permissions
-    - `GuildMember` model - Tracks Discord guild members synced from bot (see Guild Member Sync below)
-    - `YouTubeVideo` model - Stores YouTube videos fetched from team members' channels (via RSS), displayed on Team Feed
-    - `decorators.py` - `discord_permission_required` decorator for view permissions
-- `team` - Core team management:
-    - `RaceReadyRecord` - Verification records for weight/height/power (pending/verified/rejected status)
-    - `TeamLink` - Links to external resources with visibility date ranges
-    - `RosterFilter` - Temporary filtered roster views from Discord channel members (5-min expiration)
-    - `MembershipApplication` - New member registrations submitted via Discord modal (see Membership Registration below)
-    - `DiscordRole` - Discord roles synced from server for permission checking
-    - `DiscordChannel` - Discord channels synced from server for Select dropdowns in Event/Squad forms
-    - `services.py` - `get_unified_team_roster()` merges data from ZwiftPower, Zwift Racing, and User accounts;
-      `get_user_verification_types(user)` returns allowed verification types based on ZP category
+Read each app's `models.py` for full field lists. Bullets below capture purpose + cross-app interactions + non-obvious behavior only.
+
+- `accounts` - Custom User model (Discord/Zwift fields), django-allauth adapters, role-based permissions. Key entry points: `decorators.py` (`discord_permission_required`, `team_member_required`), `GuildMember` (Discord member tracking — see Guild Member Sync), `YouTubeVideo` (RSS-fetched videos for Team Feed)
+- `team` - Core team management. Models: `RaceReadyRecord` (see Race Ready Verification), `TeamLink`, `RosterFilter` (**5-min expiration**), `MembershipApplication` (see Membership Registration), `DiscordRole` / `DiscordChannel` (synced from server, used as Select dropdown choices in Event/Squad forms). Services: `get_unified_team_roster()` merges ZP + ZR + User data; `get_user_verification_types(user)` returns required verification types per ZP category
 - `zwift` - Zwift integration. `utils.fetch_zwift_id(username, password)` calls the Sauce mod API to resolve a Zwift account to a `zwid` (used during onboarding/profile linking); models/views are stubs.
-- `zwiftpower` - ZwiftPower API integration:
-    - `ZPTeamRiders` - Team roster data from admin API
-    - `ZPEvent` - Event metadata
-    - `ZPRiderResults` - Individual rider results per event
-- `zwiftracing` - Zwift Racing API integration:
-    - `ZRRider` model - Rider data with seed/velo rating fields (`seed_race`, `seed_time_trial`, `seed_endurance`,
-      `seed_pursuit`, `seed_sprint`, `seed_punch`, `seed_climb`, `seed_tt_factor` and matching `velo_*` fields)
-- `analytics` - Server-side page visit tracking with client-side enrichment:
-    - `PageVisit` model - Tracks page visits (user, IP, user agent, screen dimensions, browser/OS info)
-    - `POST /api/analytics/track/` - Client-side tracking endpoint (Django Ninja)
-    - Dashboard at `/analytics/` with period filters (day/week/month/year), requires `app_admin` permission
-    - Client-side JS snippet in `base.html` sends screen/browser data to tracking endpoint
-- `club_strava` - Strava Club Activities integration:
-    - `ClubActivity` model - Stores Strava club activity data with distance/time formatting properties
-    - `strava_client.py` - OAuth token refresh, activity fetching, bulk sync with rate limit handling
-    - Views at `/strava/` - Activity list with sport_type and search filters
-    - `sync_strava_activities()` background task for scheduled syncing
-- `dbot_api` - Discord bot REST API using Django Ninja
-- `data_connection` - Google Sheets data export:
-    - `DataConnection` model - Configurable exports to Google Sheets
-    - `gs_client.py` - Google Sheets/Drive API client using service account
-    - Supports field selection from User, ZwiftPower, and Zwift Racing data
-    - Configurable filters (gender, division, rating, phenotype)
-    - Manual sync clears sheet and rewrites all data
-- `events` - Event management with squads and signups:
-    - `Event` model - Team events with title, description (Markdown), dates, Discord channel/role IDs (`head_captain_role_id` for the event's head captain, `signup_notification_channel_id` for posting per-rider signup notifications — `0` disables), signup settings, `prefixes` (JSONField list of allowed Discord role/channel prefixes), `squad_gender_options` (JSONField list, default `["Male", "Female", "COED"]`), `squad_gender_required` (bool — gates whether the field appears in the signup form), `coordinator_role_ids` (JSONField list of Discord role IDs for "Regional/Group Coordinators" — role setup page renders a filterable multi-select restricted to roles whose name starts with one of `EVENT_ROLE_PREFIXES`; the form re-resolves every submitted ID against `DiscordRole` and rejects off-prefix or unknown IDs even if the choices list is tampered with)
-    - `Squad` model - Squads within an event with captain/vice-captain, ZR category range, Discord text/audio channels, URL, invite URL, optional `gender` (single value drawn from the parent event's `squad_gender_options`)
-        - Discord role fields: `team_discord_role` (squad role), `discord_captain_role` (squad captain role), `captain_notifications` (bool — DM captains on member events)
-    - `SquadMember` model - Links users to squads (member/pending/rejected status, unique on squad+user)
-    - `AvailabilityGrid` - Date/time grid for collecting squad availability (status: draft/published/closed). Stores all times in UTC; converted to user/grid timezone at render
-    - `AvailabilityResponse` - One per (grid, user); stores `available_cells` JSON of UTC date/time pairs
-    - `AvailabilitySlotSelection` ("Scheduled Race") - Named race slot built from heatmap by captains/admins. Fields: `name`, `slot_date/slot_time` (UTC), `status` (none/pending/confirmed), `event_invite_url`, `course_url`, `thread_link`, `selected_users` M2M, `opponent` (CharField, optional, free text), `substitute` (FK to User, optional — dropdown is populated from the same available-rider pool as the racing checkboxes, plus a "not available this slot" fallback so a saved sub stays editable). The thread-message builder appends the squad's captain/vice-captain in their own labelled block beneath the rider mentions and includes the SUB on its own line; captain, vice-captain, and substitute are all added to `allowed_user_ids` so they get pinged even when not racing
-    - `EventSignup` model - Event-level signups with status, optional multi-select `signup_timezone` and `signup_squad_gender` (only saved when the event has the corresponding `*_required` flag set)
-    - `Race` model - Individual races within an event
-    - `RaceRegistration` model - Race-level registrations
-    - Views require `team_member` permission; create/edit/delete event require `event_admin`. Squad CRUD (`/events/<id>/squads/manage/`, add, edit, delete) is gated by `_can_manage_event_squads(user, event)` — allows event admins, superusers, and holders of the event's `head_captain_role_id` Discord role. The "Manage Squads" button on `event_detail` shows for the same set
-    - **Manage availability** (grids, scheduled races, Discord thread creation) is gated by `_can_manage_squad_availability(user, squad)` — allows event admins, superusers, the squad's captain/vice-captain, holders of the squad's `discord_captain_role`, and holders of the parent event's `head_captain_role_id`. Same captain-or-admin pattern is used by `_can_view_v_report`
-    - **Discord thread actions** for a confirmed scheduled race: "Save & Create Thread" (creates the thread + posts a starter message) and "Save & Post Update" (posts a "Race details updated" message into the existing thread). Both go through `apps/accounts/discord_service.py:create_discord_thread` / `send_discord_channel_message`; the resulting URL lands on `slot.thread_link`. Requires status=confirmed, riders selected, squad has `discord_channel_id`
-    - Role Setup: event prefixes (multi-select from `EVENT_ROLE_PREFIXES` constance), head captain role, event role — editable by `assign_roles` or event's head captain
-    - Manage Roles: assign/unassign Discord roles to members — requires `assign_roles` or event's head captain role
-    - Squad Discord roles must start with **any** of the event's prefixes; the squad role dropdown is disabled when the event has no prefixes set
-    - Squad assignment from signup list (event admins can assign users to multiple squads)
-    - Expandable squad member list with ZP/ZR data, Discord role checks
-    - Markdown rendering for event description and signup instructions
+- `zwiftpower` - ZwiftPower API integration. Models: `ZPTeamRiders`, `ZPEvent`, `ZPRiderResults`. Client in `zp_client.py` (session-based, requires Zwift OAuth login)
+- `zwiftracing` - Zwift Racing API integration. `ZRRider` stores per-discipline `seed_*` and `velo_*` rating fields. Client in `zr_client.py` returns `(status_code, json)` tuples; 429s return data with `retryAfter` instead of raising
+- `analytics` - Server-side page-visit tracking enriched by a client-side JS snippet in `base.html`. Dashboard at `/analytics/` (`app_admin` only). Tracking endpoint: `POST /api/analytics/track/` (Django Ninja)
+- `club_strava` - Strava club activity sync. See Strava Integration section
+- `dbot_api` - Discord bot REST API + cron task API using Django Ninja (see Discord Bot API and Cron API sections)
+- `data_connection` - Configurable Google Sheets exports via service account. Field selection across User/ZP/ZR, filters by gender/division/rating/phenotype. **Manual sync clears the sheet and rewrites all data**
+- `events` - Event management with squads, signups, availability grids, scheduled races, and Discord thread integration. See Event Permission Gates below for the load-bearing behavior
 - `magic_links` - Passwordless authentication (legacy — kept so old DMed links still resolve at `/m/`; do not extend)
-- `user_api` - Per-user API keys with bearer auth (Django Ninja):
-    - `ApiKey` model — 30-day default expiry, hashed at rest, scoped to a single user
-    - `/user/api-keys/` — UI for creating/revoking the current user's keys
-    - `/api/user/` — bearer-authenticated endpoints (e.g. `zr_profile`)
-    - `purge_expired_api_keys` background task (in `apps/dbot_api/cron_api.py` task registry) hard-deletes keys expired > 90 days
-- `tickets` - **Internal only** (sidebar link intentionally disabled). Member-support and team-management ticket queue:
-    - `Ticket` model — `title`, `details` (Markdown), `status` (new/in_progress/closed), `category` (support/membership/verification/equipment/discord/event/squad/other), `priority` (low/normal/high/urgent), `submitted_by` (nullable for system-generated tickets), `assigned_to`, `closed_by`, `resolution`, `guild_member` (FK to `accounts.GuildMember` for system-generated tickets)
-    - `closed_at` is auto-managed by `Ticket.save()` when status transitions to/from `closed`; `closed_by` is set in the view that triggered the close
-    - `apps/tickets/services.py:create_member_left_ticket` is called by the guild-member sync when a member's `date_left` is freshly stamped — files a low-priority Membership ticket with a Markdown summary, idempotent while a non-closed ticket exists for the same `GuildMember`
-    - Routes at `/tickets/` (list with filters, create, detail, edit) — gated by `team_member_required`; no finer-grained permissions yet
-- `cms` - Dynamic CMS pages:
-    - `Page` model - Content pages with markdown, hero sections, card layouts, and accordion sections
-    - Publishing workflow (draft/published status)
-    - Navigation settings (show_in_nav, nav_location, nav_order, nav_title)
-    - `nav_location` choices: `main_nav` (sidebar, default) or `user_menu` (top-right user dropdown)
-    - Context processor provides `cms_nav_pages` (sidebar) and `cms_user_menu_pages` (user dropdown)
-    - Access control (require_login, require_team_member)
+- `user_api` - Per-user API keys with bearer auth (Django Ninja). `ApiKey`: 30-day default expiry, hashed at rest, scoped to one user. `purge_expired_api_keys` cron task hard-deletes keys expired > 90 days
+- `tickets` - **Internal only** (sidebar link intentionally disabled). Member-support / team-management ticket queue. Non-obvious: `Ticket.closed_at` is auto-managed by `save()` on status transitions to/from `closed`; `apps/tickets/services.py:create_member_left_ticket` fires from the guild-member sync when `date_left` is freshly stamped (idempotent while a non-closed ticket exists for that `GuildMember`). Gated by `team_member_required`; no finer-grained permissions yet
+- `cms` - Dynamic CMS pages (`Page` model) with markdown body, draft/published workflow, sidebar/user-menu placement (`nav_location` = `main_nav` or `user_menu`), per-page `require_login` / `require_team_member`. Context processor exposes `cms_nav_pages` + `cms_user_menu_pages`
+
+#### Event Permission Gates (`apps/events/views.py`)
+
+Read these helpers before touching event/squad views — most non-trivial behavior in the events app routes through them.
+
+- `_can_manage_event_squads(user, event)` — gates squad CRUD. Event admins, superusers, and holders of the event's `head_captain_role_id` Discord role
+- `_can_manage_squad_availability(user, squad)` — gates availability grids, scheduled races, and Discord thread actions. Adds squad captain/vice-captain and squad `discord_captain_role` holders to the set above. Same gate used by `_can_view_v_report`
+- Squad Discord roles **must** start with one of the event's `prefixes` (server-side re-validated against `DiscordRole` even if the client tampers with the choices list). The squad-role dropdown is disabled when the event has no prefixes set
+- `coordinator_role_ids` ("Regional/Group Coordinators") — multi-select restricted to roles starting with `EVENT_ROLE_PREFIXES`; same server-side re-validation
+- Role Setup (`/events/<id>/role-setup/`): editable by `assign_roles` or event head captain. Manage Roles (`/events/<id>/manage-roles/`): same gate
+- Discord thread actions ("Save & Create Thread" / "Save & Post Update") require `status=confirmed`, riders selected, and `squad.discord_channel_id`. Both go through `apps/accounts/discord_service.py`; the resulting URL lands on `slot.thread_link`. Captain, vice-captain, and substitute are added to `allowed_user_ids` so they get pinged even when not racing
+- `signup_notification_channel_id` on `Event`: `0` disables per-rider signup notifications
+- All grid/response/slot times stored in UTC, converted at render. `EventSignup.signup_timezone` and `signup_squad_gender` are only saved when the matching `*_required` flag is on
 
 ### Authentication (django-allauth)
 
@@ -320,66 +273,26 @@ To add new cron tasks, update `TASK_REGISTRY` dict in `cron_api.py`.
 
 ### URL Routes (`gotta_bike_platform/urls.py`)
 
-- `/` - Home page
-- `/about/` - About page
-- `/admin/` - Django admin
-- `/accounts/` - allauth (login, logout, MFA)
-- `/user/` - User profile and settings (`apps.accounts.urls`):
-    - `/user/profile/` - User's own profile (private)
-    - `/user/profile/edit/` - Edit profile
-    - `/user/profile/<int:user_id>/` - Public profile (team members only)
-- `/user/api-keys/` - Per-user API key management (`apps.user_api.urls`)
-- `/team/` - Team management (`apps.team.urls`):
-    - `/team/roster/` - Team roster view
-    - `/team/roster/f/{uuid}/` - Filtered roster view (temporary, 5-min expiration)
-    - `/team/links/` - Team links
-    - `/team/verification/` - Verification records (approvers only)
-    - `/team/applications/` - Membership registrations list (admins only)
-    - `/team/applications/{uuid}/` - Admin membership registration view
-    - `/team/apply/{uuid}/` - Public membership registration form
-    - `/team/performance-review/` - Performance review
-    - `/team/discord-review/` - Discord guild member audit (membership admins only)
-    - `/team/membership-review/` - Membership review (membership admins only)
-    - `/team/team-feed/` - Team social media feed
-- `/page/<slug>/` - CMS pages (`apps.cms.urls`)
-- `/events/` - Events management (`apps.events.urls`):
-    - `/events/` - Event list
-    - `/events/my-events/` - Authenticated user's signed-up events with squad/availability state
-    - `/events/create/` - Create event (event admins)
-    - `/events/<id>/` - Event detail with signups, squads, and squad assignment
-    - `/events/<id>/edit/` - Edit event (event admins)
-    - `/events/<id>/signup/` - Sign up for event
-    - `/events/<id>/squads/manage/` - Squad management dashboard (event admins / head captain — see `_can_manage_event_squads`)
-    - `/events/<id>/squads/add/` - Create squad (event admins / head captain)
-    - `/events/<id>/squads/<squad_id>/edit/` - Edit squad (event admins / head captain)
-    - `/events/<id>/squads/<squad_id>/delete/` - Delete squad (event admins / head captain, POST)
-    - `/events/<id>/squads/assign/` - Assign user to squad (event admins, POST)
-    - `/events/<id>/role-setup/` - Discord role setup (event admins read-only; assign_roles/head captain can edit)
-    - `/events/<id>/manage-roles/` - Assign/unassign Discord roles (assign_roles or head captain)
-    - `/events/<id>/squads/<squad_id>/availability/` - Manage availability grids for a squad (captain/admin gate)
-    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/` - Member response form (published grids)
-    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/copy/` - Clone an existing grid (incl. time slots) onto a new date — `availability_copy_view`, same captain/admin gate
-    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/results/` - Heatmap + scheduled race editor
-    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/slots/<slot_pk>/create-thread/` - Create Discord thread for a confirmed scheduled race (powers "Save & Create Thread")
-    - `/events/<id>/squads/<squad_id>/availability/<grid_uuid>/slots/<slot_pk>/post-update/` - Persist edits and post an update message into the slot's existing thread (powers "Save & Post Update")
-- `/site/config/` - Site configuration (Constance settings UI)
-- `/data-connections/` - Google Sheets exports (`apps.data_connection.urls`)
-- `/strava/` - Strava club activities (`apps.club_strava.urls`)
-- `/zp/` - ZwiftPower team-wide results (`apps.zwiftpower.urls`):
-    - `/zp/results/` - Team results landing page
-    - `/zp/results/<int:zid>/` - Per-event results detail
-- `/analytics/` - Analytics dashboard (`apps.analytics.urls`, requires `app_admin`)
-- `/tickets/` - Member-support / team-management tickets (`apps.tickets.urls`) — **internal only**, sidebar link disabled
-    - `/tickets/` - List with status/category/mine/search filters
-    - `/tickets/new/` - Create
-    - `/tickets/<int:pk>/` - Detail
-    - `/tickets/<int:pk>/edit/` - Edit (assignee / status / resolution)
-- `/api/dbot/` - Discord bot API
-- `/api/cron/` - Cron task API
-- `/api/user/` - Per-user API keys (Django Ninja), bearer-authenticated
-- `/api/analytics/` - Analytics tracking API (`apps.analytics.api`)
-- `/robots.txt` - Dynamic robots.txt (see Robots.txt section)
-- `/m/` - Magic links (legacy)
+Mount points — read each app's `urls.py` for the full pattern list:
+
+- `/`, `/about/` — `gotta_bike_platform.views` (home — see Home Page Logic)
+- `/admin/`, `/accounts/`, `/site/config/` — Django admin, allauth, Constance UI
+- `/user/`, `/user/api-keys/` — `apps.accounts.urls`, `apps.user_api.urls`
+- `/team/`, `/events/`, `/tickets/`, `/page/<slug>/` — feature apps (`tickets` is **internal only**, sidebar link disabled)
+- `/strava/`, `/zp/`, `/analytics/`, `/data-connections/` — feature apps
+- `/api/dbot/`, `/api/cron/`, `/api/user/`, `/api/analytics/` — Django Ninja APIs
+- `/m/` — magic links (legacy — see Apps section)
+
+Non-obvious gates / behavior not visible from the URL pattern alone:
+
+- `/team/roster/f/<uuid>/` — filtered roster, **5-min expiration**
+- `/team/apply/<uuid>/` — public (no auth) membership registration form
+- `/events/<id>/squads/manage|add|edit|delete/` — `_can_manage_event_squads` (event admin / superuser / event head captain role holder)
+- `/events/<id>/squads/<sid>/availability/...` — `_can_manage_squad_availability` (above + squad captain/vice-captain + `discord_captain_role` holders)
+- `/events/<id>/role-setup/` — event admins read-only; `assign_roles` or head captain can edit
+- `/events/<id>/manage-roles/` — `assign_roles` or event head captain only
+- `/analytics/` — `app_admin` only
+- `/robots.txt` — dynamic (rendered by `gotta_bike_platform/views.py`)
 
 ### Frontend
 
