@@ -157,6 +157,7 @@ def convert_grid_to_local(
         delta = timedelta(minutes=slot_duration)
         while current < end:
             t_str = current.strftime("%H:%M")
+            current_d_str = current.strftime("%Y-%m-%d")
             local_dt = current.astimezone(tz)
             local_d = local_dt.strftime("%Y-%m-%d")
             local_t = local_dt.strftime("%H:%M")
@@ -164,8 +165,8 @@ def convert_grid_to_local(
             local_times_set.add(local_t)
 
             local_key = f"{local_d}|{local_t}"
-            utc_key = f"{d_str}|{t_str}"
-            cell_map[local_key] = {"date": d_str, "time": t_str}
+            utc_key = f"{current_d_str}|{t_str}"
+            cell_map[local_key] = {"date": current_d_str, "time": t_str}
             reverse_map[utc_key] = local_key
 
             current += delta
