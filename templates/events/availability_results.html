@@ -175,7 +175,7 @@
   <!-- Filter: minimum rider count + icon toggle -->
   <div class="flex flex-wrap items-center gap-4 mb-6 text-sm">
     <div class="flex items-center gap-2">
-      <label for="min-rider-filter" class="text-base-content/70">Show cells with at least:</label>
+      <label for="min-rider-filter" class="text-base-content/70">Rider Count</label>
       <select id="min-rider-filter" class="select select-bordered select-sm">
         <option value="0" selected>All cells</option>
       </select>
@@ -183,7 +183,7 @@
     </div>
     <label class="label cursor-pointer gap-2 py-0">
       <input type="checkbox" id="show-icons-toggle" class="checkbox checkbox-sm">
-      <span class="label-text text-sm">Show icons in cells</span>
+      <span class="label-text text-sm">Icons</span>
     </label>
     <label class="label cursor-pointer gap-2 py-0">
       <span class="text-base-content/70 text-sm">24 h</span>
@@ -195,8 +195,8 @@
   <!-- Copy Availability (shareable image) -->
   <div class="mb-6">
     <p class="text-sm text-base-content/70 mb-2">
-      Copy a simplified availability image to share with opponents. Slots with at least 4 riders show their count
-      (capped at &ge;5); already-scheduled slots show &ldquo;Racing&rdquo;.
+      Copy a simplified availability image to share with opponents. Set the <strong>Rider Count</strong> filter above,
+      then slots that meet it show their count; already-scheduled slots show &ldquo;Racing&rdquo;.
     </p>
     <button type="button"
             id="copy-availability-btn"
@@ -394,7 +394,7 @@
     return h12 + ':' + m + ' ' + period;
   }
 
-  function readGridData() {
+  function readGridData(threshold) {
     var grid = document.getElementById('avail-grid');
     if (!grid) return null;
 
@@ -422,8 +422,8 @@
         var kind = 'empty';
         var label = '';
         if (hasRace) { kind = 'race'; label = 'Racing'; }
-        else if (!blocked && count >= 5) { kind = 'high'; label = '≥5'; } // ≥5
-        else if (!blocked && count === 4) { kind = 'low'; label = '4'; }
+        else if (!blocked && count > threshold) { kind = 'high'; label = '≥' + (threshold + 1); }
+        else if (!blocked && count === threshold) { kind = 'low'; label = String(threshold); }
         cells.push({ kind: kind, label: label });
       });
       rows.push({ time: formatTime(rawTime), cells: cells });
@@ -432,7 +432,7 @@
     return { dayHeaders: dayHeaders, rows: rows };
   }
 
-  function buildCanvas(data) {
+  function buildCanvas(data, threshold) {
     var dpr = window.devicePixelRatio || 1;
     var cols = data.dayHeaders.length;
     var nRows = data.rows.length;
@@ -571,10 +571,10 @@
       ctx.fillText(text, lx, legendY);
       lx += ctx.measureText(text).width + 14;
     }
-    drawSwatch('#bbf7d0', '4 riders');
-    drawSwatch('#16a34a', '≥5 riders');
+    drawSwatch('#bbf7d0', threshold + ' riders');
+    drawSwatch('#16a34a', '≥' + (threshold + 1) + ' riders');
     drawSwatch('#2563eb', 'Racing');
-    drawSwatch('#ffffff', 'Fewer than 4');
+    drawSwatch('#ffffff', 'Fewer than ' + threshold);
 
     return canvas;
   }
@@ -599,12 +599,19 @@
   }
 
   btn.addEventListener('click', async function() {
+    var filterSelect = document.getElementById('min-rider-filter');
+    var threshold = filterSelect ? (parseInt(filterSelect.value, 10) || 0) : 0;
+    if (threshold <= 0) {
+      setStatus('Set the Rider Count filter first.', 'text-warning');
+      setTimeout(function() { setStatus(''); }, 4000);
+      return;
+    }
     setStatus('Building image…', 'text-base-content/70');
     btn.disabled = true;
     try {
-      var data = readGridData();
+      var data = readGridData(threshold);
       if (!data) { setStatus('Grid not found.', 'text-error'); return; }
-      var canvas = buildCanvas(data);
+      var canvas = buildCanvas(data, threshold);
       try {
         await copyToClipboard(canvas);
         setStatus('Copied to clipboard.', 'text-success');
