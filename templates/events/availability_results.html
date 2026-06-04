@@ -5,6 +5,11 @@
 
 {% block extra_css %}
 <style>
+  /* HTMX indicator - hidden by default (no layout gap), shown during request. */
+  .htmx-indicator { display: none; }
+  .htmx-request .htmx-indicator,
+  .htmx-request.htmx-indicator { display: inline-block; }
+
   /* On mobile, the wrapper becomes the scroll container so the sticky-top
      date header stays visible while scrolling through hours. Desktop keeps
      its natural height (page handles scrolling). */
@@ -674,6 +679,7 @@
 <!-- Slot Selection Modal -->
 <dialog id="slot-modal" class="modal">
   <div class="modal-box max-w-md">
+    <button type="button" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close" onclick="document.getElementById('slot-modal').close()">✕</button>
     <h3 class="font-bold text-lg mb-3" id="slot-modal-title">Schedule Race</h3>
     <form id="slot-modal-form" method="post"
           hx-target="#slot-selections-container"
@@ -737,12 +743,6 @@
       <div id="slot-modal-error" class="alert alert-error py-2 mb-3 text-xs hidden"></div>
 
       <div class="modal-action">
-        <a id="slot-modal-thread-open" href="#" target="_blank" rel="noopener" class="btn btn-outline btn-sm hidden mr-auto">
-          Open thread
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-          </svg>
-        </a>
         <button type="button" id="slot-modal-create-thread" class="btn btn-info btn-sm hidden mr-auto"
                 hx-target="#slot-selections-container" hx-swap="innerHTML"
                 hx-include="#slot-modal-form"
@@ -757,6 +757,7 @@
           <span id="slot-modal-update-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
           Save &amp; Post Update
         </button>
+        <button type="submit" class="btn btn-primary btn-sm" id="slot-modal-submit">Save Race</button>
         <div class="dropdown dropdown-top dropdown-end" id="slot-modal-thread-menu">
           <div tabindex="0" role="button" class="btn btn-ghost btn-sm" title="Thread actions" aria-label="Thread actions">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -783,8 +784,6 @@
             </li>
           </ul>
         </div>
-        <button type="button" class="btn btn-sm" onclick="document.getElementById('slot-modal').close()">Cancel</button>
-        <button type="submit" class="btn btn-primary btn-sm" id="slot-modal-submit">Save Race</button>
       </div>
     </form>
   </div>
@@ -816,7 +815,6 @@
     const substituteSelect = document.getElementById('slot-modal-substitute');
     const title = document.getElementById('slot-modal-title');
     const threadBtn = document.getElementById('slot-modal-create-thread');
-    const threadOpenLink = document.getElementById('slot-modal-thread-open');
     const errorBox = document.getElementById('slot-modal-error');
 
     const utcKey = utcDate + '|' + utcTime;
@@ -952,18 +950,15 @@
 
   function updateActionButtons() {
     const threadBtn = document.getElementById('slot-modal-create-thread');
-    const threadOpenLink = document.getElementById('slot-modal-thread-open');
     const postUpdateBtn = document.getElementById('slot-modal-post-update');
     const existing = window.__slotModalExisting;
     const currentStatus = document.getElementById('slot-modal-status').value;
 
     setThreadMenuState(existing);
 
-    // Existing slot WITH a thread → show "Save & Post Update" and the Open link.
+    // Existing slot WITH a thread → show "Save & Post Update".
     if (existing && existing.thread_link) {
       threadBtn.classList.add('hidden');
-      threadOpenLink.href = existing.thread_link;
-      threadOpenLink.classList.remove('hidden');
       postUpdateBtn.classList.remove('hidden');
       postUpdateBtn.disabled = false;
       postUpdateBtn.title = '';
@@ -976,7 +971,6 @@
 
     // No thread yet (new or existing slot) → show "Save & Create Thread" with
     // eligibility-based disable state.
-    threadOpenLink.classList.add('hidden');
     postUpdateBtn.classList.add('hidden');
     threadBtn.classList.remove('hidden');
 
