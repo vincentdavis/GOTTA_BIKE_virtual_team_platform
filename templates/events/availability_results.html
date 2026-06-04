@@ -777,11 +777,6 @@
                       hx-target="#slot-selections-container" hx-swap="innerHTML"
                       hx-confirm="Archive (close) this Discord thread? It keeps its history and can be reopened by posting in it.">Archive thread</button>
             </li>
-            <li>
-              <button type="button" id="slot-modal-delete-thread" class="text-error"
-                      hx-target="#slot-selections-container" hx-swap="innerHTML"
-                      hx-confirm="Permanently delete this Discord thread and all its messages? This cannot be undone.">Delete thread</button>
-            </li>
           </ul>
         </div>
       </div>
@@ -926,9 +921,8 @@
     const urls = hasThread ? {
       'slot-modal-rename-thread': updateUrlBase + existing.id + '/rename-thread/',
       'slot-modal-archive-thread': updateUrlBase + existing.id + '/archive-thread/',
-      'slot-modal-delete-thread': updateUrlBase + existing.id + '/delete-thread/',
     } : {};
-    ['slot-modal-rename-thread', 'slot-modal-archive-thread', 'slot-modal-delete-thread'].forEach(function(id) {
+    ['slot-modal-rename-thread', 'slot-modal-archive-thread'].forEach(function(id) {
       const btn = document.getElementById(id);
       if (!btn) return;
       if (hasThread) {
@@ -1032,7 +1026,7 @@
     if (!elt) return;
     const threadActionIds = [
       'slot-modal-create-thread', 'slot-modal-post-update',
-      'slot-modal-rename-thread', 'slot-modal-archive-thread', 'slot-modal-delete-thread',
+      'slot-modal-rename-thread', 'slot-modal-archive-thread',
     ];
     if (threadActionIds.includes(elt.id)) {
       const errorBox = document.getElementById('slot-modal-error');
