@@ -231,6 +231,155 @@ def create_discord_thread(
             return None, f"Discord API request failed: {e}"
 
 
+def rename_discord_thread(thread_id: str | int, name: str) -> tuple[bool, str | None]:
+    """Rename an existing Discord thread.
+
+    PATCHes ``/channels/{thread_id}`` with a new ``name``. Discord caps thread
+    names at 100 characters; the name is truncated if longer. Note Discord rate
+    limits thread renames aggressively (~2 per 10 minutes per thread), so callers
+    should only rename when the name has actually changed.
+
+    Args:
+        thread_id: The Discord thread (channel) ID.
+        name: The new thread name. Truncated to 100 characters.
+
+    Returns:
+        Tuple of (success, error_message). On success, error_message is None.
+
+    """
+    return _patch_discord_thread(thread_id, {"name": name[:100]}, action="rename")
+
+
+def archive_discord_thread(thread_id: str | int) -> tuple[bool, str | None]:
+    """Archive (close) an existing Discord thread.
+
+    PATCHes ``/channels/{thread_id}`` with ``archived=true``. Archiving is
+    reversible — the thread keeps its history and URL, and posting in it (or an
+    explicit un-archive) reopens it.
+
+    Args:
+        thread_id: The Discord thread (channel) ID.
+
+    Returns:
+        Tuple of (success, error_message). On success, error_message is None.
+
+    """
+    return _patch_discord_thread(thread_id, {"archived": True}, action="archive")
+
+
+def _patch_discord_thread(
+    thread_id: str | int, payload: dict, *, action: str
+) -> tuple[bool, str | None]:
+    """PATCH a Discord thread's metadata (shared by rename/archive).
+
+    Args:
+        thread_id: The Discord thread (channel) ID.
+        payload: The JSON body to send (e.g. ``{"name": ...}`` or ``{"archived": True}``).
+        action: Short label used in log messages (e.g. "rename", "archive").
+
+    Returns:
+        Tuple of (success, error_message). On success, error_message is None.
+
+    """
+    if not thread_id or str(thread_id) == "0":
+        return False, "No Discord thread configured."
+
+    bot_token = config.DISCORD_BOT_TOKEN
+    if not bot_token:
+        return False, "Discord bot token is not configured."
+
+    headers = {
+        "Authorization": f"Bot {bot_token}",
+        "Content-Type": "application/json",
+    }
+
+    with logfire.span(f"{action}_discord_thread", thread_id=str(thread_id)):
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.patch(
+                    f"{DISCORD_API_BASE}/channels/{thread_id}",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                logfire.info(f"Discord thread {action}d", thread_id=str(thread_id))
+                return True, None
+        except httpx.HTTPStatusError as e:
+            try:
+                err_body = e.response.json()
+                err_msg = err_body.get("message") or str(e)
+            except ValueError:
+                err_msg = e.response.text or str(e)
+            logfire.error(
+                f"Failed to {action} Discord thread",
+                thread_id=str(thread_id),
+                status_code=e.response.status_code,
+                error=err_msg,
+            )
+            return False, err_msg
+        except httpx.RequestError as e:
+            logfire.error(
+                f"Discord API request failed for thread {action}",
+                thread_id=str(thread_id),
+                error=str(e),
+            )
+            return False, f"Discord API request failed: {e}"
+
+
+def delete_discord_thread(thread_id: str | int) -> tuple[bool, str | None]:
+    """Permanently delete a Discord thread and all of its messages.
+
+    DELETEs ``/channels/{thread_id}``. This is irreversible — callers should
+    clear any stored thread link afterward so it no longer points at a dead URL.
+
+    Args:
+        thread_id: The Discord thread (channel) ID.
+
+    Returns:
+        Tuple of (success, error_message). On success, error_message is None.
+
+    """
+    if not thread_id or str(thread_id) == "0":
+        return False, "No Discord thread configured."
+
+    bot_token = config.DISCORD_BOT_TOKEN
+    if not bot_token:
+        return False, "Discord bot token is not configured."
+
+    headers = {"Authorization": f"Bot {bot_token}"}
+
+    with logfire.span("delete_discord_thread", thread_id=str(thread_id)):
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.delete(
+                    f"{DISCORD_API_BASE}/channels/{thread_id}",
+                    headers=headers,
+                )
+                response.raise_for_status()
+                logfire.info("Discord thread deleted", thread_id=str(thread_id))
+                return True, None
+        except httpx.HTTPStatusError as e:
+            try:
+                err_body = e.response.json()
+                err_msg = err_body.get("message") or str(e)
+            except ValueError:
+                err_msg = e.response.text or str(e)
+            logfire.error(
+                "Failed to delete Discord thread",
+                thread_id=str(thread_id),
+                status_code=e.response.status_code,
+                error=err_msg,
+            )
+            return False, err_msg
+        except httpx.RequestError as e:
+            logfire.error(
+                "Discord API request failed for thread deletion",
+                thread_id=str(thread_id),
+                error=str(e),
+            )
+            return False, f"Discord API request failed: {e}"
+
+
 def send_verification_notification(
     discord_id: str,
     is_verified: bool,

@@ -23,8 +23,11 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import (
     add_discord_role,
+    archive_discord_thread,
     create_discord_thread,
+    delete_discord_thread,
     remove_discord_role,
+    rename_discord_thread,
     send_discord_channel_message,
     sync_user_discord_roles,
 )
@@ -3917,6 +3920,34 @@ def _build_slot_thread_message(
     return "\n".join(lines), discord_ids
 
 
+def _slot_thread_name(selection: AvailabilitySlotSelection, grid: AvailabilityGrid) -> str:
+    """Build the Discord thread name for a scheduled race.
+
+    Format is ``"{race name} {Mon D}"`` where the date is rendered in the grid's
+    local timezone. Used both when creating a thread and when renaming an
+    existing one so the two stay consistent.
+
+    Args:
+        selection: The slot selection record.
+        grid: The parent availability grid (provides the display timezone).
+
+    Returns:
+        The thread name string (not yet truncated; Discord truncates to 100).
+
+    """
+    utc_dt = datetime.combine(
+        selection.slot_date,
+        datetime.strptime(selection.slot_time, "%H:%M").time(),
+        tzinfo=ZoneInfo("UTC"),
+    )
+    try:
+        grid_tz = ZoneInfo(grid.grid_timezone) if grid.grid_timezone else ZoneInfo("UTC")
+    except Exception:
+        grid_tz = ZoneInfo("UTC")
+    grid_local_dt = utc_dt.astimezone(grid_tz)
+    return f"{selection.name} {grid_local_dt.strftime('%b %-d')}"
+
+
 def _create_slot_thread(
     selection: AvailabilitySlotSelection,
     squad: Squad,
@@ -3954,17 +3985,7 @@ def _create_slot_thread(
     if not guild_id:
         return "Discord guild is not configured."
 
-    utc_dt = datetime.combine(
-        selection.slot_date,
-        datetime.strptime(selection.slot_time, "%H:%M").time(),
-        tzinfo=ZoneInfo("UTC"),
-    )
-    try:
-        grid_tz = ZoneInfo(grid.grid_timezone) if grid.grid_timezone else ZoneInfo("UTC")
-    except Exception:
-        grid_tz = ZoneInfo("UTC")
-    grid_local_dt = utc_dt.astimezone(grid_tz)
-    thread_name = f"{selection.name} {grid_local_dt.strftime('%b %-d')}"
+    thread_name = _slot_thread_name(selection, grid)
 
     message_body, discord_ids = _build_slot_thread_message(selection)
 
@@ -4379,6 +4400,186 @@ def slot_selection_post_update_view(
     if error:
         return HttpResponse(error, status=400)
 
+    return _render_slot_selections_partial(request, event, squad, grid)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def slot_selection_rename_thread_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int
+) -> HttpResponse:
+    """Rename the Discord thread for a scheduled race to match its current name.
+
+    Persists the posted race name first (so a just-edited name is reflected),
+    then renames the thread to ``"{race name} {Mon D}"``. Skips the Discord call
+    when the name is unchanged to avoid burning Discord's rename rate limit.
+
+    Args:
+        request: The HTTP request with the slot form payload (``name`` is used).
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+        slot_pk: The slot selection primary key.
+
+    Returns:
+        HTMX partial with updated slot selections container, or 400 on error.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        return HttpResponse("Permission denied", status=403)
+
+    if not selection.thread_link:
+        return HttpResponse("This race has no Discord thread yet — create one first.", status=400)
+
+    thread_id = _extract_thread_id(selection.thread_link)
+    if not thread_id:
+        return HttpResponse("Could not determine the Discord thread id from the saved link.", status=400)
+
+    name = request.POST.get("name", "").strip()
+    if not name:
+        return HttpResponse("Name is required.", status=400)
+
+    old_name = _slot_thread_name(selection, grid)
+    if name != selection.name:
+        selection.name = name
+        selection.save(update_fields=["name", "updated_at"])
+    new_name = _slot_thread_name(selection, grid)
+
+    if new_name == old_name:
+        # Nothing to rename — avoid spending the Discord rename rate limit.
+        return _render_slot_selections_partial(request, event, squad, grid)
+
+    ok, error = rename_discord_thread(thread_id, new_name)
+    if not ok:
+        logfire.error(
+            "Failed to rename scheduled race Discord thread",
+            selection_id=selection.pk,
+            thread_id=thread_id,
+            error=error,
+        )
+        return HttpResponse(f"Failed to rename thread: {error}", status=400)
+
+    logfire.info(
+        "Scheduled race Discord thread renamed",
+        selection_id=selection.pk,
+        thread_id=thread_id,
+        user_id=request.user.id,
+    )
+    return _render_slot_selections_partial(request, event, squad, grid)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def slot_selection_archive_thread_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int
+) -> HttpResponse:
+    """Archive (close) the Discord thread for a scheduled race.
+
+    Archiving is reversible — the thread and its history are preserved and the
+    saved ``thread_link`` is left intact so it keeps working.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+        slot_pk: The slot selection primary key.
+
+    Returns:
+        HTMX partial with updated slot selections container, or 400 on error.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        return HttpResponse("Permission denied", status=403)
+
+    thread_id = _extract_thread_id(selection.thread_link or "")
+    if not thread_id:
+        return HttpResponse("This race has no Discord thread to archive.", status=400)
+
+    ok, error = archive_discord_thread(thread_id)
+    if not ok:
+        logfire.error(
+            "Failed to archive scheduled race Discord thread",
+            selection_id=selection.pk,
+            thread_id=thread_id,
+            error=error,
+        )
+        return HttpResponse(f"Failed to archive thread: {error}", status=400)
+
+    logfire.info(
+        "Scheduled race Discord thread archived",
+        selection_id=selection.pk,
+        thread_id=thread_id,
+        user_id=request.user.id,
+    )
+    return _render_slot_selections_partial(request, event, squad, grid)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def slot_selection_delete_thread_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int
+) -> HttpResponse:
+    """Permanently delete the Discord thread for a scheduled race.
+
+    Deletes the thread and clears the saved ``thread_link`` so the slot no longer
+    points at a dead URL. The slot itself is left in place. Irreversible.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+        slot_pk: The slot selection primary key.
+
+    Returns:
+        HTMX partial with updated slot selections container, or 400 on error.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        return HttpResponse("Permission denied", status=403)
+
+    thread_id = _extract_thread_id(selection.thread_link or "")
+    if not thread_id:
+        return HttpResponse("This race has no Discord thread to delete.", status=400)
+
+    ok, error = delete_discord_thread(thread_id)
+    if not ok:
+        logfire.error(
+            "Failed to delete scheduled race Discord thread",
+            selection_id=selection.pk,
+            thread_id=thread_id,
+            error=error,
+        )
+        return HttpResponse(f"Failed to delete thread: {error}", status=400)
+
+    selection.thread_link = ""
+    selection.save(update_fields=["thread_link", "updated_at"])
+
+    logfire.info(
+        "Scheduled race Discord thread deleted",
+        selection_id=selection.pk,
+        thread_id=thread_id,
+        user_id=request.user.id,
+    )
     return _render_slot_selections_partial(request, event, squad, grid)
 
 

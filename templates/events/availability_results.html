@@ -757,6 +757,32 @@
           <span id="slot-modal-update-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
           Save &amp; Post Update
         </button>
+        <div class="dropdown dropdown-top dropdown-end" id="slot-modal-thread-menu">
+          <div tabindex="0" role="button" class="btn btn-ghost btn-sm" title="Thread actions" aria-label="Thread actions">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </div>
+          <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box z-[1] w-52 p-2 shadow">
+            <li class="menu-title text-xs">Discord thread</li>
+            <li>
+              <button type="button" id="slot-modal-rename-thread"
+                      hx-target="#slot-selections-container" hx-swap="innerHTML"
+                      hx-include="#slot-modal-form">Rename thread</button>
+            </li>
+            <li>
+              <button type="button" id="slot-modal-archive-thread"
+                      hx-target="#slot-selections-container" hx-swap="innerHTML"
+                      hx-confirm="Archive (close) this Discord thread? It keeps its history and can be reopened by posting in it.">Archive thread</button>
+            </li>
+            <li>
+              <button type="button" id="slot-modal-delete-thread" class="text-error"
+                      hx-target="#slot-selections-container" hx-swap="innerHTML"
+                      hx-confirm="Permanently delete this Discord thread and all its messages? This cannot be undone.">Delete thread</button>
+            </li>
+          </ul>
+        </div>
         <button type="button" class="btn btn-sm" onclick="document.getElementById('slot-modal').close()">Cancel</button>
         <button type="submit" class="btn btn-primary btn-sm" id="slot-modal-submit">Save Race</button>
       </div>
@@ -894,12 +920,44 @@
   // thread) based on the current form state and whether the slot already has
   // a thread. Called on modal open and whenever inputs that affect eligibility
   // change (status, rider checkboxes).
+  // Enable/disable the gear menu's thread actions (Rename / Archive / Delete).
+  // All three require an existing slot that already has a Discord thread; when
+  // there is none the items stay visible but disabled with an explanatory tip.
+  function setThreadMenuState(existing) {
+    const hasThread = !!(existing && existing.thread_link);
+    const urls = hasThread ? {
+      'slot-modal-rename-thread': updateUrlBase + existing.id + '/rename-thread/',
+      'slot-modal-archive-thread': updateUrlBase + existing.id + '/archive-thread/',
+      'slot-modal-delete-thread': updateUrlBase + existing.id + '/delete-thread/',
+    } : {};
+    ['slot-modal-rename-thread', 'slot-modal-archive-thread', 'slot-modal-delete-thread'].forEach(function(id) {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      if (hasThread) {
+        btn.classList.remove('menu-disabled');
+        btn.removeAttribute('disabled');
+        btn.title = '';
+        btn.setAttribute('hx-post', urls[id]);
+        btn.setAttribute('hx-headers', JSON.stringify({"X-CSRFToken": csrfToken}));
+      } else {
+        btn.classList.add('menu-disabled');
+        btn.setAttribute('disabled', 'disabled');
+        btn.title = 'No Discord thread for this race yet';
+        btn.removeAttribute('hx-post');
+        btn.removeAttribute('hx-headers');
+      }
+      htmx.process(btn);
+    });
+  }
+
   function updateActionButtons() {
     const threadBtn = document.getElementById('slot-modal-create-thread');
     const threadOpenLink = document.getElementById('slot-modal-thread-open');
     const postUpdateBtn = document.getElementById('slot-modal-post-update');
     const existing = window.__slotModalExisting;
     const currentStatus = document.getElementById('slot-modal-status').value;
+
+    setThreadMenuState(existing);
 
     // Existing slot WITH a thread → show "Save & Post Update" and the Open link.
     if (existing && existing.thread_link) {
@@ -978,7 +1036,11 @@
   document.body.addEventListener('htmx:responseError', function(e) {
     const elt = e.detail.elt;
     if (!elt) return;
-    if (elt.id === 'slot-modal-create-thread' || elt.id === 'slot-modal-post-update') {
+    const threadActionIds = [
+      'slot-modal-create-thread', 'slot-modal-post-update',
+      'slot-modal-rename-thread', 'slot-modal-archive-thread', 'slot-modal-delete-thread',
+    ];
+    if (threadActionIds.includes(elt.id)) {
       const errorBox = document.getElementById('slot-modal-error');
       errorBox.textContent = (e.detail.xhr && e.detail.xhr.responseText) || 'Request failed.';
       errorBox.classList.remove('hidden');
