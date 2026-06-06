@@ -78,6 +78,10 @@ class Event(models.Model):
     end_date = models.DateField(help_text="Event end date")
     visible = models.BooleanField(default=True, help_text="Whether the event is visible to team members")
     signups_open = models.BooleanField(default=False, help_text="Whether signups are currently open")
+    show_signups = models.BooleanField(
+        default=False,
+        help_text="Let all logged-in team members expand and see the signup list (names only); event admins always see full details",
+    )
     signup_instructions = models.TextField(blank=True, help_text="Instructions shown at the top of the signup form")
     timezone_options = models.JSONField(
         default=_default_timezone_options,

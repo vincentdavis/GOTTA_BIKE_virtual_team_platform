@@ -138,6 +138,7 @@ class EventForm(forms.ModelForm):
             "signup_notification_channel_id",
             "visible",
             "signups_open",
+            "show_signups",
             "signup_instructions",
             "timezone_options",
             "timezone_required",
@@ -173,6 +174,9 @@ class EventForm(forms.ModelForm):
                 attrs={"class": "checkbox"},
             ),
             "signups_open": forms.CheckboxInput(
+                attrs={"class": "checkbox"},
+            ),
+            "show_signups": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
             "signup_instructions": forms.Textarea(

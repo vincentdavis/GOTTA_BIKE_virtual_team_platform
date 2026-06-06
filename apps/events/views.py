@@ -673,7 +673,10 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     )
     signups = event.signups.select_related("user").all()
     user_signup = event.signups.filter(user=request.user).first()
-    enriched_signups = _enrich_signups(signups, event=event) if request.user.is_event_admin else []
+    # Event admins always see the full signup table; with show_signups on, any
+    # team member can expand a names-only list (gated further in the template).
+    can_view_signups = request.user.is_event_admin or event.show_signups
+    enriched_signups = _enrich_signups(signups, event=event) if can_view_signups else []
 
     # Attach enriched member data and tooltip to each squad
     squad_members_data = _enrich_squad_members(event) if squads else {}
@@ -745,6 +748,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "signup_count": signups.count(),
             "user_signup": user_signup,
             "is_event_admin": request.user.is_event_admin,
+            "can_view_signups": can_view_signups,
             "guild_id": config.GUILD_ID,
             "zp_category_columns": CATEGORY_COLUMNS,
             "zp_by_squad": zp_by_squad,
