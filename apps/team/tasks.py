@@ -662,15 +662,16 @@ def notify_captains_verification(
                 squad__event__visible=True,
                 squad__event__end_date__gte=today,
             )
-            .select_related("squad__captain", "squad__vice_captain", "squad__event")
+            .select_related("squad__event")
+            .prefetch_related("squad__captains", "squad__vice_captains")
         )
 
-        # Collect unique captains (deduplicate, skip None, skip the user themselves)
+        # Collect unique captains (deduplicate, skip the user themselves)
         captains_to_notify: dict[int, User] = {}
         for membership in squad_memberships:
             squad = membership.squad
-            for leader in (squad.captain, squad.vice_captain):
-                if leader and leader.pk != user.pk and leader.discord_id and leader.pk not in captains_to_notify:
+            for leader in (*squad.captains.all(), *squad.vice_captains.all()):
+                if leader.pk != user.pk and leader.discord_id and leader.pk not in captains_to_notify:
                     captains_to_notify[leader.pk] = leader
 
         if not captains_to_notify:

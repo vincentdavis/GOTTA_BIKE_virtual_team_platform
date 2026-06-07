@@ -571,8 +571,8 @@
                 {{ squad.member_count }}
                 {% endif %}
               </td>
-              <td>{% if squad.captain %}{{ squad.captain.get_full_name|default:squad.captain.discord_username }}{% else %}-{% endif %}</td>
-              <td>{% if squad.vice_captain %}{{ squad.vice_captain.get_full_name|default:squad.vice_captain.discord_username }}{% else %}-{% endif %}</td>
+              <td>{% for c in squad.captains.all %}{{ c.get_full_name|default:c.discord_username }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
+              <td>{% for vc in squad.vice_captains.all %}{{ vc.get_full_name|default:vc.discord_username }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
               <td>
                 {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category %}
                 {% if squad.min_zwift_racing_category == squad.max_zwift_racing_category %}{{ squad.max_zwift_racing_category }}{% else %}{{ squad.min_zwift_racing_category|default:"" }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %} &ndash; {% endif %}{{ squad.max_zwift_racing_category|default:"" }}{% endif %}
@@ -619,7 +619,7 @@
                       {% for member in squad.enriched_members %}
                       <tr>
                         <td data-col="sq_name">
-                          {% if squad.captain and member.user.pk == squad.captain.pk %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif squad.vice_captain and member.user.pk == squad.vice_captain.pk %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
+                          {% if member.user.pk in squad.captain_pks %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif member.user.pk in squad.vice_captain_pks %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
                           {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_id=member.user.discord_id discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready is_extra_verified=member.is_extra_verified in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
                         </td>
                         <td data-col="sq_gender">

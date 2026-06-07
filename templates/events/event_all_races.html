@@ -70,7 +70,7 @@
         <div class="flex flex-wrap gap-x-3 gap-y-2 text-sm">
           {% for r in slot.riders %}
           <div>
-            {% if r.user.pk == slot.squad.captain_id %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif r.user.pk == slot.squad.vice_captain_id %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
+            {% if r.user.pk in slot.squad.captain_pks %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif r.user.pk in slot.squad.vice_captain_pks %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
             {% include "accounts/_user_tooltip.html" with display_name=r.user.get_full_name|default:r.user.discord_username user_id=r.user.pk discord_id=r.user.discord_id discord_avatar_url=r.user.discord_avatar_url zwid=r.zwid zp_category=r.zp_category zp_category_w=r.zp_category_w zr_category=r.zr_category zr_rating=r.zr_rating zr_phenotype=r.zr_phenotype zr_age=r.zr_age is_race_ready=r.is_race_ready is_extra_verified=r.is_extra_verified in_zwiftpower=r.in_zwiftpower in_zwiftracing=r.in_zwiftracing %}
           </div>
           {% endfor %}

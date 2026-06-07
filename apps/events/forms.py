@@ -555,8 +555,6 @@ class SquadForm(forms.ModelForm):
             "gender",
             "discord_channel_id",
             "audio_channel_id",
-            "captain",
-            "vice_captain",
             "discord_captain_role",
             "team_discord_role",
             "min_zwift_category",
@@ -573,12 +571,6 @@ class SquadForm(forms.ModelForm):
             ),
             "squad_timezone": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "e.g., America/New_York"},
-            ),
-            "captain": forms.Select(
-                attrs={"class": "select select-bordered w-full"},
-            ),
-            "vice_captain": forms.Select(
-                attrs={"class": "select select-bordered w-full"},
             ),
             "min_zwift_category": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "e.g., A, B, C, D, E"},
@@ -632,16 +624,8 @@ class SquadForm(forms.ModelForm):
         if not self.gender_options:
             self.fields["gender"].widget.attrs["disabled"] = True
 
-        # Sort captain/vice_captain alphabetically and show full names
-        from apps.accounts.models import User
-
-        captain_qs = User.objects.order_by("first_name", "last_name", "discord_username")
-        for field_name in ("captain", "vice_captain"):
-            field = self.fields[field_name]
-            field.queryset = captain_qs
-            field.label_from_instance = lambda u: (
-                f"{u.first_name} {u.last_name}".strip() or u.discord_nickname or u.discord_username or u.username
-            )
+        # Captains and vice-captains are managed per-member from the squad panel
+        # (Set as Captain / Vice Captain), not via this form.
 
         choices = _get_channel_choices()
 

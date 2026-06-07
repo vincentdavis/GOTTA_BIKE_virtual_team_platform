@@ -57,22 +57,22 @@
         </div>
 
         {# Leadership section #}
-        {% if squad.captain or squad.vice_captain %}
+        {% if squad.captains.all or squad.vice_captains.all %}
         <div class="card bg-base-300 p-3 mb-2">
           <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Leadership</p>
           <div class="space-y-1">
-            {% if squad.captain %}
+            {% for captain in squad.captains.all %}
             <div class="flex items-center justify-between">
-              <span class="text-base-content/70 text-sm">Captain</span>
-              <span class="text-sm">{{ squad.captain.get_full_name|default:squad.captain.discord_username }}</span>
+              <span class="text-base-content/70 text-sm">{% if forloop.first %}Captain{% endif %}</span>
+              <span class="text-sm">{{ captain.get_full_name|default:captain.discord_username }}</span>
             </div>
-            {% endif %}
-            {% if squad.vice_captain %}
+            {% endfor %}
+            {% for vc in squad.vice_captains.all %}
             <div class="flex items-center justify-between">
-              <span class="text-base-content/70 text-sm">Vice Captain</span>
-              <span class="text-sm">{{ squad.vice_captain.get_full_name|default:squad.vice_captain.discord_username }}</span>
+              <span class="text-base-content/70 text-sm">{% if forloop.first %}Vice Captain{% endif %}</span>
+              <span class="text-sm">{{ vc.get_full_name|default:vc.discord_username }}</span>
             </div>
-            {% endif %}
+            {% endfor %}
             <div class="flex items-center justify-between">
               <span class="text-base-content/70 text-sm">Notifications</span>
               {% if squad.captain_notifications %}

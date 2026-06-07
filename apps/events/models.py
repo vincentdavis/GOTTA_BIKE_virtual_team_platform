@@ -80,7 +80,7 @@ class Event(models.Model):
     signups_open = models.BooleanField(default=False, help_text="Whether signups are currently open")
     show_signups = models.BooleanField(
         default=False,
-        help_text="Let all logged-in team members expand and see the signup list (names only); event admins always see full details",
+        help_text="Let all logged-in members expand the signup list (names only); admins see full details",
     )
     signup_instructions = models.TextField(blank=True, help_text="Instructions shown at the top of the signup form")
     timezone_options = models.JSONField(
@@ -402,21 +402,17 @@ class Squad(models.Model):
         default=0,
         help_text="Discord voice/stage channel ID for squad audio (0 = none)",
     )
-    captain = models.ForeignKey(
+    captains = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="captain_squads",
-        help_text="Squad captain",
+        help_text="Squad captains",
     )
-    vice_captain = models.ForeignKey(
+    vice_captains = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="vice_captain_squads",
-        help_text="Squad vice captain",
+        help_text="Squad vice captains",
     )
     team_discord_role = models.BigIntegerField(
         default=0,
@@ -490,6 +486,30 @@ class Squad(models.Model):
         """Generate or regenerate the squad invite token, invalidating the old one."""
         self.invite_token = uuid.uuid4()
         self.save(update_fields=["invite_token"])
+
+    @property
+    def captain_pks(self) -> set[int]:
+        """Return the set of captain user PKs (uses prefetched ``captains`` when available)."""
+        return {u.pk for u in self.captains.all()}
+
+    @property
+    def vice_captain_pks(self) -> set[int]:
+        """Return the set of vice-captain user PKs (uses prefetched ``vice_captains`` when available)."""
+        return {u.pk for u in self.vice_captains.all()}
+
+    def is_leader(self, user) -> bool:
+        """Return whether ``user`` is a captain or vice-captain of this squad.
+
+        Args:
+            user: The user to check (may be None or anonymous).
+
+        Returns:
+            True if the user is a captain or vice-captain.
+
+        """
+        if user is None or not getattr(user, "pk", None):
+            return False
+        return user.pk in self.captain_pks or user.pk in self.vice_captain_pks
 
 
 class SquadMember(models.Model):

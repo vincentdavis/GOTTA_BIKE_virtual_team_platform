@@ -31,7 +31,7 @@
           <button type="submit" class="text-error hover:text-error/70 font-bold leading-none text-lg" title="Remove from {{ squad.name }}">&times;</button>
         </form>
         {% endif %}
-        {% if squad.captain and member.user.pk == squad.captain.pk %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif squad.vice_captain and member.user.pk == squad.vice_captain.pk %}<span class="tooltip" data-tip="Vice Captain">🏅</span>{% endif %}
+        {% if member.user.pk in squad.captain_pks %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif member.user.pk in squad.vice_captain_pks %}<span class="tooltip" data-tip="Vice Captain">🏅</span>{% endif %}
         {% if member.has_discord_role is not None %}
           <span class="text-xs {% if member.has_discord_role %}text-success{% else %}text-error{% endif %}"
                 title="{% if member.has_discord_role %}Has squad role{% else %}Missing squad role{% endif %}">
@@ -49,7 +49,7 @@
         <div class="dropdown dropdown-end ml-auto shrink-0">
           <label tabindex="0" class="btn btn-ghost btn-xs px-1 leading-none"><svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/></svg></label>
           <ul tabindex="0" class="dropdown-content menu menu-xs bg-base-100 rounded-box shadow-lg z-10 w-40">
-            {% if squad.captain and member.user.pk == squad.captain.pk %}
+            {% if member.user.pk in squad.captain_pks %}
             <li>
               <form method="post" action="{% url 'events:squad_set_captain' event_pk squad.pk %}"
                     hx-post="{% url 'events:squad_set_captain' event_pk squad.pk %}" hx-target="#squad-panel-{{ squad.pk }}" hx-swap="outerHTML">
@@ -59,7 +59,7 @@
                 <button type="submit" class="w-full text-left">Remove Captain</button>
               </form>
             </li>
-            {% elif squad.vice_captain and member.user.pk == squad.vice_captain.pk %}
+            {% elif member.user.pk in squad.vice_captain_pks %}
             <li>
               <form method="post" action="{% url 'events:squad_set_captain' event_pk squad.pk %}"
                     hx-post="{% url 'events:squad_set_captain' event_pk squad.pk %}" hx-target="#squad-panel-{{ squad.pk }}" hx-swap="outerHTML">

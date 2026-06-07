@@ -30,29 +30,16 @@
           {% endif %}
         </div>
 
-        <!-- Captain / Vice Captain -->
+        <!-- Captain Discord Role -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="form-control w-full">
-            <label class="label">
-              <span class="label-text">Captain</span>
-            </label>
-            <div class="searchable-select" data-for="id_captain">
-              {{ form.captain }}
-              <input type="text" class="input input-bordered w-full" placeholder="Search by name..." autocomplete="off">
-              <ul class="menu bg-base-200 rounded-box shadow-lg w-full max-h-48 overflow-y-auto flex-nowrap" style="display:none"></ul>
-            </div>
-            {% if form.captain.errors %}
-            <label class="label">
-              <span class="label-text-alt text-error">{{ form.captain.errors.0 }}</span>
-            </label>
-            {% endif %}
-          </div>
-
           <div class="form-control w-full">
             <label class="label" for="id_discord_captain_role">
               <span class="label-text">Captain Discord Role</span>
             </label>
             {{ form.discord_captain_role }}
+            <label class="label pt-0">
+              <span class="label-text-alt">Assign captains and vice-captains from the squad's member list (Set as Captain / Vice Captain). Multiple of each are allowed.</span>
+            </label>
             {% if form.discord_captain_role.errors %}
             <label class="label">
               <span class="label-text-alt text-error">{{ form.discord_captain_role.errors.0 }}</span>
@@ -75,24 +62,6 @@
             <span class="label-text-alt text-error">{{ form.captain_notifications.errors.0 }}</span>
           </label>
           {% endif %}
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="form-control w-full">
-            <label class="label">
-              <span class="label-text">Vice Captain</span>
-            </label>
-            <div class="searchable-select" data-for="id_vice_captain">
-              {{ form.vice_captain }}
-              <input type="text" class="input input-bordered w-full" placeholder="Search by name..." autocomplete="off">
-              <ul class="menu bg-base-200 rounded-box shadow-lg w-full max-h-48 overflow-y-auto flex-nowrap" style="display:none"></ul>
-            </div>
-            {% if form.vice_captain.errors %}
-            <label class="label">
-              <span class="label-text-alt text-error">{{ form.vice_captain.errors.0 }}</span>
-            </label>
-            {% endif %}
-          </div>
         </div>
 
         <!-- Zwift Racing Category Range -->

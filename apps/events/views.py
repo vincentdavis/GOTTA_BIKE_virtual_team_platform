@@ -115,7 +115,7 @@ def _can_manage_squad_availability(user: User, squad: Squad) -> bool:
     """
     if user.is_event_admin or user.is_superuser:
         return True
-    if squad.captain_id == user.pk or squad.vice_captain_id == user.pk:
+    if squad.captains.filter(pk=user.pk).exists() or squad.vice_captains.filter(pk=user.pk).exists():
         return True
     if squad.discord_captain_role and user.has_discord_role(squad.discord_captain_role):
         return True
@@ -141,7 +141,7 @@ def _can_view_v_report(user: User, event: Event) -> bool:
         return True
     if event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id):
         return True
-    return event.squads.filter(Q(captain=user) | Q(vice_captain=user)).exists()
+    return event.squads.filter(Q(captains=user) | Q(vice_captains=user)).exists()
 
 
 def _assign_discord_role(user, role_id: int, role_display_name: str, *, admin_user_id: int) -> bool | None:
@@ -235,12 +235,12 @@ def _build_role_badges(user, event):
     user_squads = list(
         Squad.objects.filter(
             pk__in=SquadMember.objects.filter(squad__event=event, user=user).values_list("squad_id", flat=True),
-        ).select_related("captain", "vice_captain")
+        ).prefetch_related("captains", "vice_captains")
     )
     for sq in user_squads:
         if sq.team_discord_role:
             badges.append({"name": sq.name, "has_role": user.has_discord_role(sq.team_discord_role)})
-        if sq.discord_captain_role and (sq.captain_id == user.pk or sq.vice_captain_id == user.pk):
+        if sq.discord_captain_role and sq.is_leader(user):
             badges.append({"name": f"{sq.name} Cpt", "has_role": user.has_discord_role(sq.discord_captain_role)})
     return badges
 
@@ -258,7 +258,9 @@ def _enrich_squad_members(event):
 
     """
     all_sms = list(
-        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER).select_related("user", "squad")
+        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER)
+        .select_related("user", "squad")
+        .prefetch_related("squad__captains", "squad__vice_captains")
     )
     if not all_sms:
         return {}
@@ -280,7 +282,7 @@ def _enrich_squad_members(event):
         squad_role_id = sm.squad.team_discord_role
         has_discord_role = user.has_discord_role(squad_role_id) if squad_role_id else None
         captain_role_id = sm.squad.discord_captain_role
-        is_captain_or_vc = sm.squad.captain_id == user.pk or sm.squad.vice_captain_id == user.pk
+        is_captain_or_vc = sm.squad.is_leader(user)
         has_captain_role = user.has_discord_role(captain_role_id) if captain_role_id and is_captain_or_vc else None
 
         entry = {
@@ -339,11 +341,9 @@ def _enrich_signups(signups, event=None):
     # Build captain/VC lookup: user_id -> set of squad PKs where they are captain/VC
     captain_squads: dict[int, set] = {}
     if event:
-        for sq in event.squads.select_related("captain", "vice_captain").all():
-            if sq.captain_id:
-                captain_squads.setdefault(sq.captain_id, set()).add(sq.pk)
-            if sq.vice_captain_id:
-                captain_squads.setdefault(sq.vice_captain_id, set()).add(sq.pk)
+        for sq in event.squads.prefetch_related("captains", "vice_captains").all():
+            for leader in (*sq.captains.all(), *sq.vice_captains.all()):
+                captain_squads.setdefault(leader.pk, set()).add(sq.pk)
 
     enriched = []
     for signup in signups:
@@ -423,8 +423,10 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
     )
     if not show_past:
         signups = signups.filter(event__end_date__gte=timezone.now().date())
-    squad_memberships = SquadMember.objects.filter(user=request.user, status=SquadMember.Status.MEMBER).select_related(
-        "squad", "squad__event"
+    squad_memberships = (
+        SquadMember.objects.filter(user=request.user, status=SquadMember.Status.MEMBER)
+        .select_related("squad", "squad__event")
+        .prefetch_related("squad__captains", "squad__vice_captains")
     )
     squads_by_event: dict[int, list] = {}
     for sm in squad_memberships:
@@ -669,7 +671,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     event = get_object_or_404(Event, pk=pk)
     races = event.races.all()
     squads = list(
-        event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+        event.squads.prefetch_related("captains", "vice_captains").annotate(member_count=Count("squad_members")).all()
     )
     signups = event.signups.select_related("user").all()
     user_signup = event.signups.filter(user=request.user).first()
@@ -1001,7 +1003,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         return redirect("events:event_detail", pk=event_pk)
 
     squads = list(
-        event.squads.select_related("captain", "vice_captain").annotate(member_count=Count("squad_members")).all()
+        event.squads.prefetch_related("captains", "vice_captains").annotate(member_count=Count("squad_members")).all()
     )
 
     # Build ID→name lookups for Discord channels and roles
@@ -1133,7 +1135,7 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         AvailabilitySlotSelection.objects
         .filter(grid__squad__event=event, slot_date__gte=today_local)
         .select_related("grid", "grid__squad")
-        .prefetch_related("selected_users")
+        .prefetch_related("selected_users", "grid__squad__captains", "grid__squad__vice_captains")
         .order_by("slot_date", "slot_time", "grid__squad__name")
     )
 
@@ -1810,16 +1812,14 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     admin_user_id=request.user.id,
                 )
                 _unassign_discord_role(signup.user, remove_squad.team_discord_role, admin_user_id=request.user.id)
-                # If user was captain/VC, clear references and remove captain role
-                updated_fields = []
-                if remove_squad.captain_id == signup.user_id:
-                    remove_squad.captain = None
-                    updated_fields.append("captain")
-                if remove_squad.vice_captain_id == signup.user_id:
-                    remove_squad.vice_captain = None
-                    updated_fields.append("vice_captain")
-                if updated_fields:
-                    remove_squad.save(update_fields=updated_fields)
+                # If user was captain/VC, drop them from those roles and remove the captain Discord role
+                was_leader = (
+                    remove_squad.captains.filter(pk=signup.user_id).exists()
+                    or remove_squad.vice_captains.filter(pk=signup.user_id).exists()
+                )
+                if was_leader:
+                    remove_squad.captains.remove(signup.user_id)
+                    remove_squad.vice_captains.remove(signup.user_id)
                     _unassign_discord_role(
                         signup.user, remove_squad.discord_captain_role, admin_user_id=request.user.id
                     )
@@ -1843,15 +1843,13 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 for sm in user_squad_members:
                     sq = sm.squad
                     _unassign_discord_role(signup.user, sq.team_discord_role, admin_user_id=request.user.id)
-                    updated_fields = []
-                    if sq.captain_id == signup.user_id:
-                        sq.captain = None
-                        updated_fields.append("captain")
-                    if sq.vice_captain_id == signup.user_id:
-                        sq.vice_captain = None
-                        updated_fields.append("vice_captain")
-                    if updated_fields:
-                        sq.save(update_fields=updated_fields)
+                    was_leader = (
+                        sq.captains.filter(pk=signup.user_id).exists()
+                        or sq.vice_captains.filter(pk=signup.user_id).exists()
+                    )
+                    if was_leader:
+                        sq.captains.remove(signup.user_id)
+                        sq.vice_captains.remove(signup.user_id)
                         _unassign_discord_role(signup.user, sq.discord_captain_role, admin_user_id=request.user.id)
                 if not is_htmx:
                     messages.success(request, f"{signup.user} removed from all squads.")
@@ -1985,10 +1983,11 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
     target_user = get_object_or_404(User, pk=int(user_id))
 
     if role == "captain":
-        squad.captain = target_user
-        squad.save(update_fields=["captain"])
+        # A user holds at most one leadership role per squad; promote to captain.
+        squad.vice_captains.remove(target_user)
+        squad.captains.add(target_user)
         logfire.info(
-            "Squad captain set",
+            "Squad captain added",
             event_id=event_pk,
             squad_id=squad_pk,
             captain_id=target_user.id,
@@ -1998,10 +1997,10 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
             target_user, squad.discord_captain_role, f"{squad.name} Captain", admin_user_id=request.user.id
         )
     elif role == "vice_captain":
-        squad.vice_captain = target_user
-        squad.save(update_fields=["vice_captain"])
+        squad.captains.remove(target_user)
+        squad.vice_captains.add(target_user)
         logfire.info(
-            "Squad vice captain set",
+            "Squad vice captain added",
             event_id=event_pk,
             squad_id=squad_pk,
             vice_captain_id=target_user.id,
@@ -2011,15 +2010,13 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
             target_user, squad.discord_captain_role, f"{squad.name} Captain", admin_user_id=request.user.id
         )
     elif role == "none":
-        updated_fields = []
-        if squad.captain_id == target_user.pk:
-            squad.captain = None
-            updated_fields.append("captain")
-        if squad.vice_captain_id == target_user.pk:
-            squad.vice_captain = None
-            updated_fields.append("vice_captain")
-        if updated_fields:
-            squad.save(update_fields=updated_fields)
+        was_leader = (
+            squad.captains.filter(pk=target_user.pk).exists()
+            or squad.vice_captains.filter(pk=target_user.pk).exists()
+        )
+        if was_leader:
+            squad.captains.remove(target_user)
+            squad.vice_captains.remove(target_user)
             logfire.info(
                 "Squad captain role removed",
                 event_id=event_pk,
@@ -2051,7 +2048,7 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
 
         # Refresh squad from DB to get updated captain/vice_captain
         squad.refresh_from_db()
-        squad = Squad.objects.select_related("captain", "vice_captain").get(pk=squad_pk)
+        squad = Squad.objects.prefetch_related("captains", "vice_captains").get(pk=squad_pk)
         squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
 
         panel_html = render_to_string(
@@ -3765,7 +3762,7 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     signups = event.signups.select_related("user").all()
     enriched_signups = _enrich_signups(signups, event=event)
     squads = list(
-        event.squads.select_related("captain", "vice_captain")
+        event.squads.prefetch_related("captains", "vice_captains")
         .annotate(member_count=Count("squad_members"))
         .order_by("name")
     )
@@ -3877,11 +3874,11 @@ def _build_slot_thread_message(
     mentions = " ".join(f"<@{did}>" for did in rider_discord_ids)
 
     squad = selection.grid.squad
-    captain = squad.captain
-    vice_captain = squad.vice_captain
+    captains = list(squad.captains.all())
+    vice_captains = list(squad.vice_captains.all())
     substitute = selection.substitute
-    captain_did = captain.discord_id if captain and captain.discord_id else ""
-    vice_captain_did = vice_captain.discord_id if vice_captain and vice_captain.discord_id else ""
+    captain_dids = [c.discord_id for c in captains if c.discord_id]
+    vice_captain_dids = [vc.discord_id for vc in vice_captains if vc.discord_id]
     substitute_did = substitute.discord_id if substitute and substitute.discord_id else ""
 
     lines: list[str] = []
@@ -3906,18 +3903,20 @@ def _build_slot_thread_message(
             lines.append(mentions)
         if substitute_did:
             lines.append(f"**SUB:** <@{substitute_did}>")
-    if captain_did or vice_captain_did:
+    if captain_dids or vice_captain_dids:
         lines.append("")
-        if captain_did:
-            lines.append(f"**Captain:** <@{captain_did}>")
-        if vice_captain_did:
-            lines.append(f"**Vice Captain:** <@{vice_captain_did}>")
+        if captain_dids:
+            label = "Captain" if len(captain_dids) == 1 else "Captains"
+            lines.append(f"**{label}:** " + " ".join(f"<@{did}>" for did in captain_dids))
+        if vice_captain_dids:
+            label = "Vice Captain" if len(vice_captain_dids) == 1 else "Vice Captains"
+            lines.append(f"**{label}:** " + " ".join(f"<@{did}>" for did in vice_captain_dids))
 
     # Discord IDs to include in allowed_user_ids — dedup while preserving order
-    # so captain/vice-captain/substitute actually get pinged even if they aren't racing.
+    # so captains/vice-captains/substitute actually get pinged even if they aren't racing.
     seen: set[str] = set()
     discord_ids: list[str] = []
-    for did in (*rider_discord_ids, substitute_did, captain_did, vice_captain_did):
+    for did in (*rider_discord_ids, substitute_did, *captain_dids, *vice_captain_dids):
         if did and did not in seen:
             seen.add(did)
             discord_ids.append(did)

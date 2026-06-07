@@ -23,8 +23,6 @@ class SquadInline(admin.TabularInline):
     extra = 0
     fields: ClassVar[list[str]] = [
         "name",
-        "captain",
-        "vice_captain",
         "min_zwift_racing_category",
         "max_zwift_racing_category",
     ]
@@ -136,7 +134,7 @@ class SquadAdmin(admin.ModelAdmin):
     list_display: ClassVar[list[str]] = [
         "event",
         "name",
-        "captain",
+        "captains_display",
         "min_zwift_racing_category",
         "max_zwift_racing_category",
     ]
@@ -146,7 +144,22 @@ class SquadAdmin(admin.ModelAdmin):
         "event__title",
     ]
     readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at", "invite_token"]
+    filter_horizontal: ClassVar[list[str]] = ["captains", "vice_captains"]
     inlines: ClassVar[list] = [SquadMemberInline]
+
+    @admin.display(description="Captains")
+    def captains_display(self, obj: Squad) -> str:
+        """Return a comma-separated list of squad captain names for the list view.
+
+        Args:
+            obj: The squad being rendered.
+
+        Returns:
+            Comma-separated captain names, or "-" when there are none.
+
+        """
+        names = [u.get_full_name() or u.discord_username or u.username for u in obj.captains.all()]
+        return ", ".join(names) or "-"
 
 
 @admin.register(SquadMember)
