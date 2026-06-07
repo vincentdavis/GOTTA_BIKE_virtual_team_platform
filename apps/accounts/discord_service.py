@@ -512,6 +512,20 @@ def remove_discord_role(discord_id: str, role_id: str) -> bool:
                 f"{DISCORD_API_BASE}/guilds/{guild_id}/members/{discord_id}/roles/{role_id}",
                 headers=headers,
             )
+            # A 404 means the member is no longer in the guild (or the role no
+            # longer exists). Either way the desired end-state — the member does
+            # not have this role — already holds, so treat removal as a no-op
+            # success. This keeps removals idempotent for users who left the
+            # guild and lets callers clear their local role cache.
+            if response.status_code == 404:
+                logfire.warning(
+                    "Discord role remove skipped: member or role not found (already removed)",
+                    discord_id=discord_id,
+                    role_id=role_id,
+                    guild_id=guild_id,
+                )
+                return True
+
             response.raise_for_status()
 
             logfire.info(
