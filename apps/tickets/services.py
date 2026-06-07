@@ -10,7 +10,37 @@ from django.urls import reverse
 from apps.tickets.models import Ticket
 
 if TYPE_CHECKING:
-    from apps.accounts.models import GuildMember
+    from apps.accounts.models import GuildMember, User
+
+
+def _member_cleanup_lines(user: User) -> list[str]:
+    """Build a checklist of squad/event associations an admin should clean up.
+
+    Discord already strips a departed member's roles automatically, so this is
+    about the app's own stale records (squad membership, leadership, signups).
+
+    Args:
+        user: The linked user whose associations to enumerate.
+
+    Returns:
+        Markdown bullet lines, or an empty list if there is nothing to clean up.
+
+    """
+    lines: list[str] = []
+    lines.extend(
+        f"- Squad member: {sm.squad.event.title} / {sm.squad.name} ({sm.get_status_display()})"
+        for sm in user.squad_memberships.select_related("squad", "squad__event").all()
+    )
+    lines.extend(
+        f"- Captain of: {squad.event.title} / {squad.name}"
+        for squad in user.captain_squads.select_related("event").all()
+    )
+    lines.extend(
+        f"- Vice-captain of: {squad.event.title} / {squad.name}"
+        for squad in user.vice_captain_squads.select_related("event").all()
+    )
+    lines.extend(f"- Event signup: {signup.event.title}" for signup in user.event_signups.select_related("event").all())
+    return lines
 
 
 def create_member_left_ticket(guild_member: GuildMember) -> Ticket | None:
@@ -59,6 +89,13 @@ def create_member_left_ticket(guild_member: GuildMember) -> Ticket | None:
     if guild_member.roles:
         role_ids = ", ".join(str(r) for r in guild_member.roles)
         lines.append(f"- **Last known role IDs:** {role_ids}")
+
+    if linked_user:
+        cleanup_lines = _member_cleanup_lines(linked_user)
+        if cleanup_lines:
+            lines.append("")
+            lines.append("**App cleanup needed** (Discord already removed their roles on departure):")
+            lines.extend(cleanup_lines)
 
     ticket = Ticket.objects.create(
         title=f"Member left guild: {display_name}",

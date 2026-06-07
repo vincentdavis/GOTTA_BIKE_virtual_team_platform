@@ -38,6 +38,17 @@
 - [ ] Decide what to do with `guild_member_sync_status` now that `sync_guild_members` runs on the platform.
   Options: keep both (defensive), remove the status task and its `SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS`
   setting as redundant, or repurpose it to post a Discord alert when `hours_since_last_sync` exceeds a threshold.
+- [ ] Auto-cleanup on guild departure. Today, when `apply_guild_member_sync` stamps `date_left` it only files a
+  member-left ticket (now with a squad/leadership/signup cleanup checklist — see
+  `apps/tickets/services.py:_member_cleanup_lines`). Discord already strips the departed member's roles, but the
+  app keeps stale state. Tiered options to automate, conservative first:
+  (A) clear the linked `User.discord_roles` cache so app permissions/badges reflect the departure (safe,
+  self-healing on rejoin); (B) also drop them from `Squad.captains`/`vice_captains`; (C) full roster removal
+  (`SquadMember`, race `selected_users`/`substitutes`, `EventSignup`) — destructive, not restored on rejoin.
+  **Guard required**: only run cleanup on a "healthy" sync (plausible member count, not near-zero / partial page)
+  so an incomplete Discord fetch can't wrongly strip many active members. Consider gating B/C behind admin
+  confirmation on the ticket, or only after `date_left` persists across N consecutive syncs. The 404-on-removal
+  case is already handled idempotently in `apps/accounts/discord_service.py:remove_discord_role`.
 
 ### Performance Review
 
