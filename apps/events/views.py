@@ -3118,7 +3118,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     cell_map = grid_data["cell_map"]  # local_key → {"date": utc_date, "time": utc_time}
 
     # Load existing slot selections
-    slot_selections = list(grid.slot_selections.prefetch_related("selected_users"))
+    slot_selections = list(grid.slot_selections.prefetch_related("selected_users", "substitutes"))
     slot_selection_by_utc_key = {}
     scheduled_count_by_user_id: dict[int, int] = {}
     for sel in slot_selections:
@@ -3195,7 +3195,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "course_url": sel.course_url,
             "thread_link": sel.thread_link,
             "selected_user_ids": list(sel.selected_users.values_list("pk", flat=True)),
-            "substitute_id": sel.substitute_id,
+            "substitute_ids": list(sel.substitutes.values_list("pk", flat=True)),
         }
 
     # Build enriched slot selections for initial render
@@ -3822,23 +3822,16 @@ def _extract_thread_id(thread_link: str) -> str | None:
     return candidate if candidate.isdigit() else None
 
 
-def _resolve_substitute_id(raw_value: str) -> int | None:
-    """Coerce a posted ``substitute`` form value to a User PK or ``None``.
+def _set_slot_substitutes(selection: AvailabilitySlotSelection, request: HttpRequest) -> None:
+    """Set a slot selection's substitutes M2M from the posted ``substitutes`` checkboxes.
 
     Args:
-        raw_value: The raw POST value (may be empty string, a numeric PK, or junk).
-
-    Returns:
-        Integer PK if the value is a valid existing user id, else ``None``.
+        selection: The slot selection to update.
+        request: The request whose POST holds the selected substitute user PKs.
 
     """
-    if not raw_value:
-        return None
-    try:
-        pk = int(raw_value)
-    except ValueError:
-        return None
-    return pk if User.objects.filter(pk=pk).exists() else None
+    sub_ids = request.POST.getlist("substitutes")
+    selection.substitutes.set(User.objects.filter(pk__in=sub_ids))
 
 
 def _build_slot_thread_message(
@@ -3876,10 +3869,9 @@ def _build_slot_thread_message(
     squad = selection.grid.squad
     captains = list(squad.captains.all())
     vice_captains = list(squad.vice_captains.all())
-    substitute = selection.substitute
     captain_dids = [c.discord_id for c in captains if c.discord_id]
     vice_captain_dids = [vc.discord_id for vc in vice_captains if vc.discord_id]
-    substitute_did = substitute.discord_id if substitute and substitute.discord_id else ""
+    substitute_dids = [s.discord_id for s in selection.substitutes.all() if s.discord_id]
 
     lines: list[str] = []
     if header:
@@ -3897,12 +3889,13 @@ def _build_slot_thread_message(
         lines.append(f"**Event invite:** {selection.event_invite_url}")
     if selection.course_url:
         lines.append(f"**Course:** {selection.course_url}")
-    if mentions or substitute_did:
+    if mentions or substitute_dids:
         lines.append("")
         if mentions:
             lines.append(mentions)
-        if substitute_did:
-            lines.append(f"**SUB:** <@{substitute_did}>")
+        if substitute_dids:
+            label = "SUB" if len(substitute_dids) == 1 else "SUBS"
+            lines.append(f"**{label}:** " + " ".join(f"<@{did}>" for did in substitute_dids))
     if captain_dids or vice_captain_dids:
         lines.append("")
         if captain_dids:
@@ -3913,10 +3906,10 @@ def _build_slot_thread_message(
             lines.append(f"**{label}:** " + " ".join(f"<@{did}>" for did in vice_captain_dids))
 
     # Discord IDs to include in allowed_user_ids — dedup while preserving order
-    # so captains/vice-captains/substitute actually get pinged even if they aren't racing.
+    # so captains/vice-captains/substitutes actually get pinged even if they aren't racing.
     seen: set[str] = set()
     discord_ids: list[str] = []
-    for did in (*rider_discord_ids, substitute_did, *captain_dids, *vice_captain_dids):
+    for did in (*rider_discord_ids, *substitute_dids, *captain_dids, *vice_captain_dids):
         if did and did not in seen:
             seen.add(did)
             discord_ids.append(did)
@@ -4110,7 +4103,6 @@ def slot_selection_create_view(
     valid_statuses = {s.value for s in AvailabilitySlotSelection.Status}
     status = raw_status if raw_status in valid_statuses else AvailabilitySlotSelection.Status.NONE
     selected_user_ids = request.POST.getlist("selected_users")
-    substitute_id = _resolve_substitute_id(request.POST.get("substitute", ""))
     also_create_thread = request.POST.get("create_thread") == "1"
 
     if not name or not slot_date or not slot_time:
@@ -4127,11 +4119,11 @@ def slot_selection_create_view(
             "event_invite_url": event_invite_url,
             "course_url": course_url,
             "thread_link": thread_link,
-            "substitute_id": substitute_id,
             "created_by": request.user,
         },
     )
     selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
+    _set_slot_substitutes(selection, request)
 
     logfire.info(
         "Slot selection created" if created else "Slot selection updated",
@@ -4197,7 +4189,6 @@ def slot_selection_update_view(
     selection.event_invite_url = event_invite_url
     selection.course_url = course_url
     selection.thread_link = thread_link
-    selection.substitute_id = _resolve_substitute_id(request.POST.get("substitute", ""))
     selection.save(
         update_fields=[
             "name",
@@ -4206,11 +4197,11 @@ def slot_selection_update_view(
             "event_invite_url",
             "course_url",
             "thread_link",
-            "substitute",
             "updated_at",
         ]
     )
     selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
+    _set_slot_substitutes(selection, request)
 
     logfire.info(
         "Slot selection updated",
@@ -4307,7 +4298,6 @@ def slot_selection_create_thread_view(
         selection.opponent = request.POST.get("opponent", "").strip()
         selection.event_invite_url = request.POST.get("event_invite_url", "").strip()
         selection.course_url = request.POST.get("course_url", "").strip()
-        selection.substitute_id = _resolve_substitute_id(request.POST.get("substitute", ""))
         # thread_link is intentionally NOT overwritten here — it's set below
         # once the thread is created. Letting the form's stale value land would
         # break the idempotence guard on the next click.
@@ -4318,13 +4308,14 @@ def slot_selection_create_thread_view(
                 "opponent",
                 "event_invite_url",
                 "course_url",
-                "substitute",
                 "updated_at",
             ]
         )
         if "selected_users" in request.POST:
             selected_user_ids = request.POST.getlist("selected_users")
             selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
+        if "substitutes" in request.POST:
+            _set_slot_substitutes(selection, request)
 
     error = _create_slot_thread(selection, squad, grid, request.user)
     if error:
@@ -4381,7 +4372,6 @@ def slot_selection_post_update_view(
     selection.opponent = request.POST.get("opponent", "").strip()
     selection.event_invite_url = request.POST.get("event_invite_url", "").strip()
     selection.course_url = request.POST.get("course_url", "").strip()
-    selection.substitute_id = _resolve_substitute_id(request.POST.get("substitute", ""))
     # thread_link is preserved — the form value can be stale, but the saved one
     # is what we trust for posting back into the thread.
     selection.save(
@@ -4391,13 +4381,14 @@ def slot_selection_post_update_view(
             "opponent",
             "event_invite_url",
             "course_url",
-            "substitute",
             "updated_at",
         ]
     )
     if "selected_users" in request.POST:
         selected_user_ids = request.POST.getlist("selected_users")
         selection.selected_users.set(User.objects.filter(pk__in=selected_user_ids))
+    if "substitutes" in request.POST:
+        _set_slot_substitutes(selection, request)
 
     error = _post_slot_thread_update(selection, request.user)
     if error:

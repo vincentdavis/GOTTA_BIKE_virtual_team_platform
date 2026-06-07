@@ -734,10 +734,9 @@
       </div>
 
       <div class="form-control mb-3">
-        <label class="label"><span class="label-text">SUB (optional)</span></label>
-        <select name="substitute" id="slot-modal-substitute" class="select select-bordered select-sm w-full">
-          <option value="">— No substitute —</option>
-        </select>
+        <label class="label"><span class="label-text">Substitutes (optional)</span></label>
+        <div id="slot-modal-substitutes" class="max-h-60 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
+        </div>
       </div>
 
       <div id="slot-modal-error" class="alert alert-error py-2 mb-3 text-xs hidden"></div>
@@ -807,7 +806,7 @@
     const dateInput = document.getElementById('slot-modal-date');
     const timeInput = document.getElementById('slot-modal-time');
     const ridersDiv = document.getElementById('slot-modal-riders');
-    const substituteSelect = document.getElementById('slot-modal-substitute');
+    const substitutesDiv = document.getElementById('slot-modal-substitutes');
     const title = document.getElementById('slot-modal-title');
     const threadBtn = document.getElementById('slot-modal-create-thread');
     const errorBox = document.getElementById('slot-modal-error');
@@ -866,28 +865,40 @@
       });
     }
 
-    // Populate substitute dropdown from the same available pool. Pre-select the
-    // saved value (if any). Renders even when that user is no longer in the
-    // available list, so the existing choice is still visible/editable.
-    substituteSelect.innerHTML = '<option value="">— No substitute —</option>';
-    const subId = existing && existing.substitute_id ? String(existing.substitute_id) : '';
+    // Build substitute checkboxes from the same available pool, pre-checking any
+    // saved subs. Previously-saved subs who are no longer available still render
+    // (checked, flagged) so the existing choice stays visible/editable.
+    substitutesDiv.innerHTML = '';
+    const subIds = (existing && existing.substitute_ids ? existing.substitute_ids : []).map(String);
     const seenSubIds = new Set();
-    available.forEach(function(uid) {
+    const addSubCheckbox = function(uid, note) {
       const u = userData[uid];
       if (!u) return;
-      seenSubIds.add(String(uid));
-      const opt = document.createElement('option');
-      opt.value = uid;
-      opt.textContent = u.display_name + (u.zr_category ? ' (' + u.zr_category + ')' : '');
-      substituteSelect.appendChild(opt);
-    });
-    if (subId && !seenSubIds.has(subId) && userData[subId]) {
-      const opt = document.createElement('option');
-      opt.value = subId;
-      opt.textContent = userData[subId].display_name + ' (not available this slot)';
-      substituteSelect.appendChild(opt);
+      const checked = subIds.includes(String(uid));
+      const label = document.createElement('label');
+      label.className = 'flex items-center gap-2 cursor-pointer text-sm py-0.5';
+      let extra = '';
+      if (u.zr_category) extra += ' <span class="badge badge-xs badge-outline">' + u.zr_category + '</span>';
+      if (u.zr_rating) extra += ' <span class="text-xs text-base-content/50">' + u.zr_rating + '</span>';
+      if (note) extra += ' <span class="text-xs text-warning">' + note + '</span>';
+      label.innerHTML = '<input type="checkbox" name="substitutes" value="' + uid + '" class="checkbox checkbox-xs checkbox-secondary sub-cb"' + (checked ? ' checked' : '') + '> ' + u.display_name + extra;
+      substitutesDiv.appendChild(label);
+    };
+    if (available.length === 0 && subIds.length === 0) {
+      substitutesDiv.innerHTML = '<p class="text-xs text-base-content/50">No riders available at this slot</p>';
+    } else {
+      available.forEach(function(uid) {
+        seenSubIds.add(String(uid));
+        addSubCheckbox(uid, '');
+      });
+      // Saved subs no longer in the available pool are still shown so they can be kept/removed.
+      subIds.forEach(function(uid) {
+        if (!seenSubIds.has(String(uid))) {
+          seenSubIds.add(String(uid));
+          addSubCheckbox(uid, '(not available this slot)');
+        }
+      });
     }
-    substituteSelect.value = subId;
 
     // Re-process HTMX attributes after changing hx-post
     htmx.process(form);

@@ -889,13 +889,11 @@ class AvailabilitySlotSelection(models.Model):
         related_name="availability_selections",
         help_text="Users selected for this slot",
     )
-    substitute = models.ForeignKey(
+    substitutes = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="substitute_slot_selections",
-        help_text="Optional substitute rider available to step in",
+        help_text="Optional substitute riders available to step in",
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
