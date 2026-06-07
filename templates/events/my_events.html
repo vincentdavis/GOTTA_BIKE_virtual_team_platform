@@ -182,8 +182,7 @@
                             {% endif %}
                           </div>
                           <div id="slot-riders-{{ item.event.pk }}-{{ sq.squad.pk }}-{{ slot.selection.pk }}" style="display:none" class="mt-2">
-                            {% if slot.selection.event_invite_url or slot.selection.course_url or slot.selection.thread_link %}
-                            <p class="text-xs mb-2 flex flex-wrap gap-x-3">
+                            <p class="text-xs mb-2 flex flex-wrap gap-x-3 gap-y-1">
                               {% if slot.selection.event_invite_url %}
                               <a href="{{ slot.selection.event_invite_url }}" target="_blank" rel="noopener" class="link link-primary">Event invite</a>
                               {% endif %}
@@ -193,6 +192,8 @@
                               {% if slot.selection.thread_link %}
                               <a href="{{ slot.selection.thread_link }}" target="_blank" rel="noopener" class="link link-primary">Discord thread</a>
                               {% endif %}
+                              <a href="{{ slot.gcal_url }}" target="_blank" rel="noopener" class="link link-secondary">📅 Google Calendar</a>
+                              <a href="{{ slot.ics_url }}" class="link link-secondary">📅 Download .ics</a>
                             </p>
                             {% endif %}
                             {% if slot.riders %}

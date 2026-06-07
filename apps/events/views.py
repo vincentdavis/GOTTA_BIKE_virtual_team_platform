@@ -13,7 +13,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -32,6 +32,7 @@ from apps.accounts.discord_service import (
     sync_user_discord_roles,
 )
 from apps.accounts.models import Permissions, User
+from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
 from apps.events.forms import EventForm, EventRoleSetupForm, SquadForm
 from apps.events.models import (
     ZR_CATEGORY_ORDER,
@@ -564,6 +565,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             "status_class": status_class,
             "is_status_visible": sel.status != AvailabilitySlotSelection.Status.NONE,
             "riders": riders,
+            **race_calendar_urls(sel, request),
         })
 
     events_data = []
@@ -3834,10 +3836,41 @@ def _set_slot_substitutes(selection: AvailabilitySlotSelection, request: HttpReq
     selection.substitutes.set(User.objects.filter(pk__in=sub_ids))
 
 
+@require_GET
+def race_calendar_ics_view(request: HttpRequest, token: str) -> HttpResponse:
+    """Serve a scheduled race as a downloadable .ics calendar invite.
+
+    Public on purpose: the ``token`` is an unguessable signed value, so a team
+    member can add the race to their calendar straight from a Discord thread
+    without logging in.
+
+    Args:
+        request: The HTTP request.
+        token: Signed token encoding the race primary key.
+
+    Returns:
+        A ``text/calendar`` response.
+
+    Raises:
+        Http404: If the token is invalid or the race no longer exists.
+
+    """
+    pk = unsign_race_token(token)
+    if pk is None:
+        raise Http404("Invalid calendar link.")
+    selection = get_object_or_404(
+        AvailabilitySlotSelection.objects.select_related("grid", "grid__squad"), pk=pk
+    )
+    response = HttpResponse(build_race_ics(selection), content_type="text/calendar; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="race-{selection.pk}.ics"'
+    return response
+
+
 def _build_slot_thread_message(
     selection: AvailabilitySlotSelection,
     *,
     header: str | None = None,
+    request: HttpRequest | None = None,
 ) -> tuple[str, list[str]]:
     """Build the Discord message body for a scheduled race thread.
 
@@ -3852,6 +3885,8 @@ def _build_slot_thread_message(
     Args:
         selection: The slot selection record.
         header: Optional first line (e.g. "**🔄 Race details updated**").
+        request: Current request, used to build absolute calendar links. When
+            omitted, the "Add to calendar" line is skipped.
 
     Returns:
         Tuple of (message body, deduped list of Discord IDs to mention).
@@ -3905,6 +3940,12 @@ def _build_slot_thread_message(
             label = "Vice Captain" if len(vice_captain_dids) == 1 else "Vice Captains"
             lines.append(f"**{label}:** " + " ".join(f"<@{did}>" for did in vice_captain_dids))
 
+    if request is not None:
+        cal = race_calendar_urls(selection, request)
+        # Angle brackets suppress Discord's link previews for these long URLs.
+        lines.append("")
+        lines.append(f"📅 **Add to calendar:** Google: <{cal['gcal_url']}> · iCal: <{cal['ics_url']}>")
+
     # Discord IDs to include in allowed_user_ids — dedup while preserving order
     # so captains/vice-captains/substitutes actually get pinged even if they aren't racing.
     seen: set[str] = set()
@@ -3949,6 +3990,7 @@ def _create_slot_thread(
     squad: Squad,
     grid: AvailabilityGrid,
     user: User,
+    request: HttpRequest | None = None,
 ) -> str | None:
     """Create the Discord thread for a confirmed scheduled race.
 
@@ -3962,6 +4004,8 @@ def _create_slot_thread(
         squad: The parent squad.
         grid: The parent availability grid.
         user: The acting user (recorded in logs).
+        request: Current request, forwarded so the starter message can include
+            absolute calendar links.
 
     Returns:
         None on success, or an error message string suitable for displaying to
@@ -3983,7 +4027,7 @@ def _create_slot_thread(
 
     thread_name = _slot_thread_name(selection, grid)
 
-    message_body, discord_ids = _build_slot_thread_message(selection)
+    message_body, discord_ids = _build_slot_thread_message(selection, request=request)
 
     thread_id, error = create_discord_thread(squad.discord_channel_id, thread_name)
     if thread_id is None:
@@ -4021,12 +4065,16 @@ def _create_slot_thread(
     return None
 
 
-def _post_slot_thread_update(selection: AvailabilitySlotSelection, user: User) -> str | None:
+def _post_slot_thread_update(
+    selection: AvailabilitySlotSelection, user: User, request: HttpRequest | None = None
+) -> str | None:
     """Post an "updated" message to the existing thread for a scheduled race.
 
     Args:
         selection: The slot selection record (must already have ``thread_link`` set).
         user: The acting user (recorded in logs).
+        request: Current request, forwarded so the update message can include
+            absolute calendar links.
 
     Returns:
         None on success, or an error message string.
@@ -4037,7 +4085,7 @@ def _post_slot_thread_update(selection: AvailabilitySlotSelection, user: User) -
         return "Could not determine the Discord thread id from the saved link."
 
     message_body, discord_ids = _build_slot_thread_message(
-        selection, header="**🔄 Race details updated**"
+        selection, header="**🔄 Race details updated**", request=request
     )
     posted = send_discord_channel_message(
         thread_id,
@@ -4136,7 +4184,7 @@ def slot_selection_create_view(
     )
 
     if also_create_thread and not selection.thread_link:
-        error = _create_slot_thread(selection, squad, grid, request.user)
+        error = _create_slot_thread(selection, squad, grid, request.user, request=request)
         if error:
             return HttpResponse(error, status=400)
 
@@ -4317,7 +4365,7 @@ def slot_selection_create_thread_view(
         if "substitutes" in request.POST:
             _set_slot_substitutes(selection, request)
 
-    error = _create_slot_thread(selection, squad, grid, request.user)
+    error = _create_slot_thread(selection, squad, grid, request.user, request=request)
     if error:
         return HttpResponse(error, status=400)
 
@@ -4390,7 +4438,7 @@ def slot_selection_post_update_view(
     if "substitutes" in request.POST:
         _set_slot_substitutes(selection, request)
 
-    error = _post_slot_thread_update(selection, request.user)
+    error = _post_slot_thread_update(selection, request.user, request=request)
     if error:
         return HttpResponse(error, status=400)
 

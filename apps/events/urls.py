@@ -26,6 +26,7 @@ from apps.events.views import (
     event_toggle_role_view,
     manage_roles_view,
     my_events_view,
+    race_calendar_ics_view,
     slot_selection_archive_thread_view,
     slot_selection_create_thread_view,
     slot_selection_create_view,
@@ -54,6 +55,7 @@ app_name = "events"
 
 urlpatterns = [
     path("squad-invite/<uuid:token>/", squad_invite_view, name="squad_invite"),
+    path("race/<str:token>/race.ics", race_calendar_ics_view, name="race_calendar_ics"),
     path("", event_list_view, name="event_list"),
     path("my-events/", my_events_view, name="my_events"),
     path("create/", event_create_view, name="event_create"),
