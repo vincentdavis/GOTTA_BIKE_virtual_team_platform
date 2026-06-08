@@ -123,3 +123,82 @@ def test_notify_task_returns_error_when_send_fails(event_with_channel, user) -> 
         result = post_signup_notification(signup_id=signup.pk)
     assert result["status"] == "error"
     assert result["reason"] == "send_failed"
+
+
+# --- Template / page smoke tests -------------------------------------------------
+# These guard against template syntax errors and view/template integration
+# breakage, which the unit tests above don't exercise (templates are only parsed
+# when actually rendered).
+
+EVENTS_TEMPLATES = [
+    "events/my_events.html",
+    "events/availability_results.html",
+    "events/event_detail.html",
+    "events/event_form.html",
+    "events/squad_form.html",
+    "events/squad_manage.html",
+    "events/_squad_panel.html",
+    "events/event_all_races.html",
+]
+
+
+@pytest.mark.parametrize("template_name", EVENTS_TEMPLATES)
+def test_events_templates_compile(template_name: str) -> None:
+    from django.template.loader import get_template
+
+    get_template(template_name)  # raises TemplateSyntaxError on a bad block tag
+
+
+@pytest.mark.django_db
+def test_my_events_page_renders_empty(auth_client) -> None:
+    from django.urls import reverse
+
+    response = auth_client.get(reverse("events:my_events"))
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_my_events_renders_scheduled_race_with_calendar_links(auth_client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import (
+        AvailabilityGrid,
+        AvailabilitySlotSelection,
+        Squad,
+        SquadMember,
+    )
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL",
+        start_date=today,
+        end_date=today + timedelta(days=7),
+        visible=True,
+    )
+    EventSignup.objects.create(event=event, user=team_member, status=EventSignup.Status.REGISTERED)
+    squad = Squad.objects.create(event=event, name="Squad A")
+    SquadMember.objects.create(squad=squad, user=team_member, status=SquadMember.Status.MEMBER)
+    grid = AvailabilityGrid.objects.create(
+        squad=squad,
+        start_date=today,
+        end_date=today + timedelta(days=7),
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+    selection = AvailabilitySlotSelection.objects.create(
+        grid=grid,
+        name="Race 1",
+        slot_date=today + timedelta(days=3),
+        slot_time="18:30",
+        status=AvailabilitySlotSelection.Status.CONFIRMED,
+    )
+    selection.selected_users.add(team_member)
+
+    response = auth_client.get(reverse("events:my_events"))
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "Download .ics" in body
+    assert "/events/race/" in body
+    assert "calendar.google.com" in body
