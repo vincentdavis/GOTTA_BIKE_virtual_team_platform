@@ -11,8 +11,8 @@
   {% endif %}
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <h2 class="card-title text-2xl mb-2">{{ page_title }}</h2>
-      <p class="text-sm text-base-content/70 mb-4">Event: {{ event.title }}</p>
+      <a href="{% url 'events:event_detail' event.pk %}" class="text-sm font-semibold uppercase tracking-wide text-primary hover:underline">{{ event.title }}</a>
+      <h2 class="card-title text-2xl mb-4">{{ page_title }}</h2>
 
       <form method="post" class="space-y-4">
         {% csrf_token %}
