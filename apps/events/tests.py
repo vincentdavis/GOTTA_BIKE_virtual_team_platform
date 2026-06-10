@@ -138,6 +138,7 @@ EVENTS_TEMPLATES = [
     "events/squad_form.html",
     "events/squad_manage.html",
     "events/_squad_panel.html",
+    "events/_squad_manage_panel.html",
     "events/event_all_races.html",
 ]
 
@@ -202,3 +203,59 @@ def test_my_events_renders_scheduled_race_with_calendar_links(auth_client, team_
     assert "Download .ics" in body
     assert "/events/race/" in body
     assert "calendar.google.com" in body
+
+
+@pytest.mark.django_db
+def test_squad_manage_renders_riders_section(client, event_admin, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+
+    client.force_login(event_admin)
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL",
+        start_date=today,
+        end_date=today + timedelta(days=7),
+        visible=True,
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    SquadMember.objects.create(squad=squad, user=event_admin, status=SquadMember.Status.MEMBER)
+    # team_member is signed up but not in the squad -> should be an "add rider" option
+    EventSignup.objects.create(event=event, user=team_member, status=EventSignup.Status.REGISTERED)
+
+    response = client.get(reverse("events:squad_manage", args=[event.pk]))
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "Riders" in body
+    assert f'id="squad-panel-{squad.pk}"' in body
+    assert "+ Add rider" in body
+
+
+@pytest.mark.django_db
+def test_squad_assign_from_manage_page_returns_panel(client, event_admin, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+
+    client.force_login(event_admin)
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL",
+        start_date=today,
+        end_date=today + timedelta(days=7),
+        visible=True,
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    signup = EventSignup.objects.create(event=event, user=team_member, status=EventSignup.Status.REGISTERED)
+
+    manage_url = reverse("events:squad_manage", args=[event.pk])
+    response = client.post(
+        reverse("events:squad_assign", args=[event.pk]),
+        {"signup_id": signup.pk, "squad_id": squad.pk},
+        HTTP_HX_REQUEST="true",
+        HTTP_HX_CURRENT_URL=f"http://testserver{manage_url}",
+    )
+    assert response.status_code == 200
+    assert f'id="squad-panel-{squad.pk}"' in response.content.decode()
+    assert SquadMember.objects.filter(squad=squad, user=team_member).exists()

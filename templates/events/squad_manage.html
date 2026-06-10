@@ -208,6 +208,16 @@
           {% endif %}
         </div>
 
+        {# Riders section (expandable) #}
+        <details class="collapse collapse-arrow bg-base-300 mb-2">
+          <summary class="collapse-title text-xs font-semibold uppercase tracking-wide text-base-content/50 min-h-0 py-3">
+            Riders
+          </summary>
+          <div class="collapse-content">
+            {% include "events/_squad_manage_panel.html" with squad=squad members=squad.enriched_members available_signups=squad.available_signups event_role_name=event_role_name event_pk=event.pk can_manage=can_manage oob=False %}
+          </div>
+        </details>
+
         {# Footer: timestamps #}
         <div class="text-xs text-base-content/50 mt-1 flex gap-4">
           <span>Created {{ squad.created_at|date:"M j, Y" }}</span>

@@ -173,3 +173,5 @@ cython_debug/
 
 .idea
 .claude
+.ai
+.junie

@@ -36,6 +36,10 @@ select = [
     "SIM",
     # Django
     "DJ",
+    # flake8-datetimez (timezone-aware datetimes)
+    "DTZ",
+    # flake8-type-checking (move type-only imports into TYPE_CHECKING)
+    "TC",
     # Ruff
     "RUF",
     # flake8-bandit (security)
@@ -60,13 +64,16 @@ unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [lint.per-file-ignores]
-"tests/*" = ["S101", "D100", "D103"]      # Allow assert, missing docstrings in tests
-"**/tests.py" = ["S101", "D100", "D103"]  # Same for app-level tests.py files
-"**/test_*.py" = ["S101", "D100", "D103"] # Same for test_*.py files
+"tests/*" = ["S101", "D100", "D103", "DTZ"]      # Allow assert, missing docstrings, naive dates in tests
+"**/tests.py" = ["S101", "D100", "D103", "DTZ"]  # Same for app-level tests.py files
+"**/test_*.py" = ["S101", "D100", "D103", "DTZ"] # Same for test_*.py files
 "conftest.py" = ["D100", "D103", "DOC201"] # Fixtures self-document via name
 "**/conftest.py" = ["D100", "D103", "DOC201"]
 "__init__.py" = ["D104"]                  # Allow missing docstrings in __init__.py
-"migrations/*" = ["D100", "D101"]         # Django migrations don't need docstrings
+# Auto-generated Django migrations: skip docstrings, line length, and mutable
+# class defaults (operations/dependencies lists). The glob must be **-anchored
+# to match apps/<app>/migrations/*.py — a bare "migrations/*" matches nothing here.
+"**/migrations/*" = ["D100", "D101", "E501", "RUF012"]
 
 [format]
 # Like Black, use double quotes for strings.

@@ -317,6 +317,79 @@ def _enrich_squad_members(event):
     return by_squad
 
 
+def _build_manage_squad_context(request, event, squad):
+    """Build template context for the self-contained roster panel on the manage-squads page.
+
+    Computes enriched members (with signup ids for remove forms), the list of signups
+    available to add to this squad (all event signups not already members), and Discord
+    role names for display.
+
+    Args:
+        request: The HTTP request (used to resolve the manage permission).
+        event: The parent Event.
+        squad: The Squad whose panel is being rendered.
+
+    Returns:
+        Context dict for ``events/_squad_manage_panel.html``.
+
+    """
+    from apps.team.models import DiscordRole
+
+    squad_members_data = _enrich_squad_members(event)
+    members = squad_members_data.get(squad.pk, [])
+    all_signups = list(EventSignup.objects.filter(event=event).select_related("user"))
+    signup_by_user = {s.user_id: s.pk for s in all_signups}
+    for member in members:
+        member["signup_id"] = signup_by_user.get(member["user"].pk)
+
+    member_user_ids = {m["user"].pk for m in members}
+    available_signups = sorted(
+        (s for s in all_signups if s.user_id not in member_user_ids),
+        key=lambda s: (s.user.get_full_name() or s.user.discord_username or "").lower(),
+    )
+
+    role_ids = {str(squad.team_discord_role)} if squad.team_discord_role else set()
+    if event.event_role:
+        role_ids.add(str(event.event_role))
+    role_names = (
+        dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
+    )
+    squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
+
+    return {
+        "squad": squad,
+        "members": members,
+        "available_signups": available_signups,
+        "event_role_name": role_names.get(str(event.event_role), "") if event.event_role else "",
+        "event_pk": event.pk,
+        "can_manage": _can_manage_event_squads(request.user, event),
+        "oob": False,
+    }
+
+
+def _render_manage_squad_panel(request, event, squad_pk):
+    """Render the manage-squads roster panel for a single squad as an HTMX response.
+
+    Args:
+        request: The HTTP request.
+        event: The parent Event.
+        squad_pk: Primary key of the squad to re-render.
+
+    Returns:
+        An ``HttpResponse`` containing the rendered panel.
+
+    """
+    squad = get_object_or_404(
+        Squad.objects.prefetch_related("captains", "vice_captains"), pk=squad_pk, event=event
+    )
+    html = render_to_string(
+        "events/_squad_manage_panel.html",
+        _build_manage_squad_context(request, event, squad),
+        request=request,
+    )
+    return HttpResponse(html)
+
+
 def _enrich_signups(signups, event=None):
     """Enrich signup queryset with ZP/ZR data and squad assignment for display.
 
@@ -1019,6 +1092,9 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         if s.team_discord_role:
             role_ids.add(str(s.team_discord_role))
 
+    if event.event_role:
+        role_ids.add(str(event.event_role))
+
     from apps.team.models import DiscordChannel, DiscordRole
 
     channel_names = (
@@ -1029,6 +1105,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     role_names = (
         dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
     )
+    event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
 
     # Attach availability grids (published/closed) grouped by squad
     grids_by_squad: dict[int, list] = {}
@@ -1038,11 +1115,26 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     ):
         grids_by_squad.setdefault(grid.squad_id, []).append(grid)
 
+    # Enriched members + add-rider options for the expandable Riders section
+    squad_members_data = _enrich_squad_members(event)
+    all_signups = list(EventSignup.objects.filter(event=event).select_related("user"))
+    signup_by_user = {s.user_id: s.pk for s in all_signups}
+
     for s in squads:
         s.channel_name = channel_names.get(str(s.discord_channel_id), "") if s.discord_channel_id else ""
         s.audio_name = channel_names.get(str(s.audio_channel_id), "") if s.audio_channel_id else ""
         s.role_name = role_names.get(str(s.team_discord_role), "") if s.team_discord_role else ""
         s.active_grids = grids_by_squad.get(s.pk, [])
+
+        members = squad_members_data.get(s.pk, [])
+        for member in members:
+            member["signup_id"] = signup_by_user.get(member["user"].pk)
+        s.enriched_members = members
+        member_user_ids = {m["user"].pk for m in members}
+        s.available_signups = sorted(
+            (su for su in all_signups if su.user_id not in member_user_ids),
+            key=lambda su: (su.user.get_full_name() or su.user.discord_username or "").lower(),
+        )
 
     return render(
         request,
@@ -1050,6 +1142,8 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         {
             "event": event,
             "squads": squads,
+            "event_role_name": event_role_name,
+            "can_manage": True,
         },
     )
 
@@ -1778,7 +1872,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """
     event = get_object_or_404(Event, pk=event_pk)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_event_squads(request.user, event):
         logfire.warning(
             "Unauthorized squad assign attempt",
             event_id=event_pk,
@@ -1878,6 +1972,13 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
     # HTMX: return just the updated squad cell instead of full page reload
     if request.headers.get("HX-Request"):
+        hx_url = request.headers.get("HX-Current-URL", "")
+        # Manage-squads page: re-render just the affected squad's self-contained roster panel
+        if "squads/manage" in hx_url:
+            affected_pk = squad_id if squad_id != 0 else int(request.POST.get("remove_squad_id") or 0)
+            if affected_pk:
+                return _render_manage_squad_panel(request, event, affected_pk)
+
         assigned_squads = list(
             Squad.objects.filter(
                 pk__in=SquadMember.objects.filter(squad__event=event, user=signup.user).values_list(
@@ -1898,7 +1999,6 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         )
 
         # If request came from the assign-riders page, include OOB squad panel updates
-        hx_url = request.headers.get("HX-Current-URL", "")
         if "assign-riders" in hx_url:
             squad_members_data = _enrich_squad_members(event)
             # Map user_id -> signup pk for remove buttons in squad panels
@@ -1970,7 +2070,7 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
     event = get_object_or_404(Event, pk=event_pk)
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
 
-    if not request.user.is_event_admin and not request.user.is_superuser:
+    if not _can_manage_event_squads(request.user, event):
         logfire.warning("Unauthorized squad captain set attempt", event_id=event_pk, user_id=request.user.id)
         messages.error(request, "You don't have permission to set squad captains.")
         return redirect("events:event_detail", pk=event_pk)
@@ -2029,6 +2129,10 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
             _unassign_discord_role(target_user, squad.discord_captain_role, admin_user_id=request.user.id)
 
     if request.headers.get("HX-Request"):
+        # Manage-squads page: re-render just this squad's self-contained roster panel
+        if "squads/manage" in request.headers.get("HX-Current-URL", ""):
+            return _render_manage_squad_panel(request, event, squad_pk)
+
         squad_members_data = _enrich_squad_members(event)
         signup_by_user = dict(EventSignup.objects.filter(event=event).values_list("user_id", "pk"))
         for members in squad_members_data.values():
