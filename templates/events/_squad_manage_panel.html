@@ -1,10 +1,6 @@
 {% load accounts_tags %}
 {# Self-contained squad roster panel for the manage-squads page. All actions re-render this panel in place. #}
 <div id="squad-panel-{{ squad.pk }}" {% if oob %}hx-swap-oob="true"{% endif %}>
-  <div class="flex items-center justify-between mb-2">
-    <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Riders</p>
-    <span class="badge badge-neutral badge-sm">{{ members|length }} member{{ members|length|pluralize }}</span>
-  </div>
   {% if event_role_name or squad.role_name %}
   <div class="flex flex-wrap gap-2 text-xs text-base-content/60 mb-2">
     {% if event_role_name %}<span>Event: @{{ event_role_name }}</span>{% endif %}
@@ -108,3 +104,7 @@
   </form>
   {% endif %}
 </div>
+{% if htmx_count_oob %}
+{# Keep the collapsed summary's member count in sync after an HTMX re-render. #}
+<span id="squad-count-{{ squad.pk }}" hx-swap-oob="true" class="badge badge-neutral badge-sm normal-case">{{ members|length }} member{{ members|length|pluralize }}</span>
+{% endif %}

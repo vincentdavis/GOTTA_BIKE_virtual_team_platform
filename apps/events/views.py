@@ -364,6 +364,7 @@ def _build_manage_squad_context(request, event, squad):
         "event_pk": event.pk,
         "can_manage": _can_manage_event_squads(request.user, event),
         "oob": False,
+        "htmx_count_oob": True,
     }
 
 
