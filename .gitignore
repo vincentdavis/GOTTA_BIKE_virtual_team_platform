@@ -172,6 +172,7 @@ cython_debug/
 #.idea/
 
 .idea
+.idea.zip
 .claude
 .ai
 .junie
