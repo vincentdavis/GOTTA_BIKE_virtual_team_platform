@@ -726,3 +726,123 @@ def notify_captains_verification(
             "total_captains": len(captains_to_notify),
             "errors": errors,
         }
+
+
+def _verification_record_url(record_id: int) -> str:
+    """Build the best available URL to a verification record's review page.
+
+    Uses the first non-wildcard, non-localhost ALLOWED_HOSTS entry to form an
+    absolute https URL; falls back to the relative path when no public host is set.
+
+    Args:
+        record_id: ID of the RaceReadyRecord.
+
+    Returns:
+        Absolute (or relative, as fallback) URL string.
+
+    """
+    from django.urls import reverse
+
+    from gotta_bike_platform.config import settings as app_settings
+
+    path = reverse("team:verification_record_detail", args=[record_id])
+    non_public_hosts = {"*", "localhost", "127.0.0.1", "0.0.0.0"}  # noqa: S104 — exclusion list, not a bind address
+    host = next((h for h in app_settings.allowed_hosts if h not in non_public_hosts), None)
+    return f"https://{host}{path}" if host else path
+
+
+@task
+def notify_pvt_power_submission(record_id: int) -> dict:
+    """DM the performance verification team when a power verification record is submitted.
+
+    Sends a Discord DM to every member holding a role in
+    ``PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES`` (or with an explicit
+    ``performance_verification_team`` override), excluding the submitter.
+
+    Args:
+        record_id: ID of the submitted power RaceReadyRecord.
+
+    Returns:
+        dict with notification status and counts.
+
+    """
+    from django.db.models import Q
+
+    from apps.accounts.models import Permissions, User
+
+    with logfire.span("notify_pvt_power_submission", record_id=record_id):
+        try:
+            record = RaceReadyRecord.objects.select_related("user").get(pk=record_id)
+        except RaceReadyRecord.DoesNotExist:
+            logfire.error("RaceReadyRecord not found for PVT power notification", record_id=record_id)
+            return {"status": "error", "reason": "record_not_found"}
+
+        if record.verify_type != "power":
+            logfire.warning(
+                "PVT power notification skipped for non-power record",
+                record_id=record_id,
+                verify_type=record.verify_type,
+            )
+            return {"status": "skipped", "reason": "not_power"}
+
+        # Resolve PVT Discord role IDs from Constance
+        try:
+            role_ids = [int(r) for r in json.loads(config.PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES or "[]")]
+        except (json.JSONDecodeError, ValueError, TypeError):
+            logfire.warning("Invalid PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES setting")
+            role_ids = []
+
+        # Candidate users: hold one of the PVT roles, or have an explicit override granting it
+        candidate_q = Q(permission_overrides__performance_verification_team=True)
+        for rid in role_ids:
+            candidate_q |= Q(discord_roles__has_key=str(rid))
+
+        candidates = User.objects.filter(candidate_q).exclude(discord_id="").exclude(discord_id__isnull=True)
+
+        # Dedupe, honor full permission semantics (overrides can revoke), skip the submitter
+        recipients: dict[int, User] = {}
+        for candidate in candidates:
+            if candidate.pk == record.user_id or not candidate.discord_id:
+                continue
+            if candidate.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM):
+                recipients[candidate.pk] = candidate
+
+        if not recipients:
+            logfire.info("No PVT members to notify for power submission", record_id=record_id)
+            return {"status": "no_recipients", "notified": 0}
+
+        submitter = _get_user_display_name(record.user)
+        message = (
+            f"⚡ **{submitter}** submitted a **Power** verification record for review.\n"
+            f"Review it here: {_verification_record_url(record_id)}"
+        )
+
+        sent = 0
+        errors = []
+        for recipient in recipients.values():
+            if send_discord_dm(recipient.discord_id, message):
+                sent += 1
+                logfire.info(
+                    "PVT power DM sent",
+                    recipient_id=recipient.id,
+                    recipient_discord_id=recipient.discord_id,
+                    record_id=record_id,
+                )
+            else:
+                errors.append(recipient.discord_id)
+                logfire.warning(
+                    "Failed to send PVT power DM",
+                    recipient_id=recipient.id,
+                    recipient_discord_id=recipient.discord_id,
+                    record_id=record_id,
+                )
+            time.sleep(0.5)
+
+        logfire.info(
+            "PVT power notification complete",
+            record_id=record_id,
+            notified=sent,
+            failed=len(errors),
+            total_recipients=len(recipients),
+        )
+        return {"status": "complete", "notified": sent, "errors": errors, "total_recipients": len(recipients)}

@@ -674,6 +674,12 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
             notification_type="submitted",
         )
 
+        # Notify the performance verification team when a power record is submitted
+        if record.verify_type == "power":
+            from apps.team.tasks import notify_pvt_power_submission
+
+            notify_pvt_power_submission.enqueue(record_id=record.id)
+
         if request.headers.get("HX-Request"):
             # Return updated race ready section
             race_ready_records = request.user.race_ready_records.all()
