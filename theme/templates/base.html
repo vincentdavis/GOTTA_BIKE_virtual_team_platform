@@ -1,4 +1,4 @@
-{% load static tailwind_tags django_htmx accounts_tags %}
+{% load static tailwind_tags django_htmx accounts_tags tz %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -112,6 +112,14 @@
         <span>{{ config.TEAM_NAME }}</span>
       {% endif %}
     </a>
+    {% if deploy_time %}
+    {% timezone "America/New_York" %}
+    <span class="hidden sm:inline text-xs text-base-content/40 ml-1 whitespace-nowrap"
+          title="Last deploy{% if deploy_version %} · {{ deploy_version }}{% endif %}">
+      UPDATE:{{ deploy_time|date:"Y/m/d g:i" }}{{ deploy_time|date:"A"|lower }}{% if deploy_version %} ({{ deploy_version }}){% endif %}
+    </span>
+    {% endtimezone %}
+    {% endif %}
   </div>
   <div class="flex-none gap-2 px-4">
     {% block header_actions %}{% endblock %}
