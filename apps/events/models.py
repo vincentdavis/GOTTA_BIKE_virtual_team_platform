@@ -52,6 +52,7 @@ class Event(models.Model):
     Attributes:
         title: Display name for the event.
         description: Longer description of the event (supports Markdown).
+        config_option: Configuration profile (LADDER/SERIES/TTT) gating optional event behaviors.
         start_date: Event start date.
         end_date: Event end date.
         visible: Whether the event is visible to team members.
@@ -64,6 +65,13 @@ class Event(models.Model):
 
     """
 
+    class ConfigOption(models.TextChoices):
+        """Event configuration profiles that gate optional event behaviors."""
+
+        LADDER = "LADDER", "Ladder"
+        SERIES = "SERIES", "Series"
+        TTT = "TTT", "TTT"
+
     prefixes = models.JSONField(
         default=list,
         blank=True,
@@ -71,6 +79,13 @@ class Event(models.Model):
             'Channel/role prefixes (list), e.g. ["$", "~"]. '
             "Roles matching any of these prefixes appear in event/squad selectors."
         ),
+    )
+    config_option = models.CharField(
+        max_length=20,
+        choices=ConfigOption.choices,
+        blank=True,
+        default="",
+        help_text="Configuration profile used to enable optional event behaviors",
     )
     title = models.CharField(max_length=200, help_text="Event title")
     description = models.TextField(blank=True, help_text="Event description (supports Markdown)")

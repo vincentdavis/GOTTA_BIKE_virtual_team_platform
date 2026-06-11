@@ -83,6 +83,22 @@
           </label>
         </div>
 
+        <!-- Config Option -->
+        <div class="form-control w-full">
+          <label class="label" for="id_config_option">
+            <span class="label-text">Event Type</span>
+          </label>
+          {{ form.config_option }}
+          {% if form.config_option.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.config_option.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Configuration profile for optional event behaviors</span>
+          </label>
+        </div>
+
         <!-- Date Range -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control w-full">

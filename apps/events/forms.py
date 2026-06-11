@@ -131,6 +131,7 @@ class EventForm(forms.ModelForm):
             "title",
             "logo",
             "description",
+            "config_option",
             "start_date",
             "end_date",
             "url",
@@ -169,6 +170,9 @@ class EventForm(forms.ModelForm):
             ),
             "url": forms.URLInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},
+            ),
+            "config_option": forms.Select(
+                attrs={"class": "select select-bordered w-full"},
             ),
             "visible": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
