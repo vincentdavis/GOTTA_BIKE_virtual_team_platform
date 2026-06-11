@@ -4,7 +4,7 @@ import logfire
 import markdown
 from constance import config
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
@@ -173,3 +173,26 @@ def robots_txt(request):
 
     content = "\n".join(lines)
     return HttpResponse(content, content_type="text/plain")
+
+
+@require_GET
+def healthz(request):
+    """Return service health plus deploy metadata for programmatic version checks.
+
+    Public, unauthenticated, dependency-free (no DB hit) so it is safe as a
+    liveness/version probe.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        JSON response with status, version (short commit SHA), and deploy time.
+
+    """
+    from gotta_bike_platform.version import DEPLOY_TIME, DEPLOY_VERSION
+
+    return JsonResponse({
+        "status": "ok",
+        "version": DEPLOY_VERSION or None,
+        "deployed_at": DEPLOY_TIME.isoformat(),
+    })

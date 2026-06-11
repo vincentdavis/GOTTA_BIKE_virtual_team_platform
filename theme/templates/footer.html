@@ -41,5 +41,5 @@
             </a>
         </div>
     </nav>
-    <p>Copyright &copy; {% now "Y" %} {{ config.TEAM_NAME }}. All rights reserved.</p>
+    <p>Copyright &copy; {% now "Y" %} {{ config.TEAM_NAME }}. All rights reserved.{% if deploy_version %} <span class="text-base-content/40">&middot; {{ deploy_version }}</span>{% endif %}</p>
 </footer>
