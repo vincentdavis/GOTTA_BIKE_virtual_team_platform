@@ -48,7 +48,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
         <div class="flex justify-between bg-base-300 px-3 py-2 rounded">
           <span class="text-base-content/60">Submitted by</span>
-          <span>{{ ticket.submitted_by.get_full_name|default:ticket.submitted_by.discord_username }}</span>
+          <span>{% if ticket.submitted_by %}{{ ticket.submitted_by.get_full_name|default:ticket.submitted_by.discord_username }}{% else %}<span class="text-base-content/30">System</span>{% endif %}</span>
         </div>
         <div class="flex justify-between bg-base-300 px-3 py-2 rounded">
           <span class="text-base-content/60">Assigned to</span>

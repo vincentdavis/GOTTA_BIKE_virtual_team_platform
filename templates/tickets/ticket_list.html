@@ -84,7 +84,7 @@
             {% else %}<span class="badge badge-neutral badge-sm">Normal</span>
             {% endif %}
           </td>
-          <td class="text-sm">{{ t.submitted_by.get_full_name|default:t.submitted_by.discord_username }}</td>
+          <td class="text-sm">{% if t.submitted_by %}{{ t.submitted_by.get_full_name|default:t.submitted_by.discord_username }}{% else %}<span class="text-base-content/30">System</span>{% endif %}</td>
           <td class="text-sm">
             {% if t.assigned_to %}{{ t.assigned_to.get_full_name|default:t.assigned_to.discord_username }}
             {% else %}<span class="text-base-content/30">—</span>{% endif %}
