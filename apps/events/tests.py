@@ -585,3 +585,123 @@ def test_availability_template_delete(client, event_admin) -> None:
     )
     assert response.status_code == 302
     assert not AvailabilityGridTemplate.objects.filter(pk=template.pk).exists()
+
+
+# ---- Edit draft availability grids ----
+
+
+def _draft_grid(squad, **overrides):
+    from apps.events.models import AvailabilityGrid
+
+    fields = {
+        "squad": squad,
+        "start_date": date(2026, 7, 1),
+        "end_date": date(2026, 7, 7),
+        "start_time": "18:00",
+        "end_time": "20:00",
+        "slot_duration": 30,
+        "grid_timezone": "UTC",
+        "blocked_cells": [],
+        "status": AvailabilityGrid.Status.DRAFT,
+    }
+    fields.update(overrides)
+    return AvailabilityGrid.objects.create(**fields)
+
+
+@pytest.mark.django_db
+def test_availability_edit_get_prefills_draft(client, event_admin) -> None:
+    from django.urls import reverse
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    grid = _draft_grid(squad)
+
+    response = client.get(reverse("events:availability_edit", args=[event.pk, squad.pk, grid.id]))
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "Edit Availability Grid" in body
+    assert '"start_time": "18:00"' in body  # INITIAL_GRID embedded
+
+
+@pytest.mark.django_db
+def test_availability_edit_blocked_for_published(client, event_admin) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    grid = _draft_grid(squad, status=AvailabilityGrid.Status.PUBLISHED)
+
+    response = client.get(reverse("events:availability_edit", args=[event.pk, squad.pk, grid.id]))
+    assert response.status_code == 302  # redirected, not editable
+
+
+@pytest.mark.django_db
+def test_availability_edit_post_updates_grid(client, event_admin) -> None:
+    import json
+
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    grid = _draft_grid(squad, title="Original")
+
+    payload = {
+        "title": "Renamed",
+        "start_date": "2026-07-01",
+        "end_date": "2026-07-07",
+        "start_time": "19:00",
+        "end_time": "21:00",
+        "slot_duration": 30,
+        "timezone": "UTC",
+        "blocked_cells": [],
+        "expires": None,
+        "max_races_question": True,
+        "rest_days_question": False,
+    }
+    response = client.post(
+        reverse("events:availability_edit", args=[event.pk, squad.pk, grid.id]),
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    # No new grid created; the existing one is updated in place.
+    assert AvailabilityGrid.objects.filter(squad=squad).count() == 1
+    grid.refresh_from_db()
+    assert grid.title == "Renamed"
+    assert grid.start_time == "19:00"
+    assert grid.max_races_question is True
+    assert grid.status == AvailabilityGrid.Status.DRAFT
+
+
+@pytest.mark.django_db
+def test_availability_edit_denied_for_non_manager(client, team_member) -> None:
+    from django.urls import reverse
+
+    client.force_login(team_member)
+    event, squad = _avail_event_squad()
+    grid = _draft_grid(squad)
+
+    response = client.get(reverse("events:availability_edit", args=[event.pk, squad.pk, grid.id]))
+    assert response.status_code == 302  # redirected to event detail, no permission
+
+
+@pytest.mark.parametrize(
+    ("sd", "ed", "st", "et", "tz"),
+    [
+        (date(2026, 7, 1), date(2026, 7, 7), "08:00", "20:00", "America/New_York"),
+        (date(2026, 1, 5), date(2026, 1, 11), "19:00", "21:00", "Europe/London"),
+        (date(2026, 7, 1), date(2026, 7, 1), "22:00", "23:30", "America/Los_Angeles"),  # crosses UTC midnight
+        (date(2026, 3, 8), date(2026, 3, 14), "07:00", "09:00", "America/New_York"),  # DST start week
+        (date(2026, 7, 1), date(2026, 7, 7), "08:00", "20:00", "UTC"),
+    ],
+)
+def test_convert_utc_to_local_config_round_trips(sd, ed, st, et, tz) -> None:
+    from apps.events.tz_utils import convert_local_to_utc, convert_utc_to_local_config
+
+    u = convert_local_to_utc(sd, ed, st, et, tz)
+    back = convert_utc_to_local_config(u[0], u[1], u[2], u[3], tz)
+    assert back == (sd, ed, st, et)

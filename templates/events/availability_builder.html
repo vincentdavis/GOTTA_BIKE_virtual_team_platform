@@ -35,7 +35,7 @@
     <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary text-sm">&larr; Back to Manage Squads</a>
   </div>
 
-  <h1 class="text-2xl font-bold mb-1">Availability Builder</h1>
+  <h1 class="text-2xl font-bold mb-1">{{ page_heading|default:"Availability Builder" }}</h1>
   <p class="text-base-content/70 mb-6">{{ event.title }} &mdash; {{ squad.name }}</p>
 
   <!-- Settings Panel -->
@@ -175,6 +175,7 @@
   var SQUAD_ID = {{ squad.pk }};
   var TIMEZONE_CHOICES = {{ timezone_choices_json|safe }};
   var USER_TIMEZONE = '{{ user_timezone }}';
+  var INITIAL_GRID = {% if initial_grid_json %}{{ initial_grid_json|safe }}{% else %}null{% endif %};
 
   // DOM refs
   var startDateEl = document.getElementById('cfg-start-date');
@@ -715,6 +716,11 @@
     return el ? el.value : null;
   }
 
+  function setRadioValue(name, val) {
+    var el = document.querySelector('input[name="' + name + '"][value="' + val + '"]');
+    if (el) el.checked = true;
+  }
+
   function showToast(msg, isError) {
     var toast = document.getElementById('save-toast');
     var inner = document.getElementById('save-toast-inner');
@@ -889,6 +895,24 @@
   populateTimezoneSelect();
   populateTimeSelects();
   setDefaultDates();
+
+  // Edit mode: pre-fill the builder from an existing grid, then generate it.
+  if (INITIAL_GRID) {
+    startDateEl.value = INITIAL_GRID.start_date;
+    endDateEl.value = INITIAL_GRID.end_date;
+    startTimeEl.value = INITIAL_GRID.start_time;
+    endTimeEl.value = INITIAL_GRID.end_time;
+    timezoneEl.value = INITIAL_GRID.timezone;
+    slotDurationEl.value = String(INITIAL_GRID.slot_duration);
+    titleEl.value = INITIAL_GRID.title || '';
+    expiresEl.value = INITIAL_GRID.expires || '';
+    setRadioValue('cfg-max-races', INITIAL_GRID.max_races_question ? 'yes' : 'no');
+    setRadioValue('cfg-rest-days', INITIAL_GRID.rest_days_question ? 'yes' : 'no');
+    (INITIAL_GRID.blocked_cells || []).forEach(function(c) {
+      cellStates[c.date + '|' + c.time] = 'blocked';
+    });
+    buildGrid();
+  }
 })();
 </script>
 {% endblock %}

@@ -61,6 +61,56 @@ def convert_local_to_utc(
     )
 
 
+def convert_utc_to_local_config(
+    utc_start_date: date,
+    utc_end_date: date,
+    utc_start_time: str,
+    utc_end_time: str,
+    source_tz: str,
+) -> tuple[date, date, str, str]:
+    """Reverse of :func:`convert_local_to_utc` for re-editing a stored grid.
+
+    Recovers the local start/end dates and times a grid was originally built with, so the
+    builder can be pre-filled in the grid's own timezone. The end time is reconstructed by
+    finding the UTC date (near the local end date) whose instant maps back onto the local
+    end date, which handles end times that cross UTC midnight.
+
+    Args:
+        utc_start_date: Stored UTC start date.
+        utc_end_date: Stored (anchored) UTC end date.
+        utc_start_time: Stored UTC start time as "HH:MM".
+        utc_end_time: Stored UTC end time as "HH:MM".
+        source_tz: IANA timezone the grid was created in.
+
+    Returns:
+        Tuple of (local_start_date, local_end_date, local_start_time, local_end_time).
+
+    """
+    if source_tz == "UTC":
+        return utc_start_date, utc_end_date, utc_start_time, utc_end_time
+
+    tz = ZoneInfo(source_tz)
+    utc = ZoneInfo("UTC")
+
+    local_start_dt = datetime.combine(utc_start_date, time.fromisoformat(utc_start_time), tzinfo=utc).astimezone(tz)
+    local_start_date = local_start_dt.date()
+    local_start_time = local_start_dt.strftime("%H:%M")
+
+    # The anchored UTC date span preserves the local day count.
+    length_days = (utc_end_date - utc_start_date).days + 1
+    local_end_date = local_start_date + timedelta(days=length_days - 1)
+
+    end_time_obj = time.fromisoformat(utc_end_time)
+    local_end_time = utc_end_time
+    for delta in (0, 1, -1):
+        candidate = datetime.combine(local_end_date + timedelta(days=delta), end_time_obj, tzinfo=utc).astimezone(tz)
+        if candidate.date() == local_end_date:
+            local_end_time = candidate.strftime("%H:%M")
+            break
+
+    return local_start_date, local_end_date, local_start_time, local_end_time
+
+
 def convert_blocked_cells_to_utc(
     blocked_cells: list[dict],
     source_tz: str,

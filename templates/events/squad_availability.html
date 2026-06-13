@@ -52,6 +52,8 @@
               </td>
               <td class="text-right space-x-1">
                 {% if grid.is_draft %}
+                <a href="{% url 'events:availability_edit' event.pk squad.pk grid.pk %}"
+                   class="btn btn-warning btn-xs btn-outline">Edit</a>
                 <button type="button" class="btn btn-success btn-xs"
                         onclick="document.getElementById('publish-modal-{{ grid.pk }}').showModal()">
                   Publish

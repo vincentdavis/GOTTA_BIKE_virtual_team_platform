@@ -8,6 +8,7 @@ from apps.events.views import (
     availability_copy_view,
     availability_create_view,
     availability_delete_view,
+    availability_edit_view,
     availability_preview_view,
     availability_respond_view,
     availability_results_view,
@@ -113,6 +114,11 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/preview/",
         availability_preview_view,
         name="availability_preview",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/edit/",
+        availability_edit_view,
+        name="availability_edit",
     ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/availability/templates/",

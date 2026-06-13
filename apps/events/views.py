@@ -50,6 +50,7 @@ from apps.events.tz_utils import (
     convert_blocked_cells_to_utc,
     convert_grid_to_local,
     convert_local_to_utc,
+    convert_utc_to_local_config,
 )
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
@@ -2490,13 +2491,107 @@ def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int)
     )
 
 
-def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) -> JsonResponse:
+@login_required
+@team_member_required()
+@require_http_methods(["GET", "POST"])
+def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str) -> HttpResponse:
+    """Edit a draft availability grid in the builder.
+
+    GET pre-fills the builder from the stored grid (converted back to its own timezone).
+    POST re-validates and updates the grid in place. Only draft grids are editable, so no
+    member responses can be affected.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+
+    Returns:
+        Rendered builder (GET) or JsonResponse (POST), or a redirect when not allowed.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        logfire.warning(
+            "Unauthorized availability edit access",
+            grid_id=str(grid.id),
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        if request.method == "POST":
+            return JsonResponse({"error": "Permission denied."}, status=403)
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    if grid.status != AvailabilityGrid.Status.DRAFT:
+        if request.method == "POST":
+            return JsonResponse({"error": "Only draft grids can be edited."}, status=400)
+        messages.error(request, "Only draft grids can be edited.")
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+    if request.method == "POST":
+        return _handle_availability_save(request, event, squad, grid=grid)
+
+    # GET: pre-fill the builder from the stored (UTC) grid, converted back to its own timezone.
+    local_start_date, local_end_date, local_start_time, local_end_time = convert_utc_to_local_config(
+        grid.start_date, grid.end_date, grid.start_time, grid.end_time, grid.grid_timezone
+    )
+    grid_local = convert_grid_to_local(
+        grid.dates, grid.start_time, grid.end_time, grid.slot_duration, grid.blocked_cells, grid.grid_timezone
+    )
+    blocked_local = [
+        {"date": key.split("|")[0], "time": key.split("|")[1]} for key in grid_local["display_blocked"]
+    ]
+    initial_grid = {
+        "start_date": local_start_date.isoformat(),
+        "end_date": local_end_date.isoformat(),
+        "start_time": local_start_time,
+        "end_time": local_end_time,
+        "timezone": grid.grid_timezone,
+        "slot_duration": grid.slot_duration,
+        "blocked_cells": blocked_local,
+        "title": grid.title,
+        "expires": grid.expires.isoformat() if grid.expires else "",
+        "max_races_question": grid.max_races_question,
+        "rest_days_question": grid.rest_days_question,
+    }
+    user_tz = getattr(request.user, "timezone", "") or "UTC"
+    logfire.debug(
+        "Availability builder opened for edit",
+        grid_id=str(grid.id),
+        user_id=request.user.id,
+        event_id=event_pk,
+        squad_id=squad_pk,
+    )
+    return render(
+        request,
+        "events/availability_builder.html",
+        {
+            "event": event,
+            "squad": squad,
+            "timezone_choices_json": json.dumps(TIMEZONE_CHOICES),
+            "user_timezone": user_tz,
+            "initial_grid_json": json.dumps(initial_grid),
+            "page_heading": "Edit Availability Grid",
+        },
+    )
+
+
+def _handle_availability_save(
+    request: HttpRequest, event: Event, squad: Squad, grid: AvailabilityGrid | None = None
+) -> JsonResponse:
     """Validate and persist an AvailabilityGrid from a JSON POST body.
 
     Args:
         request: The HTTP request with JSON body.
         event: The parent event.
         squad: The squad to attach the grid to.
+        grid: An existing grid to update in place; when None a new draft grid is created.
 
     Returns:
         JsonResponse with grid id on success, or error details on failure.
@@ -2565,30 +2660,45 @@ def _handle_availability_save(request: HttpRequest, event: Event, squad: Squad) 
         )
         blocked_cells = convert_blocked_cells_to_utc(blocked_cells, grid_tz, slot_duration)
 
-    grid = AvailabilityGrid.objects.create(
-        squad=squad,
-        title=title,
-        start_date=start_date,
-        end_date=end_date,
-        start_time=start_time,
-        end_time=end_time,
-        slot_duration=slot_duration,
-        grid_timezone=grid_tz,
-        blocked_cells=blocked_cells,
-        max_races_question=bool(data.get("max_races_question", False)),
-        rest_days_question=bool(data.get("rest_days_question", False)),
-        expires=expires,
-        status=AvailabilityGrid.Status.DRAFT,
-        created_by=request.user,
-    )
+    field_values = {
+        "title": title,
+        "start_date": start_date,
+        "end_date": end_date,
+        "start_time": start_time,
+        "end_time": end_time,
+        "slot_duration": slot_duration,
+        "grid_timezone": grid_tz,
+        "blocked_cells": blocked_cells,
+        "max_races_question": bool(data.get("max_races_question", False)),
+        "rest_days_question": bool(data.get("rest_days_question", False)),
+        "expires": expires,
+    }
 
-    logfire.info(
-        "Availability grid created",
-        grid_id=str(grid.id),
-        squad_id=squad.pk,
-        event_id=event.pk,
-        user_id=request.user.id,
-    )
+    if grid is None:
+        grid = AvailabilityGrid.objects.create(
+            squad=squad,
+            status=AvailabilityGrid.Status.DRAFT,
+            created_by=request.user,
+            **field_values,
+        )
+        logfire.info(
+            "Availability grid created",
+            grid_id=str(grid.id),
+            squad_id=squad.pk,
+            event_id=event.pk,
+            user_id=request.user.id,
+        )
+    else:
+        for attr, value in field_values.items():
+            setattr(grid, attr, value)
+        grid.save()
+        logfire.info(
+            "Availability grid updated",
+            grid_id=str(grid.id),
+            squad_id=squad.pk,
+            event_id=event.pk,
+            user_id=request.user.id,
+        )
     return JsonResponse({"id": str(grid.id), "status": "ok"})
 
 
