@@ -12,6 +12,9 @@ from apps.events.views import (
     availability_respond_view,
     availability_results_view,
     availability_status_view,
+    availability_template_apply_view,
+    availability_template_create_view,
+    availability_template_delete_view,
     event_all_races_view,
     event_create_view,
     event_delete_view,
@@ -110,6 +113,21 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/preview/",
         availability_preview_view,
         name="availability_preview",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/templates/",
+        availability_template_create_view,
+        name="availability_template_create",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/templates/<int:template_pk>/apply/",
+        availability_template_apply_view,
+        name="availability_template_apply",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/templates/<int:template_pk>/delete/",
+        availability_template_delete_view,
+        name="availability_template_delete",
     ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/status/",

@@ -149,6 +149,73 @@
       <p class="text-sm text-base-content/50">No availability grids yet.</p>
       {% endif %}
 
+      <div class="divider">Templates</div>
+      <p class="text-xs text-base-content/60 mb-2">
+        Reusable starting points for this squad. Build a grid and click <strong>Save as Template</strong> to add one,
+        then <strong>Use</strong> it to spin up a draft for a chosen start date.
+      </p>
+      {% if availability_templates %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Configuration</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in availability_templates %}
+            <tr>
+              <td class="font-medium">{{ t.name }}</td>
+              <td class="text-sm text-base-content/70">
+                {{ t.start_time }}&ndash;{{ t.end_time }} {{ t.grid_timezone }} &middot;
+                {{ t.slot_duration }}m slots &middot; {{ t.default_length_days }} day{{ t.default_length_days|pluralize }}
+                {% if t.max_races_question %} &middot; max-races{% endif %}{% if t.rest_days_question %} &middot; rest-days{% endif %}
+              </td>
+              <td class="text-right space-x-1">
+                <button type="button" class="btn btn-secondary btn-xs"
+                        onclick="document.getElementById('use-template-{{ t.pk }}').showModal()">
+                  Use
+                </button>
+                <dialog id="use-template-{{ t.pk }}" class="modal">
+                  <div class="modal-box">
+                    <h3 class="font-bold text-lg">Use template "{{ t.name }}"</h3>
+                    <p class="py-2 text-sm">
+                      Creates a new <strong>draft</strong> grid spanning
+                      {{ t.default_length_days }} day{{ t.default_length_days|pluralize }} from the start date below,
+                      using {{ t.start_time }}&ndash;{{ t.end_time }} {{ t.grid_timezone }}, {{ t.slot_duration }}-minute slots.
+                    </p>
+                    <form method="post" action="{% url 'events:availability_template_apply' event.pk squad.pk t.pk %}" class="space-y-3">
+                      {% csrf_token %}
+                      <div class="form-control">
+                        <label class="label py-1"><span class="label-text text-xs">Start date</span></label>
+                        <input type="date" name="start_date" required value="{{ today }}"
+                               class="input input-bordered input-sm w-full">
+                      </div>
+                      <div class="modal-action">
+                        <button type="button" class="btn btn-sm" onclick="this.closest('dialog').close()">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary">Create Draft</button>
+                      </div>
+                    </form>
+                  </div>
+                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                </dialog>
+                <form method="post" action="{% url 'events:availability_template_delete' event.pk squad.pk t.pk %}" class="inline"
+                      onsubmit="return confirm('Delete template &quot;{{ t.name|escapejs }}&quot;? This cannot be undone.');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-error btn-xs btn-outline">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/50">No templates yet.</p>
+      {% endif %}
+
       <div class="divider"></div>
       <div class="flex justify-between items-center">
         <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary">Back to Squads</a>

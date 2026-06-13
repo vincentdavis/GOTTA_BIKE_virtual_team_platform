@@ -1033,3 +1033,83 @@ class AvailabilitySlotSelection(models.Model):
 
         """
         return f"{self.name} ({self.slot_date} {self.slot_time})"
+
+
+class AvailabilityGridTemplate(models.Model):
+    """A reusable, per-squad availability-grid configuration.
+
+    Stores the date-independent shape of a grid (times, slot size, timezone, and the
+    optional questions) so captains can spin up a new draft grid for the squad without
+    rebuilding the configuration each time. Times are stored as **local** "HH:MM" in
+    ``timezone``; the apply flow converts them to UTC for the chosen dates so DST is
+    handled correctly. Blocked cells are not stored (set fresh per grid).
+
+    Attributes:
+        squad: The squad this template belongs to.
+        name: Library label shown in the template picker.
+        start_time: Local start time as "HH:MM".
+        end_time: Local end time as "HH:MM".
+        grid_timezone: IANA timezone the times are expressed in.
+        slot_duration: Minutes per slot (15, 30, or 60).
+        default_length_days: Number of days a grid spans; used to derive end date on apply.
+        max_races_question: Carry the "max races" question onto created grids.
+        rest_days_question: Carry the "rest days" question onto created grids.
+        created_by: User who created this template.
+        created_at: When the template was created.
+        updated_at: When the template was last modified.
+
+    """
+
+    squad = models.ForeignKey(
+        Squad,
+        on_delete=models.CASCADE,
+        related_name="availability_templates",
+        help_text="The squad this template belongs to",
+    )
+    name = models.CharField(max_length=200, help_text="Label shown in the template picker")
+    start_time = models.CharField(max_length=5, help_text='Local start time as "HH:MM"')
+    end_time = models.CharField(max_length=5, help_text='Local end time as "HH:MM"')
+    grid_timezone = models.CharField(
+        max_length=50,
+        default="UTC",
+        help_text="IANA timezone the times are expressed in",
+    )
+    slot_duration = models.PositiveSmallIntegerField(help_text="Minutes per time slot (15, 30, or 60)")
+    default_length_days = models.PositiveSmallIntegerField(
+        default=7,
+        help_text="Number of days a created grid spans (used to derive the end date on apply)",
+    )
+    max_races_question = models.BooleanField(
+        default=False,
+        help_text="Carry the max-races question onto grids created from this template",
+    )
+    rest_days_question = models.BooleanField(
+        default=False,
+        help_text="Carry the rest-days question onto grids created from this template",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_availability_templates",
+        help_text="User who created this template",
+    )
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the template was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the template was last updated")
+
+    class Meta:
+        """Meta options for AvailabilityGridTemplate model."""
+
+        ordering = ["name"]  # noqa: RUF012
+        verbose_name = "Availability Grid Template"
+        verbose_name_plural = "Availability Grid Templates"
+
+    def __str__(self) -> str:
+        """Return squad and template name.
+
+        Returns:
+            String in format "Squad - Name".
+
+        """
+        return f"{self.squad} - {self.name}"

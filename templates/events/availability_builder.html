@@ -118,6 +118,7 @@
     <button id="btn-block-all" class="btn btn-neutral btn-xs btn-outline">Block All</button>
     <button id="btn-open-all" class="btn btn-ghost btn-xs btn-outline">Open All</button>
     <button id="btn-preview" class="btn btn-secondary btn-xs btn-outline hidden md:inline-flex" onclick="document.getElementById('preview-modal').showModal()">Preview</button>
+    <button id="btn-save-template" class="btn btn-info btn-xs btn-outline">Save as Template</button>
     <button id="btn-save" class="btn btn-success btn-xs">Save Grid</button>
   </div>
 
@@ -787,6 +788,60 @@
       showToast('Network error. Please try again.', true);
       btnSave.disabled = false;
       btnSave.textContent = 'Save Grid';
+    });
+  });
+
+  // --- Save as Template ---
+  var btnSaveTemplate = document.getElementById('btn-save-template');
+  var TEMPLATE_CREATE_URL = "{% url 'events:availability_template_create' event.pk squad.pk %}";
+
+  btnSaveTemplate.addEventListener('click', function() {
+    if (!startDateEl.value || !endDateEl.value || !startTimeEl.value || !endTimeEl.value) {
+      showToast('Set the dates and times first.', true);
+      return;
+    }
+    var lengthDays = Math.round(
+      (parseDateStr(endDateEl.value) - parseDateStr(startDateEl.value)) / 86400000
+    ) + 1;
+    if (!(lengthDays >= 1 && lengthDays <= 31)) {
+      showToast('Date range must be between 1 and 31 days.', true);
+      return;
+    }
+
+    var name = (window.prompt('Template name:') || '').trim();
+    if (!name) return;
+
+    var payload = {
+      name: name,
+      start_time: startTimeEl.value,
+      end_time: endTimeEl.value,
+      timezone: timezoneEl.value || 'UTC',
+      slot_duration: parseInt(slotDurationEl.value),
+      length_days: lengthDays,
+      max_races_question: getRadioValue('cfg-max-races') === 'yes',
+      rest_days_question: getRadioValue('cfg-rest-days') === 'yes'
+    };
+
+    btnSaveTemplate.disabled = true;
+    fetch(TEMPLATE_CREATE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify(payload)
+    })
+    .then(function(resp) {
+      return resp.json().then(function(data) { return { ok: resp.ok, data: data }; });
+    })
+    .then(function(result) {
+      btnSaveTemplate.disabled = false;
+      if (result.ok) {
+        showToast('Template "' + name + '" saved.', false);
+      } else {
+        showToast(result.data.error || 'Could not save template.', true);
+      }
+    })
+    .catch(function() {
+      btnSaveTemplate.disabled = false;
+      showToast('Network error. Please try again.', true);
     });
   });
 

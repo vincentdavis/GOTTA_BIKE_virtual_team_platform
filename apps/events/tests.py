@@ -137,6 +137,8 @@ EVENTS_TEMPLATES = [
     "events/event_form.html",
     "events/squad_form.html",
     "events/squad_manage.html",
+    "events/squad_availability.html",
+    "events/availability_builder.html",
     "events/_squad_panel.html",
     "events/_squad_manage_panel.html",
     "events/event_all_races.html",
@@ -419,3 +421,167 @@ def test_squad_form_requires_gender(event_admin) -> None:
     form_ok = SquadForm(data={"name": "Squad A", "gender": "COED"}, event_prefixes=event.prefixes or [])
     form_ok.is_valid()
     assert "gender" not in form_ok.errors
+
+
+# ---- Availability grid templates ----
+
+
+def _avail_event_squad():
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=14), visible=True
+    )
+    from apps.events.models import Squad
+
+    squad = Squad.objects.create(event=event, name="Squad A", gender="COED")
+    return event, squad
+
+
+@pytest.mark.django_db
+def test_availability_template_create(client, event_admin) -> None:
+    import json
+
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGridTemplate
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+
+    payload = {
+        "name": "Weeknights EU",
+        "start_time": "19:00",
+        "end_time": "21:00",
+        "timezone": "UTC",
+        "slot_duration": 30,
+        "length_days": 7,
+        "max_races_question": True,
+        "rest_days_question": False,
+    }
+    response = client.post(
+        reverse("events:availability_template_create", args=[event.pk, squad.pk]),
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    t = AvailabilityGridTemplate.objects.get(squad=squad)
+    assert t.name == "Weeknights EU"
+    assert t.slot_duration == 30
+    assert t.default_length_days == 7
+    assert t.max_races_question is True
+    assert t.rest_days_question is False
+
+
+@pytest.mark.django_db
+def test_availability_template_create_requires_name(client, event_admin) -> None:
+    import json
+
+    from django.urls import reverse
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    response = client.post(
+        reverse("events:availability_template_create", args=[event.pk, squad.pk]),
+        data=json.dumps({"start_time": "19:00", "end_time": "21:00", "slot_duration": 30, "length_days": 7}),
+        content_type="application/json",
+    )
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_availability_template_create_denied_for_non_manager(client, team_member) -> None:
+    import json
+
+    from django.urls import reverse
+
+    client.force_login(team_member)
+    event, squad = _avail_event_squad()
+    body = {"name": "X", "start_time": "19:00", "end_time": "21:00", "slot_duration": 30, "length_days": 7}
+    response = client.post(
+        reverse("events:availability_template_create", args=[event.pk, squad.pk]),
+        data=json.dumps(body),
+        content_type="application/json",
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_availability_template_apply_creates_draft(client, event_admin) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid, AvailabilityGridTemplate
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    template = AvailabilityGridTemplate.objects.create(
+        squad=squad,
+        name="UTC 7-day",
+        start_time="18:00",
+        end_time="20:00",
+        grid_timezone="UTC",
+        slot_duration=30,
+        default_length_days=7,
+        max_races_question=True,
+        rest_days_question=True,
+    )
+    response = client.post(
+        reverse("events:availability_template_apply", args=[event.pk, squad.pk, template.pk]),
+        {"start_date": "2026-07-01"},
+    )
+    assert response.status_code == 302
+    grid = AvailabilityGrid.objects.get(squad=squad)
+    assert grid.status == AvailabilityGrid.Status.DRAFT
+    assert grid.start_date.isoformat() == "2026-07-01"
+    # default_length_days=7 -> end is start + 6 days
+    assert grid.end_date.isoformat() == "2026-07-07"
+    assert grid.start_time == "18:00"  # UTC template, no conversion
+    assert grid.slot_duration == 30
+    assert grid.blocked_cells == []
+    assert grid.max_races_question is True
+    assert grid.rest_days_question is True
+
+
+@pytest.mark.django_db
+def test_availability_template_apply_converts_local_to_utc(client, event_admin) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid, AvailabilityGridTemplate
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    # New York 19:00 in July (EDT, UTC-4) -> 23:00 UTC
+    template = AvailabilityGridTemplate.objects.create(
+        squad=squad,
+        name="NY evenings",
+        start_time="19:00",
+        end_time="21:00",
+        grid_timezone="America/New_York",
+        slot_duration=30,
+        default_length_days=1,
+    )
+    response = client.post(
+        reverse("events:availability_template_apply", args=[event.pk, squad.pk, template.pk]),
+        {"start_date": "2026-07-01"},
+    )
+    assert response.status_code == 302
+    grid = AvailabilityGrid.objects.get(squad=squad)
+    assert grid.start_time == "23:00"  # converted from local 19:00 EDT
+    assert grid.grid_timezone == "America/New_York"
+
+
+@pytest.mark.django_db
+def test_availability_template_delete(client, event_admin) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGridTemplate
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    template = AvailabilityGridTemplate.objects.create(
+        squad=squad, name="Tmp", start_time="18:00", end_time="20:00", slot_duration=30
+    )
+    response = client.post(
+        reverse("events:availability_template_delete", args=[event.pk, squad.pk, template.pk])
+    )
+    assert response.status_code == 302
+    assert not AvailabilityGridTemplate.objects.filter(pk=template.pk).exists()

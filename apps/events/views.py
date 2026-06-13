@@ -37,6 +37,7 @@ from apps.events.forms import EventForm, EventRoleSetupForm, SquadForm
 from apps.events.models import (
     ZR_CATEGORY_ORDER,
     AvailabilityGrid,
+    AvailabilityGridTemplate,
     AvailabilityResponse,
     AvailabilitySlotSelection,
     Event,
@@ -1801,6 +1802,7 @@ def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) 
         return redirect("events:event_detail", pk=event_pk)
 
     availability_grids = squad.availability_grids.all()
+    availability_templates = squad.availability_templates.all()
 
     return render(
         request,
@@ -1809,6 +1811,8 @@ def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) 
             "event": event,
             "squad": squad,
             "availability_grids": availability_grids,
+            "availability_templates": availability_templates,
+            "today": timezone.now().date().isoformat(),
         },
     )
 
@@ -2991,6 +2995,212 @@ def availability_copy_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         blocked_cells_source=len(source.blocked_cells or []),
     )
     messages.success(request, f'Created copy "{new_grid.title}" as a draft.')
+    return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def availability_template_create_view(request: HttpRequest, event_pk: int, squad_pk: int) -> JsonResponse:
+    """Save the builder's current configuration as a reusable per-squad template.
+
+    Accepts a JSON body with the grid shape (local times, timezone, slot duration, length,
+    and the optional questions). Blocked cells and dates are intentionally not stored.
+
+    Args:
+        request: The HTTP request with a JSON body.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        JsonResponse with the template id on success, or error details on failure.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        return JsonResponse({"error": "Permission denied."}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except (json.JSONDecodeError, ValueError):
+        return JsonResponse({"error": "Invalid JSON body."}, status=400)
+
+    name = str(data.get("name", "")).strip()
+    if not name:
+        return JsonResponse({"error": "Template name is required."}, status=400)
+
+    hhmm_re = re.compile(r"^\d{2}:\d{2}$")
+    start_time = str(data.get("start_time", ""))
+    end_time = str(data.get("end_time", ""))
+    if not hhmm_re.match(start_time) or not hhmm_re.match(end_time):
+        return JsonResponse({"error": "start_time and end_time must be HH:MM format."}, status=400)
+    if start_time >= end_time:
+        return JsonResponse({"error": "start_time must be before end_time."}, status=400)
+
+    try:
+        slot_duration = int(data.get("slot_duration", 0))
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "slot_duration must be an integer."}, status=400)
+    if slot_duration not in (15, 30, 60):
+        return JsonResponse({"error": "slot_duration must be 15, 30, or 60."}, status=400)
+
+    try:
+        length_days = int(data.get("length_days", 0))
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "length_days must be an integer."}, status=400)
+    if not 1 <= length_days <= 31:
+        return JsonResponse({"error": "length_days must be between 1 and 31."}, status=400)
+
+    grid_tz = str(data.get("timezone", "UTC")).strip() or "UTC"
+    if grid_tz != "UTC" and grid_tz not in available_timezones():
+        return JsonResponse({"error": f"Invalid timezone: {grid_tz}"}, status=400)
+
+    template = AvailabilityGridTemplate.objects.create(
+        squad=squad,
+        name=name,
+        start_time=start_time,
+        end_time=end_time,
+        grid_timezone=grid_tz,
+        slot_duration=slot_duration,
+        default_length_days=length_days,
+        max_races_question=bool(data.get("max_races_question", False)),
+        rest_days_question=bool(data.get("rest_days_question", False)),
+        created_by=request.user,
+    )
+    logfire.info(
+        "Availability template created",
+        template_id=template.pk,
+        squad_id=squad.pk,
+        event_id=event.pk,
+        user_id=request.user.id,
+    )
+    return JsonResponse({"id": template.pk, "status": "ok"})
+
+
+@login_required
+@team_member_required()
+@require_POST
+def availability_template_apply_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, template_pk: int
+) -> HttpResponse:
+    """Create a draft availability grid from a template and a chosen start date.
+
+    The end date is derived from the template's ``default_length_days``. The template's local
+    times are converted to UTC for the chosen dates (DST-aware), and a draft grid is created.
+
+    Args:
+        request: The HTTP request with a ``start_date`` POST field.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        template_pk: The template primary key.
+
+    Returns:
+        Redirect to the squad availability page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    template = get_object_or_404(AvailabilityGridTemplate, pk=template_pk, squad=squad)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        logfire.warning(
+            "Unauthorized availability template apply attempt",
+            template_id=template.pk,
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    try:
+        start_date = date.fromisoformat(request.POST.get("start_date", ""))
+    except (ValueError, TypeError):
+        messages.error(request, "Invalid or missing start date.")
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+    end_date = start_date + timedelta(days=template.default_length_days - 1)
+
+    start_date_utc, end_date_utc, start_time_utc, end_time_utc = convert_local_to_utc(
+        start_date,
+        end_date,
+        template.start_time,
+        template.end_time,
+        template.grid_timezone,
+    )
+
+    grid = AvailabilityGrid.objects.create(
+        squad=squad,
+        title="",
+        start_date=start_date_utc,
+        end_date=end_date_utc,
+        start_time=start_time_utc,
+        end_time=end_time_utc,
+        slot_duration=template.slot_duration,
+        grid_timezone=template.grid_timezone,
+        blocked_cells=[],
+        max_races_question=template.max_races_question,
+        rest_days_question=template.rest_days_question,
+        expires=None,
+        status=AvailabilityGrid.Status.DRAFT,
+        created_by=request.user,
+    )
+    logfire.info(
+        "Availability grid created from template",
+        template_id=template.pk,
+        grid_id=str(grid.id),
+        squad_id=squad.pk,
+        event_id=event.pk,
+        user_id=request.user.id,
+    )
+    messages.success(request, f'Created draft "{grid.title}" from template "{template.name}".')
+    return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def availability_template_delete_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, template_pk: int
+) -> HttpResponse:
+    """Delete a per-squad availability template.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        template_pk: The template primary key.
+
+    Returns:
+        Redirect to the squad availability page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    template = get_object_or_404(AvailabilityGridTemplate, pk=template_pk, squad=squad)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        logfire.warning(
+            "Unauthorized availability template delete attempt",
+            template_id=template.pk,
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    template_name = template.name
+    template.delete()
+    logfire.info(
+        "Availability template deleted",
+        squad_id=squad.pk,
+        event_id=event.pk,
+        user_id=request.user.id,
+    )
+    messages.success(request, f'Deleted template "{template_name}".')
     return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
 
