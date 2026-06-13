@@ -1041,8 +1041,10 @@ function switchCategorySource(source) {
   var table = document.getElementById('squad-table');
   if (!table) return;
   var headers = table.querySelectorAll('th[data-sort]');
-  headers.forEach(function(th, colIdx) {
+  headers.forEach(function(th) {
     th.addEventListener('click', function() {
+      // Real cell index among all <th> (the leading arrow column has no data-sort)
+      var colIdx = Array.from(th.parentNode.children).indexOf(th);
       var sortType = th.getAttribute('data-sort');
       var asc = th.getAttribute('data-dir') !== 'asc';
       headers.forEach(function(h) {
@@ -1163,8 +1165,10 @@ function switchCategorySource(source) {
   // Sort
   document.querySelectorAll('[data-signup-table]').forEach(function(table) {
     var headers = table.querySelectorAll('th[data-sort]');
-    headers.forEach(function(th, colIdx) {
+    headers.forEach(function(th) {
       th.addEventListener('click', function() {
+        // Real cell index among all <th>, in case a non-sortable column is added
+        var colIdx = Array.from(th.parentNode.children).indexOf(th);
         var sortType = th.getAttribute('data-sort');
         var asc = th.getAttribute('data-dir') !== 'asc';
         // Reset all headers in this table
