@@ -69,6 +69,10 @@
           <div class="form-control w-full">
             <label class="label" for="id_min_zwift_racing_category">
               <span class="label-text">Min ZR Category</span>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_min_zwift_racing_category }}
+                <span>Enforce</span>
+              </label>
             </label>
             {{ form.min_zwift_racing_category }}
             {% if form.min_zwift_racing_category.errors %}
@@ -81,6 +85,10 @@
           <div class="form-control w-full">
             <label class="label" for="id_max_zwift_racing_category">
               <span class="label-text">Max ZR Category</span>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_max_zwift_racing_category }}
+                <span>Enforce</span>
+              </label>
             </label>
             {{ form.max_zwift_racing_category }}
             {% if form.max_zwift_racing_category.errors %}

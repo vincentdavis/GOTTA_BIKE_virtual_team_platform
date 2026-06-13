@@ -565,6 +565,8 @@ class SquadForm(forms.ModelForm):
             "max_zwift_category",
             "min_zwift_racing_category",
             "max_zwift_racing_category",
+            "enforce_min_zwift_racing_category",
+            "enforce_max_zwift_racing_category",
             "url",
             "invite_url",
             "captain_notifications",
@@ -587,6 +589,12 @@ class SquadForm(forms.ModelForm):
             ),
             "max_zwift_racing_category": forms.Select(
                 attrs={"class": "select select-bordered w-full"},
+            ),
+            "enforce_min_zwift_racing_category": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "enforce_max_zwift_racing_category": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
             ),
             "url": forms.URLInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},

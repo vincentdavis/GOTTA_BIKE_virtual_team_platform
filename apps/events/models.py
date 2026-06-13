@@ -451,6 +451,14 @@ class Squad(models.Model):
         choices=ZR_CATEGORY_CHOICES,
         help_text="Maximum Zwift Racing category",
     )
+    enforce_min_zwift_racing_category = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider weaker than the minimum Zwift Racing category",
+    )
+    enforce_max_zwift_racing_category = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider stronger than the maximum Zwift Racing category",
+    )
     url = models.URLField(max_length=500, blank=True, help_text="External URL for squad details")
     invite_url = models.URLField(max_length=500, blank=True, help_text="Invite URL for joining the squad")
     captain_notifications = models.BooleanField(
@@ -525,6 +533,62 @@ class Squad(models.Model):
         if user is None or not getattr(user, "pk", None):
             return False
         return user.pk in self.captain_pks or user.pk in self.vice_captain_pks
+
+    @property
+    def zr_requirement_text(self) -> str:
+        """Return a human description of the enforced ZR category bounds (empty if none enforced).
+
+        ZR tiers rank Diamond (strongest) to Copper (weakest). ``min_zwift_racing_category`` is the
+        weakest tier allowed and ``max_zwift_racing_category`` is the strongest tier allowed.
+        """
+        enforce_min = self.enforce_min_zwift_racing_category and self.min_zwift_racing_category
+        enforce_max = self.enforce_max_zwift_racing_category and self.max_zwift_racing_category
+        if enforce_min and enforce_max:
+            return f"{self.max_zwift_racing_category} to {self.min_zwift_racing_category}"
+        if enforce_max:
+            return f"{self.max_zwift_racing_category} or weaker"
+        if enforce_min:
+            return f"{self.min_zwift_racing_category} or stronger"
+        return ""
+
+    def check_zr_eligibility(self, zr_category: str) -> tuple[bool, str]:
+        """Check a rider's ZR category against this squad's enforced bounds.
+
+        ZR tiers rank Diamond (strongest) to Copper (weakest). A rider must be no stronger than
+        ``max_zwift_racing_category`` and no weaker than ``min_zwift_racing_category`` for the bounds
+        that are enforced.
+
+        Args:
+            zr_category: The rider's current ZR category (e.g. "Gold"); blank/unknown if not in ZR.
+
+        Returns:
+            ``(ok, reason)`` where ``reason`` is a human-readable explanation when ``ok`` is False.
+
+        """
+        enforce_min = self.enforce_min_zwift_racing_category and self.min_zwift_racing_category
+        enforce_max = self.enforce_max_zwift_racing_category and self.max_zwift_racing_category
+        if not enforce_min and not enforce_max:
+            return True, ""
+
+        order = ZR_CATEGORY_ORDER  # index 0 = Diamond (strongest) ... index 9 = Copper (weakest)
+        cat = (zr_category or "").strip()
+        if cat not in order:
+            return False, f"no ZR category on record; this squad requires {self.zr_requirement_text}"
+
+        rider_idx = order.index(cat)
+        if enforce_max and self.max_zwift_racing_category in order:
+            max_idx = order.index(self.max_zwift_racing_category)
+            if rider_idx < max_idx:
+                return False, (
+                    f"ZR category {cat} is above this squad's maximum ({self.max_zwift_racing_category})"
+                )
+        if enforce_min and self.min_zwift_racing_category in order:
+            min_idx = order.index(self.min_zwift_racing_category)
+            if rider_idx > min_idx:
+                return False, (
+                    f"ZR category {cat} is below this squad's minimum ({self.min_zwift_racing_category})"
+                )
+        return True, ""
 
 
 class SquadMember(models.Model):

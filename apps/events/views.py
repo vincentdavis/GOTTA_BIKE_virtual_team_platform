@@ -1954,6 +1954,29 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 messages.info(request, f"{signup.user} was not assigned to any squad.")
     else:
         squad = get_object_or_404(Squad, pk=squad_id, event=event)
+        rider_zr = ""
+        if signup.user.zwid:
+            zr = ZRRider.objects.filter(zwid=signup.user.zwid).first()
+            rider_zr = getattr(zr, "race_current_category", "") or "" if zr else ""
+        eligible, reason = squad.check_zr_eligibility(rider_zr)
+        if not eligible:
+            logfire.info(
+                "Squad assignment blocked by ZR enforcement",
+                event_id=event_pk,
+                squad_id=squad.pk,
+                squad_name=squad.name,
+                user_id=signup.user_id,
+                admin_user_id=request.user.id,
+                rider_zr_category=rider_zr,
+                reason=reason,
+            )
+            block_msg = f"Cannot add {signup.user} to {squad.name}: {reason}."
+            if is_htmx:
+                resp = HttpResponse(status=204)
+                resp["HX-Trigger"] = json.dumps({"showToast": [{"message": block_msg, "tags": "error"}]})
+                return resp
+            messages.error(request, block_msg)
+            return redirect("events:event_detail", pk=event_pk)
         SquadMember.objects.update_or_create(
             squad=squad,
             user=signup.user,
@@ -3749,6 +3772,24 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
     if already_member:
         messages.info(request, f"You're already a member of squad {squad.name}.")
         return redirect("events:my_events")
+
+    # Enforce the squad's ZR category bounds before joining
+    rider_zr = ""
+    if request.user.zwid:
+        zr = ZRRider.objects.filter(zwid=request.user.zwid).first()
+        rider_zr = getattr(zr, "race_current_category", "") or "" if zr else ""
+    eligible, reason = squad.check_zr_eligibility(rider_zr)
+    if not eligible:
+        logfire.info(
+            "Squad invite join blocked by ZR enforcement",
+            squad_id=squad.pk,
+            event_id=event.pk,
+            user_id=request.user.id,
+            rider_zr_category=rider_zr,
+            reason=reason,
+        )
+        messages.error(request, f"You can't join {squad.name}: {reason}.")
+        return redirect("events:squad_invite", token=token)
 
     # Ensure event signup exists and is active
     signup, created = EventSignup.objects.get_or_create(

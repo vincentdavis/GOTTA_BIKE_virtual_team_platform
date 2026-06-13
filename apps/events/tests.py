@@ -259,3 +259,82 @@ def test_squad_assign_from_manage_page_returns_panel(client, event_admin, team_m
     assert response.status_code == 200
     assert f'id="squad-panel-{squad.pk}"' in response.content.decode()
     assert SquadMember.objects.filter(squad=squad, user=team_member).exists()
+
+
+# ---- ZR category enforcement on squad join ----
+
+
+@pytest.mark.parametrize(
+    ("rider_cat", "expected_ok"),
+    [
+        ("Diamond", False),  # stronger than max (Sapphire)
+        ("Emerald", False),  # stronger than max
+        ("Sapphire", True),  # at max
+        ("Platinum", True),  # inside band
+        ("Gold", True),  # at min
+        ("Silver", False),  # weaker than min (Gold)
+        ("Copper", False),  # weaker than min
+        ("", False),  # no ZR category on record
+    ],
+)
+def test_squad_check_zr_eligibility_band(rider_cat, expected_ok) -> None:
+    from apps.events.models import Squad
+
+    squad = Squad(
+        min_zwift_racing_category="Gold",
+        max_zwift_racing_category="Sapphire",
+        enforce_min_zwift_racing_category=True,
+        enforce_max_zwift_racing_category=True,
+    )
+    ok, reason = squad.check_zr_eligibility(rider_cat)
+    assert ok is expected_ok
+    if not ok:
+        assert reason  # a human-readable reason is always provided when blocked
+
+
+def test_squad_check_zr_eligibility_respects_enforce_flags() -> None:
+    from apps.events.models import Squad
+
+    # Bounds set but neither checkbox enabled -> never blocks.
+    squad = Squad(min_zwift_racing_category="Gold", max_zwift_racing_category="Sapphire")
+    assert squad.check_zr_eligibility("Copper") == (True, "")
+
+    # Only the max bound enforced -> too-strong blocked, anything weaker allowed.
+    squad_max = Squad(max_zwift_racing_category="Sapphire", enforce_max_zwift_racing_category=True)
+    assert squad_max.check_zr_eligibility("Diamond")[0] is False
+    assert squad_max.check_zr_eligibility("Copper")[0] is True
+
+
+@pytest.mark.django_db
+def test_squad_assign_blocked_by_zr_enforcement(client, event_admin, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+    from apps.zwiftracing.models import ZRRider
+
+    client.force_login(event_admin)
+    team_member.zwid = 555001
+    team_member.save(update_fields=["zwid"])
+    ZRRider.objects.create(zwid=team_member.zwid, race_current_category="Copper")
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad = Squad.objects.create(
+        event=event,
+        name="Squad A",
+        min_zwift_racing_category="Gold",
+        enforce_min_zwift_racing_category=True,
+    )
+    signup = EventSignup.objects.create(event=event, user=team_member, status=EventSignup.Status.REGISTERED)
+
+    response = client.post(
+        reverse("events:squad_assign", args=[event.pk]),
+        {"signup_id": signup.pk, "squad_id": squad.pk},
+        HTTP_HX_REQUEST="true",
+    )
+    # Blocked: no DOM swap (204), toast fired, and no membership created.
+    assert response.status_code == 204
+    assert "showToast" in response.headers.get("HX-Trigger", "")
+    assert not SquadMember.objects.filter(squad=squad, user=team_member).exists()
