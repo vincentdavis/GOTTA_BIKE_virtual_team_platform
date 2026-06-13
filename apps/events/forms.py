@@ -5,7 +5,7 @@ from typing import ClassVar
 
 from django import forms
 
-from apps.events.models import Event, Squad
+from apps.events.models import SQUAD_GENDER_CHOICES, Event, Squad
 from apps.team.models import DiscordChannel, DiscordRole
 
 
@@ -143,7 +143,6 @@ class EventForm(forms.ModelForm):
             "signup_instructions",
             "timezone_options",
             "timezone_required",
-            "squad_gender_options",
             "squad_gender_required",
         ]
         widgets: ClassVar[dict] = {
@@ -194,7 +193,6 @@ class EventForm(forms.ModelForm):
             "timezone_required": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
-            "squad_gender_options": forms.HiddenInput(),
             "squad_gender_required": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
@@ -544,7 +542,7 @@ class SquadForm(forms.ModelForm):
     )
 
     gender = forms.ChoiceField(
-        required=False,
+        required=True,
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
         label="Gender",
     )
@@ -567,6 +565,7 @@ class SquadForm(forms.ModelForm):
             "max_zwift_racing_category",
             "enforce_min_zwift_racing_category",
             "enforce_max_zwift_racing_category",
+            "enforce_gender",
             "url",
             "invite_url",
             "captain_notifications",
@@ -596,6 +595,9 @@ class SquadForm(forms.ModelForm):
             "enforce_max_zwift_racing_category": forms.CheckboxInput(
                 attrs={"class": "checkbox checkbox-primary checkbox-sm"},
             ),
+            "enforce_gender": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
             "url": forms.URLInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},
             ),
@@ -619,22 +621,15 @@ class SquadForm(forms.ModelForm):
         Args:
             *args: Positional arguments passed to ModelForm.
             event_prefixes: The parent event's Discord prefixes. When empty, the role field is disabled.
-            gender_options: The parent event's allowed squad-gender options. When empty, the gender field is disabled.
+            gender_options: Accepted for call-site compatibility; squad gender is now a fixed set.
             **kwargs: Keyword arguments passed to ModelForm.
 
         """
         super().__init__(*args, **kwargs)
         self.event_prefixes = list(event_prefixes or [])
-        self.gender_options = list(gender_options or [])
 
-        # Populate gender choices from the parent event's options
-        gender_choices = [("", "—")] + [(g, g) for g in self.gender_options]
-        current_gender = self.initial.get("gender") or ""
-        if current_gender and current_gender not in self.gender_options:
-            gender_choices.append((current_gender, f"{current_gender} (not in event options)"))
-        self.fields["gender"].choices = gender_choices
-        if not self.gender_options:
-            self.fields["gender"].widget.attrs["disabled"] = True
+        # Squad gender is a fixed set (Male/Female/COED) and required when configuring a squad.
+        self.fields["gender"].choices = [("", "Select gender"), *SQUAD_GENDER_CHOICES]
 
         # Captains and vice-captains are managed per-member from the squad panel
         # (Set as Captain / Vice Captain), not via this form.

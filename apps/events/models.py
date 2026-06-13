@@ -23,7 +23,10 @@ ZR_CATEGORY_CHOICES = [(cat, cat) for cat in ZR_CATEGORY_ORDER]
 
 
 DEFAULT_TIMEZONE_OPTIONS = ["US EAST", "US WEST", "Atlantic", "EMEA Central", "EMEA West"]
+# Fixed squad-gender options. "Male"/"Female" require a matching User.gender when enforced;
+# "COED" allows any gender. This list is intentionally not user-configurable.
 DEFAULT_SQUAD_GENDER_OPTIONS = ["Male", "Female", "COED"]
+SQUAD_GENDER_CHOICES = [(g, g) for g in DEFAULT_SQUAD_GENDER_OPTIONS]
 
 
 def _default_timezone_options() -> list[str]:
@@ -407,7 +410,12 @@ class Squad(models.Model):
     gender = models.CharField(
         max_length=50,
         blank=True,
-        help_text="Optional squad gender; must be one of the parent event's squad_gender_options when set",
+        choices=SQUAD_GENDER_CHOICES,
+        help_text="Squad gender (Male, Female, or COED)",
+    )
+    enforce_gender = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider whose gender does not match the squad gender (COED allows any)",
     )
     discord_channel_id = models.BigIntegerField(
         default=0,
@@ -589,6 +597,30 @@ class Squad(models.Model):
                     f"ZR category {cat} is below this squad's minimum ({self.min_zwift_racing_category})"
                 )
         return True, ""
+
+    def check_gender_eligibility(self, user_gender: str) -> tuple[bool, str]:
+        """Check a rider's gender against this squad's enforced gender.
+
+        A "Male" squad requires ``User.gender == "male"``, "Female" requires ``"female"``, and
+        "COED" allows any gender. Only enforced when ``enforce_gender`` is set and a squad gender
+        is configured.
+
+        Args:
+            user_gender: The rider's ``User.gender`` value ("male"/"female"/"other"/blank).
+
+        Returns:
+            ``(ok, reason)`` where ``reason`` is a human-readable explanation when ``ok`` is False.
+
+        """
+        if not self.enforce_gender or not self.gender or self.gender == "COED":
+            return True, ""
+        required = {"Male": "male", "Female": "female"}.get(self.gender)
+        if required is None:
+            return True, ""  # unknown squad gender value; do not block
+        if (user_gender or "").strip().lower() == required:
+            return True, ""
+        shown = user_gender or "unset"
+        return False, f"gender ({shown}) does not match this squad's required gender ({self.gender})"
 
 
 class SquadMember(models.Model):

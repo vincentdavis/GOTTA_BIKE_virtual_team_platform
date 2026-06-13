@@ -338,3 +338,84 @@ def test_squad_assign_blocked_by_zr_enforcement(client, event_admin, team_member
     assert response.status_code == 204
     assert "showToast" in response.headers.get("HX-Trigger", "")
     assert not SquadMember.objects.filter(squad=squad, user=team_member).exists()
+
+
+# ---- Squad gender enforcement ----
+
+
+@pytest.mark.parametrize(
+    ("squad_gender", "user_gender", "expected_ok"),
+    [
+        ("Male", "male", True),
+        ("Male", "female", False),
+        ("Male", "other", False),
+        ("Male", "", False),
+        ("Female", "female", True),
+        ("Female", "male", False),
+        ("COED", "male", True),
+        ("COED", "female", True),
+        ("COED", "", True),
+    ],
+)
+def test_squad_check_gender_eligibility(squad_gender, user_gender, expected_ok) -> None:
+    from apps.events.models import Squad
+
+    squad = Squad(gender=squad_gender, enforce_gender=True)
+    ok, reason = squad.check_gender_eligibility(user_gender)
+    assert ok is expected_ok
+    if not ok:
+        assert reason
+
+
+def test_squad_check_gender_eligibility_respects_enforce_flag() -> None:
+    from apps.events.models import Squad
+
+    # enforce off -> never blocks even on mismatch
+    assert Squad(gender="Male").check_gender_eligibility("female") == (True, "")
+    # gender unset on squad -> nothing to enforce
+    assert Squad(gender="", enforce_gender=True).check_gender_eligibility("female") == (True, "")
+
+
+@pytest.mark.django_db
+def test_squad_assign_blocked_by_gender_enforcement(client, event_admin, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+
+    client.force_login(event_admin)
+    team_member.gender = "female"
+    team_member.save(update_fields=["gender"])
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad = Squad.objects.create(event=event, name="Men's A", gender="Male", enforce_gender=True)
+    signup = EventSignup.objects.create(event=event, user=team_member, status=EventSignup.Status.REGISTERED)
+
+    response = client.post(
+        reverse("events:squad_assign", args=[event.pk]),
+        {"signup_id": signup.pk, "squad_id": squad.pk},
+        HTTP_HX_REQUEST="true",
+    )
+    assert response.status_code == 204
+    assert "showToast" in response.headers.get("HX-Trigger", "")
+    assert not SquadMember.objects.filter(squad=squad, user=team_member).exists()
+
+
+@pytest.mark.django_db
+def test_squad_form_requires_gender(event_admin) -> None:
+    from apps.events.forms import SquadForm
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    # Missing gender -> invalid
+    form = SquadForm(data={"name": "No Gender"}, event_prefixes=event.prefixes or [])
+    assert not form.is_valid()
+    assert "gender" in form.errors
+    # Valid gender -> gender error cleared
+    form_ok = SquadForm(data={"name": "Squad A", "gender": "COED"}, event_prefixes=event.prefixes or [])
+    form_ok.is_valid()
+    assert "gender" not in form_ok.errors

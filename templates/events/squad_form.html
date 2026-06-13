@@ -142,7 +142,11 @@
         <!-- Gender -->
         <div class="form-control w-full">
           <label class="label" for="id_gender">
-            <span class="label-text">Gender</span>
+            <span class="label-text">Squad Gender <span class="text-error">*</span></span>
+            <label class="label-text-alt cursor-pointer flex items-center gap-1">
+              {{ form.enforce_gender }}
+              <span>Enforce</span>
+            </label>
           </label>
           {{ form.gender }}
           {% if form.gender.errors %}
@@ -152,11 +156,8 @@
           {% endif %}
           <label class="label">
             <span class="label-text-alt">
-              {% if event.squad_gender_options %}
-                Optional. Options come from the event's Squad Gender Preference Options.
-              {% else %}
-                Add Squad Gender Preference Options on the event first to enable this field.
-              {% endif %}
+              When <strong>Enforce</strong> is checked, a Male squad requires riders with gender Male,
+              Female requires Female, and COED allows any gender.
             </span>
           </label>
         </div>

@@ -1958,16 +1958,21 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         if signup.user.zwid:
             zr = ZRRider.objects.filter(zwid=signup.user.zwid).first()
             rider_zr = getattr(zr, "race_current_category", "") or "" if zr else ""
-        eligible, reason = squad.check_zr_eligibility(rider_zr)
-        if not eligible:
+        for ok, reason in (
+            squad.check_gender_eligibility(signup.user.gender),
+            squad.check_zr_eligibility(rider_zr),
+        ):
+            if ok:
+                continue
             logfire.info(
-                "Squad assignment blocked by ZR enforcement",
+                "Squad assignment blocked by squad requirements",
                 event_id=event_pk,
                 squad_id=squad.pk,
                 squad_name=squad.name,
                 user_id=signup.user_id,
                 admin_user_id=request.user.id,
                 rider_zr_category=rider_zr,
+                rider_gender=signup.user.gender,
                 reason=reason,
             )
             block_msg = f"Cannot add {signup.user} to {squad.name}: {reason}."
@@ -3773,19 +3778,24 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
         messages.info(request, f"You're already a member of squad {squad.name}.")
         return redirect("events:my_events")
 
-    # Enforce the squad's ZR category bounds before joining
+    # Enforce the squad's gender and ZR category requirements before joining
     rider_zr = ""
     if request.user.zwid:
         zr = ZRRider.objects.filter(zwid=request.user.zwid).first()
         rider_zr = getattr(zr, "race_current_category", "") or "" if zr else ""
-    eligible, reason = squad.check_zr_eligibility(rider_zr)
-    if not eligible:
+    for ok, reason in (
+        squad.check_gender_eligibility(request.user.gender),
+        squad.check_zr_eligibility(rider_zr),
+    ):
+        if ok:
+            continue
         logfire.info(
-            "Squad invite join blocked by ZR enforcement",
+            "Squad invite join blocked by squad requirements",
             squad_id=squad.pk,
             event_id=event.pk,
             user_id=request.user.id,
             rider_zr_category=rider_zr,
+            rider_gender=request.user.gender,
             reason=reason,
         )
         messages.error(request, f"You can't join {squad.name}: {reason}.")
