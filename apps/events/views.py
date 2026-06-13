@@ -1679,7 +1679,6 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         form = SquadForm(
             request.POST,
             event_prefixes=event.prefixes or [],
-            gender_options=event.squad_gender_options or [],
         )
         if form.is_valid():
             squad = form.save(commit=False)
@@ -1696,7 +1695,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             messages.success(request, f'Squad "{squad.name}" created successfully!')
             return redirect("events:event_detail", pk=event_pk)
     else:
-        form = SquadForm(event_prefixes=event.prefixes or [], gender_options=event.squad_gender_options or [])
+        form = SquadForm(event_prefixes=event.prefixes or [])
 
     return render(
         request,
@@ -1743,7 +1742,6 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             request.POST,
             instance=squad,
             event_prefixes=event.prefixes or [],
-            gender_options=event.squad_gender_options or [],
         )
         if form.is_valid():
             form.save()
@@ -1760,7 +1758,6 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
         form = SquadForm(
             instance=squad,
             event_prefixes=event.prefixes or [],
-            gender_options=event.squad_gender_options or [],
         )
 
     return render(

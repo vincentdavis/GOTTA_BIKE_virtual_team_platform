@@ -613,7 +613,6 @@ class SquadForm(forms.ModelForm):
         self,
         *args,
         event_prefixes: list[str] | None = None,
-        gender_options: list[str] | None = None,
         **kwargs,
     ) -> None:
         """Initialize form with Discord channel choices and captain labels.
@@ -621,7 +620,6 @@ class SquadForm(forms.ModelForm):
         Args:
             *args: Positional arguments passed to ModelForm.
             event_prefixes: The parent event's Discord prefixes. When empty, the role field is disabled.
-            gender_options: Accepted for call-site compatibility; squad gender is now a fixed set.
             **kwargs: Keyword arguments passed to ModelForm.
 
         """
