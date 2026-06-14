@@ -26,6 +26,9 @@
       <form method="post" enctype="multipart/form-data" class="space-y-4">
         {% csrf_token %}
 
+        <!-- ===== Event Details ===== -->
+        <h3 class="text-lg font-semibold">Event Details</h3>
+
         <!-- Title -->
         <div class="form-control w-full">
           <label class="label" for="id_title">
@@ -83,22 +86,6 @@
           </label>
         </div>
 
-        <!-- Config Option -->
-        <div class="form-control w-full">
-          <label class="label" for="id_config_option">
-            <span class="label-text">Event Type</span>
-          </label>
-          {{ form.config_option }}
-          {% if form.config_option.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.config_option.errors.0 }}</span>
-          </label>
-          {% endif %}
-          <label class="label">
-            <span class="label-text-alt">Configuration profile for optional event behaviors</span>
-          </label>
-        </div>
-
         <!-- Date Range -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control w-full">
@@ -142,6 +129,121 @@
           </label>
         </div>
 
+        <!-- ===== Signup ===== -->
+        <div class="divider"></div>
+        <h3 class="text-lg font-semibold">Signup</h3>
+
+        <!-- Signup Instructions -->
+        <div class="form-control w-full">
+          <label class="label" for="id_signup_instructions">
+            <span class="label-text">Signup Instructions</span>
+          </label>
+          <div role="tablist" class="tabs tabs-bordered mb-1">
+            <button type="button" role="tab" class="tab tab-active" data-md-tab="write" data-md-target="signup_instructions">Write</button>
+            <button type="button" role="tab" class="tab" data-md-tab="preview" data-md-target="signup_instructions">Preview</button>
+          </div>
+          <div data-md-write="signup_instructions">
+            {{ form.signup_instructions }}
+          </div>
+          <div data-md-preview="signup_instructions" class="prose prose-sm max-w-none border border-base-300 rounded-lg p-3 min-h-[6rem] bg-base-100 hidden"></div>
+          {% if form.signup_instructions.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.signup_instructions.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Supports Markdown. Shown at the top of the signup modal form</span>
+          </label>
+        </div>
+
+        <!-- Timezones or Regions (chip/tag input) -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Timezones or Regions</span>
+          </label>
+          {{ form.timezone_options }}
+          <div id="tz-chips" class="flex flex-wrap gap-2 mb-2 min-h-[2rem]"></div>
+          <div class="join w-full">
+            <input type="text" id="tz-input" class="input input-bordered join-item w-full" placeholder="e.g. WEMA, AMER, APAC">
+            <button type="button" id="tz-add-btn" class="btn btn-primary join-item">Add</button>
+          </div>
+          {% if form.timezone_options.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.timezone_options.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Type a timezone label and press Enter or click Add</span>
+          </label>
+        </div>
+
+        <!-- Timezone Required -->
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-2">
+            {{ form.timezone_required }}
+            <span class="label-text">Require timezone, region selection at signup</span>
+          </label>
+        </div>
+
+        <!-- Squad Gender Required -->
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-2">
+            {{ form.squad_gender_required }}
+            <span class="label-text">Require squad gender preference at signup</span>
+          </label>
+          <label class="label">
+            <span class="label-text-alt">When on, riders pick which squad types (Male / Female / COED) they're willing to join at signup.</span>
+          </label>
+        </div>
+
+        <!-- ===== Status ===== -->
+        <div class="divider"></div>
+        <h3 class="text-lg font-semibold">Status</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-2">
+              {{ form.signups_open }}
+              <span class="label-text">Signups open</span>
+            </label>
+          </div>
+          <div class="form-control">
+            <label class="label cursor-pointer justify-start gap-2">
+              {{ form.visible }}
+              <span class="label-text">Visible to team members</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- ===== Options ===== -->
+        <div class="divider"></div>
+        <h3 class="text-lg font-semibold">Options</h3>
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-2">
+            {{ form.show_signups }}
+            <span class="label-text">Show signups to all members (names only)</span>
+          </label>
+        </div>
+
+        <!-- Event Type -->
+        <div class="form-control w-full">
+          <label class="label" for="id_config_option">
+            <span class="label-text">Event Type</span>
+          </label>
+          {{ form.config_option }}
+          {% if form.config_option.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.config_option.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">Configuration profile for optional event behaviors</span>
+          </label>
+        </div>
+
+        <!-- ===== Discord Config ===== -->
+        <div class="divider"></div>
+        <h3 class="text-lg font-semibold">Discord Config</h3>
+
         <!-- Discord Channel -->
         <div class="form-control w-full" data-channel-field>
           <label class="label" for="id_discord_channel_id">
@@ -182,99 +284,6 @@
           </label>
         </div>
 
-        <!-- Visible & Signups Open -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="form-control">
-            <label class="label cursor-pointer justify-start gap-2">
-              {{ form.visible }}
-              <span class="label-text">Visible to team members</span>
-            </label>
-          </div>
-          <div class="form-control">
-            <label class="label cursor-pointer justify-start gap-2">
-              {{ form.signups_open }}
-              <span class="label-text">Signups open</span>
-            </label>
-          </div>
-          <div class="form-control">
-            <label class="label cursor-pointer justify-start gap-2">
-              {{ form.show_signups }}
-              <span class="label-text">Show signups to all members (names only)</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Signup Instructions -->
-        <div class="form-control w-full">
-          <label class="label" for="id_signup_instructions">
-            <span class="label-text">Signup Instructions</span>
-          </label>
-          <div role="tablist" class="tabs tabs-bordered mb-1">
-            <button type="button" role="tab" class="tab tab-active" data-md-tab="write" data-md-target="signup_instructions">Write</button>
-            <button type="button" role="tab" class="tab" data-md-tab="preview" data-md-target="signup_instructions">Preview</button>
-          </div>
-          <div data-md-write="signup_instructions">
-            {{ form.signup_instructions }}
-          </div>
-          <div data-md-preview="signup_instructions" class="prose prose-sm max-w-none border border-base-300 rounded-lg p-3 min-h-[6rem] bg-base-100 hidden"></div>
-          {% if form.signup_instructions.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.signup_instructions.errors.0 }}</span>
-          </label>
-          {% endif %}
-          <label class="label">
-            <span class="label-text-alt">Supports Markdown. Shown at the top of the signup modal form</span>
-          </label>
-        </div>
-
-        <!-- Timezones or Regions (chip/tag input) -->
-        <div class="form-control w-full">
-          <label class="label">
-            <span class="label-text">TimesZones or Regions</span>
-          </label>
-          {{ form.timezone_options }}
-          <div id="tz-chips" class="flex flex-wrap gap-2 mb-2 min-h-[2rem]"></div>
-          <div class="join w-full">
-            <input type="text" id="tz-input" class="input input-bordered join-item w-full" placeholder="e.g. WEMA, AMER, APAC">
-            <button type="button" id="tz-add-btn" class="btn btn-primary join-item">Add</button>
-          </div>
-          {% if form.timezone_options.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ form.timezone_options.errors.0 }}</span>
-          </label>
-          {% endif %}
-          <label class="label">
-            <span class="label-text-alt">Type a timezone label and press Enter or click Add</span>
-          </label>
-        </div>
-
-        <!-- Timezone Required -->
-        <div class="form-control">
-          <label class="label cursor-pointer justify-start gap-2">
-            {{ form.timezone_required }}
-            <span class="label-text">Require timezone, region selection at signup</span>
-          </label>
-        </div>
-
-        <!-- Squad Gender Required -->
-        <div class="form-control">
-          <label class="label cursor-pointer justify-start gap-2">
-            {{ form.squad_gender_required }}
-            <span class="label-text">Require squad gender preference at signup</span>
-          </label>
-          <label class="label">
-            <span class="label-text-alt">When on, riders pick which squad types (Male / Female / COED) they're willing to join at signup.</span>
-          </label>
-        </div>
-
-        {% if event %}
-        <!-- Metadata (read-only) -->
-        <div class="bg-base-300 rounded-lg p-4 text-sm text-base-content/70 space-y-1">
-          <p><span class="font-semibold">Created:</span> {{ event.created_at|date:"M j, Y g:i A" }}{% if event.created_by %} by {{ event.created_by.get_full_name|default:event.created_by.username }}{% endif %}</p>
-          <p><span class="font-semibold">Last updated:</span> {{ event.updated_at|date:"M j, Y g:i A" }}</p>
-        </div>
-        {% endif %}
-
         {% if form.non_field_errors %}
         <div class="alert alert-error">
           {% for error in form.non_field_errors %}
@@ -302,6 +311,16 @@
           <p><span class="font-semibold">Prefixes:</span> {% if event.prefixes %}<span class="font-mono">{% for p in event.prefixes %}{{ p }}{% if not forloop.last %}  {% endif %}{% endfor %}</span>{% else %}(none){% endif %}</p>
           <p><span class="font-semibold">Head Captain Role:</span> {{ role_display.head_captain_role_id }}</p>
           <p><span class="font-semibold">Event Role:</span> {{ role_display.event_role }}</p>
+        </div>
+      </div>
+
+      <!-- Info (read-only) -->
+      <div class="divider"></div>
+      <div class="space-y-3">
+        <h3 class="text-lg font-semibold">Info</h3>
+        <div class="bg-base-300 rounded-lg p-4 text-sm text-base-content/70 space-y-1">
+          <p><span class="font-semibold">Created:</span> {{ event.created_at|date:"M j, Y g:i A" }}{% if event.created_by %} by {{ event.created_by.get_full_name|default:event.created_by.username }}{% endif %}</p>
+          <p><span class="font-semibold">Last updated:</span> {{ event.updated_at|date:"M j, Y g:i A" }}</p>
         </div>
       </div>
 
