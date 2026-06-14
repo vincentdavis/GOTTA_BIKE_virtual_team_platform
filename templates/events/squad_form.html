@@ -131,6 +131,10 @@
           <div class="form-control w-full">
             <label class="label" for="id_min_womens_zwift_category">
               <span class="label-text">Min womens Zwift Cat.</span>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_min_womens_zwift_category }}
+                <span>Enforce</span>
+              </label>
             </label>
             {{ form.min_womens_zwift_category }}
             {% if form.min_womens_zwift_category.errors %}
@@ -143,6 +147,10 @@
           <div class="form-control w-full">
             <label class="label" for="id_max_womens_zwift_category">
               <span class="label-text">Max womens Zwift Cat.</span>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_max_womens_zwift_category }}
+                <span>Enforce</span>
+              </label>
             </label>
             {{ form.max_womens_zwift_category }}
             {% if form.max_womens_zwift_category.errors %}
@@ -152,6 +160,10 @@
             {% endif %}
           </div>
         </div>
+        <p class="text-xs text-base-content/60 -mt-2">
+          When enforced, a woman's ZwiftPower category (A high &rarr; E low) must fall within these bounds to join.
+          Riders without a women's category aren't affected.
+        </p>
 
         <!-- Timezone -->
         <div class="form-control w-full">

@@ -449,6 +449,83 @@ def test_squad_form_saves_womens_zwift_category(event_admin) -> None:
     assert squad.max_womens_zwift_category == "A"
 
 
+# ---- Women's Zwift category enforcement ----
+
+
+@pytest.mark.parametrize(
+    ("rider_cat", "expected_ok"),
+    [
+        ("A+", False),  # stronger than max (B)
+        ("A", False),
+        ("B", True),
+        ("C", True),
+        ("D", True),
+        ("E", False),  # weaker than min (D)
+        ("", True),  # no women's category -> not affected
+    ],
+)
+def test_squad_womens_zwift_eligibility_band(rider_cat, expected_ok) -> None:
+    from apps.events.models import Squad
+
+    squad = Squad(
+        min_womens_zwift_category="D",
+        max_womens_zwift_category="B",
+        enforce_min_womens_zwift_category=True,
+        enforce_max_womens_zwift_category=True,
+    )
+    ok, reason = squad.check_womens_zwift_eligibility(rider_cat)
+    assert ok is expected_ok
+    if not ok:
+        assert reason
+
+
+def test_squad_womens_zwift_eligibility_respects_flags() -> None:
+    from apps.events.models import Squad
+
+    # Bound set but enforce off -> never blocks.
+    assert Squad(min_womens_zwift_category="D").check_womens_zwift_eligibility("E") == (True, "")
+    # Only max enforced -> too-strong blocked, weaker allowed.
+    s = Squad(max_womens_zwift_category="B", enforce_max_womens_zwift_category=True)
+    assert s.check_womens_zwift_eligibility("A")[0] is False
+    assert s.check_womens_zwift_eligibility("C")[0] is True
+
+
+@pytest.mark.django_db
+def test_squad_assign_blocked_by_womens_zwift_enforcement(
+    client, event_admin, team_member, zp_team_rider_factory
+) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+
+    client.force_login(event_admin)
+    team_member.zwid = 556001
+    team_member.save(update_fields=["zwid"])
+    zp_team_rider_factory(zwid=team_member.zwid, divw=50)  # women's category E
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad = Squad.objects.create(
+        event=event,
+        name="Women's A",
+        gender="COED",
+        min_womens_zwift_category="D",
+        enforce_min_womens_zwift_category=True,
+    )
+    signup = EventSignup.objects.create(event=event, user=team_member, status=EventSignup.Status.REGISTERED)
+
+    response = client.post(
+        reverse("events:squad_assign", args=[event.pk]),
+        {"signup_id": signup.pk, "squad_id": squad.pk},
+        HTTP_HX_REQUEST="true",
+    )
+    assert response.status_code == 204  # blocked: E is below the squad minimum (D)
+    assert "showToast" in response.headers.get("HX-Trigger", "")
+    assert not SquadMember.objects.filter(squad=squad, user=team_member).exists()
+
+
 # ---- Availability grid templates ----
 
 

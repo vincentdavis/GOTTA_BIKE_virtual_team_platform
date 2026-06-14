@@ -21,6 +21,12 @@ ZR_CATEGORY_ORDER = [
 ]
 ZR_CATEGORY_CHOICES = [(cat, cat) for cat in ZR_CATEGORY_ORDER]
 
+# Zwift category ranking, strongest -> weakest. "A+" is a real ZwiftPower category
+# (division 5); squads only set bounds from A..E, but riders may be A+, so the rank
+# used for comparison includes it.
+ZWIFT_CATEGORY_ORDER = ["A+", "A", "B", "C", "D", "E"]
+ZWIFT_CATEGORY_BOUND_CHOICES = [(c, c) for c in ("A", "B", "C", "D", "E")]
+
 
 DEFAULT_TIMEZONE_OPTIONS = ["US EAST", "US WEST", "Atlantic", "EMEA Central", "EMEA West"]
 # Fixed squad-gender options. "Male"/"Female" require a matching User.gender when enforced;
@@ -450,10 +456,24 @@ class Squad(models.Model):
     min_zwift_category = models.CharField(max_length=20, blank=True, help_text="Minimum Zwift category (e.g., A, B, C)")
     max_zwift_category = models.CharField(max_length=20, blank=True, help_text="Maximum Zwift category (e.g., A, B, C)")
     min_womens_zwift_category = models.CharField(
-        max_length=20, blank=True, help_text="Minimum women's Zwift category (e.g., A, B, C)"
+        max_length=20,
+        blank=True,
+        choices=ZWIFT_CATEGORY_BOUND_CHOICES,
+        help_text="Minimum women's Zwift category (weakest allowed; A high, E low)",
     )
     max_womens_zwift_category = models.CharField(
-        max_length=20, blank=True, help_text="Maximum women's Zwift category (e.g., A, B, C)"
+        max_length=20,
+        blank=True,
+        choices=ZWIFT_CATEGORY_BOUND_CHOICES,
+        help_text="Maximum women's Zwift category (strongest allowed; A high, E low)",
+    )
+    enforce_min_womens_zwift_category = models.BooleanField(
+        default=False,
+        help_text="Block adding a woman weaker than the minimum women's Zwift category",
+    )
+    enforce_max_womens_zwift_category = models.BooleanField(
+        default=False,
+        help_text="Block adding a woman stronger than the maximum women's Zwift category",
     )
     min_zwift_racing_category = models.CharField(
         max_length=20,
@@ -629,6 +649,49 @@ class Squad(models.Model):
             return True, ""
         shown = user_gender or "unset"
         return False, f"gender ({shown}) does not match this squad's required gender ({self.gender})"
+
+    def check_womens_zwift_eligibility(self, womens_category: str) -> tuple[bool, str]:
+        """Check a rider's women's Zwift category against this squad's enforced bounds.
+
+        Zwift categories rank A (strongest) to E (weakest), with A+ stronger than A. A rider
+        must be no stronger than ``max_womens_zwift_category`` and no weaker than
+        ``min_womens_zwift_category`` for the bounds that are enforced. Riders without a
+        women's category (e.g. men, or women not yet categorized) are not blocked — the
+        women's bounds only apply to riders who have a women's Zwift category.
+
+        Args:
+            womens_category: The rider's women's Zwift category letter (e.g. "B"); blank if none.
+
+        Returns:
+            ``(ok, reason)`` where ``reason`` explains a block.
+
+        """
+        enforce_min = self.enforce_min_womens_zwift_category and self.min_womens_zwift_category
+        enforce_max = self.enforce_max_womens_zwift_category and self.max_womens_zwift_category
+        if not enforce_min and not enforce_max:
+            return True, ""
+
+        order = ZWIFT_CATEGORY_ORDER  # index 0 = A+ (strongest) ... index 5 = E (weakest)
+        cat = (womens_category or "").strip().upper()
+        if cat not in order:
+            return True, ""  # no women's category on record; women's bounds don't apply
+
+        rider_idx = order.index(cat)
+        if enforce_max and self.max_womens_zwift_category in order:
+            max_idx = order.index(self.max_womens_zwift_category)
+            if rider_idx < max_idx:
+                return False, (
+                    f"women's Zwift category {cat} is above this squad's maximum "
+                    f"({self.max_womens_zwift_category})"
+                )
+        if enforce_min and self.min_womens_zwift_category in order:
+            min_idx = order.index(self.min_womens_zwift_category)
+            if rider_idx > min_idx:
+                return False, (
+                    f"women's Zwift category {cat} is below this squad's minimum "
+                    f"({self.min_womens_zwift_category})"
+                )
+        return True, ""
 
 
 class SquadMember(models.Model):
