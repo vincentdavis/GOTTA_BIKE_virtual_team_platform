@@ -1959,15 +1959,18 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     else:
         squad = get_object_or_404(Squad, pk=squad_id, event=event)
         rider_zr = ""
+        rider_zwift_cat = ""
         rider_womens_cat = ""
         if signup.user.zwid:
             zr = ZRRider.objects.filter(zwid=signup.user.zwid).first()
             rider_zr = getattr(zr, "race_current_category", "") or "" if zr else ""
             zp = ZPTeamRiders.objects.filter(zwid=signup.user.zwid).first()
-            if zp and zp.divw:
-                rider_womens_cat = ZP_DIV_TO_CATEGORY.get(zp.divw, "")
+            if zp:
+                rider_zwift_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp.div else ""
+                rider_womens_cat = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp.divw else ""
         for ok, reason in (
             squad.check_gender_eligibility(signup.user.gender),
+            squad.check_zwift_eligibility(rider_zwift_cat),
             squad.check_womens_zwift_eligibility(rider_womens_cat),
             squad.check_zr_eligibility(rider_zr),
         ):
@@ -4119,15 +4122,18 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
 
     # Enforce the squad's gender and category requirements before joining
     rider_zr = ""
+    rider_zwift_cat = ""
     rider_womens_cat = ""
     if request.user.zwid:
         zr = ZRRider.objects.filter(zwid=request.user.zwid).first()
         rider_zr = getattr(zr, "race_current_category", "") or "" if zr else ""
         zp = ZPTeamRiders.objects.filter(zwid=request.user.zwid).first()
-        if zp and zp.divw:
-            rider_womens_cat = ZP_DIV_TO_CATEGORY.get(zp.divw, "")
+        if zp:
+            rider_zwift_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp.div else ""
+            rider_womens_cat = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp.divw else ""
     for ok, reason in (
         squad.check_gender_eligibility(request.user.gender),
+        squad.check_zwift_eligibility(rider_zwift_cat),
         squad.check_womens_zwift_eligibility(rider_womens_cat),
         squad.check_zr_eligibility(rider_zr),
     ):

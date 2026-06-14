@@ -561,6 +561,8 @@ class SquadForm(forms.ModelForm):
             "team_discord_role",
             "min_zwift_category",
             "max_zwift_category",
+            "enforce_min_zwift_category",
+            "enforce_max_zwift_category",
             "min_womens_zwift_category",
             "max_womens_zwift_category",
             "enforce_min_womens_zwift_category",
@@ -581,11 +583,17 @@ class SquadForm(forms.ModelForm):
             "squad_timezone": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "e.g., America/New_York"},
             ),
-            "min_zwift_category": forms.TextInput(
-                attrs={"class": "input input-bordered w-full", "placeholder": "e.g., A, B, C, D, E"},
+            "min_zwift_category": forms.Select(
+                attrs={"class": "select select-bordered w-full"},
             ),
-            "max_zwift_category": forms.TextInput(
-                attrs={"class": "input input-bordered w-full", "placeholder": "e.g., A, B, C, D, E"},
+            "max_zwift_category": forms.Select(
+                attrs={"class": "select select-bordered w-full"},
+            ),
+            "enforce_min_zwift_category": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "enforce_max_zwift_category": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
             ),
             "min_womens_zwift_category": forms.Select(
                 attrs={"class": "select select-bordered w-full"},
