@@ -26,7 +26,6 @@
 
 ### Events & Squads
 
-- [ ] Availability: CSV export of responses
 - [ ] Document Discord bot channel permissions required for "Create Discord Thread" (View Channel + Create Public
   Threads + Send Messages in Threads); investigate startup preflight check
 
