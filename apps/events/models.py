@@ -754,6 +754,59 @@ class Squad(models.Model):
             label="women's Zwift category",
         )
 
+    @staticmethod
+    def _bounds_text(min_cat: str, max_cat: str, enforce_min: bool, enforce_max: bool) -> str:
+        """Describe an enforced category range. ``max_cat`` is strongest, ``min_cat`` weakest.
+
+        Returns:
+            A short range label (e.g. "B-D", "B or weaker"), or "" if nothing is enforced.
+
+        """
+        emin = enforce_min and min_cat
+        emax = enforce_max and max_cat
+        if emin and emax:
+            return f"{max_cat}-{min_cat}"
+        if emax:
+            return f"{max_cat} or weaker"
+        if emin:
+            return f"{min_cat} or stronger"
+        return ""
+
+    @property
+    def enforcement_summary(self) -> list[str]:
+        """Return short labels for each membership requirement this squad enforces.
+
+        Used to show enforcement status on the squad list. Empty when nothing is enforced.
+        """
+        items: list[str] = []
+        if self.enforce_gender and self.gender:
+            items.append(f"Gender: {self.gender}")
+        zwift = self._bounds_text(
+            self.min_zwift_category,
+            self.max_zwift_category,
+            self.enforce_min_zwift_category,
+            self.enforce_max_zwift_category,
+        )
+        if zwift:
+            items.append(f"Zwift: {zwift}")
+        womens = self._bounds_text(
+            self.min_womens_zwift_category,
+            self.max_womens_zwift_category,
+            self.enforce_min_womens_zwift_category,
+            self.enforce_max_womens_zwift_category,
+        )
+        if womens:
+            items.append(f"Women's Zwift: {womens}")
+        zr = self._bounds_text(
+            self.min_zwift_racing_category,
+            self.max_zwift_racing_category,
+            self.enforce_min_zwift_racing_category,
+            self.enforce_max_zwift_racing_category,
+        )
+        if zr:
+            items.append(f"ZR: {zr}")
+        return items
+
 
 class SquadMember(models.Model):
     """Links a user to a squad with membership status.

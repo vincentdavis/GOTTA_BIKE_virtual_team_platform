@@ -63,6 +63,20 @@
           </div>
         </div>
 
+        {# Enforcement / join requirements #}
+        <div class="card bg-base-300 p-3 mb-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Enforced Requirements</p>
+          {% if squad.enforcement_summary %}
+          <div class="flex flex-wrap gap-1">
+            {% for item in squad.enforcement_summary %}
+            <span class="badge badge-warning badge-sm">{{ item }}</span>
+            {% endfor %}
+          </div>
+          {% else %}
+          <span class="text-sm text-base-content/50">None enforced</span>
+          {% endif %}
+        </div>
+
         {# Leadership section #}
         {% if squad.captains.all or squad.vice_captains.all %}
         <div class="card bg-base-300 p-3 mb-2">

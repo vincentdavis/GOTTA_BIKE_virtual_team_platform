@@ -263,6 +263,52 @@ def test_squad_assign_from_manage_page_returns_panel(client, event_admin, team_m
     assert SquadMember.objects.filter(squad=squad, user=team_member).exists()
 
 
+def test_squad_enforcement_summary() -> None:
+    from apps.events.models import Squad
+
+    squad = Squad(
+        gender="Female",
+        enforce_gender=True,
+        min_zwift_category="D",
+        max_zwift_category="B",
+        enforce_min_zwift_category=True,
+        enforce_max_zwift_category=True,
+        min_zwift_racing_category="Gold",
+        enforce_min_zwift_racing_category=True,
+    )
+    summary = squad.enforcement_summary
+    assert "Gender: Female" in summary
+    assert "Zwift: B-D" in summary
+    assert "ZR: Gold or stronger" in summary
+    # A bound set without its enforce flag is excluded.
+    assert not any("Women's" in s for s in summary)
+    # Nothing enforced -> empty.
+    assert Squad(gender="COED", min_zwift_category="A").enforcement_summary == []
+
+
+@pytest.mark.django_db
+def test_squad_manage_shows_enforcement_badges(client, event_admin) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    client.force_login(event_admin)
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    Squad.objects.create(
+        event=event, name="Women A", gender="Female", enforce_gender=True,
+        max_zwift_category="B", enforce_max_zwift_category=True,
+    )
+    response = client.get(reverse("events:squad_manage", args=[event.pk]))
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert "Enforced Requirements" in body
+    assert "Gender: Female" in body
+    assert "Zwift: B or weaker" in body
+
+
 # ---- ZR category enforcement on squad join ----
 
 
