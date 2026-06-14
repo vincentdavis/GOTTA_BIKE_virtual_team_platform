@@ -12,6 +12,13 @@
     <h2 class="text-xl font-bold">Squads &mdash; {{ event.title }}</h2>
     <div class="flex gap-2">
       <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-info btn-sm">V Report</a>
+      {% if can_manage_roles %}
+      <a href="{% url 'events:manage_roles' event.pk %}" class="btn btn-primary btn-sm">Manage Roles</a>
+      {% else %}
+      <span class="tooltip" data-tip="Requires Assign Roles or Head Captain role">
+        <button class="btn btn-sm btn-disabled" disabled>Manage Roles</button>
+      </span>
+      {% endif %}
       <a href="{% url 'events:squad_assign_page' event.pk %}" class="btn btn-secondary btn-sm">Assign Riders</a>
       <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">Add Squad</a>
     </div>

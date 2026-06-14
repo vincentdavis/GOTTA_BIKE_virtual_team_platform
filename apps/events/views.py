@@ -1148,6 +1148,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "squads": squads,
             "event_role_name": event_role_name,
             "can_manage": True,
+            "can_manage_roles": _can_manage_event_roles(request.user, event),
         },
     )
 
