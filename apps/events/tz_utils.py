@@ -240,6 +240,32 @@ def convert_grid_to_local(
     }
 
 
+def drop_fully_blocked_days(grid_data: dict) -> dict:
+    """Filter a grid's display dates to those with at least one open cell.
+
+    Operates on the output of :func:`convert_grid_to_local`: a display date is kept only
+    when at least one of its valid cells is not blocked. Days where every slot is blocked
+    are removed from ``display_dates``. The same dict is returned (``display_dates`` replaced).
+
+    Args:
+        grid_data: The dict returned by :func:`convert_grid_to_local`.
+
+    Returns:
+        The grid_data dict with fully-blocked days removed from ``display_dates``.
+
+    """
+    times = grid_data["display_time_slots"]
+    blocked = grid_data["display_blocked"]
+    valid = grid_data["valid_cells"]
+    kept = []
+    for d in grid_data["display_dates"]:
+        day_cells = [f"{d}|{t}" for t in times if f"{d}|{t}" in valid]
+        if any(cell not in blocked for cell in day_cells):
+            kept.append(d)
+    grid_data["display_dates"] = kept
+    return grid_data
+
+
 # Common IANA timezone choices for the builder dropdown.
 # Values use canonical IANA names (same as the profile form) so the
 # user's profile timezone matches an option in the dropdown.

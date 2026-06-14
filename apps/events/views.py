@@ -51,6 +51,7 @@ from apps.events.tz_utils import (
     convert_grid_to_local,
     convert_local_to_utc,
     convert_utc_to_local_config,
+    drop_fully_blocked_days,
 )
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
@@ -2559,6 +2560,7 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         "expires": grid.expires.isoformat() if grid.expires else "",
         "max_races_question": grid.max_races_question,
         "rest_days_question": grid.rest_days_question,
+        "hide_empty_days": grid.hide_empty_days,
     }
     user_tz = getattr(request.user, "timezone", "") or "UTC"
     logfire.debug(
@@ -2671,6 +2673,7 @@ def _handle_availability_save(
         "blocked_cells": blocked_cells,
         "max_races_question": bool(data.get("max_races_question", False)),
         "rest_days_question": bool(data.get("rest_days_question", False)),
+        "hide_empty_days": bool(data.get("hide_empty_days", False)),
         "expires": expires,
     }
 
@@ -2797,6 +2800,9 @@ def availability_preview_view(request: HttpRequest, event_pk: int, squad_pk: int
         display_tz = "UTC"
 
     grid_data = convert_grid_to_local(utc_dates, utc_start_time, utc_end_time, slot_duration, utc_blocked, display_tz)
+
+    if bool(data.get("hide_empty_days", False)):
+        grid_data = drop_fully_blocked_days(grid_data)
 
     return JsonResponse({
         "display_dates": list(grid_data["display_dates"]),
@@ -3401,6 +3407,9 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
 
     grid_data = convert_grid_to_local(grid.dates, grid.start_time, grid.end_time, grid.slot_duration, grid.blocked_cells, display_tz)
 
+    if grid.hide_empty_days:
+        grid_data = drop_fully_blocked_days(grid_data)
+
     # Convert existing response UTC keys → local keys
     existing_local_keys: list[str] = []
     if existing_response:
@@ -3548,6 +3557,9 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     tz_is_default = not user_tz
 
     grid_data = convert_grid_to_local(grid.dates, grid.start_time, grid.end_time, grid.slot_duration, grid.blocked_cells, display_tz)
+
+    if grid.hide_empty_days:
+        grid_data = drop_fully_blocked_days(grid_data)
 
     # Re-key user IDs from UTC → local
     cell_user_ids: dict[str, list[int]] = {}

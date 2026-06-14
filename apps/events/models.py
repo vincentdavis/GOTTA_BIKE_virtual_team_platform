@@ -751,6 +751,10 @@ class AvailabilityGrid(models.Model):
         default=False,
         help_text="Ask responders: How many days rest between races do you require?",
     )
+    hide_empty_days = models.BooleanField(
+        default=False,
+        help_text="Hide days where every time slot is blocked from the response/results grids",
+    )
     expires = models.DateField(null=True, blank=True, help_text="Date when this grid expires and is no longer visible")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

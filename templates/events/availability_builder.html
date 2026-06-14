@@ -65,6 +65,12 @@
             <span class="label-text text-xs">No</span>
           </label>
         </div>
+        <div class="flex items-center gap-3">
+          <label class="label cursor-pointer gap-1 py-0">
+            <input type="checkbox" id="cfg-hide-empty-days" class="checkbox checkbox-xs">
+            <span class="label-text text-xs">Hide days with no available times</span>
+          </label>
+        </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <div class="form-control">
@@ -184,6 +190,7 @@
   var endTimeEl = document.getElementById('cfg-end-time');
   var timezoneEl = document.getElementById('cfg-timezone');
   var slotDurationEl = document.getElementById('cfg-slot-duration');
+  var hideEmptyDaysEl = document.getElementById('cfg-hide-empty-days');
   var btnGenerateDesktop = document.getElementById('btn-generate-desktop');
   var btnGenerateMobile = document.getElementById('btn-generate-mobile');
   var gridContainer = document.getElementById('grid-container');
@@ -663,6 +670,7 @@
       slot_duration: parseInt(slotDurationEl.value),
       timezone: timezoneEl.value || 'UTC',
       blocked_cells: blockedCells,
+      hide_empty_days: hideEmptyDaysEl.checked,
     };
 
     fetch(PREVIEW_URL, {
@@ -764,7 +772,8 @@
       blocked_cells: blockedCells,
       expires: expiresEl.value || null,
       max_races_question: maxRacesAnswer === 'yes',
-      rest_days_question: restDaysAnswer === 'yes'
+      rest_days_question: restDaysAnswer === 'yes',
+      hide_empty_days: hideEmptyDaysEl.checked
     };
 
     btnSave.disabled = true;
@@ -908,6 +917,7 @@
     expiresEl.value = INITIAL_GRID.expires || '';
     setRadioValue('cfg-max-races', INITIAL_GRID.max_races_question ? 'yes' : 'no');
     setRadioValue('cfg-rest-days', INITIAL_GRID.rest_days_question ? 'yes' : 'no');
+    hideEmptyDaysEl.checked = !!INITIAL_GRID.hide_empty_days;
     (INITIAL_GRID.blocked_cells || []).forEach(function(c) {
       cellStates[c.date + '|' + c.time] = 'blocked';
     });

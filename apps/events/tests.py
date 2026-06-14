@@ -705,3 +705,97 @@ def test_convert_utc_to_local_config_round_trips(sd, ed, st, et, tz) -> None:
     u = convert_local_to_utc(sd, ed, st, et, tz)
     back = convert_utc_to_local_config(u[0], u[1], u[2], u[3], tz)
     assert back == (sd, ed, st, et)
+
+
+# ---- Hide days with no availability ----
+
+
+def test_drop_fully_blocked_days() -> None:
+    from apps.events.tz_utils import convert_grid_to_local, drop_fully_blocked_days
+
+    dates = ["2026-06-15", "2026-06-16"]
+    slots = ["18:00", "18:30", "19:00", "19:30"]
+    blocked = [{"date": "2026-06-15", "time": t} for t in slots]  # all of Jun 15 blocked
+    grid_data = convert_grid_to_local(dates, "18:00", "20:00", 30, blocked, "UTC")
+    assert "2026-06-15" in grid_data["display_dates"]
+
+    drop_fully_blocked_days(grid_data)
+    assert grid_data["display_dates"] == ["2026-06-16"]
+
+
+def _published_grid(squad, *, hide_empty_days, **overrides):
+    from apps.events.models import AvailabilityGrid
+
+    slots = ["18:00", "18:30", "19:00", "19:30"]
+    fields = {
+        "squad": squad,
+        "start_date": date(2026, 6, 15),
+        "end_date": date(2026, 6, 16),
+        "start_time": "18:00",
+        "end_time": "20:00",
+        "slot_duration": 30,
+        "grid_timezone": "UTC",
+        "blocked_cells": [{"date": "2026-06-15", "time": t} for t in slots],  # Jun 15 fully blocked
+        "status": AvailabilityGrid.Status.PUBLISHED,
+        "hide_empty_days": hide_empty_days,
+    }
+    fields.update(overrides)
+    return AvailabilityGrid.objects.create(**fields)
+
+
+@pytest.mark.django_db
+def test_respond_hides_fully_blocked_day_when_flag_on(auth_client) -> None:
+    from django.urls import reverse
+
+    event, squad = _avail_event_squad()
+    grid = _published_grid(squad, hide_empty_days=True)
+
+    response = auth_client.get(reverse("events:availability_respond", args=[event.pk, squad.pk, grid.id]))
+    assert response.status_code == 200
+    assert 'var dates = ["2026-06-16"];' in response.content.decode()  # Jun 15 dropped
+
+
+@pytest.mark.django_db
+def test_respond_shows_all_days_when_flag_off(auth_client) -> None:
+    from django.urls import reverse
+
+    event, squad = _avail_event_squad()
+    grid = _published_grid(squad, hide_empty_days=False)
+
+    response = auth_client.get(reverse("events:availability_respond", args=[event.pk, squad.pk, grid.id]))
+    assert response.status_code == 200
+    assert 'var dates = ["2026-06-15", "2026-06-16"];' in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_availability_save_stores_hide_empty_days(client, event_admin) -> None:
+    import json
+
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    payload = {
+        "title": "",
+        "start_date": "2026-06-15",
+        "end_date": "2026-06-16",
+        "start_time": "18:00",
+        "end_time": "20:00",
+        "slot_duration": 30,
+        "timezone": "UTC",
+        "blocked_cells": [],
+        "expires": None,
+        "max_races_question": False,
+        "rest_days_question": False,
+        "hide_empty_days": True,
+    }
+    response = client.post(
+        reverse("events:availability_create", args=[event.pk, squad.pk]),
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    grid = AvailabilityGrid.objects.get(squad=squad)
+    assert grid.hide_empty_days is True
