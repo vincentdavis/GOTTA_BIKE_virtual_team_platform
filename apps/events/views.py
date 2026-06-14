@@ -598,7 +598,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             display_tz = "UTC"
         utc_dt = datetime.combine(
             sel.slot_date,
-            datetime.strptime(sel.slot_time, "%H:%M").time(),
+            datetime.strptime(sel.slot_time, "%H:%M").time(),  # noqa: DTZ007  # clock-only parse, no date used
             tzinfo=ZoneInfo("UTC"),
         )
         local_dt = utc_dt.astimezone(tz_obj)
@@ -1289,7 +1289,7 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             display_tz = "UTC"
         utc_dt = datetime.combine(
             sel.slot_date,
-            datetime.strptime(sel.slot_time, "%H:%M").time(),
+            datetime.strptime(sel.slot_time, "%H:%M").time(),  # noqa: DTZ007  # clock-only parse, no date used
             tzinfo=ZoneInfo("UTC"),
         )
         local_dt = utc_dt.astimezone(tz_obj)
@@ -3406,7 +3406,9 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
     display_tz = user_tz or grid.grid_timezone or "UTC"
     tz_is_default = not user_tz
 
-    grid_data = convert_grid_to_local(grid.dates, grid.start_time, grid.end_time, grid.slot_duration, grid.blocked_cells, display_tz)
+    grid_data = convert_grid_to_local(
+        grid.dates, grid.start_time, grid.end_time, grid.slot_duration, grid.blocked_cells, display_tz
+    )
 
     if grid.hide_empty_days:
         grid_data = drop_fully_blocked_days(grid_data)
@@ -3557,7 +3559,9 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     display_tz = user_tz or grid.grid_timezone or "UTC"
     tz_is_default = not user_tz
 
-    grid_data = convert_grid_to_local(grid.dates, grid.start_time, grid.end_time, grid.slot_duration, grid.blocked_cells, display_tz)
+    grid_data = convert_grid_to_local(
+        grid.dates, grid.start_time, grid.end_time, grid.slot_duration, grid.blocked_cells, display_tz
+    )
 
     if grid.hide_empty_days:
         grid_data = drop_fully_blocked_days(grid_data)
@@ -3690,7 +3694,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         from datetime import datetime as dt
         from zoneinfo import ZoneInfo
 
-        utc_dt = dt.combine(sel.slot_date, dt.strptime(sel.slot_time, "%H:%M").time(), tzinfo=ZoneInfo("UTC"))
+        utc_dt = dt.combine(sel.slot_date, dt.strptime(sel.slot_time, "%H:%M").time(), tzinfo=ZoneInfo("UTC"))  # noqa: DTZ007  # clock-only parse, no date used
         local_dt = utc_dt.astimezone(ZoneInfo(display_tz))
         enriched_selections.append({
             "selection": sel,
@@ -4380,7 +4384,7 @@ def _build_slot_thread_message(
     """
     utc_dt = datetime.combine(
         selection.slot_date,
-        datetime.strptime(selection.slot_time, "%H:%M").time(),
+        datetime.strptime(selection.slot_time, "%H:%M").time(),  # noqa: DTZ007  # clock-only parse, no date used
         tzinfo=ZoneInfo("UTC"),
     )
     unix_ts = int(utc_dt.timestamp())
@@ -4460,7 +4464,7 @@ def _slot_thread_name(selection: AvailabilitySlotSelection, grid: AvailabilityGr
     """
     utc_dt = datetime.combine(
         selection.slot_date,
-        datetime.strptime(selection.slot_time, "%H:%M").time(),
+        datetime.strptime(selection.slot_time, "%H:%M").time(),  # noqa: DTZ007  # clock-only parse, no date used
         tzinfo=ZoneInfo("UTC"),
     )
     try:
@@ -5171,7 +5175,7 @@ def _render_slot_selections_partial(
         from datetime import datetime as dt
         from zoneinfo import ZoneInfo
 
-        utc_dt = dt.combine(sel.slot_date, dt.strptime(sel.slot_time, "%H:%M").time(), tzinfo=ZoneInfo("UTC"))
+        utc_dt = dt.combine(sel.slot_date, dt.strptime(sel.slot_time, "%H:%M").time(), tzinfo=ZoneInfo("UTC"))  # noqa: DTZ007  # clock-only parse, no date used
         local_dt = utc_dt.astimezone(ZoneInfo(display_tz))
         enriched_selections.append({
             "selection": sel,
