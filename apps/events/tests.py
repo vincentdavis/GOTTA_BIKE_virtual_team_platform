@@ -423,6 +423,32 @@ def test_squad_form_requires_gender(event_admin) -> None:
     assert "gender" not in form_ok.errors
 
 
+@pytest.mark.django_db
+def test_squad_form_saves_womens_zwift_category(event_admin) -> None:
+    from apps.events.forms import SquadForm
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    form = SquadForm(
+        data={
+            "name": "Squad A",
+            "gender": "COED",
+            "min_womens_zwift_category": "B",
+            "max_womens_zwift_category": "A",
+        },
+        event_prefixes=event.prefixes or [],
+    )
+    assert form.is_valid(), form.errors
+    squad = form.save(commit=False)
+    squad.event = event
+    squad.save()
+    squad.refresh_from_db()
+    assert squad.min_womens_zwift_category == "B"
+    assert squad.max_womens_zwift_category == "A"
+
+
 # ---- Availability grid templates ----
 
 

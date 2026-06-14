@@ -561,6 +561,8 @@ class SquadForm(forms.ModelForm):
             "team_discord_role",
             "min_zwift_category",
             "max_zwift_category",
+            "min_womens_zwift_category",
+            "max_womens_zwift_category",
             "min_zwift_racing_category",
             "max_zwift_racing_category",
             "enforce_min_zwift_racing_category",
@@ -581,6 +583,12 @@ class SquadForm(forms.ModelForm):
                 attrs={"class": "input input-bordered w-full", "placeholder": "e.g., A, B, C, D, E"},
             ),
             "max_zwift_category": forms.TextInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "e.g., A, B, C, D, E"},
+            ),
+            "min_womens_zwift_category": forms.TextInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "e.g., A, B, C, D, E"},
+            ),
+            "max_womens_zwift_category": forms.TextInput(
                 attrs={"class": "input input-bordered w-full", "placeholder": "e.g., A, B, C, D, E"},
             ),
             "min_zwift_racing_category": forms.Select(

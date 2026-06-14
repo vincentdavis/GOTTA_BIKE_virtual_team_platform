@@ -388,6 +388,8 @@ class Squad(models.Model):
         discord_captain_role: Discord role ID for the squad captain.
         min_zwift_category: Minimum Zwift category letter.
         max_zwift_category: Maximum Zwift category letter.
+        min_womens_zwift_category: Minimum women's Zwift category letter.
+        max_womens_zwift_category: Maximum women's Zwift category letter.
         min_zwift_racing_category: Minimum Zwift Racing category.
         max_zwift_racing_category: Maximum Zwift Racing category.
         url: External URL for squad details.
@@ -447,6 +449,12 @@ class Squad(models.Model):
     )
     min_zwift_category = models.CharField(max_length=20, blank=True, help_text="Minimum Zwift category (e.g., A, B, C)")
     max_zwift_category = models.CharField(max_length=20, blank=True, help_text="Maximum Zwift category (e.g., A, B, C)")
+    min_womens_zwift_category = models.CharField(
+        max_length=20, blank=True, help_text="Minimum women's Zwift category (e.g., A, B, C)"
+    )
+    max_womens_zwift_category = models.CharField(
+        max_length=20, blank=True, help_text="Maximum women's Zwift category (e.g., A, B, C)"
+    )
     min_zwift_racing_category = models.CharField(
         max_length=20,
         blank=True,

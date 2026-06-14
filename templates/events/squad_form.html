@@ -126,6 +126,33 @@
           </div>
         </div>
 
+        <!-- Women's Zwift Category Range -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="id_min_womens_zwift_category">
+              <span class="label-text">Min womens Zwift Cat.</span>
+            </label>
+            {{ form.min_womens_zwift_category }}
+            {% if form.min_womens_zwift_category.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.min_womens_zwift_category.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="id_max_womens_zwift_category">
+              <span class="label-text">Max womens Zwift Cat.</span>
+            </label>
+            {{ form.max_womens_zwift_category }}
+            {% if form.max_womens_zwift_category.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.max_womens_zwift_category.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+
         <!-- Timezone -->
         <div class="form-control w-full">
           <label class="label" for="id_squad_timezone">
