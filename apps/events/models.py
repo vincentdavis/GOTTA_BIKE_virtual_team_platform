@@ -1,7 +1,7 @@
 """Models for events app."""
 
 import uuid
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from django.conf import settings
 from django.db import models
@@ -1195,6 +1195,13 @@ class AvailabilitySlotSelection(models.Model):
         related_name="substitute_slot_selections",
         help_text="Optional substitute riders available to step in",
     )
+    directeurs_sportifs = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        through="SlotDS",
+        through_fields=("selection", "user"),
+        related_name="directing_slot_selections",
+        help_text="Team members helping with this race (DS); given the squad role while assigned",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -1222,6 +1229,81 @@ class AvailabilitySlotSelection(models.Model):
 
         """
         return f"{self.name} ({self.slot_date} {self.slot_time})"
+
+    @property
+    def race_datetime_utc(self) -> datetime:
+        """Return the race start as a tz-aware UTC datetime (combining slot_date + slot_time)."""
+        try:
+            slot_t = time.fromisoformat(self.slot_time)
+        except ValueError:
+            slot_t = time(0, 0)
+        return datetime.combine(self.slot_date, slot_t, tzinfo=UTC)
+
+
+class SlotDS(models.Model):
+    """Through model linking a Directeur Sportif (DS) to a scheduled race.
+
+    A DS is any team member helping with a race. When added they are given the squad's
+    Discord role (``team_discord_role``); a daily sweep removes it after the race. We only
+    remove what we assigned, and never strip a role the user holds for another reason.
+
+    Attributes:
+        selection: The scheduled race (slot selection).
+        user: The DS team member.
+        role_was_assigned: True only if we actually added the squad role (they didn't already hold it).
+        role_removed_at: When the role was removed/handled; null while still assigned.
+        added_by: Admin who added the DS.
+        added_at: When the DS was added.
+
+    """
+
+    selection = models.ForeignKey(
+        AvailabilitySlotSelection,
+        on_delete=models.CASCADE,
+        related_name="ds_assignments",
+        help_text="The scheduled race this DS helps with",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ds_assignments",
+        help_text="The Directeur Sportif",
+    )
+    role_was_assigned = models.BooleanField(
+        default=False,
+        help_text="Whether we added the squad role (only then do we remove it later)",
+    )
+    role_removed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the squad role was removed/handled for this DS (null while active)",
+    )
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="added_ds_assignments",
+        help_text="Admin who added this DS",
+    )
+    added_at = models.DateTimeField(default=timezone.now, help_text="When the DS was added")
+
+    class Meta:
+        """Meta options for SlotDS model."""
+
+        ordering = ["added_at"]  # noqa: RUF012
+        unique_together = [("selection", "user")]  # noqa: RUF012
+        verbose_name = "Slot Directeur Sportif"
+        verbose_name_plural = "Slot Directeurs Sportifs"
+
+    def __str__(self) -> str:
+        """Return DS and race description.
+
+        Returns:
+            String in format "DS <user> for <race>".
+
+        """
+        return f"DS {self.user} for {self.selection}"
 
 
 class AvailabilityGridTemplate(models.Model):

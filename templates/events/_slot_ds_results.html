@@ -1,0 +1,12 @@
+<div id="ds-results-{{ selection.pk }}" class="mt-1 flex flex-col gap-0.5">
+  {% for r in results %}
+  <button type="button" class="btn btn-ghost btn-xs justify-start"
+          data-on-click="@post('{% url 'events:slot_ds_add' event.pk squad.pk grid.pk selection.pk r.user.pk %}', {headers: {'X-CSRFToken': '{{ csrf_token }}'}})">
+    + {{ r.display_name }}
+  </button>
+  {% empty %}
+  {% if query|length >= 2 %}
+  <span class="text-xs text-base-content/40 px-1">No matches</span>
+  {% endif %}
+  {% endfor %}
+</div>

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logfire
 from django.tasks import task  # ty:ignore[unresolved-import]
+from django.utils import timezone
 
 from apps.accounts.discord_service import send_discord_channel_message
-from apps.events.models import EventSignup
+from apps.events import ds_service
+from apps.events.models import EventSignup, SlotDS
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -145,3 +147,39 @@ def enqueue_signup_notification(signup: EventSignup, *, request=None) -> None:
         except Exception:
             profile_url = None
     notify_signup_to_channel.enqueue(signup_id=signup.pk, profile_url=profile_url)
+
+
+@task
+def remove_expired_ds_roles() -> dict:
+    """Remove squad roles from Directeurs Sportifs whose races have finished.
+
+    Daily sweep: for each DS we gave the squad role to (``role_was_assigned``) whose race
+    start is in the past and that hasn't been handled yet, remove the role — but only if it
+    is safe to do so (the DS isn't a squad member/captain and has no other still-active DS
+    assignment for the same squad). Each handled assignment is stamped ``role_removed_at``.
+
+    Returns:
+        Dict with ``checked``, ``removed``, and ``kept`` counts.
+
+    """
+    now = timezone.now()
+    pending = SlotDS.objects.filter(role_was_assigned=True, role_removed_at__isnull=True).select_related(
+        "user", "selection__grid__squad"
+    )
+    checked = removed = kept = 0
+    for ds in pending:
+        if ds.selection.race_datetime_utc >= now:
+            continue  # race not finished yet
+        checked += 1
+        squad = ds.selection.grid.squad
+        if ds_service.should_remove_squad_role(ds.user, squad, exclude_slot_ds_pk=ds.pk):
+            ds_service.remove_squad_role(ds.user, squad)
+            removed += 1
+        else:
+            kept += 1  # entitled (member/captain) or another active DS assignment keeps the role
+        ds.role_removed_at = now
+        ds.save(update_fields=["role_removed_at"])
+
+    result = {"checked": checked, "removed": removed, "kept": kept}
+    logfire.info("DS role sweep complete", **result)
+    return result

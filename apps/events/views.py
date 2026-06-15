@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo, available_timezones
 
 import logfire
 from constance import config
+from datastar_py.django import DatastarResponse, ServerSentEventGenerator
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -32,6 +33,7 @@ from apps.accounts.discord_service import (
     sync_user_discord_roles,
 )
 from apps.accounts.models import Permissions, User
+from apps.events import ds_service
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
 from apps.events.forms import EventForm, EventRoleSetupForm, SquadForm
 from apps.events.models import (
@@ -42,6 +44,7 @@ from apps.events.models import (
     AvailabilitySlotSelection,
     Event,
     EventSignup,
+    SlotDS,
     Squad,
     SquadMember,
 )
@@ -4413,6 +4416,7 @@ def _build_slot_thread_message(
     captain_dids = [c.discord_id for c in captains if c.discord_id]
     vice_captain_dids = [vc.discord_id for vc in vice_captains if vc.discord_id]
     substitute_dids = [s.discord_id for s in selection.substitutes.all() if s.discord_id]
+    ds_dids = [d.discord_id for d in selection.directeurs_sportifs.all() if d.discord_id]
 
     lines: list[str] = []
     if header:
@@ -4445,6 +4449,10 @@ def _build_slot_thread_message(
         if vice_captain_dids:
             label = "Vice Captain" if len(vice_captain_dids) == 1 else "Vice Captains"
             lines.append(f"**{label}:** " + " ".join(f"<@{did}>" for did in vice_captain_dids))
+    if ds_dids:
+        lines.append("")
+        label = "DS" if len(ds_dids) == 1 else "DSs"
+        lines.append(f"🎽 **{label}:** " + " ".join(f"<@{did}>" for did in ds_dids))
 
     if request is not None:
         cal = race_calendar_urls(selection, request)
@@ -4456,7 +4464,7 @@ def _build_slot_thread_message(
     # so captains/vice-captains/substitutes actually get pinged even if they aren't racing.
     seen: set[str] = set()
     discord_ids: list[str] = []
-    for did in (*rider_discord_ids, *substitute_dids, *captain_dids, *vice_captain_dids):
+    for did in (*rider_discord_ids, *substitute_dids, *captain_dids, *vice_captain_dids, *ds_dids):
         if did and did not in seen:
             seen.add(did)
             discord_ids.append(did)
@@ -5149,7 +5157,7 @@ def _render_slot_selections_partial(
     from apps.zwiftpower.models import ZPTeamRiders
     from apps.zwiftracing.models import ZRRider
 
-    selections = list(grid.slot_selections.prefetch_related("selected_users"))
+    selections = list(grid.slot_selections.prefetch_related("selected_users", "directeurs_sportifs"))
     is_event_admin = _can_manage_squad_availability(request.user, squad)
 
     # Determine display timezone
@@ -5193,9 +5201,14 @@ def _render_slot_selections_partial(
 
         utc_dt = dt.combine(sel.slot_date, dt.strptime(sel.slot_time, "%H:%M").time(), tzinfo=ZoneInfo("UTC"))  # noqa: DTZ007  # clock-only parse, no date used
         local_dt = utc_dt.astimezone(ZoneInfo(display_tz))
+        ds_list = [
+            {"user": d, "display_name": d.get_full_name() or d.discord_username}
+            for d in sel.directeurs_sportifs.all()
+        ]
         enriched_selections.append({
             "selection": sel,
             "enriched_users": enriched_users,
+            "ds_list": ds_list,
             "local_date": local_dt.strftime("%Y-%m-%d"),
             "local_time": local_dt.strftime("%H:%M"),
             "local_day": local_dt.strftime("%a"),
@@ -5214,6 +5227,171 @@ def _render_slot_selections_partial(
         request=request,
     )
     return HttpResponse(html)
+
+
+def _render_ds_list(request: HttpRequest, event: Event, squad: Squad, grid: AvailabilityGrid, selection) -> str:
+    """Render the DS chips list partial (target ``#ds-list-<pk>``) for a slot.
+
+    Returns:
+        The rendered ``_slot_ds_list.html`` HTML string.
+
+    """
+    ds_list = [
+        {"user": d, "display_name": d.get_full_name() or d.discord_username}
+        for d in selection.directeurs_sportifs.all()
+    ]
+    return render_to_string(
+        "events/_slot_ds_list.html",
+        {"selection": selection, "ds_list": ds_list, "event": event, "squad": squad, "grid": grid},
+        request=request,
+    )
+
+
+def _post_ds_added_to_thread(selection, ds_user) -> None:
+    """If the race has a Discord thread, post a short note @-mentioning the newly added DS."""
+    if not selection.thread_link or not ds_user.discord_id:
+        return
+    thread_id = selection.thread_link.rstrip("/").split("/")[-1]
+    if not thread_id.isdigit():
+        return
+    name = ds_user.get_full_name() or ds_user.discord_username or "DS"
+    send_discord_channel_message(
+        int(thread_id),
+        f"🎽 **DS added:** <@{ds_user.discord_id}> ({name})",
+        allowed_user_ids=[ds_user.discord_id],
+    )
+
+
+@login_required
+@team_member_required()
+@require_GET
+def slot_ds_search_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int
+) -> HttpResponse:
+    """Datastar: search team members to add as DS, patching the results list for a slot.
+
+    Returns:
+        A Datastar SSE response patching the slot's ``#ds-results-<pk>`` element.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
+    if not _can_manage_squad_availability(request.user, squad):
+        return HttpResponse("Permission denied", status=403)
+
+    q = request.GET.get("q", "").strip()
+    results = []
+    if len(q) >= 2:
+        existing = set(selection.directeurs_sportifs.values_list("pk", flat=True))
+        users = (
+            User.objects.filter(
+                Q(first_name__icontains=q)
+                | Q(last_name__icontains=q)
+                | Q(discord_username__icontains=q)
+                | Q(discord_nickname__icontains=q)
+            )
+            .exclude(pk__in=existing)
+            .filter(discord_id__isnull=False)
+            .exclude(discord_id="")
+            .order_by("first_name", "last_name")[:8]
+        )
+        results = [{"user": u, "display_name": u.get_full_name() or u.discord_username} for u in users]
+
+    html = render_to_string(
+        "events/_slot_ds_results.html",
+        {"selection": selection, "results": results, "event": event, "squad": squad, "grid": grid, "query": q},
+        request=request,
+    )
+    return DatastarResponse(ServerSentEventGenerator.patch_elements(html))
+
+
+@login_required
+@team_member_required()
+@require_POST
+def slot_ds_add_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int, user_id: int
+) -> HttpResponse:
+    """Datastar: add a DS to a race — assign the squad role, mention in the thread, patch the list.
+
+    Returns:
+        A Datastar SSE response patching the slot's DS list and clearing the search results.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
+    if not _can_manage_squad_availability(request.user, squad):
+        return HttpResponse("Permission denied", status=403)
+
+    ds_user = get_object_or_404(User, pk=user_id)
+    ds, created = SlotDS.objects.get_or_create(
+        selection=selection, user=ds_user, defaults={"added_by": request.user}
+    )
+    if created:
+        if ds_service.assign_squad_role(ds_user, squad, actor_id=request.user.id):
+            ds.role_was_assigned = True
+            ds.save(update_fields=["role_was_assigned"])
+        _post_ds_added_to_thread(selection, ds_user)
+        logfire.info(
+            "DS added to race",
+            selection_id=selection.pk,
+            ds_user_id=ds_user.id,
+            squad_id=squad.pk,
+            role_assigned=ds.role_was_assigned,
+            admin_user_id=request.user.id,
+        )
+
+    list_html = _render_ds_list(request, event, squad, grid, selection)
+    cleared_results = f'<div id="ds-results-{selection.pk}"></div>'
+
+    def events_gen():
+        yield ServerSentEventGenerator.patch_elements(list_html)
+        yield ServerSentEventGenerator.patch_elements(cleared_results)
+
+    return DatastarResponse(events_gen())
+
+
+@login_required
+@team_member_required()
+@require_POST
+def slot_ds_remove_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str, slot_pk: int, user_id: int
+) -> HttpResponse:
+    """Datastar: remove a DS from a race — strip the squad role if safe, patch the list.
+
+    Returns:
+        A Datastar SSE response patching the slot's DS list.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+    selection = get_object_or_404(AvailabilitySlotSelection, pk=slot_pk, grid=grid)
+    if not _can_manage_squad_availability(request.user, squad):
+        return HttpResponse("Permission denied", status=403)
+
+    ds = SlotDS.objects.filter(selection=selection, user_id=user_id).select_related("user").first()
+    if ds:
+        if (
+            ds.role_was_assigned
+            and ds.role_removed_at is None
+            and ds_service.should_remove_squad_role(ds.user, squad, exclude_slot_ds_pk=ds.pk)
+        ):
+            ds_service.remove_squad_role(ds.user, squad, actor_id=request.user.id)
+        logfire.info(
+            "DS removed from race",
+            selection_id=selection.pk,
+            ds_user_id=ds.user_id,
+            squad_id=squad.pk,
+            admin_user_id=request.user.id,
+        )
+        ds.delete()
+
+    list_html = _render_ds_list(request, event, squad, grid, selection)
+    return DatastarResponse(ServerSentEventGenerator.patch_elements(list_html))
 
 
 def _can_add_members(user: User, event: Event) -> bool:

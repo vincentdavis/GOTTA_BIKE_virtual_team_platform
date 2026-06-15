@@ -31,6 +31,9 @@ from apps.events.views import (
     manage_roles_view,
     my_events_view,
     race_calendar_ics_view,
+    slot_ds_add_view,
+    slot_ds_remove_view,
+    slot_ds_search_view,
     slot_selection_archive_thread_view,
     slot_selection_create_thread_view,
     slot_selection_create_view,
@@ -174,6 +177,21 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/<int:slot_pk>/delete/",
         slot_selection_delete_view,
         name="slot_selection_delete",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/<int:slot_pk>/ds/search/",
+        slot_ds_search_view,
+        name="slot_ds_search",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/<int:slot_pk>/ds/add/<int:user_id>/",
+        slot_ds_add_view,
+        name="slot_ds_add",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/<int:slot_pk>/ds/remove/<int:user_id>/",
+        slot_ds_remove_view,
+        name="slot_ds_remove",
     ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/slots/<int:slot_pk>/create-thread/",

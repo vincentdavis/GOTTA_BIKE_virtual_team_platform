@@ -57,6 +57,17 @@
     {% else %}
     <p class="text-xs text-base-content/50">No riders selected</p>
     {% endif %}
+
+    {% if is_event_admin %}
+    {# Directeurs Sportifs — Datastar-powered add/remove/search #}
+    <div class="mt-2 border-t border-base-300 pt-2">
+      <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">Directeurs Sportifs</p>
+      {% include "events/_slot_ds_list.html" with selection=item.selection ds_list=item.ds_list %}
+      <input type="text" class="input input-bordered input-xs w-full mt-1" placeholder="Add DS by name…"
+             data-on-input__debounce.300ms="@get('{% url 'events:slot_ds_search' event.pk squad.pk grid.pk item.selection.pk %}?q=' + encodeURIComponent(evt.target.value))">
+      {% include "events/_slot_ds_results.html" with selection=item.selection results='' query='' %}
+    </div>
+    {% endif %}
   </div>
 </div>
 {% empty %}

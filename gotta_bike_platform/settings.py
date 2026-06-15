@@ -814,6 +814,11 @@ CONSTANCE_CONFIG = {
         "How often to purge user API keys that expired more than 90 days ago (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS": (
+        24,
+        "How often to remove squad roles from Directeurs Sportifs after their race has finished (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -964,6 +969,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS",
         "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
         "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS",
+        "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS",
     ),
 }
 

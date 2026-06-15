@@ -139,6 +139,9 @@ EVENTS_TEMPLATES = [
     "events/squad_manage.html",
     "events/squad_availability.html",
     "events/availability_builder.html",
+    "events/_slot_selections_container.html",
+    "events/_slot_ds_list.html",
+    "events/_slot_ds_results.html",
     "events/_squad_panel.html",
     "events/_squad_manage_panel.html",
     "events/event_all_races.html",
@@ -1025,3 +1028,147 @@ def test_availability_save_stores_hide_empty_days(client, event_admin) -> None:
     assert response.status_code == 200
     grid = AvailabilityGrid.objects.get(squad=squad)
     assert grid.hide_empty_days is True
+
+
+# ---- Directeur Sportif (DS) ----
+
+
+def _ds_user(user_model, name="DS", discord_id="900001", roles=None):
+    return user_model.objects.create(
+        username=f"ds_{discord_id}",
+        first_name=name,
+        discord_id=discord_id,
+        discord_username=name.lower(),
+        discord_roles=roles or {},
+    )
+
+
+def _ds_squad_grid_slot(event, *, role_id=999, slot_date=None):
+    from apps.events.models import AvailabilityGrid, AvailabilitySlotSelection, Squad
+
+    squad = Squad.objects.create(event=event, name="Squad A", gender="COED", team_discord_role=role_id)
+    grid = AvailabilityGrid.objects.create(
+        squad=squad,
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 7),
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=30,
+        grid_timezone="UTC",
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+    selection = AvailabilitySlotSelection.objects.create(
+        grid=grid, name="Race 1", slot_date=slot_date or date(2026, 7, 3), slot_time="19:00"
+    )
+    return squad, grid, selection
+
+
+@pytest.mark.django_db
+def test_ds_assign_squad_role_only_when_not_held(user_model):
+    from apps.events import ds_service
+    from apps.events.models import Squad
+
+    squad = Squad(name="S", team_discord_role=999)
+    fresh = _ds_user(user_model, discord_id="900100", roles={})
+    with patch("apps.events.ds_service.add_discord_role", return_value=True):
+        assert ds_service.assign_squad_role(fresh, squad) is True  # newly assigned
+    fresh.refresh_from_db()
+    assert "999" in fresh.discord_roles
+
+    already = _ds_user(user_model, discord_id="900101", roles={"999": "S"})
+    with patch("apps.events.ds_service.add_discord_role", return_value=True) as m:
+        assert ds_service.assign_squad_role(already, squad) is False  # already held; not ours
+        assert m.call_count == 0
+
+
+@pytest.mark.django_db
+def test_ds_should_remove_respects_membership(user_model):
+    today = date.today()
+    event = Event.objects.create(title="E", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    squad, _grid, _sel = _ds_squad_grid_slot(event)
+    from apps.events import ds_service
+    from apps.events.models import SquadMember
+
+    outsider = _ds_user(user_model, discord_id="900200")
+    assert ds_service.should_remove_squad_role(outsider, squad, exclude_slot_ds_pk=None) is True
+
+    member = _ds_user(user_model, discord_id="900201")
+    SquadMember.objects.create(squad=squad, user=member, status=SquadMember.Status.MEMBER)
+    assert ds_service.should_remove_squad_role(member, squad, exclude_slot_ds_pk=None) is False
+
+
+@pytest.mark.django_db
+def test_remove_expired_ds_roles_task():
+    from apps.events.models import SlotDS
+    from apps.events.tasks import remove_expired_ds_roles
+
+    today = date.today()
+    event = Event.objects.create(title="E", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    from django.contrib.auth import get_user_model
+
+    um = get_user_model()
+    # Past race, DS we assigned the role to, not otherwise entitled -> removed.
+    _squad, _g, past_sel = _ds_squad_grid_slot(event, slot_date=date(2020, 1, 1))
+    ds_user = _ds_user(um, discord_id="900300", roles={"999": "Squad A"})
+    SlotDS.objects.create(selection=past_sel, user=ds_user, role_was_assigned=True)
+    # Future race for a second DS -> skipped (not past).
+    from apps.events.models import AvailabilitySlotSelection
+
+    future_sel = AvailabilitySlotSelection.objects.create(
+        grid=past_sel.grid, name="Future", slot_date=date(2999, 1, 1), slot_time="19:00"
+    )
+    future_user = _ds_user(um, discord_id="900301", roles={"999": "Squad A"})
+    SlotDS.objects.create(selection=future_sel, user=future_user, role_was_assigned=True)
+
+    with patch("apps.events.ds_service.remove_discord_role", return_value=True) as m:
+        result = remove_expired_ds_roles.call()
+
+    assert result["removed"] == 1
+    assert m.call_count == 1
+    past_ds = SlotDS.objects.get(selection=past_sel, user=ds_user)
+    assert past_ds.role_removed_at is not None
+    future_ds = SlotDS.objects.get(selection=future_sel, user=future_user)
+    assert future_ds.role_removed_at is None  # future race untouched
+
+
+@pytest.mark.django_db
+def test_slot_ds_add_and_remove_endpoints(client, event_admin, user_model):
+    from django.urls import reverse
+
+    from apps.events.models import SlotDS
+
+    client.force_login(event_admin)
+    today = date.today()
+    event = Event.objects.create(title="E", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    squad, grid, selection = _ds_squad_grid_slot(event)
+    ds_user = _ds_user(user_model, name="Helper", discord_id="900400")
+
+    add_url = reverse("events:slot_ds_add", args=[event.pk, squad.pk, grid.id, selection.pk, ds_user.pk])
+    with patch("apps.events.ds_service.add_discord_role", return_value=True):
+        resp = client.post(add_url)
+    assert resp.status_code == 200
+    assert resp["content-type"].startswith("text/event-stream")
+    body = b"".join(resp.streaming_content).decode()
+    assert "Helper" in body and f"ds-list-{selection.pk}" in body
+    ds = SlotDS.objects.get(selection=selection, user=ds_user)
+    assert ds.role_was_assigned is True
+
+    remove_url = reverse("events:slot_ds_remove", args=[event.pk, squad.pk, grid.id, selection.pk, ds_user.pk])
+    with patch("apps.events.ds_service.remove_discord_role", return_value=True):
+        resp2 = client.post(remove_url)
+    assert resp2.status_code == 200
+    assert not SlotDS.objects.filter(selection=selection, user=ds_user).exists()
+
+
+@pytest.mark.django_db
+def test_thread_message_includes_ds(user_model):
+    from apps.events.views import _build_slot_thread_message
+
+    today = date.today()
+    event = Event.objects.create(title="E", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    _squad, _grid, selection = _ds_squad_grid_slot(event)
+    ds_user = _ds_user(user_model, name="Sporty", discord_id="900500")
+    selection.directeurs_sportifs.add(ds_user)
+    body, ids = _build_slot_thread_message(selection)
+    assert "DS:" in body
+    assert "900500" in ids
