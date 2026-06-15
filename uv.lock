@@ -302,6 +302,15 @@ wheels = [
 ]
 
 [[package]]
+name = "datastar-py"
+version = "1.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/d9/56/697b0c2300985f5143384696fd4854cfdcadf6839577fde49d5b9e0d9000/datastar_py-1.0.2.tar.gz", hash = "sha256:c6f86e2b48c3a5ea08570a4e958267307a5ffc0253c259f054dc3bb6de8a2c0e", size = 129512, upload-time = "2026-06-02T17:47:58.417Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0f/14/2cffb0ef9a69d113349f483786c435abf06ea5091e275328cc163b2a2f23/datastar_py-1.0.2-py3-none-any.whl", hash = "sha256:d84735e5cc55ed85e02f80bbab01c2877e7ed7a6185cc144f802a9821616c9d3", size = 19727, upload-time = "2026-06-02T17:47:57.285Z" },
+]
+
+[[package]]
 name = "dj-database-url"
 version = "3.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -675,6 +684,7 @@ dependencies = [
     { name = "apscheduler" },
     { name = "beautifulsoup4" },
     { name = "boto3" },
+    { name = "datastar-py" },
     { name = "dj-database-url" },
     { name = "django" },
     { name = "django-allauth", extra = ["mfa", "socialaccount"] },
@@ -724,6 +734,7 @@ requires-dist = [
     { name = "apscheduler", specifier = ">=3.11.2" },
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "boto3", specifier = ">=1.42.83" },
+    { name = "datastar-py", specifier = ">=1.0.2" },
     { name = "dj-database-url", specifier = ">=3.1.2" },
     { name = "django", specifier = ">=6.0.6" },
     { name = "django-allauth", extras = ["mfa", "socialaccount"], specifier = ">=65.18.0" },
