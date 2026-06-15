@@ -64,7 +64,7 @@
       <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">Directeurs Sportifs</p>
       {% include "events/_slot_ds_list.html" with selection=item.selection ds_list=item.ds_list %}
       <input type="text" class="input input-bordered input-xs w-full mt-1" placeholder="Add DS by name…"
-             data-on-input__debounce.300ms="@get('{% url 'events:slot_ds_search' event.pk squad.pk grid.pk item.selection.pk %}?q=' + encodeURIComponent(evt.target.value))">
+             data-on:input__debounce.300ms="@get('{% url 'events:slot_ds_search' event.pk squad.pk grid.pk item.selection.pk %}?q=' + encodeURIComponent(evt.target.value))">
       {% include "events/_slot_ds_results.html" with selection=item.selection results='' query='' %}
     </div>
     {% endif %}

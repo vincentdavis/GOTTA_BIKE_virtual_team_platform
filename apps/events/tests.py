@@ -1172,3 +1172,15 @@ def test_thread_message_includes_ds(user_model):
     body, ids = _build_slot_thread_message(selection)
     assert "DS:" in body
     assert "900500" in ids
+
+
+def test_ds_templates_use_datastar_colon_event_syntax():
+    # Guard: Datastar event handlers must be data-on:<event>, not data-on-<event>
+    # (the hyphen form is silently ignored, so the panel does nothing).
+    from pathlib import Path
+
+    base = Path(__file__).resolve().parent.parent.parent / "templates" / "events"
+    for name in ("_slot_ds_list.html", "_slot_ds_results.html", "_slot_selections_container.html"):
+        text = (base / name).read_text()
+        assert "data-on-" not in text, f"{name} uses hyphen data-on- (should be data-on:)"
+    assert "data-on:" in (base / "_slot_selections_container.html").read_text()

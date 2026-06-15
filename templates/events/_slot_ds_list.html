@@ -3,7 +3,7 @@
   <span class="badge badge-outline badge-sm gap-1">
     🎽 {{ ds.display_name }}
     <button type="button" class="text-error font-bold leading-none" title="Remove DS"
-            data-on-click="@post('{% url 'events:slot_ds_remove' event.pk squad.pk grid.pk selection.pk ds.user.pk %}', {headers: {'X-CSRFToken': '{{ csrf_token }}'}})">&times;</button>
+            data-on:click="@post('{% url 'events:slot_ds_remove' event.pk squad.pk grid.pk selection.pk ds.user.pk %}', {headers: {'X-CSRFToken': '{{ csrf_token }}'}})">&times;</button>
   </span>
   {% empty %}
   <span class="text-xs text-base-content/40">No DS assigned</span>
