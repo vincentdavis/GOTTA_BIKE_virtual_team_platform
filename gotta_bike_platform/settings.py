@@ -538,6 +538,11 @@ CONSTANCE_CONFIG = {
         "Discord role ID for new members (0 = disabled)",
         int,
     ),
+    "DS_ROLE_ID": (
+        0,
+        "Discord role ID for Directeurs Sportifs (0 = disabled)",
+        int,
+    ),
     "NEW_MEMBER_DAYS": (
         30,
         "Number of days a member is considered new",
@@ -855,6 +860,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "TEAM_MEMBER_ROLE_ID",
         "RACE_READY_ROLE_ID",
         "NEW_MEMBER_ROLE_ID",
+        "DS_ROLE_ID",
         "NEW_MEMBER_DAYS",
         "NEW_ARRIVAL_MESSAGE_PUBLIC",
         "NEW_ARRIVAL_MESSAGE_PRIVATE",
