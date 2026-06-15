@@ -26,6 +26,9 @@
 
 ### Events & Squads
 
+- [ ] Wire `DS_ROLE_ID` into the DS feature alongside the squad role. The `DS_ROLE_ID` Constance setting exists
+  (Discord Guild fieldset) but is unused; when set, also assign/remove it (in addition to the squad
+  `team_discord_role`) on DS add/remove in `apps/events/ds_service.py` + `remove_expired_ds_roles` sweep.
 - [ ] Document Discord bot channel permissions required for "Create Discord Thread" (View Channel + Create Public
   Threads + Send Messages in Threads); investigate startup preflight check
 
