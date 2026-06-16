@@ -103,14 +103,37 @@ def format_draft_savings_input(params: physics.PhysicsParams) -> str:
     return ", ".join(f"{round(frac * 100, 1):g}" for frac in params.draft_savings)
 
 
-def default_draft_savings_input() -> str:
-    """Return the global default savings formatted for a create form.
+def quick_finish_time(plan: TttPlan, params: physics.PhysicsParams | None = None) -> float:
+    """Estimate a plan's finish time cheaply (no NP simulation), e.g. for lists.
+
+    Args:
+        plan: The plan (its ``riders`` should be prefetched for efficiency).
+        params: Physics constants; falls back to the plan's resolved params.
 
     Returns:
-        e.g. ``"0, 23.3, 30, 36.6"`` from the Constance default.
+        Estimated finish time in seconds (0.0 if no route).
 
     """
-    return format_draft_savings_input(physics.params_from_constance())
+    if not plan.route:
+        return 0.0
+    if params is None:
+        params = params_for_plan(plan)
+
+    riders = list(plan.riders.all())
+    if riders:
+        avg_weight = sum(float(r.weight_kg or FALLBACK_WEIGHT_KG) for r in riders) / len(riders)
+        avg_height = sum(float(r.height_cm or FALLBACK_HEIGHT_CM) for r in riders) / len(riders)
+    else:
+        avg_weight, avg_height = FALLBACK_WEIGHT_KG, FALLBACK_HEIGHT_CM
+
+    return physics.estimate_time_seconds(
+        float(plan.route.distance_km),
+        plan.route.elevation_m,
+        float(plan.target_speed_kph),
+        avg_weight_kg=avg_weight,
+        avg_height_cm=avg_height,
+        params=params,
+    )
 
 
 _MAX_NP_SECONDS = 14400  # cap the simulated series at 4 hours

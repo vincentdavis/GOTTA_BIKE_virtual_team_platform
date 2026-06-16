@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ttt_extras %}
 
 {% block title %}TTT Planner{% endblock %}
 
@@ -29,13 +30,13 @@
               <input type="text" name="team_name" class="input input-bordered input-sm w-full" />
             </label>
             <label class="form-control">
-              <span class="label-text mb-1">Draft savings by position (% aero saved, front first)</span>
-              <input type="text" name="draft_savings" value="{{ default_draft_savings_input }}"
-                     placeholder="0, 23.3, 30, 36.6, 39, 40, 41, 42"
-                     class="input input-bordered input-sm w-full" />
-              <span class="label-text-alt mt-1 text-base-content/50">
-                Comma-separated. Position 1 is the front rider (0%). Clear to use the team default.
-              </span>
+              <span class="label-text mb-1">Event</span>
+              <select name="event_type" class="select select-bordered select-sm w-full">
+                <option value="">— Unspecified —</option>
+                {% for value, label in event_types %}
+                  <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
             </label>
             <div class="modal-action">
               <button type="button" class="btn btn-ghost btn-sm" onclick="new_plan_modal.close()">Cancel</button>
@@ -48,32 +49,40 @@
         </form>
       </dialog>
 
-      {% if plans %}
+      {% if plan_rows %}
       <div class="overflow-x-auto">
         <table class="table table-zebra">
           <thead>
             <tr>
               <th>Name</th>
+              <th>Event</th>
+              <th>Team</th>
               <th>Route</th>
-              <th>Target speed</th>
+              <th class="text-right">Riders</th>
+              <th class="text-right">Target</th>
+              <th class="text-right">Est. time</th>
               <th>Updated</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {% for plan in plans %}
+            {% for row in plan_rows %}
             <tr class="hover">
               <td>
-                <a href="{% url 'ttt_planner:detail' plan.pk %}" class="link link-primary font-medium">
-                  {{ plan.name|default:"Untitled plan" }}
+                <a href="{% url 'ttt_planner:detail' row.plan.pk %}" class="link link-primary font-medium">
+                  {{ row.plan.name|default:"Untitled plan" }}
                 </a>
               </td>
-              <td>{{ plan.route.name|default:"—" }}</td>
-              <td>{{ plan.target_speed_kph }} kph</td>
-              <td class="text-sm text-base-content/60">{{ plan.updated_at|date:"M j, Y" }}</td>
+              <td>{{ row.plan.get_event_type_display|default:"—" }}</td>
+              <td>{{ row.plan.team_name|default:"—" }}</td>
+              <td>{{ row.plan.route.name|default:"—" }}</td>
+              <td class="text-right">{{ row.rider_count }}</td>
+              <td class="text-right">{{ row.plan.target_speed_kph }} kph</td>
+              <td class="text-right">{% if row.finish_s %}{{ row.finish_s|duration_hms }}{% else %}—{% endif %}</td>
+              <td class="text-sm text-base-content/60">{{ row.plan.updated_at|date:"M j, Y" }}</td>
               <td class="text-right">
-                <form method="post" action="{% url 'ttt_planner:delete' plan.pk %}"
-                      onsubmit="return confirm('Delete &quot;{{ plan.name|default:'Untitled plan'|escapejs }}&quot;?');">
+                <form method="post" action="{% url 'ttt_planner:delete' row.plan.pk %}"
+                      onsubmit="return confirm('Delete &quot;{{ row.plan.name|default:'Untitled plan'|escapejs }}&quot;?');">
                   {% csrf_token %}
                   <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
                 </form>

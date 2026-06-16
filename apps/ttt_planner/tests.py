@@ -503,16 +503,65 @@ def test_draft_savings_table_non_owner_forbidden(auth_client, team_member, app_a
 
 
 @pytest.mark.django_db
-def test_create_with_draft_savings(auth_client, team_member):
-    """The create form stores name and a draft-savings fraction list on the new plan."""
+def test_create_plan_stores_name_team_and_event(auth_client, team_member):
+    """The create form stores name, team, and event; draft savings stays default (empty)."""
     resp = auth_client.post(
         reverse("ttt_planner:create"),
-        {"name": "Created Plan", "team_name": "Coalition", "draft_savings": "0, 20, 28"},
+        {"name": "Created Plan", "team_name": "Coalition", "event_type": "zrl"},
     )
     assert resp.status_code == 302
     plan = TttPlan.objects.get(name="Created Plan")
     assert plan.team_name == "Coalition"
-    assert plan.draft_savings == pytest.approx([0.0, 0.20, 0.28])
+    assert plan.event_type == "zrl"
+    assert plan.draft_savings == []
+
+
+@pytest.mark.django_db
+def test_create_plan_rejects_bad_event(auth_client, team_member):
+    """An invalid event_type on create is stored as blank."""
+    resp = auth_client.post(reverse("ttt_planner:create"), {"name": "P", "event_type": "bogus"})
+    assert resp.status_code == 302
+    assert TttPlan.objects.get(name="P").event_type == ""
+
+
+@pytest.mark.django_db
+def test_plan_update_stores_event_type(auth_client, team_member):
+    """Posting a valid event_type stores it; an invalid value clears it."""
+    plan = TttPlan.objects.create(created_by=team_member)
+    resp = auth_client.post(reverse("ttt_planner:update", args=[plan.pk]), {"event_type": "wtrl_ttt"})
+    assert resp.status_code == 200
+    plan.refresh_from_db()
+    assert plan.event_type == "wtrl_ttt"
+
+    resp = auth_client.post(reverse("ttt_planner:update", args=[plan.pk]), {"event_type": "bogus"})
+    assert resp.status_code == 200
+    plan.refresh_from_db()
+    assert plan.event_type == ""
+
+
+@pytest.mark.django_db
+def test_plan_list_shows_event_riders_team_and_time(auth_client, team_member):
+    """The plan list shows team name, event, rider count, and an estimated time."""
+    route = Route.objects.create(name="List Route", distance_km=20, elevation_m=0)
+    plan = TttPlan.objects.create(
+        created_by=team_member,
+        name="My Plan",
+        team_name="Coalition A",
+        event_type=TttPlan.EventType.WTRL_TTT,
+        route=route,
+        target_speed_kph=42,
+    )
+    PlanRider.objects.create(plan=plan, order=0, name="A", weight_kg=72, height_cm=178, ftp_w=300)
+    PlanRider.objects.create(plan=plan, order=1, name="B", weight_kg=78, height_cm=182, ftp_w=300)
+
+    resp = auth_client.get(reverse("ttt_planner:list"))
+    assert resp.status_code == 200
+    rows = resp.context["plan_rows"]
+    assert rows[0]["rider_count"] == 2
+    assert rows[0]["finish_s"] > 0
+    content = resp.content
+    assert b"Coalition A" in content
+    assert b"WTRL TTT" in content
 
 
 # --------------------------------------------------------------------------- #

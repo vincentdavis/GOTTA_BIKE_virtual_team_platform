@@ -30,6 +30,15 @@
           <input type="text" name="team_name" value="{{ plan.team_name }}" class="input input-bordered input-sm" />
         </label>
         <label class="form-control">
+          <span class="label-text mb-1">Event</span>
+          <select name="event_type" class="select select-bordered select-sm">
+            <option value="">— Unspecified —</option>
+            {% for value, label in event_types %}
+              <option value="{{ value }}" {% if plan.event_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="form-control">
           <span class="label-text mb-1">Route</span>
           <select name="route" class="select select-bordered select-sm">
             <option value="">— No route —</option>

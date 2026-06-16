@@ -12,6 +12,7 @@ import contextlib
 
 import logfire
 from django.contrib.auth.decorators import login_required
+from django.db.models import Count
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -19,8 +20,8 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.decorators import team_member_required
 from apps.ttt_planner.models import PlanRider, Route, TttPlan
-from apps.ttt_planner.services import physics, roster, zwiftgopher, zwiftgopher_client
-from apps.ttt_planner.services.compute import auto_set_speed, compute_plan, default_draft_savings_input
+from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
+from apps.ttt_planner.services.compute import auto_set_speed, compute_plan, quick_finish_time
 from apps.ttt_planner.tasks import run_zwiftgopher_optimize
 
 
@@ -68,11 +69,18 @@ def planner_list(request: HttpRequest) -> HttpResponse:
         The plan list page.
 
     """
-    plans = TttPlan.objects.filter(created_by=request.user).select_related("route")
+    plans = (
+        TttPlan.objects
+        .filter(created_by=request.user)
+        .select_related("route")
+        .prefetch_related("riders")
+        .annotate(rider_count=Count("riders"))
+    )
+    plan_rows = [{"plan": plan, "rider_count": plan.rider_count, "finish_s": quick_finish_time(plan)} for plan in plans]
     return render(
         request,
         "ttt_planner/planner_list.html",
-        {"plans": plans, "default_draft_savings_input": default_draft_savings_input()},
+        {"plan_rows": plan_rows, "event_types": TttPlan.EventType.choices},
     )
 
 
@@ -86,12 +94,12 @@ def plan_create(request: HttpRequest) -> HttpResponse:
         Redirect to the new plan's detail page.
 
     """
-    parsed = physics.parse_draft_savings(request.POST.get("draft_savings", ""))
+    event_type = request.POST.get("event_type", "")
     plan = TttPlan.objects.create(
         created_by=request.user,
         name=request.POST.get("name", "").strip(),
         team_name=request.POST.get("team_name", "").strip(),
-        draft_savings=list(parsed) if parsed else [],
+        event_type=event_type if event_type in TttPlan.EventType.values else "",
     )
     logfire.info("TTT plan created", plan_id=str(plan.pk), user_id=request.user.id)
     return redirect("ttt_planner:detail", plan_id=plan.pk)
@@ -114,7 +122,13 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
     return render(
         request,
         "ttt_planner/planner_detail.html",
-        {"plan": plan, "result": result, "can_edit": can_edit, "routes": routes},
+        {
+            "plan": plan,
+            "result": result,
+            "can_edit": can_edit,
+            "routes": routes,
+            "event_types": TttPlan.EventType.choices,
+        },
     )
 
 
@@ -169,6 +183,9 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
         plan.name = request.POST.get("name", "").strip()
     if "team_name" in request.POST:
         plan.team_name = request.POST.get("team_name", "").strip()
+    if "event_type" in request.POST:
+        event_type = request.POST.get("event_type", "")
+        plan.event_type = event_type if event_type in TttPlan.EventType.values else ""
     if "target_speed_kph" in request.POST:
         with contextlib.suppress(ValueError):
             plan.target_speed_kph = max(0.0, float(request.POST.get("target_speed_kph") or 0))

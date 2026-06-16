@@ -42,9 +42,20 @@ class Route(models.Model):
 class TttPlan(models.Model):
     """A saved TTT plan. The UUID primary key doubles as the share token."""
 
+    class EventType(models.TextChoices):
+        """The kind of event this plan targets."""
+
+        ZRL = "zrl", "ZRL"
+        DRS = "drs", "DRS"
+        WTRL_TTT = "wtrl_ttt", "WTRL TTT"
+        OTHER = "other", "Other"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200, blank=True, help_text="Plan name")
     team_name = models.CharField(max_length=200, blank=True, help_text="Team name shown on the plan")
+    event_type = models.CharField(
+        max_length=20, blank=True, default="", choices=EventType.choices, help_text="Event this plan targets"
+    )
     route = models.ForeignKey(
         Route, on_delete=models.SET_NULL, null=True, blank=True, related_name="plans", help_text="Selected route"
     )
