@@ -319,35 +319,204 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
     )
 
 
-def auto_set_speed(plan: TttPlan, params: physics.PhysicsParams | None = None) -> float:
-    """Suggest a target flat speed where the average puller's IF is ~0.95.
+def _mean_draft_factor(team_size: int, params: physics.PhysicsParams) -> float:
+    """Average sitting-in draft factor (1 - mean savings over positions 2..N).
 
-    Uses the mean weight/height/FTP of pulling riders to find a sustainable
-    front-pull speed.
+    Args:
+        team_size: Number of riders in the rotation.
+        params: Physics constants.
+
+    Returns:
+        The aerodynamic multiplier applied while drafting.
+
+    """
+    if team_size > 1:
+        mean_savings = sum(physics.draft_savings_fraction(p, params) for p in range(2, team_size + 1)) / (team_size - 1)
+    else:
+        mean_savings = 0.0
+    return max(0.0, 1.0 - mean_savings)
+
+
+def _rider_wh(rider: PlanRider) -> tuple[float, float]:
+    """Return a rider's weight/height, substituting fallbacks when missing.
+
+    Args:
+        rider: The plan rider.
+
+    Returns:
+        ``(weight_kg, height_cm)``.
+
+    """
+    weight = float(rider.weight_kg) if rider.weight_kg is not None else FALLBACK_WEIGHT_KG
+    height = float(rider.height_cm) if rider.height_cm is not None else FALLBACK_HEIGHT_CM
+    return weight, height
+
+
+def sustainable_speed(
+    plan: TttPlan, *, target_if: float | None = None, params: physics.PhysicsParams | None = None
+) -> float:
+    """Solve for the fastest team speed every rider can sustain at the target IF.
+
+    For each rider, their cycle-average power (front power during their own pull +
+    draft power while sitting in, weighted by pull duration) must stay at or below
+    ``target_if * FTP``. The binding (weakest-relative) rider caps the speed.
+    Pull durations therefore directly affect the result.
 
     Args:
         plan: The plan.
-        params: Physics constants; falls back to Constance-derived params.
+        target_if: Intensity factor target; defaults to the plan's ``target_if``.
+        params: Physics constants; falls back to the plan's resolved params.
 
     Returns:
-        Suggested speed in km/h (rounded to 0.1), or the current speed if it
-        cannot be derived.
+        The sustainable speed in km/h (rounded to 0.1), or the current target
+        speed if it cannot be derived (no FTP data).
 
     """
     if params is None:
         params = params_for_plan(plan)
+    if target_if is None:
+        target_if = float(plan.target_if or 0.95)
 
-    pulling = [r for r in plan.riders.all() if not r.zero_pull and r.ftp_w]
-    if not pulling:
+    all_riders = list(plan.riders.all())
+    ftp_riders = [r for r in all_riders if r.ftp_w]
+    if not ftp_riders:
         return float(plan.target_speed_kph)
 
-    avg_weight = sum(float(r.weight_kg or FALLBACK_WEIGHT_KG) for r in pulling) / len(pulling)
-    avg_height = sum(float(r.height_cm or FALLBACK_HEIGHT_CM) for r in pulling) / len(pulling)
-    avg_ftp = sum(r.ftp_w for r in pulling) / len(pulling)
-
-    target_power = 0.95 * avg_ftp
     grade = _grade(plan)
-    speed = physics.speed_for_power(
-        target_power, weight_kg=avg_weight, height_cm=avg_height, grade=grade, params=params
-    )
-    return round(speed, 1)
+    draft_factor = _mean_draft_factor(len(all_riders), params)
+    cycle = sum(r.pull_duration_s for r in all_riders if not r.zero_pull) or 1
+
+    def avg_power(rider: PlanRider, speed: float) -> float:
+        weight, height = _rider_wh(rider)
+        front = physics.power_for_speed(
+            speed, weight_kg=weight, height_cm=height, grade=grade, draft_factor=1.0, params=params
+        )
+        draft = physics.power_for_speed(
+            speed, weight_kg=weight, height_cm=height, grade=grade, draft_factor=draft_factor, params=params
+        )
+        pull = 0 if rider.zero_pull else rider.pull_duration_s
+        return (front * pull + draft * (cycle - pull)) / cycle
+
+    def feasible(speed: float) -> bool:
+        return all(avg_power(r, speed) <= target_if * r.ftp_w for r in ftp_riders)
+
+    lo, hi = 0.0, 120.0
+    for _ in range(60):
+        mid = (lo + hi) / 2.0
+        if feasible(mid):
+            lo = mid
+        else:
+            hi = mid
+    return round(lo, 1)
+
+
+# Auto-balance tuning.
+_BALANCE_MAX_PULL_S = 180
+_BALANCE_MIN_PULL_S = 10
+_BALANCE_STEP_S = 5
+
+
+@dataclass
+class BalanceAssignment:
+    """A proposed pull assignment for one rider from auto-balance."""
+
+    rider_pk: int
+    pull_duration_s: int
+    zero_pull: bool
+    order: int
+
+
+@dataclass
+class BalanceResult:
+    """Result of an auto-balance: per-rider assignments plus the team speed."""
+
+    speed_kph: float
+    assignments: list[BalanceAssignment]
+
+
+def compute_auto_balance(
+    plan: TttPlan, *, target_if: float | None = None, params: physics.PhysicsParams | None = None
+) -> BalanceResult | None:
+    """Balance pull durations so every rider is equally stressed at the target IF.
+
+    Finds the speed at which the riders' required front-time fractions sum to one
+    (exactly one rider on the front at all times, each at ``target_if * FTP``),
+    then turns those fractions into pull durations (stronger riders pull longer),
+    orders the rotation strongest-first, and benches riders who cannot even hold
+    the draft at that speed (zero-pull).
+
+    Args:
+        plan: The plan.
+        target_if: Intensity factor target; defaults to the plan's ``target_if``.
+        params: Physics constants; falls back to the plan's resolved params.
+
+    Returns:
+        A :class:`BalanceResult`, or None if there are no riders with FTP.
+
+    """
+    if params is None:
+        params = params_for_plan(plan)
+    if target_if is None:
+        target_if = float(plan.target_if or 0.95)
+
+    all_riders = list(plan.riders.all())
+    ftp_riders = [r for r in all_riders if r.ftp_w]
+    if not ftp_riders:
+        return None
+
+    grade = _grade(plan)
+    draft_factor = _mean_draft_factor(len(all_riders), params)
+
+    def powers(rider: PlanRider, speed: float) -> tuple[float, float]:
+        weight, height = _rider_wh(rider)
+        front = physics.power_for_speed(
+            speed, weight_kg=weight, height_cm=height, grade=grade, draft_factor=1.0, params=params
+        )
+        draft = physics.power_for_speed(
+            speed, weight_kg=weight, height_cm=height, grade=grade, draft_factor=draft_factor, params=params
+        )
+        return front, draft
+
+    def front_share(rider: PlanRider, speed: float) -> float:
+        front, draft = powers(rider, speed)
+        budget = target_if * rider.ftp_w
+        if front <= draft:
+            return 1.0
+        return min(max((budget - draft) / (front - draft), 0.0), 1.0)
+
+    # Largest speed where the sum of required front-time shares is still >= 1.
+    lo, hi = 0.0, 120.0
+    for _ in range(60):
+        mid = (lo + hi) / 2.0
+        if sum(front_share(r, mid) for r in ftp_riders) >= 1.0:
+            lo = mid
+        else:
+            hi = mid
+    speed = lo
+
+    shares = {r.pk: front_share(r, speed) for r in ftp_riders}
+    pullers = [r for r in ftp_riders if shares[r.pk] > 1e-3]
+    benched = [r for r in ftp_riders if shares[r.pk] <= 1e-3]
+
+    assignments: list[BalanceAssignment] = []
+    order = 0
+    if pullers:
+        max_share = max(shares[r.pk] for r in pullers)
+        cycle = _BALANCE_MAX_PULL_S / max_share if max_share > 0 else _BALANCE_MAX_PULL_S
+        durations = {
+            r.pk: max(round(shares[r.pk] * cycle / _BALANCE_STEP_S) * _BALANCE_STEP_S, _BALANCE_MIN_PULL_S)
+            for r in pullers
+        }
+        for rider in sorted(pullers, key=lambda r: -durations[r.pk]):
+            assignments.append(BalanceAssignment(rider.pk, durations[rider.pk], False, order))
+            order += 1
+
+    for rider in benched:
+        assignments.append(BalanceAssignment(rider.pk, rider.pull_duration_s, True, order))
+        order += 1
+    # Riders without FTP can't be balanced; keep their settings, ordered last.
+    for rider in (r for r in all_riders if not r.ftp_w):
+        assignments.append(BalanceAssignment(rider.pk, rider.pull_duration_s, rider.zero_pull, order))
+        order += 1
+
+    return BalanceResult(speed_kph=round(speed, 1), assignments=assignments)

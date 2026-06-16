@@ -1,0 +1,5 @@
+{% comment %}Target-speed input. Rendered in the settings form, and re-emitted out-of-band by Calculate / Auto-balance so the field reflects the new computed speed.{% endcomment %}
+<input type="number" step="0.1" min="0" name="target_speed_kph" id="ttt-target-speed"
+       value="{{ plan.target_speed_kph }}"
+       {% if oob %}hx-swap-oob="true"{% endif %}
+       class="input input-bordered input-sm w-full" />

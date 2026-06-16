@@ -8,11 +8,17 @@
       <div class="flex items-center justify-between gap-2">
         <h3 class="card-title">Pull schedule</h3>
         {% if can_edit and result.riders %}
-        <button type="button" class="btn btn-ghost btn-xs text-error"
-                hx-post="{% url 'ttt_planner:riders_remove_selected' plan.pk %}"
-                hx-include="[name='rider_ids']"
-                hx-target="#ttt-plan-body" hx-swap="innerHTML"
-                hx-confirm="Remove the selected riders?">Remove selected</button>
+        <div class="flex gap-1">
+          <button type="button" class="btn btn-ghost btn-xs"
+                  hx-post="{% url 'ttt_planner:auto_balance' plan.pk %}"
+                  hx-target="#ttt-plan-body" hx-swap="innerHTML"
+                  hx-confirm="Auto-balance pull durations and order at the target IF?">Auto-balance</button>
+          <button type="button" class="btn btn-ghost btn-xs text-error"
+                  hx-post="{% url 'ttt_planner:riders_remove_selected' plan.pk %}"
+                  hx-include="[name='rider_ids']"
+                  hx-target="#ttt-plan-body" hx-swap="innerHTML"
+                  hx-confirm="Remove the selected riders?">Remove selected</button>
+        </div>
         {% endif %}
       </div>
       {% if result.riders %}

@@ -21,7 +21,12 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.accounts.decorators import team_member_required
 from apps.ttt_planner.models import PlanRider, Route, TttPlan
 from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
-from apps.ttt_planner.services.compute import auto_set_speed, compute_plan, quick_finish_time
+from apps.ttt_planner.services.compute import (
+    compute_auto_balance,
+    compute_plan,
+    quick_finish_time,
+    sustainable_speed,
+)
 from apps.ttt_planner.tasks import run_zwiftgopher_optimize
 
 
@@ -57,6 +62,25 @@ def _render_plan_body(request: HttpRequest, plan: TttPlan, *, can_edit: bool) ->
         {"plan": plan, "result": result, "can_edit": can_edit},
         request=request,
     )
+
+
+def _plan_body_with_speed_oob(request: HttpRequest, plan: TttPlan) -> str:
+    """Plan body plus an out-of-band update of the target-speed input field.
+
+    Used by endpoints that change the target speed (Calculate / Auto-balance) so
+    the input in the settings form (outside the swapped body) stays in sync.
+
+    Args:
+        request: The request.
+        plan: The plan (with its new target speed already saved).
+
+    Returns:
+        Combined HTML for the swap.
+
+    """
+    body = _render_plan_body(request, plan, can_edit=True)
+    oob = render_to_string("ttt_planner/_speed_input.html", {"plan": plan, "oob": True}, request=request)
+    return body + oob
 
 
 @login_required
@@ -199,6 +223,9 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
         else:
             with contextlib.suppress(ValueError):
                 plan.cda_coef = max(0.0, float(raw))
+    if "target_if" in request.POST:
+        with contextlib.suppress(ValueError):
+            plan.target_if = min(max(float(request.POST.get("target_if") or 0.95), 0.1), 1.5)
 
     plan.save()
     return HttpResponse(_render_plan_body(request, plan, can_edit=True))
@@ -312,8 +339,11 @@ def zwiftgopher_run(request: HttpRequest, plan_id: str) -> HttpResponse:
 @login_required
 @team_member_required(raise_exception=True)
 @require_POST
-def auto_speed(request: HttpRequest, plan_id: str) -> HttpResponse:
-    """Set the target speed to the suggested sustainable value; recompute.
+def calculate_speed(request: HttpRequest, plan_id: str) -> HttpResponse:
+    """Set the target speed to the max sustainable value for the target IF; recompute.
+
+    Uses the current pull durations, so changing durations and recalculating
+    changes the speed (and the estimated time).
 
     Returns:
         The refreshed plan body partial.
@@ -323,9 +353,47 @@ def auto_speed(request: HttpRequest, plan_id: str) -> HttpResponse:
     if plan is None:
         return HttpResponse("Permission denied", status=403)
 
-    plan.target_speed_kph = auto_set_speed(plan)
-    plan.save(update_fields=["target_speed_kph", "updated_at"])
-    return HttpResponse(_render_plan_body(request, plan, can_edit=True))
+    if "target_if" in request.POST:
+        with contextlib.suppress(ValueError):
+            plan.target_if = min(max(float(request.POST.get("target_if") or 0.95), 0.1), 1.5)
+
+    plan.target_speed_kph = sustainable_speed(plan)
+    plan.save(update_fields=["target_if", "target_speed_kph", "updated_at"])
+    return HttpResponse(_plan_body_with_speed_oob(request, plan))
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_POST
+def auto_balance(request: HttpRequest, plan_id: str) -> HttpResponse:
+    """Balance pull durations and order at the target IF, set the speed; recompute.
+
+    Returns:
+        The refreshed plan body partial.
+
+    """
+    plan = _get_editable_plan(request, plan_id)
+    if plan is None:
+        return HttpResponse("Permission denied", status=403)
+
+    result = compute_auto_balance(plan)
+    if result is not None:
+        riders_by_pk = {r.pk: r for r in plan.riders.all()}
+        to_update = []
+        for assignment in result.assignments:
+            rider = riders_by_pk.get(assignment.rider_pk)
+            if rider is None:
+                continue
+            rider.pull_duration_s = assignment.pull_duration_s
+            rider.zero_pull = assignment.zero_pull
+            rider.order = assignment.order
+            to_update.append(rider)
+        if to_update:
+            PlanRider.objects.bulk_update(to_update, ["pull_duration_s", "zero_pull", "order"])
+        plan.target_speed_kph = result.speed_kph
+        plan.save(update_fields=["target_speed_kph", "updated_at"])
+        logfire.info("TTT auto-balance applied", plan_id=str(plan.pk), speed=result.speed_kph)
+    return HttpResponse(_plan_body_with_speed_oob(request, plan))
 
 
 @login_required

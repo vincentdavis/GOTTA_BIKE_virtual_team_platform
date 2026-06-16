@@ -62,6 +62,9 @@ class TttPlan(models.Model):
     target_speed_kph = models.DecimalField(
         max_digits=5, decimal_places=1, default=40.0, help_text="Target flat speed in km/h"
     )
+    target_if = models.FloatField(
+        default=0.95, help_text="Target intensity factor used by Calculate / Auto-balance (e.g. 0.95)"
+    )
     draft_savings = models.JSONField(
         default=list,
         blank=True,

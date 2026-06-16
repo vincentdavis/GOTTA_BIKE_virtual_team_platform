@@ -51,16 +51,22 @@
         </label>
         <label class="form-control">
           <span class="label-text mb-1">Target flat speed (kph)</span>
+          {% include "ttt_planner/_speed_input.html" %}
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Target IF</span>
           <div class="join">
-            <input type="number" step="0.1" min="0" name="target_speed_kph"
-                   value="{{ plan.target_speed_kph }}"
+            <input type="number" step="0.01" min="0.1" max="1.5" name="target_if"
+                   value="{{ plan.target_if }}"
                    class="input input-bordered input-sm join-item w-full" />
             <button type="button"
-                    class="btn btn-sm join-item"
-                    hx-post="{% url 'ttt_planner:auto_speed' plan.pk %}"
+                    class="btn btn-sm btn-primary join-item"
+                    hx-post="{% url 'ttt_planner:calculate_speed' plan.pk %}"
+                    hx-include="[name='target_if']"
                     hx-target="#ttt-plan-body"
-                    hx-swap="innerHTML">Auto</button>
+                    hx-swap="innerHTML">Calculate</button>
           </div>
+          <span class="label-text-alt mt-1 text-base-content/50">Sets the max sustainable speed from pull durations.</span>
         </label>
         <label class="form-control">
           <span class="label-text mb-1">Aero CdA coef</span>
