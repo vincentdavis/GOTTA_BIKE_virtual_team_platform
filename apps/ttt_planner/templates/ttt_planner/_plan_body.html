@@ -1,0 +1,181 @@
+{% load ttt_extras %}
+{# Roster table + results panel. Returned by every mutating endpoint. #}
+<div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+
+  {# ---- Roster / pull schedule ---- #}
+  <div class="xl:col-span-3 card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="card-title">Pull schedule</h3>
+      {% if result.riders %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Rider</th>
+              <th class="text-right">kg</th>
+              <th class="text-right" title="Estimated CdA (drag area, m²) from height &amp; weight">CdA</th>
+              <th class="text-right">FTP</th>
+              <th class="text-right">Pull W</th>
+              <th class="text-right">W/kg</th>
+              <th class="text-right">IF</th>
+              <th class="text-right">Avg W</th>
+              <th class="text-right" title="Normalized Power over the race (needs a route)">NP</th>
+              <th class="text-right" title="Training Stress Score (needs a route and FTP)">TSS</th>
+              {% if can_edit %}<th>Pull (s)</th><th>Zero</th><th></th>{% else %}<th class="text-right">Pull (s)</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for rr in result.riders %}
+            <tr class="hover">
+              <td class="text-base-content/50">{{ forloop.counter }}</td>
+              <td class="font-medium">
+                {{ rr.rider.name }}
+                {% if rr.missing_data %}
+                  <span class="badge badge-warning badge-xs" title="Missing weight/height — using defaults">est</span>
+                {% endif %}
+                {% if rr.rider.zero_pull %}
+                  <span class="badge badge-ghost badge-xs">no pull</span>
+                {% endif %}
+              </td>
+              <td class="text-right">{{ rr.weight_kg|floatformat:0 }}</td>
+              <td class="text-right">{{ rr.cda|floatformat:3 }}</td>
+              <td class="text-right">{{ rr.rider.ftp_w|default:"—" }}</td>
+              <td class="text-right font-semibold">{{ rr.pull_power_w }}</td>
+              <td class="text-right">{{ rr.pull_wkg }}</td>
+              <td class="text-right
+                {% if rr.intensity_factor and rr.intensity_factor >= 1.05 %}text-error font-semibold
+                {% elif rr.intensity_factor and rr.intensity_factor >= 0.95 %}text-warning{% endif %}">
+                {{ rr.intensity_factor|default:"—" }}
+              </td>
+              <td class="text-right">{{ rr.avg_power_w }}</td>
+              <td class="text-right">{{ rr.normalized_power_w|default:"—" }}</td>
+              <td class="text-right">{% if rr.tss is not None %}{{ rr.tss|floatformat:"-1" }}{% else %}—{% endif %}</td>
+              {% if can_edit %}
+              <td>
+                <input type="number" name="pull_duration_s" value="{{ rr.rider.pull_duration_s }}"
+                       class="input input-bordered input-xs w-16"
+                       hx-post="{% url 'ttt_planner:rider_update' plan.pk rr.rider.pk %}"
+                       hx-trigger="change" hx-target="#ttt-plan-body" hx-swap="innerHTML" />
+              </td>
+              <td>
+                <input type="checkbox" name="zero_pull" class="checkbox checkbox-xs"
+                       {% if rr.rider.zero_pull %}checked{% endif %}
+                       hx-post="{% url 'ttt_planner:rider_update' plan.pk rr.rider.pk %}"
+                       hx-trigger="change" hx-target="#ttt-plan-body" hx-swap="innerHTML" />
+              </td>
+              <td class="whitespace-nowrap">
+                <button class="btn btn-ghost btn-xs"
+                        hx-post="{% url 'ttt_planner:rider_reorder' plan.pk rr.rider.pk 'up' %}"
+                        hx-target="#ttt-plan-body" hx-swap="innerHTML"
+                        {% if forloop.first %}disabled{% endif %}>↑</button>
+                <button class="btn btn-ghost btn-xs"
+                        hx-post="{% url 'ttt_planner:rider_reorder' plan.pk rr.rider.pk 'down' %}"
+                        hx-target="#ttt-plan-body" hx-swap="innerHTML"
+                        {% if forloop.last %}disabled{% endif %}>↓</button>
+                <button class="btn btn-ghost btn-xs text-error"
+                        hx-post="{% url 'ttt_planner:rider_remove' plan.pk rr.rider.pk %}"
+                        hx-target="#ttt-plan-body" hx-swap="innerHTML"
+                        hx-confirm="Remove {{ rr.rider.name }}?">✕</button>
+              </td>
+              {% else %}
+              <td class="text-right">{{ rr.rider.pull_duration_s }}</td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if can_edit %}
+      <p class="text-xs text-base-content/50 mt-2">
+        Pull W is the power to hold the target speed on the front. Set a custom Pull W on a rider via the
+        admin override, or leave blank to use the model. Edit pull seconds inline; toggle Zero for recovery riders.
+      </p>
+      {% endif %}
+      {% else %}
+      <p class="text-base-content/60">No riders yet. {% if can_edit %}Add riders above.{% endif %}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Results summary ---- #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="card-title">Team</h3>
+      <div class="stats stats-vertical bg-base-100">
+        <div class="stat">
+          <div class="stat-title">Target speed</div>
+          <div class="stat-value text-2xl">{{ result.target_speed_kph }}<span class="text-sm"> kph</span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Avg team power</div>
+          <div class="stat-value text-2xl">{{ result.avg_team_power_w }}<span class="text-sm"> W</span></div>
+        </div>
+        <div class="stat">
+          <div class="stat-title">Est. finish time</div>
+          <div class="stat-value text-2xl">
+            {% if result.estimated_time_s %}
+              {{ result.estimated_time_s|duration_hms }}
+            {% else %}—{% endif %}
+          </div>
+          <div class="stat-desc">
+            {% if plan.route %}{{ plan.route.name }} · {{ plan.route.distance_km }} km{% else %}Select a route{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ---- Draft savings by position (editable per-plan draft setting) ---- #}
+<div class="card bg-base-200 shadow-xl mt-6">
+  <div class="card-body">
+    <div class="flex items-center justify-between gap-2">
+      <h3 class="card-title">Draft savings by position</h3>
+      {% if can_edit %}
+      <button type="button" class="btn btn-ghost btn-xs"
+              hx-post="{% url 'ttt_planner:draft_savings_update' plan.pk %}"
+              hx-vals='{"reset": "1"}'
+              hx-target="#ttt-plan-body" hx-swap="innerHTML">Reset to default</button>
+      {% endif %}
+    </div>
+    <p class="text-xs text-base-content/60 mb-2">
+      Aerodynamic power saved at each wheel position for this plan. Position 1 is the rider on the front (no draft);
+      savings increase deeper in the line and plateau. Drafting riders need <code>aero power × (1 − saving)</code>
+      to hold the target speed.
+      {% if can_edit %}<span class="text-base-content/40">Edit a cell (% saved) to retune this plan.</span>{% endif %}
+    </p>
+    <form class="overflow-x-auto"
+          {% if can_edit %}
+          hx-post="{% url 'ttt_planner:draft_savings_update' plan.pk %}"
+          hx-trigger="change"
+          hx-target="#ttt-plan-body" hx-swap="innerHTML"
+          {% endif %}>
+      <table class="table table-sm w-auto">
+        <thead>
+          <tr>
+            <th>Position</th>
+            {% for row in result.draft_table %}<th class="text-right">{{ row.position }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="font-medium whitespace-nowrap">Aero saved %</td>
+            {% for row in result.draft_table %}
+              <td class="text-right">
+                {% if can_edit and row.position > 1 %}
+                  <input type="number" name="saving" value="{{ row.saving_pct|floatformat:'-1' }}"
+                         step="0.1" min="0" max="95"
+                         class="input input-bordered input-xs w-16 text-right" />
+                {% else %}
+                  {{ row.saving_pct|floatformat:"-1" }}%
+                {% endif %}
+              </td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+    </form>
+  </div>
+</div>

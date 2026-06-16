@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}{{ plan.name|default:"TTT Plan" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+  <div class="flex items-center justify-between gap-4">
+    <a href="{% url 'ttt_planner:list' %}" class="btn btn-ghost btn-sm">&larr; All plans</a>
+    {% if not can_edit %}
+      <span class="badge badge-info">Shared view (read-only)</span>
+    {% endif %}
+  </div>
+
+  {# ---- Plan settings ---- #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      {% if can_edit %}
+      <form class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+            hx-post="{% url 'ttt_planner:update' plan.pk %}"
+            hx-trigger="change, submit"
+            hx-target="#ttt-plan-body"
+            hx-swap="innerHTML">
+        <label class="form-control">
+          <span class="label-text mb-1">Plan name</span>
+          <input type="text" name="name" value="{{ plan.name }}" class="input input-bordered input-sm" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Team name</span>
+          <input type="text" name="team_name" value="{{ plan.team_name }}" class="input input-bordered input-sm" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Route</span>
+          <select name="route" class="select select-bordered select-sm">
+            <option value="">— No route —</option>
+            {% for r in routes %}
+              <option value="{{ r.pk }}" {% if plan.route_id == r.pk %}selected{% endif %}>
+                {{ r.name }} ({{ r.distance_km }} km / {{ r.elevation_m }} m)
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Target flat speed (kph)</span>
+          <div class="join">
+            <input type="number" step="0.1" min="0" name="target_speed_kph"
+                   value="{{ plan.target_speed_kph }}"
+                   class="input input-bordered input-sm join-item w-full" />
+            <button type="button"
+                    class="btn btn-sm join-item"
+                    hx-post="{% url 'ttt_planner:auto_speed' plan.pk %}"
+                    hx-target="#ttt-plan-body"
+                    hx-swap="innerHTML">Auto</button>
+          </div>
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Aero CdA coef</span>
+          <input type="number" step="0.0001" min="0" name="cda_coef"
+                 value="{{ result.cda_coef }}"
+                 class="input input-bordered input-sm" />
+          <span class="label-text-alt mt-1 text-base-content/50">Clear to use the team default.</span>
+        </label>
+      </form>
+      {% else %}
+        <h2 class="card-title text-2xl">{{ plan.name|default:"TTT Plan" }}</h2>
+        <p class="text-sm text-base-content/70">
+          {% if plan.team_name %}{{ plan.team_name }} · {% endif %}
+          {% if plan.route %}{{ plan.route.name }} · {% endif %}
+          Target {{ plan.target_speed_kph }} kph
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Add rider (owner only) ---- #}
+  {% if can_edit %}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="font-semibold">Add riders</h3>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="relative">
+          <span class="label-text mb-1 block">Search team riders</span>
+          <input type="text" name="q" placeholder="Name or Zwift ID…"
+                 class="input input-bordered input-sm w-full"
+                 hx-get="{% url 'ttt_planner:rider_search' plan.pk %}"
+                 hx-trigger="keyup changed delay:300ms, search"
+                 hx-target="#ttt-rider-search"
+                 hx-swap="innerHTML" />
+          <div id="ttt-rider-search"></div>
+        </div>
+
+        <form hx-post="{% url 'ttt_planner:rider_add_manual' plan.pk %}"
+              hx-target="#ttt-plan-body" hx-swap="innerHTML"
+              hx-on::after-request="if(event.detail.successful) this.reset()">
+          <span class="label-text mb-1 block">Add a guest manually</span>
+          <div class="flex flex-wrap gap-2 items-end">
+            <input type="text" name="name" placeholder="Name" required
+                   class="input input-bordered input-sm w-32" />
+            <input type="number" step="0.1" name="weight_kg" placeholder="kg"
+                   class="input input-bordered input-sm w-20" />
+            <input type="number" name="height_cm" placeholder="cm"
+                   class="input input-bordered input-sm w-20" />
+            <input type="number" name="ftp_w" placeholder="FTP"
+                   class="input input-bordered input-sm w-20" />
+            <button type="submit" class="btn btn-primary btn-sm">Add</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ---- Roster + results (HTMX swap target) ---- #}
+  <div id="ttt-plan-body">
+    {% include "ttt_planner/_plan_body.html" %}
+  </div>
+
+  {% if can_edit %}
+  <div class="text-right">
+    <form method="post" action="{% url 'ttt_planner:delete' plan.pk %}"
+          onsubmit="return confirm('Delete this plan?');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-error btn-outline btn-sm">Delete plan</button>
+    </form>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

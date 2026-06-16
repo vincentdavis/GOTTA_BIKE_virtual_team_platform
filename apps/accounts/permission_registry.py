@@ -68,6 +68,8 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/zp/results/ - Team-wide ZwiftPower race results",
             "/zp/results/{zid}/ - Per-event ZP results leaderboard",
             "/events/squad-invite/{token}/ - Accept squad invite link",
+            "/ttt/ - TTT planner (list, create, edit plans)",
+            "/ttt/{id}/ - View/edit a TTT plan (read-only for non-owners via share link)",
         ],
     },
     Permissions.RACE_READY: {

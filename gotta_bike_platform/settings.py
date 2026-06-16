@@ -95,6 +95,7 @@ INSTALLED_APPS = [
     "apps.events.apps.EventsConfig",
     "apps.user_api.apps.UserApiConfig",
     "apps.tickets.apps.TicketsConfig",
+    "apps.ttt_planner.apps.TttPlannerConfig",
     "django_tasks",
     "django_tasks_db",
 ]
@@ -824,6 +825,19 @@ CONSTANCE_CONFIG = {
         "How often to remove squad roles from Directeurs Sportifs after their race has finished (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    # TTT Planner physics constants (tunable; calibrate against Zwift Insider / zwiftgopher)
+    "TTT_AIR_DENSITY": (1.225, "Air density rho (kg/m^3) for the TTT power model", float),
+    "TTT_CRR": (0.004, "Coefficient of rolling resistance for the TTT power model", float),
+    "TTT_BIKE_MASS_KG": (8.0, "Bike + wheels mass (kg) added to rider weight in the TTT power model", float),
+    "TTT_DRIVETRAIN_EFFICIENCY": (1.0, "Drivetrain efficiency (1.0 = no loss) for the TTT power model", float),
+    "TTT_CDA_COEF": (0.0318, "Leading coefficient of the CdA estimate (folds in Cd) for the TTT power model", float),
+    "TTT_CDA_HEIGHT_EXP": (0.725, "Height exponent in the CdA estimate for the TTT power model", float),
+    "TTT_CDA_WEIGHT_EXP": (0.425, "Weight exponent in the CdA estimate for the TTT power model", float),
+    "TTT_DRAFT_SAVINGS": (
+        "[0.0, 0.233, 0.30, 0.366, 0.39, 0.40, 0.41, 0.42]",
+        "Aero-power savings fraction by wheel position (index 0 = front). JSON array.",
+        "string_list_field",
+    ),
 }
 
 CONSTANCE_CONFIG_FIELDSETS = {
@@ -976,6 +990,16 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
         "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS",
         "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS",
+    ),
+    "TTT Planner": (
+        "TTT_AIR_DENSITY",
+        "TTT_CRR",
+        "TTT_BIKE_MASS_KG",
+        "TTT_DRIVETRAIN_EFFICIENCY",
+        "TTT_CDA_COEF",
+        "TTT_CDA_HEIGHT_EXP",
+        "TTT_CDA_WEIGHT_EXP",
+        "TTT_DRAFT_SAVINGS",
     ),
 }
 

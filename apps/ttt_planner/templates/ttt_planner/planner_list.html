@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}TTT Planner{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <h2 class="card-title text-2xl">TTT Planner</h2>
+          <p class="text-sm text-base-content/70">Plan team time trial pull schedules</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="new_plan_modal.showModal()">New Plan</button>
+      </div>
+
+      <dialog id="new_plan_modal" class="modal">
+        <div class="modal-box">
+          <h3 class="font-bold text-lg mb-4">New TTT plan</h3>
+          <form method="post" action="{% url 'ttt_planner:create' %}" class="space-y-3">
+            {% csrf_token %}
+            <label class="form-control">
+              <span class="label-text mb-1">Plan name</span>
+              <input type="text" name="name" placeholder="e.g. WTRL Round 3"
+                     class="input input-bordered input-sm w-full" />
+            </label>
+            <label class="form-control">
+              <span class="label-text mb-1">Team name <span class="text-base-content/40">(optional)</span></span>
+              <input type="text" name="team_name" class="input input-bordered input-sm w-full" />
+            </label>
+            <label class="form-control">
+              <span class="label-text mb-1">Draft savings by position (% aero saved, front first)</span>
+              <input type="text" name="draft_savings" value="{{ default_draft_savings_input }}"
+                     placeholder="0, 23.3, 30, 36.6, 39, 40, 41, 42"
+                     class="input input-bordered input-sm w-full" />
+              <span class="label-text-alt mt-1 text-base-content/50">
+                Comma-separated. Position 1 is the front rider (0%). Clear to use the team default.
+              </span>
+            </label>
+            <div class="modal-action">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="new_plan_modal.close()">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-sm">Create</button>
+            </div>
+          </form>
+        </div>
+        <form method="dialog" class="modal-backdrop">
+          <button>close</button>
+        </form>
+      </dialog>
+
+      {% if plans %}
+      <div class="overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Route</th>
+              <th>Target speed</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for plan in plans %}
+            <tr class="hover">
+              <td>
+                <a href="{% url 'ttt_planner:detail' plan.pk %}" class="link link-primary font-medium">
+                  {{ plan.name|default:"Untitled plan" }}
+                </a>
+              </td>
+              <td>{{ plan.route.name|default:"—" }}</td>
+              <td>{{ plan.target_speed_kph }} kph</td>
+              <td class="text-sm text-base-content/60">{{ plan.updated_at|date:"M j, Y" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-base-content/60">No plans yet. Create one to get started.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
