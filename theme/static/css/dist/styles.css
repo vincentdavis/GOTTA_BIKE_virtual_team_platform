@@ -5826,6 +5826,9 @@
   .whitespace-nowrap {
     white-space: nowrap;
   }
+  .whitespace-pre {
+    white-space: pre;
+  }
   @layer daisyui.l1.l2 {
     .alert-error {
       color: var(--color-error-content);

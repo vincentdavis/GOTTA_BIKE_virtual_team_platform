@@ -19,8 +19,9 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.decorators import team_member_required
 from apps.ttt_planner.models import PlanRider, Route, TttPlan
-from apps.ttt_planner.services import physics, roster
+from apps.ttt_planner.services import physics, roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import auto_set_speed, compute_plan, default_draft_savings_input
+from apps.ttt_planner.tasks import run_zwiftgopher_optimize
 
 
 def _can_edit(plan: TttPlan, user) -> bool:
@@ -218,6 +219,77 @@ def draft_savings_update(request: HttpRequest, plan_id: str) -> HttpResponse:
 
     plan.save(update_fields=["draft_savings", "updated_at"])
     return HttpResponse(_render_plan_body(request, plan, can_edit=True))
+
+
+def _render_gopher_panel(request: HttpRequest, plan: TttPlan, *, can_edit: bool) -> str:
+    """Render the zwiftgopher compare panel for a plan.
+
+    Args:
+        request: The request.
+        plan: The plan.
+        can_edit: Whether the run controls should be shown.
+
+    Returns:
+        Rendered HTML of the ``_zwiftgopher_panel`` partial.
+
+    """
+    return render_to_string(
+        "ttt_planner/_zwiftgopher_panel.html",
+        {
+            "plan": plan,
+            "result": compute_plan(plan),
+            "gopher": plan.zwiftgopher_result,
+            "can_edit": can_edit,
+            "gopher_configured": zwiftgopher_client.is_configured(),
+            "route_schedules": zwiftgopher.VALID_ROUTE_SCHEDULES,
+        },
+        request=request,
+    )
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_GET
+def zwiftgopher_panel(request: HttpRequest, plan_id: str) -> HttpResponse:
+    """Return the zwiftgopher panel (used for polling while a run is pending).
+
+    Returns:
+        The panel partial.
+
+    """
+    plan = get_object_or_404(TttPlan, pk=plan_id)
+    return HttpResponse(_render_gopher_panel(request, plan, can_edit=_can_edit(plan, request.user)))
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_POST
+def zwiftgopher_run(request: HttpRequest, plan_id: str) -> HttpResponse:
+    """Enqueue a zwiftgopher optimize run for a plan; return the panel.
+
+    Returns:
+        The panel partial (in the pending state, which self-polls).
+
+    """
+    plan = _get_editable_plan(request, plan_id)
+    if plan is None:
+        return HttpResponse("Permission denied", status=403)
+
+    schedule = request.POST.get("route_schedule", zwiftgopher.DEFAULT_ROUTE_SCHEDULE)
+    if schedule not in zwiftgopher.VALID_ROUTE_SCHEDULES:
+        schedule = zwiftgopher.DEFAULT_ROUTE_SCHEDULE
+
+    plan.zwiftgopher_status = TttPlan.GopherStatus.PENDING
+    plan.zwiftgopher_error = ""
+    plan.zwiftgopher_request = None
+    plan.zwiftgopher_raw_response = None
+    plan.save(
+        update_fields=["zwiftgopher_status", "zwiftgopher_error", "zwiftgopher_request", "zwiftgopher_raw_response"]
+    )
+
+    run_zwiftgopher_optimize.enqueue(str(plan.pk), schedule)
+    logfire.info("zwiftgopher run enqueued", plan_id=str(plan.pk), schedule=schedule, user_id=request.user.id)
+    return HttpResponse(_render_gopher_panel(request, plan, can_edit=True))
 
 
 @login_required

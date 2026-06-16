@@ -125,6 +125,12 @@ class Settings(BaseSettings):
         description="Base64-encoded Google service account JSON credentials",
     )
 
+    # zwiftgopher TTT optimizer API (used by the TTT planner compare panel)
+    zwift_gopher_api: str | None = Field(
+        default=None,
+        description="zwiftgopher.com API key (Bearer token) for the TTT optimize endpoint",
+    )
+
     # CORS
     cors_allowed_origins_str: str = Field(
         default="",

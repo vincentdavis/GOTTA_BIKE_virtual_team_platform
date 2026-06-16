@@ -62,6 +62,32 @@ class TttPlan(models.Model):
         blank=True,
         help_text="Per-plan aero CdA coefficient. Blank uses the global TTT_CDA_COEF default.",
     )
+
+    class GopherStatus(models.TextChoices):
+        """Status of the most recent zwiftgopher optimize run."""
+
+        NONE = "", "Not run"
+        PENDING = "pending", "Running"
+        DONE = "done", "Done"
+        ERROR = "error", "Error"
+
+    zwiftgopher_status = models.CharField(
+        max_length=10, blank=True, default="", choices=GopherStatus.choices, help_text="zwiftgopher run status"
+    )
+    zwiftgopher_result = models.JSONField(
+        null=True, blank=True, help_text="Normalized result from the last zwiftgopher optimize run"
+    )
+    zwiftgopher_request = models.JSONField(
+        null=True, blank=True, help_text="Raw request body sent to the zwiftgopher optimize API"
+    )
+    zwiftgopher_raw_response = models.JSONField(
+        null=True, blank=True, help_text="Raw JSON response from the zwiftgopher optimize API"
+    )
+    zwiftgopher_error = models.CharField(max_length=300, blank=True, help_text="Error from the last zwiftgopher run")
+    zwiftgopher_fetched_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the last zwiftgopher result was fetched"
+    )
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

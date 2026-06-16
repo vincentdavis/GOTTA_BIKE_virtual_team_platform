@@ -1,0 +1,2234 @@
+[
+  {
+    "zwift_route_id": "time-trial",
+    "name": "Bologna Time Trial",
+    "world": "Bologna",
+    "distance_km": 8.05,
+    "elevation_m": 236,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "downtown-dolphin",
+    "name": "Downtown Dolphin",
+    "world": "Crit City",
+    "distance_km": 1.96,
+    "elevation_m": 17,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "bell-lap",
+    "name": "The Bell Lap",
+    "world": "Crit City",
+    "distance_km": 1.97,
+    "elevation_m": 17,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "bon-voyage",
+    "name": "Bon Voyage",
+    "world": "France",
+    "distance_km": 28.21,
+    "elevation_m": 132,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "casse-pattes",
+    "name": "Casse-Pattes",
+    "world": "France",
+    "distance_km": 22.89,
+    "elevation_m": 155,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "climb-portal-mont-saint-michel",
+    "name": "Climb Portal - Mont Saint-Michel",
+    "world": "France",
+    "distance_km": 2.47,
+    "elevation_m": 11,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "croissant",
+    "name": "Croissant",
+    "world": "France",
+    "distance_km": 9.27,
+    "elevation_m": 49,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "douce-france",
+    "name": "Douce France",
+    "world": "France",
+    "distance_km": 24,
+    "elevation_m": 133,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "france-classic-fondo",
+    "name": "France Classic Fondo",
+    "world": "France",
+    "distance_km": 145.44,
+    "elevation_m": 1099,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "gentil-8",
+    "name": "Gentil 8",
+    "world": "France",
+    "distance_km": 23.18,
+    "elevation_m": 243,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "hell-of-the-north",
+    "name": "Hell of the North",
+    "world": "France",
+    "distance_km": 19.82,
+    "elevation_m": 241,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "knights-of-the-roundabout",
+    "name": "Knights of the Roundabout",
+    "world": "France",
+    "distance_km": 51.19,
+    "elevation_m": 336,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "la-reine",
+    "name": "La Reine",
+    "world": "France",
+    "distance_km": 22.46,
+    "elevation_m": 1201,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "macaron",
+    "name": "Macaron",
+    "world": "France",
+    "distance_km": 2.44,
+    "elevation_m": 13,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "peaky-pave",
+    "name": "Peaky Pavé",
+    "world": "France",
+    "distance_km": 30.62,
+    "elevation_m": 369,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "petit-boucle",
+    "name": "Petit Boucle",
+    "world": "France",
+    "distance_km": 60.79,
+    "elevation_m": 483,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "petite-douleur",
+    "name": "Petite Douleur",
+    "world": "France",
+    "distance_km": 13.9,
+    "elevation_m": 194,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "rgv",
+    "name": "R.G.V.",
+    "world": "France",
+    "distance_km": 24,
+    "elevation_m": 133,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "roule-ma-poule",
+    "name": "Roule Ma Poule",
+    "world": "France",
+    "distance_km": 22.89,
+    "elevation_m": 155,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "sacre-bleu",
+    "name": "Sacre Bleu",
+    "world": "France",
+    "distance_km": 71.18,
+    "elevation_m": 396,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "three-musketeers",
+    "name": "Three Musketeers",
+    "world": "France",
+    "distance_km": 35.2,
+    "elevation_m": 195,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "tire-bouchon",
+    "name": "Tire-Bouchon",
+    "world": "France",
+    "distance_km": 60.78,
+    "elevation_m": 479,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "ven-10",
+    "name": "Ven-10",
+    "world": "France",
+    "distance_km": 10,
+    "elevation_m": 780,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "ven-top",
+    "name": "Ven-Top",
+    "world": "France",
+    "distance_km": 20.75,
+    "elevation_m": 1535,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "2018-uci-worlds-course-short-lap",
+    "name": "2018 Worlds Short Lap",
+    "world": "Innsbruck",
+    "distance_km": 23.68,
+    "elevation_m": 495,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "achterbahn",
+    "name": "Achterbahn",
+    "world": "Innsbruck",
+    "distance_km": 47.43,
+    "elevation_m": 989,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "innsbruck-kom-after-party",
+    "name": "Innsbruck KOM After Party",
+    "world": "Innsbruck",
+    "distance_km": 36.97,
+    "elevation_m": 657,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "2023-continental-qualifiers",
+    "name": "InnsbruckConti",
+    "world": "Innsbruck",
+    "distance_km": 12.48,
+    "elevation_m": 480,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "innsbruckring",
+    "name": "Innsbruckring",
+    "world": "Innsbruck",
+    "distance_km": 8.8,
+    "elevation_m": 77,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "lutscher",
+    "name": "Lutscher",
+    "world": "Innsbruck",
+    "distance_km": 13.7,
+    "elevation_m": 402,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "lutscher-ccw",
+    "name": "Lutscher CCW",
+    "world": "Innsbruck",
+    "distance_km": 13.75,
+    "elevation_m": 402,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "greater-london-8",
+    "name": "Greater London 8",
+    "world": "London",
+    "distance_km": 23.81,
+    "elevation_m": 276,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "greater-london-flat",
+    "name": "Greater London Flat",
+    "world": "London",
+    "distance_km": 11.68,
+    "elevation_m": 53,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "greater-london-loop",
+    "name": "Greater London Loop",
+    "world": "London",
+    "distance_km": 21.03,
+    "elevation_m": 255,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "greater-london-loop-rev",
+    "name": "Greater London Loop Reverse",
+    "world": "London",
+    "distance_km": 20.98,
+    "elevation_m": 255,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "greatest-london-flat",
+    "name": "Greatest London Flat",
+    "world": "London",
+    "distance_km": 23.61,
+    "elevation_m": 164,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "greatest-london-loop",
+    "name": "Greatest London Loop",
+    "world": "London",
+    "distance_km": 25.67,
+    "elevation_m": 355,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "greatest-london-loop-rev",
+    "name": "Greatest London Loop Reverse",
+    "world": "London",
+    "distance_km": 25.67,
+    "elevation_m": 355,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "keith-hill-after-party",
+    "name": "Keith Hill After Party",
+    "world": "London",
+    "distance_km": 36.19,
+    "elevation_m": 431,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "leith-hill-after-party",
+    "name": "Leith Hill After Party",
+    "world": "London",
+    "distance_km": 41.54,
+    "elevation_m": 434,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "london-8",
+    "name": "London 8",
+    "world": "London",
+    "distance_km": 20.34,
+    "elevation_m": 256,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "london-8-rev",
+    "name": "London 8 Reverse",
+    "world": "London",
+    "distance_km": 20.29,
+    "elevation_m": 256,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "london-calling",
+    "name": "London Calling",
+    "world": "London",
+    "distance_km": 31.23,
+    "elevation_m": 207,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "london-classique",
+    "name": "London Classique",
+    "world": "London",
+    "distance_km": 5.46,
+    "elevation_m": 25,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "classique-rev",
+    "name": "London Classique Reverse",
+    "world": "London",
+    "distance_km": 5.46,
+    "elevation_m": 25,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "london-flat",
+    "name": "London Flat",
+    "world": "London",
+    "distance_km": 11.99,
+    "elevation_m": 115,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "london-loop",
+    "name": "London Loop",
+    "world": "London",
+    "distance_km": 14.88,
+    "elevation_m": 231,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "london-loop-rev",
+    "name": "London Loop Reverse",
+    "world": "London",
+    "distance_km": 14.83,
+    "elevation_m": 231,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "london-the-prl-full",
+    "name": "London PRL FULL",
+    "world": "London",
+    "distance_km": 173.34,
+    "elevation_m": 2624,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-prl-half",
+    "name": "London PRL Half",
+    "world": "London",
+    "distance_km": 69.16,
+    "elevation_m": 1009,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "london-uprising",
+    "name": "London Uprising",
+    "world": "London",
+    "distance_km": 20.58,
+    "elevation_m": 356,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "surrey-hills",
+    "name": "Surrey Hills",
+    "world": "London",
+    "distance_km": 39.13,
+    "elevation_m": 877,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-london-pretzel",
+    "name": "The London Pretzel",
+    "world": "London",
+    "distance_km": 55.74,
+    "elevation_m": 572,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "london-triple-loops",
+    "name": "Triple Loops",
+    "world": "London",
+    "distance_km": 40.95,
+    "elevation_m": 565,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "zg25-climb-champs",
+    "name": "ZG25 Climb Champs",
+    "world": "London",
+    "distance_km": 4.65,
+    "elevation_m": 156,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "bridges-and-boardwalks",
+    "name": "Bridges and Boardwalks",
+    "world": "Makuri Islands",
+    "distance_km": 6.35,
+    "elevation_m": 60,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "castle-crit",
+    "name": "Castle Crit",
+    "world": "Makuri Islands",
+    "distance_km": 3.47,
+    "elevation_m": 43,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "castle-to-castle",
+    "name": "Castle to Castle",
+    "world": "Makuri Islands",
+    "distance_km": 22.38,
+    "elevation_m": 140,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "chain-chomper",
+    "name": "Chain Chomper",
+    "world": "Makuri Islands",
+    "distance_km": 13.62,
+    "elevation_m": 183,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "chasing-the-sun",
+    "name": "Chasing the Sun",
+    "world": "Makuri Islands",
+    "distance_km": 35.06,
+    "elevation_m": 315,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "country-to-coastal",
+    "name": "Country to Coastal",
+    "world": "Makuri Islands",
+    "distance_km": 33.43,
+    "elevation_m": 274,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "countryside-tour",
+    "name": "Countryside Tour",
+    "world": "Makuri Islands",
+    "distance_km": 15.85,
+    "elevation_m": 185,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "electric-break",
+    "name": "Electric Break",
+    "world": "Makuri Islands",
+    "distance_km": 17.76,
+    "elevation_m": 190,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "electric-loop",
+    "name": "Electric Loop",
+    "world": "Makuri Islands",
+    "distance_km": 8.94,
+    "elevation_m": 42,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "farmland-loop",
+    "name": "Farmland Loop",
+    "world": "Makuri Islands",
+    "distance_km": 7.76,
+    "elevation_m": 57,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "fine-and-sandy",
+    "name": "Fine and Sandy",
+    "world": "Makuri Islands",
+    "distance_km": 10.65,
+    "elevation_m": 77,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "flatland-loop",
+    "name": "Flatland Loop",
+    "world": "Makuri Islands",
+    "distance_km": 12.86,
+    "elevation_m": 99,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "island-hopper",
+    "name": "Island Hopper",
+    "world": "Makuri Islands",
+    "distance_km": 17.99,
+    "elevation_m": 129,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "island-outskirts",
+    "name": "Island Outskirts",
+    "world": "Makuri Islands",
+    "distance_km": 11.37,
+    "elevation_m": 90,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "kappa-quest",
+    "name": "Kappa Quest",
+    "world": "Makuri Islands",
+    "distance_km": 9.09,
+    "elevation_m": 140,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "kappa-quest-reverse",
+    "name": "Kappa Quest Reverse",
+    "world": "Makuri Islands",
+    "distance_km": 9.09,
+    "elevation_m": 140,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "kaze-kicker",
+    "name": "Kaze Kicker",
+    "world": "Makuri Islands",
+    "distance_km": 16.88,
+    "elevation_m": 134,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "makuri-40",
+    "name": "Makuri 40",
+    "world": "Makuri Islands",
+    "distance_km": 40.12,
+    "elevation_m": 307,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "makuri-madness",
+    "name": "Makuri Madness",
+    "world": "Makuri Islands",
+    "distance_km": 15.95,
+    "elevation_m": 85,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "makuri-pretzel",
+    "name": "Makuri Pretzel",
+    "world": "Makuri Islands",
+    "distance_km": 77.58,
+    "elevation_m": 618,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "mech-isle-loop",
+    "name": "Mech Isle Loop",
+    "world": "Makuri Islands",
+    "distance_km": 4.02,
+    "elevation_m": 39,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "neokyo-all-nighter",
+    "name": "Neokyo All-Nighter",
+    "world": "Makuri Islands",
+    "distance_km": 24.34,
+    "elevation_m": 168,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "neokyo-crit-course",
+    "name": "Neokyo Crit Course",
+    "world": "Makuri Islands",
+    "distance_km": 3.88,
+    "elevation_m": 20,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "neon-after-party",
+    "name": "Neon After Party",
+    "world": "Makuri Islands",
+    "distance_km": 16.2,
+    "elevation_m": 137,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "neon-flats",
+    "name": "Neon Flats",
+    "world": "Makuri Islands",
+    "distance_km": 14.73,
+    "elevation_m": 72,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "neon-shore-loop",
+    "name": "Neon Shore Loop",
+    "world": "Makuri Islands",
+    "distance_km": 32.95,
+    "elevation_m": 253,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "railways-and-rooftops",
+    "name": "Railways and Rooftops",
+    "world": "Makuri Islands",
+    "distance_km": 6.2,
+    "elevation_m": 70,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "red-zone-repeats",
+    "name": "Red Zone Repeats",
+    "world": "Makuri Islands",
+    "distance_km": 19.39,
+    "elevation_m": 87,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "rooftop-rendezvous",
+    "name": "Rooftop Rendezvous",
+    "world": "Makuri Islands",
+    "distance_km": 3.75,
+    "elevation_m": 56,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "sea-to-tree",
+    "name": "Sea to Tree",
+    "world": "Makuri Islands",
+    "distance_km": 3.27,
+    "elevation_m": 108,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "shisa-shakedown",
+    "name": "Shisa Shakedown",
+    "world": "Makuri Islands",
+    "distance_km": 49.44,
+    "elevation_m": 495,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "sleepless-city",
+    "name": "Sleepless City",
+    "world": "Makuri Islands",
+    "distance_km": 9.56,
+    "elevation_m": 43,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "spirit-forest",
+    "name": "Spirit Forest",
+    "world": "Makuri Islands",
+    "distance_km": 8.45,
+    "elevation_m": 135,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "sprinters-playground",
+    "name": "Sprinter's Playground",
+    "world": "Makuri Islands",
+    "distance_km": 12.35,
+    "elevation_m": 67,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "sukis-playground",
+    "name": "Suki's Playground",
+    "world": "Makuri Islands",
+    "distance_km": 18.31,
+    "elevation_m": 150,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "temples-and-towers",
+    "name": "Temples and Towers",
+    "world": "Makuri Islands",
+    "distance_km": 32.6,
+    "elevation_m": 318,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "three-village-loop",
+    "name": "Three Village Loop",
+    "world": "Makuri Islands",
+    "distance_km": 10.55,
+    "elevation_m": 93,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "tropic-rush",
+    "name": "Tropic Rush",
+    "world": "Makuri Islands",
+    "distance_km": 41.27,
+    "elevation_m": 327,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "turf-n-surf",
+    "name": "Turf N Surf",
+    "world": "Makuri Islands",
+    "distance_km": 24.63,
+    "elevation_m": 196,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "twilight-harbor",
+    "name": "Twilight Harbor",
+    "world": "Makuri Islands",
+    "distance_km": 6.85,
+    "elevation_m": 33,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "two-village-loop",
+    "name": "Two Village Loop",
+    "world": "Makuri Islands",
+    "distance_km": 12.8,
+    "elevation_m": 88,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "valley-to-mountaintop",
+    "name": "Valley to Mountaintop",
+    "world": "Makuri Islands",
+    "distance_km": 5.01,
+    "elevation_m": 131,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "wandering-flats",
+    "name": "Wandering Flats",
+    "world": "Makuri Islands",
+    "distance_km": 25.1,
+    "elevation_m": 146,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "2022-cycling-esports-world-championships-route",
+    "name": "2022 Cycling Esports World Championships Route",
+    "world": "New York",
+    "distance_km": 54.74,
+    "elevation_m": 941,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "astoria-line-8",
+    "name": "Astoria Line 8",
+    "world": "New York",
+    "distance_km": 11.57,
+    "elevation_m": 141,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "avon-flyer",
+    "name": "Avon Flyer",
+    "world": "New York",
+    "distance_km": 3.31,
+    "elevation_m": 25,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "double-parked",
+    "name": "Double Parked",
+    "world": "New York",
+    "distance_km": 42.17,
+    "elevation_m": 330,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "double-span-spin",
+    "name": "Double Span Spin",
+    "world": "New York",
+    "distance_km": 7.02,
+    "elevation_m": 80,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "empire-elevation",
+    "name": "Empire Elevation",
+    "world": "New York",
+    "distance_km": 24.16,
+    "elevation_m": 261,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "everything-bagel",
+    "name": "Everything Bagel",
+    "world": "New York",
+    "distance_km": 34.28,
+    "elevation_m": 545,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "fuhgeddaboudit",
+    "name": "Fuhgeddaboudit",
+    "world": "New York",
+    "distance_km": 78.91,
+    "elevation_m": 838,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "gotham-grind",
+    "name": "Gotham Grind",
+    "world": "New York",
+    "distance_km": 9.26,
+    "elevation_m": 96,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "gotham-grind-rev",
+    "name": "Gotham Grind Reverse",
+    "world": "New York",
+    "distance_km": 9.26,
+    "elevation_m": 96,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "grand-central-circuit",
+    "name": "Grand Central Circuit",
+    "world": "New York",
+    "distance_km": 6.86,
+    "elevation_m": 144,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "grand-central-circuit-rev",
+    "name": "Grand Central Circuit Reverse",
+    "world": "New York",
+    "distance_km": 6.86,
+    "elevation_m": 144,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "green-to-screen",
+    "name": "Green to Screen",
+    "world": "New York",
+    "distance_km": 28.38,
+    "elevation_m": 207,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "hudson-hustle",
+    "name": "Hudson Hustle",
+    "world": "New York",
+    "distance_km": 20.32,
+    "elevation_m": 216,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "issendorf-express",
+    "name": "Issendorf Express",
+    "world": "New York",
+    "distance_km": 7.23,
+    "elevation_m": 53,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "knickerbocker",
+    "name": "Knickerbocker",
+    "world": "New York",
+    "distance_km": 22.55,
+    "elevation_m": 365,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "knickerbocker-reverse",
+    "name": "Knickerbocker Reverse",
+    "world": "New York",
+    "distance_km": 22.55,
+    "elevation_m": 365,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "lady-liberty",
+    "name": "Lady Liberty",
+    "world": "New York",
+    "distance_km": 12.36,
+    "elevation_m": 206,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "laguardia-after-party",
+    "name": "LaGuardia After Party",
+    "world": "New York",
+    "distance_km": 20.74,
+    "elevation_m": 295,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "laguardia-loop",
+    "name": "LaGuardia Loop",
+    "world": "New York",
+    "distance_km": 2.79,
+    "elevation_m": 26,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "laguardia-loop-reverse",
+    "name": "LaGuardia Loop Reverse",
+    "world": "New York",
+    "distance_km": 2.79,
+    "elevation_m": 26,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "mighty-metropolitan",
+    "name": "Mighty Metropolitan",
+    "world": "New York",
+    "distance_km": 20.1,
+    "elevation_m": 318,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "no-sleep-till-brooklyn",
+    "name": "No Sleep Till Brooklyn",
+    "world": "New York",
+    "distance_km": 31.79,
+    "elevation_m": 251,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "new-york-kom-after-party",
+    "name": "NYC KOM After Party",
+    "world": "New York",
+    "distance_km": 36.63,
+    "elevation_m": 475,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "park-perimeter-loop",
+    "name": "Park Perimeter Loop",
+    "world": "New York",
+    "distance_km": 9.76,
+    "elevation_m": 126,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "park-perimeter-rev",
+    "name": "Park Perimeter Reverse",
+    "world": "New York",
+    "distance_km": 9.76,
+    "elevation_m": 126,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "prospect-park-loop",
+    "name": "Prospect Park Loop",
+    "world": "New York",
+    "distance_km": 5.43,
+    "elevation_m": 37,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "rising-empire",
+    "name": "Rising Empire",
+    "world": "New York",
+    "distance_km": 20.82,
+    "elevation_m": 377,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "spinfinity",
+    "name": "Spinfinity",
+    "world": "New York",
+    "distance_km": 19.28,
+    "elevation_m": 155,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "spinfinity-ultra",
+    "name": "Spinfinity Ultra",
+    "world": "New York",
+    "distance_km": 35.01,
+    "elevation_m": 291,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "stay-puft-pursuit",
+    "name": "Stay Puft Pursuit",
+    "world": "New York",
+    "distance_km": 31.18,
+    "elevation_m": 416,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-6-train",
+    "name": "The 6 Train",
+    "world": "New York",
+    "distance_km": 6.47,
+    "elevation_m": 69,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-6-train-rev",
+    "name": "The 6 Train Reverse",
+    "world": "New York",
+    "distance_km": 6.47,
+    "elevation_m": 69,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "the-double-borough",
+    "name": "The Double Borough",
+    "world": "New York",
+    "distance_km": 17.81,
+    "elevation_m": 147,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-greenway",
+    "name": "The Greenway",
+    "world": "New York",
+    "distance_km": 36.22,
+    "elevation_m": 290,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-highline",
+    "name": "The Highline",
+    "world": "New York",
+    "distance_km": 10.53,
+    "elevation_m": 179,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-highline-rev",
+    "name": "The Highline Reverse",
+    "world": "New York",
+    "distance_km": 10.53,
+    "elevation_m": 179,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "times-square-circuit",
+    "name": "Times Square Circuit",
+    "world": "New York",
+    "distance_km": 3.5,
+    "elevation_m": 20,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "toefield-tornado",
+    "name": "Toefield Tornado",
+    "world": "New York",
+    "distance_km": 10.22,
+    "elevation_m": 53,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "watts-the-limit",
+    "name": "Watts the Limit",
+    "world": "New York",
+    "distance_km": 29.53,
+    "elevation_m": 200,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "champs-elysees",
+    "name": "Champs-Élysées",
+    "world": "Paris",
+    "distance_km": 6.62,
+    "elevation_m": 39,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "lutece-express",
+    "name": "Lutece Express",
+    "world": "Paris",
+    "distance_km": 6.62,
+    "elevation_m": 39,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "cobbled-climbs",
+    "name": "Cobbled Climbs",
+    "world": "Richmond",
+    "distance_km": 9.18,
+    "elevation_m": 134,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "cobbled-climbs-rev",
+    "name": "Cobbled Climbs Reverse",
+    "world": "Richmond",
+    "distance_km": 9.18,
+    "elevation_m": 134,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "cobbled-crown",
+    "name": "Cobbled Crown",
+    "world": "Richmond",
+    "distance_km": 24.04,
+    "elevation_m": 288,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "libby-hill-after-party",
+    "name": "Libby Hill After Party",
+    "world": "Richmond",
+    "distance_km": 32.9,
+    "elevation_m": 160,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "richmond-uci-rev",
+    "name": "Richmond 2015 Worlds Reverse",
+    "world": "Richmond",
+    "distance_km": 16.25,
+    "elevation_m": 158,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "richmond-loop-around",
+    "name": "Richmond Loop Around",
+    "world": "Richmond",
+    "distance_km": 42.55,
+    "elevation_m": 556,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "richmond-rollercoaster",
+    "name": "Richmond Rollercoaster",
+    "world": "Richmond",
+    "distance_km": 5.06,
+    "elevation_m": 20,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "2015-uci-worlds-course",
+    "name": "Richmond UCI Worlds",
+    "world": "Richmond",
+    "distance_km": 16.25,
+    "elevation_m": 158,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-fan-flats",
+    "name": "The Fan Flats",
+    "world": "Richmond",
+    "distance_km": 5.06,
+    "elevation_m": 20,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "braek-fast-crits-and-grits",
+    "name": "BRAEk-fast Crits and Grits",
+    "world": "Scotland",
+    "distance_km": 20.79,
+    "elevation_m": 226,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "city-and-the-sgurr",
+    "name": "City and the Sgurr",
+    "world": "Scotland",
+    "distance_km": 5.92,
+    "elevation_m": 103,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "dun-dash",
+    "name": "Dùn Dash",
+    "world": "Scotland",
+    "distance_km": 12.42,
+    "elevation_m": 138,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "glasgow-crit-circuit",
+    "name": "Glasgow Crit Circuit",
+    "world": "Scotland",
+    "distance_km": 3.01,
+    "elevation_m": 33,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "glasgow-crit-six",
+    "name": "Glasgow Crit Six",
+    "world": "Scotland",
+    "distance_km": 18.07,
+    "elevation_m": 199,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "glasgow-reverse",
+    "name": "Glasgow Reverse",
+    "world": "Scotland",
+    "distance_km": 3.01,
+    "elevation_m": 33,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "loch-loop",
+    "name": "Loch Loop",
+    "world": "Scotland",
+    "distance_km": 8.06,
+    "elevation_m": 71,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "outer-scotland",
+    "name": "Outer Scotland",
+    "world": "Scotland",
+    "distance_km": 11.11,
+    "elevation_m": 104,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "rolling-highlands",
+    "name": "Rolling Highlands",
+    "world": "Scotland",
+    "distance_km": 8.95,
+    "elevation_m": 77,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "scotland-after-party",
+    "name": "Scotland After Party",
+    "world": "Scotland",
+    "distance_km": 13.63,
+    "elevation_m": 189,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "scotland-smash",
+    "name": "Scotland Smash",
+    "world": "Scotland",
+    "distance_km": 17.82,
+    "elevation_m": 167,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-epiloch",
+    "name": "The Epiloch",
+    "world": "Scotland",
+    "distance_km": 8.06,
+    "elevation_m": 71,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "the-muckle-yin",
+    "name": "The Muckle Yin",
+    "world": "Scotland",
+    "distance_km": 23.41,
+    "elevation_m": 282,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "accelerate-to-elevate",
+    "name": "Accelerate to Elevate",
+    "world": "Watopia",
+    "distance_km": 41.27,
+    "elevation_m": 1152,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "beach-island-loop",
+    "name": "Beach Island Loop",
+    "world": "Watopia",
+    "distance_km": 12.78,
+    "elevation_m": 49,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "big-flat-8",
+    "name": "Big Flat 8",
+    "world": "Watopia",
+    "distance_km": 29.21,
+    "elevation_m": 103,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "big-foot-hills",
+    "name": "Big Foot Hills",
+    "world": "Watopia",
+    "distance_km": 67.59,
+    "elevation_m": 708,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "big-loop",
+    "name": "Big Loop",
+    "world": "Watopia",
+    "distance_km": 42.6,
+    "elevation_m": 662,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "big-loop-rev",
+    "name": "Big Loop Reverse",
+    "world": "Watopia",
+    "distance_km": 42.6,
+    "elevation_m": 658,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "bigger-loop",
+    "name": "Bigger Loop",
+    "world": "Watopia",
+    "distance_km": 53.2,
+    "elevation_m": 691,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "canopies-and-coastlines",
+    "name": "Canopies and Coastlines",
+    "world": "Watopia",
+    "distance_km": 22.61,
+    "elevation_m": 124,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "climb-control",
+    "name": "Climb Control",
+    "world": "Watopia",
+    "distance_km": 23.67,
+    "elevation_m": 191,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "climb-portal-volcano",
+    "name": "Climb Portal - Volcano",
+    "world": "Watopia",
+    "distance_km": 7.35,
+    "elevation_m": 20,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "climbers-gambit",
+    "name": "Climber's Gambit",
+    "world": "Watopia",
+    "distance_km": 27.82,
+    "elevation_m": 671,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "coast-crusher",
+    "name": "Coast Crusher",
+    "world": "Watopia",
+    "distance_km": 34.57,
+    "elevation_m": 175,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "coast-to-coast",
+    "name": "Coast to Coast",
+    "world": "Watopia",
+    "distance_km": 24.09,
+    "elevation_m": 154,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "coastal-crown-loop",
+    "name": "Coastal Crown Loop",
+    "world": "Watopia",
+    "distance_km": 15.07,
+    "elevation_m": 185,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "danger-noodle",
+    "name": "Danger Noodle",
+    "world": "Watopia",
+    "distance_km": 32.07,
+    "elevation_m": 414,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "deca-dash",
+    "name": "Deca Dash",
+    "world": "Watopia",
+    "distance_km": 48.35,
+    "elevation_m": 484,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "downtown-eruoption",
+    "name": "Downtown Eruption",
+    "world": "Watopia",
+    "distance_km": 19.44,
+    "elevation_m": 275,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "downtown-titans",
+    "name": "Downtown Titans",
+    "world": "Watopia",
+    "distance_km": 24.65,
+    "elevation_m": 292,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "dust-in-the-wind",
+    "name": "Dust In The Wind",
+    "world": "Watopia",
+    "distance_km": 52.11,
+    "elevation_m": 583,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "eastern-eight",
+    "name": "Eastern Eight",
+    "world": "Watopia",
+    "distance_km": 51.68,
+    "elevation_m": 407,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "elevation-evaluation",
+    "name": "Elevation Evaluation",
+    "world": "Watopia",
+    "distance_km": 24.62,
+    "elevation_m": 396,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "flat-out-fast",
+    "name": "Flat Out Fast",
+    "world": "Watopia",
+    "distance_km": 21.38,
+    "elevation_m": 46,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "flat-route-rev",
+    "name": "Flat Route Reverse",
+    "world": "Watopia",
+    "distance_km": 10.27,
+    "elevation_m": 61,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "four-horsemen",
+    "name": "Four Horsemen",
+    "world": "Watopia",
+    "distance_km": 89.79,
+    "elevation_m": 2109,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "glyph-heights",
+    "name": "Glyph Heights",
+    "world": "Watopia",
+    "distance_km": 25.4,
+    "elevation_m": 537,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "going-coastal",
+    "name": "Going Coastal",
+    "world": "Watopia",
+    "distance_km": 16.39,
+    "elevation_m": 63,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "handful-of-gravel",
+    "name": "Handful Of Gravel",
+    "world": "Watopia",
+    "distance_km": 6.13,
+    "elevation_m": 75,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "hilly-route-rev",
+    "name": "Hilly Route Reverse",
+    "world": "Watopia",
+    "distance_km": 9.19,
+    "elevation_m": 109,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "hot-laps",
+    "name": "Hot Laps",
+    "world": "Watopia",
+    "distance_km": 23.28,
+    "elevation_m": 149,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "itza-climb-finish",
+    "name": "Itza Climb Finish",
+    "world": "Watopia",
+    "distance_km": 30.09,
+    "elevation_m": 290,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "itza-party",
+    "name": "Itza Party",
+    "world": "Watopia",
+    "distance_km": 45.75,
+    "elevation_m": 506,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "jarvis-seaside-sprint",
+    "name": "Jarvis Seaside Sprint",
+    "world": "Watopia",
+    "distance_km": 12.5,
+    "elevation_m": 95,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "jungle-circuit",
+    "name": "Jungle Circuit",
+    "world": "Watopia",
+    "distance_km": 7.86,
+    "elevation_m": 83,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "jungle-circuit-rev",
+    "name": "Jungle Circuit Reverse",
+    "world": "Watopia",
+    "distance_km": 7.86,
+    "elevation_m": 83,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "jurassic-coast",
+    "name": "Jurassic Coast",
+    "world": "Watopia",
+    "distance_km": 19.32,
+    "elevation_m": 212,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "legends-and-lava",
+    "name": "Legends and Lava",
+    "world": "Watopia",
+    "distance_km": 24.51,
+    "elevation_m": 352,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "loop-de-loop",
+    "name": "Loop de Loop",
+    "world": "Watopia",
+    "distance_km": 12.42,
+    "elevation_m": 144,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "loopin-lava",
+    "name": "Loopin Lava",
+    "world": "Watopia",
+    "distance_km": 14.21,
+    "elevation_m": 196,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "mayan-8",
+    "name": "Mayan 8",
+    "world": "Watopia",
+    "distance_km": 23.07,
+    "elevation_m": 241,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "mayan-mash",
+    "name": "Mayan Mash",
+    "world": "Watopia",
+    "distance_km": 34.62,
+    "elevation_m": 755,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "mayan-san-remo",
+    "name": "Mayan San Remo",
+    "world": "Watopia",
+    "distance_km": 21.09,
+    "elevation_m": 217,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "mountain-mash",
+    "name": "Mountain Mash",
+    "world": "Watopia",
+    "distance_km": 5.79,
+    "elevation_m": 335,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "muir-and-the-mountain",
+    "name": "Muir And The Mountain",
+    "world": "Watopia",
+    "distance_km": 34.14,
+    "elevation_m": 792,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "navig8",
+    "name": "Navig8",
+    "world": "Watopia",
+    "distance_km": 63.86,
+    "elevation_m": 417,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "ocean-lava-cliffside-loop",
+    "name": "Ocean Lava Cliffside Loop",
+    "world": "Watopia",
+    "distance_km": 19.05,
+    "elevation_m": 156,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "oh-hill-no",
+    "name": "Oh Hill No",
+    "world": "Watopia",
+    "distance_km": 7.89,
+    "elevation_m": 306,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "out-and-back-again",
+    "name": "Out And Back Again",
+    "world": "Watopia",
+    "distance_km": 39.9,
+    "elevation_m": 328,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "peak-performance",
+    "name": "Peak Performance",
+    "world": "Watopia",
+    "distance_km": 45.82,
+    "elevation_m": 726,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "power-punches",
+    "name": "Power Punches",
+    "world": "Watopia",
+    "distance_km": 23.48,
+    "elevation_m": 205,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "power-to-the-portal",
+    "name": "Power to the Portal",
+    "world": "Watopia",
+    "distance_km": 17.58,
+    "elevation_m": 99,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "power-to-the-tower",
+    "name": "Power to the Tower",
+    "world": "Watopia",
+    "distance_km": 44.7,
+    "elevation_m": 1493,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "quatch-quest",
+    "name": "Quatch Quest",
+    "world": "Watopia",
+    "distance_km": 46.47,
+    "elevation_m": 1706,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "radio-rendezvous",
+    "name": "Radio Rendezvous",
+    "world": "Watopia",
+    "distance_km": 20.52,
+    "elevation_m": 736,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "repack-rush",
+    "name": "Repack Rush",
+    "world": "Watopia",
+    "distance_km": 2.78,
+    "elevation_m": 28,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "road-to-ruins",
+    "name": "Road to Ruins",
+    "world": "Watopia",
+    "distance_km": 29.65,
+    "elevation_m": 275,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "road-to-ruins-rev",
+    "name": "Road To Ruins Reverse",
+    "world": "Watopia",
+    "distance_km": 29.65,
+    "elevation_m": 275,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "road-to-sky",
+    "name": "Road to Sky",
+    "world": "Watopia",
+    "distance_km": 17.5,
+    "elevation_m": 1044,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "sand-and-sequoias",
+    "name": "Sand And Sequoias",
+    "world": "Watopia",
+    "distance_km": 20.15,
+    "elevation_m": 175,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "seaside-sprint",
+    "name": "Seaside Sprint",
+    "world": "Watopia",
+    "distance_km": 6.29,
+    "elevation_m": 47,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "serpentine-8",
+    "name": "Serpentine 8",
+    "world": "Watopia",
+    "distance_km": 19.27,
+    "elevation_m": 206,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "shorelines-and-summits",
+    "name": "Shorelines and Summits",
+    "world": "Watopia",
+    "distance_km": 46.19,
+    "elevation_m": 773,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "snowman",
+    "name": "Snowman",
+    "world": "Watopia",
+    "distance_km": 44.04,
+    "elevation_m": 578,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "southern-coast-cruise",
+    "name": "Southern Coast Cruise",
+    "world": "Watopia",
+    "distance_km": 23.63,
+    "elevation_m": 136,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "spiral-into-the-volcano",
+    "name": "Spiral into the Volcano",
+    "world": "Watopia",
+    "distance_km": 55.63,
+    "elevation_m": 355,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "sugar-cookie",
+    "name": "Sugar Cookie",
+    "world": "Watopia",
+    "distance_km": 33.55,
+    "elevation_m": 250,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "tair-dringfa-fechan",
+    "name": "Tair Dringfa Fechan",
+    "world": "Watopia",
+    "distance_km": 31.12,
+    "elevation_m": 372,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "temple-trek",
+    "name": "Temple Trek",
+    "world": "Watopia",
+    "distance_km": 6.51,
+    "elevation_m": 25,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "tempus-fugit",
+    "name": "Tempus Fugit",
+    "world": "Watopia",
+    "distance_km": 17.23,
+    "elevation_m": 26,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-big-ring",
+    "name": "The Big Ring",
+    "world": "Watopia",
+    "distance_km": 48.87,
+    "elevation_m": 268,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-classic",
+    "name": "The Classic",
+    "world": "Watopia",
+    "distance_km": 4.84,
+    "elevation_m": 48,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-magnificent-8",
+    "name": "The Magnificent 8",
+    "world": "Watopia",
+    "distance_km": 28.93,
+    "elevation_m": 155,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-mega-pretzel",
+    "name": "The Mega Pretzel",
+    "world": "Watopia",
+    "distance_km": 107.28,
+    "elevation_m": 1638,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-uber-pretzel",
+    "name": "The Uber Pretzel",
+    "world": "Watopia",
+    "distance_km": 128.3,
+    "elevation_m": 2380,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "three-little-sisters",
+    "name": "Three Little Sisters",
+    "world": "Watopia",
+    "distance_km": 37.74,
+    "elevation_m": 435,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "three-sisters",
+    "name": "Three Sisters",
+    "world": "Watopia",
+    "distance_km": 48.01,
+    "elevation_m": 896,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "three-sisters-rev",
+    "name": "Three Sisters Reverse",
+    "world": "Watopia",
+    "distance_km": 45.69,
+    "elevation_m": 878,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "three-step-sisters",
+    "name": "Three Step Sisters",
+    "world": "Watopia",
+    "distance_km": 37.86,
+    "elevation_m": 586,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "tick-tock",
+    "name": "Tick Tock",
+    "world": "Watopia",
+    "distance_km": 16.86,
+    "elevation_m": 53,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "tides-and-temples",
+    "name": "Tides and Temples",
+    "world": "Watopia",
+    "distance_km": 36.47,
+    "elevation_m": 460,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "tour-of-fire-and-ice",
+    "name": "Tour of Fire and Ice",
+    "world": "Watopia",
+    "distance_km": 25.36,
+    "elevation_m": 1164,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "triple-flat-loops",
+    "name": "Triple Flat Loops",
+    "world": "Watopia",
+    "distance_km": 33.98,
+    "elevation_m": 157,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "triple-twist",
+    "name": "Triple Twist",
+    "world": "Watopia",
+    "distance_km": 19.88,
+    "elevation_m": 180,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "two-bridges-loop",
+    "name": "Two Bridges Loop",
+    "world": "Watopia",
+    "distance_km": 7.11,
+    "elevation_m": 81,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "volcano-circuit",
+    "name": "Volcano Circuit",
+    "world": "Watopia",
+    "distance_km": 4.1,
+    "elevation_m": 20,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "volcano-circuit-ccw",
+    "name": "Volcano Circuit CCW",
+    "world": "Watopia",
+    "distance_km": 4.1,
+    "elevation_m": 20,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "volcano-climb",
+    "name": "Volcano Climb",
+    "world": "Watopia",
+    "distance_km": 22.86,
+    "elevation_m": 203,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "volcano-climb-after-party",
+    "name": "Volcano Climb After Party",
+    "world": "Watopia",
+    "distance_km": 39.85,
+    "elevation_m": 285,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "volcano-flat",
+    "name": "Volcano Flat",
+    "world": "Watopia",
+    "distance_km": 12.35,
+    "elevation_m": 50,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "volcano-flat-rev",
+    "name": "Volcano Flat Reverse",
+    "world": "Watopia",
+    "distance_km": 12.35,
+    "elevation_m": 50,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "waisted-8",
+    "name": "Waisted 8",
+    "world": "Watopia",
+    "distance_km": 30.69,
+    "elevation_m": 144,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "figure-8",
+    "name": "Watopia Figure 8",
+    "world": "Watopia",
+    "distance_km": 29.7,
+    "elevation_m": 254,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "figure-8-reverse",
+    "name": "Watopia Figure 8 Reverse",
+    "world": "Watopia",
+    "distance_km": 29.7,
+    "elevation_m": 254,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "flat-route",
+    "name": "Watopia Flat Route",
+    "world": "Watopia",
+    "distance_km": 10.27,
+    "elevation_m": 61,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "hilly-route",
+    "name": "Watopia Hilly Route",
+    "world": "Watopia",
+    "distance_km": 9.19,
+    "elevation_m": 109,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "mountain-8",
+    "name": "Watopia Mountain 8",
+    "world": "Watopia",
+    "distance_km": 32.26,
+    "elevation_m": 691,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "mountain-route",
+    "name": "Watopia Mountain Route",
+    "world": "Watopia",
+    "distance_km": 29.72,
+    "elevation_m": 683,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "the-pretzel",
+    "name": "Watopia Pretzel",
+    "world": "Watopia",
+    "distance_km": 72.54,
+    "elevation_m": 1361,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "watopias-waistband",
+    "name": "Watopia's Waistband",
+    "world": "Watopia",
+    "distance_km": 25.46,
+    "elevation_m": 95,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "watts-of-the-wild",
+    "name": "Watts of the Wild",
+    "world": "Watopia",
+    "distance_km": 42.02,
+    "elevation_m": 309,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "wbr-climbing-series",
+    "name": "WBR Climbing Series",
+    "world": "Watopia",
+    "distance_km": 43.21,
+    "elevation_m": 1116,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "whole-lotta-lava",
+    "name": "Whole Lotta Lava",
+    "world": "Watopia",
+    "distance_km": 12.29,
+    "elevation_m": 161,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "zg25-queen",
+    "name": "ZG25 Queen",
+    "world": "Watopia",
+    "distance_km": 44.61,
+    "elevation_m": 894,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "bambino-fondo",
+    "name": "Zwift Bambino Fondo",
+    "world": "Watopia",
+    "distance_km": 51.89,
+    "elevation_m": 580,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "2022-bambino-fondo",
+    "name": "Zwift Bambino Fondo 2022",
+    "world": "Watopia",
+    "distance_km": 53.06,
+    "elevation_m": 397,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "zwift-games-2024-epic",
+    "name": "Zwift Games 2024 Epic",
+    "world": "Watopia",
+    "distance_km": 79.72,
+    "elevation_m": 822,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "gran-fondo",
+    "name": "Zwift Gran Fondo",
+    "world": "Watopia",
+    "distance_km": 97.51,
+    "elevation_m": 1193,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "2022-gran-fondo",
+    "name": "Zwift Gran Fondo 2022",
+    "world": "Watopia",
+    "distance_km": 92.56,
+    "elevation_m": 1114,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "medio-fondo",
+    "name": "Zwift Medio Fondo",
+    "world": "Watopia",
+    "distance_km": 72.5,
+    "elevation_m": 1006,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "2022-medio-fondo",
+    "name": "Zwift Medio Fondo 2022",
+    "world": "Watopia",
+    "distance_km": 79.13,
+    "elevation_m": 918,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "harrogate-circuit",
+    "name": "2019 Worlds Harrogate Circuit",
+    "world": "Yorkshire",
+    "distance_km": 13.83,
+    "elevation_m": 245,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "duchy-estate",
+    "name": "Duchy Estate",
+    "world": "Yorkshire",
+    "distance_km": 3,
+    "elevation_m": 41,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "harrogate-circuit-rev",
+    "name": "Harrogate Circuit Reverse",
+    "world": "Yorkshire",
+    "distance_km": 13.83,
+    "elevation_m": 245,
+    "event_only": true
+  },
+  {
+    "zwift_route_id": "queens-highway",
+    "name": "Queen's Highway",
+    "world": "Yorkshire",
+    "distance_km": 3,
+    "elevation_m": 41,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "queens-highway-after-party",
+    "name": "Queen's Highway After Party",
+    "world": "Yorkshire",
+    "distance_km": 17.15,
+    "elevation_m": 259,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "royal-pump-room-8",
+    "name": "Royal Pump Room 8",
+    "world": "Yorkshire",
+    "distance_km": 27.71,
+    "elevation_m": 491,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "tour-of-tewit-well",
+    "name": "Tour Of Tewit Well",
+    "world": "Yorkshire",
+    "distance_km": 10.88,
+    "elevation_m": 205,
+    "event_only": false
+  },
+  {
+    "zwift_route_id": "yorkshire-double-loop",
+    "name": "Yorkshire Double Loop",
+    "world": "Yorkshire",
+    "distance_km": 29.62,
+    "elevation_m": 547,
+    "event_only": false
+  }
+]

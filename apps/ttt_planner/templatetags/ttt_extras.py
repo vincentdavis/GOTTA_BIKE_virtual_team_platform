@@ -1,8 +1,29 @@
 """Template filters for the TTT planner."""
 
+import json
+
 from django import template
 
 register = template.Library()
+
+
+@register.filter
+def pretty_json(value) -> str:
+    """Render a value as indented JSON for display.
+
+    Args:
+        value: Any JSON-serializable value (e.g. a stored request/response dict).
+
+    Returns:
+        Indented JSON string, or an empty string for None.
+
+    """
+    if value is None:
+        return ""
+    try:
+        return json.dumps(value, indent=2, sort_keys=False)
+    except TypeError, ValueError:
+        return str(value)
 
 
 @register.filter

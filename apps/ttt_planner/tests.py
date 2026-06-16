@@ -4,9 +4,10 @@ import pytest
 from django.urls import reverse
 
 from apps.ttt_planner.models import PlanRider, Route, TttPlan
-from apps.ttt_planner.services import physics
+from apps.ttt_planner.services import physics, zwiftgopher
 from apps.ttt_planner.services.compute import compute_plan
 from apps.ttt_planner.services.roster import get_rider_data
+from apps.ttt_planner.tasks import run_zwiftgopher_optimize
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
 
@@ -512,3 +513,215 @@ def test_create_with_draft_savings(auth_client, team_member):
     plan = TttPlan.objects.get(name="Created Plan")
     assert plan.team_name == "Coalition"
     assert plan.draft_savings == pytest.approx([0.0, 0.20, 0.28])
+
+
+# --------------------------------------------------------------------------- #
+# zwiftgopher integration
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.django_db
+def test_build_optimize_request(team_member):
+    """Request body sends zwid riders as IDs+overrides and complete manual riders as custom_riders."""
+    plan = TttPlan.objects.create(created_by=team_member, team_name="Squad", target_speed_kph=42)
+    PlanRider.objects.create(plan=plan, order=0, name="A", zwid=111, ftp_w=300, weight_kg=72, height_cm=178)
+    PlanRider.objects.create(plan=plan, order=1, name="Guest", ftp_w=250, weight_kg=70, height_cm=175)
+    PlanRider.objects.create(plan=plan, order=2, name="NoData")  # incomplete manual -> skipped
+
+    payload = zwiftgopher.build_optimize_request(plan, "next_wtrl")
+    assert payload["riders"] == [111]
+    assert payload["rider_overrides"]["111"]["ftp"] == 300
+    assert payload["rider_overrides"]["111"]["weight"] == pytest.approx(72.0)
+    assert {"name": "Guest", "ftp": 250, "weight": 70.0, "height": 175} in payload["custom_riders"]
+    assert all(c["name"] != "NoData" for c in payload["custom_riders"])
+    assert payload["route"] == "next_wtrl"
+    assert payload["target_speed"] == pytest.approx(42.0)
+    assert payload["request_id"] == str(plan.pk)
+
+
+@pytest.mark.django_db
+def test_build_optimize_request_invalid_schedule_defaults(team_member):
+    """An unknown route schedule falls back to the default."""
+    plan = TttPlan.objects.create(created_by=team_member)
+    payload = zwiftgopher.build_optimize_request(plan, "bogus")
+    assert payload["route"] == zwiftgopher.DEFAULT_ROUTE_SCHEDULE
+
+
+@pytest.mark.django_db
+def test_count_optimizable_riders(team_member):
+    """Counts zwid riders and complete manual riders, skipping incomplete manuals."""
+    plan = TttPlan.objects.create(created_by=team_member)
+    PlanRider.objects.create(plan=plan, order=0, name="A", zwid=111)
+    PlanRider.objects.create(plan=plan, order=1, name="Guest", ftp_w=250, weight_kg=70, height_cm=175)
+    PlanRider.objects.create(plan=plan, order=2, name="NoData")
+    assert zwiftgopher.count_optimizable_riders(plan) == 2
+
+
+def test_parse_optimize_response_success():
+    """A successful response normalizes fields and sorts riders by pull order."""
+    data = {
+        "success": True,
+        "data": {
+            "route": "Canopies and Coastlines",
+            "estimated_time_seconds": 1947,
+            "estimated_time_formatted": "32:27",
+            "estimated_avg_speed": 43.2,
+            "team_avg_power": 285,
+            "team_avg_if": 93,
+            "riders": [
+                {"name": "Second", "order": 2, "pull_power": 250, "if_percent": 95},
+                {"name": "First", "order": 1, "pull_power": 240, "if_percent": 92},
+            ],
+        },
+    }
+    result = zwiftgopher.parse_optimize_response(200, data)
+    assert result["ok"] is True
+    assert result["estimated_time_seconds"] == 1947
+    assert result["estimated_time_formatted"] == "32:27"
+    assert result["team_avg_if"] == 93
+    assert result["route"] == "Canopies and Coastlines"
+    # Riders come back sorted by their suggested pull order.
+    assert [r["name"] for r in result["riders"]] == ["First", "Second"]
+    assert result["riders"][0]["pull_power"] == 240
+
+
+def test_parse_optimize_response_rate_limited():
+    """A 429 is reported as a rate-limit error."""
+    result = zwiftgopher.parse_optimize_response(429, {})
+    assert result["ok"] is False
+    assert "rate limited" in result["error"].lower()
+
+
+def test_parse_optimize_response_errors():
+    """Error and transport-failure shapes surface a message."""
+    result = zwiftgopher.parse_optimize_response(400, {"success": False, "message": "At least 2 riders are required"})
+    assert result["ok"] is False
+    assert "2 riders" in result["error"]
+    transport = zwiftgopher.parse_optimize_response(0, {"error": "boom"})
+    assert transport["ok"] is False
+    assert transport["error"] == "boom"
+
+
+@pytest.mark.django_db
+def test_zwiftgopher_run_enqueues(auth_client, team_member, monkeypatch):
+    """Run sets status to pending and enqueues the task with the chosen schedule."""
+
+    class _FakeTask:
+        def __init__(self):
+            self.calls = []
+
+        def enqueue(self, *args):
+            self.calls.append(args)
+
+    fake = _FakeTask()
+    monkeypatch.setattr("apps.ttt_planner.views.run_zwiftgopher_optimize", fake)
+    plan = TttPlan.objects.create(created_by=team_member)
+    resp = auth_client.post(reverse("ttt_planner:zwiftgopher_run", args=[plan.pk]), {"route_schedule": "next_zrl"})
+    assert resp.status_code == 200
+    plan.refresh_from_db()
+    assert plan.zwiftgopher_status == TttPlan.GopherStatus.PENDING
+    assert fake.calls == [(str(plan.pk), "next_zrl")]
+
+
+@pytest.mark.django_db
+def test_zwiftgopher_run_non_owner_forbidden(auth_client, team_member, app_admin):
+    """A non-owner cannot trigger a run on someone else's plan."""
+    plan = TttPlan.objects.create(created_by=team_member)
+    auth_client.force_login(app_admin)
+    resp = auth_client.post(reverse("ttt_planner:zwiftgopher_run", args=[plan.pk]))
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_run_task_stores_result(team_member, monkeypatch):
+    """The task calls the client, stores the parsed result, and marks done."""
+    monkeypatch.setattr("apps.ttt_planner.tasks.time.sleep", lambda *a: None)
+    monkeypatch.setattr("apps.ttt_planner.tasks.zwiftgopher_client.is_configured", lambda: True)
+    monkeypatch.setattr(
+        "apps.ttt_planner.tasks.zwiftgopher_client.optimize",
+        lambda payload: (
+            200,
+            {
+                "success": True,
+                "data": {
+                    "route": "Canopies",
+                    "estimated_time_seconds": 1947,
+                    "estimated_avg_speed": 43.2,
+                    "team_avg_power": 285,
+                    "riders": [{"name": "Dave", "power_300_watts": 295, "speed_index": 68}],
+                },
+            },
+        ),
+    )
+    plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
+    PlanRider.objects.create(plan=plan, order=0, name="A", zwid=111, ftp_w=300, weight_kg=72, height_cm=178)
+    PlanRider.objects.create(plan=plan, order=1, name="B", zwid=222, ftp_w=310, weight_kg=78, height_cm=182)
+
+    run_zwiftgopher_optimize.func(str(plan.pk), "next_wtrl")
+
+    plan.refresh_from_db()
+    assert plan.zwiftgopher_status == TttPlan.GopherStatus.DONE
+    assert plan.zwiftgopher_result["estimated_time_seconds"] == 1947
+    assert plan.zwiftgopher_fetched_at is not None
+    # Raw request + response are stored for the in-panel viewers.
+    assert plan.zwiftgopher_request["request_id"] == str(plan.pk)
+    assert sorted(plan.zwiftgopher_request["riders"]) == [111, 222]
+    assert plan.zwiftgopher_raw_response["success"] is True
+
+
+@pytest.mark.django_db
+def test_run_task_too_few_riders(team_member, monkeypatch):
+    """The task errors out when fewer than 2 optimizable riders are present."""
+    monkeypatch.setattr("apps.ttt_planner.tasks.zwiftgopher_client.is_configured", lambda: True)
+    plan = TttPlan.objects.create(created_by=team_member)
+    PlanRider.objects.create(plan=plan, order=0, name="A", zwid=111, ftp_w=300, weight_kg=72, height_cm=178)
+
+    run_zwiftgopher_optimize.func(str(plan.pk))
+
+    plan.refresh_from_db()
+    assert plan.zwiftgopher_status == TttPlan.GopherStatus.ERROR
+    assert "at least" in plan.zwiftgopher_error.lower()
+
+
+@pytest.mark.django_db
+def test_run_task_not_configured(team_member, monkeypatch):
+    """The task errors when no API key is configured."""
+    monkeypatch.setattr("apps.ttt_planner.tasks.zwiftgopher_client.is_configured", lambda: False)
+    plan = TttPlan.objects.create(created_by=team_member)
+    run_zwiftgopher_optimize.func(str(plan.pk))
+    plan.refresh_from_db()
+    assert plan.zwiftgopher_status == TttPlan.GopherStatus.ERROR
+
+
+@pytest.mark.django_db
+def test_gopher_panel_renders(auth_client, team_member):
+    """The panel endpoint renders for a plan."""
+    plan = TttPlan.objects.create(created_by=team_member)
+    resp = auth_client.get(reverse("ttt_planner:zwiftgopher_panel", args=[plan.pk]))
+    assert resp.status_code == 200
+    assert b"zwiftgopher" in resp.content
+
+
+@pytest.mark.django_db
+def test_gopher_panel_shows_request_response_viewers(auth_client, team_member):
+    """When raw request/response are stored, the panel shows the JSON viewers."""
+    plan = TttPlan.objects.create(
+        created_by=team_member,
+        zwiftgopher_status=TttPlan.GopherStatus.DONE,
+        zwiftgopher_request={"request_id": "abc", "riders": [111, 222]},
+        zwiftgopher_raw_response={"success": True, "data": {"route": "Probe Route"}},
+    )
+    resp = auth_client.get(reverse("ttt_planner:zwiftgopher_panel", args=[plan.pk]))
+    assert resp.status_code == 200
+    assert b"View API request" in resp.content
+    assert b"View API response" in resp.content
+    assert b"Probe Route" in resp.content
+
+
+def test_pretty_json_filter():
+    """The pretty_json filter indents dicts and handles None."""
+    from apps.ttt_planner.templatetags.ttt_extras import pretty_json
+
+    assert pretty_json(None) == ""
+    out = pretty_json({"a": 1})
+    assert '"a": 1' in out

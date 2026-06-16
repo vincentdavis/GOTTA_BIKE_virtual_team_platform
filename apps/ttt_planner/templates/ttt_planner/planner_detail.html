@@ -115,6 +115,9 @@
     {% include "ttt_planner/_plan_body.html" %}
   </div>
 
+  {# zwiftgopher compare panel — lazy-loaded after the page renders #}
+  <div hx-get="{% url 'ttt_planner:zwiftgopher_panel' plan.pk %}" hx-trigger="load" hx-swap="outerHTML"></div>
+
   {% if can_edit %}
   <div class="text-right">
     <form method="post" action="{% url 'ttt_planner:delete' plan.pk %}"
