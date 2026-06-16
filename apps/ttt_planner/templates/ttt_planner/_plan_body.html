@@ -5,12 +5,22 @@
   {# ---- Roster / pull schedule ---- #}
   <div class="xl:col-span-3 card bg-base-200 shadow-xl">
     <div class="card-body">
-      <h3 class="card-title">Pull schedule</h3>
+      <div class="flex items-center justify-between gap-2">
+        <h3 class="card-title">Pull schedule</h3>
+        {% if can_edit and result.riders %}
+        <button type="button" class="btn btn-ghost btn-xs text-error"
+                hx-post="{% url 'ttt_planner:riders_remove_selected' plan.pk %}"
+                hx-include="[name='rider_ids']"
+                hx-target="#ttt-plan-body" hx-swap="innerHTML"
+                hx-confirm="Remove the selected riders?">Remove selected</button>
+        {% endif %}
+      </div>
       {% if result.riders %}
       <div class="overflow-x-auto">
         <table class="table table-sm">
           <thead>
             <tr>
+              {% if can_edit %}<th></th>{% endif %}
               <th>#</th>
               <th>Rider</th>
               <th class="text-right">kg</th>
@@ -28,6 +38,12 @@
           <tbody>
             {% for rr in result.riders %}
             <tr class="hover">
+              {% if can_edit %}
+              <td>
+                <input type="checkbox" name="rider_ids" value="{{ rr.rider.pk }}"
+                       class="checkbox checkbox-xs" aria-label="Select {{ rr.rider.name }}" />
+              </td>
+              {% endif %}
               <td class="text-base-content/50">{{ forloop.counter }}</td>
               <td class="font-medium">
                 {{ rr.rider.name }}

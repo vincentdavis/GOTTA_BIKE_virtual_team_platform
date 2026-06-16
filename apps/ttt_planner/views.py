@@ -365,6 +365,28 @@ def rider_remove(request: HttpRequest, plan_id: str, rider_id: int) -> HttpRespo
 @login_required
 @team_member_required(raise_exception=True)
 @require_POST
+def riders_remove_selected(request: HttpRequest, plan_id: str) -> HttpResponse:
+    """Remove all riders whose ids are checked in the table.
+
+    Expects ``rider_ids`` POST values (the checked rows).
+
+    Returns:
+        The refreshed plan body partial.
+
+    """
+    plan = _get_editable_plan(request, plan_id)
+    if plan is None:
+        return HttpResponse("Permission denied", status=403)
+
+    rider_ids = request.POST.getlist("rider_ids")
+    if rider_ids:
+        plan.riders.filter(pk__in=rider_ids).delete()
+    return HttpResponse(_render_plan_body(request, plan, can_edit=True))
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_POST
 def rider_reorder(request: HttpRequest, plan_id: str, rider_id: int, direction: str) -> HttpResponse:
     """Move a rider up or down in the pull order (swap with its neighbour).
 

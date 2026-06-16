@@ -57,6 +57,7 @@
               <th>Route</th>
               <th>Target speed</th>
               <th>Updated</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -70,6 +71,13 @@
               <td>{{ plan.route.name|default:"—" }}</td>
               <td>{{ plan.target_speed_kph }} kph</td>
               <td class="text-sm text-base-content/60">{{ plan.updated_at|date:"M j, Y" }}</td>
+              <td class="text-right">
+                <form method="post" action="{% url 'ttt_planner:delete' plan.pk %}"
+                      onsubmit="return confirm('Delete &quot;{{ plan.name|default:'Untitled plan'|escapejs }}&quot;?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+                </form>
+              </td>
             </tr>
             {% endfor %}
           </tbody>

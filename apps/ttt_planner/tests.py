@@ -287,6 +287,54 @@ def test_rider_search_renders(auth_client, team_member):
 
 
 @pytest.mark.django_db
+def test_riders_remove_selected(auth_client, team_member):
+    """Bulk remove deletes only the checked riders."""
+    plan = TttPlan.objects.create(created_by=team_member)
+    a = PlanRider.objects.create(plan=plan, order=0, name="A")
+    b = PlanRider.objects.create(plan=plan, order=1, name="B")
+    c = PlanRider.objects.create(plan=plan, order=2, name="C")
+    resp = auth_client.post(
+        reverse("ttt_planner:riders_remove_selected", args=[plan.pk]),
+        {"rider_ids": [str(a.pk), str(c.pk)]},
+    )
+    assert resp.status_code == 200
+    assert set(plan.riders.values_list("pk", flat=True)) == {b.pk}
+
+
+@pytest.mark.django_db
+def test_riders_remove_selected_non_owner_forbidden(auth_client, team_member, app_admin):
+    """A non-owner cannot bulk-remove riders from someone else's plan."""
+    plan = TttPlan.objects.create(created_by=team_member)
+    rider = PlanRider.objects.create(plan=plan, order=0, name="A")
+    auth_client.force_login(app_admin)
+    resp = auth_client.post(
+        reverse("ttt_planner:riders_remove_selected", args=[plan.pk]),
+        {"rider_ids": [str(rider.pk)]},
+    )
+    assert resp.status_code == 403
+    assert plan.riders.count() == 1
+
+
+@pytest.mark.django_db
+def test_owner_can_delete_plan(auth_client, team_member):
+    """The owner can delete their plan and is redirected to the list."""
+    plan = TttPlan.objects.create(created_by=team_member, name="Doomed")
+    resp = auth_client.post(reverse("ttt_planner:delete", args=[plan.pk]))
+    assert resp.status_code == 302
+    assert not TttPlan.objects.filter(pk=plan.pk).exists()
+
+
+@pytest.mark.django_db
+def test_non_owner_cannot_delete_plan(auth_client, team_member, app_admin):
+    """A non-owner cannot delete another captain's plan."""
+    plan = TttPlan.objects.create(created_by=team_member)
+    auth_client.force_login(app_admin)
+    resp = auth_client.post(reverse("ttt_planner:delete", args=[plan.pk]))
+    assert resp.status_code == 403
+    assert TttPlan.objects.filter(pk=plan.pk).exists()
+
+
+@pytest.mark.django_db
 def test_rider_reorder_swaps_order(auth_client, team_member):
     """Moving a rider up swaps its order with the neighbour."""
     plan = TttPlan.objects.create(created_by=team_member)
