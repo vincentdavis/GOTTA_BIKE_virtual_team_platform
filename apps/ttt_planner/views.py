@@ -166,6 +166,7 @@ def route_gpx_upload(request: HttpRequest, route_id: int) -> HttpResponse:
         gpx.elevation_m = stats.elevation_m
         gpx.terrain = stats.terrain
         gpx.point_count = stats.point_count
+        gpx.profile = stats.profile
     except ValueError as exc:
         gpx.parse_error = str(exc)[:300]
         logfire.warning("GPX parse failed", route_id=route.pk, error=str(exc))

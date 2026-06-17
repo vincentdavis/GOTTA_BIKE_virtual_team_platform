@@ -58,6 +58,9 @@ class RouteGpx(models.Model):
     )
     elevation_m = models.PositiveIntegerField(null=True, blank=True, help_text="Elevation gain parsed from the GPX (m)")
     terrain = models.CharField(max_length=20, blank=True, help_text="Terrain type derived from the parsed GPX")
+    profile = models.JSONField(
+        default=list, blank=True, help_text="Downsampled elevation profile: [[distance_km, elevation_m], ...]"
+    )
     point_count = models.PositiveIntegerField(default=0, help_text="Number of track points parsed")
     parse_error = models.CharField(max_length=300, blank=True, help_text="Error from parsing the GPX, if any")
     uploaded_by = models.ForeignKey(

@@ -932,6 +932,10 @@ def test_parse_gpx_computes_metrics():
     assert stats.distance_km > 0
     assert stats.elevation_m == 20
     assert stats.terrain in {"flat", "rolling", "hilly", "mountainous"}
+    # Elevation profile: [distance_km, elevation_m] pairs, rising from 0 to 20 m.
+    assert len(stats.profile) == 3
+    assert stats.profile[0][1] == pytest.approx(0.0)
+    assert stats.profile[-1][1] == pytest.approx(20.0)
 
 
 def test_parse_gpx_rejects_garbage():
@@ -969,6 +973,7 @@ def test_gpx_upload_parses_and_stores(auth_client, tmp_path, settings):
     assert gpx.distance_km > 0
     assert gpx.elevation_m == 20
     assert gpx.point_count == 3
+    assert gpx.profile  # elevation profile stored for charting
     assert not gpx.parse_error
 
 

@@ -31,34 +31,37 @@
     <div class="card-body">
       <h3 class="font-semibold mb-2">GPX tracks</h3>
       {% if gpx_files %}
-      <div class="overflow-x-auto">
-        <table class="table table-sm">
-          <thead>
-            <tr><th>Label</th><th class="text-right">Distance</th><th class="text-right">Elev</th><th>Type</th><th>Notes</th><th></th></tr>
-          </thead>
-          <tbody>
-            {% for g in gpx_files %}
-            <tr>
-              <td class="font-medium">
-                <a href="{{ g.file.url }}" class="link link-primary">{{ g.label|default:"GPX" }}</a>
-                {% if g.parse_error %}<span class="badge badge-error badge-xs" title="{{ g.parse_error }}">parse error</span>{% endif %}
-                <div class="text-xs text-base-content/40">{{ g.uploaded_by.get_full_name|default:g.uploaded_by.username|default:"—" }} · {{ g.uploaded_at|date:"M j, Y" }}</div>
-              </td>
-              <td class="text-right">{% if g.distance_km %}{{ g.distance_km }} km{% else %}—{% endif %}</td>
-              <td class="text-right">{% if g.elevation_m is not None %}{{ g.elevation_m }} m{% else %}—{% endif %}</td>
-              <td>{% if g.terrain %}<span class="badge badge-outline badge-sm">{{ g.terrain }}</span>{% else %}—{% endif %}</td>
-              <td class="text-sm whitespace-pre-line max-w-xs">{{ g.notes|default:"—" }}</td>
-              <td class="text-right">
-                <form method="post" action="{% url 'routes:gpx_delete' route.pk g.pk %}"
-                      onsubmit="return confirm('Delete this GPX file?');">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="space-y-3">
+        {% for g in gpx_files %}
+        <div class="rounded-box border border-base-300 p-3">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <a href="{{ g.file.url }}" class="link link-primary font-medium">{{ g.label|default:"GPX" }}</a>
+              {% if g.parse_error %}<span class="badge badge-error badge-xs" title="{{ g.parse_error }}">parse error</span>{% endif %}
+              <div class="text-xs text-base-content/40">
+                {{ g.uploaded_by.get_full_name|default:g.uploaded_by.username|default:"—" }} · {{ g.uploaded_at|date:"M j, Y" }}
+              </div>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+              {% if g.distance_km %}<span>{{ g.distance_km }} km</span>{% endif %}
+              {% if g.elevation_m is not None %}<span>· {{ g.elevation_m }} m</span>{% endif %}
+              {% if g.terrain %}<span class="badge badge-outline badge-sm">{{ g.terrain }}</span>{% endif %}
+              <form method="post" action="{% url 'routes:gpx_delete' route.pk g.pk %}"
+                    onsubmit="return confirm('Delete this GPX file?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+              </form>
+            </div>
+          </div>
+
+          {% if g.profile %}
+          <div style="height:160px" class="mt-2"><canvas class="gpx-profile-chart" data-src="{{ g.pk }}"></canvas></div>
+          {{ g.profile|json_script:g.pk }}
+          {% endif %}
+
+          {% if g.notes %}<p class="text-sm text-base-content/70 whitespace-pre-line mt-2">{{ g.notes }}</p>{% endif %}
+        </div>
+        {% endfor %}
       </div>
       {% else %}
       <p class="text-base-content/60">No GPX files uploaded yet.</p>
@@ -88,4 +91,42 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    if (typeof Chart === "undefined") return;
+    document.querySelectorAll(".gpx-profile-chart").forEach(function (canvas) {
+      var src = document.getElementById(canvas.dataset.src);
+      if (!src) return;
+      var points = JSON.parse(src.textContent);  // [[distance_km, elevation_m], ...]
+      new Chart(canvas, {
+        type: "line",
+        data: {
+          datasets: [{
+            data: points.map(function (p) { return { x: p[0], y: p[1] }; }),
+            borderColor: "#2563eb",
+            backgroundColor: "rgba(37,99,235,0.15)",
+            fill: true,
+            pointRadius: 0,
+            borderWidth: 1.5,
+            tension: 0.1,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: { legend: { display: false }, tooltip: { intersect: false, mode: "index" } },
+          scales: {
+            x: { type: "linear", title: { display: true, text: "km" }, ticks: { maxTicksLimit: 8 } },
+            y: { title: { display: true, text: "m" } },
+          },
+        },
+      });
+    });
+  });
+</script>
 {% endblock %}
