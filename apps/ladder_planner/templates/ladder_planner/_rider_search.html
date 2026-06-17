@@ -1,0 +1,18 @@
+{# Autocomplete results for the add-our-rider search. #}
+{% if results %}
+<ul class="menu bg-base-100 rounded-box shadow mt-1 w-full absolute z-10 max-h-72 overflow-y-auto">
+  {% for r in results %}
+  <li>
+    <button type="button" class="justify-between"
+            hx-post="{% url 'ladder_planner:our_rider_add' matchup.pk r.zwid %}"
+            hx-target="#ladder-body" hx-swap="innerHTML"
+            hx-on::after-request="document.getElementById('ladder-our-search').innerHTML=''">
+      <span>{{ r.name }}{% if r.category %} <span class="badge badge-xs">{{ r.category }}</span>{% endif %}</span>
+      <span class="text-xs text-base-content/50">{% if r.rating %}{{ r.rating|floatformat:0 }} vELO{% endif %}</span>
+    </button>
+  </li>
+  {% endfor %}
+</ul>
+{% elif query|length >= 2 %}
+<div class="text-xs text-base-content/50 px-1 mt-1">No matches</div>
+{% endif %}

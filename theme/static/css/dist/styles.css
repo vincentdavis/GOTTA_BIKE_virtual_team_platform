@@ -5206,6 +5206,16 @@
   .gap-y-2 {
     row-gap: calc(var(--spacing) * 2);
   }
+  :where(.divide-y > :not(:last-child)) {
+    --tw-divide-y-reverse: 0;
+    border-bottom-style: var(--tw-border-style);
+    border-top-style: var(--tw-border-style);
+    border-top-width: calc(1px * var(--tw-divide-y-reverse));
+    border-bottom-width: calc(1px * calc(1 - var(--tw-divide-y-reverse)));
+  }
+  :where(.divide-base-200 > :not(:last-child)) {
+    border-color: var(--color-base-200);
+  }
   .self-center {
     align-self: center;
   }
@@ -5433,6 +5443,14 @@
       background-color: color-mix(in oklab, var(--color-error) 20%, transparent);
     }
   }
+  .bg-error\/25 {
+    background-color: var(--color-error);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-error\/25 {
+      background-color: color-mix(in oklab, var(--color-error) 25%, transparent);
+    }
+  }
   .bg-error\/30 {
     background-color: var(--color-error);
   }
@@ -5461,6 +5479,14 @@
   .bg-primary {
     background-color: var(--color-primary);
   }
+  .bg-primary\/5 {
+    background-color: var(--color-primary);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-primary\/5 {
+      background-color: color-mix(in oklab, var(--color-primary) 5%, transparent);
+    }
+  }
   .bg-purple-600 {
     background-color: var(--color-purple-600);
   }
@@ -5476,6 +5502,14 @@
   @supports (color: color-mix(in lab, red, red)) {
     .bg-success\/10 {
       background-color: color-mix(in oklab, var(--color-success) 10%, transparent);
+    }
+  }
+  .bg-success\/25 {
+    background-color: var(--color-success);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-success\/25 {
+      background-color: color-mix(in oklab, var(--color-success) 25%, transparent);
     }
   }
   .bg-transparent {
@@ -5766,6 +5800,16 @@
     line-height: var(--tw-leading, var(--text-xs--line-height));
   }
   @layer daisyui.l1.l2 {
+    .tabs-lg {
+      --tab-height: calc(var(--size-field, 0.25rem) * 12);
+    }
+    .tabs-lg > .tab {
+      font-size: 1.125rem;
+      --tab-p: 1rem;
+      --tab-radius-min: calc(1.5rem - var(--border));
+    }
+  }
+  @layer daisyui.l1.l2 {
     .badge-lg {
       --size: calc(var(--size-selector, 0.25rem) * 7);
       font-size: 1rem;
@@ -5782,6 +5826,9 @@
       --size: calc(var(--size-selector, 0.25rem) * 4);
       font-size: 0.625rem;
     }
+  }
+  .text-\[10px\] {
+    font-size: 10px;
   }
   @layer daisyui.l1.l2 {
     .textarea-sm {
@@ -5958,6 +6005,9 @@
       color: color-mix(in oklab, var(--color-base-content) 80%, transparent);
     }
   }
+  .text-black {
+    color: var(--color-black);
+  }
   .text-error {
     color: var(--color-error);
   }
@@ -6044,6 +6094,9 @@
   }
   .opacity-30 {
     opacity: 30%;
+  }
+  .opacity-40 {
+    opacity: 40%;
   }
   .opacity-50 {
     opacity: 50%;
@@ -6877,6 +6930,11 @@
   inherits: false;
   initial-value: 0;
 }
+@property --tw-divide-y-reverse {
+  syntax: "*";
+  inherits: false;
+  initial-value: 0;
+}
 @property --tw-border-style {
   syntax: "*";
   inherits: false;
@@ -7038,6 +7096,7 @@
       --tw-skew-y: initial;
       --tw-space-y-reverse: 0;
       --tw-space-x-reverse: 0;
+      --tw-divide-y-reverse: 0;
       --tw-border-style: solid;
       --tw-leading: initial;
       --tw-font-weight: initial;

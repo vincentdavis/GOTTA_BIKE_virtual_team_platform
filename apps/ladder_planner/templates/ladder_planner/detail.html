@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}{{ matchup.name|default:"Ladder Matchup" }}{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6">
+
+  <div class="flex items-center justify-between gap-4">
+    <a href="{% url 'ladder_planner:list' %}" class="btn btn-ghost btn-sm">&larr; All matchups</a>
+    {% if can_edit %}
+      <button class="btn btn-outline btn-sm"
+              hx-post="{% url 'ladder_planner:refresh' matchup.pk %}"
+              hx-target="#ladder-body" hx-swap="innerHTML"
+              hx-confirm="Re-fetch ZR data for all riders?">Refresh data</button>
+    {% else %}
+      <span class="badge badge-info">Shared view (read-only)</span>
+    {% endif %}
+  </div>
+
+  {# ---- Matchup settings ---- #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      {% if can_edit %}
+      <form class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+            hx-post="{% url 'ladder_planner:update' matchup.pk %}"
+            hx-trigger="change, submit"
+            hx-target="#ladder-body" hx-swap="innerHTML">
+        <label class="form-control">
+          <span class="label-text mb-1">Matchup name</span>
+          <input type="text" name="name" value="{{ matchup.name }}" class="input input-bordered input-sm" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Our team name</span>
+          <input type="text" name="our_team_name" value="{{ matchup.our_team_name }}" class="input input-bordered input-sm" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Opponent team name</span>
+          <input type="text" name="opponent_team_name" value="{{ matchup.opponent_team_name }}" class="input input-bordered input-sm" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Course name <span class="text-base-content/40">(optional)</span></span>
+          <input type="text" name="course_name" value="{{ matchup.course_name }}" class="input input-bordered input-sm" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Course profile</span>
+          <select name="course_profile" class="select select-bordered select-sm">
+            {% for value, label in course_profiles %}
+              <option value="{{ value }}" {% if matchup.course_profile == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </form>
+      {% else %}
+        <h2 class="card-title text-2xl">{{ matchup.name|default:"Ladder Matchup" }}</h2>
+        <p class="text-sm text-base-content/70">
+          {{ matchup.our_team_name|default:"Our team" }} vs {{ matchup.opponent_team_name|default:"Opponent" }}
+          · {{ matchup.get_course_profile_display }}{% if matchup.course_name %} · {{ matchup.course_name }}{% endif %}
+        </p>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---- Add riders (owner only) ---- #}
+  {% if can_edit %}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="font-semibold">Add riders</h3>
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="relative">
+          <span class="label-text mb-1 block">Our team — search our roster</span>
+          <input type="text" name="q" placeholder="Name or Zwift ID…"
+                 class="input input-bordered input-sm w-full"
+                 hx-get="{% url 'ladder_planner:our_rider_search' matchup.pk %}"
+                 hx-trigger="keyup changed delay:300ms, search"
+                 hx-target="#ladder-our-search" hx-swap="innerHTML" />
+          <div id="ladder-our-search"></div>
+        </div>
+
+        <form hx-post="{% url 'ladder_planner:opponents_add' matchup.pk %}"
+              hx-target="#ladder-body" hx-swap="innerHTML"
+              hx-on::after-request="if(event.detail.successful) this.reset()">
+          <span class="label-text mb-1 block">Opponent — paste Zwift IDs (fetched live from ZR)</span>
+          <textarea name="zwids" rows="2" placeholder="e.g. 12345, 67890 123456"
+                    class="textarea textarea-bordered textarea-sm w-full font-mono"></textarea>
+          <button type="submit" class="btn btn-primary btn-sm mt-2">Fetch &amp; add opponents</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ---- Comparison body (HTMX swap target) ---- #}
+  <div id="ladder-body">
+    {% include "ladder_planner/_matchup_body.html" %}
+  </div>
+
+  {% if can_edit %}
+  <div class="text-right">
+    <form method="post" action="{% url 'ladder_planner:delete' matchup.pk %}"
+          onsubmit="return confirm('Delete this matchup?');">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-error btn-outline btn-sm">Delete matchup</button>
+    </form>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+  // Chart instances keyed by canvas id, so we can destroy/redraw after HTMX swaps.
+  window._ladderCharts = window._ladderCharts || {};
+
+  window.renderLadderCharts = function () {
+    if (typeof Chart === "undefined") return;
+    var dataEl = document.getElementById("ladder-chart-data");
+    var durEl = document.getElementById("ladder-chart-durations");
+    var lblEl = document.getElementById("ladder-chart-labels");
+    if (!dataEl || !durEl || !lblEl) return;
+
+    var charts = JSON.parse(dataEl.textContent);
+    var labels = JSON.parse(durEl.textContent);
+    var teams = JSON.parse(lblEl.textContent);
+
+    var configs = [
+      ["chart-wkg-average", "wkg_average"],
+      ["chart-wkg-median", "wkg_median"],
+      ["chart-w-average", "w_average"],
+      ["chart-w-median", "w_median"],
+    ];
+
+    configs.forEach(function (cfg) {
+      var canvasId = cfg[0], key = cfg[1];
+      var canvas = document.getElementById(canvasId);
+      var series = charts[key];
+      if (!canvas || !series) return;
+      // Skip while hidden (zero-size canvas in an inactive tab); redraw on tab open.
+      if (canvas.offsetParent === null) return;
+
+      if (window._ladderCharts[canvasId]) {
+        window._ladderCharts[canvasId].destroy();
+      }
+      window._ladderCharts[canvasId] = new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels: labels,
+          datasets: [
+            { label: teams.ours || "Our team", data: series.ours, backgroundColor: "#a21caf" },
+            { label: teams.opp || "Opponent", data: series.opp, backgroundColor: "#9ca3af" },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: { legend: { position: "top" } },
+          scales: { y: { beginAtZero: true } },
+        },
+      });
+    });
+  };
+
+  document.addEventListener("DOMContentLoaded", window.renderLadderCharts);
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    if (e.target && e.target.id === "ladder-body") window.renderLadderCharts();
+  });
+</script>
+{% endblock %}

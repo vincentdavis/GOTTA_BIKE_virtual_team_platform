@@ -96,6 +96,7 @@ INSTALLED_APPS = [
     "apps.user_api.apps.UserApiConfig",
     "apps.tickets.apps.TicketsConfig",
     "apps.ttt_planner.apps.TttPlannerConfig",
+    "apps.ladder_planner.apps.LadderPlannerConfig",
     "django_tasks",
     "django_tasks_db",
 ]

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}Ladder Planner{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-6">
+        <div>
+          <h2 class="card-title text-2xl">Ladder Planner</h2>
+          <p class="text-sm text-base-content/70">Scout a club ladder matchup: our team vs an opponent</p>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="new_matchup_modal.showModal()">New Matchup</button>
+      </div>
+
+      <dialog id="new_matchup_modal" class="modal">
+        <div class="modal-box">
+          <h3 class="font-bold text-lg mb-4">New ladder matchup</h3>
+          <form method="post" action="{% url 'ladder_planner:create' %}" class="space-y-3">
+            {% csrf_token %}
+            <label class="form-control">
+              <span class="label-text mb-1">Matchup name</span>
+              <input type="text" name="name" placeholder="e.g. Ladder Round 3" class="input input-bordered input-sm w-full" />
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="form-control">
+                <span class="label-text mb-1">Our team name</span>
+                <input type="text" name="our_team_name" value="{{ config.TEAM_NAME }}" class="input input-bordered input-sm w-full" />
+              </label>
+              <label class="form-control">
+                <span class="label-text mb-1">Opponent name</span>
+                <input type="text" name="opponent_team_name" class="input input-bordered input-sm w-full" />
+              </label>
+            </div>
+            <label class="form-control">
+              <span class="label-text mb-1">Course profile</span>
+              <select name="course_profile" class="select select-bordered select-sm w-full">
+                <option value="flat">Flat</option>
+                <option value="rolling" selected>Rolling</option>
+                <option value="hilly">Hilly</option>
+                <option value="mountainous">Mountainous</option>
+              </select>
+            </label>
+            <div class="modal-action">
+              <button type="button" class="btn btn-ghost btn-sm" onclick="new_matchup_modal.close()">Cancel</button>
+              <button type="submit" class="btn btn-primary btn-sm">Create</button>
+            </div>
+          </form>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+      </dialog>
+
+      {% if matchups %}
+      <div class="overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr><th>Name</th><th>Our team</th><th>Opponent</th><th>Profile</th><th class="text-right">Riders</th><th>Updated</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for m in matchups %}
+            <tr class="hover">
+              <td><a href="{% url 'ladder_planner:detail' m.pk %}" class="link link-primary font-medium">{{ m.name|default:"Untitled matchup" }}</a></td>
+              <td>{{ m.our_team_name|default:"—" }}</td>
+              <td>{{ m.opponent_team_name|default:"—" }}</td>
+              <td>{{ m.get_course_profile_display }}</td>
+              <td class="text-right">{{ m.rider_count }}</td>
+              <td class="text-sm text-base-content/60">{{ m.updated_at|date:"M j, Y" }}</td>
+              <td class="text-right">
+                <form method="post" action="{% url 'ladder_planner:delete' m.pk %}"
+                      onsubmit="return confirm('Delete &quot;{{ m.name|default:'Untitled matchup'|escapejs }}&quot;?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-base-content/60">No matchups yet. Create one to get started.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
