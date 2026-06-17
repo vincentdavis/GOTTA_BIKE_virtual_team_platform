@@ -107,3 +107,75 @@ class LadderRider(models.Model):
 
         """
         return self.name
+
+
+class CachedRider(models.Model):
+    """A shared, reusable Zwift Racing snapshot for a non-team (opponent) rider.
+
+    Populated cache-aside from live fetches and the club refresh tasks, and kept
+    warm by ``refresh_cached_clubs``. Distinct from ``ZRRider`` (which is "our
+    club"): writing opponents here keeps them out of the unified team roster.
+    The opponent search reads this table; matches are snapshotted onto
+    ``LadderRider`` at add time.
+    """
+
+    class Source(models.TextChoices):
+        """Where the cached snapshot came from."""
+
+        RIDER = "rider", "Rider fetch"
+        CLUB = "club", "Club refresh"
+
+    zwid = models.PositiveIntegerField(unique=True, help_text="Zwift ID")
+    name = models.CharField(max_length=255, db_index=True, help_text="Rider display name")
+    club_id = models.PositiveIntegerField(null=True, blank=True, db_index=True, help_text="Club ID")
+    club_name = models.CharField(max_length=255, blank=True, help_text="Club name")
+    zr_data = models.JSONField(default=dict, help_text="Normalized ZR snapshot (see services.normalize)")
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.RIDER, help_text="Snapshot origin")
+    fetched_at = models.DateTimeField(help_text="When this snapshot was fetched from ZR")
+
+    class Meta:
+        """Meta options for CachedRider."""
+
+        verbose_name = "Cached Rider"
+        verbose_name_plural = "Cached Riders"
+        ordering: ClassVar[list[str]] = ["name"]
+
+    def __str__(self) -> str:
+        """Return the rider name and zwid.
+
+        Returns:
+            Human-readable label.
+
+        """
+        return f"{self.name} ({self.zwid})"
+
+
+class CachedClub(models.Model):
+    """A club whose roster we cache, driving the periodic background refresh.
+
+    A club becomes tracked when one of its riders is fetched. ``refresh_cached_clubs``
+    re-pulls due, in-use clubs on a cadence so the opponent search stays current.
+    """
+
+    club_id = models.PositiveIntegerField(unique=True, help_text="Club ID")
+    name = models.CharField(max_length=255, blank=True, help_text="Club name")
+    rider_count = models.PositiveIntegerField(default=0, help_text="Riders cached at last refresh")
+    last_refreshed_at = models.DateTimeField(null=True, blank=True, help_text="When the club was last refreshed")
+    auto_refresh = models.BooleanField(default=True, help_text="Include in the periodic background refresh")
+    last_error = models.CharField(max_length=300, blank=True, help_text="Error from the last refresh, if any")
+
+    class Meta:
+        """Meta options for CachedClub."""
+
+        verbose_name = "Cached Club"
+        verbose_name_plural = "Cached Clubs"
+        ordering: ClassVar[list[str]] = ["name"]
+
+    def __str__(self) -> str:
+        """Return the club name and id.
+
+        Returns:
+            Human-readable label.
+
+        """
+        return f"{self.name or 'Club'} ({self.club_id})"

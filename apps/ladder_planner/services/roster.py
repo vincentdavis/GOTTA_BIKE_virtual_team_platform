@@ -13,7 +13,8 @@ import httpx
 import logfire
 from django.db.models import Q
 
-from apps.ladder_planner.services import normalize
+from apps.ladder_planner.models import CachedRider
+from apps.ladder_planner.services import cache, normalize
 from apps.zwiftracing import zr_client
 from apps.zwiftracing.models import ZRRider
 
@@ -99,5 +100,6 @@ def fetch_opponents(zwids: list[int]) -> tuple[list[dict[str, Any]], str | None]
         return [], "Unexpected response from the Zwift Racing API."
 
     riders = [normalize.from_api(item) for item in payload if isinstance(item, dict) and item.get("riderId")]
+    cache.upsert_riders(riders, source=CachedRider.Source.RIDER)
     logfire.info("ZR opponents fetched", requested=len(zwids), returned=len(riders))
     return riders, None

@@ -90,6 +90,8 @@ def _blank() -> dict[str, Any]:
         "zp_ftp": None,
         "zp_category": "",
         "phenotype": "",
+        "club_id": None,
+        "club_name": "",
         "rating_current": None,
         "rating_max30": None,
         "rating_max90": None,
@@ -122,6 +124,8 @@ def from_zrrider(rider: ZRRider) -> dict[str, Any]:
     data["zp_ftp"] = _i(rider.zp_ftp)
     data["zp_category"] = rider.zp_category or ""
     data["phenotype"] = rider.phenotype_value or ""
+    data["club_id"] = rider.club_id
+    data["club_name"] = rider.club_name or ""
     data["rating_current"] = _f(rider.race_current_rating)
     data["rating_max30"] = _f(rider.race_max30_rating)
     data["rating_max90"] = _f(rider.race_max90_rating)
@@ -171,6 +175,10 @@ def from_api(payload: dict[str, Any]) -> dict[str, Any]:
     data["height_cm"] = _i(payload.get("height"))
     data["zp_ftp"] = _i(payload.get("zpFTP"))
     data["zp_category"] = payload.get("zpCategory") or ""
+
+    club = payload.get("club") or {}
+    data["club_id"] = _i(club.get("id"))
+    data["club_name"] = club.get("name") or ""
 
     power = payload.get("power") or {}
     for key in DURATION_KEYS:

@@ -21,9 +21,42 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.decorators import team_member_required
 from apps.ladder_planner.models import CourseProfile, LadderMatchup, LadderRider, Side
-from apps.ladder_planner.services import compute, roster
+from apps.ladder_planner.services import cache, compute, roster
+from apps.ladder_planner.tasks import warm_club
 
 _MAX_OPPONENTS_PER_REQUEST = 50
+
+
+def _warm_clubs(datas: list[dict]) -> None:
+    """Enqueue background club warming for the distinct clubs in freshly-fetched riders.
+
+    Args:
+        datas: Normalized rider dicts just fetched live from ZR.
+
+    """
+    for club_id in {d.get("club_id") for d in datas if d.get("club_id")}:
+        warm_club.enqueue(club_id)
+
+
+def _add_opponent(matchup: LadderMatchup, data: dict, order: int, now) -> None:
+    """Create an opponent LadderRider from a normalized snapshot.
+
+    Args:
+        matchup: The matchup.
+        data: Normalized rider dict.
+        order: Display order.
+        now: Snapshot timestamp.
+
+    """
+    LadderRider.objects.create(
+        matchup=matchup,
+        side=Side.OPPONENT,
+        order=order,
+        zwid=data["zwid"],
+        name=data.get("name") or str(data["zwid"]),
+        zr_data=data,
+        fetched_at=now,
+    )
 
 
 def _can_edit(matchup: LadderMatchup, user) -> bool:
@@ -242,6 +275,33 @@ def our_rider_search(request: HttpRequest, matchup_id: str) -> HttpResponse:
 
 @login_required
 @team_member_required(raise_exception=True)
+@require_GET
+def opponent_search(request: HttpRequest, matchup_id: str) -> HttpResponse:
+    """Autocomplete: search cached opponent riders (no ZR call).
+
+    Shows cached matches with data age; a miss offers a live fetch-by-zwid.
+
+    Returns:
+        The opponent search-results dropdown partial.
+
+    """
+    matchup = _get_editable(request, matchup_id)
+    if matchup is None:
+        return HttpResponse("Permission denied", status=403)
+
+    query = request.GET.get("q", "").strip()
+    existing = set(matchup.riders.filter(side=Side.OPPONENT).values_list("zwid", flat=True))
+    results = cache.search(query, exclude_zwids=existing)
+    fetch_zwid = int(query) if query.isdigit() and int(query) not in existing else None
+    return render(
+        request,
+        "ladder_planner/_opponent_search.html",
+        {"matchup": matchup, "results": results, "query": query, "fetch_zwid": fetch_zwid},
+    )
+
+
+@login_required
+@team_member_required(raise_exception=True)
 @require_POST
 def our_rider_add(request: HttpRequest, matchup_id: str, zwid: int) -> HttpResponse:
     """Add one of our riders (by zwid) to the matchup, snapshotting ZR data.
@@ -292,8 +352,40 @@ def _parse_zwids(raw: str) -> list[int]:
 @login_required
 @team_member_required(raise_exception=True)
 @require_POST
+def opponent_add(request: HttpRequest, matchup_id: str, zwid: int) -> HttpResponse:
+    """Add one opponent from the cache (search-result click); live-fetch on miss.
+
+    Returns:
+        The refreshed matchup body partial.
+
+    """
+    matchup = _get_editable(request, matchup_id)
+    if matchup is None:
+        return HttpResponse("Permission denied", status=403)
+
+    error = ""
+    if not matchup.riders.filter(side=Side.OPPONENT, zwid=zwid).exists():
+        data = cache.get_snapshot(zwid)
+        if data is None:
+            riders, error = roster.fetch_opponents([zwid])
+            data = riders[0] if riders else None
+            if data:
+                _warm_clubs(riders)
+        if data:
+            _add_opponent(matchup, data, _next_order(matchup, Side.OPPONENT), timezone.now())
+        elif not error:
+            error = "No Zwift Racing data found for that rider."
+    return HttpResponse(_render_body(request, matchup, can_edit=True, error=error))
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_POST
 def opponents_add(request: HttpRequest, matchup_id: str) -> HttpResponse:
-    """Add opponent riders by zwid, fetching their data live from Zwift Racing.
+    """Add opponents by zwid: use the cache where present, live-fetch the misses.
+
+    Freshly fetched riders trigger a background club warm so their teammates
+    become searchable without further live calls.
 
     Returns:
         The refreshed matchup body partial (with a notice or error).
@@ -308,38 +400,49 @@ def opponents_add(request: HttpRequest, matchup_id: str) -> HttpResponse:
         return HttpResponse(_render_body(request, matchup, can_edit=True, error="Enter one or more Zwift IDs."))
 
     existing = set(matchup.riders.filter(side=Side.OPPONENT).values_list("zwid", flat=True))
-    to_fetch = [z for z in zwids if z not in existing]
-    if not to_fetch:
+    candidates = [z for z in zwids if z not in existing]
+    if not candidates:
         return HttpResponse(
             _render_body(request, matchup, can_edit=True, notice="Those riders are already on the opponent.")
         )
 
-    riders, error = roster.fetch_opponents(to_fetch)
-    if error:
-        return HttpResponse(_render_body(request, matchup, can_edit=True, error=error))
+    # Cache-first: only the misses cost a (single, batched) live ZR call.
+    snapshots: dict[int, dict] = {}
+    misses: list[int] = []
+    for zwid in candidates:
+        cached = cache.get_snapshot(zwid)
+        if cached is not None:
+            snapshots[zwid] = cached
+        else:
+            misses.append(zwid)
+
+    error = ""
+    if misses:
+        fetched, error = roster.fetch_opponents(misses)
+        for data in fetched:
+            if data.get("zwid"):
+                snapshots[data["zwid"]] = data
+        _warm_clubs(fetched)
 
     now = timezone.now()
     order = _next_order(matchup, Side.OPPONENT)
     created = 0
-    for data in riders:
-        zwid = data.get("zwid")
-        if not zwid or zwid in existing:
-            continue
-        LadderRider.objects.create(
-            matchup=matchup,
-            side=Side.OPPONENT,
-            order=order,
-            zwid=zwid,
-            name=data["name"] or str(zwid),
-            zr_data=data,
-            fetched_at=now,
-        )
-        existing.add(zwid)
-        order += 1
-        created += 1
+    for zwid in candidates:
+        data = snapshots.get(zwid)
+        if data:
+            _add_opponent(matchup, data, order, now)
+            order += 1
+            created += 1
 
-    missing = len(to_fetch) - created
-    notice = f"Added {created} opponent rider(s)." + (f" {missing} zwid(s) returned no data." if missing else "")
+    if error and not created:
+        return HttpResponse(_render_body(request, matchup, can_edit=True, error=error))
+
+    missing = len(candidates) - created
+    notice = f"Added {created} opponent rider(s)."
+    if missing:
+        notice += f" {missing} zwid(s) returned no data."
+    if error:
+        notice += f" ({error})"
     return HttpResponse(_render_body(request, matchup, can_edit=True, notice=notice))
 
 
@@ -385,13 +488,14 @@ def rider_toggle(request: HttpRequest, matchup_id: str, rider_id: int) -> HttpRe
 @team_member_required(raise_exception=True)
 @require_POST
 def matchup_refresh(request: HttpRequest, matchup_id: str) -> HttpResponse:
-    """Re-fetch ZR data for all riders, overwriting their snapshots.
+    """Re-snapshot all riders from the cache (no live ZR call).
 
-    Our riders refresh from synced ``ZRRider`` data; opponents are re-fetched
-    live from the Zwift Racing API in one batched call.
+    Our riders re-read from synced ``ZRRider`` data; opponents re-read from the
+    shared cache, which is kept current by ``refresh_cached_clubs`` and on-demand
+    fetches. Riders missing from the cache keep their existing snapshot.
 
     Returns:
-        The refreshed matchup body partial (with a notice or error).
+        The refreshed matchup body partial (with a notice).
 
     """
     matchup = _get_editable(request, matchup_id)
@@ -399,31 +503,16 @@ def matchup_refresh(request: HttpRequest, matchup_id: str) -> HttpResponse:
         return HttpResponse("Permission denied", status=403)
 
     now = timezone.now()
-    riders = list(matchup.riders.all())
-
-    # Our side: refresh from local ZRRider snapshots.
-    for rider in (r for r in riders if r.side == Side.OURS):
-        data = roster.get_our_rider(rider.zwid)
+    updated = 0
+    for rider in matchup.riders.all():
+        data = roster.get_our_rider(rider.zwid) if rider.side == Side.OURS else cache.get_snapshot(rider.zwid)
         if data:
             rider.zr_data = data
             rider.name = data["name"] or rider.name
             rider.fetched_at = now
             rider.save(update_fields=["zr_data", "name", "fetched_at"])
+            updated += 1
 
-    # Opponent side: one batched live fetch.
-    error = ""
-    opp_riders = [r for r in riders if r.side == Side.OPPONENT]
-    if opp_riders:
-        fetched, error = roster.fetch_opponents([r.zwid for r in opp_riders])
-        by_zwid = {d["zwid"]: d for d in fetched}
-        for rider in opp_riders:
-            data = by_zwid.get(rider.zwid)
-            if data:
-                rider.zr_data = data
-                rider.name = data["name"] or rider.name
-                rider.fetched_at = now
-                rider.save(update_fields=["zr_data", "name", "fetched_at"])
-
-    logfire.info("Ladder matchup refreshed", matchup_id=str(matchup.pk), user_id=request.user.id)
-    notice = "" if error else "Rider data refreshed."
-    return HttpResponse(_render_body(request, matchup, can_edit=True, notice=notice, error=error))
+    logfire.info("Ladder matchup refreshed", matchup_id=str(matchup.pk), user_id=request.user.id, updated=updated)
+    notice = f"Re-snapshotted {updated} rider(s) from cache."
+    return HttpResponse(_render_body(request, matchup, can_edit=True, notice=notice))

@@ -29,6 +29,7 @@ from apps.accounts.tasks import (
 from apps.club_strava.tasks import sync_strava_activities
 from apps.data_connection.tasks import sync_all_data_connections
 from apps.events.tasks import remove_expired_ds_roles
+from apps.ladder_planner.tasks import refresh_cached_clubs
 from apps.team.tasks import sync_discord_channels, sync_discord_roles, warn_expiring_verifications
 from apps.user_api.tasks import purge_expired_api_keys
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
@@ -143,6 +144,12 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Remove squad roles from Directeurs Sportifs after their race has finished",
         "scheduled": True,
         "hours_setting": "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS",
+    },
+    "refresh_cached_clubs": {
+        "task": refresh_cached_clubs,
+        "description": "Refresh cached opponent clubs used by recent ladder matchups",
+        "scheduled": True,
+        "hours_setting": "SCHEDULER_REFRESH_CACHED_CLUBS_HOURS",
     },
 }
 

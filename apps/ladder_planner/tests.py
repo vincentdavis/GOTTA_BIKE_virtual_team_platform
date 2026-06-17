@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
 import pytest
+from django.utils import timezone
 
-from apps.ladder_planner.models import CourseProfile, LadderMatchup, LadderRider, Side
-from apps.ladder_planner.services import compute, normalize, roster
+from apps.ladder_planner import tasks as lp_tasks
+from apps.ladder_planner import views as lp_views
+from apps.ladder_planner.models import CachedClub, CachedRider, CourseProfile, LadderMatchup, LadderRider, Side
+from apps.ladder_planner.services import cache, compute, normalize, roster
 
 # ----- fixtures / helpers ------------------------------------------------------------------------
 
@@ -345,3 +350,139 @@ def test_detail_page_renders(auth_client, team_member):
     resp = auth_client.get(f"/ladder/{matchup.pk}/")
     assert resp.status_code == 200
     assert b"Projected Score" in resp.content
+
+
+# ----- cache layer -------------------------------------------------------------------------------
+
+
+def _api_rider(zwid: int, *, club_id: int = 11991, club_name: str = "RIVALS") -> dict:
+    """Build a minimal ZR API rider payload with a club.
+
+    Returns:
+        A ZR API rider dict.
+
+    """
+    return {
+        "riderId": zwid,
+        "name": f"Rider {zwid}",
+        "weight": 70,
+        "club": {"id": club_id, "name": club_name},
+        "power": {"w60": 400, "wkg60": 5.7},
+        "race": {"current": {"rating": 1500, "mixed": {"category": "Sapphire"}}},
+    }
+
+
+@pytest.mark.django_db
+def test_cache_upsert_get_snapshot_and_club_tracking():
+    cache.upsert_riders([normalize.from_api(_api_rider(101))], source=CachedRider.Source.CLUB)
+    assert CachedRider.objects.filter(zwid=101).exists()
+    snap = cache.get_snapshot(101)
+    assert snap and snap["zwid"] == 101 and snap["w"]["60"] == 400
+    # The rider's club is now tracked for the background refresh.
+    assert CachedClub.objects.filter(club_id=11991, auto_refresh=True).exists()
+    assert cache.get_snapshot(999) is None
+
+
+@pytest.mark.django_db
+def test_cache_search_reports_age():
+    cache.upsert_riders([normalize.from_api(_api_rider(202, club_name="ACME"))], source=CachedRider.Source.RIDER)
+    CachedRider.objects.filter(zwid=202).update(fetched_at=timezone.now() - timedelta(days=3))
+    results = cache.search("Rider 202")
+    assert len(results) == 1
+    assert results[0]["zwid"] == 202
+    assert results[0]["club_name"] == "ACME"
+    assert results[0]["age_days"] == 3
+
+
+@pytest.mark.django_db
+def test_fetch_opponents_writes_through_cache(monkeypatch):
+    monkeypatch.setattr(roster.zr_client, "get_riders", lambda zwids: (200, [_api_rider(303)]))
+    riders, error = roster.fetch_opponents([303])
+    assert error is None and riders
+    assert CachedRider.objects.filter(zwid=303).exists()
+
+
+@pytest.mark.django_db
+def test_warm_club_caches_full_roster(monkeypatch):
+    payload = {"clubId": 11991, "name": "RIVALS", "riders": [_api_rider(401), _api_rider(402)]}
+    monkeypatch.setattr(lp_tasks, "get_club", lambda club_id, from_id: (200, payload))
+
+    result = lp_tasks.warm_club.func(11991)
+    assert result["status"] == "complete"
+    assert result["cached"] == 2
+    assert CachedRider.objects.filter(zwid__in=[401, 402], source=CachedRider.Source.CLUB).count() == 2
+    club = CachedClub.objects.get(club_id=11991)
+    assert club.rider_count == 2
+    assert club.last_refreshed_at is not None
+
+
+@pytest.mark.django_db
+def test_warm_club_rate_limited_reenqueues(monkeypatch):
+    monkeypatch.setattr(lp_tasks, "get_club", lambda club_id, from_id: (429, {"retryAfter": "597"}))
+    # Task objects are frozen; patch the module symbol the task body looks up.
+    real = lp_tasks.warm_club.func
+    captured = []
+    fake = SimpleNamespace(func=real, using=lambda **kw: SimpleNamespace(enqueue=lambda *a: captured.append(a)))
+    monkeypatch.setattr(lp_tasks, "warm_club", fake)
+
+    result = real(11991)
+    assert result["status"] == "rate_limited"
+    assert captured  # re-enqueued for a later retry
+    assert not CachedRider.objects.exists()
+
+
+@pytest.mark.django_db
+def test_refresh_cached_clubs_enqueues_due_active_clubs(team_member, monkeypatch):
+    matchup = _make_matchup(team_member)
+    _add(matchup, Side.OPPONENT, {**normalize.from_api(_api_rider(501, club_id=777)), "name": "Opp"})
+    CachedClub.objects.create(club_id=777, auto_refresh=True, last_refreshed_at=None)
+    # A stale club that is NOT referenced by any matchup must be skipped.
+    CachedClub.objects.create(club_id=888, auto_refresh=True, last_refreshed_at=None)
+
+    enqueued = []
+    monkeypatch.setattr(lp_tasks, "warm_club", SimpleNamespace(enqueue=lambda cid: enqueued.append(cid)))
+
+    result = lp_tasks.refresh_cached_clubs.func()
+    assert result["enqueued"] == 1
+    assert enqueued == [777]
+
+
+@pytest.mark.django_db
+def test_refresh_cached_clubs_skips_recently_refreshed(team_member, monkeypatch):
+    matchup = _make_matchup(team_member)
+    _add(matchup, Side.OPPONENT, {**normalize.from_api(_api_rider(601, club_id=777)), "name": "Opp"})
+    CachedClub.objects.create(club_id=777, auto_refresh=True, last_refreshed_at=timezone.now())
+
+    enqueued = []
+    monkeypatch.setattr(lp_tasks, "warm_club", SimpleNamespace(enqueue=lambda cid: enqueued.append(cid)))
+
+    result = lp_tasks.refresh_cached_clubs.func()
+    assert result["enqueued"] == 0
+    assert enqueued == []
+
+
+@pytest.mark.django_db
+def test_opponent_add_uses_cache_without_live_call(auth_client, team_member, monkeypatch):
+    matchup = _make_matchup(team_member)
+    cache.upsert_riders([normalize.from_api(_api_rider(701))], source=CachedRider.Source.CLUB)
+
+    def _no_live(_zwids):
+        raise AssertionError("live fetch should not happen on a cache hit")
+
+    monkeypatch.setattr(roster, "fetch_opponents", _no_live)
+    resp = auth_client.post(f"/ladder/{matchup.pk}/opponents/add/701/", HTTP_HX_REQUEST="true")
+    assert resp.status_code == 200
+    assert matchup.riders.filter(side=Side.OPPONENT, zwid=701).exists()
+
+
+@pytest.mark.django_db
+def test_opponent_add_cache_miss_fetches_live(auth_client, team_member, monkeypatch):
+    matchup = _make_matchup(team_member)
+    monkeypatch.setattr(roster, "fetch_opponents", lambda zwids: ([normalize.from_api(_api_rider(801))], None))
+    warmed = []
+    monkeypatch.setattr(lp_views, "warm_club", SimpleNamespace(enqueue=lambda cid: warmed.append(cid)))
+
+    resp = auth_client.post(f"/ladder/{matchup.pk}/opponents/add/801/", HTTP_HX_REQUEST="true")
+    assert resp.status_code == 200
+    assert matchup.riders.filter(side=Side.OPPONENT, zwid=801).exists()
+    assert warmed == [11991]  # cache-miss fetch warms the rider's club in the background

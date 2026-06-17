@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from apps.ladder_planner.models import LadderMatchup, LadderRider
+from apps.ladder_planner.models import CachedClub, CachedRider, LadderMatchup, LadderRider
 
 
 class LadderRiderInline(admin.TabularInline):
@@ -22,3 +22,22 @@ class LadderMatchupAdmin(admin.ModelAdmin):
     list_filter = ("course_profile",)
     search_fields = ("name", "our_team_name", "opponent_team_name", "course_name")
     inlines = (LadderRiderInline,)
+
+
+@admin.register(CachedRider)
+class CachedRiderAdmin(admin.ModelAdmin):
+    """Admin for cached opponent riders."""
+
+    list_display = ("name", "zwid", "club_name", "club_id", "source", "fetched_at")
+    list_filter = ("source",)
+    search_fields = ("name", "zwid", "club_name")
+    readonly_fields = ("fetched_at",)
+
+
+@admin.register(CachedClub)
+class CachedClubAdmin(admin.ModelAdmin):
+    """Admin for tracked clubs driving the background refresh."""
+
+    list_display = ("name", "club_id", "rider_count", "auto_refresh", "last_refreshed_at", "last_error")
+    list_filter = ("auto_refresh",)
+    search_fields = ("name", "club_id")

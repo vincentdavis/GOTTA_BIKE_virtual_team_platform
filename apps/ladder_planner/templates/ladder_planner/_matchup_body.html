@@ -46,7 +46,9 @@
       <ul class="divide-y divide-base-200">
         {% for rider in matchup.riders.all %}{% if rider.side == Side.OPPONENT %}
           <li class="flex items-center justify-between gap-2 py-1 text-sm {% if not rider.is_racing %}opacity-40{% endif %}">
-            <span class="truncate">{{ rider.name }}</span>
+            <span class="truncate">{{ rider.name }}
+              {% if rider.fetched_at %}<span class="text-xs text-base-content/40">· {{ rider.fetched_at|timesince }} old</span>{% endif %}
+            </span>
             {% if can_edit %}
             <span class="flex gap-1 shrink-0">
               <button class="btn btn-ghost btn-xs" title="Toggle racing"

@@ -1,0 +1,31 @@
+{# Opponent search results: cached matches (with data age) + a live fetch-by-zwid fallback. #}
+<ul class="menu bg-base-100 rounded-box shadow mt-1 w-full absolute z-10 max-h-72 overflow-y-auto">
+  {% for r in results %}
+  <li>
+    <button type="button" class="justify-between"
+            hx-post="{% url 'ladder_planner:opponent_add' matchup.pk r.zwid %}"
+            hx-target="#ladder-body" hx-swap="innerHTML"
+            hx-on::after-request="document.getElementById('ladder-opp-search').innerHTML=''">
+      <span>{{ r.name }}{% if r.category %} <span class="badge badge-xs">{{ r.category }}</span>{% endif %}
+        {% if r.club_name %}<span class="text-xs text-base-content/50">· {{ r.club_name }}</span>{% endif %}</span>
+      <span class="text-xs text-base-content/50">
+        {% if r.rating %}{{ r.rating|floatformat:0 }} vELO · {% endif %}
+        {% if r.age_days == 0 %}today{% else %}{{ r.age_days }}d old{% endif %}
+      </span>
+    </button>
+  </li>
+  {% empty %}
+  {% if query|length >= 2 %}<li class="menu-title text-xs">No cached match</li>{% endif %}
+  {% endfor %}
+
+  {% if fetch_zwid %}
+  <li>
+    <button type="button" class="text-primary"
+            hx-post="{% url 'ladder_planner:opponent_add' matchup.pk fetch_zwid %}"
+            hx-target="#ladder-body" hx-swap="innerHTML"
+            hx-on::after-request="document.getElementById('ladder-opp-search').innerHTML=''">
+      Fetch Zwift ID {{ fetch_zwid }} from Zwift Racing →
+    </button>
+  </li>
+  {% endif %}
+</ul>

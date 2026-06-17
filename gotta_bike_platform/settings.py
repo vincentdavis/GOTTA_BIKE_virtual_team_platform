@@ -826,6 +826,11 @@ CONSTANCE_CONFIG = {
         "How often to remove squad roles from Directeurs Sportifs after their race has finished (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_REFRESH_CACHED_CLUBS_HOURS": (
+        24,
+        "How often to check for stale cached opponent clubs and refresh those used by recent ladder matchups (hours). Requires scheduler restart to take effect.",
+        int,
+    ),
     # TTT Planner physics constants (tunable; calibrate against Zwift Insider / zwiftgopher)
     "TTT_AIR_DENSITY": (1.225, "Air density rho (kg/m^3) for the TTT power model", float),
     "TTT_CRR": (0.004, "Coefficient of rolling resistance for the TTT power model", float),
@@ -991,6 +996,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
         "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS",
         "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS",
+        "SCHEDULER_REFRESH_CACHED_CLUBS_HOURS",
     ),
     "TTT Planner": (
         "TTT_AIR_DENSITY",

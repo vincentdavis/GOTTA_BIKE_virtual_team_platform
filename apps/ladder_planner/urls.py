@@ -15,7 +15,9 @@ urlpatterns = [
     path("<uuid:matchup_id>/refresh/", views.matchup_refresh, name="refresh"),
     path("<uuid:matchup_id>/ours/search/", views.our_rider_search, name="our_rider_search"),
     path("<uuid:matchup_id>/ours/add/<int:zwid>/", views.our_rider_add, name="our_rider_add"),
+    path("<uuid:matchup_id>/opponents/search/", views.opponent_search, name="opponent_search"),
     path("<uuid:matchup_id>/opponents/add/", views.opponents_add, name="opponents_add"),
+    path("<uuid:matchup_id>/opponents/add/<int:zwid>/", views.opponent_add, name="opponent_add"),
     path("<uuid:matchup_id>/riders/<int:rider_id>/remove/", views.rider_remove, name="rider_remove"),
     path("<uuid:matchup_id>/riders/<int:rider_id>/toggle/", views.rider_toggle, name="rider_toggle"),
 ]
