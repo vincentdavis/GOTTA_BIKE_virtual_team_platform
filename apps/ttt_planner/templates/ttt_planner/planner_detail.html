@@ -40,12 +40,25 @@
         </label>
         <label class="form-control">
           <span class="label-text mb-1">Route</span>
-          <select name="route" class="select select-bordered select-sm">
+          <select name="route" class="select select-bordered select-sm" onchange="tttApplyRoute(this)">
             <option value="">— No route —</option>
-            {% for r in routes %}
-              <option value="{{ r.pk }}" {% if plan.route_id == r.pk %}selected{% endif %}>
-                {{ r.name }} ({{ r.distance_km }} km / {{ r.elevation_m }} m)
-              </option>
+            {% for r in route_options %}
+              <option value="{{ r.pk }}" data-name="{{ r.name }}" data-terrain="{{ r.terrain }}"
+                      {% if plan.route_id == r.pk %}selected{% endif %}>{{ r.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Course name <span class="text-base-content/40">(optional)</span></span>
+          <input type="text" id="ttt-course-name" name="course_name" value="{{ plan.course_name }}"
+                 class="input input-bordered input-sm" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Course type</span>
+          <select id="ttt-course-type" name="course_type" class="select select-bordered select-sm">
+            <option value="">— Unspecified —</option>
+            {% for value, label in course_types %}
+              <option value="{{ value }}" {% if plan.course_type == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </label>
@@ -80,7 +93,8 @@
         <h2 class="card-title text-2xl">{{ plan.name|default:"TTT Plan" }}</h2>
         <p class="text-sm text-base-content/70">
           {% if plan.team_name %}{{ plan.team_name }} · {% endif %}
-          {% if plan.route %}{{ plan.route.name }} · {% endif %}
+          {% if plan.course_name %}{{ plan.course_name }}{% elif plan.route %}{{ plan.route.name }}{% endif %}
+          {% if plan.course_type %} ({{ plan.get_course_type_display }}){% endif %} ·
           Target {{ plan.target_speed_kph }} kph
         </p>
       {% endif %}
@@ -144,4 +158,20 @@
   {% endif %}
 
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Picking a route prefills the course name + type (both stay editable). Runs at the
+  // select's target phase, before HTMX's form-change handler bubbles, so the POST carries
+  // the updated values.
+  window.tttApplyRoute = function (sel) {
+    var opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) return;
+    var nameEl = document.getElementById("ttt-course-name");
+    var typeEl = document.getElementById("ttt-course-type");
+    if (nameEl && opt.dataset.name) nameEl.value = opt.dataset.name;
+    if (typeEl && opt.dataset.terrain) typeEl.value = opt.dataset.terrain;
+  };
+</script>
 {% endblock %}

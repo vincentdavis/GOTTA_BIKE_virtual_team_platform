@@ -8,6 +8,8 @@ from typing import ClassVar
 from django.conf import settings
 from django.db import models
 
+from apps.ttt_planner import terrain
+
 
 class Route(models.Model):
     """A Zwift route a TTT can be planned on.
@@ -39,6 +41,47 @@ class Route(models.Model):
         return f"{self.name} ({self.distance_km} km)"
 
 
+class RouteGpx(models.Model):
+    """An uploaded GPX track for a route.
+
+    A route can have several (different spawn points / lead-ins), so this is a FK.
+    Distance / elevation / terrain are parsed from the file on upload; the start
+    point and lead-in are captured as free-text notes.
+    """
+
+    route = models.ForeignKey(Route, on_delete=models.CASCADE, related_name="gpx_files")
+    label = models.CharField(max_length=200, blank=True, help_text="Label for this track (e.g. spawn point / lead-in)")
+    file = models.FileField(upload_to="route_gpx/", help_text="The uploaded .gpx file")
+    notes = models.TextField(blank=True, help_text="Free-text notes: start point and lead-in")
+    distance_km = models.DecimalField(
+        max_digits=6, decimal_places=2, null=True, blank=True, help_text="Distance parsed from the GPX (km)"
+    )
+    elevation_m = models.PositiveIntegerField(null=True, blank=True, help_text="Elevation gain parsed from the GPX (m)")
+    terrain = models.CharField(max_length=20, blank=True, help_text="Terrain type derived from the parsed GPX")
+    point_count = models.PositiveIntegerField(default=0, help_text="Number of track points parsed")
+    parse_error = models.CharField(max_length=300, blank=True, help_text="Error from parsing the GPX, if any")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        """Meta options for RouteGpx."""
+
+        verbose_name = "Route GPX"
+        verbose_name_plural = "Route GPX files"
+        ordering: ClassVar[list[str]] = ["route", "label", "id"]
+
+    def __str__(self) -> str:
+        """Return a label for the GPX file.
+
+        Returns:
+            Human-readable label.
+
+        """
+        return f"{self.route.name} — {self.label or self.file.name}"
+
+
 class TttPlan(models.Model):
     """A saved TTT plan. The UUID primary key doubles as the share token."""
 
@@ -58,6 +101,13 @@ class TttPlan(models.Model):
     )
     route = models.ForeignKey(
         Route, on_delete=models.SET_NULL, null=True, blank=True, related_name="plans", help_text="Selected route"
+    )
+    course_name = models.CharField(max_length=200, blank=True, help_text="Course / route name (free text)")
+    course_type = models.CharField(
+        max_length=20,
+        blank=True,
+        choices=terrain.TERRAIN_CHOICES,
+        help_text="Terrain type (informational; prefilled from the route)",
     )
     target_speed_kph = models.DecimalField(
         max_digits=5, decimal_places=1, default=40.0, help_text="Target flat speed in km/h"

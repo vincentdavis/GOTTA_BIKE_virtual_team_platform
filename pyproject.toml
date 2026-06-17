@@ -24,6 +24,7 @@ dependencies = [
     "django-tasks-db>=0.12.0",
     "google-api-python-client>=2.194.0",
     "google-auth>=2.49.1",
+    "gpxpy>=1.6.2",
     "granian>=2.7.2",
     "gspread>=6.2.1",
     "honcho>=2.0.0",

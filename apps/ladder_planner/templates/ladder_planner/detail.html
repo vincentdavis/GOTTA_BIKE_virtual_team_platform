@@ -38,12 +38,23 @@
           <input type="text" name="opponent_team_name" value="{{ matchup.opponent_team_name }}" class="input input-bordered input-sm" />
         </label>
         <label class="form-control">
+          <span class="label-text mb-1">Route <span class="text-base-content/40">(prefills name + profile)</span></span>
+          <select name="route" class="select select-bordered select-sm" onchange="ladderApplyRoute(this)">
+            <option value="">— No route —</option>
+            {% for r in route_options %}
+              <option value="{{ r.pk }}" data-name="{{ r.name }}" data-profile="{{ r.profile }}"
+                      {% if matchup.route_id == r.pk %}selected{% endif %}>{{ r.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="form-control">
           <span class="label-text mb-1">Course name <span class="text-base-content/40">(optional)</span></span>
-          <input type="text" name="course_name" value="{{ matchup.course_name }}" class="input input-bordered input-sm" />
+          <input type="text" id="ladder-course-name" name="course_name" value="{{ matchup.course_name }}"
+                 class="input input-bordered input-sm" />
         </label>
         <label class="form-control">
           <span class="label-text mb-1">Course profile</span>
-          <select name="course_profile" class="select select-bordered select-sm">
+          <select id="ladder-course-profile" name="course_profile" class="select select-bordered select-sm">
             {% for value, label in course_profiles %}
               <option value="{{ value }}" {% if matchup.course_profile == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
@@ -122,6 +133,19 @@
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script>
+  // Picking a route prefills the course name + suggested profile (both stay editable).
+  // Runs before HTMX's form-change handler (target phase before bubble), so the POST
+  // carries the updated values.
+  window.ladderApplyRoute = function (sel) {
+    var opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) return;
+    var nameEl = document.getElementById("ladder-course-name");
+    var profEl = document.getElementById("ladder-course-profile");
+    if (nameEl && opt.dataset.name) nameEl.value = opt.dataset.name;
+    if (profEl && opt.dataset.profile) profEl.value = opt.dataset.profile;
+  };
+</script>
 <script>
   // Chart instances keyed by canvas id, so we can destroy/redraw after HTMX swaps.
   window._ladderCharts = window._ladderCharts || {};

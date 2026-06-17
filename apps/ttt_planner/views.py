@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 
 import logfire
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.http import HttpRequest, HttpResponse
@@ -19,7 +20,8 @@ from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.decorators import team_member_required
-from apps.ttt_planner.models import PlanRider, Route, TttPlan
+from apps.ttt_planner import terrain
+from apps.ttt_planner.models import PlanRider, Route, RouteGpx, TttPlan
 from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
     compute_auto_balance,
@@ -27,6 +29,7 @@ from apps.ttt_planner.services.compute import (
     quick_finish_time,
     sustainable_speed,
 )
+from apps.ttt_planner.services.gpx import parse_gpx
 from apps.ttt_planner.tasks import run_zwiftgopher_optimize
 
 
@@ -81,6 +84,118 @@ def _plan_body_with_speed_oob(request: HttpRequest, plan: TttPlan) -> str:
     body = _render_plan_body(request, plan, can_edit=True)
     oob = render_to_string("ttt_planner/_speed_input.html", {"plan": plan, "oob": True}, request=request)
     return body + oob
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_GET
+def route_list(request: HttpRequest) -> HttpResponse:
+    """List all known routes with their derived terrain type.
+
+    Returns:
+        The routes reference page.
+
+    """
+    rows = [
+        {
+            "pk": route.pk,
+            "name": route.name,
+            "world": route.world,
+            "distance_km": route.distance_km,
+            "elevation_m": route.elevation_m,
+            "terrain": terrain.terrain_label(terrain.derive_terrain(float(route.distance_km), route.elevation_m)),
+            "is_active": route.is_active,
+            "gpx_count": route.gpx_count,
+        }
+        for route in Route.objects.annotate(gpx_count=Count("gpx_files")).order_by("world", "name")
+    ]
+    return render(request, "ttt_planner/route_list.html", {"rows": rows})
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_GET
+def route_detail(request: HttpRequest, route_id: int) -> HttpResponse:
+    """Show a route with its uploaded GPX files and an upload form.
+
+    Returns:
+        The route detail page.
+
+    """
+    route = get_object_or_404(Route, pk=route_id)
+    gpx_files = route.gpx_files.select_related("uploaded_by")
+    estimated = terrain.terrain_label(terrain.derive_terrain(float(route.distance_km), route.elevation_m))
+    return render(
+        request,
+        "ttt_planner/route_detail.html",
+        {"route": route, "gpx_files": gpx_files, "estimated_terrain": estimated},
+    )
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_POST
+def route_gpx_upload(request: HttpRequest, route_id: int) -> HttpResponse:
+    """Upload a GPX file for a route, parsing it for distance/elevation/terrain.
+
+    Returns:
+        Redirect back to the route detail page.
+
+    """
+    route = get_object_or_404(Route, pk=route_id)
+    upload = request.FILES.get("file")
+    if not upload:
+        messages.error(request, "Choose a .gpx file to upload.")
+        return redirect("routes:detail", route_id=route.pk)
+    if not upload.name.lower().endswith(".gpx"):
+        messages.error(request, "That doesn't look like a .gpx file.")
+        return redirect("routes:detail", route_id=route.pk)
+
+    content = upload.read()
+    upload.seek(0)  # rewind so the FileField saves the full content
+    gpx = RouteGpx(
+        route=route,
+        label=request.POST.get("label", "").strip(),
+        notes=request.POST.get("notes", "").strip(),
+        uploaded_by=request.user,
+        file=upload,
+    )
+    try:
+        stats = parse_gpx(content)
+        gpx.distance_km = stats.distance_km
+        gpx.elevation_m = stats.elevation_m
+        gpx.terrain = stats.terrain
+        gpx.point_count = stats.point_count
+    except ValueError as exc:
+        gpx.parse_error = str(exc)[:300]
+        logfire.warning("GPX parse failed", route_id=route.pk, error=str(exc))
+    gpx.save()
+
+    if gpx.parse_error:
+        messages.warning(request, "File saved, but it couldn't be parsed as GPX.")
+    else:
+        messages.success(request, f"Uploaded — {gpx.distance_km} km / {gpx.elevation_m} m ({gpx.terrain}).")
+    logfire.info("Route GPX uploaded", route_id=route.pk, gpx_id=gpx.pk, user_id=request.user.id)
+    return redirect("routes:detail", route_id=route.pk)
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_POST
+def route_gpx_delete(request: HttpRequest, route_id: int, gpx_id: int) -> HttpResponse:
+    """Delete a GPX file (uploader or an app admin/superuser).
+
+    Returns:
+        Redirect back to the route detail page.
+
+    """
+    gpx = get_object_or_404(RouteGpx, pk=gpx_id, route_id=route_id)
+    if request.user.is_superuser or request.user.is_app_admin or gpx.uploaded_by_id == request.user.id:
+        gpx.delete()
+        messages.success(request, "GPX file deleted.")
+    else:
+        messages.error(request, "You can only delete GPX files you uploaded.")
+    return redirect("routes:detail", route_id=route_id)
 
 
 @login_required
@@ -142,7 +257,7 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
     plan = get_object_or_404(TttPlan.objects.select_related("route"), pk=plan_id)
     can_edit = _can_edit(plan, request.user)
     result = compute_plan(plan)
-    routes = Route.objects.filter(is_active=True) if can_edit else Route.objects.none()
+    route_options = terrain.route_options() if can_edit else []
     return render(
         request,
         "ttt_planner/planner_detail.html",
@@ -150,7 +265,8 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
             "plan": plan,
             "result": result,
             "can_edit": can_edit,
-            "routes": routes,
+            "route_options": route_options,
+            "course_types": terrain.TERRAIN_CHOICES,
             "event_types": TttPlan.EventType.choices,
         },
     )
@@ -216,6 +332,11 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
     if "route" in request.POST:
         route_id = request.POST.get("route")
         plan.route = Route.objects.filter(pk=route_id).first() if route_id else None
+    if "course_name" in request.POST:
+        plan.course_name = request.POST.get("course_name", "").strip()
+    if "course_type" in request.POST:
+        course_type = request.POST.get("course_type", "")
+        plan.course_type = course_type if course_type in terrain.TERRAIN_VALUES else ""
     if "cda_coef" in request.POST:
         raw = request.POST.get("cda_coef", "").strip()
         if not raw:

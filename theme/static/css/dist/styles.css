@@ -5876,6 +5876,9 @@
   .whitespace-pre {
     white-space: pre;
   }
+  .whitespace-pre-line {
+    white-space: pre-line;
+  }
   @layer daisyui.l1.l2 {
     .alert-error {
       color: var(--color-error-content);

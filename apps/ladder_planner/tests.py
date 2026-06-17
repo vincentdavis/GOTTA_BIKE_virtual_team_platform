@@ -13,7 +13,7 @@ from django.utils import timezone
 from apps.ladder_planner import tasks as lp_tasks
 from apps.ladder_planner import views as lp_views
 from apps.ladder_planner.models import CachedClub, CachedRider, CourseProfile, LadderMatchup, LadderRider, Side
-from apps.ladder_planner.services import cache, compute, normalize, roster
+from apps.ladder_planner.services import cache, compute, courses, normalize, roster
 
 # ----- fixtures / helpers ------------------------------------------------------------------------
 
@@ -473,6 +473,52 @@ def test_opponent_add_uses_cache_without_live_call(auth_client, team_member, mon
     resp = auth_client.post(f"/ladder/{matchup.pk}/opponents/add/701/", HTTP_HX_REQUEST="true")
     assert resp.status_code == 200
     assert matchup.riders.filter(side=Side.OPPONENT, zwid=701).exists()
+
+
+# ----- course / route picker ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("distance_km", "elevation_m", "expected"),
+    [
+        (28.21, 132, CourseProfile.FLAT),  # ~4.7 m/km
+        (20.0, 200, CourseProfile.ROLLING),  # 10 m/km
+        (10.0, 200, CourseProfile.HILLY),  # 20 m/km
+        (8.05, 236, CourseProfile.MOUNTAINOUS),  # ~29 m/km
+        (0, 100, CourseProfile.ROLLING),  # unknown distance -> default
+    ],
+)
+def test_derive_profile_from_climbing_density(distance_km, elevation_m, expected):
+    assert courses.derive_profile(distance_km, elevation_m) == expected
+
+
+@pytest.mark.django_db
+def test_route_options_includes_derived_profile():
+    from apps.ttt_planner.models import Route
+
+    Route.objects.create(name="Flatland", distance_km=30, elevation_m=120)
+    Route.objects.create(name="Climby", distance_km=10, elevation_m=300)
+    by_name = {o["name"]: o for o in courses.route_options()}
+    assert by_name["Flatland"]["profile"] == CourseProfile.FLAT
+    assert by_name["Climby"]["profile"] == CourseProfile.MOUNTAINOUS
+
+
+@pytest.mark.django_db
+def test_matchup_update_sets_route(auth_client, team_member):
+    from apps.ttt_planner.models import Route
+
+    matchup = _make_matchup(team_member)
+    route = Route.objects.create(name="Bon Voyage", distance_km=28.21, elevation_m=132)
+    resp = auth_client.post(
+        f"/ladder/{matchup.pk}/update/",
+        {"route": route.pk, "course_name": "Bon Voyage", "course_profile": "flat"},
+        HTTP_HX_REQUEST="true",
+    )
+    assert resp.status_code == 200
+    matchup.refresh_from_db()
+    assert matchup.route_id == route.pk
+    assert matchup.course_name == "Bon Voyage"
+    assert matchup.course_profile == "flat"
 
 
 @pytest.mark.django_db

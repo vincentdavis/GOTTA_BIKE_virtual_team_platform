@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block title %}{{ route.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+  <a href="{% url 'routes:list' %}" class="btn btn-ghost btn-sm">&larr; All routes</a>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for m in messages %}
+    <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} py-2">{{ m }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl">{{ route.name }}</h2>
+      <p class="text-sm text-base-content/70">
+        {% if route.world %}{{ route.world }} · {% endif %}
+        {{ route.distance_km }} km · {{ route.elevation_m }} m ·
+        <span class="badge badge-outline badge-sm">{{ estimated_terrain }}</span>
+        <span class="text-base-content/40">(estimated)</span>
+      </p>
+    </div>
+  </div>
+
+  {# ---- GPX files ---- #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="font-semibold mb-2">GPX tracks</h3>
+      {% if gpx_files %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr><th>Label</th><th class="text-right">Distance</th><th class="text-right">Elev</th><th>Type</th><th>Notes</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for g in gpx_files %}
+            <tr>
+              <td class="font-medium">
+                <a href="{{ g.file.url }}" class="link link-primary">{{ g.label|default:"GPX" }}</a>
+                {% if g.parse_error %}<span class="badge badge-error badge-xs" title="{{ g.parse_error }}">parse error</span>{% endif %}
+                <div class="text-xs text-base-content/40">{{ g.uploaded_by.get_full_name|default:g.uploaded_by.username|default:"—" }} · {{ g.uploaded_at|date:"M j, Y" }}</div>
+              </td>
+              <td class="text-right">{% if g.distance_km %}{{ g.distance_km }} km{% else %}—{% endif %}</td>
+              <td class="text-right">{% if g.elevation_m is not None %}{{ g.elevation_m }} m{% else %}—{% endif %}</td>
+              <td>{% if g.terrain %}<span class="badge badge-outline badge-sm">{{ g.terrain }}</span>{% else %}—{% endif %}</td>
+              <td class="text-sm whitespace-pre-line max-w-xs">{{ g.notes|default:"—" }}</td>
+              <td class="text-right">
+                <form method="post" action="{% url 'routes:gpx_delete' route.pk g.pk %}"
+                      onsubmit="return confirm('Delete this GPX file?');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-base-content/60">No GPX files uploaded yet.</p>
+      {% endif %}
+
+      {# ---- Upload form ---- #}
+      <form method="post" action="{% url 'routes:gpx_upload' route.pk %}" enctype="multipart/form-data" class="mt-4 space-y-3">
+        {% csrf_token %}
+        <h4 class="font-semibold text-sm">Upload a GPX file</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label class="form-control">
+            <span class="label-text mb-1">GPX file</span>
+            <input type="file" name="file" accept=".gpx" required class="file-input file-input-bordered file-input-sm w-full" />
+          </label>
+          <label class="form-control">
+            <span class="label-text mb-1">Label <span class="text-base-content/40">(e.g. spawn / lead-in)</span></span>
+            <input type="text" name="label" class="input input-bordered input-sm w-full" />
+          </label>
+        </div>
+        <label class="form-control">
+          <span class="label-text mb-1">Notes — start point &amp; lead-in</span>
+          <textarea name="notes" rows="2" class="textarea textarea-bordered textarea-sm w-full"
+                    placeholder="e.g. Start at the Watopia banner; ~1.2 km lead-in from the pens."></textarea>
+        </label>
+        <button type="submit" class="btn btn-primary btn-sm">Upload &amp; parse</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

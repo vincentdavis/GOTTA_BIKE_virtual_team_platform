@@ -38,6 +38,14 @@ class LadderMatchup(models.Model):
     name = models.CharField(max_length=200, blank=True, help_text="Matchup name")
     our_team_name = models.CharField(max_length=200, blank=True, help_text="Our team name shown on the matchup")
     opponent_team_name = models.CharField(max_length=200, blank=True, help_text="Opponent team name")
+    route = models.ForeignKey(
+        "ttt_planner.Route",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Optional route picked from the shared route library (prefills name + profile)",
+    )
     course_name = models.CharField(max_length=200, blank=True, help_text="Course / route name (free text)")
     course_profile = models.CharField(
         max_length=20,

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Routes{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
+        <div>
+          <h2 class="card-title text-2xl">Routes</h2>
+          <p class="text-sm text-base-content/70">{{ rows|length }} known routes · terrain type is estimated from climbing density (m/km)</p>
+        </div>
+        <input type="text" placeholder="Filter by name or world…"
+               class="input input-bordered input-sm w-64"
+               oninput="filterRoutes(this.value)" />
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="table table-sm table-zebra" id="routes-table">
+          <thead>
+            <tr>
+              <th>Route</th><th>World</th><th class="text-right">Distance</th>
+              <th class="text-right">Elevation</th><th class="text-right">m/km</th><th>Type</th><th class="text-right">GPX</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr class="route-row {% if not r.is_active %}opacity-50{% endif %}"
+                data-search="{{ r.name|lower }} {{ r.world|lower }}">
+              <td class="font-medium">
+                <a href="{% url 'routes:detail' r.pk %}" class="link link-primary">{{ r.name }}</a>
+                {% if not r.is_active %} <span class="badge badge-ghost badge-xs">inactive</span>{% endif %}
+              </td>
+              <td>{{ r.world|default:"—" }}</td>
+              <td class="text-right">{{ r.distance_km }} km</td>
+              <td class="text-right">{{ r.elevation_m }} m</td>
+              <td class="text-right">{% if r.distance_km %}{% widthratio r.elevation_m r.distance_km 1 %}{% else %}—{% endif %}</td>
+              <td><span class="badge badge-outline badge-sm">{{ r.terrain }}</span></td>
+              <td class="text-right">{% if r.gpx_count %}<span class="badge badge-success badge-sm">{{ r.gpx_count }}</span>{% else %}—{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="7" class="text-center text-base-content/60 py-6">No routes found.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function filterRoutes(q) {
+    q = (q || "").trim().toLowerCase();
+    document.querySelectorAll("#routes-table .route-row").forEach(function (row) {
+      row.style.display = !q || row.dataset.search.indexOf(q) !== -1 ? "" : "none";
+    });
+  }
+</script>
+{% endblock %}

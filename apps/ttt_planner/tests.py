@@ -1,9 +1,10 @@
 """Tests for the TTT planner: physics, computation, roster merge, and sharing."""
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
-from apps.ttt_planner.models import PlanRider, Route, TttPlan
+from apps.ttt_planner.models import PlanRider, Route, RouteGpx, TttPlan
 from apps.ttt_planner.services import physics, zwiftgopher
 from apps.ttt_planner.services.compute import compute_auto_balance, compute_plan, sustainable_speed
 from apps.ttt_planner.services.roster import get_rider_data
@@ -839,3 +840,158 @@ def test_pretty_json_filter():
     assert pretty_json(None) == ""
     out = pretty_json({"a": 1})
     assert '"a": 1' in out
+
+
+# ----- route terrain / course selector -----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("distance_km", "elevation_m", "expected"),
+    [
+        (28.21, 132, "flat"),  # ~4.7 m/km
+        (20.0, 200, "rolling"),  # 10 m/km
+        (10.0, 200, "hilly"),  # 20 m/km
+        (8.05, 236, "mountainous"),  # ~29 m/km
+        (0, 100, "rolling"),  # unknown distance -> default
+    ],
+)
+def test_derive_terrain(distance_km, elevation_m, expected):
+    """derive_terrain classifies routes by climbing density."""
+    from apps.ttt_planner import terrain
+
+    assert terrain.derive_terrain(distance_km, elevation_m) == expected
+
+
+@pytest.mark.django_db
+def test_route_options_includes_terrain():
+    """route_options exposes a derived terrain type per active route."""
+    from apps.ttt_planner import terrain
+
+    Route.objects.create(name="Flatland", distance_km=30, elevation_m=120)
+    Route.objects.create(name="Climby", distance_km=10, elevation_m=300)
+    by_name = {o["name"]: o for o in terrain.route_options()}
+    assert by_name["Flatland"]["terrain"] == "flat"
+    assert by_name["Climby"]["terrain"] == "mountainous"
+
+
+@pytest.mark.django_db
+def test_plan_update_sets_course_name_and_type(auth_client, team_member):
+    """The plan update endpoint persists the course name and type."""
+    plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
+    route = Route.objects.create(name="Bon Voyage", distance_km=28.21, elevation_m=132)
+    resp = auth_client.post(
+        reverse("ttt_planner:update", args=[plan.pk]),
+        {"route": route.pk, "course_name": "Bon Voyage", "course_type": "flat"},
+    )
+    assert resp.status_code == 200
+    plan.refresh_from_db()
+    assert plan.route_id == route.pk
+    assert plan.course_name == "Bon Voyage"
+    assert plan.course_type == "flat"
+
+
+@pytest.mark.django_db
+def test_plan_update_rejects_invalid_course_type(auth_client, team_member):
+    """An invalid course type is coerced to empty rather than stored."""
+    plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
+    resp = auth_client.post(reverse("ttt_planner:update", args=[plan.pk]), {"course_type": "bogus"})
+    assert resp.status_code == 200
+    plan.refresh_from_db()
+    assert plan.course_type == ""
+
+
+@pytest.mark.django_db
+def test_route_list_page_renders(auth_client):
+    """The routes reference page lists routes with a derived terrain type."""
+    Route.objects.create(name="Climby Loop", world="Watopia", distance_km=10, elevation_m=300)
+    resp = auth_client.get(reverse("routes:list"))
+    assert resp.status_code == 200
+    assert b"Climby Loop" in resp.content
+    assert b"Mountainous" in resp.content
+
+
+# ----- route GPX uploads -------------------------------------------------------------------------
+
+GPX_SAMPLE = b"""<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="test">
+  <trk><trkseg>
+    <trkpt lat="0.0" lon="0.00"><ele>0</ele></trkpt>
+    <trkpt lat="0.0" lon="0.01"><ele>10</ele></trkpt>
+    <trkpt lat="0.0" lon="0.02"><ele>20</ele></trkpt>
+  </trkseg></trk>
+</gpx>
+"""
+
+
+def test_parse_gpx_computes_metrics():
+    """parse_gpx returns distance, elevation gain, terrain and point count."""
+    from apps.ttt_planner.services.gpx import parse_gpx
+
+    stats = parse_gpx(GPX_SAMPLE)
+    assert stats.point_count == 3
+    assert stats.distance_km > 0
+    assert stats.elevation_m == 20
+    assert stats.terrain in {"flat", "rolling", "hilly", "mountainous"}
+
+
+def test_parse_gpx_rejects_garbage():
+    """parse_gpx raises ValueError on non-GPX content."""
+    from apps.ttt_planner.services.gpx import parse_gpx
+
+    with pytest.raises(ValueError):
+        parse_gpx(b"not a gpx file")
+
+
+@pytest.mark.django_db
+def test_route_detail_renders(auth_client):
+    """The route detail page renders with the upload form."""
+    route = Route.objects.create(name="Test Route", distance_km=20, elevation_m=100)
+    resp = auth_client.get(reverse("routes:detail", args=[route.pk]))
+    assert resp.status_code == 200
+    assert b"Upload a GPX file" in resp.content
+
+
+@pytest.mark.django_db
+def test_gpx_upload_parses_and_stores(auth_client, tmp_path, settings):
+    """Uploading a GPX parses it and stores the metrics on a RouteGpx."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    route = Route.objects.create(name="Upload Route", distance_km=20, elevation_m=100)
+    upload = SimpleUploadedFile("track.gpx", GPX_SAMPLE, content_type="application/gpx+xml")
+
+    resp = auth_client.post(
+        reverse("routes:gpx_upload", args=[route.pk]),
+        {"label": "Main spawn", "notes": "1km lead-in", "file": upload},
+    )
+    assert resp.status_code == 302
+    gpx = route.gpx_files.get()
+    assert gpx.label == "Main spawn"
+    assert gpx.notes == "1km lead-in"
+    assert gpx.distance_km > 0
+    assert gpx.elevation_m == 20
+    assert gpx.point_count == 3
+    assert not gpx.parse_error
+
+
+@pytest.mark.django_db
+def test_gpx_upload_rejects_non_gpx(auth_client, tmp_path, settings):
+    """A non-.gpx upload is rejected without creating a record."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    route = Route.objects.create(name="Reject Route", distance_km=20, elevation_m=100)
+    upload = SimpleUploadedFile("notes.txt", b"hello", content_type="text/plain")
+
+    resp = auth_client.post(reverse("routes:gpx_upload", args=[route.pk]), {"file": upload})
+    assert resp.status_code == 302
+    assert route.gpx_files.count() == 0
+
+
+@pytest.mark.django_db
+def test_gpx_delete_by_uploader(auth_client, team_member, tmp_path, settings):
+    """The uploader can delete their GPX file."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    route = Route.objects.create(name="Del Route", distance_km=20, elevation_m=100)
+    gpx = RouteGpx.objects.create(
+        route=route, label="x", file=SimpleUploadedFile("t.gpx", GPX_SAMPLE), uploaded_by=team_member
+    )
+    resp = auth_client.post(reverse("routes:gpx_delete", args=[route.pk, gpx.pk]))
+    assert resp.status_code == 302
+    assert route.gpx_files.count() == 0

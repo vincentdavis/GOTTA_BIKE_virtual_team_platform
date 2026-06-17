@@ -57,6 +57,7 @@ urlpatterns = [
     path("tickets/", include("apps.tickets.urls")),
     path("ttt/", include("apps.ttt_planner.urls")),
     path("ladder/", include("apps.ladder_planner.urls")),
+    path("routes/", include("apps.ttt_planner.routes_urls")),
     # Site-level configuration
     path("site/config/", config_settings, name="config_settings"),
     # Note: specific routes must come before the generic <str:section_key> pattern

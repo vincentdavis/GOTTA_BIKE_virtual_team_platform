@@ -21,8 +21,9 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.decorators import team_member_required
 from apps.ladder_planner.models import CourseProfile, LadderMatchup, LadderRider, Side
-from apps.ladder_planner.services import cache, compute, roster
+from apps.ladder_planner.services import cache, compute, courses, roster
 from apps.ladder_planner.tasks import warm_club
+from apps.ttt_planner.models import Route
 
 _MAX_OPPONENTS_PER_REQUEST = 50
 
@@ -195,6 +196,7 @@ def matchup_detail(request: HttpRequest, matchup_id: str) -> HttpResponse:
             "summary": compute.matchup_summary(matchup),
             "can_edit": can_edit,
             "course_profiles": CourseProfile.choices,
+            "route_options": courses.route_options() if can_edit else [],
             "Side": Side,
         },
     )
@@ -238,6 +240,9 @@ def matchup_update(request: HttpRequest, matchup_id: str) -> HttpResponse:
         matchup.our_team_name = request.POST.get("our_team_name", "").strip()
     if "opponent_team_name" in request.POST:
         matchup.opponent_team_name = request.POST.get("opponent_team_name", "").strip()
+    if "route" in request.POST:
+        route_id = request.POST.get("route")
+        matchup.route = Route.objects.filter(pk=route_id).first() if route_id else None
     if "course_name" in request.POST:
         matchup.course_name = request.POST.get("course_name", "").strip()
     if "course_profile" in request.POST:
