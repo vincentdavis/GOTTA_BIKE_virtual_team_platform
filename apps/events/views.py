@@ -1385,6 +1385,25 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         if unassigned:
             groups.append({"name": "Unassigned", "rows": unassigned})
 
+    # Squads tab: squad members whose current category/gender now violates their
+    # squad's enforced limits (e.g. a rider upgraded after being assigned).
+    members_by_squad = _enrich_squad_members(event)
+    squad_violations = []
+    for squad in event.squads.order_by("name"):
+        rows = []
+        for member in members_by_squad.get(squad.id, []):
+            checks = (
+                squad.check_zwift_eligibility(member["zp_category"]),
+                squad.check_womens_zwift_eligibility(member["zp_category_w"]),
+                squad.check_zr_eligibility(member["zr_category"]),
+                squad.check_gender_eligibility(member["gender"]),
+            )
+            reasons = [reason for ok, reason in checks if not ok]
+            if reasons:
+                rows.append({"member": member, "reasons": reasons})
+        if rows:
+            squad_violations.append({"name": squad.name, "rows": rows})
+
     logfire.info(
         "Squad v-report viewed",
         event_id=event_pk,
@@ -1393,6 +1412,7 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         rider_count=len(enriched),
         group_by=group_by,
         expiring_days=expiring_days,
+        squad_violation_count=sum(len(s["rows"]) for s in squad_violations),
     )
 
     return render(
@@ -1405,6 +1425,7 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "group_by": group_by,
             "expiring": expiring_raw if expiring_days is not None else "",
             "height_never_expires": config.HEIGHT_VERIFICATION_DAYS == 0,
+            "squad_violations": squad_violations,
         },
     )
 

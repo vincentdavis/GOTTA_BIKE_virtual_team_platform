@@ -8,49 +8,100 @@
     <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary text-sm">&larr; Back to Manage Squads</a>
   </div>
 
-  <div class="flex justify-between items-center mb-4">
-    <h2 class="text-xl font-bold">Eligibility &mdash; {{ event.title }}</h2>
-    <span class="badge badge-ghost">{{ signups|length }} rider{{ signups|length|pluralize }}</span>
-  </div>
+  <h2 class="text-xl font-bold mb-4">Eligibility &mdash; {{ event.title }}</h2>
 
-  <p class="text-sm text-base-content/70 mb-4">
-    Days remaining until each verification record expires for registered riders.
-    Race Ready shows the soonest expiration across the rider's required verifications.
-  </p>
+  <div role="tablist" class="tabs tabs-lifted">
 
-  {# ---- Controls: group + expiring filter (GET) ---- #}
-  <form method="get" class="flex flex-wrap items-end gap-3 mb-4">
-    <label class="form-control">
-      <span class="label-text mb-1">Group by</span>
-      <select name="group" class="select select-bordered select-sm" onchange="this.form.submit()">
-        <option value="" {% if not group_by %}selected{% endif %}>None</option>
-        <option value="squad" {% if group_by == 'squad' %}selected{% endif %}>Squad</option>
-      </select>
-    </label>
-    <label class="form-control">
-      <span class="label-text mb-1">Expiring within (days)</span>
-      <input type="number" name="expiring" min="0" value="{{ expiring }}" placeholder="any"
-             class="input input-bordered input-sm w-28" />
-    </label>
-    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
-    {% if group_by or expiring %}
-    <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-ghost btn-sm">Clear</a>
-    {% endif %}
-  </form>
+    {# ===== Eligibility tab ===== #}
+    <input type="radio" name="elig_tabs" role="tab" class="tab" aria-label="Eligibility" checked />
+    <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
+      <div class="flex justify-between items-center mb-3">
+        <p class="text-sm text-base-content/70">
+          Days remaining until each verification record expires for registered riders.
+          Race Ready shows the soonest expiration across the rider's required verifications.
+        </p>
+        <span class="badge badge-ghost shrink-0">{{ signups|length }} rider{{ signups|length|pluralize }}</span>
+      </div>
 
-  {% if not signups %}
-  <div class="alert">
-    <span>{% if expiring %}No riders match this filter.{% else %}No registered riders for this event.{% endif %}</span>
-  </div>
-  {% elif groups is not None %}
-    {% for group in groups %}
-    <div class="mb-6">
-      <h3 class="font-semibold mb-2">{{ group.name }} <span class="badge badge-ghost badge-sm">{{ group.rows|length }}</span></h3>
-      {% include "events/_eligibility_table.html" with signups=group.rows %}
+      {# ---- Controls: group + expiring filter (GET) ---- #}
+      <form method="get" class="flex flex-wrap items-end gap-3 mb-4">
+        <label class="form-control">
+          <span class="label-text mb-1">Group by</span>
+          <select name="group" class="select select-bordered select-sm" onchange="this.form.submit()">
+            <option value="" {% if not group_by %}selected{% endif %}>None</option>
+            <option value="squad" {% if group_by == 'squad' %}selected{% endif %}>Squad</option>
+          </select>
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Expiring within (days)</span>
+          <input type="number" name="expiring" min="0" value="{{ expiring }}" placeholder="any"
+                 class="input input-bordered input-sm w-28" />
+        </label>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+        {% if group_by or expiring %}
+        <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-ghost btn-sm">Clear</a>
+        {% endif %}
+      </form>
+
+      {% if not signups %}
+      <div class="alert">
+        <span>{% if expiring %}No riders match this filter.{% else %}No registered riders for this event.{% endif %}</span>
+      </div>
+      {% elif groups is not None %}
+        {% for group in groups %}
+        <div class="mb-6">
+          <h3 class="font-semibold mb-2">{{ group.name }} <span class="badge badge-ghost badge-sm">{{ group.rows|length }}</span></h3>
+          {% include "events/_eligibility_table.html" with signups=group.rows %}
+        </div>
+        {% endfor %}
+      {% else %}
+        {% include "events/_eligibility_table.html" %}
+      {% endif %}
     </div>
-    {% endfor %}
-  {% else %}
-    {% include "events/_eligibility_table.html" %}
-  {% endif %}
+
+    {# ===== Squads tab ===== #}
+    <input type="radio" name="elig_tabs" role="tab" class="tab" aria-label="Squads" />
+    <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
+      <p class="text-sm text-base-content/70 mb-4">
+        Squad members whose <strong>current</strong> Zwift category, ZR category, or gender now falls outside
+        their squad's enforced limits &mdash; e.g. a rider who was upgraded after being assigned.
+      </p>
+
+      {% for sv in squad_violations %}
+      <div class="mb-6">
+        <h3 class="font-semibold mb-2">{{ sv.name }} <span class="badge badge-warning badge-sm">{{ sv.rows|length }}</span></h3>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr><th>Rider</th><th>Zwift</th><th>ZR</th><th>Issues</th></tr>
+            </thead>
+            <tbody>
+              {% for row in sv.rows %}
+              {% with m=row.member %}
+              <tr>
+                <td>
+                  {% include "accounts/_user_tooltip.html" with display_name=m.user.get_full_name|default:m.user.discord_username user_id=m.user.pk discord_id=m.user.discord_id discord_avatar_url=m.user.discord_avatar_url zwid=m.zwid zp_category=m.zp_category zp_category_w=m.zp_category_w zr_category=m.zr_category zr_rating=m.zr_rating zr_phenotype=m.zr_phenotype is_race_ready=m.is_race_ready is_extra_verified=m.is_extra_verified in_zwiftpower=m.in_zwiftpower in_zwiftracing=m.in_zwiftracing %}
+                </td>
+                <td class="whitespace-nowrap">{{ m.zp_category|default:"—" }}{% if m.zp_category_w %} / {{ m.zp_category_w }}{% endif %}</td>
+                <td class="whitespace-nowrap">{{ m.zr_category|default:"—" }}</td>
+                <td class="text-sm text-error">
+                  <ul class="list-disc list-inside">
+                    {% for reason in row.reasons %}<li>{{ reason }}</li>{% endfor %}
+                  </ul>
+                </td>
+              </tr>
+              {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% empty %}
+      <div class="alert alert-success">
+        <span>All squad members are within their squad's enforced limits.</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
 </div>
 {% endblock %}

@@ -1261,3 +1261,32 @@ def test_eligibility_expiring_filter(client, superuser, user_model, verification
     body = client.get(reverse("events:squad_v_report", args=[event.pk]), {"expiring": "7"}).content.decode()
     assert "Soonxyz" in body
     assert "Laterxyz" not in body
+
+
+@pytest.mark.django_db
+def test_eligibility_squads_tab_flags_out_of_bounds(client, superuser, user_model, zp_team_rider_factory):
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+
+    client.force_login(superuser)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    # Squad caps Zwift category at B (strongest allowed).
+    squad = Squad.objects.create(
+        event=event, name="B Squad", max_zwift_category="B", enforce_max_zwift_category=True
+    )
+
+    over = user_model.objects.create(username="over", first_name="Overxyz", zwid=90001)
+    zp_team_rider_factory(zwid=90001, div=10)  # Cat A -> above the B cap
+    ok_rider = user_model.objects.create(username="okr", first_name="Okayxyz", zwid=90002)
+    zp_team_rider_factory(zwid=90002, div=20)  # Cat B -> within
+    SquadMember.objects.create(squad=squad, user=over, status=SquadMember.Status.MEMBER)
+    SquadMember.objects.create(squad=squad, user=ok_rider, status=SquadMember.Status.MEMBER)
+
+    body = client.get(reverse("events:squad_v_report", args=[event.pk])).content.decode()
+    assert "Overxyz" in body  # flagged: Cat A above the squad's B maximum
+    assert "maximum (B)" in body  # the violation reason is shown (apostrophe is HTML-escaped)
+    # The within-limits rider should not be listed as a violation.
+    # (Both names exist in the ZP data, but only the violator appears in the Squads section.)
+    assert body.count("Okayxyz") == 0
