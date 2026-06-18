@@ -950,6 +950,18 @@ def test_parse_gpx_rejects_garbage():
 
 
 @pytest.mark.django_db
+def test_whatsonzwift_url():
+    """The route builds a whatsonzwift link from world + name (name-based slug)."""
+    bon = Route.objects.create(name="Bon Voyage", world="France", distance_km=28.21, elevation_m=132)
+    assert bon.whatsonzwift_url == "https://whatsonzwift.com/world/france/route/bon-voyage"
+    # Bologna world is slugged "bologna-tt" on whatsonzwift; route slug from the name.
+    bologna = Route.objects.create(name="Bologna Time Trial", world="Bologna", distance_km=8.05, elevation_m=236)
+    assert bologna.whatsonzwift_url == "https://whatsonzwift.com/world/bologna-tt/route/bologna-time-trial"
+    # No world -> no link.
+    assert Route.objects.create(name="Nowhere", world="", distance_km=5, elevation_m=10).whatsonzwift_url == ""
+
+
+@pytest.mark.django_db
 def test_route_detail_renders(auth_client):
     """The route detail page renders with the upload form."""
     route = Route.objects.create(name="Test Route", distance_km=20, elevation_m=100)

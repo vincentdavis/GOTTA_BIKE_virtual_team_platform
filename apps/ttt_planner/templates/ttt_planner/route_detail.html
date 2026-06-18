@@ -16,13 +16,22 @@
 
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <h2 class="card-title text-2xl">{{ route.name }}</h2>
-      <p class="text-sm text-base-content/70">
-        {% if route.world %}{{ route.world }} · {% endif %}
-        {{ route.distance_km }} km · {{ route.elevation_m }} m ·
-        <span class="badge badge-outline badge-sm">{{ estimated_terrain }}</span>
-        <span class="text-base-content/40">(estimated)</span>
-      </p>
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 class="card-title text-2xl">{{ route.name }}</h2>
+          <p class="text-sm text-base-content/70">
+            {% if route.world %}{{ route.world }} · {% endif %}
+            {{ route.distance_km }} km · {{ route.elevation_m }} m ·
+            <span class="badge badge-outline badge-sm">{{ estimated_terrain }}</span>
+            <span class="text-base-content/40">(estimated)</span>
+          </p>
+        </div>
+        {% if route.whatsonzwift_url %}
+        <a href="{{ route.whatsonzwift_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
+          View on whatsonzwift ↗
+        </a>
+        {% endif %}
+      </div>
     </div>
   </div>
 

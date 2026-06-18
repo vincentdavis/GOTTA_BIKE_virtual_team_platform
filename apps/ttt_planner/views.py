@@ -111,6 +111,7 @@ def route_list(request: HttpRequest) -> HttpResponse:
             "terrain_rank": terrain.TERRAIN_RANK.get(terrain_value, 0),
             "is_active": route.is_active,
             "gpx_count": route.gpx_count,
+            "whatsonzwift_url": route.whatsonzwift_url,
         })
     return render(request, "ttt_planner/route_list.html", {"rows": rows})
 

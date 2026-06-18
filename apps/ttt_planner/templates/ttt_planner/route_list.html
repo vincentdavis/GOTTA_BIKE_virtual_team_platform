@@ -35,6 +35,7 @@
                 data-search="{{ r.name|lower }} {{ r.world|lower }}">
               <td class="font-medium" data-sort="{{ r.name|lower }}">
                 <a href="{% url 'routes:detail' r.pk %}" class="link link-primary">{{ r.name }}</a>
+                {% if r.whatsonzwift_url %}<a href="{{ r.whatsonzwift_url }}" target="_blank" rel="noopener" class="text-xs text-base-content/40 ml-1" title="View on whatsonzwift">↗</a>{% endif %}
                 {% if not r.is_active %} <span class="badge badge-ghost badge-xs">inactive</span>{% endif %}
               </td>
               <td data-sort="{{ r.world|lower }}">{{ r.world|default:"—" }}</td>

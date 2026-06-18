@@ -7,8 +7,12 @@ from typing import ClassVar
 
 from django.conf import settings
 from django.db import models
+from django.utils.text import slugify
 
 from apps.ttt_planner import terrain
+
+# whatsonzwift world slugs that don't match slugify(world).
+_WOZ_WORLD_OVERRIDES = {"bologna": "bologna-tt"}
 
 
 class Route(models.Model):
@@ -39,6 +43,26 @@ class Route(models.Model):
 
         """
         return f"{self.name} ({self.distance_km} km)"
+
+    @property
+    def whatsonzwift_url(self) -> str:
+        """Build a best-effort whatsonzwift.com link from the world + name.
+
+        The route slug is derived from the route name (not ``zwift_route_id``,
+        which doesn't always match whatsonzwift). A small override map handles
+        worlds whose slug differs (e.g. Bologna → bologna-tt). Coverage is high
+        but not guaranteed for every route.
+
+        Returns:
+            The whatsonzwift URL, or empty string if world/name is missing.
+
+        """
+        world_slug = slugify(self.world)
+        route_slug = slugify(self.name)
+        if not world_slug or not route_slug:
+            return ""
+        world_slug = _WOZ_WORLD_OVERRIDES.get(world_slug, world_slug)
+        return f"https://whatsonzwift.com/world/{world_slug}/route/{route_slug}"
 
 
 class RouteGpx(models.Model):
