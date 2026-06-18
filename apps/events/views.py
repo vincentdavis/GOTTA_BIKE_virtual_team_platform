@@ -1331,7 +1331,7 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             user_id=request.user.id,
             username=request.user.username,
         )
-        messages.error(request, "You don't have permission to view the verification report.")
+        messages.error(request, "You don't have permission to view Eligibility.")
         return redirect("events:event_detail", pk=event_pk)
 
     signups = event.signups.filter(status=EventSignup.Status.REGISTERED).select_related("user")
