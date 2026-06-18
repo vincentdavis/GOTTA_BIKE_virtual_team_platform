@@ -1015,3 +1015,58 @@ def test_gpx_delete_by_uploader(auth_client, team_member, tmp_path, settings):
     resp = auth_client.post(reverse("routes:gpx_delete", args=[route.pk, gpx.pk]))
     assert resp.status_code == 302
     assert route.gpx_files.count() == 0
+
+
+# --------------------------------------------------------------------------- #
+# Squad picker
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.django_db
+def test_plan_squad_add_adds_members(auth_client, team_member, user_model):
+    """Adding a squad snapshots team data where available, else name-only; skips no-zwid."""
+    from datetime import date, timedelta
+
+    from apps.events.models import Event, Squad, SquadMember
+
+    plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    squad = Squad.objects.create(event=event, name="Alpha")
+
+    synced = user_model.objects.create(username="synced", zwid=7001, first_name="Syn")
+    ZRRider.objects.create(zwid=7001, name="Synced Rider", weight=72, zp_ftp=300)
+    unsynced = user_model.objects.create(username="unsynced", zwid=7002, first_name="Uns")
+    no_zwid = user_model.objects.create(username="nozwid")
+    for u in (synced, unsynced, no_zwid):
+        SquadMember.objects.create(squad=squad, user=u, status=SquadMember.Status.MEMBER)
+
+    resp = auth_client.post(reverse("ttt_planner:plan_squad_add", args=[plan.pk]), {"squad": squad.pk})
+    assert resp.status_code == 200
+    riders = plan.riders.all()
+    assert set(riders.values_list("zwid", flat=True)) == {7001, 7002}  # no_zwid skipped
+    synced_rider = riders.get(zwid=7001)
+    assert float(synced_rider.weight_kg) == pytest.approx(72)
+    assert synced_rider.ftp_w == 300
+    unsynced_rider = riders.get(zwid=7002)
+    assert unsynced_rider.weight_kg is None
+    assert unsynced_rider.name  # name-only fallback present
+
+
+@pytest.mark.django_db
+def test_plan_squad_add_dedupes(auth_client, team_member, user_model):
+    """Adding the same squad twice doesn't duplicate riders."""
+    from datetime import date, timedelta
+
+    from apps.events.models import Event, Squad, SquadMember
+
+    plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    squad = Squad.objects.create(event=event, name="Alpha")
+    u = user_model.objects.create(username="dup", zwid=7100)
+    SquadMember.objects.create(squad=squad, user=u, status=SquadMember.Status.MEMBER)
+
+    auth_client.post(reverse("ttt_planner:plan_squad_add", args=[plan.pk]), {"squad": squad.pk})
+    auth_client.post(reverse("ttt_planner:plan_squad_add", args=[plan.pk]), {"squad": squad.pk})
+    assert plan.riders.filter(zwid=7100).count() == 1

@@ -20,6 +20,8 @@ from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.decorators import team_member_required
+from apps.events import squads as event_squads
+from apps.events.models import Squad
 from apps.ttt_planner import terrain
 from apps.ttt_planner.models import PlanRider, Route, RouteGpx, TttPlan
 from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
@@ -263,6 +265,7 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
     can_edit = _can_edit(plan, request.user)
     result = compute_plan(plan)
     route_options = terrain.route_options() if can_edit else []
+    my_squads, other_squads = event_squads.squads_for_picker(request.user) if can_edit else ([], [])
     return render(
         request,
         "ttt_planner/planner_detail.html",
@@ -273,6 +276,8 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
             "route_options": route_options,
             "course_types": terrain.TERRAIN_CHOICES,
             "event_types": TttPlan.EventType.choices,
+            "my_squads": my_squads,
+            "other_squads": other_squads,
         },
     )
 
@@ -582,6 +587,52 @@ def rider_add(request: HttpRequest, plan_id: str, zwid: int) -> HttpResponse:
                 height_cm=data.height_cm,
                 ftp_w=data.ftp_w,
             )
+    return HttpResponse(_render_plan_body(request, plan, can_edit=True))
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_POST
+def plan_squad_add(request: HttpRequest, plan_id: str) -> HttpResponse:
+    """Add all members of a chosen event squad to the plan, snapshotting team data.
+
+    Members with team data (ZP/ZR) get weight/height/FTP; those without are added
+    name-only. Existing riders are skipped; members without a zwid can't be added.
+
+    Returns:
+        The refreshed plan body partial.
+
+    """
+    plan = _get_editable_plan(request, plan_id)
+    if plan is None:
+        return HttpResponse("Permission denied", status=403)
+
+    squad = Squad.objects.filter(pk=request.POST.get("squad")).first()
+    if squad is None:
+        return HttpResponse(_render_plan_body(request, plan, can_edit=True))
+
+    users = event_squads.squad_member_users(squad)
+    existing = set(plan.riders.exclude(zwid__isnull=True).values_list("zwid", flat=True))
+    zwids = [u.zwid for u in users if u.zwid and u.zwid not in existing]
+    data_by_zwid = roster.get_rider_data(zwids)
+
+    order = _next_order(plan)
+    for user in users:
+        if not user.zwid or user.zwid in existing:
+            continue
+        data = data_by_zwid.get(user.zwid)
+        PlanRider.objects.create(
+            plan=plan,
+            order=order,
+            zwid=user.zwid,
+            name=data.name if data else (user.get_full_name() or user.username),
+            weight_kg=data.weight_kg if data else None,
+            height_cm=data.height_cm if data else None,
+            ftp_w=data.ftp_w if data else None,
+        )
+        existing.add(user.zwid)
+        order += 1
+    logfire.info("TTT squad added", plan_id=str(plan.pk), squad_id=squad.pk, user_id=request.user.id)
     return HttpResponse(_render_plan_body(request, plan, can_edit=True))
 
 
