@@ -10,10 +10,12 @@ import httpx
 import pytest
 from django.utils import timezone
 
+from apps.events.models import Event, Squad, SquadMember
 from apps.ladder_planner import tasks as lp_tasks
 from apps.ladder_planner import views as lp_views
 from apps.ladder_planner.models import CachedClub, CachedRider, CourseProfile, LadderMatchup, LadderRider, Side
-from apps.ladder_planner.services import cache, compute, courses, normalize, roster
+from apps.ladder_planner.services import cache, compute, courses, normalize, roster, squads
+from apps.zwiftracing.models import ZRRider
 
 # ----- fixtures / helpers ------------------------------------------------------------------------
 
@@ -532,3 +534,82 @@ def test_opponent_add_cache_miss_fetches_live(auth_client, team_member, monkeypa
     assert resp.status_code == 200
     assert matchup.riders.filter(side=Side.OPPONENT, zwid=801).exists()
     assert warmed == [11991]  # cache-miss fetch warms the rider's club in the background
+
+
+# ----- squad picker ------------------------------------------------------------------------------
+
+
+def _event(title, *, days_to_end=7, visible=True):
+    """Create an event ending `days_to_end` days from today.
+
+    Returns:
+        The created Event.
+
+    """
+    today = timezone.now().date()
+    return Event.objects.create(
+        title=title, start_date=today - timedelta(days=1), end_date=today + timedelta(days=days_to_end), visible=visible
+    )
+
+
+@pytest.mark.django_db
+def test_squads_for_picker_groups_and_sorts(team_member, user_model):
+    active = _event("Spring Series")
+    past = _event("Old Event", days_to_end=-2)
+    Squad.objects.create(event=active, name="A Squad")
+    b_squad = Squad.objects.create(event=active, name="B Squad")
+    Squad.objects.create(event=past, name="Z Squad")  # excluded (event ended)
+    b_squad.captains.add(team_member)  # team_member belongs to B Squad as captain
+
+    mine, other = squads.squads_for_picker(team_member)
+    assert [s["label"] for s in mine] == ["Spring Series — B Squad"]
+    assert [s["label"] for s in other] == ["Spring Series — A Squad"]
+
+
+@pytest.mark.django_db
+def test_squad_member_users_unions_roles(team_member, user_model):
+    event = _event("Series")
+    squad = Squad.objects.create(event=event, name="Alpha")
+    cap = user_model.objects.create(username="cap", zwid=1)
+    member = user_model.objects.create(username="mem", zwid=2)
+    squad.captains.add(cap)
+    SquadMember.objects.create(squad=squad, user=member, status=SquadMember.Status.MEMBER)
+
+    users = squads.squad_member_users(squad)
+    assert {u.pk for u in users} == {cap.pk, member.pk}
+
+
+@pytest.mark.django_db
+def test_our_squad_add_adds_members(auth_client, team_member, user_model):
+    matchup = _make_matchup(team_member)
+    event = _event("Series")
+    squad = Squad.objects.create(event=event, name="Alpha")
+
+    synced = user_model.objects.create(username="synced", zwid=4001, first_name="Syn")
+    ZRRider.objects.create(zwid=4001, name="Synced Rider", race_current_rating=1600, power_w60=380)
+    unsynced = user_model.objects.create(username="unsynced", zwid=4002, first_name="Uns")
+    no_zwid = user_model.objects.create(username="nozwid")
+    for u in (synced, unsynced, no_zwid):
+        SquadMember.objects.create(squad=squad, user=u, status=SquadMember.Status.MEMBER)
+
+    resp = auth_client.post(f"/ladder/{matchup.pk}/ours/add-squad/", {"squad": squad.pk}, HTTP_HX_REQUEST="true")
+    assert resp.status_code == 200
+    ours = matchup.riders.filter(side=Side.OURS)
+    assert set(ours.values_list("zwid", flat=True)) == {4001, 4002}  # no_zwid skipped
+    synced_rider = ours.get(zwid=4001)
+    assert synced_rider.zr_data["rating_current"] == 1600  # snapshotted from ZR
+    unsynced_rider = ours.get(zwid=4002)
+    assert unsynced_rider.zr_data["rating_current"] is None  # name-only
+
+
+@pytest.mark.django_db
+def test_our_squad_add_dedupes(auth_client, team_member, user_model):
+    matchup = _make_matchup(team_member)
+    event = _event("Series")
+    squad = Squad.objects.create(event=event, name="Alpha")
+    u = user_model.objects.create(username="dup", zwid=5001)
+    SquadMember.objects.create(squad=squad, user=u, status=SquadMember.Status.MEMBER)
+
+    auth_client.post(f"/ladder/{matchup.pk}/ours/add-squad/", {"squad": squad.pk})
+    auth_client.post(f"/ladder/{matchup.pk}/ours/add-squad/", {"squad": squad.pk})  # again
+    assert matchup.riders.filter(side=Side.OURS, zwid=5001).count() == 1

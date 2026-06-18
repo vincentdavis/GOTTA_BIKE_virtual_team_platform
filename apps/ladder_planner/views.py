@@ -20,8 +20,9 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.decorators import team_member_required
+from apps.events.models import Squad
 from apps.ladder_planner.models import CourseProfile, LadderMatchup, LadderRider, Side
-from apps.ladder_planner.services import cache, compute, courses, roster
+from apps.ladder_planner.services import cache, compute, courses, normalize, roster, squads
 from apps.ladder_planner.tasks import warm_club
 from apps.ttt_planner.models import Route
 
@@ -188,6 +189,7 @@ def matchup_detail(request: HttpRequest, matchup_id: str) -> HttpResponse:
     """
     matchup = get_object_or_404(LadderMatchup, pk=matchup_id)
     can_edit = _can_edit(matchup, request.user)
+    my_squads, other_squads = squads.squads_for_picker(request.user) if can_edit else ([], [])
     return render(
         request,
         "ladder_planner/detail.html",
@@ -197,6 +199,8 @@ def matchup_detail(request: HttpRequest, matchup_id: str) -> HttpResponse:
             "can_edit": can_edit,
             "course_profiles": CourseProfile.choices,
             "route_options": courses.route_options() if can_edit else [],
+            "my_squads": my_squads,
+            "other_squads": other_squads,
             "Side": Side,
         },
     )
@@ -335,6 +339,61 @@ def our_rider_add(request: HttpRequest, matchup_id: str, zwid: int) -> HttpRespo
         else:
             error = "Rider not found in our synced Zwift Racing data."
     return HttpResponse(_render_body(request, matchup, can_edit=True, error=error))
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_POST
+def our_squad_add(request: HttpRequest, matchup_id: str) -> HttpResponse:
+    """Add all members of a chosen event squad to our side.
+
+    Members are snapshotted from synced ZR data where available, else added
+    name-only. Existing riders are skipped; members without a zwid can't be
+    added (the matchup keys riders by zwid).
+
+    Returns:
+        The refreshed matchup body partial (with a notice or error).
+
+    """
+    matchup = _get_editable(request, matchup_id)
+    if matchup is None:
+        return HttpResponse("Permission denied", status=403)
+
+    squad = Squad.objects.filter(pk=request.POST.get("squad")).select_related("event").first()
+    if squad is None:
+        return HttpResponse(_render_body(request, matchup, can_edit=True, error="Squad not found."))
+
+    existing = set(matchup.riders.filter(side=Side.OURS).values_list("zwid", flat=True))
+    now = timezone.now()
+    order = _next_order(matchup, Side.OURS)
+    added = no_zwid = 0
+    for user in squads.squad_member_users(squad):
+        if not user.zwid:
+            no_zwid += 1
+            continue
+        if user.zwid in existing:
+            continue
+        data = roster.get_our_rider(user.zwid) or normalize.minimal(
+            user.zwid, user.get_full_name() or user.username
+        )
+        LadderRider.objects.create(
+            matchup=matchup,
+            side=Side.OURS,
+            order=order,
+            zwid=user.zwid,
+            name=data["name"],
+            zr_data=data,
+            fetched_at=now,
+        )
+        existing.add(user.zwid)
+        order += 1
+        added += 1
+
+    notice = f"Added {added} rider(s) from {squad.name}."
+    if no_zwid:
+        notice += f" {no_zwid} member(s) skipped (no Zwift ID)."
+    logfire.info("Ladder squad added", matchup_id=str(matchup.pk), squad_id=squad.pk, added=added)
+    return HttpResponse(_render_body(request, matchup, can_edit=True, notice=notice))
 
 
 def _parse_zwids(raw: str) -> list[int]:

@@ -77,14 +77,38 @@
     <div class="card-body">
       <h3 class="font-semibold">Add riders</h3>
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="relative">
-          <span class="label-text mb-1 block">Our team — search our roster</span>
-          <input type="text" name="q" placeholder="Name or Zwift ID…"
-                 class="input input-bordered input-sm w-full"
-                 hx-get="{% url 'ladder_planner:our_rider_search' matchup.pk %}"
-                 hx-trigger="keyup changed delay:300ms, search"
-                 hx-target="#ladder-our-search" hx-swap="innerHTML" />
-          <div id="ladder-our-search"></div>
+        <div class="space-y-3">
+          {% if my_squads or other_squads %}
+          <form hx-post="{% url 'ladder_planner:our_squad_add' matchup.pk %}"
+                hx-target="#ladder-body" hx-swap="innerHTML"
+                hx-on::after-request="if(event.detail.successful) this.reset()">
+            <span class="label-text mb-1 block">Our team — add a whole squad</span>
+            <select name="squad" class="select select-bordered select-sm w-full"
+                    onchange="if(this.value) this.form.requestSubmit()">
+              <option value="">Choose squad…</option>
+              {% if my_squads %}
+              <optgroup label="Your squads">
+                {% for s in my_squads %}<option value="{{ s.pk }}">{{ s.label }}</option>{% endfor %}
+              </optgroup>
+              {% endif %}
+              {% if other_squads %}
+              <optgroup label="Other active squads">
+                {% for s in other_squads %}<option value="{{ s.pk }}">{{ s.label }}</option>{% endfor %}
+              </optgroup>
+              {% endif %}
+            </select>
+          </form>
+          {% endif %}
+
+          <div class="relative">
+            <span class="label-text mb-1 block">Our team — search our roster</span>
+            <input type="text" name="q" placeholder="Name or Zwift ID…"
+                   class="input input-bordered input-sm w-full"
+                   hx-get="{% url 'ladder_planner:our_rider_search' matchup.pk %}"
+                   hx-trigger="keyup changed delay:300ms, search"
+                   hx-target="#ladder-our-search" hx-swap="innerHTML" />
+            <div id="ladder-our-search"></div>
+          </div>
         </div>
 
         <div class="space-y-3">

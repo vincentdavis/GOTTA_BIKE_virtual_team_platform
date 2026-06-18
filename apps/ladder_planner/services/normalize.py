@@ -106,6 +106,26 @@ def _blank() -> dict[str, Any]:
     }
 
 
+def minimal(zwid: int, name: str) -> dict[str, Any]:
+    """Build a name-only unified rider dict (no power/vELO data).
+
+    Used when a rider has a zwid but no synced ZR data, so they still appear on
+    the matchup (with blank metrics) rather than being dropped.
+
+    Args:
+        zwid: Zwift ID.
+        name: Display name.
+
+    Returns:
+        A unified rider dict with only zwid and name populated.
+
+    """
+    data = _blank()
+    data["zwid"] = zwid
+    data["name"] = name or str(zwid)
+    return data
+
+
 def from_zrrider(rider: ZRRider) -> dict[str, Any]:
     """Build the unified rider dict from a ``ZRRider`` model instance.
 
