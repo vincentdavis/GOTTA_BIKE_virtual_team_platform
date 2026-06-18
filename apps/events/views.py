@@ -1085,7 +1085,9 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         return redirect("events:event_detail", pk=event_pk)
 
     squads = list(
-        event.squads.prefetch_related("captains", "vice_captains").annotate(member_count=Count("squad_members")).all()
+        event.squads.prefetch_related("captains", "vice_captains")
+        .annotate(member_count=Count("squad_members"))
+        .order_by("name")
     )
 
     # Build ID→name lookups for Discord channels and roles

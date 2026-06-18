@@ -25,9 +25,16 @@
   </div>
 
   {% if squads %}
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="mb-4">
+    <input type="text" id="squad-search" placeholder="Search squads by name or captain…"
+           class="input input-bordered input-sm w-full md:w-80"
+           oninput="filterSquads(this.value)" />
+    <p id="squad-no-results" class="text-sm text-base-content/60 mt-2 hidden">No squads match your search.</p>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="squad-grid">
     {% for squad in squads %}
-    <div class="card bg-base-200 shadow-md">
+    <div class="card bg-base-200 shadow-md squad-card"
+         data-search="{{ squad.name|lower }} {% for c in squad.captains.all %}{{ c.get_full_name|lower }} {% endfor %}{% for c in squad.vice_captains.all %}{{ c.get_full_name|lower }} {% endfor %}">
       <div class="card-body p-4">
         {# Header: name + action buttons #}
         <div class="flex items-center justify-between mb-1">
@@ -259,4 +266,20 @@
   </div>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function filterSquads(q) {
+    q = (q || "").trim().toLowerCase();
+    var shown = 0;
+    document.querySelectorAll("#squad-grid .squad-card").forEach(function (card) {
+      var match = !q || card.dataset.search.indexOf(q) !== -1;
+      card.style.display = match ? "" : "none";
+      if (match) shown++;
+    });
+    var none = document.getElementById("squad-no-results");
+    if (none) none.classList.toggle("hidden", shown !== 0);
+  }
+</script>
 {% endblock %}

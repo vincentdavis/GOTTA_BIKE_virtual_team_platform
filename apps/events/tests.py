@@ -238,6 +238,25 @@ def test_squad_manage_renders_riders_section(client, event_admin, team_member) -
 
 
 @pytest.mark.django_db
+def test_squad_manage_has_search_and_sorts_by_name(client, event_admin) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    client.force_login(event_admin)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    # Created out of order; the page should list them alphabetically by name.
+    Squad.objects.create(event=event, name="Charlie")
+    Squad.objects.create(event=event, name="Alpha")
+    Squad.objects.create(event=event, name="Bravo")
+
+    body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
+    assert 'id="squad-search"' in body
+    assert body.index("Alpha") < body.index("Bravo") < body.index("Charlie")
+
+
+@pytest.mark.django_db
 def test_squad_assign_from_manage_page_returns_panel(client, event_admin, team_member) -> None:
     from django.urls import reverse
 
