@@ -137,6 +137,8 @@ EVENTS_TEMPLATES = [
     "events/event_form.html",
     "events/squad_form.html",
     "events/squad_manage.html",
+    "events/squad_v_report.html",
+    "events/_eligibility_table.html",
     "events/squad_availability.html",
     "events/availability_builder.html",
     "events/_slot_selections_container.html",
@@ -1203,3 +1205,59 @@ def test_ds_templates_use_datastar_colon_event_syntax():
         text = (base / name).read_text()
         assert "data-on-" not in text, f"{name} uses hyphen data-on- (should be data-on:)"
     assert "data-on:" in (base / "_slot_selections_container.html").read_text()
+
+
+# --------------------------------------------------------------------------- #
+# Eligibility page: grouping + expiring filter
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.django_db
+def test_eligibility_group_by_squad(client, superuser, user_model):
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+
+    client.force_login(superuser)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    squad_a = Squad.objects.create(event=event, name="Squad A")
+    squad_b = Squad.objects.create(event=event, name="Squad B")
+
+    multi = user_model.objects.create(username="multi", first_name="Multixyz")
+    solo = user_model.objects.create(username="solo", first_name="Soloxyz")
+    for u in (multi, solo):
+        EventSignup.objects.create(event=event, user=u, status=EventSignup.Status.REGISTERED)
+    # multi is a member of both squads; solo is in no squad.
+    SquadMember.objects.create(squad=squad_a, user=multi, status=SquadMember.Status.MEMBER)
+    SquadMember.objects.create(squad=squad_b, user=multi, status=SquadMember.Status.MEMBER)
+
+    body = client.get(reverse("events:squad_v_report", args=[event.pk]), {"group": "squad"}).content.decode()
+    assert "Squad A" in body
+    assert "Squad B" in body
+    assert "Unassigned" in body
+    assert body.count("Multixyz") >= 2  # appears under both squads
+    assert "Soloxyz" in body  # appears under Unassigned
+
+
+@pytest.mark.django_db
+def test_eligibility_expiring_filter(client, superuser, user_model, verification_factory):
+    from constance import config
+    from django.urls import reverse
+
+    client.force_login(superuser)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+
+    wl_days = config.WEIGHT_LIGHT_DAYS  # default validity for weight_light
+    soon = user_model.objects.create(username="soon", first_name="Soonxyz", is_race_ready=True)
+    later = user_model.objects.create(username="later", first_name="Laterxyz", is_race_ready=True)
+    for u in (soon, later):
+        EventSignup.objects.create(event=event, user=u, status=EventSignup.Status.REGISTERED)
+    # 'soon' expires in ~3 days; 'later' has the full validity window remaining.
+    verification_factory(soon, "weight_light", days_ago=wl_days - 3)
+    verification_factory(later, "weight_light", days_ago=0)
+
+    body = client.get(reverse("events:squad_v_report", args=[event.pk]), {"expiring": "7"}).content.decode()
+    assert "Soonxyz" in body
+    assert "Laterxyz" not in body

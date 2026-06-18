@@ -1,0 +1,63 @@
+{# Eligibility table for a list of enriched signups. Expects: signups, height_never_expires. #}
+<div class="overflow-x-auto">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Rider</th>
+        <th class="text-right">Race Ready</th>
+        <th class="text-right">Weight</th>
+        <th class="text-right">Height</th>
+        <th class="text-right">Power</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in signups %}
+      <tr>
+        <td>
+          {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+        </td>
+        <td class="text-right font-mono">
+          {% with d=entry.verification.race_ready_days %}
+            {% if d is None %}
+              <span class="text-base-content/40">&mdash;</span>
+            {% else %}
+              <span class="{% if d <= 7 %}text-error font-semibold{% elif d <= 30 %}text-warning{% endif %}">{{ d }} d</span>
+            {% endif %}
+          {% endwith %}
+        </td>
+        <td class="text-right font-mono">
+          {% with d=entry.verification.weight_days %}
+            {% if d is None %}
+              <span class="text-base-content/40">&mdash;</span>
+            {% else %}
+              <span class="{% if d <= 7 %}text-error font-semibold{% elif d <= 30 %}text-warning{% endif %}">{{ d }} d</span>
+            {% endif %}
+          {% endwith %}
+        </td>
+        <td class="text-right font-mono">
+          {% with d=entry.verification.height_days has_h=entry.verification.has_height %}
+            {% if d is None %}
+              {% if has_h and height_never_expires %}
+                <span class="text-base-content/70">Never</span>
+              {% else %}
+                <span class="text-base-content/40">&mdash;</span>
+              {% endif %}
+            {% else %}
+              <span class="{% if d <= 7 %}text-error font-semibold{% elif d <= 30 %}text-warning{% endif %}">{{ d }} d</span>
+            {% endif %}
+          {% endwith %}
+        </td>
+        <td class="text-right font-mono">
+          {% with d=entry.verification.power_days %}
+            {% if d is None %}
+              <span class="text-base-content/40">&mdash;</span>
+            {% else %}
+              <span class="{% if d <= 7 %}text-error font-semibold{% elif d <= 30 %}text-warning{% endif %}">{{ d }} d</span>
+            {% endif %}
+          {% endwith %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

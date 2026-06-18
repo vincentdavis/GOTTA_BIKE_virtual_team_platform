@@ -1351,12 +1351,48 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         ),
     )
 
+    # Filter: riders whose eligibility (race-ready) expiration falls within N days.
+    expiring_raw = request.GET.get("expiring", "").strip()
+    expiring_days = int(expiring_raw) if expiring_raw.isdigit() else None
+    if expiring_days is not None:
+        enriched = [
+            e
+            for e in enriched
+            if e["verification"]["race_ready_days"] is not None
+            and e["verification"]["race_ready_days"] <= expiring_days
+        ]
+
+    # Grouping: optionally group riders by squad (a rider in multiple squads appears
+    # in each), with an "Unassigned" group for riders in no squad.
+    group_by = request.GET.get("group", "")
+    groups = None
+    if group_by == "squad":
+        member_ids_by_squad: dict[int, set[int]] = {}
+        assigned: set[int] = set()
+        for squad_id, user_id in SquadMember.objects.filter(
+            squad__event=event, status=SquadMember.Status.MEMBER
+        ).values_list("squad_id", "user_id"):
+            member_ids_by_squad.setdefault(squad_id, set()).add(user_id)
+            assigned.add(user_id)
+
+        groups = []
+        for squad in event.squads.order_by("name"):
+            ids = member_ids_by_squad.get(squad.id, set())
+            rows = [e for e in enriched if e["user"].id in ids]
+            if rows:
+                groups.append({"name": squad.name, "rows": rows})
+        unassigned = [e for e in enriched if e["user"].id not in assigned]
+        if unassigned:
+            groups.append({"name": "Unassigned", "rows": unassigned})
+
     logfire.info(
         "Squad v-report viewed",
         event_id=event_pk,
         user_id=request.user.id,
         username=request.user.username,
         rider_count=len(enriched),
+        group_by=group_by,
+        expiring_days=expiring_days,
     )
 
     return render(
@@ -1365,6 +1401,9 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         {
             "event": event,
             "signups": enriched,
+            "groups": groups,
+            "group_by": group_by,
+            "expiring": expiring_raw if expiring_days is not None else "",
             "height_never_expires": config.HEIGHT_VERIFICATION_DAYS == 0,
         },
     )
