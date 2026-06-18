@@ -1158,62 +1158,6 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     )
 
 
-def _get_verification_days(user: User) -> dict:
-    """Compute days remaining per verification type for a user.
-
-    Returns:
-        Dict with weight_days, height_days, power_days, race_ready_days, has_height.
-        Each *_days value is int (days, may be 0) or None
-        (no valid record / never expires / not race-ready).
-        has_height distinguishes "no record" from "never expires" for height.
-
-    """
-    from apps.team.models import RaceReadyRecord
-    from apps.team.services import get_user_required_verification_types
-
-    def latest_days(verify_types: list[str]) -> tuple[int | None, bool]:
-        rec = (
-            RaceReadyRecord.objects.filter(
-                user=user,
-                status=RaceReadyRecord.Status.VERIFIED,
-                verify_type__in=verify_types,
-            )
-            .order_by("-record_date")
-            .first()
-        )
-        if rec is None:
-            return None, False
-        days = rec.days_remaining
-        if days is not None and days < 0:
-            return None, True  # expired but a record exists
-        return days, True
-
-    weight_days, _ = latest_days(["weight_full", "weight_light"])
-    height_days, has_height = latest_days(["height"])
-    power_days, _ = latest_days(["power"])
-
-    race_ready_days: int | None = None
-    if user.is_race_ready:
-        required = get_user_required_verification_types(user)
-        type_to_days = {
-            "weight_full": weight_days,
-            "weight_light": weight_days,
-            "height": height_days,
-            "power": power_days,
-        }
-        constraining = [type_to_days[t] for t in required if type_to_days.get(t) is not None]
-        if constraining:
-            race_ready_days = min(constraining)
-
-    return {
-        "weight_days": weight_days,
-        "height_days": height_days,
-        "power_days": power_days,
-        "race_ready_days": race_ready_days,
-        "has_height": has_height,
-    }
-
-
 @login_required
 @team_member_required()
 @require_GET
@@ -1393,8 +1337,11 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     signups = event.signups.filter(status=EventSignup.Status.REGISTERED).select_related("user")
     enriched = _enrich_signups(signups, event=event)
 
+    from apps.team.services import verification_days_bulk
+
+    verification_by_user = verification_days_bulk([entry["user"] for entry in enriched])
     for entry in enriched:
-        entry["verification"] = _get_verification_days(entry["user"])
+        entry["verification"] = verification_by_user[entry["user"].id]
 
     enriched.sort(
         key=lambda e: (

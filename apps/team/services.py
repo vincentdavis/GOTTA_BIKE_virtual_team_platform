@@ -2,13 +2,14 @@
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import ClassVar
 
 import logfire
 from constance import config
 from django.db.models import Count, Max, Min, OuterRef, Subquery
+from django.utils import timezone
 
 from apps.accounts.models import GuildMember, User
 from apps.team.models import RaceReadyRecord
@@ -62,6 +63,119 @@ def get_user_required_verification_types(user: User) -> list[str]:
             zwid=user.zwid,
         )
         return DEFAULT_VERIFICATION_TYPES
+
+
+_VERIFICATION_GROUPS = {
+    "weight": {"weight_full", "weight_light"},
+    "height": {"height"},
+    "power": {"power"},
+}
+_ALL_VERIFY_TYPES = ["weight_full", "weight_light", "height", "power"]
+
+
+def verification_days_bulk(users: list[User]) -> dict[int, dict]:
+    """Compute verification day-counts for many users with a fixed number of queries.
+
+    Batched equivalent of computing per-user weight/height/power/race-ready days.
+    Uses a small constant number of queries (verified records, ZwiftPower
+    categories, and the validity settings read once) regardless of user count,
+    instead of several queries per user, then does the date math in memory.
+
+    Args:
+        users: The users to compute for.
+
+    Returns:
+        Mapping of ``user.id`` -> dict with ``weight_days``, ``height_days``,
+        ``power_days``, ``race_ready_days``, ``has_height`` (same shape as the
+        per-user computation).
+
+    """
+    user_list = list(users)
+    user_ids = [u.id for u in user_list]
+
+    # 1) Latest verified record per (user, group). Ordered newest-first so the
+    # first record seen for each group is the latest.
+    latest: dict[int, dict[str, RaceReadyRecord]] = {}
+    records = (
+        RaceReadyRecord.objects.filter(
+            user_id__in=user_ids,
+            status=RaceReadyRecord.Status.VERIFIED,
+            verify_type__in=_ALL_VERIFY_TYPES,
+        )
+        .order_by("user_id", "-record_date")
+    )
+    for rec in records:
+        groups = latest.setdefault(rec.user_id, {})
+        for group, types in _VERIFICATION_GROUPS.items():
+            if rec.verify_type in types:
+                groups.setdefault(group, rec)
+
+    # 2) ZwiftPower categories for the required-types lookup, parsed config once.
+    zwids = [u.zwid for u in user_list if u.zwid]
+    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
+    try:
+        requirements = json.loads(config.CATEGORY_REQUIREMENTS)
+    except (json.JSONDecodeError, TypeError):
+        requirements = {}
+
+    # Read the validity settings ONCE (RaceReadyRecord.days_remaining reads all four
+    # from Constance on every call, which is the real per-record query cost).
+    today = timezone.now().date()
+    validity_days = {
+        "weight_full": config.WEIGHT_FULL_DAYS,
+        "weight_light": config.WEIGHT_LIGHT_DAYS,
+        "height": config.HEIGHT_VERIFICATION_DAYS,
+        "power": config.POWER_VERIFICATION_DAYS,
+    }
+
+    def _days_and_has(rec: RaceReadyRecord | None) -> tuple[int | None, bool]:
+        if rec is None:
+            return None, False
+        validity = validity_days.get(rec.verify_type, 0)
+        if not validity or not rec.record_date:
+            return None, True  # never expires, but a record exists
+        days = (rec.record_date + timedelta(days=validity) - today).days
+        if days < 0:
+            return None, True  # expired but a record exists
+        return days, True
+
+    def _required_types(user: User) -> list[str]:
+        zp = zp_by_zwid.get(user.zwid) if user.zwid else None
+        if not zp:
+            return DEFAULT_VERIFICATION_TYPES
+        category = zp.divw if user.gender == "female" else zp.div
+        if not category:
+            return DEFAULT_VERIFICATION_TYPES
+        types = requirements.get(str(category), DEFAULT_VERIFICATION_TYPES)
+        return types if types else DEFAULT_VERIFICATION_TYPES
+
+    result: dict[int, dict] = {}
+    for user in user_list:
+        groups = latest.get(user.id, {})
+        weight_days, _ = _days_and_has(groups.get("weight"))
+        height_days, has_height = _days_and_has(groups.get("height"))
+        power_days, _ = _days_and_has(groups.get("power"))
+
+        race_ready_days: int | None = None
+        if user.is_race_ready:
+            type_to_days = {
+                "weight_full": weight_days,
+                "weight_light": weight_days,
+                "height": height_days,
+                "power": power_days,
+            }
+            constraining = [type_to_days[t] for t in _required_types(user) if type_to_days.get(t) is not None]
+            if constraining:
+                race_ready_days = min(constraining)
+
+        result[user.id] = {
+            "weight_days": weight_days,
+            "height_days": height_days,
+            "power_days": power_days,
+            "race_ready_days": race_ready_days,
+            "has_height": has_height,
+        }
+    return result
 
 
 def get_user_verification_types(user: User) -> list[str]:
