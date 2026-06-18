@@ -20,24 +20,29 @@
         <table class="table table-sm table-zebra" id="routes-table">
           <thead>
             <tr>
-              <th>Route</th><th>World</th><th class="text-right">Distance</th>
-              <th class="text-right">Elevation</th><th class="text-right">m/km</th><th>Type</th><th class="text-right">GPX</th>
+              <th class="cursor-pointer select-none" onclick="sortRoutes(0,'text',this)">Route <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none" onclick="sortRoutes(1,'text',this)">World <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(2,'num',this)">Distance <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(3,'num',this)">Elevation <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(4,'num',this)">m/km <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none" onclick="sortRoutes(5,'num',this)">Type <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(6,'num',this)">GPX <span class="sort-ind"></span></th>
             </tr>
           </thead>
           <tbody>
             {% for r in rows %}
             <tr class="route-row {% if not r.is_active %}opacity-50{% endif %}"
                 data-search="{{ r.name|lower }} {{ r.world|lower }}">
-              <td class="font-medium">
+              <td class="font-medium" data-sort="{{ r.name|lower }}">
                 <a href="{% url 'routes:detail' r.pk %}" class="link link-primary">{{ r.name }}</a>
                 {% if not r.is_active %} <span class="badge badge-ghost badge-xs">inactive</span>{% endif %}
               </td>
-              <td>{{ r.world|default:"—" }}</td>
-              <td class="text-right">{{ r.distance_km }} km</td>
-              <td class="text-right">{{ r.elevation_m }} m</td>
-              <td class="text-right">{% if r.distance_km %}{% widthratio r.elevation_m r.distance_km 1 %}{% else %}—{% endif %}</td>
-              <td><span class="badge badge-outline badge-sm">{{ r.terrain }}</span></td>
-              <td class="text-right">{% if r.gpx_count %}<span class="badge badge-success badge-sm">{{ r.gpx_count }}</span>{% else %}—{% endif %}</td>
+              <td data-sort="{{ r.world|lower }}">{{ r.world|default:"—" }}</td>
+              <td class="text-right" data-sort="{{ r.distance_km }}">{{ r.distance_km }} km</td>
+              <td class="text-right" data-sort="{{ r.elevation_m }}">{{ r.elevation_m }} m</td>
+              <td class="text-right" data-sort="{{ r.m_per_km }}">{{ r.m_per_km }}</td>
+              <td data-sort="{{ r.terrain_rank }}"><span class="badge badge-outline badge-sm">{{ r.terrain }}</span></td>
+              <td class="text-right" data-sort="{{ r.gpx_count }}">{% if r.gpx_count %}<span class="badge badge-success badge-sm">{{ r.gpx_count }}</span>{% else %}—{% endif %}</td>
             </tr>
             {% empty %}
             <tr><td colspan="7" class="text-center text-base-content/60 py-6">No routes found.</td></tr>
@@ -57,6 +62,30 @@
     document.querySelectorAll("#routes-table .route-row").forEach(function (row) {
       row.style.display = !q || row.dataset.search.indexOf(q) !== -1 ? "" : "none";
     });
+  }
+
+  function sortRoutes(col, type, header) {
+    var table = document.getElementById("routes-table");
+    var tbody = table.tBodies[0];
+    var asc = header.dataset.asc !== "true";  // toggle
+    // Reset all indicators, then mark this column.
+    table.querySelectorAll("th").forEach(function (th) {
+      delete th.dataset.asc;
+      var ind = th.querySelector(".sort-ind");
+      if (ind) ind.textContent = "";
+    });
+    header.dataset.asc = asc;
+    var ind = header.querySelector(".sort-ind");
+    if (ind) ind.textContent = asc ? "▲" : "▼";
+
+    var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr.route-row"));
+    rows.sort(function (a, b) {
+      var x = a.children[col].dataset.sort || "";
+      var y = b.children[col].dataset.sort || "";
+      var cmp = type === "num" ? parseFloat(x || 0) - parseFloat(y || 0) : x.localeCompare(y);
+      return asc ? cmp : -cmp;
+    });
+    rows.forEach(function (row) { tbody.appendChild(row); });
   }
 </script>
 {% endblock %}

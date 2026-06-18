@@ -18,6 +18,8 @@ TERRAIN_CHOICES: list[tuple[str, str]] = [
     ("mountainous", "Mountainous"),
 ]
 TERRAIN_VALUES: set[str] = {value for value, _ in TERRAIN_CHOICES}
+# Flat -> mountainous ordering, for sorting by terrain.
+TERRAIN_RANK: dict[str, int] = {value: i for i, (value, _) in enumerate(TERRAIN_CHOICES)}
 
 # Climbing-density thresholds (metres of climb per km) → terrain type.
 _FLAT_MAX = 8.0

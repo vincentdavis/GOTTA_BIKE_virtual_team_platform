@@ -96,19 +96,22 @@ def route_list(request: HttpRequest) -> HttpResponse:
         The routes reference page.
 
     """
-    rows = [
-        {
+    rows = []
+    for route in Route.objects.annotate(gpx_count=Count("gpx_files")).order_by("world", "name"):
+        distance = float(route.distance_km)
+        terrain_value = terrain.derive_terrain(distance, route.elevation_m)
+        rows.append({
             "pk": route.pk,
             "name": route.name,
             "world": route.world,
             "distance_km": route.distance_km,
             "elevation_m": route.elevation_m,
-            "terrain": terrain.terrain_label(terrain.derive_terrain(float(route.distance_km), route.elevation_m)),
+            "m_per_km": round(route.elevation_m / distance, 1) if distance else 0,
+            "terrain": terrain.terrain_label(terrain_value),
+            "terrain_rank": terrain.TERRAIN_RANK.get(terrain_value, 0),
             "is_active": route.is_active,
             "gpx_count": route.gpx_count,
-        }
-        for route in Route.objects.annotate(gpx_count=Count("gpx_files")).order_by("world", "name")
-    ]
+        })
     return render(request, "ttt_planner/route_list.html", {"rows": rows})
 
 

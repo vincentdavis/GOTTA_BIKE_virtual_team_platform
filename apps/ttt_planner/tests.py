@@ -908,6 +908,9 @@ def test_route_list_page_renders(auth_client):
     assert resp.status_code == 200
     assert b"Climby Loop" in resp.content
     assert b"Mountainous" in resp.content
+    # Columns are sortable.
+    assert b"sortRoutes" in resp.content
+    assert b'data-sort=' in resp.content
 
 
 # ----- route GPX uploads -------------------------------------------------------------------------
