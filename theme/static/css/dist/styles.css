@@ -4789,6 +4789,9 @@
   .max-h-32 {
     max-height: calc(var(--spacing) * 32);
   }
+  .max-h-48 {
+    max-height: calc(var(--spacing) * 48);
+  }
   .max-h-60 {
     max-height: calc(var(--spacing) * 60);
   }
@@ -6380,6 +6383,11 @@
   @media (hover: hover) {
     .hover\:bg-base-100:hover {
       background-color: var(--color-base-100);
+    }
+  }
+  @media (hover: hover) {
+    .hover\:bg-base-200:hover {
+      background-color: var(--color-base-200);
     }
   }
   @media (hover: hover) {

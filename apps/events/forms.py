@@ -520,24 +520,24 @@ class SquadForm(forms.ModelForm):
 
     discord_channel_id = forms.CharField(
         required=False,
-        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        widget=forms.Select(attrs={"class": "select select-bordered w-full filter-select"}),
     )
 
     audio_channel_id = forms.CharField(
         required=False,
-        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        widget=forms.Select(attrs={"class": "select select-bordered w-full filter-select"}),
         label="Audio Channel",
     )
 
     team_discord_role = forms.CharField(
         required=False,
-        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        widget=forms.Select(attrs={"class": "select select-bordered w-full filter-select"}),
         label="Discord Role",
     )
 
     discord_captain_role = forms.CharField(
         required=False,
-        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        widget=forms.Select(attrs={"class": "select select-bordered w-full filter-select"}),
         label="Captain Discord Role",
     )
 

@@ -362,74 +362,80 @@
 })();
 </script>
 <script>
-(function() {
-  document.querySelectorAll('.searchable-select').forEach(function(wrap) {
-    var select = wrap.querySelector('select');
-    var input = wrap.querySelector('input[type="text"]');
-    var list = wrap.querySelector('ul');
+// Discord channel / audio channel / role pickers: show the full list, filter as you type.
+// Progressive enhancement over the native <select> (which still holds + submits the value).
+(function () {
+  function enhance(select) {
+    if (select.disabled || select.dataset.filterReady) return;
+    select.dataset.filterReady = '1';
 
-    // Hide the native select
+    var wrap = document.createElement('div');
+    select.parentNode.insertBefore(wrap, select);
+    wrap.appendChild(select);
     select.style.display = 'none';
 
-    // Build options data from the select
-    var options = [];
-    Array.from(select.options).forEach(function(opt) {
-      options.push({ value: opt.value, label: opt.textContent, lowerLabel: opt.textContent.toLowerCase() });
+    var search = document.createElement('input');
+    search.type = 'text';
+    search.placeholder = 'Type to filter…';
+    search.className = 'input input-bordered input-sm w-full mb-1';
+    wrap.appendChild(search);
+
+    var list = document.createElement('div');
+    list.className = 'border border-base-300 rounded-box max-h-48 overflow-y-auto';
+    wrap.appendChild(list);
+
+    var empty = document.createElement('div');
+    empty.className = 'px-2 py-1 text-sm text-base-content/50';
+    empty.textContent = 'No matches';
+    empty.style.display = 'none';
+    list.appendChild(empty);
+
+    var items = Array.from(select.options).map(function (opt) {
+      var row = document.createElement('div');
+      row.className = 'px-2 py-1 cursor-pointer hover:bg-base-200 text-sm';
+      row.textContent = opt.textContent;
+      row.dataset.value = opt.value;
+      row.dataset.text = opt.textContent;
+      row.dataset.label = opt.textContent.toLowerCase();
+      row.addEventListener('click', function () {
+        select.value = opt.value;
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        mark();
+      });
+      list.appendChild(row);
+      return row;
     });
 
-    // Set input to current selection
-    var currentOpt = select.options[select.selectedIndex];
-    if (currentOpt && currentOpt.value) {
-      input.value = currentOpt.textContent;
+    function mark() {
+      items.forEach(function (row) {
+        var sel = row.dataset.value === select.value;
+        row.classList.toggle('bg-base-300', sel);
+        row.classList.toggle('font-semibold', sel);
+        row.textContent = (sel ? '✓ ' : '') + row.dataset.text;
+      });
     }
 
-    function renderList(query) {
-      list.innerHTML = '';
-      var lower = query.toLowerCase();
-      var matches = options.filter(function(o) {
-        if (!o.value) return lower === ''; // show "(none)" only when empty
-        return o.lowerLabel.indexOf(lower) !== -1;
+    function filter() {
+      var q = search.value.trim().toLowerCase();
+      var shown = 0;
+      items.forEach(function (row) {
+        var match = !q || row.dataset.label.indexOf(q) !== -1;
+        row.style.display = match ? '' : 'none';
+        if (match) { shown++; }
       });
-      if (matches.length === 0) {
-        list.style.display = 'none';
-        return;
-      }
-      matches.slice(0, 30).forEach(function(o) {
-        var li = document.createElement('li');
-        var a = document.createElement('a');
-        a.textContent = o.label;
-        a.addEventListener('mousedown', function(e) {
-          e.preventDefault();
-          select.value = o.value;
-          input.value = o.value ? o.label : '';
-          list.style.display = 'none';
-        });
-        li.appendChild(a);
-        list.appendChild(li);
-      });
-      list.style.display = '';
+      empty.style.display = shown ? 'none' : '';
     }
 
-    input.addEventListener('focus', function() {
-      renderList(input.value);
-    });
+    search.addEventListener('input', filter);
+    mark();
+    var selected = items.find(function (r) { return r.dataset.value === select.value; });
+    if (selected) { selected.scrollIntoView({ block: 'nearest' }); }
+  }
 
-    input.addEventListener('input', function() {
-      renderList(input.value);
-    });
-
-    input.addEventListener('blur', function() {
-      // Delay to allow mousedown on list item
-      setTimeout(function() {
-        list.style.display = 'none';
-        // If input was cleared, clear selection
-        if (!input.value.trim()) {
-          select.value = '';
-          input.value = '';
-        }
-      }, 200);
-    });
-  });
+  function init() {
+    document.querySelectorAll('select.filter-select').forEach(enhance);
+  }
+  if (document.readyState !== 'loading') { init(); } else { document.addEventListener('DOMContentLoaded', init); }
 })();
 </script>
 {% endblock %}
