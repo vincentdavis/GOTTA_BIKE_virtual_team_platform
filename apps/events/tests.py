@@ -139,6 +139,7 @@ EVENTS_TEMPLATES = [
     "events/squad_manage.html",
     "events/squad_v_report.html",
     "events/_eligibility_table.html",
+    "events/_filter_select_script.html",
     "events/squad_availability.html",
     "events/availability_builder.html",
     "events/_slot_selections_container.html",

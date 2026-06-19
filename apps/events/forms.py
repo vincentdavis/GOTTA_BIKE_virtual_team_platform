@@ -116,11 +116,11 @@ class EventForm(forms.ModelForm):
 
     discord_channel_id = forms.CharField(
         required=False,
-        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        widget=forms.Select(attrs={"class": "select select-bordered w-full filter-select"}),
     )
     signup_notification_channel_id = forms.CharField(
         required=False,
-        widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
+        widget=forms.Select(attrs={"class": "select select-bordered w-full filter-select"}),
     )
 
     class Meta:
