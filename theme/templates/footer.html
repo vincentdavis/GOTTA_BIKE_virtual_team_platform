@@ -1,3 +1,4 @@
+{% load tz %}
 <footer class="footer footer-center bg-base-200 text-base-content p-10">
     <nav>
         <div class="grid grid-flow-col gap-4">
@@ -41,5 +42,5 @@
             </a>
         </div>
     </nav>
-    <p>Copyright &copy; {% now "Y" %} {{ config.TEAM_NAME }}. All rights reserved.{% if deploy_version %} <span class="text-base-content/40">&middot; {{ deploy_version }}</span>{% endif %}</p>
+    <p>Copyright &copy; {% now "Y" %} {{ config.TEAM_NAME }}. All rights reserved.{% if deploy_time %} <span class="text-base-content/40" title="Last deploy">&middot; Updated {% timezone "America/New_York" %}{{ deploy_time|date:"Y/m/d g:i" }}{{ deploy_time|date:"A"|lower }}{% endtimezone %}</span>{% endif %}{% if deploy_version %} <span class="text-base-content/40">&middot; {{ deploy_version }}</span>{% endif %}</p>
 </footer>
