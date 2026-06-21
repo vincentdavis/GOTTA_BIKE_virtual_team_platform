@@ -176,3 +176,4 @@ cython_debug/
 .claude
 .ai
 .junie
+apps/zwift/zwift_api_docs
