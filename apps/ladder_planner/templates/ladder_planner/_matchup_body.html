@@ -9,7 +9,7 @@
 
 {# ---- Rider rosters (owner editing) ---- #}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-  <div class="card bg-base-100 border border-base-300">
+  <div class="card bg-base-100 border border-base-300 overflow-visible">
     <div class="card-body p-4">
       <h3 class="font-semibold text-sm flex items-center justify-between">
         <span>{{ summary.projected.our_label }}</span>
@@ -18,7 +18,7 @@
       <ul class="divide-y divide-base-200">
         {% for rider in matchup.riders.all %}{% if rider.side == Side.OURS %}
           <li class="flex items-center justify-between gap-2 py-1 text-sm {% if not rider.is_racing %}opacity-40{% endif %}">
-            <span class="truncate">{% include "accounts/_user_tooltip.html" with display_name=rider.name zwid=rider.zwid zp_category=rider.zr_data.zp_category zr_category=rider.zr_data.rank zr_rating=rider.zr_data.rating_current zr_phenotype=rider.zr_data.phenotype in_zwiftpower=rider.zr_data.zp_category in_zwiftracing=True hide_verification=True %}</span>
+            <span class="min-w-0">{% include "accounts/_user_tooltip.html" with display_name=rider.name zwid=rider.zwid zp_category=rider.zr_data.zp_category zr_category=rider.zr_data.rank zr_rating=rider.zr_data.rating_current zr_phenotype=rider.zr_data.phenotype in_zwiftpower=rider.zr_data.zp_category in_zwiftracing=True hide_verification=True %}</span>
             {% if can_edit %}
             <span class="flex gap-1 shrink-0">
               <button class="btn btn-ghost btn-xs" title="Toggle racing"
@@ -37,7 +37,7 @@
     </div>
   </div>
 
-  <div class="card bg-base-100 border border-base-300">
+  <div class="card bg-base-100 border border-base-300 overflow-visible">
     <div class="card-body p-4">
       <h3 class="font-semibold text-sm flex items-center justify-between">
         <span>{{ summary.projected.opp_label }}</span>
@@ -46,7 +46,7 @@
       <ul class="divide-y divide-base-200">
         {% for rider in matchup.riders.all %}{% if rider.side == Side.OPPONENT %}
           <li class="flex items-center justify-between gap-2 py-1 text-sm {% if not rider.is_racing %}opacity-40{% endif %}">
-            <span class="truncate inline-flex items-center gap-1">{% include "accounts/_user_tooltip.html" with display_name=rider.name zwid=rider.zwid zp_category=rider.zr_data.zp_category zr_category=rider.zr_data.rank zr_rating=rider.zr_data.rating_current zr_phenotype=rider.zr_data.phenotype in_zwiftpower=rider.zr_data.zp_category in_zwiftracing=True hide_verification=True %}
+            <span class="inline-flex items-center gap-1 min-w-0">{% include "accounts/_user_tooltip.html" with display_name=rider.name zwid=rider.zwid zp_category=rider.zr_data.zp_category zr_category=rider.zr_data.rank zr_rating=rider.zr_data.rating_current zr_phenotype=rider.zr_data.phenotype in_zwiftpower=rider.zr_data.zp_category in_zwiftracing=True hide_verification=True %}
               {% if rider.fetched_at %}<span class="text-xs text-base-content/40">· {{ rider.fetched_at|timesince }} old</span>{% endif %}
             </span>
             {% if can_edit %}
