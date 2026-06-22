@@ -351,4 +351,151 @@
     if (e.target && e.target.id === "ladder-body") window.applyLadderPerRiderGrouping();
   });
 </script>
+<style>
+  /* Font-size overrides for the stat tables. The #ladder-body id selector
+     out-specifies DaisyUI's `.table-xs/.table-sm :where(th,td)` cell sizing.
+     "md" uses no class, leaving each table at its native size. */
+  #ladder-body table.lfs-xs th, #ladder-body table.lfs-xs td { font-size: 0.70rem; line-height: 1.1rem; }
+  #ladder-body table.lfs-sm th, #ladder-body table.lfs-sm td { font-size: 0.80rem; line-height: 1.2rem; }
+  #ladder-body table.lfs-lg th, #ladder-body table.lfs-lg td { font-size: 1.05rem; line-height: 1.5rem; }
+  #ladder-body table.lfs-xl th, #ladder-body table.lfs-xl td { font-size: 1.30rem; line-height: 1.8rem; }
+</style>
+<script>
+  // Display preferences for all stat tables (the .tab-content tables): font size,
+  // bold, and gradient coloring of numeric columns. Driven by the gear dropdown in
+  // _matchup_body.html. Persisted in localStorage; re-applied after every HTMX swap.
+  (function () {
+    var PREFS_KEY = "ladderStatPrefs";
+    var DEFAULTS = { size: "md", bold: false, gradient: "off", invert: false };
+    // Size classes target the cells (DaisyUI's table-xs/table-sm size th/td, not the
+    // <table>). Rules live in the #ladder-body <style> block so the id selector
+    // out-specifies DaisyUI. "md" adds no class -> each table keeps its native size.
+    var SIZE_CLASS = { xs: "lfs-xs", sm: "lfs-sm", md: "", lg: "lfs-lg", xl: "lfs-xl" };
+    var ALL_SIZE = ["lfs-xs", "lfs-sm", "lfs-lg", "lfs-xl"];
+
+    // Gradient palettes: ordered [position, [r,g,b]] stops, value mapped to [0,1].
+    var PALETTES = {
+      rg: [[0, [239, 68, 68]], [0.5, [250, 204, 21]], [1, [34, 197, 94]]],
+      cw: [[0, [37, 99, 235]], [0.5, [229, 231, 235]], [1, [234, 88, 12]]],
+      viridis: [[0, [68, 1, 84]], [0.25, [59, 82, 139]], [0.5, [33, 145, 140]], [0.75, [94, 201, 98]], [1, [253, 231, 37]]],
+      blues: [[0, [222, 235, 247]], [0.5, [66, 146, 198]], [1, [8, 48, 107]]],
+      cividis: [[0, [0, 32, 77]], [0.25, [44, 77, 106]], [0.5, [124, 123, 120]], [0.75, [187, 173, 108]], [1, [255, 233, 69]]],
+      spectral: [[0, [50, 136, 189]], [0.25, [171, 221, 164]], [0.5, [255, 255, 191]], [0.75, [253, 174, 97]], [1, [213, 62, 79]]],
+      plasma: [[0, [13, 8, 135]], [0.33, [156, 23, 158]], [0.66, [237, 121, 83]], [1, [240, 249, 33]]],
+    };
+
+    function lerp(a, b, t) { return Math.round(a + (b - a) * t); }
+    function paletteColor(stops, t) {
+      t = Math.max(0, Math.min(1, t));
+      for (var i = 1; i < stops.length; i++) {
+        if (t <= stops[i][0]) {
+          var s0 = stops[i - 1], s1 = stops[i];
+          var span = (s1[0] - s0[0]) || 1;
+          var k = (t - s0[0]) / span;
+          return [lerp(s0[1][0], s1[1][0], k), lerp(s0[1][1], s1[1][1], k), lerp(s0[1][2], s1[1][2], k)];
+        }
+      }
+      return stops[stops.length - 1][1];
+    }
+    function textColor(rgb) {
+      var lum = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+      return lum > 0.6 ? "" : "#fff"; // light bg -> default text (per-rider keeps text-black); dark bg -> white
+    }
+
+    function load() {
+      try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(PREFS_KEY) || "{}")); }
+      catch (e) { return Object.assign({}, DEFAULTS); }
+    }
+    function save(p) { try { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch (e) { /* ignore */ } }
+
+    function statTables() {
+      var body = document.getElementById("ladder-body");
+      return body ? Array.prototype.slice.call(body.querySelectorAll(".tab-content table")) : [];
+    }
+
+    function cellNumber(td) {
+      if (td.querySelector(".dropdown")) return null; // tooltip cell — treat as text
+      var t = td.textContent.replace(/[^0-9.\-]/g, "");
+      if (t === "" || t === "-" || t === ".") return null;
+      var n = parseFloat(t);
+      return isNaN(n) ? null : n;
+    }
+
+    function clearColors(table) {
+      table.querySelectorAll("td").forEach(function (td) {
+        if ("origBg" in td.dataset) {
+          td.style.background = td.dataset.origBg;
+          td.style.color = td.dataset.origColor || "";
+          delete td.dataset.origBg;
+          delete td.dataset.origColor;
+        }
+      });
+    }
+
+    function colorTable(table, stops, invert) {
+      var body = table.tBodies[0];
+      if (!body) return;
+      var rows = Array.prototype.slice.call(body.rows).filter(function (r) { return !r.querySelector("td[colspan]"); });
+      if (!rows.length) return;
+      var cols = 0;
+      rows.forEach(function (r) { cols = Math.max(cols, r.cells.length); });
+      for (var c = 0; c < cols; c++) {
+        var cells = [];
+        rows.forEach(function (r) {
+          var td = r.cells[c];
+          if (!td) return;
+          var v = cellNumber(td);
+          if (v !== null) cells.push([td, v]);
+        });
+        if (cells.length < 2) continue; // not a numeric column
+        var vals = cells.map(function (p) { return p[1]; });
+        var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+        cells.forEach(function (pair) {
+          var td = pair[0], v = pair[1];
+          if (!("origBg" in td.dataset)) { td.dataset.origBg = td.style.background; td.dataset.origColor = td.style.color; }
+          var t = hi <= lo ? 0.5 : (v - lo) / (hi - lo);
+          if (invert) t = 1 - t;
+          var rgb = paletteColor(stops, t);
+          td.style.background = "rgb(" + rgb[0] + "," + rgb[1] + "," + rgb[2] + ")";
+          td.style.color = textColor(rgb);
+        });
+      }
+    }
+
+    window.applyLadderStatPrefs = function () {
+      var p = load();
+      statTables().forEach(function (table) {
+        table.style.removeProperty("font-size"); // clear any legacy inline size
+        ALL_SIZE.forEach(function (c) { table.classList.remove(c); });
+        var cls = SIZE_CLASS[p.size in SIZE_CLASS ? p.size : "md"];
+        if (cls) table.classList.add(cls);
+        table.classList.toggle("font-bold", !!p.bold);
+        clearColors(table);
+        if (p.gradient && p.gradient !== "off" && PALETTES[p.gradient]) colorTable(table, PALETTES[p.gradient], !!p.invert);
+      });
+      document.querySelectorAll("[data-stat-size]").forEach(function (b) {
+        b.classList.toggle("btn-active", b.getAttribute("data-stat-size") === p.size);
+      });
+      document.querySelectorAll("[data-stat-grad]").forEach(function (b) {
+        b.classList.toggle("btn-active", b.getAttribute("data-stat-grad") === (p.gradient || "off"));
+      });
+      var bold = document.querySelector("[data-stat-bold]");
+      if (bold) bold.checked = !!p.bold;
+      var invert = document.querySelector("[data-stat-invert]");
+      if (invert) invert.checked = !!p.invert;
+    };
+
+    window.setLadderStatPref = function (key, val) {
+      var p = load();
+      p[key] = val;
+      save(p);
+      window.applyLadderStatPrefs();
+    };
+
+    document.addEventListener("DOMContentLoaded", window.applyLadderStatPrefs);
+    document.body.addEventListener("htmx:afterSwap", function (e) {
+      if (e.target && e.target.id === "ladder-body") window.applyLadderStatPrefs();
+    });
+  })();
+</script>
 {% endblock %}

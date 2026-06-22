@@ -69,7 +69,51 @@
 </div>
 
 {# ---- Tabs ---- #}
-<div role="tablist" class="tabs tabs-lifted tabs-lg">
+<div class="relative">
+  {# Display options for all stat tables: font size, bold, gradient coloring. #}
+  <div class="dropdown dropdown-end absolute right-0 top-0 z-20">
+    <button type="button" tabindex="0" class="btn btn-ghost btn-sm btn-circle" title="Table display options" aria-label="Table display options">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.03 7.03 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.241.437-.613.43-.992a7.03 7.03 0 0 1 0-.255c.007-.378-.138-.75-.43-.991l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+      </svg>
+    </button>
+    <div tabindex="0" class="dropdown-content z-30 mt-2 w-60 bg-base-100 rounded-box shadow-lg border border-base-300 p-3 space-y-3">
+      <div>
+        <div class="text-xs font-semibold mb-1">Text size</div>
+        <div class="join" role="group" aria-label="Text size">
+          <button type="button" class="btn btn-xs join-item" data-stat-size="xs" onclick="window.setLadderStatPref('size','xs')">XS</button>
+          <button type="button" class="btn btn-xs join-item" data-stat-size="sm" onclick="window.setLadderStatPref('size','sm')">S</button>
+          <button type="button" class="btn btn-xs join-item" data-stat-size="md" onclick="window.setLadderStatPref('size','md')">M</button>
+          <button type="button" class="btn btn-xs join-item" data-stat-size="lg" onclick="window.setLadderStatPref('size','lg')">L</button>
+          <button type="button" class="btn btn-xs join-item" data-stat-size="xl" onclick="window.setLadderStatPref('size','xl')">XL</button>
+        </div>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-semibold">Bold</span>
+        <input type="checkbox" class="toggle toggle-sm" data-stat-bold onchange="window.setLadderStatPref('bold', this.checked)" />
+      </div>
+      <div>
+        <div class="text-xs font-semibold mb-1">Gradient coloring</div>
+        <div class="grid grid-cols-2 gap-1">
+          <button type="button" class="btn btn-xs" data-stat-grad="off" onclick="window.setLadderStatPref('gradient','off')">Default</button>
+          <button type="button" class="btn btn-xs" data-stat-grad="rg" onclick="window.setLadderStatPref('gradient','rg')">Red–Green</button>
+          <button type="button" class="btn btn-xs" data-stat-grad="cw" onclick="window.setLadderStatPref('gradient','cw')">Cool–Warm</button>
+          <button type="button" class="btn btn-xs" data-stat-grad="viridis" onclick="window.setLadderStatPref('gradient','viridis')">Viridis</button>
+          <button type="button" class="btn btn-xs" data-stat-grad="blues" onclick="window.setLadderStatPref('gradient','blues')">Blues</button>
+          <button type="button" class="btn btn-xs" data-stat-grad="cividis" onclick="window.setLadderStatPref('gradient','cividis')">Cividis</button>
+          <button type="button" class="btn btn-xs" data-stat-grad="spectral" onclick="window.setLadderStatPref('gradient','spectral')">Spectral</button>
+          <button type="button" class="btn btn-xs" data-stat-grad="plasma" onclick="window.setLadderStatPref('gradient','plasma')">Plasma</button>
+        </div>
+        <p class="text-[10px] text-base-content/50 mt-1">Colors numeric columns; higher = top of scale.</p>
+        <div class="flex items-center justify-between mt-2">
+          <span class="text-xs font-semibold">Invert colors</span>
+          <input type="checkbox" class="toggle toggle-sm" data-stat-invert onchange="window.setLadderStatPref('invert', this.checked)" />
+        </div>
+      </div>
+    </div>
+  </div>
+  <div role="tablist" class="tabs tabs-lifted tabs-lg">
 
   {# ===== Projected Score ===== #}
   <input type="radio" name="ladder_tabs" role="tab" class="tab" aria-label="Projected Score" checked />
@@ -298,6 +342,7 @@
     </div>
     <p class="text-xs text-base-content/50 mt-2">Podium % is podiums / finishes over the last 90 days.</p>
   </div>
+  </div>
 </div>
 
 {# Chart data for this matchup; re-emitted on each swap so charts stay in sync. #}
@@ -306,3 +351,4 @@
 <script id="ladder-chart-labels" type="application/json">{"ours": "{{ summary.power.our_label|escapejs }}", "opp": "{{ summary.power.opp_label|escapejs }}"}</script>
 <script>window.renderLadderCharts && window.renderLadderCharts();</script>
 <script>window.applyLadderPerRiderGrouping && window.applyLadderPerRiderGrouping();</script>
+<script>window.applyLadderStatPrefs && window.applyLadderStatPrefs();</script>
