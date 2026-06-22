@@ -18,7 +18,7 @@
       <ul class="divide-y divide-base-200">
         {% for rider in matchup.riders.all %}{% if rider.side == Side.OURS %}
           <li class="flex items-center justify-between gap-2 py-1 text-sm {% if not rider.is_racing %}opacity-40{% endif %}">
-            <span class="truncate">{{ rider.name }}</span>
+            <span class="truncate">{% include "accounts/_user_tooltip.html" with display_name=rider.name zwid=rider.zwid zp_category=rider.zr_data.zp_category zr_category=rider.zr_data.rank zr_rating=rider.zr_data.rating_current zr_phenotype=rider.zr_data.phenotype in_zwiftpower=rider.zr_data.zp_category in_zwiftracing=True hide_verification=True %}</span>
             {% if can_edit %}
             <span class="flex gap-1 shrink-0">
               <button class="btn btn-ghost btn-xs" title="Toggle racing"
@@ -46,7 +46,7 @@
       <ul class="divide-y divide-base-200">
         {% for rider in matchup.riders.all %}{% if rider.side == Side.OPPONENT %}
           <li class="flex items-center justify-between gap-2 py-1 text-sm {% if not rider.is_racing %}opacity-40{% endif %}">
-            <span class="truncate">{{ rider.name }}
+            <span class="truncate inline-flex items-center gap-1">{% include "accounts/_user_tooltip.html" with display_name=rider.name zwid=rider.zwid zp_category=rider.zr_data.zp_category zr_category=rider.zr_data.rank zr_rating=rider.zr_data.rating_current zr_phenotype=rider.zr_data.phenotype in_zwiftpower=rider.zr_data.zp_category in_zwiftracing=True hide_verification=True %}
               {% if rider.fetched_at %}<span class="text-xs text-base-content/40">· {{ rider.fetched_at|timesince }} old</span>{% endif %}
             </span>
             {% if can_edit %}
@@ -99,7 +99,7 @@
         <tbody>
           {% for row in summary.projected.rows %}
           <tr class="{% if row.side == Side.OURS %}bg-primary/5{% endif %}">
-            <td class="font-medium">{{ row.name }}</td>
+            <td class="font-medium">{% include "accounts/_user_tooltip.html" with display_name=row.name zwid=row.zwid zp_category=row.zp_category zr_category=row.zr_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype in_zwiftpower=row.zp_category in_zwiftracing=True hide_verification=True %}</td>
             <td>{{ row.team }}</td>
             <td class="text-right">{{ row.rating }}</td>
             <td class="text-right">{{ row.handicap }}</td>
@@ -296,7 +296,7 @@
         </tbody>
       </table>
     </div>
-    <p class="text-xs text-base-content/50 mt-2">Podium % is all-time (podiums / finishes), not 90-day.</p>
+    <p class="text-xs text-base-content/50 mt-2">Podium % is podiums / finishes over the last 90 days.</p>
   </div>
 </div>
 
