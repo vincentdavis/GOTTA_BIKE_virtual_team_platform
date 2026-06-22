@@ -144,14 +144,20 @@ def _next_order(matchup: LadderMatchup, side: str) -> int:
 @team_member_required(raise_exception=True)
 @require_GET
 def matchup_list(request: HttpRequest) -> HttpResponse:
-    """List the current user's ladder matchups.
+    """List ladder matchups: the current user's first, then other members'.
 
     Returns:
         The matchup list page.
 
     """
-    matchups = LadderMatchup.objects.filter(created_by=request.user).annotate(rider_count=Count("riders"))
-    return render(request, "ladder_planner/list.html", {"matchups": matchups})
+    all_matchups = LadderMatchup.objects.annotate(rider_count=Count("riders")).select_related("created_by")
+    matchups = all_matchups.filter(created_by=request.user)
+    other_matchups = all_matchups.exclude(created_by=request.user)
+    return render(
+        request,
+        "ladder_planner/list.html",
+        {"matchups": matchups, "other_matchups": other_matchups},
+    )
 
 
 @login_required

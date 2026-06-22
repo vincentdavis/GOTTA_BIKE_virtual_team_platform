@@ -209,24 +209,34 @@ def route_gpx_delete(request: HttpRequest, route_id: int, gpx_id: int) -> HttpRe
 @team_member_required(raise_exception=True)
 @require_GET
 def planner_list(request: HttpRequest) -> HttpResponse:
-    """List the current user's TTT plans.
+    """List TTT plans: the current user's first, then other members'.
 
     Returns:
         The plan list page.
 
     """
-    plans = (
+    all_plans = (
         TttPlan.objects
-        .filter(created_by=request.user)
-        .select_related("route")
+        .select_related("route", "created_by")
         .prefetch_related("riders")
         .annotate(rider_count=Count("riders"))
     )
-    plan_rows = [{"plan": plan, "rider_count": plan.rider_count, "finish_s": quick_finish_time(plan)} for plan in plans]
+    plan_rows = [
+        {"plan": plan, "rider_count": plan.rider_count, "finish_s": quick_finish_time(plan)}
+        for plan in all_plans.filter(created_by=request.user)
+    ]
+    other_plan_rows = [
+        {"plan": plan, "rider_count": plan.rider_count, "finish_s": quick_finish_time(plan)}
+        for plan in all_plans.exclude(created_by=request.user)
+    ]
     return render(
         request,
         "ttt_planner/planner_list.html",
-        {"plan_rows": plan_rows, "event_types": TttPlan.EventType.choices},
+        {
+            "plan_rows": plan_rows,
+            "other_plan_rows": other_plan_rows,
+            "event_types": TttPlan.EventType.choices,
+        },
     )
 
 

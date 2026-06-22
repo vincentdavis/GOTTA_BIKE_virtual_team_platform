@@ -79,7 +79,31 @@
         </table>
       </div>
       {% else %}
-      <p class="text-base-content/60">No matchups yet. Create one to get started.</p>
+      <p class="text-base-content/60">You have no matchups yet. Create one to get started.</p>
+      {% endif %}
+
+      {% if other_matchups %}
+      <div class="divider text-sm text-base-content/60 mt-8">Other team members' matchups</div>
+      <div class="overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr><th>Name</th><th>Created by</th><th>Our team</th><th>Opponent</th><th>Profile</th><th class="text-right">Riders</th><th>Updated</th></tr>
+          </thead>
+          <tbody>
+            {% for m in other_matchups %}
+            <tr class="hover">
+              <td><a href="{% url 'ladder_planner:detail' m.pk %}" class="link link-primary font-medium">{{ m.name|default:"Untitled matchup" }}</a></td>
+              <td class="text-sm">{{ m.created_by.discord_nickname|default:m.created_by.discord_username|default:m.created_by.username }}</td>
+              <td>{{ m.our_team_name|default:"—" }}</td>
+              <td>{{ m.opponent_team_name|default:"—" }}</td>
+              <td>{{ m.get_course_profile_display }}</td>
+              <td class="text-right">{{ m.rider_count }}</td>
+              <td class="text-sm text-base-content/60">{{ m.updated_at|date:"M j, Y" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
       {% endif %}
     </div>
   </div>

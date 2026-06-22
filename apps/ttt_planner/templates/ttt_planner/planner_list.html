@@ -93,7 +93,47 @@
         </table>
       </div>
       {% else %}
-      <p class="text-base-content/60">No plans yet. Create one to get started.</p>
+      <p class="text-base-content/60">You have no plans yet. Create one to get started.</p>
+      {% endif %}
+
+      {% if other_plan_rows %}
+      <div class="divider text-sm text-base-content/60 mt-8">Other team members' plans</div>
+      <div class="overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Created by</th>
+              <th>Event</th>
+              <th>Team</th>
+              <th>Route</th>
+              <th class="text-right">Riders</th>
+              <th class="text-right">Target</th>
+              <th class="text-right">Est. time</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in other_plan_rows %}
+            <tr class="hover">
+              <td>
+                <a href="{% url 'ttt_planner:detail' row.plan.pk %}" class="link link-primary font-medium">
+                  {{ row.plan.name|default:"Untitled plan" }}
+                </a>
+              </td>
+              <td class="text-sm">{{ row.plan.created_by.discord_nickname|default:row.plan.created_by.discord_username|default:row.plan.created_by.username }}</td>
+              <td>{{ row.plan.get_event_type_display|default:"—" }}</td>
+              <td>{{ row.plan.team_name|default:"—" }}</td>
+              <td>{{ row.plan.route.name|default:"—" }}</td>
+              <td class="text-right">{{ row.rider_count }}</td>
+              <td class="text-right">{{ row.plan.target_speed_kph }} kph</td>
+              <td class="text-right">{% if row.finish_s %}{{ row.finish_s|duration_hms }}{% else %}—{% endif %}</td>
+              <td class="text-sm text-base-content/60">{{ row.plan.updated_at|date:"M j, Y" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
       {% endif %}
     </div>
   </div>
