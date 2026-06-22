@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 
 DURATION_LABELS: list[str] = [label for _, label in DURATIONS]
 
+# Projected-score ladder points: 1st place scores this many, each lower place one
+# fewer, down to 0 (so only the top PROJECTED_TOP_POINTS finishers score).
+PROJECTED_TOP_POINTS = 10
+
 # Heatmap endpoints: worst (low) red -> best (high) green.
 _LOW_RGB = (230, 124, 115)
 _HIGH_RGB = (122, 201, 160)
@@ -125,11 +129,12 @@ def projected_score(matchup: LadderMatchup) -> dict[str, Any]:
             })
 
     entries.sort(key=lambda e: e["handicapped"], reverse=True)
-    total = len(entries)
     our_points = opp_points = 0
     for finish, entry in enumerate(entries, start=1):
         entry["finish"] = finish
-        entry["points"] = total - finish + 1
+        # Ladder scoring: 1st = 10 points, decreasing by one per place, floored at 0
+        # (11th place and lower score nothing).
+        entry["points"] = max(0, PROJECTED_TOP_POINTS + 1 - finish)
         if entry["side"] == Side.OURS:
             our_points += entry["points"]
         else:

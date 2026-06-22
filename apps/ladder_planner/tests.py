@@ -176,10 +176,10 @@ def test_projected_score_ranks_by_handicapped_velo(team_member):
     result = compute.projected_score(matchup)
     rows = result["rows"]
     assert [r["name"] for r in rows] == ["Ours", "Theirs"]  # ours sorts first (1550 > 1500)
-    assert rows[0]["finish"] == 1 and rows[0]["points"] == 2
-    assert rows[1]["finish"] == 2 and rows[1]["points"] == 1
-    assert result["our_points"] == 2
-    assert result["opp_points"] == 1
+    assert rows[0]["finish"] == 1 and rows[0]["points"] == 10
+    assert rows[1]["finish"] == 2 and rows[1]["points"] == 9
+    assert result["our_points"] == 10
+    assert result["opp_points"] == 9
     assert result["favored"] == "Us"
 
 
