@@ -16,6 +16,7 @@ what the heatmap visualizes.
 from __future__ import annotations
 
 import math
+import statistics
 from dataclasses import dataclass, field
 from itertools import pairwise
 
@@ -187,8 +188,9 @@ def climb_matchup(
         params: Physics constants.
 
     Returns:
-        Dict with ``our_points``, ``opp_points``, ``margin`` (our - opp), and the
-        fastest time per side (``our_best_s`` / ``opp_best_s``, may be None).
+        Dict with ``our_points``, ``opp_points``, ``margin`` (our - opp), the
+        fastest time per side (``our_best_s`` / ``opp_best_s``), and the median
+        time per side (``our_median_s`` / ``opp_median_s``). Times may be None.
 
     """
     ranked = []
@@ -214,6 +216,8 @@ def climb_matchup(
         "margin": our_points - opp_points,
         "our_best_s": min(our_times) if our_times else None,
         "opp_best_s": min(opp_times) if opp_times else None,
+        "our_median_s": statistics.median(our_times) if our_times else None,
+        "opp_median_s": statistics.median(opp_times) if opp_times else None,
     }
 
 

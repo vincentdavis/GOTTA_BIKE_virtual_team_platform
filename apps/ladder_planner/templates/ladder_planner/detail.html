@@ -471,7 +471,9 @@
         if (cls) table.classList.add(cls);
         table.classList.toggle("font-bold", !!p.bold);
         clearColors(table);
-        if (p.gradient && p.gradient !== "off" && PALETTES[p.gradient]) colorTable(table, PALETTES[p.gradient], !!p.invert);
+        if (p.gradient && p.gradient !== "off" && PALETTES[p.gradient] && !table.hasAttribute("data-no-gradient")) {
+          colorTable(table, PALETTES[p.gradient], !!p.invert);
+        }
       });
       document.querySelectorAll("[data-stat-size]").forEach(function (b) {
         b.classList.toggle("btn-active", b.getAttribute("data-stat-size") === p.size);

@@ -613,3 +613,38 @@ def test_our_squad_add_dedupes(auth_client, team_member, user_model):
     auth_client.post(f"/ladder/{matchup.pk}/ours/add-squad/", {"squad": squad.pk})
     auth_client.post(f"/ladder/{matchup.pk}/ours/add-squad/", {"squad": squad.pk})  # again
     assert matchup.riders.filter(side=Side.OURS, zwid=5001).count() == 1
+
+
+# ----- climb advantage heatmap -------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_climb_advantage_available_and_favours_stronger(team_member):
+    matchup = _make_matchup(team_member)
+    strong_w = {"5": 1100, "15": 880, "30": 770, "60": 560, "120": 500, "300": 420, "1200": 360}
+    weak_w = {k: v * 0.8 for k, v in strong_w.items()}
+
+    for i in range(2):
+        d = _zr_data(rating=1500, handicaps={}, w=strong_w, name=f"O{i}")
+        d["weight_kg"], d["height_cm"] = 66, 178
+        _add(matchup, Side.OURS, d, order=i)
+    for i in range(2):
+        d = _zr_data(rating=1500, handicaps={}, w=weak_w, name=f"T{i}")
+        d["weight_kg"], d["height_cm"] = 72, 178  # weaker and heavier
+        _add(matchup, Side.OPPONENT, d, order=i)
+
+    climb = compute.climb_advantage(matchup)
+    assert climb["available"] is True
+    assert len(climb["lengths"]) == len(compute.CLIMB_LENGTHS_M)
+    assert len(climb["rows"]) == len(compute.CLIMB_GRADES)
+    assert all(len(row["cells"]) == len(compute.CLIMB_LENGTHS_M) for row in climb["rows"])
+    # Our team is stronger and lighter, so we're faster (positive time gap) somewhere.
+    assert any(c["advantage_s"] > 0 for row in climb["rows"] for c in row["cells"])
+
+
+@pytest.mark.django_db
+def test_climb_advantage_unavailable_without_data(team_member):
+    matchup = _make_matchup(team_member)
+    _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={}, name="O"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1500, handicaps={}, name="T"))
+    assert compute.climb_advantage(matchup)["available"] is False

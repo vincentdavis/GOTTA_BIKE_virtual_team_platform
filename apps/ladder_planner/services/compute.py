@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from apps.ladder_planner.models import Side
 from apps.ladder_planner.services.normalize import DURATION_KEYS, DURATIONS, VELO_KEYS, VELO_LABELS
+from apps.ttt_planner.services import climb as climb_engine
 
 if TYPE_CHECKING:
     from apps.ladder_planner.models import LadderMatchup, LadderRider
@@ -21,6 +22,10 @@ DURATION_LABELS: list[str] = [label for _, label in DURATIONS]
 # Projected-score ladder points: 1st place scores this many, each lower place one
 # fewer, down to 0 (so only the top PROJECTED_TOP_POINTS finishers score).
 PROJECTED_TOP_POINTS = 10
+
+# Climb-advantage heatmap axes: rows are grades, columns are climb lengths.
+CLIMB_GRADES: list[float] = [0.03, 0.05, 0.08, 0.12]
+CLIMB_LENGTHS_M: list[float] = [250, 500, 1000, 2000, 4000, 8000, 15000]
 
 # Heatmap endpoints: worst (low) red -> best (high) green.
 _LOW_RGB = (230, 124, 115)
@@ -493,6 +498,166 @@ def other_stats(matchup: LadderMatchup) -> dict[str, Any]:
     return {"rows": rows, "our_label": our_label, "opp_label": opp_label}
 
 
+# ----- Climb advantage heatmap -------------------------------------------------------------------
+
+
+def _diverging_rgb(t: float) -> str:
+    """Diverging heatmap color for a normalized advantage in [-1, 1].
+
+    Positive (our team favored) trends green, negative (opponent) trends red,
+    zero is neutral grey.
+
+    Args:
+        t: Normalized advantage, clamped to [-1, 1].
+
+    Returns:
+        A ``"rgb(r,g,b)"`` string.
+
+    """
+    neutral, pos, neg = (243, 244, 246), (34, 197, 94), (239, 68, 68)
+    t = max(-1.0, min(1.0, t))
+    target = pos if t >= 0 else neg
+    k = abs(t)
+    rgb = tuple(round(neutral[i] + (target[i] - neutral[i]) * k) for i in range(3))
+    return f"rgb({rgb[0]},{rgb[1]},{rgb[2]})"
+
+
+def _format_length(metres: float) -> str:
+    """Format a climb length for column headers.
+
+    Args:
+        metres: Length in metres.
+
+    Returns:
+        ``"250 m"`` style for sub-kilometre, ``"2 km"`` style otherwise.
+
+    """
+    return f"{int(metres)} m" if metres < 1000 else f"{metres / 1000:g} km"
+
+
+def _format_clock(seconds: float | None) -> str:
+    """Format a duration as ``m:ss``.
+
+    Args:
+        seconds: Duration in seconds, or None.
+
+    Returns:
+        ``"4:07"`` style, or ``"—"`` when None.
+
+    """
+    if seconds is None:
+        return "—"
+    minutes, secs = divmod(round(seconds), 60)
+    return f"{minutes}:{secs:02d}"
+
+
+def _format_gap(seconds: float) -> str:
+    """Format a signed time gap for a heatmap cell.
+
+    Args:
+        seconds: Our advantage in seconds (positive = we're faster).
+
+    Returns:
+        ``"+12s"`` for sub-minute gaps, ``"+1:20"`` for larger, ``"0"`` for none.
+
+    """
+    if not seconds:
+        return "0"
+    sign = "+" if seconds > 0 else "-"
+    magnitude = abs(seconds)
+    return f"{sign}{_format_clock(magnitude)}" if magnitude >= 60 else f"{sign}{round(magnitude)}s"
+
+
+def _median_gap(cell: dict) -> float:
+    """Median climb-time gap for a cell: opponent median minus ours.
+
+    Args:
+        cell: A ``climb_matchup`` result dict.
+
+    Returns:
+        Seconds of our advantage (positive = our team is faster), 0 if either
+        side has no usable time.
+
+    """
+    if cell["our_median_s"] is None or cell["opp_median_s"] is None:
+        return 0.0
+    return cell["opp_median_s"] - cell["our_median_s"]
+
+
+def _climb_rider(rider: LadderRider, side_tag: str) -> climb_engine.ClimbRider | None:
+    """Build a climb-engine rider from a ladder rider's frozen ZR snapshot.
+
+    Args:
+        rider: The ladder rider.
+        side_tag: Team tag passed through to the engine.
+
+    Returns:
+        A ``ClimbRider``, or None if weight or a power curve is missing.
+
+    """
+    data = rider.zr_data or {}
+    weight = data.get("weight_kg")
+    curve = {int(k): float(v) for k, v in (data.get("w") or {}).items() if v}
+    if not weight or not curve:
+        return None
+    return climb_engine.ClimbRider(
+        name=rider.name,
+        weight_kg=float(weight),
+        height_cm=float(data.get("height_cm") or 0),
+        power_curve=curve,
+        side=side_tag,
+    )
+
+
+def climb_advantage(matchup: LadderMatchup) -> dict[str, Any]:
+    """Build the climb-advantage heatmap: favored team across grade x climb length.
+
+    Args:
+        matchup: The matchup.
+
+    Returns:
+        ``{"available": False, ...}`` if either side lacks usable power/weight data,
+        otherwise ``available`` plus ``lengths`` (column headers) and ``rows`` (one
+        per grade, each with colored cells carrying the points margin).
+
+    """
+    our_label, opp_label = _labels(matchup)
+    ours, opp = _racing(matchup)
+    our_riders = [cr for r in ours if (cr := _climb_rider(r, "ours"))]
+    opp_riders = [cr for r in opp if (cr := _climb_rider(r, "opp"))]
+    if not our_riders or not opp_riders:
+        return {"available": False, "our_label": our_label, "opp_label": opp_label}
+
+    grid = climb_engine.advantage_grid(our_riders, opp_riders, CLIMB_LENGTHS_M, CLIMB_GRADES)
+    # Cell value is the median climber's time gap (opponent - ours); positive = we're faster.
+    max_abs = max((abs(_median_gap(c)) for row in grid for c in row["cells"]), default=0) or 1
+
+    rows = []
+    for row in grid:
+        cells = []
+        for c in row["cells"]:
+            gap = _median_gap(c)
+            cells.append({
+                "advantage_s": gap,
+                "label": _format_gap(gap),
+                "rgb": _diverging_rgb(gap / max_abs),
+                "title": (
+                    f"{row['grade'] * 100:g}% · {_format_length(c['length_m'])} — "
+                    f"{our_label} {_format_clock(c['our_median_s'])} / {opp_label} {_format_clock(c['opp_median_s'])} "
+                    f"· pts {c['our_points']}-{c['opp_points']}"
+                ),
+            })
+        rows.append({"grade": f"{row['grade'] * 100:g}%", "cells": cells})
+
+    return {
+        "available": True,
+        "our_label": our_label,
+        "opp_label": opp_label,
+        "lengths": [_format_length(m) for m in CLIMB_LENGTHS_M],
+        "rows": rows,
+    }
+
+
 def matchup_summary(matchup: LadderMatchup) -> dict[str, Any]:
     """Bundle all computed views for a matchup detail page.
 
@@ -509,6 +674,7 @@ def matchup_summary(matchup: LadderMatchup) -> dict[str, Any]:
         "power": power_comparison(matchup),
         "top": top_riders(matchup),
         "per_rider": per_rider_power(matchup),
+        "climb": climb_advantage(matchup),
         "velo2": velo2_comparison(matchup),
         "other": other_stats(matchup),
         "our_count": len(ours),

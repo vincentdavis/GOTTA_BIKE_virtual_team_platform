@@ -342,6 +342,43 @@
     </div>
     <p class="text-xs text-base-content/50 mt-2">Podium % is podiums / finishes over the last 90 days.</p>
   </div>
+
+  {# ===== Climb compare ===== #}
+  <input type="radio" name="ladder_tabs" role="tab" class="tab" aria-label="Climb compare" />
+  <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
+    <h3 class="font-semibold mb-1">Climb advantage</h3>
+    <p class="text-xs text-base-content/60 mb-3">
+      Median climber's time gap by climb grade (rows) and length (columns), steady best effort with no draft.
+      <span class="font-medium" style="color:rgb(34,197,94)">Green</span> = {{ summary.climb.our_label }} faster,
+      <span class="font-medium" style="color:rgb(239,68,68)">red</span> = {{ summary.climb.opp_label }}; value is the time gap (+ = we're faster). Hover for medians and points.
+    </p>
+    {% if summary.climb.available %}
+    <div class="overflow-x-auto">
+      <table data-no-gradient class="table table-xs text-center">
+        <thead>
+          <tr>
+            <th class="text-left">Grade \ Length</th>
+            {% for L in summary.climb.lengths %}<th class="text-center">{{ L }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in summary.climb.rows %}
+          <tr>
+            <td class="font-medium whitespace-nowrap text-left">{{ row.grade }}</td>
+            {% for c in row.cells %}<td class="text-center text-black font-medium" style="background:{{ c.rgb }}" title="{{ c.title }}">{{ c.label }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="text-[10px] text-base-content/50 mt-2">
+      Power-duration curve is 90-day bests (fresh, optimistic — not fatigued mid-race). CdA estimated from height/weight.
+      Colour intensity is relative to the biggest gap in this grid.
+    </p>
+    {% else %}
+    <p class="text-base-content/60 py-6 text-center">Add riders with power and weight data on both teams to compare climbs.</p>
+    {% endif %}
+  </div>
   </div>
 </div>
 
