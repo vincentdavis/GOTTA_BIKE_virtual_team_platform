@@ -116,6 +116,12 @@ def projected_score(matchup: LadderMatchup) -> dict[str, Any]:
                 "rating": round(rating, 1),
                 "handicap": round(handicap, 1),
                 "handicapped": round(rating + handicap, 1),
+                # Fields consumed by the user tooltip (links + badges).
+                "zwid": rider.zwid,
+                "zp_category": data.get("zp_category") or "",
+                "zr_category": data.get("rank") or "",
+                "zr_rating": round(rating, 1),
+                "zr_phenotype": data.get("phenotype") or "",
             })
 
     entries.sort(key=lambda e: e["handicapped"], reverse=True)
