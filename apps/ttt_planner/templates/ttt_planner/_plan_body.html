@@ -201,3 +201,38 @@
     </form>
   </div>
 </div>
+
+{# ---- Climb compare (per-rider climb-strength) ---- #}
+<div class="card bg-base-200 shadow-xl mt-6">
+  <div class="card-body">
+    <h3 class="card-title">Climb compare</h3>
+    <p class="text-xs text-base-content/60 mb-3">
+      Each rider's time gap behind the squad's fastest climber up a {{ climb.grade_pct }}% climb, by length.
+      <span class="font-medium" style="color:rgb(34,197,94)">Green</span> = stays with the group,
+      <span class="font-medium" style="color:rgb(239,68,68)">red</span> = first dropped. Steady best effort, no draft.
+    </p>
+    {% if climb.available %}
+    <div class="overflow-x-auto">
+      <table class="table table-sm text-center">
+        <thead>
+          <tr>
+            <th class="text-left">Rider</th>
+            {% for L in climb.lengths %}<th class="text-center">{{ L }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in climb.rows %}
+          <tr>
+            <td class="font-medium whitespace-nowrap text-left">{{ row.name }}</td>
+            {% for c in row.cells %}<td class="text-center text-black font-medium" {% if c.rgb %}style="background:{{ c.rgb }}"{% endif %}>{{ c.label }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include "_climb_method.html" %}
+    {% else %}
+    <p class="text-base-content/60 py-6 text-center">Add riders linked to Zwift Racing data (zwid + power curve) to compare climbs.</p>
+    {% endif %}
+  </div>
+</div>

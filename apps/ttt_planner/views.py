@@ -26,6 +26,7 @@ from apps.ttt_planner import terrain
 from apps.ttt_planner.models import PlanRider, Route, RouteGpx, TttPlan
 from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
+    climb_strength,
     compute_auto_balance,
     compute_plan,
     quick_finish_time,
@@ -64,7 +65,7 @@ def _render_plan_body(request: HttpRequest, plan: TttPlan, *, can_edit: bool) ->
     result = compute_plan(plan)
     return render_to_string(
         "ttt_planner/_plan_body.html",
-        {"plan": plan, "result": result, "can_edit": can_edit},
+        {"plan": plan, "result": result, "can_edit": can_edit, "climb": climb_strength(plan)},
         request=request,
     )
 

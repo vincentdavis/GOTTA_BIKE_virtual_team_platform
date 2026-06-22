@@ -1,0 +1,66 @@
+{# Shared "how the climb compare is calculated" explainer. Used by the ladder
+   matchup Climb compare tab and the TTT plan Climb compare card. #}
+<details class="collapse collapse-arrow bg-base-100 border border-base-300 mt-4">
+  <summary class="collapse-title text-sm font-semibold">Method &amp; calculations</summary>
+  <div class="collapse-content text-xs text-base-content/70 space-y-3">
+    <p>
+      Each rider is reduced to their <strong>power-duration curve</strong> (5s, 15s, 30s, 1m, 2m, 5m, 20m
+      best watts from Zwift Racing, 90-day) plus weight and height. For a climb of a given length and
+      grade we solve how long that rider would take, then compare riders.
+    </p>
+
+    <div>
+      <p class="font-medium text-base-content/80">1. Power needed to climb at a speed</p>
+      <p>
+        The standard cycling power model — the rider power to hold ground speed <code>v</code> (m/s) on
+        gradient <code>g</code> with total mass <code>m</code> (rider + bike) is:
+      </p>
+      <p class="font-mono bg-base-200 rounded px-2 py-1">
+        P = ( Crr·m·G·v &nbsp;+&nbsp; m·G·g·v &nbsp;+&nbsp; ½·ρ·CdA·v³·draft ) / drivetrain
+      </p>
+      <p>
+        The three terms are rolling resistance, gravity (dominant on a climb), and aerodynamic drag.
+        <code>G</code> = 9.807 m/s². On steep climbs the aero term is small, so drafting helps little.
+      </p>
+    </div>
+
+    <div>
+      <p class="font-medium text-base-content/80">2. CdA (drag area)</p>
+      <p>
+        Estimated from height and weight, <code>CdA = coef · height_m^0.725 · weight_kg^0.425</code>
+        (a DuBois-style frontal-area approximation). The coefficient and exponents are configurable in
+        Site Config; road/climbing racing uses <code>STD_CDA_COEF</code> (a more upright position than the
+        TTT aero tuck), and each matchup/plan can override the coefficient.
+      </p>
+    </div>
+
+    <div>
+      <p class="font-medium text-base-content/80">3. Climb time (fixed-point solve)</p>
+      <p>
+        A climb's duration sets which part of the power curve applies, but that power sets the speed,
+        which sets the duration — so we iterate: guess a time → read sustainable power at that duration
+        (log-time interpolation of the curve) → invert the power model for speed on the grade → recompute
+        the time. This converges in a few steps to each rider's steady best-effort climb time.
+      </p>
+    </div>
+
+    <div>
+      <p class="font-medium text-base-content/80">4. What the cells show</p>
+      <p>
+        The metric shown in each cell is described above the table. Because riders' power curves decline
+        at different rates, the ranking changes with climb length — short walls favour punchers, long
+        climbs favour sustained-power riders.
+      </p>
+    </div>
+
+    <div>
+      <p class="font-medium text-base-content/80">Caveats</p>
+      <ul class="list-disc list-inside space-y-0.5">
+        <li>Power is 90-day <em>bests</em> — fresh and optimistic, not fatigued mid-race.</li>
+        <li>Steady-state effort only; it ignores the surges that often cause the actual drop.</li>
+        <li>CdA is estimated from height/weight, not measured.</li>
+        <li>The grid assumes no draft (each rider riding their own pace).</li>
+      </ul>
+    </div>
+  </div>
+</details>

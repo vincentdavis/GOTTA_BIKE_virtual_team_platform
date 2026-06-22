@@ -520,3 +520,150 @@ def compute_auto_balance(
         order += 1
 
     return BalanceResult(speed_kph=round(speed, 1), assignments=assignments)
+
+
+# ----- Climb compare (per-rider climb-strength heatmap) ------------------------------------------
+
+from apps.ttt_planner.services import climb as climb_engine  # noqa: E402
+
+# Per-rider climb heatmap axes: a single reference grade, swept over climb lengths.
+TTT_CLIMB_GRADE = 0.08
+TTT_CLIMB_LENGTHS_M: list[float] = [500, 1000, 2000, 4000, 8000, 15000]
+_TTT_CURVE_FIELDS = (
+    (5, "power_w5"), (15, "power_w15"), (30, "power_w30"), (60, "power_w60"),
+    (120, "power_w120"), (300, "power_w300"), (1200, "power_w1200"),
+)
+
+
+def _ttt_format_length(metres: float) -> str:
+    """Format a climb length for column headers.
+
+    Args:
+        metres: Length in metres.
+
+    Returns:
+        ``"500 m"`` or ``"2 km"`` style.
+
+    """
+    return f"{int(metres)} m" if metres < 1000 else f"{metres / 1000:g} km"
+
+
+def _ttt_format_gap(seconds: float) -> str:
+    """Format a rider's time gap behind the squad's fastest climber.
+
+    Args:
+        seconds: Seconds behind the fastest (>= 0).
+
+    Returns:
+        ``"0"`` when level, else ``"+12s"`` / ``"+1:20"``.
+
+    """
+    if seconds < 0.5:
+        return "0"
+    minutes, secs = divmod(round(seconds), 60)
+    return f"+{minutes}:{secs:02d}" if seconds >= 60 else f"+{round(seconds)}s"
+
+
+def _ttt_gap_rgb(t: float) -> str:
+    """Green (with the group) -> amber -> red (dropped) for a normalized gap.
+
+    Args:
+        t: Normalized gap in [0, 1] (0 = fastest, 1 = biggest gap in the grid).
+
+    Returns:
+        A ``"rgb(r,g,b)"`` string.
+
+    """
+    green, amber, red = (34, 197, 94), (250, 204, 21), (239, 68, 68)
+    t = max(0.0, min(1.0, t))
+    lo, hi, k = (green, amber, t / 0.5) if t <= 0.5 else (amber, red, (t - 0.5) / 0.5)
+    rgb = tuple(round(lo[i] + (hi[i] - lo[i]) * k) for i in range(3))
+    return f"rgb({rgb[0]},{rgb[1]},{rgb[2]})"
+
+
+def _ttt_climb_rider(plan_rider: PlanRider) -> climb_engine.ClimbRider | None:
+    """Build a climb-engine rider from a plan rider's linked ZR power curve.
+
+    Args:
+        plan_rider: The plan rider (needs a ``zwid`` linked to a ``ZRRider``).
+
+    Returns:
+        A ``ClimbRider``, or None if there's no zwid, ZR record, weight, or curve.
+
+    """
+    if not plan_rider.zwid:
+        return None
+    from apps.zwiftracing.models import ZRRider
+
+    zr = ZRRider.objects.filter(zwid=plan_rider.zwid).first()
+    if zr is None:
+        return None
+    curve = {secs: float(v) for secs, field in _TTT_CURVE_FIELDS if (v := getattr(zr, field))}
+    weight = float(zr.weight) if zr.weight else (float(plan_rider.weight_kg) if plan_rider.weight_kg else 0.0)
+    height = float(zr.height or plan_rider.height_cm or 0)
+    if not weight or not curve:
+        return None
+    return climb_engine.ClimbRider(name=plan_rider.name, weight_kg=weight, height_cm=height, power_curve=curve)
+
+
+def climb_strength(plan: TttPlan) -> dict:
+    """Per-rider climb heatmap: each rider's time gap behind the fastest climber.
+
+    Rows are riders, columns are climb lengths at ``TTT_CLIMB_GRADE``; each cell is
+    how far behind the squad's fastest climber the rider would finish that climb
+    (0 = sets the pace, larger = first to get dropped).
+
+    Args:
+        plan: The plan.
+
+    Returns:
+        ``{"available": False}`` if fewer than two riders have ZR power + weight,
+        otherwise ``available`` plus ``grade_pct``, ``lengths`` (column headers),
+        and ``rows`` (one per rider with colored gap cells).
+
+    """
+    riders = [cr for r in plan.riders.all() if (cr := _ttt_climb_rider(r))]
+    if len(riders) < 2:
+        return {"available": False}
+
+    params = physics.params_from_constance(cda_coef_key="STD_CDA_COEF")
+    if plan.cda_coef is not None:
+        params = replace(params, cda_coef=plan.cda_coef)
+
+    # times[rider_index][length] = climb seconds (or None).
+    times: list[dict[float, float | None]] = []
+    for rider in riders:
+        row = {}
+        for length in TTT_CLIMB_LENGTHS_M:
+            res = climb_engine.climb_effort(rider, length, TTT_CLIMB_GRADE, params=params)
+            row[length] = res.time_s if res else None
+        times.append(row)
+
+    fastest = {
+        length: min((t for row in times if (t := row[length]) is not None), default=None)
+        for length in TTT_CLIMB_LENGTHS_M
+    }
+    max_gap = max(
+        (row[length] - fastest[length] for row in times for length in TTT_CLIMB_LENGTHS_M
+         if row[length] is not None and fastest[length] is not None),
+        default=0,
+    ) or 1
+
+    rows = []
+    for rider, row in zip(riders, times, strict=True):
+        cells = []
+        for length in TTT_CLIMB_LENGTHS_M:
+            t, f = row[length], fastest[length]
+            if t is None or f is None:
+                cells.append({"label": "—", "rgb": ""})
+                continue
+            gap = t - f
+            cells.append({"gap_s": gap, "label": _ttt_format_gap(gap), "rgb": _ttt_gap_rgb(gap / max_gap)})
+        rows.append({"name": rider.name, "cells": cells})
+
+    return {
+        "available": True,
+        "grade_pct": f"{TTT_CLIMB_GRADE * 100:g}",
+        "lengths": [_ttt_format_length(m) for m in TTT_CLIMB_LENGTHS_M],
+        "rows": rows,
+    }

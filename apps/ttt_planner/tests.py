@@ -1070,3 +1070,40 @@ def test_plan_squad_add_dedupes(auth_client, team_member, user_model):
     auth_client.post(reverse("ttt_planner:plan_squad_add", args=[plan.pk]), {"squad": squad.pk})
     auth_client.post(reverse("ttt_planner:plan_squad_add", args=[plan.pk]), {"squad": squad.pk})
     assert plan.riders.filter(zwid=7100).count() == 1
+
+
+# ----- climb compare (per-rider climb strength) --------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_climb_strength_per_rider_gaps(team_member):
+    from apps.ttt_planner.services.compute import TTT_CLIMB_LENGTHS_M, climb_strength
+
+    plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
+    strong_w = {
+        "power_w5": 1100, "power_w15": 880, "power_w30": 770, "power_w60": 560,
+        "power_w120": 500, "power_w300": 420, "power_w1200": 360,
+    }
+    weak_w = {k: int(v * 0.75) for k, v in strong_w.items()}
+    ZRRider.objects.create(zwid=101, name="Strong", weight=66, height=178, **strong_w)
+    ZRRider.objects.create(zwid=102, name="Weak", weight=80, height=178, **weak_w)
+    PlanRider.objects.create(plan=plan, order=0, name="Strong", zwid=101, weight_kg=66, height_cm=178, ftp_w=320)
+    PlanRider.objects.create(plan=plan, order=1, name="Weak", zwid=102, weight_kg=80, height_cm=178, ftp_w=240)
+
+    climb = climb_strength(plan)
+    assert climb["available"] is True
+    assert len(climb["lengths"]) == len(TTT_CLIMB_LENGTHS_M)
+    assert len(climb["rows"]) == 2
+    strong_row = next(r for r in climb["rows"] if r["name"] == "Strong")
+    weak_row = next(r for r in climb["rows"] if r["name"] == "Weak")
+    assert any(c["label"] == "0" for c in strong_row["cells"])  # strong+light sets the pace
+    assert any(c.get("gap_s", 0) > 0 for c in weak_row["cells"])  # weak rider trails
+
+
+@pytest.mark.django_db
+def test_climb_strength_unavailable_without_zr(team_member):
+    from apps.ttt_planner.services.compute import climb_strength
+
+    plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
+    PlanRider.objects.create(plan=plan, order=0, name="A", zwid=None, weight_kg=70, height_cm=175, ftp_w=300)
+    assert climb_strength(plan)["available"] is False
