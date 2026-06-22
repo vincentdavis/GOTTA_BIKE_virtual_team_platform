@@ -174,14 +174,23 @@
       {% endfor %}
     </div>
 
-    <h3 class="font-semibold mb-2">Per-rider power</h3>
+    <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+      <h3 class="font-semibold">Per-rider power</h3>
+      <div class="join" role="group" aria-label="Column grouping">
+        <button type="button" class="btn btn-xs join-item btn-active" data-ladder-grouping-btn="domain"
+                onclick="window.applyLadderPerRiderGrouping('domain')">Group by metric</button>
+        <button type="button" class="btn btn-xs join-item" data-ladder-grouping-btn="time"
+                onclick="window.applyLadderPerRiderGrouping('time')">Group by time</button>
+      </div>
+    </div>
     <div class="overflow-x-auto">
-      <table class="table table-xs">
+      <table id="ladder-per-rider-table" class="table table-xs">
         <thead>
           <tr>
-            <th class="text-left">Rider</th><th>Team</th>
-            {% for d in summary.per_rider.durations %}<th class="text-center">{{ d }}<div class="text-[10px] font-normal text-base-content/50">w/kg</div></th>{% endfor %}
-            {% for d in summary.per_rider.durations %}<th class="text-center">{{ d }}<div class="text-[10px] font-normal text-base-content/50">W</div></th>{% endfor %}
+            <th class="text-left cursor-pointer select-none" data-sort-col="name" onclick="window.sortLadderPerRiderRows(this)">Rider</th>
+            <th class="cursor-pointer select-none" data-sort-col="team" onclick="window.sortLadderPerRiderRows(this)">Team</th>
+            {% for d in summary.per_rider.durations %}<th class="text-center cursor-pointer select-none" data-grp="wkg" data-dur="{{ forloop.counter0 }}" onclick="window.sortLadderPerRiderRows(this)">{{ d }}<div class="text-[10px] font-normal text-base-content/50">w/kg</div></th>{% endfor %}
+            {% for d in summary.per_rider.durations %}<th class="text-center cursor-pointer select-none" data-grp="w" data-dur="{{ forloop.counter0 }}" onclick="window.sortLadderPerRiderRows(this)">{{ d }}<div class="text-[10px] font-normal text-base-content/50">W</div></th>{% endfor %}
           </tr>
         </thead>
         <tbody>
@@ -189,8 +198,8 @@
           <tr>
             <td class="font-medium whitespace-nowrap">{{ row.name }}</td>
             <td class="whitespace-nowrap">{{ row.team }}</td>
-            {% for c in row.wkg %}<td class="text-center text-black" style="{% if c.rgb %}background:{{ c.rgb }}{% endif %}">{{ c.value|default_if_none:"—" }}</td>{% endfor %}
-            {% for c in row.w %}<td class="text-center text-black" style="{% if c.rgb %}background:{{ c.rgb }}{% endif %}">{{ c.value|default_if_none:"—" }}</td>{% endfor %}
+            {% for c in row.wkg %}<td class="text-center text-black" data-grp="wkg" data-dur="{{ forloop.counter0 }}" style="{% if c.rgb %}background:{{ c.rgb }}{% endif %}">{{ c.value|default_if_none:"—" }}</td>{% endfor %}
+            {% for c in row.w %}<td class="text-center text-black" data-grp="w" data-dur="{{ forloop.counter0 }}" style="{% if c.rgb %}background:{{ c.rgb }}{% endif %}">{{ c.value|default_if_none:"—" }}</td>{% endfor %}
           </tr>
           {% empty %}
           <tr><td colspan="16" class="text-center text-base-content/60 py-6">No racing riders yet.</td></tr>
@@ -296,3 +305,4 @@
 {{ summary.power.durations|json_script:"ladder-chart-durations" }}
 <script id="ladder-chart-labels" type="application/json">{"ours": "{{ summary.power.our_label|escapejs }}", "opp": "{{ summary.power.opp_label|escapejs }}"}</script>
 <script>window.renderLadderCharts && window.renderLadderCharts();</script>
+<script>window.applyLadderPerRiderGrouping && window.applyLadderPerRiderGrouping();</script>

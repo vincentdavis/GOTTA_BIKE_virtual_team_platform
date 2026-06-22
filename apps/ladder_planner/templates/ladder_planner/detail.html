@@ -228,4 +228,127 @@
     if (e.target && e.target.id === "ladder-body") window.renderLadderCharts();
   });
 </script>
+<script>
+  // Per-rider power table column grouping: "domain" (all w/kg cols, then all W
+  // cols — the default) vs "time" (each duration's w/kg + W paired). Reorders the
+  // server-rendered cells in place; the data is identical, only column order moves.
+  // Preference persists in localStorage and re-applies after every HTMX swap via
+  // the trailing call in _matchup_body.html.
+  var LADDER_GROUPING_KEY = "ladderPerRiderGrouping";
+
+  function ladderStoredGrouping() {
+    try { return localStorage.getItem(LADDER_GROUPING_KEY); } catch (e) { return null; }
+  }
+
+  window.applyLadderPerRiderGrouping = function (mode) {
+    var table = document.getElementById("ladder-per-rider-table");
+    if (!table) return;
+
+    if (mode) {
+      try { localStorage.setItem(LADDER_GROUPING_KEY, mode); } catch (e) { /* ignore */ }
+    }
+    mode = mode || ladderStoredGrouping() || "domain";
+
+    table.querySelectorAll("tr").forEach(function (row) {
+      var cells = Array.prototype.slice.call(row.querySelectorAll("[data-grp]"));
+      if (!cells.length) return;
+      cells.sort(function (a, b) {
+        var da = parseInt(a.getAttribute("data-dur"), 10);
+        var db = parseInt(b.getAttribute("data-dur"), 10);
+        var ga = a.getAttribute("data-grp"); // "wkg" sorts before "w"
+        var gb = b.getAttribute("data-grp");
+        if (mode === "time") {
+          if (da !== db) return da - db;
+          return ga === gb ? 0 : (ga === "wkg" ? -1 : 1);
+        }
+        if (ga !== gb) return ga === "wkg" ? -1 : 1;
+        return da - db;
+      });
+      // Re-append after the fixed leading cells (Rider/Team have no data-grp).
+      var parent = cells[0].parentNode;
+      cells.forEach(function (c) { parent.appendChild(c); });
+    });
+
+    // Vertical separators: in "time" mode divide each duration pair (border before
+    // every w/kg cell); in "domain" mode a single divide between the w/kg and W blocks.
+    table.querySelectorAll("[data-grp]").forEach(function (c) {
+      c.classList.remove("border-l", "border-base-300");
+    });
+    table.querySelectorAll("tr").forEach(function (row) {
+      var cells = Array.prototype.slice.call(row.querySelectorAll("[data-grp]"));
+      cells.forEach(function (c, i) {
+        if (i === 0) return;
+        var boundary = mode === "time"
+          ? c.getAttribute("data-grp") === "wkg"
+          : (c.getAttribute("data-grp") === "w" && cells[i - 1].getAttribute("data-grp") === "wkg");
+        if (boundary) c.classList.add("border-l", "border-base-300");
+      });
+    });
+
+    document.querySelectorAll("[data-ladder-grouping-btn]").forEach(function (btn) {
+      btn.classList.toggle("btn-active", btn.getAttribute("data-ladder-grouping-btn") === mode);
+    });
+  };
+
+  // Click a column header to sort the rows by that column; click again to flip
+  // direction. Independent of the column grouping above. Missing values ("—")
+  // always sink to the bottom. Sort is not re-applied after an HTMX swap (the
+  // server returns fresh rows in default order).
+  window.sortLadderPerRiderRows = function (th) {
+    var table = document.getElementById("ladder-per-rider-table");
+    if (!table || !th) return;
+    var tbody = table.querySelector("tbody");
+    if (!tbody) return;
+    var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr")).filter(function (r) {
+      return !r.querySelector("td[colspan]"); // drop the "No racing riders" placeholder
+    });
+    if (rows.length < 2) return;
+
+    var grp = th.getAttribute("data-grp");
+    var dur = th.getAttribute("data-dur");
+    var col = th.getAttribute("data-sort-col");
+    var key = grp ? "p:" + grp + ":" + dur : "c:" + col;
+    var dir = (table.getAttribute("data-sort-key") === key && table.getAttribute("data-sort-dir") === "asc")
+      ? "desc" : "asc";
+    table.setAttribute("data-sort-key", key);
+    table.setAttribute("data-sort-dir", dir);
+
+    function value(row) {
+      if (grp) {
+        var td = row.querySelector('td[data-grp="' + grp + '"][data-dur="' + dur + '"]');
+        if (!td) return null;
+        var n = parseFloat(td.textContent.replace(/[^0-9.\-]/g, ""));
+        return isNaN(n) ? null : n;
+      }
+      var cell = row.children[col === "team" ? 1 : 0];
+      return cell ? cell.textContent.trim().toLowerCase() : "";
+    }
+
+    var mult = dir === "asc" ? 1 : -1;
+    rows.sort(function (a, b) {
+      var va = value(a), vb = value(b);
+      var aEmpty = va === null || va === "";
+      var bEmpty = vb === null || vb === "";
+      if (aEmpty && bEmpty) return 0;
+      if (aEmpty) return 1;
+      if (bEmpty) return -1;
+      if (typeof va === "number") return (va - vb) * mult;
+      return (va < vb ? -1 : va > vb ? 1 : 0) * mult;
+    });
+    rows.forEach(function (r) { tbody.appendChild(r); });
+
+    // Direction indicator, inline with the duration number (before the unit label).
+    table.querySelectorAll("th .ladder-sort-ind").forEach(function (s) { s.remove(); });
+    var ind = document.createElement("span");
+    ind.className = "ladder-sort-ind ml-1 text-base-content/60";
+    ind.textContent = dir === "asc" ? "▲" : "▼";
+    var unit = th.querySelector("div");
+    if (unit) th.insertBefore(ind, unit); else th.appendChild(ind);
+  };
+
+  document.addEventListener("DOMContentLoaded", function () { window.applyLadderPerRiderGrouping(); });
+  document.body.addEventListener("htmx:afterSwap", function (e) {
+    if (e.target && e.target.id === "ladder-body") window.applyLadderPerRiderGrouping();
+  });
+</script>
 {% endblock %}
