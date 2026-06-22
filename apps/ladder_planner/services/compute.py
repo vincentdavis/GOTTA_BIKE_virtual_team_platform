@@ -8,11 +8,13 @@ with ``is_racing=True`` are included.
 from __future__ import annotations
 
 import statistics
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from apps.ladder_planner.models import Side
 from apps.ladder_planner.services.normalize import DURATION_KEYS, DURATIONS, VELO_KEYS, VELO_LABELS
 from apps.ttt_planner.services import climb as climb_engine
+from apps.ttt_planner.services import physics
 
 if TYPE_CHECKING:
     from apps.ladder_planner.models import LadderMatchup, LadderRider
@@ -628,7 +630,15 @@ def climb_advantage(matchup: LadderMatchup) -> dict[str, Any]:
     if not our_riders or not opp_riders:
         return {"available": False, "our_label": our_label, "opp_label": opp_label}
 
-    grid = climb_engine.advantage_grid(our_riders, opp_riders, CLIMB_LENGTHS_M, CLIMB_GRADES)
+    # Honour the configurable physics settings from Constance, using the standard
+    # (upright) CdA coefficient rather than the TTT aero tuck, with an optional
+    # per-matchup CdA coefficient override on top.
+    params = physics.params_from_constance(cda_coef_key="STD_CDA_COEF")
+    if matchup.cda_coef is not None:
+        params = replace(params, cda_coef=matchup.cda_coef)
+    grid = climb_engine.advantage_grid(
+        our_riders, opp_riders, CLIMB_LENGTHS_M, CLIMB_GRADES, params=params
+    )
     # Cell value is the median climber's time gap (opponent - ours); positive = we're faster.
     max_abs = max((abs(_median_gap(c)) for row in grid for c in row["cells"]), default=0) or 1
 

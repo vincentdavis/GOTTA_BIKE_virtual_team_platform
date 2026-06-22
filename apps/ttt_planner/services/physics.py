@@ -385,10 +385,15 @@ def parse_draft_savings(raw: str | list | tuple | None) -> tuple[float, ...] | N
     return normalize_draft_savings(values)
 
 
-def params_from_constance() -> PhysicsParams:
+def params_from_constance(cda_coef_key: str = "TTT_CDA_COEF") -> PhysicsParams:
     """Build :class:`PhysicsParams` from Constance settings.
 
     Imports Constance lazily so this module stays import-safe without Django.
+
+    Args:
+        cda_coef_key: Which Constance key supplies the CdA leading coefficient.
+            Defaults to ``TTT_CDA_COEF`` (aero tuck); pass ``STD_CDA_COEF`` for
+            general road/climbing racing (upright position).
 
     Returns:
         A ``PhysicsParams`` populated from the ``TTT_*`` Constance settings,
@@ -413,7 +418,7 @@ def params_from_constance() -> PhysicsParams:
         crr=_f("TTT_CRR", DEFAULT_PARAMS.crr),
         bike_mass_kg=_f("TTT_BIKE_MASS_KG", DEFAULT_PARAMS.bike_mass_kg),
         drivetrain_efficiency=_f("TTT_DRIVETRAIN_EFFICIENCY", DEFAULT_PARAMS.drivetrain_efficiency),
-        cda_coef=_f("TTT_CDA_COEF", DEFAULT_PARAMS.cda_coef),
+        cda_coef=_f(cda_coef_key, DEFAULT_PARAMS.cda_coef),
         cda_height_exp=_f("TTT_CDA_HEIGHT_EXP", DEFAULT_PARAMS.cda_height_exp),
         cda_weight_exp=_f("TTT_CDA_WEIGHT_EXP", DEFAULT_PARAMS.cda_weight_exp),
         draft_savings=savings,

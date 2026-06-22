@@ -8,6 +8,7 @@ keeping the page in sync after every edit. CSRF is supplied globally via
 
 from __future__ import annotations
 
+import contextlib
 import re
 
 import logfire
@@ -259,6 +260,13 @@ def matchup_update(request: HttpRequest, matchup_id: str) -> HttpResponse:
         profile = request.POST.get("course_profile", "")
         if profile in CourseProfile.values:
             matchup.course_profile = profile
+    if "cda_coef" in request.POST:
+        raw = request.POST.get("cda_coef", "").strip()
+        if not raw:
+            matchup.cda_coef = None  # fall back to the global TTT_CDA_COEF
+        else:
+            with contextlib.suppress(ValueError):
+                matchup.cda_coef = max(0.0, float(raw))
 
     matchup.save()
     return HttpResponse(_render_body(request, matchup, can_edit=True))

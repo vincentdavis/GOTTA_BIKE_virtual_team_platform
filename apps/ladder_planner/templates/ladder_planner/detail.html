@@ -229,6 +229,26 @@
   });
 </script>
 <script>
+  // Keep the selected tab across HTMX swaps of #ladder-body (otherwise every edit
+  // re-renders the partial with the first tab checked, bouncing you off the tab you
+  // were on — e.g. when changing CdA on the Climb compare tab).
+  (function () {
+    var activeTab = null;
+    document.body.addEventListener("htmx:beforeSwap", function (e) {
+      if (e.target && e.target.id === "ladder-body") {
+        var checked = document.querySelector('#ladder-body input[name="ladder_tabs"]:checked');
+        activeTab = checked ? checked.getAttribute("aria-label") : null;
+      }
+    });
+    document.body.addEventListener("htmx:afterSwap", function (e) {
+      if (e.target && e.target.id === "ladder-body" && activeTab) {
+        var el = document.querySelector('#ladder-body input[name="ladder_tabs"][aria-label="' + activeTab + '"]');
+        if (el) el.checked = true;
+      }
+    });
+  })();
+</script>
+<script>
   // Per-rider power table column grouping: "domain" (all w/kg cols, then all W
   // cols — the default) vs "time" (each duration's w/kg + W paired). Reorders the
   // server-rendered cells in place; the data is identical, only column order moves.

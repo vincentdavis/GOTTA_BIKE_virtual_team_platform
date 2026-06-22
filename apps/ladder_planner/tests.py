@@ -643,6 +643,19 @@ def test_climb_advantage_available_and_favours_stronger(team_member):
 
 
 @pytest.mark.django_db
+def test_matchup_update_sets_and_clears_cda_coef(auth_client, team_member):
+    matchup = _make_matchup(team_member)
+
+    auth_client.post(f"/ladder/{matchup.pk}/update/", {"cda_coef": "0.04"}, HTTP_HX_REQUEST="true")
+    matchup.refresh_from_db()
+    assert matchup.cda_coef == pytest.approx(0.04)
+
+    auth_client.post(f"/ladder/{matchup.pk}/update/", {"cda_coef": ""}, HTTP_HX_REQUEST="true")
+    matchup.refresh_from_db()
+    assert matchup.cda_coef is None  # blank falls back to the global default
+
+
+@pytest.mark.django_db
 def test_climb_advantage_unavailable_without_data(team_member):
     matchup = _make_matchup(team_member)
     _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={}, name="O"))

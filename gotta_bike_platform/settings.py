@@ -836,9 +836,15 @@ CONSTANCE_CONFIG = {
     "TTT_CRR": (0.004, "Coefficient of rolling resistance for the TTT power model", float),
     "TTT_BIKE_MASS_KG": (8.0, "Bike + wheels mass (kg) added to rider weight in the TTT power model", float),
     "TTT_DRIVETRAIN_EFFICIENCY": (1.0, "Drivetrain efficiency (1.0 = no loss) for the TTT power model", float),
-    "TTT_CDA_COEF": (0.0318, "Leading coefficient of the CdA estimate (folds in Cd) for the TTT power model", float),
-    "TTT_CDA_HEIGHT_EXP": (0.725, "Height exponent in the CdA estimate for the TTT power model", float),
-    "TTT_CDA_WEIGHT_EXP": (0.425, "Weight exponent in the CdA estimate for the TTT power model", float),
+    "TTT_CDA_COEF": (0.0318, "Leading coefficient of the CdA estimate (folds in Cd) for the TTT aero-tuck position", float),
+    "STD_CDA_COEF": (
+        0.0400,
+        "Leading coefficient of the CdA estimate for general road/climbing racing "
+        "(e.g. the ladder Climb compare); upright position, higher than the TTT tuck",
+        float,
+    ),
+    "TTT_CDA_HEIGHT_EXP": (0.725, "Height exponent in the CdA estimate for the power model", float),
+    "TTT_CDA_WEIGHT_EXP": (0.425, "Weight exponent in the CdA estimate for the power model", float),
     "TTT_DRAFT_SAVINGS": (
         "[0.0, 0.233, 0.30, 0.366, 0.39, 0.40, 0.41, 0.42]",
         "Aero-power savings fraction by wheel position (index 0 = front). JSON array.",
@@ -1004,6 +1010,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "TTT_BIKE_MASS_KG",
         "TTT_DRIVETRAIN_EFFICIENCY",
         "TTT_CDA_COEF",
+        "STD_CDA_COEF",
         "TTT_CDA_HEIGHT_EXP",
         "TTT_CDA_WEIGHT_EXP",
         "TTT_DRAFT_SAVINGS",

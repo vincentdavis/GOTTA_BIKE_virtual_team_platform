@@ -53,6 +53,11 @@ class LadderMatchup(models.Model):
         default=CourseProfile.ROLLING,
         help_text="Terrain profile; selects which ZR handicap drives the projected score",
     )
+    cda_coef = models.FloatField(
+        null=True,
+        blank=True,
+        help_text="Per-matchup aero CdA coefficient for the Climb compare tab. Blank uses the global TTT_CDA_COEF.",
+    )
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
