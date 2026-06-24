@@ -165,3 +165,40 @@ def team_member_required(
         login_url=login_url,
         raise_exception=raise_exception,
     )
+
+
+def race_verified_required(login_url: str | None = None) -> Callable[[F], F]:
+    """Require the user to be Race Verified (``is_race_ready``) or a superuser.
+
+    Used for shared reference data that verified racers may curate (routes and
+    segments). Authenticated users who aren't verified get a 403.
+
+    Args:
+        login_url: URL to redirect to if not logged in.
+
+    Returns:
+        Decorator function.
+
+    """
+
+    def check(user) -> bool:
+        """Allow superusers and race-verified users.
+
+        Args:
+            user: The user to check.
+
+        Returns:
+            True if allowed.
+
+        Raises:
+            PermissionDenied: If authenticated but not race verified.
+
+        """
+        if not user.is_authenticated:
+            return False
+        if user.is_superuser or getattr(user, "is_race_ready", False):
+            return True
+        logfire.warning("Route/segment edit denied: not race verified", user_id=user.id)
+        raise PermissionDenied
+
+    return user_passes_test(check, login_url=login_url)

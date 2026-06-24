@@ -1,0 +1,62 @@
+[
+  {
+    "name": "Fox Hill",
+    "type": "Climb",
+    "category": "4",
+    "direction": "Forward",
+    "distance_km": 2.4,
+    "grade_pct": 4.9,
+    "url": "https://whatsonzwift.com/world/london/segment/fox-hill/forward"
+  },
+  {
+    "name": "Box Hill",
+    "type": "Climb",
+    "category": "4",
+    "direction": "Reverse",
+    "distance_km": 3.0,
+    "grade_pct": 4.3,
+    "url": "https://whatsonzwift.com/world/london/segment/box-hill/reverse"
+  },
+  {
+    "name": "Leith Hill",
+    "type": "Climb",
+    "category": "4",
+    "direction": "Forward",
+    "distance_km": 1.9,
+    "grade_pct": 6.8,
+    "url": "https://whatsonzwift.com/world/london/segment/leith-hill/forward"
+  },
+  {
+    "name": "Keith Hill",
+    "type": "Climb",
+    "category": "3",
+    "direction": "Reverse",
+    "distance_km": 4.3,
+    "grade_pct": 5.0,
+    "url": "https://whatsonzwift.com/world/london/segment/keith-hill/reverse"
+  },
+  {
+    "name": "London Loop",
+    "type": "Segment",
+    "direction": "Reverse",
+    "distance_km": 15.0,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/london/segment/london-loop/reverse"
+  },
+  {
+    "name": "Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 200,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/london/segment/sprint/forward"
+  },
+  {
+    "name": "Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 200,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/london/segment/sprint/reverse"
+  }
+]

@@ -19,10 +19,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
-from apps.accounts.decorators import team_member_required
+from apps.accounts.decorators import race_verified_required, team_member_required
 from apps.events import squads as event_squads
 from apps.events.models import Squad
 from apps.ttt_planner import terrain
+from apps.ttt_planner.forms import RouteForm, SegmentForm
 from apps.ttt_planner.models import PlanRider, Route, RouteGpx, Segment, TttPlan
 from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
@@ -124,6 +125,7 @@ def route_list(request: HttpRequest) -> HttpResponse:
             "rows": rows,
             "climbs": [s for s in segments if s.segment_type == Segment.SegmentType.CLIMB],
             "sprints": [s for s in segments if s.segment_type == Segment.SegmentType.SPRINT],
+            "other_segments": [s for s in segments if s.segment_type == Segment.SegmentType.SEGMENT],
         },
     )
 
@@ -144,8 +146,89 @@ def route_detail(request: HttpRequest, route_id: int) -> HttpResponse:
     return render(
         request,
         "ttt_planner/route_detail.html",
-        {"route": route, "gpx_files": gpx_files, "estimated_terrain": estimated},
+        {
+            "route": route,
+            "gpx_files": gpx_files,
+            "estimated_terrain": estimated,
+            "total_distance_km": route.distance_km + route.lead_in_distance_km,
+        },
     )
+
+
+@login_required
+@race_verified_required()
+def route_create(request: HttpRequest) -> HttpResponse:
+    """Create a route (race-verified users / superusers).
+
+    Returns:
+        The route form on GET/invalid, else a redirect to the new route.
+
+    """
+    form = RouteForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        route = form.save()
+        messages.success(request, f"Route “{route.name}” created.")
+        return redirect("routes:detail", route_id=route.pk)
+    return render(request, "ttt_planner/route_form.html", {"form": form, "mode": "create"})
+
+
+@login_required
+@race_verified_required()
+def route_edit(request: HttpRequest, route_id: int) -> HttpResponse:
+    """Edit a route (race-verified users / superusers).
+
+    Returns:
+        The route form on GET/invalid, else a redirect to the route.
+
+    """
+    route = get_object_or_404(Route, pk=route_id)
+    form = RouteForm(request.POST or None, instance=route)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Route updated.")
+        return redirect("routes:detail", route_id=route.pk)
+    return render(request, "ttt_planner/route_form.html", {"form": form, "mode": "edit", "route": route})
+
+
+@login_required
+@race_verified_required()
+def segment_create(request: HttpRequest) -> HttpResponse:
+    """Create a climb/sprint segment (race-verified users / superusers).
+
+    Accepts ``?type=climb|sprint`` to preselect the segment type.
+
+    Returns:
+        The segment form on GET/invalid, else a redirect to the routes page.
+
+    """
+    initial = {}
+    seg_type = request.GET.get("type")
+    if seg_type in Segment.SegmentType.values:
+        initial["segment_type"] = seg_type
+    form = SegmentForm(request.POST or None, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        segment = form.save()
+        messages.success(request, f"{segment.get_segment_type_display()} “{segment.name}” created.")
+        return redirect("routes:list")
+    return render(request, "ttt_planner/segment_form.html", {"form": form, "mode": "create"})
+
+
+@login_required
+@race_verified_required()
+def segment_edit(request: HttpRequest, segment_id: int) -> HttpResponse:
+    """Edit a climb/sprint segment (race-verified users / superusers).
+
+    Returns:
+        The segment form on GET/invalid, else a redirect to the routes page.
+
+    """
+    segment = get_object_or_404(Segment, pk=segment_id)
+    form = SegmentForm(request.POST or None, instance=segment)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Segment updated.")
+        return redirect("routes:list")
+    return render(request, "ttt_planner/segment_form.html", {"form": form, "mode": "edit", "segment": segment})
 
 
 @login_required

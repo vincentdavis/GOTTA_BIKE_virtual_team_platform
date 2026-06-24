@@ -1,0 +1,35 @@
+[
+  {
+    "name": "Crit City",
+    "type": "Segment",
+    "direction": "Forward",
+    "distance_km": 2.0,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/crit-city/segment/crit-city/forward"
+  },
+  {
+    "name": "Crit City",
+    "type": "Segment",
+    "direction": "Reverse",
+    "distance_km": 2.0,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/crit-city/segment/crit-city/reverse"
+  },
+  {
+    "name": "Prime",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_m": 197,
+    "grade_pct": 4.0,
+    "url": "https://whatsonzwift.com/world/crit-city/segment/prime/forward"
+  },
+  {
+    "name": "Prime",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 288,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/crit-city/segment/prime/reverse"
+  }
+]

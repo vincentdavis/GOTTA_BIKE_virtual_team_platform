@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Bologna TT",
+    "type": "Segment",
+    "direction": "Forward",
+    "distance_km": 8.0,
+    "grade_pct": 2.8,
+    "url": "https://whatsonzwift.com/world/bologna-tt/segment/bologna-tt/forward"
+  }
+]

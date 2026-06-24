@@ -10,6 +10,7 @@ from django.db import models
 from django.utils.text import slugify
 
 from apps.ttt_planner import terrain
+from apps.ttt_planner.worlds import world_choices
 
 # whatsonzwift world slugs that don't match slugify(world).
 _WOZ_WORLD_OVERRIDES = {"bologna": "bologna-tt"}
@@ -22,7 +23,7 @@ class Route(models.Model):
     """
 
     name = models.CharField(max_length=200, help_text="Route name")
-    world = models.CharField(max_length=100, blank=True, help_text="Zwift world (e.g. Watopia)")
+    world = models.CharField(max_length=100, blank=True, choices=world_choices, help_text="Zwift world")
     distance_km = models.DecimalField(max_digits=6, decimal_places=2, help_text="Route distance in km")
     elevation_m = models.PositiveIntegerField(default=0, help_text="Total elevation gain in metres")
     zwift_route_id = models.CharField(max_length=50, blank=True, help_text="Zwift route identifier, if known")
@@ -129,19 +130,35 @@ class Segment(models.Model):
     """
 
     class SegmentType(models.TextChoices):
-        """Whether the segment is a climb or a sprint."""
+        """Climb, Sprint, or a generic timed segment."""
 
         CLIMB = "climb", "Climb"
         SPRINT = "sprint", "Sprint"
+        SEGMENT = "segment", "Segment"
+
+    class Direction(models.TextChoices):
+        """Which way the segment is ridden."""
+
+        FORWARD = "forward", "Forward"
+        REVERSE = "reverse", "Reverse"
 
     segment_type = models.CharField(
-        max_length=10, choices=SegmentType.choices, help_text="Climb or Sprint"
+        max_length=10, choices=SegmentType.choices, help_text="Climb, Sprint, or generic Segment"
+    )
+    direction = models.CharField(
+        max_length=10, choices=Direction.choices, blank=True, help_text="Forward or Reverse (blank if single-direction)"
     )
     name = models.CharField(max_length=200, help_text="Segment name")
+    category = models.CharField(max_length=5, blank=True, help_text="Climb category (HC, 1-4) if applicable")
     notes = models.TextField(blank=True, help_text="Free-text notes")
     length_m = models.PositiveIntegerField(default=0, help_text="Segment length in metres")
     elevation_m = models.PositiveIntegerField(default=0, help_text="Segment elevation gain in metres")
-    world = models.CharField(max_length=100, blank=True, help_text="Zwift world (e.g. Watopia)")
+    grade_pct = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True, help_text="Average grade %"
+    )
+    world = models.CharField(
+        max_length=100, blank=True, choices=world_choices, help_text="Zwift world"
+    )
     strava_url = models.URLField(blank=True, help_text="Strava segment URL")
     zwiftinsider_url = models.URLField(blank=True, help_text="ZwiftInsider segment URL")
     whatsonzwift_url = models.URLField(blank=True, help_text="whatsonzwift.com segment URL")
@@ -151,16 +168,20 @@ class Segment(models.Model):
 
         verbose_name = "Segment"
         verbose_name_plural = "Segments"
-        ordering: ClassVar[list[str]] = ["world", "name"]
+        ordering: ClassVar[list[str]] = ["world", "name", "direction"]
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["name", "world", "direction"], name="unique_segment_name_world_direction"),
+        ]
 
     def __str__(self) -> str:
         """Return a label for the segment.
 
         Returns:
-            Human-readable label with its type.
+            Human-readable label with its type and direction.
 
         """
-        return f"{self.name} ({self.get_segment_type_display()})"
+        direction = f", {self.get_direction_display()}" if self.direction else ""
+        return f"{self.name} ({self.get_segment_type_display()}{direction})"
 
 
 class TttPlan(models.Model):

@@ -26,12 +26,64 @@
             <span class="text-base-content/40">(estimated)</span>
           </p>
         </div>
-        {% if route.whatsonzwift_url %}
-        <a href="{{ route.whatsonzwift_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
-          View on whatsonzwift ↗
-        </a>
-        {% endif %}
+        <div class="flex flex-wrap gap-2">
+          {% if user.is_race_ready or user.is_superuser %}
+          <a href="{% url 'routes:edit' route.pk %}" class="btn btn-primary btn-sm">Edit route</a>
+          {% endif %}
+          {% if route.zwiftinsider_url %}
+          <a href="{{ route.zwiftinsider_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">ZwiftInsider ↗</a>
+          {% endif %}
+          {% if route.whatsonzwift_url %}
+          <a href="{{ route.whatsonzwift_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">whatsonzwift ↗</a>
+          {% endif %}
+        </div>
       </div>
+    </div>
+  </div>
+
+  {# ---- Details (lead-in, laps, segments) ---- #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="font-semibold mb-3">Details</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div>
+          <div class="text-xs text-base-content/60">Lead-in</div>
+          <div class="font-medium">{{ route.lead_in_distance_km }} km · {{ route.lead_in_elevation_m }} m</div>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/60">Laps</div>
+          <div class="font-medium">{% if route.supports_laps %}Supported{% else %}Single lap{% endif %}</div>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/60">Recommended laps <span class="text-base-content/40">(Club Ladder)</span></div>
+          <div class="font-medium">{{ route.recommended_laps|default:"—" }}</div>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/60">Total w/ lead-in</div>
+          <div class="font-medium">{{ total_distance_km }} km</div>
+        </div>
+      </div>
+
+      <h4 class="font-semibold text-sm mt-5 mb-2">Climbs &amp; sprints</h4>
+      {% with segs=route.segments.all %}
+      {% if segs %}
+      <ul class="space-y-1.5 text-sm">
+        {% for s in segs %}
+        <li class="flex flex-wrap items-center gap-2">
+          <span class="badge badge-sm {% if s.segment_type == 'climb' %}badge-warning{% else %}badge-info{% endif %}">{{ s.get_segment_type_display }}</span>
+          <span class="font-medium">{{ s.name }}</span>
+          <span class="text-base-content/50">{{ s.length_m }} m{% if s.elevation_m %} · {{ s.elevation_m }} m climb{% endif %}</span>
+          {% if s.strava_url %}<a href="{{ s.strava_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="Strava">Strava</a>{% endif %}
+          {% if s.zwiftinsider_url %}<a href="{{ s.zwiftinsider_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="ZwiftInsider">ZI</a>{% endif %}
+          {% if s.whatsonzwift_url %}<a href="{{ s.whatsonzwift_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="whatsonzwift">WoZ</a>{% endif %}
+          {% if user.is_race_ready or user.is_superuser %}<a href="{% url 'routes:segment_edit' s.pk %}" class="link link-primary text-xs">Edit</a>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-base-content/60">No climbs or sprints linked yet — add them in admin.</p>
+      {% endif %}
+      {% endwith %}
     </div>
   </div>
 

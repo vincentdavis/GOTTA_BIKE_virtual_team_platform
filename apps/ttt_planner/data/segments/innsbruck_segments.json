@@ -1,0 +1,53 @@
+[
+  {
+    "name": "KOM / QOM",
+    "type": "Climb",
+    "category": "2",
+    "direction": "Forward",
+    "distance_km": 7.4,
+    "grade_pct": 5.4,
+    "url": "https://whatsonzwift.com/world/innsbruck/segment/kom/forward"
+  },
+  {
+    "name": "KOM / QOM",
+    "type": "Climb",
+    "category": "2",
+    "direction": "Reverse",
+    "distance_km": 5.8,
+    "grade_pct": 6.9,
+    "url": "https://whatsonzwift.com/world/innsbruck/segment/kom/reverse"
+  },
+  {
+    "name": "Leg Snapper KOM / Leg Snapper QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_m": 435,
+    "grade_pct": 6.9,
+    "url": "https://whatsonzwift.com/world/innsbruck/segment/leg-snapper-kom/forward"
+  },
+  {
+    "name": "Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 300,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/innsbruck/segment/sprint/forward"
+  },
+  {
+    "name": "Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 200,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/innsbruck/segment/sprint/reverse"
+  },
+  {
+    "name": "UCI Lap",
+    "type": "Segment",
+    "direction": "Forward",
+    "distance_km": 23.6,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/innsbruck/segment/uci-lap/forward"
+  }
+]

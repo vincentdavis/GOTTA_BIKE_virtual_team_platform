@@ -1,0 +1,152 @@
+[
+  {
+    "name": "Aqueduc KOM / Aqueduc QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_m": 422,
+    "grade_pct": 0.9,
+    "url": "https://whatsonzwift.com/world/france/segment/aqueduc-kom/forward"
+  },
+  {
+    "name": "Aqueduc KOM Reverse / Aqueduc QOM Reverse",
+    "type": "Climb",
+    "category": null,
+    "direction": "Reverse",
+    "distance_m": 403,
+    "grade_pct": 2.3,
+    "url": "https://whatsonzwift.com/world/france/segment/aqueduc-kom-reverse/reverse"
+  },
+  {
+    "name": "Ballon Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 212,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/france/segment/ballon-sprint/forward"
+  },
+  {
+    "name": "Ballon Sprint Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 325,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/france/segment/ballon-sprint-reverse/reverse"
+  },
+  {
+    "name": "Dos d'Âne Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 750,
+    "grade_pct": 0.8,
+    "url": "https://whatsonzwift.com/world/france/segment/dos-d-ane-sprint/forward"
+  },
+  {
+    "name": "Dos d'Âne Sprint Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 750,
+    "grade_pct": 1.4,
+    "url": "https://whatsonzwift.com/world/france/segment/dos-d-ane-sprint-reverse/reverse"
+  },
+  {
+    "name": "Marina Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 338,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/france/segment/marina-sprint/forward"
+  },
+  {
+    "name": "Marina Sprint Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 193,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/france/segment/marina-sprint-reverse/reverse"
+  },
+  {
+    "name": "Mostly Ventoux",
+    "type": "Climb",
+    "category": "HC",
+    "direction": "Forward",
+    "distance_km": 17.1,
+    "grade_pct": 8.1,
+    "url": "https://whatsonzwift.com/world/france/segment/mostly-ventoux/forward"
+  },
+  {
+    "name": "Pavé Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 333,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/france/segment/pave-sprint/forward"
+  },
+  {
+    "name": "Pavé Sprint Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 334,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/france/segment/pave-sprint-reverse/reverse"
+  },
+  {
+    "name": "Petit KOM / Petit QOM",
+    "type": "Climb",
+    "category": "4",
+    "direction": "Forward",
+    "distance_km": 2.7,
+    "grade_pct": 4.0,
+    "url": "https://whatsonzwift.com/world/france/segment/petit-kom/forward"
+  },
+  {
+    "name": "Sprint du Cratère",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 300,
+    "grade_pct": 0.0,
+    "url": "https://whatsonzwift.com/world/france/segment/sprint-du-cratere/forward"
+  },
+  {
+    "name": "Sprint du Cratère Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 300,
+    "grade_pct": 0.0,
+    "url": "https://whatsonzwift.com/world/france/segment/sprint-du-cratere-reverse/reverse"
+  },
+  {
+    "name": "Sprinteur Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 250,
+    "grade_pct": 1.6,
+    "url": "https://whatsonzwift.com/world/france/segment/sprinteur-sprint/forward"
+  },
+  {
+    "name": "Sprinteur Sprint Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 250,
+    "grade_pct": -1.8,
+    "url": "https://whatsonzwift.com/world/france/segment/sprinteur-sprint-reverse/reverse"
+  },
+  {
+    "name": "Ventoux Half KOM / Ventoux Half QOM",
+    "type": "Climb",
+    "category": "1",
+    "direction": "Forward",
+    "distance_km": 9.5,
+    "grade_pct": 8.0,
+    "url": "https://whatsonzwift.com/world/france/segment/ventoux-half-kom/forward"
+  },
+  {
+    "name": "Ventoux KOM / Ventoux QOM",
+    "type": "Climb",
+    "category": "HC",
+    "direction": "Forward",
+    "distance_km": 19.0,
+    "grade_pct": 7.8,
+    "url": "https://whatsonzwift.com/world/france/segment/ventoux-kom/forward"
+  }
+]

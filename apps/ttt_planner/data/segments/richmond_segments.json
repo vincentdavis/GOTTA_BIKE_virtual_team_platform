@@ -1,0 +1,78 @@
+[
+  {
+    "name": "23rd St.",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_m": 275,
+    "grade_pct": 10.0,
+    "url": "https://whatsonzwift.com/world/richmond/segment/23rd-st/forward"
+  },
+  {
+    "name": "23rd St.",
+    "type": "Climb",
+    "category": null,
+    "direction": "Reverse",
+    "distance_km": 1.1,
+    "grade_pct": 3.5,
+    "url": "https://whatsonzwift.com/world/richmond/segment/23rd-st/reverse"
+  },
+  {
+    "name": "Broad St.",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 283,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/richmond/segment/broad-st/forward"
+  },
+  {
+    "name": "Broad St.",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 64,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/richmond/segment/broad-st/reverse"
+  },
+  {
+    "name": "KOM / QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_m": 644,
+    "grade_pct": 6.4,
+    "url": "https://whatsonzwift.com/world/richmond/segment/kom/forward"
+  },
+  {
+    "name": "KOM / QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Reverse",
+    "distance_m": 700,
+    "grade_pct": 3.4,
+    "url": "https://whatsonzwift.com/world/richmond/segment/kom/reverse"
+  },
+  {
+    "name": "Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 221,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/richmond/segment/sprint/forward"
+  },
+  {
+    "name": "Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 203,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/richmond/segment/sprint/reverse"
+  },
+  {
+    "name": "UCI Course",
+    "type": "Segment",
+    "direction": "Forward",
+    "distance_km": 16.2,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/richmond/segment/uci-course/forward"
+  }
+]

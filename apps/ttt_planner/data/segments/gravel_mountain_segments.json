@@ -1,0 +1,18 @@
+[
+  {
+    "name": "Red Rock Lap",
+    "type": "Segment",
+    "direction": "Forward",
+    "distance_km": 5.2,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/gravel-mountain/segment/red-rock-lap/forward"
+  },
+  {
+    "name": "Red Rock Lap",
+    "type": "Segment",
+    "direction": "Reverse",
+    "distance_km": 5.2,
+    "grade_pct": 2.0,
+    "url": "https://whatsonzwift.com/world/gravel-mountain/segment/red-rock-lap/reverse"
+  }
+]

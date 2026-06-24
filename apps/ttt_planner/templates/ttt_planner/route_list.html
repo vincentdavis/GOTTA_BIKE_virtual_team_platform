@@ -14,9 +14,14 @@
           <h2 class="text-xl font-semibold">Routes</h2>
           <p class="text-sm text-base-content/70">{{ rows|length }} known routes · terrain type is estimated from climbing density (m/km)</p>
         </div>
-        <input type="text" placeholder="Filter by name or world…"
-               class="input input-bordered input-sm w-64"
-               oninput="filterRoutes(this.value)" />
+        <div class="flex items-center gap-2">
+          <input type="text" placeholder="Filter by name or world…"
+                 class="input input-bordered input-sm w-64"
+                 oninput="filterRoutes(this.value)" />
+          {% if user.is_race_ready or user.is_superuser %}
+          <a href="{% url 'routes:create' %}" class="btn btn-primary btn-sm">+ Add route</a>
+          {% endif %}
+        </div>
       </div>
 
       <div class="overflow-x-auto">
@@ -40,6 +45,7 @@
                 <a href="{% url 'routes:detail' r.pk %}" class="link link-primary">{{ r.name }}</a>
                 {% if r.whatsonzwift_url %}<a href="{{ r.whatsonzwift_url }}" target="_blank" rel="noopener" class="text-xs text-base-content/40 ml-1" title="View on whatsonzwift">↗</a>{% endif %}
                 {% if not r.is_active %} <span class="badge badge-ghost badge-xs">inactive</span>{% endif %}
+                {% if user.is_race_ready or user.is_superuser %}<a href="{% url 'routes:edit' r.pk %}" class="text-xs link link-primary ml-1">edit</a>{% endif %}
               </td>
               <td data-sort="{{ r.world|lower }}">{{ r.world|default:"—" }}</td>
               <td class="text-right" data-sort="{{ r.distance_km }}">{{ r.distance_km }} km</td>
@@ -59,7 +65,12 @@
     {# ===== Climbs ===== #}
     <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Climbs" />
     <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
-      <h2 class="text-xl font-semibold mb-1">Climbs</h2>
+      <div class="flex justify-between items-center mb-1">
+        <h2 class="text-xl font-semibold">Climbs</h2>
+        {% if user.is_race_ready or user.is_superuser %}
+        <a href="{% url 'routes:segment_create' %}?type=climb" class="btn btn-primary btn-sm">+ Add climb</a>
+        {% endif %}
+      </div>
       <p class="text-sm text-base-content/70 mb-4">{{ climbs|length }} climb segments</p>
       {% include "ttt_planner/_segment_table.html" with segments=climbs empty_label="No climbs yet." %}
     </div>
@@ -67,9 +78,27 @@
     {# ===== Sprints ===== #}
     <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Sprints" />
     <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
-      <h2 class="text-xl font-semibold mb-1">Sprints</h2>
+      <div class="flex justify-between items-center mb-1">
+        <h2 class="text-xl font-semibold">Sprints</h2>
+        {% if user.is_race_ready or user.is_superuser %}
+        <a href="{% url 'routes:segment_create' %}?type=sprint" class="btn btn-primary btn-sm">+ Add sprint</a>
+        {% endif %}
+      </div>
       <p class="text-sm text-base-content/70 mb-4">{{ sprints|length }} sprint segments</p>
       {% include "ttt_planner/_segment_table.html" with segments=sprints empty_label="No sprints yet." %}
+    </div>
+
+    {# ===== Other segments ===== #}
+    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Other" />
+    <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
+      <div class="flex justify-between items-center mb-1">
+        <h2 class="text-xl font-semibold">Other segments</h2>
+        {% if user.is_race_ready or user.is_superuser %}
+        <a href="{% url 'routes:segment_create' %}?type=segment" class="btn btn-primary btn-sm">+ Add segment</a>
+        {% endif %}
+      </div>
+      <p class="text-sm text-base-content/70 mb-4">{{ other_segments|length }} other timed segments (loops, laps, etc.)</p>
+      {% include "ttt_planner/_segment_table.html" with segments=other_segments empty_label="No other segments yet." %}
     </div>
 
   </div>

@@ -1,0 +1,174 @@
+[
+  {
+    "name": "Brooklyn Bridge KOM / Brooklyn Bridge QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_km": 2.0,
+    "grade_pct": 1.7,
+    "url": "https://whatsonzwift.com/world/new-york/segment/brooklyn-bridge-kom/forward"
+  },
+  {
+    "name": "Brooklyn Bridge KOM / Brooklyn Bridge QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Reverse",
+    "distance_m": 5,
+    "grade_pct": 0.2,
+    "url": "https://whatsonzwift.com/world/new-york/segment/brooklyn-bridge-kom/reverse"
+  },
+  {
+    "name": "Center Sprint / Center Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 200,
+    "grade_pct": -2.2,
+    "url": "https://whatsonzwift.com/world/new-york/segment/center-sprint/forward"
+  },
+  {
+    "name": "Center Sprint Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 200,
+    "grade_pct": 2.4,
+    "url": "https://whatsonzwift.com/world/new-york/segment/center-sprint-reverse/reverse"
+  },
+  {
+    "name": "Central Park Loop",
+    "type": "Climb",
+    "category": "HC",
+    "direction": "Reverse",
+    "distance_km": 9.8,
+    "grade_pct": 15.6,
+    "url": "https://whatsonzwift.com/world/new-york/segment/central-park-loop/reverse"
+  },
+  {
+    "name": "Manhattan Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 250,
+    "grade_pct": 0.3,
+    "url": "https://whatsonzwift.com/world/new-york/segment/manhattan-sprint/forward"
+  },
+  {
+    "name": "Manhattan Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 250,
+    "grade_pct": 1.3,
+    "url": "https://whatsonzwift.com/world/new-york/segment/manhattan-sprint/reverse"
+  },
+  {
+    "name": "New York KOM / New York QOM",
+    "type": "Climb",
+    "category": "4",
+    "direction": "Forward",
+    "distance_km": 1.4,
+    "grade_pct": 6.5,
+    "url": "https://whatsonzwift.com/world/new-york/segment/new-york-kom/forward"
+  },
+  {
+    "name": "New York KOM / New York QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Reverse",
+    "distance_km": 1.1,
+    "grade_pct": 5.9,
+    "url": "https://whatsonzwift.com/world/new-york/segment/new-york-kom/reverse"
+  },
+  {
+    "name": "NY Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 150,
+    "grade_pct": -4.6,
+    "url": "https://whatsonzwift.com/world/new-york/segment/ny-sprint/forward"
+  },
+  {
+    "name": "NY Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 229,
+    "grade_pct": -0.1,
+    "url": "https://whatsonzwift.com/world/new-york/segment/ny-sprint/reverse"
+  },
+  {
+    "name": "Prospect Park Lap",
+    "type": "Climb",
+    "category": "2",
+    "direction": "Forward",
+    "distance_km": 5.4,
+    "grade_pct": 6.3,
+    "url": "https://whatsonzwift.com/world/new-york/segment/prospect-park-lap/forward"
+  },
+  {
+    "name": "The Hill KOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_m": 500,
+    "grade_pct": 3.7,
+    "url": "https://whatsonzwift.com/world/new-york/segment/the-hill-kom/forward"
+  },
+  {
+    "name": "The Hill KOM Reverse",
+    "type": "Climb",
+    "category": null,
+    "direction": "Reverse",
+    "distance_m": 10,
+    "grade_pct": -2.9,
+    "url": "https://whatsonzwift.com/world/new-york/segment/the-hill-kom-reverse/reverse"
+  },
+  {
+    "name": "The Peristyle Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 400,
+    "grade_pct": 0.6,
+    "url": "https://whatsonzwift.com/world/new-york/segment/the-peristyle-sprint/forward"
+  },
+  {
+    "name": "The Peristyle Sprint Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 400,
+    "grade_pct": 0.1,
+    "url": "https://whatsonzwift.com/world/new-york/segment/the-peristyle-sprint-reverse/reverse"
+  },
+  {
+    "name": "Times Square",
+    "type": "Climb",
+    "category": "3",
+    "direction": "Forward",
+    "distance_km": 3.5,
+    "grade_pct": 5.5,
+    "url": "https://whatsonzwift.com/world/new-york/segment/times-square/forward"
+  },
+  {
+    "name": "Times Square Reverse",
+    "type": "Climb",
+    "category": "3",
+    "direction": "Reverse",
+    "distance_km": 3.5,
+    "grade_pct": 5.5,
+    "url": "https://whatsonzwift.com/world/new-york/segment/times-square-reverse/reverse"
+  },
+  {
+    "name": "Times Square Reverse",
+    "type": "Climb",
+    "category": "3",
+    "direction": "Forward",
+    "distance_km": 3.5,
+    "grade_pct": 5.5,
+    "url": "https://whatsonzwift.com/world/new-york/segment/times-square-reverse/forward"
+  },
+  {
+    "name": "Times Square",
+    "type": "Climb",
+    "category": "3",
+    "direction": "Reverse",
+    "distance_km": 3.5,
+    "grade_pct": 5.5,
+    "url": "https://whatsonzwift.com/world/new-york/segment/times-square/reverse"
+  }
+]

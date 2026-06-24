@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Champs-Élysées",
+    "type": "Segment",
+    "direction": "Forward",
+    "distance_km": 6.6,
+    "grade_pct": 0.0,
+    "url": "https://whatsonzwift.com/world/paris/segment/champs-elysees/forward"
+  },
+  {
+    "name": "Champs-Élysées",
+    "type": "Segment",
+    "direction": "Reverse",
+    "distance_km": 6.6,
+    "grade_pct": 0.0,
+    "url": "https://whatsonzwift.com/world/paris/segment/champs-elysees/reverse"
+  },
+  {
+    "name": "Lutece Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 151,
+    "grade_pct": 3.2,
+    "url": "https://whatsonzwift.com/world/paris/segment/lutece-sprint/forward"
+  },
+  {
+    "name": "Lutece Reverse Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 232,
+    "grade_pct": -1.0,
+    "url": "https://whatsonzwift.com/world/paris/segment/lutece-reverse-sprint/reverse"
+  }
+]

@@ -1,0 +1,85 @@
+[
+  {
+    "name": "Breakaway Brae Reverse",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 450,
+    "grade_pct": 2.2,
+    "url": "https://whatsonzwift.com/world/scotland/segment/breakaway-brae-reverse/forward"
+  },
+  {
+    "name": "Breakaway Brae",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 600,
+    "grade_pct": 2.0,
+    "url": "https://whatsonzwift.com/world/scotland/segment/breakaway-brae/reverse"
+  },
+  {
+    "name": "Champion's Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 200,
+    "grade_pct": -0.4,
+    "url": "https://whatsonzwift.com/world/scotland/segment/champion-s-sprint/forward"
+  },
+  {
+    "name": "Champion's Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_km": 3.0,
+    "grade_pct": 2.2,
+    "url": "https://whatsonzwift.com/world/scotland/segment/champion-s-sprint/reverse"
+  },
+  {
+    "name": "Loch Loop Reverse",
+    "type": "Segment",
+    "direction": "Forward",
+    "distance_km": 8.0,
+    "grade_pct": 0.1,
+    "url": "https://whatsonzwift.com/world/scotland/segment/loch-loop-reverse/forward"
+  },
+  {
+    "name": "Loch Loop",
+    "type": "Segment",
+    "direction": "Reverse",
+    "distance_km": 8.0,
+    "grade_pct": 0.1,
+    "url": "https://whatsonzwift.com/world/scotland/segment/loch-loop/reverse"
+  },
+  {
+    "name": "Sgurr Summit South",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_km": 1.0,
+    "grade_pct": 3.3,
+    "url": "https://whatsonzwift.com/world/scotland/segment/sgurr-summit-south/forward"
+  },
+  {
+    "name": "Sgurr Summit North",
+    "type": "Climb",
+    "category": null,
+    "direction": "Reverse",
+    "distance_km": 1.6,
+    "grade_pct": 3.8,
+    "url": "https://whatsonzwift.com/world/scotland/segment/sgurr-summit-north/reverse"
+  },
+  {
+    "name": "The Clyde Kicker",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_m": 301,
+    "grade_pct": 3.6,
+    "url": "https://whatsonzwift.com/world/scotland/segment/the-clyde-kicker/forward"
+  },
+  {
+    "name": "The Clyde Kicker Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 600,
+    "grade_pct": 0.7,
+    "url": "https://whatsonzwift.com/world/scotland/segment/the-clyde-kicker-reverse/reverse"
+  }
+]

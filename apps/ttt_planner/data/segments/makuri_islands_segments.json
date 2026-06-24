@@ -1,0 +1,182 @@
+[
+  {
+    "name": "Alley Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 483,
+    "grade_pct": -1.2,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/alley-sprint/forward"
+  },
+  {
+    "name": "Alley Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 483,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/alley-sprint/reverse"
+  },
+  {
+    "name": "Boardwalk Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 350,
+    "grade_pct": 1.0,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/boardwalk-sprint/forward"
+  },
+  {
+    "name": "Castle KOM / Castle QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_km": 2.5,
+    "grade_pct": 2.1,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/castle-kom/forward"
+  },
+  {
+    "name": "Castle Park Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 322,
+    "grade_pct": -0.7,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/castle-park-sprint/forward"
+  },
+  {
+    "name": "Castle Park Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 322,
+    "grade_pct": 0.3,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/castle-park-sprint/reverse"
+  },
+  {
+    "name": "Country Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 146,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/country-sprint/forward"
+  },
+  {
+    "name": "Country Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 134,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/country-sprint/reverse"
+  },
+  {
+    "name": "Flatland Loop",
+    "type": "Segment",
+    "direction": "Reverse",
+    "distance_km": 12.7,
+    "grade_pct": 0.8,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/country-loop/reverse"
+  },
+  {
+    "name": "Flatland Loop",
+    "type": "Segment",
+    "direction": "Reverse",
+    "distance_km": 12.7,
+    "grade_pct": 0.8,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/flatland-loop/reverse"
+  },
+  {
+    "name": "Railway Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 644,
+    "grade_pct": -1.1,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/railway-sprint/forward"
+  },
+  {
+    "name": "Rooftop KOM / Rooftop QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_km": 1.9,
+    "grade_pct": 2.7,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/rooftop-kom/forward"
+  },
+  {
+    "name": "Shisa Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 300,
+    "grade_pct": 0.9,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/shisa-sprint/forward"
+  },
+  {
+    "name": "Shisa Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 300,
+    "grade_pct": 0.9,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/shisa-sprint/reverse"
+  },
+  {
+    "name": "Temple KOM / Temple QOM",
+    "type": "Climb",
+    "category": "4",
+    "direction": "Forward",
+    "distance_km": 2.5,
+    "grade_pct": 3.6,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/temple-kom/forward"
+  },
+  {
+    "name": "Temple KOM / Temple QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Reverse",
+    "distance_km": 1.9,
+    "grade_pct": 3.5,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/temple-kom/reverse"
+  },
+  {
+    "name": "Tidepool Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 350,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/tidepool-sprint/forward"
+  },
+  {
+    "name": "Tidepool Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 350,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/tidepool-sprint/reverse"
+  },
+  {
+    "name": "Tower Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 322,
+    "grade_pct": 1.0,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/tower-sprint/forward"
+  },
+  {
+    "name": "Tower Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 322,
+    "grade_pct": 0.0,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/tower-sprint/reverse"
+  },
+  {
+    "name": "Village Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 148,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/village-sprint/forward"
+  },
+  {
+    "name": "Village Sprint",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 140,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/makuri-islands/segment/village-sprint/reverse"
+  }
+]

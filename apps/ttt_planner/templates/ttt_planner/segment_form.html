@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}{% if mode == "edit" %}Edit segment{% else %}New segment{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <a href="{% url 'routes:list' %}" class="btn btn-ghost btn-sm">&larr; Back to routes</a>
+
+  <div class="card bg-base-200 shadow-xl mt-3">
+    <div class="card-body">
+      <h2 class="card-title text-2xl">{% if mode == "edit" %}Edit segment{% else %}New segment{% endif %}</h2>
+
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div class="alert alert-error py-2">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        {% for field in form %}
+        <label class="form-control">
+          <span class="label-text mb-1">{{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}</span>
+          {{ field }}
+          {% if field.help_text %}<span class="label-text-alt text-base-content/50 mt-1">{{ field.help_text }}</span>{% endif %}
+          {% for e in field.errors %}<span class="label-text-alt text-error mt-1">{{ e }}</span>{% endfor %}
+        </label>
+        {% endfor %}
+
+        <div class="flex justify-end gap-2 pt-2">
+          <a href="{% url 'routes:list' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">{% if mode == "edit" %}Save changes{% else %}Create segment{% endif %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

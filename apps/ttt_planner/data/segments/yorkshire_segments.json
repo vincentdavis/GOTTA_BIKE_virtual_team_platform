@@ -1,0 +1,44 @@
+[
+  {
+    "name": "UCI Worlds",
+    "type": "Segment",
+    "direction": "Forward",
+    "distance_km": 13.8,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/yorkshire/segment/uci-worlds/forward"
+  },
+  {
+    "name": "Yorkshire KOM / Yorkshire QOM",
+    "type": "Climb",
+    "category": null,
+    "direction": "Forward",
+    "distance_km": 1.2,
+    "grade_pct": 5.5,
+    "url": "https://whatsonzwift.com/world/yorkshire/segment/yorkshire-kom/forward"
+  },
+  {
+    "name": "Yorkshire KOM Reverse / Yorkshire QOM Reverse",
+    "type": "Climb",
+    "category": null,
+    "direction": "Reverse",
+    "distance_km": 1.2,
+    "grade_pct": 3.8,
+    "url": "https://whatsonzwift.com/world/yorkshire/segment/yorkshire-kom-reverse/reverse"
+  },
+  {
+    "name": "Yorkshire Sprint",
+    "type": "Sprint",
+    "direction": "Forward",
+    "distance_m": 250,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/yorkshire/segment/yorkshire-sprint/forward"
+  },
+  {
+    "name": "Yorkshire Sprint Reverse",
+    "type": "Sprint",
+    "direction": "Reverse",
+    "distance_m": 400,
+    "grade_pct": null,
+    "url": "https://whatsonzwift.com/world/yorkshire/segment/yorkshire-sprint-reverse/reverse"
+  }
+]

@@ -5,10 +5,13 @@
     <thead>
       <tr>
         <th>Name</th>
+        <th>Dir</th>
         <th>World</th>
         <th class="text-right">Length</th>
+        <th class="text-right">Grade</th>
         <th class="text-right">Elevation</th>
         <th>Links</th>
+        {% if user.is_race_ready or user.is_superuser %}<th></th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -16,19 +19,23 @@
       <tr>
         <td class="font-medium">
           {{ s.name }}
+          {% if s.category %}<span class="badge badge-ghost badge-xs ml-1">Cat {{ s.category }}</span>{% endif %}
           {% if s.notes %}<div class="text-xs font-normal text-base-content/50">{{ s.notes }}</div>{% endif %}
         </td>
+        <td>{% if s.direction %}<span class="badge badge-outline badge-xs">{{ s.get_direction_display }}</span>{% else %}—{% endif %}</td>
         <td>{{ s.world|default:"—" }}</td>
         <td class="text-right">{{ s.length_m }} m</td>
+        <td class="text-right">{% if s.grade_pct is not None %}{{ s.grade_pct }}%{% else %}—{% endif %}</td>
         <td class="text-right">{{ s.elevation_m }} m</td>
         <td class="whitespace-nowrap space-x-1">
           {% if s.strava_url %}<a href="{{ s.strava_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="Strava segment">Strava</a>{% endif %}
           {% if s.zwiftinsider_url %}<a href="{{ s.zwiftinsider_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="ZwiftInsider">ZI</a>{% endif %}
           {% if s.whatsonzwift_url %}<a href="{{ s.whatsonzwift_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="whatsonzwift">WoZ</a>{% endif %}
         </td>
+        {% if user.is_race_ready or user.is_superuser %}<td class="text-right"><a href="{% url 'routes:segment_edit' s.pk %}" class="link link-primary text-xs">Edit</a></td>{% endif %}
       </tr>
       {% empty %}
-      <tr><td colspan="5" class="text-center text-base-content/60 py-6">{{ empty_label }}</td></tr>
+      <tr><td colspan="{% if user.is_race_ready or user.is_superuser %}8{% else %}7{% endif %}" class="text-center text-base-content/60 py-6">{{ empty_label }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

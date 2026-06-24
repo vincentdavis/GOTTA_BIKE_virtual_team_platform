@@ -1,0 +1,106 @@
+[
+  {
+    "name": "Watopia",
+    "slug": "watopia",
+    "routes": 129,
+    "segments": 37,
+    "popular": true,
+    "url": "https://whatsonzwift.com/world/watopia"
+  },
+  {
+    "name": "Richmond",
+    "slug": "richmond",
+    "routes": 10,
+    "segments": 9,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/richmond"
+  },
+  {
+    "name": "London",
+    "slug": "london",
+    "routes": 24,
+    "segments": 7,
+    "popular": true,
+    "url": "https://whatsonzwift.com/world/london"
+  },
+  {
+    "name": "New York",
+    "slug": "new-york",
+    "routes": 50,
+    "segments": 20,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/new-york"
+  },
+  {
+    "name": "Innsbruck",
+    "slug": "innsbruck",
+    "routes": 7,
+    "segments": 6,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/innsbruck"
+  },
+  {
+    "name": "Bologna TT",
+    "slug": "bologna-tt",
+    "routes": 1,
+    "segments": 1,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/bologna-tt"
+  },
+  {
+    "name": "Yorkshire",
+    "slug": "yorkshire",
+    "routes": 9,
+    "segments": 5,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/yorkshire"
+  },
+  {
+    "name": "Crit City",
+    "slug": "crit-city",
+    "routes": 2,
+    "segments": 4,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/crit-city"
+  },
+  {
+    "name": "Makuri Islands",
+    "slug": "makuri-islands",
+    "routes": 47,
+    "segments": 22,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/makuri-islands"
+  },
+  {
+    "name": "France",
+    "slug": "france",
+    "routes": 23,
+    "segments": 18,
+    "popular": true,
+    "url": "https://whatsonzwift.com/world/france"
+  },
+  {
+    "name": "Paris",
+    "slug": "paris",
+    "routes": 4,
+    "segments": 4,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/paris"
+  },
+  {
+    "name": "Gravel Mountain",
+    "slug": "gravel-mountain",
+    "routes": 4,
+    "segments": 2,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/gravel-mountain"
+  },
+  {
+    "name": "Scotland",
+    "slug": "scotland",
+    "routes": 16,
+    "segments": 10,
+    "popular": false,
+    "url": "https://whatsonzwift.com/world/scotland"
+  }
+]

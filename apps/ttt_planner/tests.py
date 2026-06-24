@@ -1107,3 +1107,115 @@ def test_climb_strength_unavailable_without_zr(team_member):
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
     PlanRider.objects.create(plan=plan, order=0, name="A", zwid=None, weight_kg=70, height_cm=175, ftp_w=300)
     assert climb_strength(plan)["available"] is False
+
+
+# ----- route / segment editing (race-verified) ---------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_route_create_gated_on_race_verified(client, user_model):
+    member = user_model.objects.create_user(
+        username="rv_member", permission_overrides={"team_member": True}, is_race_ready=False
+    )
+    client.force_login(member)
+    assert client.get("/routes/new/").status_code == 403  # team member but not verified
+
+    member.is_race_ready = True
+    member.save(update_fields=["is_race_ready"])
+    assert client.get("/routes/new/").status_code == 200
+
+    resp = client.post(
+        "/routes/new/",
+        {
+            "name": "Test Climb Route", "world": "Watopia", "distance_km": "12.5",
+            "elevation_m": "180", "lead_in_distance_km": "0.3", "lead_in_elevation_m": "5",
+            "recommended_laps": "3", "supports_laps": "on", "is_active": "on",
+        },
+    )
+    assert resp.status_code == 302
+    assert Route.objects.filter(name="Test Climb Route", recommended_laps=3, supports_laps=True).exists()
+
+
+@pytest.mark.django_db
+def test_segment_create_and_edit_race_verified(client, user_model):
+    from apps.ttt_planner.models import Segment
+
+    verified = user_model.objects.create_user(
+        username="rv2", permission_overrides={"team_member": True}, is_race_ready=True
+    )
+    client.force_login(verified)
+
+    # Preselects type from the query string.
+    assert 'value="climb" selected' in client.get("/routes/segments/new/?type=climb").content.decode()
+
+    resp = client.post(
+        "/routes/segments/new/",
+        {"segment_type": "climb", "name": "Epic KOM", "world": "Watopia", "length_m": "4100", "elevation_m": "320"},
+    )
+    assert resp.status_code == 302
+    seg = Segment.objects.get(name="Epic KOM")
+    assert seg.segment_type == "climb"
+
+    resp = client.post(
+        f"/routes/segments/{seg.pk}/edit/",
+        {"segment_type": "climb", "name": "Epic KOM (rev)", "world": "Watopia",
+         "length_m": "4200", "elevation_m": "350"},
+    )
+    assert resp.status_code == 302
+    seg.refresh_from_db()
+    assert seg.name == "Epic KOM (rev)" and seg.length_m == 4200
+
+
+@pytest.mark.django_db
+def test_segment_create_denied_for_unverified(client, user_model):
+    member = user_model.objects.create_user(
+        username="rv3", permission_overrides={"team_member": True}, is_race_ready=False
+    )
+    client.force_login(member)
+    assert client.get("/routes/segments/new/").status_code == 403
+
+
+# ----- segment import command --------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_import_segments_command(tmp_path):
+    import json
+
+    from django.core.management import call_command
+
+    from apps.ttt_planner.models import Segment
+
+    data = [
+        {"name": "Test KOM", "type": "Climb", "category": "2", "direction": "Forward",
+         "distance_km": 5.0, "grade_pct": 6.0,
+         "url": "https://whatsonzwift.com/world/watopia/segment/test-kom/forward"},
+        {"name": "Test Sprint", "type": "Sprint", "direction": "Reverse", "distance_m": 300,
+         "grade_pct": None, "url": "https://whatsonzwift.com/world/london/segment/test-sprint/reverse"},
+    ]
+    f = tmp_path / "seg.json"
+    f.write_text(json.dumps(data))
+
+    call_command("import_segments", file=str(f))
+
+    kom = Segment.objects.get(name="Test KOM")
+    assert kom.segment_type == "climb" and kom.direction == "forward" and kom.world == "Watopia"
+    assert kom.length_m == 5000 and kom.elevation_m == 300 and kom.category == "2"
+
+    sprint = Segment.objects.get(name="Test Sprint")
+    assert sprint.segment_type == "sprint" and sprint.direction == "reverse"
+    assert sprint.world == "London" and sprint.length_m == 300
+
+    call_command("import_segments", file=str(f))  # idempotent
+    assert Segment.objects.filter(name="Test KOM").count() == 1
+
+
+@pytest.mark.django_db
+def test_admin_segment_import_button(client, superuser):
+    from apps.ttt_planner.models import Segment
+
+    client.force_login(superuser)
+    resp = client.get(reverse("admin:ttt_planner_segment_import"))
+    assert resp.status_code == 302  # redirects back to the changelist
+    assert resp.url == reverse("admin:ttt_planner_segment_changelist")
+    assert Segment.objects.count() > 100  # bundled dataset loaded
