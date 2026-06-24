@@ -2,7 +2,7 @@
 
 from django.contrib import admin
 
-from apps.ttt_planner.models import PlanRider, Route, RouteGpx, TttPlan
+from apps.ttt_planner.models import PlanRider, Route, RouteGpx, Segment, TttPlan
 
 
 class RouteGpxInline(admin.TabularInline):
@@ -18,10 +18,20 @@ class RouteGpxInline(admin.TabularInline):
 class RouteAdmin(admin.ModelAdmin):
     """Admin for TTT routes."""
 
-    list_display = ("name", "world", "distance_km", "elevation_m", "is_active")
-    list_filter = ("is_active", "world")
+    list_display = ("name", "world", "distance_km", "elevation_m", "supports_laps", "recommended_laps", "is_active")
+    list_filter = ("is_active", "world", "supports_laps")
     search_fields = ("name", "world")
+    filter_horizontal = ("segments",)
     inlines = (RouteGpxInline,)
+
+
+@admin.register(Segment)
+class SegmentAdmin(admin.ModelAdmin):
+    """Admin for KQOM / sprint segments."""
+
+    list_display = ("name", "segment_type", "world", "length_m", "elevation_m")
+    list_filter = ("segment_type", "world")
+    search_fields = ("name", "world")
 
 
 class PlanRiderInline(admin.TabularInline):

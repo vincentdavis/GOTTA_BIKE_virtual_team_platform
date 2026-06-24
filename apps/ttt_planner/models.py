@@ -27,6 +27,18 @@ class Route(models.Model):
     elevation_m = models.PositiveIntegerField(default=0, help_text="Total elevation gain in metres")
     zwift_route_id = models.CharField(max_length=50, blank=True, help_text="Zwift route identifier, if known")
     is_active = models.BooleanField(default=True, help_text="Show in the route picker")
+    lead_in_distance_km = models.DecimalField(
+        max_digits=6, decimal_places=2, default=0, help_text="Lead-in distance in km (before the lap starts)"
+    )
+    lead_in_elevation_m = models.PositiveIntegerField(default=0, help_text="Lead-in elevation gain in metres")
+    supports_laps = models.BooleanField(default=False, help_text="Route can be ridden as multiple laps")
+    recommended_laps = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Club Ladder recommended number of laps"
+    )
+    zwiftinsider_url = models.URLField(blank=True, help_text="ZwiftInsider route page URL")
+    segments = models.ManyToManyField(
+        "Segment", blank=True, related_name="routes", help_text="Climbs and sprints (KQOM / Sprint) on this route"
+    )
 
     class Meta:
         """Meta options for Route."""
@@ -107,6 +119,48 @@ class RouteGpx(models.Model):
 
         """
         return f"{self.route.name} — {self.label or self.file.name}"
+
+
+class Segment(models.Model):
+    """A timed Zwift segment (KQOM climb or sprint) that routes can contain.
+
+    Modelled standalone and linked to routes via ``Route.segments`` (many-to-many),
+    since the same segment (e.g. the Epic KOM) appears on many routes.
+    """
+
+    class SegmentType(models.TextChoices):
+        """Whether the segment is a climb or a sprint."""
+
+        KQOM = "kqom", "KQOM"
+        SPRINT = "sprint", "Sprint"
+
+    segment_type = models.CharField(
+        max_length=10, choices=SegmentType.choices, help_text="King/Queen of the Mountain or Sprint"
+    )
+    name = models.CharField(max_length=200, help_text="Segment name")
+    notes = models.TextField(blank=True, help_text="Free-text notes")
+    length_m = models.PositiveIntegerField(default=0, help_text="Segment length in metres")
+    elevation_m = models.PositiveIntegerField(default=0, help_text="Segment elevation gain in metres")
+    world = models.CharField(max_length=100, blank=True, help_text="Zwift world (e.g. Watopia)")
+    strava_url = models.URLField(blank=True, help_text="Strava segment URL")
+    zwiftinsider_url = models.URLField(blank=True, help_text="ZwiftInsider segment URL")
+    whatsonzwift_url = models.URLField(blank=True, help_text="whatsonzwift.com segment URL")
+
+    class Meta:
+        """Meta options for Segment."""
+
+        verbose_name = "Segment"
+        verbose_name_plural = "Segments"
+        ordering: ClassVar[list[str]] = ["world", "name"]
+
+    def __str__(self) -> str:
+        """Return a label for the segment.
+
+        Returns:
+            Human-readable label with its type.
+
+        """
+        return f"{self.name} ({self.get_segment_type_display()})"
 
 
 class TttPlan(models.Model):
