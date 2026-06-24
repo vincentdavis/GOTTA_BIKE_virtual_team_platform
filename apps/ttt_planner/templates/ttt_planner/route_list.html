@@ -45,7 +45,6 @@
                 <a href="{% url 'routes:detail' r.pk %}" class="link link-primary">{{ r.name }}</a>
                 {% if r.whatsonzwift_url %}<a href="{{ r.whatsonzwift_url }}" target="_blank" rel="noopener" class="text-xs text-base-content/40 ml-1" title="View on whatsonzwift">↗</a>{% endif %}
                 {% if not r.is_active %} <span class="badge badge-ghost badge-xs">inactive</span>{% endif %}
-                {% if user.is_race_ready or user.is_superuser %}<a href="{% url 'routes:edit' r.pk %}" class="text-xs link link-primary ml-1">edit</a>{% endif %}
               </td>
               <td data-sort="{{ r.world|lower }}">{{ r.world|default:"—" }}</td>
               <td class="text-right" data-sort="{{ r.distance_km }}">{{ r.distance_km }} km</td>

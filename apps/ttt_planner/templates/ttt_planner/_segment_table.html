@@ -1,5 +1,4 @@
-{# Segment listing for the routes-page Climb / Sprint tabs.
-   Expects: `segments` (iterable of Segment) and `empty_label`. #}
+{# Segment listing for the routes-page tabs. Expects: `segments` and `empty_label`. #}
 <div class="overflow-x-auto">
   <table class="table table-sm table-zebra">
     <thead>
@@ -18,7 +17,7 @@
       {% for s in segments %}
       <tr>
         <td class="font-medium">
-          {{ s.name }}
+          <a href="{% url 'routes:segment_detail' s.pk %}" class="link link-primary">{{ s.name }}</a>
           {% if s.category %}<span class="badge badge-ghost badge-xs ml-1">Cat {{ s.category }}</span>{% endif %}
           {% if s.notes %}<div class="text-xs font-normal text-base-content/50">{{ s.notes }}</div>{% endif %}
         </td>

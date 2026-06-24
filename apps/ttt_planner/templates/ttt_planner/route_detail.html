@@ -71,7 +71,7 @@
         {% for s in segs %}
         <li class="flex flex-wrap items-center gap-2">
           <span class="badge badge-sm {% if s.segment_type == 'climb' %}badge-warning{% else %}badge-info{% endif %}">{{ s.get_segment_type_display }}</span>
-          <span class="font-medium">{{ s.name }}</span>
+          <a href="{% url 'routes:segment_detail' s.pk %}" class="link link-primary font-medium">{{ s.name }}</a>
           <span class="text-base-content/50">{{ s.length_m }} m{% if s.elevation_m %} · {{ s.elevation_m }} m climb{% endif %}</span>
           {% if s.strava_url %}<a href="{{ s.strava_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="Strava">Strava</a>{% endif %}
           {% if s.zwiftinsider_url %}<a href="{{ s.zwiftinsider_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="ZwiftInsider">ZI</a>{% endif %}

@@ -1219,3 +1219,21 @@ def test_admin_segment_import_button(client, superuser):
     assert resp.status_code == 302  # redirects back to the changelist
     assert resp.url == reverse("admin:ttt_planner_segment_changelist")
     assert Segment.objects.count() > 100  # bundled dataset loaded
+
+
+@pytest.mark.django_db
+def test_segment_detail_view(auth_client):
+    from apps.ttt_planner.models import Route, Segment
+
+    seg = Segment.objects.create(
+        name="Epic KOM", segment_type="climb", direction="forward", world="Watopia",
+        length_m=9500, grade_pct=4, elevation_m=380, category="2",
+    )
+    route = Route.objects.create(name="Hilly Loop", world="Watopia", distance_km=20, elevation_m=400)
+    route.segments.add(seg)
+
+    resp = auth_client.get(reverse("routes:segment_detail", args=[seg.pk]))
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "Epic KOM" in body
+    assert "Hilly Loop" in body  # lists routes containing the segment

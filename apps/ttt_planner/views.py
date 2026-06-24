@@ -164,6 +164,20 @@ def route_detail(request: HttpRequest, route_id: int) -> HttpResponse:
 
 
 @login_required
+@team_member_required(raise_exception=True)
+@require_GET
+def segment_detail(request: HttpRequest, segment_id: int) -> HttpResponse:
+    """Show a segment with its stats and the routes that include it.
+
+    Returns:
+        The segment detail page.
+
+    """
+    segment = get_object_or_404(Segment, pk=segment_id)
+    return render(request, "ttt_planner/segment_detail.html", {"segment": segment})
+
+
+@login_required
 @race_verified_required()
 def route_create(request: HttpRequest) -> HttpResponse:
     """Create a route (race-verified users / superusers).

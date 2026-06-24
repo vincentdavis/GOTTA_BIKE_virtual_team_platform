@@ -14,6 +14,7 @@ urlpatterns = [
     path("", views.route_list, name="list"),
     path("new/", views.route_create, name="create"),
     path("segments/new/", views.segment_create, name="segment_create"),
+    path("segments/<int:segment_id>/", views.segment_detail, name="segment_detail"),
     path("segments/<int:segment_id>/edit/", views.segment_edit, name="segment_edit"),
     path("<int:route_id>/", views.route_detail, name="detail"),
     path("<int:route_id>/edit/", views.route_edit, name="edit"),

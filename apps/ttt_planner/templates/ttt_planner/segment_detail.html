@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}{{ segment.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+  <a href="{% url 'routes:list' %}" class="btn btn-ghost btn-sm">&larr; All routes</a>
+
+  {% if messages %}
+  <div class="space-y-2">
+    {% for m in messages %}
+    <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} py-2">{{ m }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# ---- Header ---- #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 class="card-title text-2xl">{{ segment.name }}</h2>
+          <p class="text-sm text-base-content/70 flex flex-wrap items-center gap-2 mt-1">
+            <span class="badge badge-outline badge-sm">{{ segment.get_segment_type_display }}</span>
+            {% if segment.direction %}<span class="badge badge-outline badge-sm">{{ segment.get_direction_display }}</span>{% endif %}
+            {% if segment.category %}<span class="badge badge-ghost badge-sm">Cat {{ segment.category }}</span>{% endif %}
+            {% if segment.world %}<span>· {{ segment.world }}</span>{% endif %}
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          {% if user.is_race_ready or user.is_superuser %}
+          <a href="{% url 'routes:segment_edit' segment.pk %}" class="btn btn-primary btn-sm">Edit segment</a>
+          {% endif %}
+          {% if segment.strava_url %}<a href="{{ segment.strava_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Strava ↗</a>{% endif %}
+          {% if segment.zwiftinsider_url %}<a href="{{ segment.zwiftinsider_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">ZwiftInsider ↗</a>{% endif %}
+          {% if segment.whatsonzwift_url %}<a href="{{ segment.whatsonzwift_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">whatsonzwift ↗</a>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ---- Stats ---- #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="font-semibold mb-3">Details</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div>
+          <div class="text-xs text-base-content/60">Length</div>
+          <div class="font-medium">{{ segment.length_m }} m</div>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/60">Grade</div>
+          <div class="font-medium">{% if segment.grade_pct is not None %}{{ segment.grade_pct }}%{% else %}—{% endif %}</div>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/60">Elevation</div>
+          <div class="font-medium">{{ segment.elevation_m }} m</div>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/60">World</div>
+          <div class="font-medium">{{ segment.world|default:"—" }}</div>
+        </div>
+      </div>
+      {% if segment.notes %}<p class="text-sm mt-4">{{ segment.notes }}</p>{% endif %}
+    </div>
+  </div>
+
+  {# ---- Routes containing this segment ---- #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="font-semibold mb-2">On these routes</h3>
+      {% with rts=segment.routes.all %}
+      {% if rts %}
+      <ul class="space-y-1 text-sm">
+        {% for r in rts %}
+        <li>
+          <a href="{% url 'routes:detail' r.pk %}" class="link link-primary">{{ r.name }}</a>
+          {% if r.world %}<span class="text-base-content/50">· {{ r.world }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-base-content/60">Not linked to any routes yet.</p>
+      {% endif %}
+      {% endwith %}
+    </div>
+  </div>
+</div>
+{% endblock %}
