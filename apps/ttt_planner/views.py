@@ -23,7 +23,7 @@ from apps.accounts.decorators import team_member_required
 from apps.events import squads as event_squads
 from apps.events.models import Squad
 from apps.ttt_planner import terrain
-from apps.ttt_planner.models import PlanRider, Route, RouteGpx, TttPlan
+from apps.ttt_planner.models import PlanRider, Route, RouteGpx, Segment, TttPlan
 from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
     climb_strength,
@@ -116,7 +116,16 @@ def route_list(request: HttpRequest) -> HttpResponse:
             "gpx_count": route.gpx_count,
             "whatsonzwift_url": route.whatsonzwift_url,
         })
-    return render(request, "ttt_planner/route_list.html", {"rows": rows})
+    segments = Segment.objects.all()
+    return render(
+        request,
+        "ttt_planner/route_list.html",
+        {
+            "rows": rows,
+            "climbs": [s for s in segments if s.segment_type == Segment.SegmentType.CLIMB],
+            "sprints": [s for s in segments if s.segment_type == Segment.SegmentType.SPRINT],
+        },
+    )
 
 
 @login_required

@@ -4,11 +4,14 @@
 
 {% block content %}
 <div class="max-w-5xl mx-auto">
-  <div class="card bg-base-200 shadow-xl">
-    <div class="card-body">
+  <div role="tablist" class="tabs tabs-lifted tabs-lg">
+
+    {# ===== Routes ===== #}
+    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Routes" checked />
+    <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
       <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
         <div>
-          <h2 class="card-title text-2xl">Routes</h2>
+          <h2 class="text-xl font-semibold">Routes</h2>
           <p class="text-sm text-base-content/70">{{ rows|length }} known routes · terrain type is estimated from climbing density (m/km)</p>
         </div>
         <input type="text" placeholder="Filter by name or world…"
@@ -52,6 +55,23 @@
         </table>
       </div>
     </div>
+
+    {# ===== Climbs ===== #}
+    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Climbs" />
+    <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
+      <h2 class="text-xl font-semibold mb-1">Climbs</h2>
+      <p class="text-sm text-base-content/70 mb-4">{{ climbs|length }} climb segments</p>
+      {% include "ttt_planner/_segment_table.html" with segments=climbs empty_label="No climbs yet." %}
+    </div>
+
+    {# ===== Sprints ===== #}
+    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Sprints" />
+    <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
+      <h2 class="text-xl font-semibold mb-1">Sprints</h2>
+      <p class="text-sm text-base-content/70 mb-4">{{ sprints|length }} sprint segments</p>
+      {% include "ttt_planner/_segment_table.html" with segments=sprints empty_label="No sprints yet." %}
+    </div>
+
   </div>
 </div>
 {% endblock %}

@@ -1,0 +1,35 @@
+{# Segment listing for the routes-page Climb / Sprint tabs.
+   Expects: `segments` (iterable of Segment) and `empty_label`. #}
+<div class="overflow-x-auto">
+  <table class="table table-sm table-zebra">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>World</th>
+        <th class="text-right">Length</th>
+        <th class="text-right">Elevation</th>
+        <th>Links</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in segments %}
+      <tr>
+        <td class="font-medium">
+          {{ s.name }}
+          {% if s.notes %}<div class="text-xs font-normal text-base-content/50">{{ s.notes }}</div>{% endif %}
+        </td>
+        <td>{{ s.world|default:"—" }}</td>
+        <td class="text-right">{{ s.length_m }} m</td>
+        <td class="text-right">{{ s.elevation_m }} m</td>
+        <td class="whitespace-nowrap space-x-1">
+          {% if s.strava_url %}<a href="{{ s.strava_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="Strava segment">Strava</a>{% endif %}
+          {% if s.zwiftinsider_url %}<a href="{{ s.zwiftinsider_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="ZwiftInsider">ZI</a>{% endif %}
+          {% if s.whatsonzwift_url %}<a href="{{ s.whatsonzwift_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="whatsonzwift">WoZ</a>{% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-base-content/60 py-6">{{ empty_label }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

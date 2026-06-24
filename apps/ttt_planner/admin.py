@@ -27,7 +27,7 @@ class RouteAdmin(admin.ModelAdmin):
 
 @admin.register(Segment)
 class SegmentAdmin(admin.ModelAdmin):
-    """Admin for KQOM / sprint segments."""
+    """Admin for climb / sprint segments."""
 
     list_display = ("name", "segment_type", "world", "length_m", "elevation_m")
     list_filter = ("segment_type", "world")

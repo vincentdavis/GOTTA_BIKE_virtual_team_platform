@@ -37,7 +37,7 @@ class Route(models.Model):
     )
     zwiftinsider_url = models.URLField(blank=True, help_text="ZwiftInsider route page URL")
     segments = models.ManyToManyField(
-        "Segment", blank=True, related_name="routes", help_text="Climbs and sprints (KQOM / Sprint) on this route"
+        "Segment", blank=True, related_name="routes", help_text="Climbs and sprints on this route"
     )
 
     class Meta:
@@ -122,7 +122,7 @@ class RouteGpx(models.Model):
 
 
 class Segment(models.Model):
-    """A timed Zwift segment (KQOM climb or sprint) that routes can contain.
+    """A timed Zwift segment (climb or sprint) that routes can contain.
 
     Modelled standalone and linked to routes via ``Route.segments`` (many-to-many),
     since the same segment (e.g. the Epic KOM) appears on many routes.
@@ -131,11 +131,11 @@ class Segment(models.Model):
     class SegmentType(models.TextChoices):
         """Whether the segment is a climb or a sprint."""
 
-        KQOM = "kqom", "KQOM"
+        CLIMB = "climb", "Climb"
         SPRINT = "sprint", "Sprint"
 
     segment_type = models.CharField(
-        max_length=10, choices=SegmentType.choices, help_text="King/Queen of the Mountain or Sprint"
+        max_length=10, choices=SegmentType.choices, help_text="Climb or Sprint"
     )
     name = models.CharField(max_length=200, help_text="Segment name")
     notes = models.TextField(blank=True, help_text="Free-text notes")
