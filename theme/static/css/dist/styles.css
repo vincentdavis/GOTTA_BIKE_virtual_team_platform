@@ -5020,6 +5020,9 @@
   .w-40 {
     width: calc(var(--spacing) * 40);
   }
+  .w-44 {
+    width: calc(var(--spacing) * 44);
+  }
   .w-48 {
     width: calc(var(--spacing) * 48);
   }
@@ -6772,6 +6775,51 @@
   }
   .prose-a\:underline :is(:where(a):not(:where([class~="not-prose"],[class~="not-prose"] *))) {
     text-decoration-line: underline;
+  }
+  .\[\&_input\]\:h-4 input {
+    height: calc(var(--spacing) * 4);
+  }
+  .\[\&_input\]\:w-4 input {
+    width: calc(var(--spacing) * 4);
+  }
+  .\[\&_input\]\:shrink-0 input {
+    flex-shrink: 0;
+  }
+  .\[\&_input\]\:accent-primary input {
+    accent-color: var(--color-primary);
+  }
+  .\[\&_label\]\:block label {
+    display: block;
+  }
+  .\[\&_label\]\:flex label {
+    display: flex;
+  }
+  .\[\&_label\]\:cursor-pointer label {
+    cursor: pointer;
+  }
+  .\[\&_label\]\:items-center label {
+    align-items: center;
+  }
+  .\[\&_label\]\:gap-2 label {
+    gap: calc(var(--spacing) * 2);
+  }
+  .\[\&_label\]\:rounded label {
+    border-radius: 0.25rem;
+  }
+  .\[\&_label\]\:px-1 label {
+    padding-inline: calc(var(--spacing) * 1);
+  }
+  .\[\&_label\]\:px-2 label {
+    padding-inline: calc(var(--spacing) * 2);
+  }
+  .\[\&_label\]\:py-1 label {
+    padding-block: calc(var(--spacing) * 1);
+  }
+  .\[\&_label\]\:py-1\.5 label {
+    padding-block: calc(var(--spacing) * 1.5);
+  }
+  .\[\&_label\:hover\]\:bg-base-100 label:hover {
+    background-color: var(--color-base-100);
   }
 }
 @layer base {
