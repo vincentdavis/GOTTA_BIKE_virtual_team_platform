@@ -4510,9 +4510,11 @@ def _build_slot_thread_message(
 
     if request is not None:
         cal = race_calendar_urls(selection, request)
-        # Angle brackets suppress Discord's link previews for these long URLs.
+        # Masked markdown links keep the long URLs out of the visible text and
+        # suppress Discord's link previews. Discord renders masked links in
+        # message content for messages sent by bots/apps (as these are).
         lines.append("")
-        lines.append(f"📅 **Add to calendar:** Google: <{cal['gcal_url']}> · iCal: <{cal['ics_url']}>")
+        lines.append(f"📅 **Add to calendar:** [Google Calendar]({cal['gcal_url']}) · [iCal]({cal['ics_url']})")
 
     # Discord IDs to include in allowed_user_ids — dedup while preserving order
     # so captains/vice-captains/substitutes actually get pinged even if they aren't racing.
