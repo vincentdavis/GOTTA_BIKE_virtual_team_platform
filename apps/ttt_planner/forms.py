@@ -63,7 +63,7 @@ class RouteForm(forms.ModelForm):
             "supports_laps": forms.CheckboxInput(attrs=_CHECK),
             "recommended_laps": forms.NumberInput(attrs=_INPUT),
             "zwiftinsider_url": forms.URLInput(attrs=_INPUT),
-            "segments": forms.SelectMultiple(attrs={"class": "select select-bordered w-full", "size": "8"}),
+            "segments": forms.CheckboxSelectMultiple(),
             "is_active": forms.CheckboxInput(attrs=_CHECK),
         }
 

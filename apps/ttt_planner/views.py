@@ -131,9 +131,8 @@ def route_list(request: HttpRequest) -> HttpResponse:
         {
             "rows": rows,
             "worlds": worlds_rows,
-            "climbs": [s for s in segments if s.segment_type == Segment.SegmentType.CLIMB],
-            "sprints": [s for s in segments if s.segment_type == Segment.SegmentType.SPRINT],
-            "other_segments": [s for s in segments if s.segment_type == Segment.SegmentType.SEGMENT],
+            "segments": segments,
+            "segment_worlds": sorted({s.world for s in segments if s.world}),
         },
     )
 

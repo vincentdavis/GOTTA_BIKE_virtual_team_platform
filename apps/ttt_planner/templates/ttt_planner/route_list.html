@@ -96,43 +96,35 @@
       </div>
     </div>
 
-    {# ===== Climbs ===== #}
-    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Climbs" />
+    {# ===== Segments (combined, filterable) ===== #}
+    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Segments" />
     <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
-      <div class="flex justify-between items-center mb-1">
-        <h2 class="text-xl font-semibold">Climbs</h2>
+      <div class="flex flex-wrap justify-between items-end gap-3 mb-3">
+        <div>
+          <h2 class="text-xl font-semibold">Segments</h2>
+          <p class="text-sm text-base-content/70">{{ segments|length }} climbs, sprints &amp; other segments</p>
+        </div>
         {% if user.is_race_ready or user.is_superuser %}
-        <a href="{% url 'routes:segment_create' %}?type=climb" class="btn btn-primary btn-sm">+ Add climb</a>
+        <a href="{% url 'routes:segment_create' %}" class="btn btn-primary btn-sm">+ Add segment</a>
         {% endif %}
       </div>
-      <p class="text-sm text-base-content/70 mb-4">{{ climbs|length }} climb segments</p>
-      {% include "ttt_planner/_segment_table.html" with segments=climbs empty_label="No climbs yet." %}
-    </div>
 
-    {# ===== Sprints ===== #}
-    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Sprints" />
-    <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
-      <div class="flex justify-between items-center mb-1">
-        <h2 class="text-xl font-semibold">Sprints</h2>
-        {% if user.is_race_ready or user.is_superuser %}
-        <a href="{% url 'routes:segment_create' %}?type=sprint" class="btn btn-primary btn-sm">+ Add sprint</a>
-        {% endif %}
+      <div class="flex flex-wrap items-center gap-2 mb-3">
+        <div class="join" role="group" aria-label="Type filter">
+          <button type="button" class="btn btn-xs join-item btn-active" data-seg-type="" onclick="segSetType(this)">All</button>
+          <button type="button" class="btn btn-xs join-item" data-seg-type="climb" onclick="segSetType(this)">Climbs</button>
+          <button type="button" class="btn btn-xs join-item" data-seg-type="sprint" onclick="segSetType(this)">Sprints</button>
+          <button type="button" class="btn btn-xs join-item" data-seg-type="segment" onclick="segSetType(this)">Other</button>
+        </div>
+        <select id="seg-world" class="select select-bordered select-xs" onchange="segApplyFilters()">
+          <option value="">All worlds</option>
+          {% for w in segment_worlds %}<option value="{{ w }}">{{ w }}</option>{% endfor %}
+        </select>
+        <input type="text" id="seg-search" placeholder="Search name…"
+               class="input input-bordered input-xs w-44" oninput="segApplyFilters()" />
       </div>
-      <p class="text-sm text-base-content/70 mb-4">{{ sprints|length }} sprint segments</p>
-      {% include "ttt_planner/_segment_table.html" with segments=sprints empty_label="No sprints yet." %}
-    </div>
 
-    {# ===== Other segments ===== #}
-    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Other" />
-    <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
-      <div class="flex justify-between items-center mb-1">
-        <h2 class="text-xl font-semibold">Other segments</h2>
-        {% if user.is_race_ready or user.is_superuser %}
-        <a href="{% url 'routes:segment_create' %}?type=segment" class="btn btn-primary btn-sm">+ Add segment</a>
-        {% endif %}
-      </div>
-      <p class="text-sm text-base-content/70 mb-4">{{ other_segments|length }} other timed segments (loops, laps, etc.)</p>
-      {% include "ttt_planner/_segment_table.html" with segments=other_segments empty_label="No other segments yet." %}
+      {% include "ttt_planner/_segment_table.html" with segments=segments empty_label="No segments yet." %}
     </div>
 
   </div>
@@ -146,6 +138,31 @@
     document.querySelectorAll("#routes-table .route-row").forEach(function (row) {
       row.style.display = !q || row.dataset.search.indexOf(q) !== -1 ? "" : "none";
     });
+  }
+
+  // ----- Segments tab: combined list filtered by type, world, and name -----
+  var segType = "";
+
+  function segSetType(btn) {
+    segType = btn.getAttribute("data-seg-type");
+    btn.parentNode.querySelectorAll("button").forEach(function (b) { b.classList.remove("btn-active"); });
+    btn.classList.add("btn-active");
+    segApplyFilters();
+  }
+
+  function segApplyFilters() {
+    var world = (document.getElementById("seg-world") || {}).value || "";
+    var q = ((document.getElementById("seg-search") || {}).value || "").trim().toLowerCase();
+    var shown = 0;
+    document.querySelectorAll("#segments-table tbody tr[data-seg-type]").forEach(function (row) {
+      var ok = (!segType || row.getAttribute("data-seg-type") === segType)
+        && (!world || row.getAttribute("data-seg-world") === world)
+        && (!q || (row.getAttribute("data-search") || "").indexOf(q) !== -1);
+      row.style.display = ok ? "" : "none";
+      if (ok) { shown++; }
+    });
+    var noMatch = document.getElementById("segments-no-match");
+    if (noMatch) { noMatch.classList.toggle("hidden", shown !== 0); }
   }
 
   function sortRoutes(col, type, header) {

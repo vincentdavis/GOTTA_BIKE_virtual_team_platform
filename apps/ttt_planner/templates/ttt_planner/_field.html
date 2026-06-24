@@ -1,0 +1,7 @@
+{# Render one form field with label, help text, and errors. Expects `field`. #}
+<label class="form-control">
+  <span class="label-text mb-1">{{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}</span>
+  {{ field }}
+  {% if field.help_text %}<span class="label-text-alt text-base-content/50 mt-1">{{ field.help_text }}</span>{% endif %}
+  {% for e in field.errors %}<span class="label-text-alt text-error mt-1">{{ e }}</span>{% endfor %}
+</label>

@@ -3,36 +3,72 @@
 {% block title %}{% if mode == "edit" %}Edit route{% else %}New route{% endif %}{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto">
+<div class="max-w-3xl mx-auto">
   <a href="{% if route %}{% url 'routes:detail' route.pk %}{% else %}{% url 'routes:list' %}{% endif %}"
      class="btn btn-ghost btn-sm">&larr; Back</a>
 
   <div class="card bg-base-200 shadow-xl mt-3">
     <div class="card-body">
-      <h2 class="card-title text-2xl">{% if mode == "edit" %}Edit route{% else %}New route{% endif %}</h2>
+      <h2 class="card-title text-2xl mb-2">{% if mode == "edit" %}Edit route{% else %}New route{% endif %}</h2>
 
-      <form method="post" class="space-y-3">
+      <form method="post" class="space-y-6">
         {% csrf_token %}
         {% if form.non_field_errors %}
         <div class="alert alert-error py-2">{{ form.non_field_errors }}</div>
         {% endif %}
 
-        {% for field in form %}
-          {% if field.field.widget.input_type == "checkbox" %}
-          <label class="label cursor-pointer justify-start gap-3 py-1">
-            {{ field }}<span class="label-text">{{ field.label }}</span>
-          </label>
-          {% else %}
-          <label class="form-control">
-            <span class="label-text mb-1">{{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}</span>
-            {{ field }}
-            {% if field.help_text %}<span class="label-text-alt text-base-content/50 mt-1">{{ field.help_text }}</span>{% endif %}
-            {% for e in field.errors %}<span class="label-text-alt text-error mt-1">{{ e }}</span>{% endfor %}
-          </label>
-          {% endif %}
-        {% endfor %}
+        {# ---- Basics ---- #}
+        <div>
+          <h3 class="font-semibold text-sm text-base-content/70 mb-2">Route</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {% include "ttt_planner/_field.html" with field=form.name %}
+            {% include "ttt_planner/_field.html" with field=form.world %}
+            {% include "ttt_planner/_field.html" with field=form.distance_km %}
+            {% include "ttt_planner/_field.html" with field=form.elevation_m %}
+            {% include "ttt_planner/_field.html" with field=form.zwift_route_id %}
+            {% include "ttt_planner/_field.html" with field=form.zwiftinsider_url %}
+          </div>
+        </div>
 
-        <div class="flex justify-end gap-2 pt-2">
+        {# ---- Lead-in & laps ---- #}
+        <div>
+          <h3 class="font-semibold text-sm text-base-content/70 mb-2">Lead-in &amp; laps</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {% include "ttt_planner/_field.html" with field=form.lead_in_distance_km %}
+            {% include "ttt_planner/_field.html" with field=form.lead_in_elevation_m %}
+            {% include "ttt_planner/_field.html" with field=form.recommended_laps %}
+          </div>
+          <div class="flex flex-wrap gap-6 mt-3">
+            <label class="label cursor-pointer justify-start gap-3">
+              {{ form.supports_laps }}<span class="label-text">{{ form.supports_laps.label }}</span>
+            </label>
+            <label class="label cursor-pointer justify-start gap-3">
+              {{ form.is_active }}<span class="label-text">{{ form.is_active.label }}</span>
+            </label>
+          </div>
+        </div>
+
+        {# ---- Segments (searchable checkbox list) ---- #}
+        <div>
+          <h3 class="font-semibold text-sm text-base-content/70 mb-2">Segments on this route</h3>
+          {% if form.segments.field.queryset.exists %}
+          <input type="text" placeholder="Search segments…" class="input input-bordered input-sm w-full mb-2"
+                 oninput="filterSegmentList(this)" />
+          <div class="border border-base-300 rounded-box min-h-48 max-h-96 overflow-y-auto p-2
+                      [&_label]:flex [&_label]:items-center [&_label]:gap-2 [&_label]:py-1.5 [&_label]:px-2
+                      [&_label]:cursor-pointer [&_label:hover]:bg-base-100 [&_label]:rounded
+                      [&_input]:h-4 [&_input]:w-4 [&_input]:shrink-0 [&_input]:accent-primary">
+            {{ form.segments }}
+          </div>
+          {% else %}
+          <p class="text-sm text-base-content/50">No segments available for this world yet. Set &amp; save the route's
+            world first, then come back to link climbs and sprints.</p>
+          {% endif %}
+          {% if form.segments.help_text %}<p class="label-text-alt text-base-content/50 mt-1">{{ form.segments.help_text }}</p>{% endif %}
+          {% for e in form.segments.errors %}<p class="label-text-alt text-error mt-1">{{ e }}</p>{% endfor %}
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-base-300">
           <a href="{% if route %}{% url 'routes:detail' route.pk %}{% else %}{% url 'routes:list' %}{% endif %}"
              class="btn btn-ghost">Cancel</a>
           <button type="submit" class="btn btn-primary">{% if mode == "edit" %}Save changes{% else %}Create route{% endif %}</button>
@@ -41,4 +77,16 @@
     </div>
   </div>
 </div>
+
+<script>
+  // Filter the segments checkbox list by name as you type.
+  function filterSegmentList(input) {
+    var box = input.closest("div").querySelector("#id_segments");
+    if (!box) return;
+    var q = (input.value || "").trim().toLowerCase();
+    Array.prototype.forEach.call(box.children, function (opt) {
+      opt.style.display = !q || opt.textContent.toLowerCase().indexOf(q) !== -1 ? "" : "none";
+    });
+  }
+</script>
 {% endblock %}
