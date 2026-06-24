@@ -9,6 +9,7 @@ page in sync after every edit. CSRF is supplied globally via ``hx-headers`` on
 from __future__ import annotations
 
 import contextlib
+from collections import Counter
 
 import logfire
 from django.contrib import messages
@@ -22,7 +23,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.accounts.decorators import race_verified_required, team_member_required
 from apps.events import squads as event_squads
 from apps.events.models import Squad
-from apps.ttt_planner import terrain
+from apps.ttt_planner import terrain, worlds
 from apps.ttt_planner.forms import RouteForm, SegmentForm
 from apps.ttt_planner.models import PlanRider, Route, RouteGpx, Segment, TttPlan
 from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
@@ -117,12 +118,19 @@ def route_list(request: HttpRequest) -> HttpResponse:
             "gpx_count": route.gpx_count,
             "whatsonzwift_url": route.whatsonzwift_url,
         })
-    segments = Segment.objects.all()
+    segments = list(Segment.objects.all())
+    route_counts = Counter(r["world"] for r in rows if r["world"])
+    segment_counts = Counter(s.world for s in segments if s.world)
+    worlds_rows = [
+        {**w, "our_routes": route_counts.get(w["name"], 0), "our_segments": segment_counts.get(w["name"], 0)}
+        for w in worlds.WORLDS
+    ]
     return render(
         request,
         "ttt_planner/route_list.html",
         {
             "rows": rows,
+            "worlds": worlds_rows,
             "climbs": [s for s in segments if s.segment_type == Segment.SegmentType.CLIMB],
             "sprints": [s for s in segments if s.segment_type == Segment.SegmentType.SPRINT],
             "other_segments": [s for s in segments if s.segment_type == Segment.SegmentType.SEGMENT],

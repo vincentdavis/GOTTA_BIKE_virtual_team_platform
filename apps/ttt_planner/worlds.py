@@ -9,13 +9,15 @@ import json
 from pathlib import Path
 
 _DATA_FILE = Path(__file__).resolve().parent / "data" / "zwift_worlds.json"
-_WORLDS = json.loads(_DATA_FILE.read_text())
+
+#: Full world records: ``{"name", "slug", "routes", "segments", "popular", "url"}``.
+WORLDS: list[dict] = json.loads(_DATA_FILE.read_text())
 
 #: World display names in dataset order.
-WORLD_NAMES: list[str] = [w["name"] for w in _WORLDS]
+WORLD_NAMES: list[str] = [w["name"] for w in WORLDS]
 
 #: Map whatsonzwift slug -> display name (used when importing by URL).
-SLUG_TO_NAME: dict[str, str] = {w["slug"]: w["name"] for w in _WORLDS}
+SLUG_TO_NAME: dict[str, str] = {w["slug"]: w["name"] for w in WORLDS}
 
 
 def world_choices() -> list[tuple[str, str]]:

@@ -62,6 +62,41 @@
       </div>
     </div>
 
+    {# ===== Worlds ===== #}
+    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Worlds" />
+    <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
+      <h2 class="text-xl font-semibold mb-1">Worlds</h2>
+      <p class="text-sm text-base-content/70 mb-4">{{ worlds|length }} Zwift worlds · "Ours" = routes/segments loaded here</p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm table-zebra">
+          <thead>
+            <tr>
+              <th>World</th>
+              <th></th>
+              <th class="text-right">Our routes</th>
+              <th class="text-right">Our segments</th>
+              <th class="text-right">Zwift routes</th>
+              <th class="text-right">Zwift segments</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for w in worlds %}
+            <tr>
+              <td class="font-medium">{{ w.name }}</td>
+              <td>{% if w.popular %}<span class="badge badge-primary badge-xs">popular</span>{% endif %}</td>
+              <td class="text-right">{{ w.our_routes }}</td>
+              <td class="text-right">{{ w.our_segments }}</td>
+              <td class="text-right text-base-content/50">{{ w.routes }}</td>
+              <td class="text-right text-base-content/50">{{ w.segments }}</td>
+              <td class="text-right">{% if w.url %}<a href="{{ w.url }}" target="_blank" rel="noopener" class="link link-primary text-xs">whatsonzwift ↗</a>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     {# ===== Climbs ===== #}
     <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Climbs" />
     <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
