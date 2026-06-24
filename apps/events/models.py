@@ -1147,19 +1147,6 @@ class AvailabilitySlotSelection(models.Model):
         PENDING = "pending", "Pending"
         CONFIRMED = "confirmed", "Confirmed"
 
-    class PowerUp(models.TextChoices):
-        """Zwift power-ups that can be enabled for a scheduled race."""
-
-        FEATHER = "feather", "Feather (Lightweight)"
-        AERO = "aero", "Aero Boost"
-        DRAFT = "draft", "Draft Boost (Van)"
-        BURRITO = "burrito", "Burrito"
-        STEAMROLLER = "steamroller", "Steamroller (Anvil)"
-        GHOST = "ghost", "Ghost (Invisibility)"
-        XP_SMALL = "xp_small", "Small XP Bonus"
-        XP_LARGE = "xp_large", "Large XP Bonus"
-        COFFEE = "coffee", "Coffee Stop"
-
     grid = models.ForeignKey(
         AvailabilityGrid,
         on_delete=models.CASCADE,
@@ -1206,7 +1193,7 @@ class AvailabilitySlotSelection(models.Model):
     powerups = models.JSONField(
         default=list,
         blank=True,
-        help_text="Optional list of enabled Zwift power-ups (values from PowerUp choices)",
+        help_text="Optional list of enabled Zwift power-up slugs (ttt_planner.PowerUp.slug values)",
     )
     thread_link = models.URLField(
         blank=True,
@@ -1270,10 +1257,27 @@ class AvailabilitySlotSelection(models.Model):
         return datetime.combine(self.slot_date, slot_t, tzinfo=UTC)
 
     @property
+    def powerup_objects(self) -> list:
+        """Return the enabled ``PowerUp`` records, in their configured display order.
+
+        Resolves the stored slugs against ``ttt_planner.PowerUp``. Unknown slugs
+        (e.g. a power-up later deleted) are skipped.
+
+        Returns:
+            A list of ``PowerUp`` instances.
+
+        """
+        slugs = self.powerups or []
+        if not slugs:
+            return []
+        from apps.ttt_planner.models import PowerUp  # local import avoids a cross-app import cycle
+
+        return list(PowerUp.objects.filter(slug__in=slugs))
+
+    @property
     def powerup_labels(self) -> list[str]:
-        """Return human-readable labels for the enabled power-ups, in choices order."""
-        labels = dict(self.PowerUp.choices)
-        return [labels[p] for p in self.PowerUp.values if p in (self.powerups or [])]
+        """Return the enabled power-up names, in their configured display order."""
+        return [p.name for p in self.powerup_objects]
 
 
 class SlotDS(models.Model):

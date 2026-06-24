@@ -3755,7 +3755,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "utc_cell_users_json": json.dumps(utc_cell_users_json),
             "user_data_json": json.dumps(user_data_json),
             "selections_json": json.dumps(selections_json),
-            "powerup_choices": AvailabilitySlotSelection.PowerUp.choices,
+            "powerup_choices": _powerup_choices(),
         },
     )
 
@@ -4358,21 +4358,42 @@ def _set_slot_substitutes(selection: AvailabilitySlotSelection, request: HttpReq
     selection.substitutes.set(User.objects.filter(pk__in=sub_ids))
 
 
+def _powerup_choices() -> list[tuple[str, str]]:
+    """Return ``(slug, label)`` choices for the scheduled-race power-up picker.
+
+    Sourced from the active ``ttt_planner.PowerUp`` records, in display order.
+    Excluded-from-ladder power-ups get an " (excluded)" suffix on their label.
+
+    Returns:
+        A list of ``(slug, label)`` tuples.
+
+    """
+    from apps.ttt_planner.models import PowerUp  # local import avoids a cross-app import cycle
+
+    choices = []
+    for p in PowerUp.objects.filter(is_active=True):
+        label = f"{p.name} (excluded)" if p.excluded_from_ladder else p.name
+        choices.append((p.slug, label))
+    return choices
+
+
 def _parse_slot_race_details(request: HttpRequest) -> dict:
     """Parse the optional ``laps``, ``custom_finish_km`` and ``powerups`` slot fields.
 
     All are optional; blank or unparseable scalar values become ``None`` so they
     clear any previously-stored value. ``powerups`` is filtered against the valid
-    ``PowerUp`` choices and returned in choices order.
+    ``PowerUp`` slugs and returned in their configured display order.
 
     Args:
         request: The request whose POST holds the slot form payload.
 
     Returns:
         Dict with ``laps`` (int or None), ``custom_finish_km`` (Decimal or None),
-        and ``powerups`` (list of valid power-up values).
+        and ``powerups`` (list of valid power-up slugs).
 
     """
+    from apps.ttt_planner.models import PowerUp  # local import avoids a cross-app import cycle
+
     laps_raw = request.POST.get("laps", "").strip()
     finish_raw = request.POST.get("custom_finish_km", "").strip()
     try:
@@ -4388,7 +4409,7 @@ def _parse_slot_race_details(request: HttpRequest) -> dict:
     if custom_finish_km is not None and custom_finish_km < 0:
         custom_finish_km = None
     posted = set(request.POST.getlist("powerups"))
-    powerups = [p for p in AvailabilitySlotSelection.PowerUp.values if p in posted]
+    powerups = list(PowerUp.objects.filter(is_active=True, slug__in=posted).values_list("slug", flat=True))
     return {"laps": laps, "custom_finish_km": custom_finish_km, "powerups": powerups}
 
 
@@ -4485,9 +4506,11 @@ def _build_slot_thread_message(
         lines.append(f"**Laps:** {selection.laps}")
     if selection.custom_finish_km:
         lines.append(f"**Custom finish:** {selection.custom_finish_km:g} km")
-    powerup_labels = selection.powerup_labels
-    if powerup_labels:
-        lines.append(f"**Power-ups:** {', '.join(powerup_labels)}")
+    powerup_objects = selection.powerup_objects
+    if powerup_objects:
+        # Prefix each with its Discord custom-emoji code when one is configured.
+        rendered = [f"{p.discord_emoji} {p.name}".strip() for p in powerup_objects]
+        lines.append(f"**Power-ups:** {', '.join(rendered)}")
     if mentions or substitute_dids:
         lines.append("")
         if mentions:

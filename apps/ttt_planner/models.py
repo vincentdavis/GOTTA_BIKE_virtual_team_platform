@@ -200,6 +200,11 @@ class PowerUp(models.Model):
     event_only = models.BooleanField(default=False, help_text="Only available in events")
     excluded_from_ladder = models.BooleanField(default=False, help_text="Does not count for the Club Ladder")
     icon = models.ImageField(upload_to="powerup_icons/", blank=True, help_text="PowerUp icon image")
+    discord_emoji = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Discord custom-emoji code to show in race threads, e.g. <:feather:123456789012345678>",
+    )
     order = models.PositiveSmallIntegerField(default=0, help_text="Display order on the routes page")
     is_active = models.BooleanField(default=True, help_text="Show in the PowerUps list")
 
