@@ -1237,3 +1237,16 @@ def test_segment_detail_view(auth_client):
     body = resp.content.decode()
     assert "Epic KOM" in body
     assert "Hilly Loop" in body  # lists routes containing the segment
+
+
+@pytest.mark.django_db
+def test_route_form_segments_filtered_to_world():
+    from apps.ttt_planner.forms import RouteForm
+    from apps.ttt_planner.models import Route, Segment
+
+    Segment.objects.create(name="Watopia Climb", segment_type="climb", world="Watopia", length_m=1000)
+    Segment.objects.create(name="London Climb", segment_type="climb", world="London", length_m=1000)
+    route = Route.objects.create(name="Wato Route", world="Watopia", distance_km=10, elevation_m=0)
+
+    offered = set(RouteForm(instance=route).fields["segments"].queryset.values_list("name", flat=True))
+    assert offered == {"Watopia Climb"}  # only this route's world is offered

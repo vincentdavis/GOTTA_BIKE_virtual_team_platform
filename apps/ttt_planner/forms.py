@@ -3,6 +3,7 @@
 from typing import ClassVar
 
 from django import forms
+from django.db.models import Q
 
 from apps.ttt_planner.models import Route, Segment
 
@@ -14,6 +15,24 @@ _AREA = {"class": "textarea textarea-bordered w-full", "rows": 3}
 
 class RouteForm(forms.ModelForm):
     """Create/edit a route, including the lead-in, laps, and linked segments."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        """Limit the segments picker to this route's world (plus any already linked).
+
+        Without this the picker lists every segment in every world. A route lives
+        in one world, so we only offer segments from it — set & save the route's
+        world first, then edit to choose segments.
+        """
+        super().__init__(*args, **kwargs)
+        world = getattr(self.instance, "world", "") or ""
+        linked_pks = list(self.instance.segments.values_list("pk", flat=True)) if self.instance.pk else []
+        if world:
+            self.fields["segments"].queryset = Segment.objects.filter(Q(world=world) | Q(pk__in=linked_pks))
+        elif linked_pks:
+            self.fields["segments"].queryset = Segment.objects.filter(pk__in=linked_pks)
+        else:
+            self.fields["segments"].queryset = Segment.objects.none()
+        self.fields["segments"].help_text = "Climbs & sprints in this route's world (set & save the world first)."
 
     class Meta:
         """Form metadata."""
