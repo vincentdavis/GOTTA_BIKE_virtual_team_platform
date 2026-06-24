@@ -718,6 +718,28 @@
         <input type="url" name="course_url" id="slot-modal-course-url" class="input input-bordered input-sm w-full" placeholder="https://zwiftinsider.com/route/...">
       </div>
 
+      <div class="flex gap-3 mb-3">
+        <div class="form-control flex-1">
+          <label class="label"><span class="label-text">Laps</span></label>
+          <input type="number" name="laps" id="slot-modal-laps" min="0" step="1" class="input input-bordered input-sm w-full" placeholder="optional">
+        </div>
+        <div class="form-control flex-1">
+          <label class="label"><span class="label-text">Custom finish (km)</span></label>
+          <input type="number" name="custom_finish_km" id="slot-modal-custom-finish" min="0" step="0.1" class="input input-bordered input-sm w-full" placeholder="e.g. 13.5">
+        </div>
+      </div>
+
+      <div class="form-control mb-3">
+        <label class="label"><span class="label-text">Power-ups (optional)</span></label>
+        <div id="slot-modal-powerups" class="grid grid-cols-2 gap-x-3 gap-y-1 border border-base-300 rounded-lg p-2">
+          {% for value, label in powerup_choices %}
+          <label class="flex items-center gap-2 cursor-pointer text-sm py-0.5">
+            <input type="checkbox" name="powerups" value="{{ value }}" class="checkbox checkbox-xs checkbox-accent powerup-cb"> {{ label }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
       <div class="form-control mb-3">
         <label class="label"><span class="label-text">Discord thread link</span></label>
         <input type="url" name="thread_link" id="slot-modal-thread-link" class="input input-bordered input-sm w-full" placeholder="https://discord.com/channels/.../...">
@@ -802,6 +824,8 @@
     const opponentInput = document.getElementById('slot-modal-opponent');
     const eventInviteInput = document.getElementById('slot-modal-event-invite-url');
     const courseInput = document.getElementById('slot-modal-course-url');
+    const lapsInput = document.getElementById('slot-modal-laps');
+    const customFinishInput = document.getElementById('slot-modal-custom-finish');
     const threadInput = document.getElementById('slot-modal-thread-link');
     const dateInput = document.getElementById('slot-modal-date');
     const timeInput = document.getElementById('slot-modal-time');
@@ -820,6 +844,10 @@
     errorBox.classList.add('hidden');
     errorBox.textContent = '';
 
+    // Reset power-up checkboxes; the existing/else branches below re-check as needed.
+    const powerupCheckboxes = document.querySelectorAll('#slot-modal-powerups .powerup-cb');
+    powerupCheckboxes.forEach(function(cb) { cb.checked = false; });
+
     // Reset the "submit form with create_thread=1" flag every time the modal
     // opens so a previous click does not leak into a fresh save.
     const flagInput = document.getElementById('slot-modal-create-thread-flag');
@@ -832,7 +860,13 @@
       opponentInput.value = existing.opponent || '';
       eventInviteInput.value = existing.event_invite_url || '';
       courseInput.value = existing.course_url || '';
+      lapsInput.value = (existing.laps !== null && existing.laps !== undefined) ? existing.laps : '';
+      customFinishInput.value = existing.custom_finish_km || '';
       threadInput.value = existing.thread_link || '';
+      (existing.powerups || []).forEach(function(p) {
+        const cb = document.querySelector('#slot-modal-powerups .powerup-cb[value="' + p + '"]');
+        if (cb) cb.checked = true;
+      });
       form.setAttribute('hx-post', updateUrlBase + existing.id + '/');
     } else {
       title.textContent = 'Schedule Race';
@@ -841,6 +875,8 @@
       opponentInput.value = '';
       eventInviteInput.value = '';
       courseInput.value = '';
+      lapsInput.value = '';
+      customFinishInput.value = '';
       threadInput.value = '';
       form.setAttribute('hx-post', createUrl);
     }

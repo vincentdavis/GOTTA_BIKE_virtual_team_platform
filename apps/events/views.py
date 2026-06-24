@@ -4,7 +4,7 @@ import json
 import re
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo, available_timezones
 
 import logfire
@@ -3683,6 +3683,9 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "event_invite_url": sel.event_invite_url,
             "course_url": sel.course_url,
             "thread_link": sel.thread_link,
+            "laps": sel.laps,
+            "custom_finish_km": str(sel.custom_finish_km) if sel.custom_finish_km is not None else "",
+            "powerups": sel.powerups or [],
             "selected_user_ids": list(sel.selected_users.values_list("pk", flat=True)),
             "substitute_ids": list(sel.substitutes.values_list("pk", flat=True)),
         }
@@ -3752,6 +3755,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "utc_cell_users_json": json.dumps(utc_cell_users_json),
             "user_data_json": json.dumps(user_data_json),
             "selections_json": json.dumps(selections_json),
+            "powerup_choices": AvailabilitySlotSelection.PowerUp.choices,
         },
     )
 
@@ -4354,6 +4358,40 @@ def _set_slot_substitutes(selection: AvailabilitySlotSelection, request: HttpReq
     selection.substitutes.set(User.objects.filter(pk__in=sub_ids))
 
 
+def _parse_slot_race_details(request: HttpRequest) -> dict:
+    """Parse the optional ``laps``, ``custom_finish_km`` and ``powerups`` slot fields.
+
+    All are optional; blank or unparseable scalar values become ``None`` so they
+    clear any previously-stored value. ``powerups`` is filtered against the valid
+    ``PowerUp`` choices and returned in choices order.
+
+    Args:
+        request: The request whose POST holds the slot form payload.
+
+    Returns:
+        Dict with ``laps`` (int or None), ``custom_finish_km`` (Decimal or None),
+        and ``powerups`` (list of valid power-up values).
+
+    """
+    laps_raw = request.POST.get("laps", "").strip()
+    finish_raw = request.POST.get("custom_finish_km", "").strip()
+    try:
+        laps = int(laps_raw) if laps_raw else None
+    except ValueError:
+        laps = None
+    if laps is not None and laps < 0:
+        laps = None
+    try:
+        custom_finish_km = Decimal(finish_raw) if finish_raw else None
+    except (InvalidOperation, ValueError):
+        custom_finish_km = None
+    if custom_finish_km is not None and custom_finish_km < 0:
+        custom_finish_km = None
+    posted = set(request.POST.getlist("powerups"))
+    powerups = [p for p in AvailabilitySlotSelection.PowerUp.values if p in posted]
+    return {"laps": laps, "custom_finish_km": custom_finish_km, "powerups": powerups}
+
+
 @require_GET
 def race_calendar_ics_view(request: HttpRequest, token: str) -> HttpResponse:
     """Serve a scheduled race as a downloadable .ics calendar invite.
@@ -4443,6 +4481,13 @@ def _build_slot_thread_message(
         lines.append(f"**Event invite:** {selection.event_invite_url}")
     if selection.course_url:
         lines.append(f"**Course:** {selection.course_url}")
+    if selection.laps:
+        lines.append(f"**Laps:** {selection.laps}")
+    if selection.custom_finish_km:
+        lines.append(f"**Custom finish:** {selection.custom_finish_km:g} km")
+    powerup_labels = selection.powerup_labels
+    if powerup_labels:
+        lines.append(f"**Power-ups:** {', '.join(powerup_labels)}")
     if mentions or substitute_dids:
         lines.append("")
         if mentions:
@@ -4675,6 +4720,7 @@ def slot_selection_create_view(
     status = raw_status if raw_status in valid_statuses else AvailabilitySlotSelection.Status.NONE
     selected_user_ids = request.POST.getlist("selected_users")
     also_create_thread = request.POST.get("create_thread") == "1"
+    race_details = _parse_slot_race_details(request)
 
     if not name or not slot_date or not slot_time:
         return HttpResponse("Name, date, and time are required.", status=400)
@@ -4690,6 +4736,9 @@ def slot_selection_create_view(
             "event_invite_url": event_invite_url,
             "course_url": course_url,
             "thread_link": thread_link,
+            "laps": race_details["laps"],
+            "custom_finish_km": race_details["custom_finish_km"],
+            "powerups": race_details["powerups"],
             "created_by": request.user,
         },
     )
@@ -4754,12 +4803,16 @@ def slot_selection_update_view(
     if not name:
         return HttpResponse("Name is required.", status=400)
 
+    race_details = _parse_slot_race_details(request)
     selection.name = name
     selection.status = status
     selection.opponent = opponent
     selection.event_invite_url = event_invite_url
     selection.course_url = course_url
     selection.thread_link = thread_link
+    selection.laps = race_details["laps"]
+    selection.custom_finish_km = race_details["custom_finish_km"]
+    selection.powerups = race_details["powerups"]
     selection.save(
         update_fields=[
             "name",
@@ -4768,6 +4821,9 @@ def slot_selection_update_view(
             "event_invite_url",
             "course_url",
             "thread_link",
+            "laps",
+            "custom_finish_km",
+            "powerups",
             "updated_at",
         ]
     )
@@ -4864,11 +4920,15 @@ def slot_selection_create_thread_view(
         valid_statuses = {s.value for s in AvailabilitySlotSelection.Status}
         raw_status = request.POST.get("status", selection.status)
         new_status = raw_status if raw_status in valid_statuses else selection.status
+        race_details = _parse_slot_race_details(request)
         selection.name = posted_name
         selection.status = new_status
         selection.opponent = request.POST.get("opponent", "").strip()
         selection.event_invite_url = request.POST.get("event_invite_url", "").strip()
         selection.course_url = request.POST.get("course_url", "").strip()
+        selection.laps = race_details["laps"]
+        selection.custom_finish_km = race_details["custom_finish_km"]
+        selection.powerups = race_details["powerups"]
         # thread_link is intentionally NOT overwritten here — it's set below
         # once the thread is created. Letting the form's stale value land would
         # break the idempotence guard on the next click.
@@ -4879,6 +4939,9 @@ def slot_selection_create_thread_view(
                 "opponent",
                 "event_invite_url",
                 "course_url",
+                "laps",
+                "custom_finish_km",
+                "powerups",
                 "updated_at",
             ]
         )
@@ -4938,11 +5001,15 @@ def slot_selection_post_update_view(
     raw_status = request.POST.get("status", selection.status)
     status = raw_status if raw_status in valid_statuses else selection.status
 
+    race_details = _parse_slot_race_details(request)
     selection.name = name
     selection.status = status
     selection.opponent = request.POST.get("opponent", "").strip()
     selection.event_invite_url = request.POST.get("event_invite_url", "").strip()
     selection.course_url = request.POST.get("course_url", "").strip()
+    selection.laps = race_details["laps"]
+    selection.custom_finish_km = race_details["custom_finish_km"]
+    selection.powerups = race_details["powerups"]
     # thread_link is preserved — the form value can be stale, but the saved one
     # is what we trust for posting back into the thread.
     selection.save(
@@ -4952,6 +5019,9 @@ def slot_selection_post_update_view(
             "opponent",
             "event_invite_url",
             "course_url",
+            "laps",
+            "custom_finish_km",
+            "powerups",
             "updated_at",
         ]
     )

@@ -6030,6 +6030,12 @@
     }
   }
   @layer daisyui.l1.l2 {
+    .checkbox-accent {
+      color: var(--color-accent-content);
+      --input-color: var(--color-accent);
+    }
+  }
+  @layer daisyui.l1.l2 {
     .checkbox-primary {
       color: var(--color-primary-content);
       --input-color: var(--color-primary);

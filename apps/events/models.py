@@ -1147,6 +1147,19 @@ class AvailabilitySlotSelection(models.Model):
         PENDING = "pending", "Pending"
         CONFIRMED = "confirmed", "Confirmed"
 
+    class PowerUp(models.TextChoices):
+        """Zwift power-ups that can be enabled for a scheduled race."""
+
+        FEATHER = "feather", "Feather (Lightweight)"
+        AERO = "aero", "Aero Boost"
+        DRAFT = "draft", "Draft Boost (Van)"
+        BURRITO = "burrito", "Burrito"
+        STEAMROLLER = "steamroller", "Steamroller (Anvil)"
+        GHOST = "ghost", "Ghost (Invisibility)"
+        XP_SMALL = "xp_small", "Small XP Bonus"
+        XP_LARGE = "xp_large", "Large XP Bonus"
+        COFFEE = "coffee", "Coffee Stop"
+
     grid = models.ForeignKey(
         AvailabilityGrid,
         on_delete=models.CASCADE,
@@ -1177,6 +1190,23 @@ class AvailabilitySlotSelection(models.Model):
         blank=True,
         default="",
         help_text="Optional link to the course/route page",
+    )
+    laps = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Optional number of laps for this race",
+    )
+    custom_finish_km = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Optional custom finish distance in km (e.g. 13.5)",
+    )
+    powerups = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Optional list of enabled Zwift power-ups (values from PowerUp choices)",
     )
     thread_link = models.URLField(
         blank=True,
@@ -1238,6 +1268,12 @@ class AvailabilitySlotSelection(models.Model):
         except ValueError:
             slot_t = time(0, 0)
         return datetime.combine(self.slot_date, slot_t, tzinfo=UTC)
+
+    @property
+    def powerup_labels(self) -> list[str]:
+        """Return human-readable labels for the enabled power-ups, in choices order."""
+        labels = dict(self.PowerUp.choices)
+        return [labels[p] for p in self.PowerUp.values if p in (self.powerups or [])]
 
 
 class SlotDS(models.Model):

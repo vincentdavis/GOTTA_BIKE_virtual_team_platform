@@ -27,6 +27,13 @@
           {% endif %}
         </p>
         {% endif %}
+        {% if item.selection.laps or item.selection.custom_finish_km or item.selection.powerup_labels %}
+        <p class="text-xs text-base-content/60 mt-1 flex flex-wrap gap-x-3">
+          {% if item.selection.laps %}<span>Laps: {{ item.selection.laps }}</span>{% endif %}
+          {% if item.selection.custom_finish_km %}<span>Finish: {{ item.selection.custom_finish_km|floatformat:"-2" }} km</span>{% endif %}
+          {% if item.selection.powerup_labels %}<span>Power-ups: {{ item.selection.powerup_labels|join:", " }}</span>{% endif %}
+        </p>
+        {% endif %}
       </div>
       <div class="flex items-center gap-2">
         <span class="badge badge-sm badge-primary">{{ item.enriched_users|length }} rider{{ item.enriched_users|pluralize }}</span>
