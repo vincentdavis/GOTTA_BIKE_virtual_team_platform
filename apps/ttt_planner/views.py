@@ -24,8 +24,8 @@ from apps.accounts.decorators import race_verified_required, team_member_require
 from apps.events import squads as event_squads
 from apps.events.models import Squad
 from apps.ttt_planner import terrain, worlds
-from apps.ttt_planner.forms import RouteForm, SegmentForm
-from apps.ttt_planner.models import PlanRider, Route, RouteGpx, Segment, TttPlan
+from apps.ttt_planner.forms import PowerUpForm, RouteForm, SegmentForm
+from apps.ttt_planner.models import PlanRider, PowerUp, Route, RouteGpx, Segment, TttPlan
 from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
     climb_strength,
@@ -133,6 +133,7 @@ def route_list(request: HttpRequest) -> HttpResponse:
             "worlds": worlds_rows,
             "segments": segments,
             "segment_worlds": sorted({s.world for s in segments if s.world}),
+            "powerups": PowerUp.objects.filter(is_active=True),
         },
     )
 
@@ -250,6 +251,43 @@ def segment_edit(request: HttpRequest, segment_id: int) -> HttpResponse:
         messages.success(request, "Segment updated.")
         return redirect("routes:list")
     return render(request, "ttt_planner/segment_form.html", {"form": form, "mode": "edit", "segment": segment})
+
+
+@login_required
+@race_verified_required()
+def powerup_create(request: HttpRequest) -> HttpResponse:
+    """Create a Zwift PowerUp (race-verified users / superusers).
+
+    Returns:
+        The PowerUp form on GET/invalid, else a redirect to the routes page.
+
+    """
+    form = PowerUpForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        powerup = form.save()
+        messages.success(request, f"PowerUp “{powerup.name}” created.")
+        logfire.info("PowerUp created", powerup_id=powerup.pk, user_id=request.user.id)
+        return redirect("routes:list")
+    return render(request, "ttt_planner/powerup_form.html", {"form": form, "mode": "create"})
+
+
+@login_required
+@race_verified_required()
+def powerup_edit(request: HttpRequest, powerup_id: int) -> HttpResponse:
+    """Edit a Zwift PowerUp (race-verified users / superusers).
+
+    Returns:
+        The PowerUp form on GET/invalid, else a redirect to the routes page.
+
+    """
+    powerup = get_object_or_404(PowerUp, pk=powerup_id)
+    form = PowerUpForm(request.POST or None, request.FILES or None, instance=powerup)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "PowerUp updated.")
+        logfire.info("PowerUp updated", powerup_id=powerup.pk, user_id=request.user.id)
+        return redirect("routes:list")
+    return render(request, "ttt_planner/powerup_form.html", {"form": form, "mode": "edit", "powerup": powerup})
 
 
 @login_required

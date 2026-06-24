@@ -4,7 +4,7 @@ from django.contrib import admin, messages
 from django.http import HttpRequest, HttpResponseRedirect
 from django.urls import path, reverse
 
-from apps.ttt_planner.models import PlanRider, Route, RouteGpx, Segment, TttPlan
+from apps.ttt_planner.models import PlanRider, PowerUp, Route, RouteGpx, Segment, TttPlan
 from apps.ttt_planner.services.segment_import import import_segments
 
 
@@ -75,6 +75,16 @@ class PlanRiderInline(admin.TabularInline):
 
     model = PlanRider
     extra = 0
+
+
+@admin.register(PowerUp)
+class PowerUpAdmin(admin.ModelAdmin):
+    """Admin for Zwift PowerUps reference data."""
+
+    list_display = ("name", "aka", "duration_seconds", "event_only", "excluded_from_ladder", "order", "is_active")
+    list_filter = ("event_only", "excluded_from_ladder", "is_active")
+    search_fields = ("name", "aka")
+    prepopulated_fields = {"slug": ("name",)}  # noqa: RUF012
 
 
 @admin.register(TttPlan)

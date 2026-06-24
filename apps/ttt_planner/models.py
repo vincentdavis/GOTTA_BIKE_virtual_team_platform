@@ -184,6 +184,54 @@ class Segment(models.Model):
         return f"{self.name} ({self.get_segment_type_display()}{direction})"
 
 
+class PowerUp(models.Model):
+    """A Zwift PowerUp, shown on the routes reference page.
+
+    Shared reference data that race-verified members can curate (same pattern as
+    ``Route`` / ``Segment``). The ``excluded_from_ladder`` flag marks PowerUps
+    that do not count for the Club Ladder (the XP bonuses and Boost).
+    """
+
+    name = models.CharField(max_length=100, unique=True, help_text="PowerUp name (e.g. Feather)")
+    aka = models.CharField(max_length=100, blank=True, help_text="Alternate name (e.g. Lightweight)")
+    slug = models.SlugField(max_length=120, unique=True, blank=True, help_text="URL/icon slug (auto from name)")
+    effect = models.TextField(blank=True, help_text="What the PowerUp does, including duration")
+    duration_seconds = models.PositiveIntegerField(default=0, help_text="Effect duration in seconds (0 = instant/none)")
+    event_only = models.BooleanField(default=False, help_text="Only available in events")
+    excluded_from_ladder = models.BooleanField(default=False, help_text="Does not count for the Club Ladder")
+    icon = models.ImageField(upload_to="powerup_icons/", blank=True, help_text="PowerUp icon image")
+    order = models.PositiveSmallIntegerField(default=0, help_text="Display order on the routes page")
+    is_active = models.BooleanField(default=True, help_text="Show in the PowerUps list")
+
+    class Meta:
+        """Meta options for PowerUp."""
+
+        verbose_name = "PowerUp"
+        verbose_name_plural = "PowerUps"
+        ordering: ClassVar[list[str]] = ["order", "name"]
+
+    def __str__(self) -> str:
+        """Return the PowerUp name.
+
+        Returns:
+            The PowerUp name.
+
+        """
+        return self.name
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        """Populate ``slug`` from ``name`` when missing, then save.
+
+        Args:
+            *args: Positional args passed through to ``Model.save``.
+            **kwargs: Keyword args passed through to ``Model.save``.
+
+        """
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
 class TttPlan(models.Model):
     """A saved TTT plan. The UUID primary key doubles as the share token."""
 

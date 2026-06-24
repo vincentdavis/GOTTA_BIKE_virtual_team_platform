@@ -1,0 +1,102 @@
+[
+  {
+    "name": "Feather",
+    "aka": "Lightweight",
+    "slug": "feather",
+    "effect": "Reduces your weight by 10% for 30 seconds. Best saved for climbs, where weight matters most.",
+    "duration_seconds": 30,
+    "event_only": false,
+    "excluded_from_ladder": false,
+    "icon": "feather.png"
+  },
+  {
+    "name": "Draft Boost",
+    "aka": "Van",
+    "slug": "draft-boost",
+    "effect": "Increases the draft effect you receive for 40 seconds. Only helps while you are already drafting another rider.",
+    "duration_seconds": 40,
+    "event_only": false,
+    "excluded_from_ladder": false,
+    "icon": "draft-boost.png"
+  },
+  {
+    "name": "Aero Boost",
+    "aka": "Helmet",
+    "slug": "aero-boost",
+    "effect": "Reduces your aerodynamic drag (CdA) by 25% for 15 seconds. Best at higher speeds on flats and descents.",
+    "duration_seconds": 15,
+    "event_only": false,
+    "excluded_from_ladder": false,
+    "icon": "aero-boost.png"
+  },
+  {
+    "name": "Anvil",
+    "aka": "",
+    "slug": "anvil",
+    "effect": "Makes you heavier for up to 15 seconds so you descend faster. Only works on descents.",
+    "duration_seconds": 15,
+    "event_only": true,
+    "excluded_from_ladder": false,
+    "icon": "anvil.png"
+  },
+  {
+    "name": "Steamroller",
+    "aka": "",
+    "slug": "steamroller",
+    "effect": "Reduces rolling resistance for 30 seconds across surfaces such as dirt and cobbles.",
+    "duration_seconds": 30,
+    "event_only": true,
+    "excluded_from_ladder": false,
+    "icon": "steamroller.png"
+  },
+  {
+    "name": "Burrito",
+    "aka": "",
+    "slug": "burrito",
+    "effect": "Turns off the draft effect for riders in a cone-shaped window behind you for 20 seconds.",
+    "duration_seconds": 20,
+    "event_only": true,
+    "excluded_from_ladder": false,
+    "icon": "burrito.png"
+  },
+  {
+    "name": "Ghost",
+    "aka": "Cloaking",
+    "slug": "ghost",
+    "effect": "Makes you invisible to other riders for 15 seconds. Disabled within 400m of the finish.",
+    "duration_seconds": 15,
+    "event_only": true,
+    "excluded_from_ladder": false,
+    "icon": "ghost.png"
+  },
+  {
+    "name": "Large Bonus",
+    "aka": "Large XP Bonus",
+    "slug": "large-bonus",
+    "effect": "Grants +250 experience points (about the equivalent of riding 12.5 km). No racing effect.",
+    "duration_seconds": 0,
+    "event_only": false,
+    "excluded_from_ladder": true,
+    "icon": "large-bonus.png"
+  },
+  {
+    "name": "Small Bonus",
+    "aka": "Small XP Bonus",
+    "slug": "small-bonus",
+    "effect": "Grants +10 experience points (about the equivalent of riding 0.5 km). No racing effect.",
+    "duration_seconds": 0,
+    "event_only": false,
+    "excluded_from_ladder": true,
+    "icon": "small-bonus.png"
+  },
+  {
+    "name": "Boost",
+    "aka": "",
+    "slug": "boost",
+    "effect": "",
+    "duration_seconds": 0,
+    "event_only": false,
+    "excluded_from_ladder": true,
+    "icon": ""
+  }
+]

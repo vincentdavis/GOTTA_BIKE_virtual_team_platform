@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}{% if mode == "edit" %}Edit PowerUp{% else %}New PowerUp{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <a href="{% url 'routes:list' %}" class="btn btn-ghost btn-sm">&larr; Back to routes</a>
+
+  <div class="card bg-base-200 shadow-xl mt-3">
+    <div class="card-body">
+      <h2 class="card-title text-2xl">{% if mode == "edit" %}Edit PowerUp{% else %}New PowerUp{% endif %}</h2>
+
+      <form method="post" enctype="multipart/form-data" class="space-y-3">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div class="alert alert-error py-2">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        {% if powerup.icon %}
+        <div class="flex items-center gap-3">
+          <img src="{{ powerup.icon.url }}" alt="{{ powerup.name }} icon" class="h-12 w-12 object-contain" />
+          <span class="text-sm text-base-content/60">Current icon</span>
+        </div>
+        {% endif %}
+
+        {% for field in form %}
+        <label class="form-control">
+          <span class="label-text mb-1">{{ field.label }}{% if field.field.required %} <span class="text-error">*</span>{% endif %}</span>
+          {{ field }}
+          {% if field.help_text %}<span class="label-text-alt text-base-content/50 mt-1">{{ field.help_text }}</span>{% endif %}
+          {% for e in field.errors %}<span class="label-text-alt text-error mt-1">{{ e }}</span>{% endfor %}
+        </label>
+        {% endfor %}
+
+        <div class="flex justify-end gap-2 pt-2">
+          <a href="{% url 'routes:list' %}" class="btn btn-ghost">Cancel</a>
+          <button type="submit" class="btn btn-primary">{% if mode == "edit" %}Save changes{% else %}Create PowerUp{% endif %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -127,6 +127,62 @@
       {% include "ttt_planner/_segment_table.html" with segments=segments empty_label="No segments yet." %}
     </div>
 
+    {# ===== Power-ups ===== #}
+    <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Power-ups" />
+    <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
+      <div class="flex flex-wrap justify-between items-end gap-3 mb-3">
+        <div>
+          <h2 class="text-xl font-semibold">Power-ups</h2>
+          <p class="text-sm text-base-content/70">{{ powerups|length }} Zwift PowerUps · rows marked <span class="badge badge-ghost badge-xs">excluded</span> do not count for the Club Ladder</p>
+        </div>
+        {% if user.is_race_ready or user.is_superuser %}
+        <a href="{% url 'routes:powerup_create' %}" class="btn btn-primary btn-sm">+ Add PowerUp</a>
+        {% endif %}
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-sm table-zebra">
+          <thead>
+            <tr>
+              <th></th>
+              <th>PowerUp</th>
+              <th>Effect</th>
+              <th class="text-right">Duration</th>
+              <th></th>
+              {% if user.is_race_ready or user.is_superuser %}<th></th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in powerups %}
+            <tr class="{% if p.excluded_from_ladder %}opacity-60{% endif %}">
+              <td class="w-10">
+                {% if p.icon %}
+                <img src="{{ p.icon.url }}" alt="{{ p.name }} icon" class="h-7 w-7 object-contain" />
+                {% else %}
+                <span class="flex h-7 w-7 items-center justify-center rounded bg-base-300 text-xs font-bold" title="No icon yet">{{ p.name|slice:":1" }}</span>
+                {% endif %}
+              </td>
+              <td class="font-medium whitespace-nowrap">
+                {{ p.name }}
+                {% if p.aka %}<span class="text-xs text-base-content/50">({{ p.aka }})</span>{% endif %}
+              </td>
+              <td class="text-sm">{{ p.effect|default:"—" }}</td>
+              <td class="text-right whitespace-nowrap">{% if p.duration_seconds %}{{ p.duration_seconds }}s{% else %}—{% endif %}</td>
+              <td class="whitespace-nowrap">
+                {% if p.event_only %}<span class="badge badge-info badge-xs">event-only</span>{% endif %}
+                {% if p.excluded_from_ladder %}<span class="badge badge-ghost badge-xs">excluded</span>{% endif %}
+              </td>
+              {% if user.is_race_ready or user.is_superuser %}
+              <td class="text-right whitespace-nowrap">
+                <a href="{% url 'routes:powerup_edit' p.pk %}" class="link link-primary text-xs">Edit</a>
+              </td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 </div>
 {% endblock %}
