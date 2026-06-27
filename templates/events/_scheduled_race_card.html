@@ -2,7 +2,9 @@
 One scheduled-race card. Expects a ``slot`` dict from
 ``apps.events.views._build_scheduled_race_slots``. When ``slot.event`` is set
 (cross-event "Sch. Races" page) the event is shown as a linked badge.
-Relies on a ``toggleAllRacesRiders`` JS function defined by the host page.
+Pass ``hide_event_invite=True`` to suppress the "Event invite" link (used by
+the cross-event page). Relies on a ``toggleAllRacesRiders`` JS function defined
+by the host page.
 {% endcomment %}
 <div class="bg-base-200 rounded-md p-2 border border-base-300">
   <div class="flex flex-wrap items-center gap-2 text-sm">
@@ -28,9 +30,9 @@ Relies on a ``toggleAllRacesRiders`` JS function defined by the host page.
     {% endif %}
   </div>
   <div id="all-races-riders-{{ slot.selection.pk }}" style="display:none" class="mt-2">
-    {% if slot.selection.event_invite_url or slot.selection.course_url or slot.selection.thread_link %}
+    {% if slot.selection.event_invite_url and not hide_event_invite or slot.selection.course_url or slot.selection.thread_link %}
     <p class="text-xs mb-2 flex flex-wrap gap-x-3">
-      {% if slot.selection.event_invite_url %}
+      {% if slot.selection.event_invite_url and not hide_event_invite %}
       <a href="{{ slot.selection.event_invite_url }}" target="_blank" rel="noopener" class="link link-primary">Event invite</a>
       {% endif %}
       {% if slot.selection.course_url %}

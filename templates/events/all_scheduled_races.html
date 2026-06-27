@@ -28,7 +28,7 @@
   {% if slots %}
   <div class="flex flex-col gap-2">
     {% for slot in slots %}
-    {% include "events/_scheduled_race_card.html" %}
+    {% include "events/_scheduled_race_card.html" with hide_event_invite=True %}
     {% endfor %}
   </div>
   {% else %}

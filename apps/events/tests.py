@@ -271,6 +271,53 @@ def test_all_scheduled_races_lists_races_across_events(auth_client, team_member)
 
 
 @pytest.mark.django_db
+def test_all_scheduled_races_hides_event_invite_but_keeps_course_and_thread(auth_client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid, AvailabilitySlotSelection, Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL",
+        start_date=today,
+        end_date=today + timedelta(days=7),
+        visible=True,
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    grid = AvailabilityGrid.objects.create(
+        squad=squad,
+        start_date=today,
+        end_date=today + timedelta(days=7),
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+    selection = AvailabilitySlotSelection.objects.create(
+        grid=grid,
+        name="Race 1",
+        slot_date=today + timedelta(days=3),
+        slot_time="18:30",
+        status=AvailabilitySlotSelection.Status.CONFIRMED,
+        event_invite_url="https://zwift.test/invite",
+        course_url="https://zwift.test/course",
+        thread_link="https://discord.test/thread",
+    )
+    selection.selected_users.add(team_member)
+
+    # Cross-event page: no "Event invite" link, but Course and Discord thread remain.
+    all_races = auth_client.get(reverse("events:all_races")).content.decode()
+    assert "Event invite" not in all_races
+    assert "https://zwift.test/invite" not in all_races
+    assert "Course" in all_races
+    assert "Discord thread" in all_races
+
+    # Per-event page still shows the invite link.
+    per_event = auth_client.get(reverse("events:event_all_races", args=[event.pk])).content.decode()
+    assert "Event invite" in per_event
+
+
+@pytest.mark.django_db
 def test_all_scheduled_races_excludes_past_races(auth_client, team_member) -> None:
     from django.urls import reverse
 
