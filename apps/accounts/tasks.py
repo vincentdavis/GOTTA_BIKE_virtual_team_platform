@@ -725,7 +725,7 @@ def sync_youtube_videos() -> dict:
                 new_count = 0
                 for video_data in videos:
                     # Create or update video record
-                    video, created = YouTubeVideo.objects.update_or_create(
+                    _video, created = YouTubeVideo.objects.update_or_create(
                         user=user,
                         video_id=video_data["video_id"],
                         defaults={
