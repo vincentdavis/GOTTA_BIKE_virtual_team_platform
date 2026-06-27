@@ -144,7 +144,7 @@ def _parse_date(raw: str) -> datetime | None:
     if not raw:
         return None
     try:
-        parsed_date = datetime.strptime(raw, "%Y-%m-%d").date()
+        parsed_date = datetime.strptime(raw, "%Y-%m-%d").date()  # noqa: DTZ007  # date-only parse, time discarded
     except ValueError:
         return None
     naive = datetime.combine(parsed_date, time.min)

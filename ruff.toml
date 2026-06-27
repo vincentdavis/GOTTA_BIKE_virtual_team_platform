@@ -74,6 +74,10 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # class defaults (operations/dependencies lists). The glob must be **-anchored
 # to match apps/<app>/migrations/*.py — a bare "migrations/*" matches nothing here.
 "**/migrations/*" = ["D100", "D101", "E501", "RUF012"]
+# Django ModelForm Meta classes use plain list/dict attributes (fields, widgets,
+# exclude, …) by framework convention, which RUF012 flags as mutable class
+# defaults. That's idiom, not a bug, so silence RUF012 in form modules.
+"**/forms.py" = ["RUF012"]
 
 [format]
 # Like Black, use double quotes for strings.

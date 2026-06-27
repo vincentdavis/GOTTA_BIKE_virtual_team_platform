@@ -68,7 +68,7 @@ def _race_start_end(selection: AvailabilitySlotSelection) -> tuple[datetime, dat
     """
     start = datetime.combine(
         selection.slot_date,
-        datetime.strptime(selection.slot_time, "%H:%M").time(),
+        datetime.strptime(selection.slot_time, "%H:%M").time(),  # noqa: DTZ007  # clock-only parse, no date used
         tzinfo=ZoneInfo("UTC"),
     )
     return start, start + RACE_DURATION

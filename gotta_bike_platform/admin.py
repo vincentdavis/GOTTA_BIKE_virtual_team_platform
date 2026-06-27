@@ -1,12 +1,10 @@
 """Admin configuration for gotta_bike_platform app."""
 
 from django.contrib import admin
-
 from django_tasks_db.admin import DBTaskResultAdmin as DefaultDBTaskResultAdmin
 from django_tasks_db.models import DBTaskResult
 
 from gotta_bike_platform.models import SiteSettings
-
 
 admin.site.unregister(DBTaskResult)
 
