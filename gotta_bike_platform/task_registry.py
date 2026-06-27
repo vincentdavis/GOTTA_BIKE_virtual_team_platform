@@ -119,7 +119,10 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Send DMs for expiring verifications",
         "scheduled": True,
         "hours_setting": "SCHEDULER_WARN_EXPIRING_VERIFICATIONS_HOURS",
-        "kwargs": {"days": 15, "dry_run": False},
+        # days=None makes the task read the EXPIRE_WARNING_DAYS Constance list
+        # (e.g. [15, 7, 3, 1]). Do NOT hardcode a single value here — that
+        # overrides the setting and only the matching threshold ever fires.
+        "kwargs": {"days": None, "dry_run": False},
     },
     "sync_new_member_roles": {
         "task": sync_new_member_roles,
