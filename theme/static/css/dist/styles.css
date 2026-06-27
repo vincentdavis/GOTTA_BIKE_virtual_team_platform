@@ -5499,6 +5499,9 @@
       border-color: color-mix(in oklab, var(--color-success) 30%, transparent);
     }
   }
+  .border-warning-content {
+    border-color: var(--color-warning-content);
+  }
   @layer daisyui.l1.l2 {
     .table-zebra tbody tr:where(:nth-child(even)) {
       background-color: var(--color-base-200);
@@ -6525,6 +6528,11 @@
     }
   }
   @media (hover: hover) {
+    .hover\:bg-warning-content:hover {
+      background-color: var(--color-warning-content);
+    }
+  }
+  @media (hover: hover) {
     .hover\:text-base-content\/70:hover {
       color: var(--color-base-content);
     }
@@ -6552,6 +6560,11 @@
   @media (hover: hover) {
     .hover\:text-primary:hover {
       color: var(--color-primary);
+    }
+  }
+  @media (hover: hover) {
+    .hover\:text-warning:hover {
+      color: var(--color-warning);
     }
   }
   @media (hover: hover) {
@@ -6797,9 +6810,6 @@
   .\[\&_input\]\:accent-primary input {
     accent-color: var(--color-primary);
   }
-  .\[\&_label\]\:block label {
-    display: block;
-  }
   .\[\&_label\]\:flex label {
     display: flex;
   }
@@ -6815,14 +6825,8 @@
   .\[\&_label\]\:rounded label {
     border-radius: 0.25rem;
   }
-  .\[\&_label\]\:px-1 label {
-    padding-inline: calc(var(--spacing) * 1);
-  }
   .\[\&_label\]\:px-2 label {
     padding-inline: calc(var(--spacing) * 2);
-  }
-  .\[\&_label\]\:py-1 label {
-    padding-block: calc(var(--spacing) * 1);
   }
   .\[\&_label\]\:py-1\.5 label {
     padding-block: calc(var(--spacing) * 1.5);

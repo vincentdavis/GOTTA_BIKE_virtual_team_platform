@@ -90,6 +90,30 @@
     </div>
   </div>
 {% endif %}
+{% if expiring_verifications %}
+  <div class="bg-warning text-warning-content py-3 px-4 text-sm font-medium flex-shrink-0">
+    <div class="container mx-auto">
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
+        <div class="flex items-center">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24"
+               stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <span>
+            Your {{ expiring_verifications.soonest_type }} verification expires in
+            {{ expiring_verifications.soonest_days }} day{{ expiring_verifications.soonest_days|pluralize }}.{% if expiring_verifications.count > 1 %}
+            ({{ expiring_verifications.count }} verifications expiring soon.){% endif %}
+          </span>
+        </div>
+        <a href="{% url 'accounts:verification' %}"
+           class="btn btn-sm btn-outline border-warning-content text-warning-content hover:bg-warning-content hover:text-warning">
+          Renew Verification
+        </a>
+      </div>
+    </div>
+  </div>
+{% endif %}
 
 <!-- Site Header (full width, always visible) -->
 <header class="navbar bg-base-200 border-b border-base-300 sticky top-0 z-50 flex-shrink-0">

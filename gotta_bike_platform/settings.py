@@ -155,6 +155,7 @@ TEMPLATES = [
                 "gotta_bike_platform.context_processors.deploy_info",
                 "apps.cms.context_processors.cms_nav_pages",
                 "apps.team.context_processors.pending_verification_count",
+                "apps.team.context_processors.expiring_verifications",
                 "apps.events.context_processors.pending_availability_count",
             ],
         },
