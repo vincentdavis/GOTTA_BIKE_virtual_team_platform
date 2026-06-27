@@ -1158,45 +1158,32 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     )
 
 
-@login_required
-@team_member_required()
-@require_GET
-def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
-    """Paginated list of every scheduled race in the event from today forward.
+def _build_scheduled_race_slots(
+    selections: list[AvailabilitySlotSelection],
+    user_tz: str,
+    today_local: date,
+    *,
+    include_event: bool = False,
+) -> list[dict]:
+    """Build per-slot display dicts shared by the scheduled-race pages.
 
-    25 races per page, ordered chronologically. ``?page=N`` selects a page
-    (out-of-range falls back to the last available page).
+    Used by both ``event_all_races_view`` (one event) and
+    ``all_scheduled_races_view`` (every event). Selected riders are enriched
+    with ZP/ZR data in a single batched lookup, UTC slot times are converted to
+    the viewer's timezone, and the days-until / status badge metadata is
+    computed.
 
     Args:
-        request: The HTTP request.
-        event_pk: The event primary key.
+        selections: The slot selections for the current page.
+        user_tz: The viewer's IANA timezone (may be empty).
+        today_local: Today's date in the viewer's timezone.
+        include_event: When True, add ``event`` to each slot dict so the
+            cross-event template can label which event each race belongs to.
 
     Returns:
-        Rendered all-races page.
+        List of slot display dicts consumed by the races templates.
 
     """
-    event = get_object_or_404(Event, pk=event_pk)
-
-    user_tz = getattr(request.user, "timezone", "") or ""
-    now_utc = timezone.now()
-    today_local = now_utc.astimezone(ZoneInfo(user_tz) if user_tz else now_utc.tzinfo).date()
-
-    all_selections = (
-        AvailabilitySlotSelection.objects
-        .filter(grid__squad__event=event, slot_date__gte=today_local)
-        .select_related("grid", "grid__squad")
-        .prefetch_related("selected_users", "grid__squad__captains", "grid__squad__vice_captains")
-        .order_by("slot_date", "slot_time", "grid__squad__name")
-    )
-
-    paginator = Paginator(all_selections, 25)
-    page_number = request.GET.get("page") or 1
-    try:
-        page_obj = paginator.page(page_number)
-    except Exception:
-        page_obj = paginator.page(paginator.num_pages or 1)
-    selections = list(page_obj.object_list)
-
     # Collect every selected user across the visible window for one zp/zr lookup
     users_for_lookup: dict[int, User] = {}
     for sel in selections:
@@ -1266,7 +1253,7 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             for u in sel.selected_users.all()
             if u.pk in enriched_by_user_id
         ]
-        slots.append({
+        slot = {
             "selection": sel,
             "squad": sel.grid.squad,
             "squad_name": sel.grid.squad.name,
@@ -1282,7 +1269,53 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "status_class": status_class,
             "is_status_visible": sel.status != AvailabilitySlotSelection.Status.NONE,
             "riders": riders,
-        })
+        }
+        if include_event:
+            slot["event"] = sel.grid.squad.event
+        slots.append(slot)
+    return slots
+
+
+@login_required
+@team_member_required()
+@require_GET
+def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Paginated list of every scheduled race in the event from today forward.
+
+    25 races per page, ordered chronologically. ``?page=N`` selects a page
+    (out-of-range falls back to the last available page).
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+
+    Returns:
+        Rendered all-races page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+
+    user_tz = getattr(request.user, "timezone", "") or ""
+    now_utc = timezone.now()
+    today_local = now_utc.astimezone(ZoneInfo(user_tz) if user_tz else now_utc.tzinfo).date()
+
+    all_selections = (
+        AvailabilitySlotSelection.objects
+        .filter(grid__squad__event=event, slot_date__gte=today_local)
+        .select_related("grid", "grid__squad")
+        .prefetch_related("selected_users", "grid__squad__captains", "grid__squad__vice_captains")
+        .order_by("slot_date", "slot_time", "grid__squad__name")
+    )
+
+    paginator = Paginator(all_selections, 25)
+    page_number = request.GET.get("page") or 1
+    try:
+        page_obj = paginator.page(page_number)
+    except Exception:
+        page_obj = paginator.page(paginator.num_pages or 1)
+    selections = list(page_obj.object_list)
+
+    slots = _build_scheduled_race_slots(selections, user_tz, today_local)
 
     logfire.debug(
         "Event all races viewed",
@@ -1299,6 +1332,67 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         "events/event_all_races.html",
         {
             "event": event,
+            "slots": slots,
+            "page_obj": page_obj,
+            "paginator": paginator,
+            "today": today_local,
+            "guild_id": config.GUILD_ID,
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_GET
+def all_scheduled_races_view(request: HttpRequest) -> HttpResponse:
+    """Paginated list of every scheduled race across all events from today forward.
+
+    Mirrors ``event_all_races_view`` but spans every event, labelling each race
+    with the event it belongs to. 25 races per page, ordered chronologically;
+    ``?page=N`` selects a page (out-of-range falls back to the last page).
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered all-events scheduled races page.
+
+    """
+    user_tz = getattr(request.user, "timezone", "") or ""
+    now_utc = timezone.now()
+    today_local = now_utc.astimezone(ZoneInfo(user_tz) if user_tz else now_utc.tzinfo).date()
+
+    all_selections = (
+        AvailabilitySlotSelection.objects
+        .filter(slot_date__gte=today_local)
+        .select_related("grid", "grid__squad", "grid__squad__event")
+        .prefetch_related("selected_users", "grid__squad__captains", "grid__squad__vice_captains")
+        .order_by("slot_date", "slot_time", "grid__squad__event__title", "grid__squad__name")
+    )
+
+    paginator = Paginator(all_selections, 25)
+    page_number = request.GET.get("page") or 1
+    try:
+        page_obj = paginator.page(page_number)
+    except Exception:
+        page_obj = paginator.page(paginator.num_pages or 1)
+    selections = list(page_obj.object_list)
+
+    slots = _build_scheduled_race_slots(selections, user_tz, today_local, include_event=True)
+
+    logfire.debug(
+        "All scheduled races viewed",
+        user_id=request.user.id,
+        page=page_obj.number,
+        total_pages=paginator.num_pages,
+        slot_count=len(slots),
+        total_count=paginator.count,
+    )
+
+    return render(
+        request,
+        "events/all_scheduled_races.html",
+        {
             "slots": slots,
             "page_obj": page_obj,
             "paginator": paginator,

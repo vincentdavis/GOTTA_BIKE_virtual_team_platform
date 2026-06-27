@@ -86,6 +86,14 @@
         <!-- Racing Section -->
         <li class="menu-title mt-4">Racing</li>
         <li>
+            <a href="{% url 'events:all_races' %}" class="{% if request.path == '/events/races/' %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6l1 2h6v8h-7l-1-2H5a2 2 0 00-2 2z" />
+                </svg>
+                Sch. Races
+            </a>
+        </li>
+        <li>
             <a href="{% url 'ttt_planner:list' %}" class="{% if '/ttt/' in request.path %}active{% endif %}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />

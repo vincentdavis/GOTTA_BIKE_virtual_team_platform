@@ -1,15 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}All Races - {{ event.title }}{% endblock %}
+{% block title %}Scheduled Races{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
-  <div class="mb-4">
-    <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
-  </div>
-
   <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-    <h2 class="text-xl font-bold">All Races &mdash; {{ event.title }}</h2>
+    <h2 class="text-xl font-bold">Scheduled Races</h2>
     <span class="badge badge-ghost">{{ paginator.count }} race{{ paginator.count|pluralize }} from today</span>
   </div>
 
@@ -36,7 +32,7 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="text-sm text-base-content/50">No upcoming races scheduled for this event.</p>
+  <p class="text-sm text-base-content/50">No upcoming races scheduled.</p>
   {% endif %}
 </div>
 {% endblock %}

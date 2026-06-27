@@ -148,6 +148,8 @@ EVENTS_TEMPLATES = [
     "events/_squad_panel.html",
     "events/_squad_manage_panel.html",
     "events/event_all_races.html",
+    "events/all_scheduled_races.html",
+    "events/_scheduled_race_card.html",
 ]
 
 
@@ -211,6 +213,106 @@ def test_my_events_renders_scheduled_race_with_calendar_links(auth_client, team_
     assert "Download .ics" in body
     assert "/events/race/" in body
     assert "calendar.google.com" in body
+
+
+@pytest.mark.django_db
+def test_all_scheduled_races_page_renders_empty(auth_client) -> None:
+    from django.urls import reverse
+
+    response = auth_client.get(reverse("events:all_races"))
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_all_scheduled_races_lists_races_across_events(auth_client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid, AvailabilitySlotSelection, Squad
+
+    today = date.today()
+
+    def _make_race(event_title: str, squad_name: str, race_name: str) -> None:
+        event = Event.objects.create(
+            title=event_title,
+            start_date=today,
+            end_date=today + timedelta(days=7),
+            visible=True,
+        )
+        squad = Squad.objects.create(event=event, name=squad_name)
+        grid = AvailabilityGrid.objects.create(
+            squad=squad,
+            start_date=today,
+            end_date=today + timedelta(days=7),
+            start_time="18:00",
+            end_time="20:00",
+            slot_duration=30,
+            status=AvailabilityGrid.Status.PUBLISHED,
+        )
+        selection = AvailabilitySlotSelection.objects.create(
+            grid=grid,
+            name=race_name,
+            slot_date=today + timedelta(days=3),
+            slot_time="18:30",
+            status=AvailabilitySlotSelection.Status.CONFIRMED,
+        )
+        selection.selected_users.add(team_member)
+
+    _make_race("ZRL Spring", "Squad A", "Race 1")
+    _make_race("WTRL TTT", "Squad B", "Race 2")
+
+    response = auth_client.get(reverse("events:all_races"))
+    assert response.status_code == 200
+    body = response.content.decode()
+    # Both events and their races appear on the single cross-event page.
+    assert "ZRL Spring" in body
+    assert "WTRL TTT" in body
+    assert "Race 1" in body
+    assert "Race 2" in body
+
+
+@pytest.mark.django_db
+def test_all_scheduled_races_excludes_past_races(auth_client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid, AvailabilitySlotSelection, Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="Past Event",
+        start_date=today - timedelta(days=14),
+        end_date=today,
+        visible=True,
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    grid = AvailabilityGrid.objects.create(
+        squad=squad,
+        start_date=today - timedelta(days=14),
+        end_date=today,
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+    AvailabilitySlotSelection.objects.create(
+        grid=grid,
+        name="Old Race",
+        slot_date=today - timedelta(days=5),
+        slot_time="18:30",
+        status=AvailabilitySlotSelection.Status.CONFIRMED,
+    )
+
+    response = auth_client.get(reverse("events:all_races"))
+    assert response.status_code == 200
+    assert "Old Race" not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_all_scheduled_races_requires_team_member(client, user) -> None:
+    from django.urls import reverse
+
+    client.force_login(user)  # plain user, no team_member permission
+    response = client.get(reverse("events:all_races"))
+    assert response.status_code in (302, 403)
 
 
 @pytest.mark.django_db

@@ -5,6 +5,7 @@ from django.urls import path
 from apps.events.views import (
     add_members_search_view,
     add_members_view,
+    all_scheduled_races_view,
     availability_copy_view,
     availability_create_view,
     availability_delete_view,
@@ -64,6 +65,7 @@ urlpatterns = [
     path("squad-invite/<uuid:token>/", squad_invite_view, name="squad_invite"),
     path("race/<str:token>/race.ics", race_calendar_ics_view, name="race_calendar_ics"),
     path("", event_list_view, name="event_list"),
+    path("races/", all_scheduled_races_view, name="all_races"),
     path("my-events/", my_events_view, name="my_events"),
     path("create/", event_create_view, name="event_create"),
     path("<int:pk>/", event_detail_view, name="event_detail"),
