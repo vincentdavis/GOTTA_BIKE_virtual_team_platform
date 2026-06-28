@@ -1,6 +1,7 @@
 """Views for accounts app."""
 
 import json
+from datetime import timedelta
 
 import logfire
 from constance import config
@@ -11,6 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import team_member_required
@@ -19,6 +21,71 @@ from apps.accounts.models import User
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import get_user_required_verification_types, get_user_verification_types
 from apps.zwift.utils import fetch_zwift_id
+
+# How recently the Zwift Racing data must have been fetched before the profile
+# refresh button is offered / honored. Mirrors the once-per-hour client guard.
+ZR_REFRESH_MIN_AGE = timedelta(hours=1)
+
+
+def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -> dict:
+    """Build the context for the ``accounts/partials/zwift_status.html`` partial.
+
+    Shared by ``profile_view`` (full page) and ``refresh_zr`` (HTMX swap) so the
+    ZwiftPower / Zwift Racing cards render identically. ``zr_last_updated`` and
+    ``zr_can_refresh`` drive the Zwift Racing refresh control on the own-profile
+    page (refresh is offered when the data is missing or at least
+    ``ZR_REFRESH_MIN_AGE`` old).
+
+    Args:
+        user: The profile owner (the requesting user).
+        zr_refresh_error: True to surface a "refresh failed" hint in the partial.
+
+    Returns:
+        Template context dict for the Zwift status partial.
+
+    """
+    from apps.team.services import ZP_DIV_TO_CATEGORY
+    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftracing.models import ZRRider
+
+    zp_data = None
+    zr_data = None
+    zr_last_updated = None
+    zr_can_refresh = False
+    if user.zwid_verified and user.zwid:
+        zp_rider = ZPTeamRiders.objects.filter(zwid=user.zwid).first()
+        if zp_rider:
+            # Use divw for females, div for everyone else
+            div = zp_rider.divw if user.gender == "female" else zp_rider.div
+            zp_data = {
+                "category": ZP_DIV_TO_CATEGORY.get(div, ""),
+                "rank": zp_rider.rank,
+                "ftp": zp_rider.ftp,
+            }
+            # Include women's category for female riders
+            if user.gender == "female" and zp_rider.div:
+                zp_data["category_mixed"] = ZP_DIV_TO_CATEGORY.get(zp_rider.div, "")
+
+        zr_rider = ZRRider.objects.filter(zwid=user.zwid).first()
+        if zr_rider:
+            zr_data = {
+                "category": zr_rider.race_current_category,
+                "rating": zr_rider.race_current_rating,
+            }
+            zr_last_updated = zr_rider.date_modified
+            zr_can_refresh = (timezone.now() - zr_rider.date_modified) >= ZR_REFRESH_MIN_AGE
+        else:
+            # No record yet — allow an initial fetch.
+            zr_can_refresh = True
+
+    return {
+        "user": user,
+        "zp_data": zp_data,
+        "zr_data": zr_data,
+        "zr_last_updated": zr_last_updated,
+        "zr_can_refresh": zr_can_refresh,
+        "zr_refresh_error": zr_refresh_error,
+    }
 
 
 @login_required
@@ -34,9 +101,7 @@ def profile_view(request: HttpRequest) -> HttpResponse:
 
     """
     from apps.team.models import RaceReadyRecord
-    from apps.team.services import ZP_DIV_TO_CATEGORY, get_user_required_verification_types
-    from apps.zwiftpower.models import ZPTeamRiders
-    from apps.zwiftracing.models import ZRRider
+    from apps.team.services import get_user_required_verification_types
 
     form = ProfileForm(instance=request.user)
 
@@ -62,41 +127,52 @@ def profile_view(request: HttpRequest) -> HttpResponse:
             status = "missing"
         required_summary.append({"type": vtype, "label": type_labels.get(vtype, vtype), "status": status})
 
-    # Fetch ZwiftPower and ZwiftRacing data if user is verified
-    zp_data = None
-    zr_data = None
-    if request.user.zwid_verified and request.user.zwid:
-        # Get ZwiftPower data
-        zp_rider = ZPTeamRiders.objects.filter(zwid=request.user.zwid).first()
-        if zp_rider:
-            # Use divw for females, div for everyone else
-            div = zp_rider.divw if request.user.gender == "female" else zp_rider.div
-            zp_data = {
-                "category": ZP_DIV_TO_CATEGORY.get(div, ""),
-                "rank": zp_rider.rank,
-                "ftp": zp_rider.ftp,
-            }
-            # Include women's category for female riders
-            if request.user.gender == "female" and zp_rider.div:
-                zp_data["category_mixed"] = ZP_DIV_TO_CATEGORY.get(zp_rider.div, "")
+    context = _build_zwift_status_context(request.user)
+    context["form"] = form
+    context["required_summary"] = required_summary
+    return render(request, "accounts/profile.html", context)
 
-        # Get ZwiftRacing data
-        zr_rider = ZRRider.objects.filter(zwid=request.user.zwid).first()
-        if zr_rider:
-            zr_data = {
-                "category": zr_rider.race_current_category,
-                "rating": zr_rider.race_current_rating,
-            }
+
+@login_required
+@require_POST
+def refresh_zr(request: HttpRequest) -> HttpResponse:
+    """Refresh the requesting user's Zwift Racing data (own profile only).
+
+    Rate-limited to once per ``ZR_REFRESH_MIN_AGE``: if the ``ZRRider`` record
+    was updated more recently the fetch is skipped (defends the upstream API
+    even if the client button is tampered with). Re-renders the Zwift status
+    partial for an HTMX swap.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered Zwift status partial.
+
+    """
+    from apps.zwiftracing.models import ZRRider
+    from apps.zwiftracing.tasks import refresh_rider_sync
+
+    user = request.user
+    refresh_error = False
+    if user.zwid_verified and user.zwid:
+        zr_rider = ZRRider.objects.filter(zwid=user.zwid).first()
+        recently_updated = zr_rider is not None and (timezone.now() - zr_rider.date_modified) < ZR_REFRESH_MIN_AGE
+        if not recently_updated:
+            status_code, rider = refresh_rider_sync(user.zwid)
+            refresh_error = rider is None
+            logfire.info(
+                "Profile ZR refresh requested",
+                user_id=user.id,
+                zwid=user.zwid,
+                status_code=status_code,
+                success=not refresh_error,
+            )
 
     return render(
         request,
-        "accounts/profile.html",
-        {
-            "form": form,
-            "zp_data": zp_data,
-            "zr_data": zr_data,
-            "required_summary": required_summary,
-        },
+        "accounts/partials/zwift_status.html",
+        _build_zwift_status_context(user, zr_refresh_error=refresh_error),
     )
 
 

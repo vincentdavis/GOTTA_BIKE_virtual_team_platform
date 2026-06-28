@@ -12,7 +12,7 @@ from django.tasks import task  # ty:ignore[unresolved-import]
 from django.utils import timezone
 
 from apps.zwiftracing.models import ZRRider
-from apps.zwiftracing.zr_client import get_club
+from apps.zwiftracing.zr_client import get_club, get_rider
 
 
 def _parse_decimal(value: float | int | str | None) -> Decimal | None:
@@ -164,6 +164,34 @@ def _map_rider_to_model(rider: dict) -> dict:
         "velo_climb": _parse_decimal(velo_factors.get("climb")),
         "velo_tt_factor": _parse_decimal(velo_factors.get("timeTrial")),
     }
+
+
+def refresh_rider_sync(zwid: int) -> tuple[int, ZRRider | None]:
+    """Fetch a single rider from the Zwift Racing API and upsert their ZRRider row.
+
+    Synchronous (called from the profile refresh view) so the caller can render
+    fresh data immediately, unlike the scheduled ``sync_zr_riders`` club sweep.
+    Reuses ``_map_rider_to_model`` so the stored fields match the bulk sync.
+
+    Args:
+        zwid: The rider's Zwift ID.
+
+    Returns:
+        Tuple of ``(status_code, rider)``. ``rider`` is ``None`` on any
+        non-200 response (including 429 rate limits) or an unexpected payload,
+        in which case no row is written and ``date_modified`` is left untouched.
+
+    """
+    with logfire.span("refresh_rider_sync", zwid=zwid):
+        status_code, data = get_rider(zwid)
+        if status_code != 200 or not isinstance(data, dict) or not data:
+            logfire.warning("ZR single-rider refresh failed", zwid=zwid, status_code=status_code)
+            return status_code, None
+
+        defaults = _map_rider_to_model(data)
+        rider, created = ZRRider.objects.update_or_create(zwid=zwid, defaults=defaults)
+        logfire.info("ZR single-rider refresh complete", zwid=zwid, created=created)
+        return status_code, rider
 
 
 @task

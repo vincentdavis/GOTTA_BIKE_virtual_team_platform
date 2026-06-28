@@ -70,10 +70,35 @@
 
         <!-- Zwift Racing -->
         <div class="bg-base-100/50 rounded-lg p-3">
-            <div class="flex items-center gap-2 mb-2">
-                <span class="px-1.5 py-0.5 text-xs font-bold text-info-content bg-info rounded">ZR</span>
-                <span class="text-sm font-medium">Zwift Racing</span>
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="px-1.5 py-0.5 text-xs font-bold text-info-content bg-info rounded">ZR</span>
+                    <span class="text-sm font-medium">Zwift Racing</span>
+                </div>
+                <span class="tooltip tooltip-left" data-tip="{% if zr_last_updated %}Updated {{ zr_last_updated|timesince }} ago{% else %}Never updated{% endif %}{% if not zr_can_refresh %} · refresh available hourly{% endif %}">
+                    {% if zr_can_refresh %}
+                    <button hx-post="{% url 'accounts:refresh_zr' %}"
+                            hx-target="#zwift-status-container"
+                            hx-swap="innerHTML"
+                            hx-disabled-elt="this"
+                            class="btn btn-ghost btn-xs btn-circle"
+                            aria-label="Refresh Zwift Racing data">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                    {% else %}
+                    <span class="btn btn-ghost btn-xs btn-circle btn-disabled opacity-40" aria-disabled="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </span>
+                    {% endif %}
+                </span>
             </div>
+            {% if zr_refresh_error %}
+            <p class="text-xs text-error mb-2">Update failed. Please try again later.</p>
+            {% endif %}
             {% if zr_data %}
                 <div class="space-y-1 text-sm">
                     {% if zr_data.category %}
