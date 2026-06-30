@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}All Races - {{ event.title }}{% endblock %}
+{% block title %}Races - {{ event.title }}{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
@@ -8,36 +8,52 @@
     <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
   </div>
 
-  <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-    <h2 class="text-xl font-bold">All Races &mdash; {{ event.title }}</h2>
-    <span class="badge badge-ghost">{{ paginator.count }} race{{ paginator.count|pluralize }} from today</span>
-  </div>
+  <h2 class="text-xl font-bold mb-3">{{ event.title }}</h2>
 
-  {% if paginator.num_pages > 1 %}
-  <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
-    {% if page_obj.has_previous %}
-    <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-xs">&larr; Previous</a>
-    {% else %}
-    <button class="btn btn-outline btn-xs" disabled>&larr; Previous</button>
-    {% endif %}
-    <span class="text-base-content/70">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
-    {% if page_obj.has_next %}
-    <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline btn-xs">Next &rarr;</a>
-    {% else %}
-    <button class="btn btn-outline btn-xs" disabled>Next &rarr;</button>
-    {% endif %}
-  </div>
-  {% endif %}
+  <div role="tablist" class="tabs tabs-border">
+    {# ===== All Races ===== #}
+    <input type="radio" name="races_tabs" role="tab" class="tab" aria-label="All Races"
+           {% if active_tab != "participation" %}checked{% endif %} />
+    <div role="tabpanel" class="tab-content pt-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <h3 class="font-semibold">All Races</h3>
+        <span class="badge badge-ghost">{{ paginator.count }} race{{ paginator.count|pluralize }} from today</span>
+      </div>
 
-  {% if slots %}
-  <div class="flex flex-col gap-2">
-    {% for slot in slots %}
-    {% include "events/_scheduled_race_card.html" %}
-    {% endfor %}
+      {% if paginator.num_pages > 1 %}
+      <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-xs">&larr; Previous</a>
+        {% else %}
+        <button class="btn btn-outline btn-xs" disabled>&larr; Previous</button>
+        {% endif %}
+        <span class="text-base-content/70">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline btn-xs">Next &rarr;</a>
+        {% else %}
+        <button class="btn btn-outline btn-xs" disabled>Next &rarr;</button>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if slots %}
+      <div class="flex flex-col gap-2">
+        {% for slot in slots %}
+        {% include "events/_scheduled_race_card.html" %}
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/50">No upcoming races scheduled for this event.</p>
+      {% endif %}
+    </div>
+
+    {# ===== Participation ===== #}
+    <input type="radio" name="races_tabs" role="tab" class="tab" aria-label="Participation"
+           {% if active_tab == "participation" %}checked{% endif %} />
+    <div role="tabpanel" class="tab-content pt-4">
+      {% include "events/_participation_report.html" %}
+    </div>
   </div>
-  {% else %}
-  <p class="text-sm text-base-content/50">No upcoming races scheduled for this event.</p>
-  {% endif %}
 </div>
 {% endblock %}
 

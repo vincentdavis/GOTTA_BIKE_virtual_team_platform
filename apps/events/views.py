@@ -1158,46 +1158,24 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     )
 
 
-@login_required
-@team_member_required()
-@require_GET
-def event_racing_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
-    """Per-event racing report: squad members with race counts.
+def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetime) -> list[dict]:
+    """Build the per-squad participation report for an event.
 
-    Lists every squad member grouped by squad, with the number of scheduled
-    races they have already raced (past) and the count + dates of their
-    upcoming scheduled races. Tallies are scoped to this event's scheduled
-    races (``AvailabilitySlotSelection``). Gated by the same permission as
-    squad management, since it is linked from that page.
+    Each squad member is enriched with ZP/ZR data (for the rider tooltip) and
+    annotated with how many of the event's scheduled races they have already
+    raced (past) plus the count and dates of their upcoming races. Tallies are
+    scoped to this event's scheduled races (``AvailabilitySlotSelection``).
 
     Args:
-        request: The HTTP request.
-        event_pk: The event primary key.
+        event: The event.
+        tz_obj: Timezone used to render upcoming-race dates.
+        now_utc: Current time, used to split past vs future races.
 
     Returns:
-        Rendered racing report page (or a redirect if not permitted).
+        List of ``{"squad", "rows"}`` dicts, one per squad ordered by name.
 
     """
-    event = get_object_or_404(Event, pk=event_pk)
-
-    if not _can_manage_event_squads(request.user, event):
-        logfire.warning(
-            "Unauthorized racing report attempt",
-            event_id=event_pk,
-            user_id=request.user.id,
-        )
-        messages.error(request, "You don't have permission to view the racing report.")
-        return redirect("events:event_detail", pk=event_pk)
-
-    user_tz = getattr(request.user, "timezone", "") or ""
-    try:
-        tz_obj = ZoneInfo(user_tz) if user_tz else ZoneInfo("UTC")
-    except Exception:
-        tz_obj = ZoneInfo("UTC")
-    now_utc = timezone.now()
-
-    # Tally each rider's past ("raced") and future scheduled races across the
-    # whole event, keyed by user id.
+    # Tally each rider's past ("raced") and future scheduled races, keyed by user id.
     raced_count: dict[int, int] = defaultdict(int)
     upcoming: dict[int, list[dict]] = defaultdict(list)
     selections = (
@@ -1216,40 +1194,26 @@ def event_racing_report_view(request: HttpRequest, event_pk: int) -> HttpRespons
             else:
                 raced_count[rider.pk] += 1
 
-    # Group squad members by squad and attach their tallies.
-    members_by_squad: dict[int, list] = defaultdict(list)
-    squad_members = (
-        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER)
-        .select_related("user")
-    )
-    for sm in squad_members:
-        members_by_squad[sm.squad_id].append(sm.user)
+    # Enriched squad members (ZP/ZR data for the rider tooltip) grouped by
+    # squad, with each rider's race tallies merged in.
+    enriched_by_squad = _enrich_squad_members(event)
 
     report = []
     for squad in event.squads.order_by("name"):
         rows = []
-        for rider in sorted(
-            members_by_squad.get(squad.pk, []),
-            key=lambda u: (u.get_full_name() or u.discord_username or "").lower(),
+        for member in sorted(
+            enriched_by_squad.get(squad.pk, []),
+            key=lambda m: (m["user"].get_full_name() or m["user"].discord_username or "").lower(),
         ):
-            rider_upcoming = upcoming.get(rider.pk, [])
+            rider_upcoming = upcoming.get(member["user"].pk, [])
             rows.append({
-                "user": rider,
-                "raced_count": raced_count.get(rider.pk, 0),
+                **member,
+                "raced_count": raced_count.get(member["user"].pk, 0),
                 "upcoming_count": len(rider_upcoming),
                 "upcoming": rider_upcoming,
             })
         report.append({"squad": squad, "rows": rows})
-
-    return render(
-        request,
-        "events/event_racing_report.html",
-        {
-            "event": event,
-            "report": report,
-            "display_timezone": str(tz_obj),
-        },
-    )
+    return report
 
 
 def _build_scheduled_race_slots(
@@ -1391,7 +1355,11 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
     user_tz = getattr(request.user, "timezone", "") or ""
     now_utc = timezone.now()
-    today_local = now_utc.astimezone(ZoneInfo(user_tz) if user_tz else now_utc.tzinfo).date()
+    try:
+        tz_obj = ZoneInfo(user_tz) if user_tz else ZoneInfo("UTC")
+    except Exception:
+        tz_obj = ZoneInfo("UTC")
+    today_local = now_utc.astimezone(tz_obj).date()
 
     all_selections = (
         AvailabilitySlotSelection.objects
@@ -1410,6 +1378,7 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     selections = list(page_obj.object_list)
 
     slots = _build_scheduled_race_slots(selections, user_tz, today_local)
+    participation = _build_participation_report(event, tz_obj, now_utc)
 
     logfire.debug(
         "Event all races viewed",
@@ -1430,6 +1399,9 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "page_obj": page_obj,
             "paginator": paginator,
             "today": today_local,
+            "participation": participation,
+            "display_timezone": str(tz_obj),
+            "active_tab": request.GET.get("tab") or "races",
             "guild_id": config.GUILD_ID,
         },
     )

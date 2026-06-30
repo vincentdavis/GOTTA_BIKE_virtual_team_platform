@@ -150,6 +150,7 @@ EVENTS_TEMPLATES = [
     "events/event_all_races.html",
     "events/all_scheduled_races.html",
     "events/_scheduled_race_card.html",
+    "events/_participation_report.html",
 ]
 
 
@@ -401,34 +402,43 @@ def test_racing_report_tallies_past_and_future_races(client, event_admin, team_m
     _race("Future 1", 5)
 
     client.force_login(event_admin)
-    resp = client.get(reverse("events:event_racing_report", args=[event.pk]))
+    resp = client.get(reverse("events:event_all_races", args=[event.pk]) + "?tab=participation")
     assert resp.status_code == 200
+    assert resp.context["active_tab"] == "participation"
 
-    report = resp.context["report"]
+    participation = resp.context["participation"]
     # One squad group, one rider row with 2 raced + 1 upcoming.
-    group = next(g for g in report if g["squad"].pk == squad.pk)
+    group = next(g for g in participation if g["squad"].pk == squad.pk)
     row = next(r for r in group["rows"] if r["user"].pk == team_member.pk)
     assert row["raced_count"] == 2
     assert row["upcoming_count"] == 1
     assert row["upcoming"][0]["name"] == "Future 1"
-    assert "Future 1" in resp.content.decode()
+    body = resp.content.decode()
+    assert "Future 1" in body
+    # Riders render via the shared user tooltip component (avatar/icon + hover).
+    assert "dropdown dropdown-hover" in body
+    # Both tabs are present on the page.
+    assert 'aria-label="All Races"' in body
+    assert 'aria-label="Participation"' in body
 
 
 @pytest.mark.django_db
-def test_racing_report_denied_for_non_manager(auth_client) -> None:
+def test_participation_tab_visible_to_any_team_member(auth_client) -> None:
     from django.urls import reverse
 
     today = date.today()
     event = Event.objects.create(
         title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
     )
-    # auth_client is a plain team_member -> cannot manage squads -> redirected.
-    resp = auth_client.get(reverse("events:event_racing_report", args=[event.pk]))
-    assert resp.status_code == 302
+    # auth_client is a plain team_member (no squad-manage permission) and can still view.
+    resp = auth_client.get(reverse("events:event_all_races", args=[event.pk]) + "?tab=participation")
+    assert resp.status_code == 200
+    assert resp.context["active_tab"] == "participation"
+    assert 'aria-label="Participation"' in resp.content.decode()
 
 
 @pytest.mark.django_db
-def test_squad_manage_shows_racing_report_button(client, event_admin) -> None:
+def test_squad_manage_shows_participation_button(client, event_admin) -> None:
     from django.urls import reverse
 
     today = date.today()
@@ -437,8 +447,8 @@ def test_squad_manage_shows_racing_report_button(client, event_admin) -> None:
     )
     client.force_login(event_admin)
     body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
-    assert "Racing Report" in body
-    assert reverse("events:event_racing_report", args=[event.pk]) in body
+    assert "Participation" in body
+    assert reverse("events:event_all_races", args=[event.pk]) + "?tab=participation" in body
 
 
 @pytest.mark.django_db
