@@ -130,6 +130,34 @@ def _can_manage_squad_availability(user: User, squad: Squad) -> bool:
     return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
 
 
+def _can_view_squad_manage(user: User, event: Event) -> bool:
+    """Check if a user can view the squad management page for an event.
+
+    Full squad managers (event admins, superusers, the event head captain) can
+    view and act on every squad. In addition, any squad captain / vice-captain
+    (or holder of a squad's Discord captain role) in the event can open the
+    page — but they can only edit, invite to, or manage availability for the
+    squads they actually lead (gated per-squad by
+    ``_can_manage_squad_availability``).
+
+    Args:
+        user: The requesting user.
+        event: The event to check against.
+
+    Returns:
+        True if the user can view the squad management page.
+
+    """
+    if _can_manage_event_squads(user, event):
+        return True
+    if event.squads.filter(Q(captains=user) | Q(vice_captains=user)).exists():
+        return True
+    return any(
+        s.discord_captain_role and user.has_discord_role(s.discord_captain_role)
+        for s in event.squads.all()
+    )
+
+
 def _can_view_v_report(user: User, event: Event) -> bool:
     """Check if a user can view the V Report for an event.
 
@@ -1074,7 +1102,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """
     event = get_object_or_404(Event, pk=event_pk)
 
-    if not _can_manage_event_squads(request.user, event):
+    if not _can_view_squad_manage(request.user, event):
         logfire.warning(
             "Unauthorized squad manage attempt",
             event_id=event_pk,
@@ -1083,6 +1111,8 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         )
         messages.error(request, "You don't have permission to manage squads.")
         return redirect("events:event_detail", pk=event_pk)
+
+    can_manage_all = _can_manage_event_squads(request.user, event)
 
     squads = list(
         event.squads.prefetch_related("captains", "vice_captains")
@@ -1134,6 +1164,8 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         s.audio_name = channel_names.get(str(s.audio_channel_id), "") if s.audio_channel_id else ""
         s.role_name = role_names.get(str(s.team_discord_role), "") if s.team_discord_role else ""
         s.active_grids = grids_by_squad.get(s.pk, [])
+        # Per-squad management: full managers, or this squad's captain/VC.
+        s.can_manage = can_manage_all or _can_manage_squad_availability(request.user, s)
 
         members = squad_members_data.get(s.pk, [])
         for member in members:
@@ -1152,7 +1184,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "event": event,
             "squads": squads,
             "event_role_name": event_role_name,
-            "can_manage": True,
+            "can_manage_all": can_manage_all,
             "can_manage_roles": _can_manage_event_roles(request.user, event),
         },
     )
@@ -1903,14 +1935,14 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
     event = get_object_or_404(Event, pk=event_pk)
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
 
-    if not _can_manage_event_squads(request.user, event):
+    if not _can_manage_squad_availability(request.user, squad):
         logfire.warning(
             "Unauthorized squad edit attempt",
             squad_id=squad_pk,
             event_id=event_pk,
             user_id=request.user.id,
         )
-        messages.error(request, "You don't have permission to manage squads.")
+        messages.error(request, "You don't have permission to manage this squad.")
         return redirect("events:event_detail", pk=event_pk)
 
     if request.method == "POST":
@@ -4399,10 +4431,13 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
     return redirect("events:my_events")
 
 
-@discord_permission_required("event_admin", raise_exception=True)
+@login_required
 @require_POST
 def squad_regenerate_token_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
     """Generate or regenerate an invite token for a squad.
+
+    Allowed for the squad's captain / vice-captain (and full squad managers),
+    matching the squad-availability permission.
 
     Args:
         request: The HTTP request.
@@ -4414,6 +4449,17 @@ def squad_regenerate_token_view(request: HttpRequest, event_pk: int, squad_pk: i
 
     """
     squad = get_object_or_404(Squad, pk=squad_pk, event_id=event_pk)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        logfire.warning(
+            "Unauthorized squad invite generation",
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage this squad.")
+        return redirect("events:squad_manage", event_pk=event_pk)
+
     squad.regenerate_invite_token()
     logfire.info(
         "Squad invite token regenerated",

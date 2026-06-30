@@ -452,6 +452,116 @@ def test_squad_manage_shows_participation_button(client, event_admin) -> None:
 
 
 @pytest.mark.django_db
+def test_squad_captain_can_view_manage_page_with_own_controls_only(client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad_a = Squad.objects.create(event=event, name="Squad A")
+    squad_b = Squad.objects.create(event=event, name="Squad B")
+    squad_a.captains.add(team_member)  # captain of A only
+
+    client.force_login(team_member)
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+    assert resp.status_code == 200
+    assert resp.context["can_manage_all"] is False
+    body = resp.content.decode()
+    # Edit shows for their own squad, not for the other squad.
+    assert reverse("events:squad_edit", args=[event.pk, squad_a.pk]) in body
+    assert reverse("events:squad_edit", args=[event.pk, squad_b.pk]) not in body
+    # Manager-only global actions are hidden.
+    assert reverse("events:squad_create", args=[event.pk]) not in body
+    assert reverse("events:squad_assign_page", args=[event.pk]) not in body
+
+
+@pytest.mark.django_db
+def test_non_captain_team_member_cannot_view_manage_page(client, team_member, user) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    squad.captains.add(user)  # someone else leads it
+
+    client.force_login(team_member)  # not a leader of any squad
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+    assert resp.status_code == 302
+
+
+@pytest.mark.django_db
+def test_squad_captain_can_edit_own_squad_only(client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad_a = Squad.objects.create(event=event, name="Squad A")
+    squad_b = Squad.objects.create(event=event, name="Squad B")
+    squad_a.captains.add(team_member)
+
+    client.force_login(team_member)
+    assert client.get(reverse("events:squad_edit", args=[event.pk, squad_a.pk])).status_code == 200
+    # Not a leader of squad B -> redirected away.
+    assert client.get(reverse("events:squad_edit", args=[event.pk, squad_b.pk])).status_code == 302
+
+
+@pytest.mark.django_db
+def test_squad_captain_can_generate_invite_for_own_squad_only(client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad_a = Squad.objects.create(event=event, name="Squad A")
+    squad_b = Squad.objects.create(event=event, name="Squad B")
+    squad_a.captains.add(team_member)
+
+    client.force_login(team_member)
+    client.post(reverse("events:squad_regenerate_token", args=[event.pk, squad_a.pk]))
+    client.post(reverse("events:squad_regenerate_token", args=[event.pk, squad_b.pk]))
+
+    squad_a.refresh_from_db()
+    squad_b.refresh_from_db()
+    assert squad_a.invite_token  # generated for own squad
+    assert not squad_b.invite_token  # blocked for the other squad
+
+
+@pytest.mark.django_db
+def test_event_admin_keeps_full_squad_manage_access(client, event_admin) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+
+    client.force_login(event_admin)
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+    assert resp.status_code == 200
+    assert resp.context["can_manage_all"] is True
+    body = resp.content.decode()
+    assert reverse("events:squad_create", args=[event.pk]) in body  # Add Squad
+    assert reverse("events:squad_edit", args=[event.pk, squad.pk]) in body
+
+
+@pytest.mark.django_db
 def test_squad_manage_renders_riders_section(client, event_admin, team_member) -> None:
     from django.urls import reverse
 

@@ -20,8 +20,10 @@
         <button class="btn btn-sm btn-disabled" disabled>Manage Roles</button>
       </span>
       {% endif %}
+      {% if can_manage_all %}
       <a href="{% url 'events:squad_assign_page' event.pk %}" class="btn btn-secondary btn-sm">Assign Riders</a>
       <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">Add Squad</a>
+      {% endif %}
     </div>
   </div>
 
@@ -41,11 +43,15 @@
         <div class="flex items-center justify-between mb-1">
           <h3 class="card-title text-base">{{ squad.name }}</h3>
           <div class="flex gap-1">
+            {% if squad.can_manage %}
             <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="btn btn-primary btn-sm">Edit</a>
+            {% endif %}
+            {% if can_manage_all %}
             <form method="post" action="{% url 'events:squad_delete' event.pk squad.pk %}" onsubmit="return confirm('Delete squad &quot;{{ squad.name }}&quot;?')">
               {% csrf_token %}
               <button type="submit" class="btn btn-error btn-outline btn-sm">Delete</button>
             </form>
+            {% endif %}
           </div>
         </div>
 
@@ -184,6 +190,7 @@
         {% endif %}
 
         {# Invite Link section #}
+        {% if squad.can_manage %}
         <div class="card bg-base-300 p-3 mb-2">
           <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Squad Invite Link</p>
           {% if squad.invite_token %}
@@ -204,12 +211,15 @@
           </form>
           {% endif %}
         </div>
+        {% endif %}
 
         {# Availability section #}
         <div class="card bg-base-300 p-3 mb-2">
           <div class="flex items-center justify-between mb-2">
             <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Availability</p>
+            {% if squad.can_manage %}
             <a href="{% url 'events:squad_availability' event.pk squad.pk %}" class="btn btn-primary btn-xs">Manage Availability</a>
+            {% endif %}
           </div>
           {% if squad.active_grids %}
           <div class="space-y-1">
@@ -223,12 +233,14 @@
                 <span class="badge badge-neutral badge-xs">Closed</span>
                 {% endif %}
               </div>
+              {% if squad.can_manage %}
               <div class="flex items-center gap-1">
                 {% if grid.is_published %}
                 <a href="{% url 'events:availability_respond' event.pk squad.pk grid.pk %}" class="btn btn-ghost btn-xs">Form</a>
                 {% endif %}
                 <a href="{% url 'events:availability_results' event.pk squad.pk grid.pk %}" class="btn btn-ghost btn-xs">Resp. {{ grid.response_count }}</a>
               </div>
+              {% endif %}
             </div>
             {% endfor %}
           </div>
@@ -244,7 +256,7 @@
             <span id="squad-count-{{ squad.pk }}" class="badge badge-neutral badge-sm normal-case">{{ squad.enriched_members|length }} member{{ squad.enriched_members|length|pluralize }}</span>
           </summary>
           <div class="collapse-content">
-            {% include "events/_squad_manage_panel.html" with squad=squad members=squad.enriched_members available_signups=squad.available_signups event_role_name=event_role_name event_pk=event.pk can_manage=can_manage oob=False %}
+            {% include "events/_squad_manage_panel.html" with squad=squad members=squad.enriched_members available_signups=squad.available_signups event_role_name=event_role_name event_pk=event.pk can_manage=can_manage_all oob=False %}
           </div>
         </details>
 
