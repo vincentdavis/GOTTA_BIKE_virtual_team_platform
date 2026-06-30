@@ -452,6 +452,45 @@ def test_squad_manage_shows_participation_button(client, event_admin) -> None:
 
 
 @pytest.mark.django_db
+def test_availability_actions_render_as_gear_menu(client, event_admin) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid, Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=14), visible=True
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    draft = AvailabilityGrid.objects.create(
+        squad=squad, title="Draft Grid",
+        start_date=today, end_date=today + timedelta(days=7),
+        start_time="18:00", end_time="20:00", slot_duration=30,
+        status=AvailabilityGrid.Status.DRAFT,
+    )
+    published = AvailabilityGrid.objects.create(
+        squad=squad, title="Open Grid",
+        start_date=today, end_date=today + timedelta(days=7),
+        start_time="18:00", end_time="20:00", slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+
+    client.force_login(event_admin)
+    body = client.get(reverse("events:squad_availability", args=[event.pk, squad.pk])).content.decode()
+
+    # Gear-icon dropdown trigger present instead of a row of buttons.
+    assert 'aria-label="Actions"' in body
+    assert "dropdown dropdown-end" in body
+    # Draft row exposes Edit + Publish modal; published row exposes a Close form.
+    assert reverse("events:availability_edit", args=[event.pk, squad.pk, draft.pk]) in body
+    assert f"publish-modal-{draft.pk}" in body
+    assert f"close-grid-{published.pk}" in body
+    # Destructive actions are still wired to their (confirm-guarded) forms + modals.
+    assert f'form="delete-grid-{draft.pk}"' in body
+    assert f"copy-modal-{draft.pk}" in body
+
+
+@pytest.mark.django_db
 def test_squad_captain_can_view_manage_page_with_own_controls_only(client, team_member) -> None:
     from django.urls import reverse
 
