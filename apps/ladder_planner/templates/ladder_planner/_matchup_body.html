@@ -284,16 +284,17 @@
     <div class="overflow-x-auto">
       <table class="table table-xs">
         <thead>
-          <tr class="text-center"><th class="text-left">Metric</th>{% for d in summary.velo2.disciplines %}<th>{{ d }}</th>{% endfor %}</tr>
+          <tr class="text-center"><th class="text-left">Metric</th><th></th>{% for d in summary.velo2.disciplines %}<th>{{ d }}</th>{% endfor %}</tr>
         </thead>
         <tbody>
           {% for m in summary.velo2.metrics %}
-          <tr class="text-center"><td class="text-left font-medium" rowspan="3">{{ m.label }}</td></tr>
-          <tr class="text-center"><td class="text-left text-xs text-base-content/60">{{ summary.velo2.our_label }}</td>{% for v in m.ours %}<td>{{ v|default_if_none:"—" }}</td>{% endfor %}</tr>
-          <tr class="text-center"><td class="text-left text-xs text-base-content/60">{{ summary.velo2.opp_label }}</td>{% for v in m.opp %}<td>{{ v|default_if_none:"—" }}</td>{% endfor %}</tr>
-          <tr class="text-center text-xs"><td class="text-left text-base-content/60">Advantage</td>
-            {% for v in m.adv %}<td class="{% if v > 0 %}bg-success/25{% elif v < 0 %}bg-error/25{% endif %}">{{ v|default_if_none:"—" }}</td>{% endfor %}
+          <tr class="text-center">
+            <td class="text-left font-medium" rowspan="3">{{ m.label }}</td>
+            <td class="text-left text-xs text-base-content/60">{{ summary.velo2.our_label }}</td>
+            {% for v in m.ours %}<td>{{ v|default_if_none:"—" }}</td>{% endfor %}
           </tr>
+          <tr class="text-center"><td class="text-left text-xs text-base-content/60">{{ summary.velo2.opp_label }}</td>{% for v in m.opp %}<td>{{ v|default_if_none:"—" }}</td>{% endfor %}</tr>
+          <tr class="text-center text-xs"><td class="text-left text-base-content/60">Advantage</td>{% for v in m.adv %}<td class="{% if v > 0 %}bg-success/25{% elif v < 0 %}bg-error/25{% endif %}">{{ v|default_if_none:"—" }}</td>{% endfor %}</tr>
           {% endfor %}
         </tbody>
       </table>
