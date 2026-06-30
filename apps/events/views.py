@@ -1158,6 +1158,100 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     )
 
 
+@login_required
+@team_member_required()
+@require_GET
+def event_racing_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Per-event racing report: squad members with race counts.
+
+    Lists every squad member grouped by squad, with the number of scheduled
+    races they have already raced (past) and the count + dates of their
+    upcoming scheduled races. Tallies are scoped to this event's scheduled
+    races (``AvailabilitySlotSelection``). Gated by the same permission as
+    squad management, since it is linked from that page.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+
+    Returns:
+        Rendered racing report page (or a redirect if not permitted).
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+
+    if not _can_manage_event_squads(request.user, event):
+        logfire.warning(
+            "Unauthorized racing report attempt",
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to view the racing report.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    user_tz = getattr(request.user, "timezone", "") or ""
+    try:
+        tz_obj = ZoneInfo(user_tz) if user_tz else ZoneInfo("UTC")
+    except Exception:
+        tz_obj = ZoneInfo("UTC")
+    now_utc = timezone.now()
+
+    # Tally each rider's past ("raced") and future scheduled races across the
+    # whole event, keyed by user id.
+    raced_count: dict[int, int] = defaultdict(int)
+    upcoming: dict[int, list[dict]] = defaultdict(list)
+    selections = (
+        AvailabilitySlotSelection.objects
+        .filter(grid__squad__event=event)
+        .prefetch_related("selected_users")
+        .order_by("slot_date", "slot_time")
+    )
+    for sel in selections:
+        race_dt = sel.race_datetime_utc
+        is_future = race_dt >= now_utc
+        local_date = race_dt.astimezone(tz_obj).strftime("%b %d, %Y")
+        for rider in sel.selected_users.all():
+            if is_future:
+                upcoming[rider.pk].append({"name": sel.name, "date": local_date})
+            else:
+                raced_count[rider.pk] += 1
+
+    # Group squad members by squad and attach their tallies.
+    members_by_squad: dict[int, list] = defaultdict(list)
+    squad_members = (
+        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER)
+        .select_related("user")
+    )
+    for sm in squad_members:
+        members_by_squad[sm.squad_id].append(sm.user)
+
+    report = []
+    for squad in event.squads.order_by("name"):
+        rows = []
+        for rider in sorted(
+            members_by_squad.get(squad.pk, []),
+            key=lambda u: (u.get_full_name() or u.discord_username or "").lower(),
+        ):
+            rider_upcoming = upcoming.get(rider.pk, [])
+            rows.append({
+                "user": rider,
+                "raced_count": raced_count.get(rider.pk, 0),
+                "upcoming_count": len(rider_upcoming),
+                "upcoming": rider_upcoming,
+            })
+        report.append({"squad": squad, "rows": rows})
+
+    return render(
+        request,
+        "events/event_racing_report.html",
+        {
+            "event": event,
+            "report": report,
+            "display_timezone": str(tz_obj),
+        },
+    )
+
+
 def _build_scheduled_race_slots(
     selections: list[AvailabilitySlotSelection],
     user_tz: str,

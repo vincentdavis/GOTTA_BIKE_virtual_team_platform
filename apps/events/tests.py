@@ -363,6 +363,85 @@ def test_all_scheduled_races_requires_team_member(client, user) -> None:
 
 
 @pytest.mark.django_db
+def test_racing_report_tallies_past_and_future_races(client, event_admin, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import (
+        AvailabilityGrid,
+        AvailabilitySlotSelection,
+        Squad,
+        SquadMember,
+    )
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=14), visible=True
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    SquadMember.objects.create(squad=squad, user=team_member, status=SquadMember.Status.MEMBER)
+    grid = AvailabilityGrid.objects.create(
+        squad=squad,
+        start_date=today - timedelta(days=14),
+        end_date=today + timedelta(days=14),
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+
+    def _race(name: str, day_offset: int) -> AvailabilitySlotSelection:
+        sel = AvailabilitySlotSelection.objects.create(
+            grid=grid, name=name, slot_date=today + timedelta(days=day_offset), slot_time="18:30"
+        )
+        sel.selected_users.add(team_member)
+        return sel
+
+    _race("Past 1", -10)
+    _race("Past 2", -3)
+    _race("Future 1", 5)
+
+    client.force_login(event_admin)
+    resp = client.get(reverse("events:event_racing_report", args=[event.pk]))
+    assert resp.status_code == 200
+
+    report = resp.context["report"]
+    # One squad group, one rider row with 2 raced + 1 upcoming.
+    group = next(g for g in report if g["squad"].pk == squad.pk)
+    row = next(r for r in group["rows"] if r["user"].pk == team_member.pk)
+    assert row["raced_count"] == 2
+    assert row["upcoming_count"] == 1
+    assert row["upcoming"][0]["name"] == "Future 1"
+    assert "Future 1" in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_racing_report_denied_for_non_manager(auth_client) -> None:
+    from django.urls import reverse
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    # auth_client is a plain team_member -> cannot manage squads -> redirected.
+    resp = auth_client.get(reverse("events:event_racing_report", args=[event.pk]))
+    assert resp.status_code == 302
+
+
+@pytest.mark.django_db
+def test_squad_manage_shows_racing_report_button(client, event_admin) -> None:
+    from django.urls import reverse
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    client.force_login(event_admin)
+    body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
+    assert "Racing Report" in body
+    assert reverse("events:event_racing_report", args=[event.pk]) in body
+
+
+@pytest.mark.django_db
 def test_squad_manage_renders_riders_section(client, event_admin, team_member) -> None:
     from django.urls import reverse
 

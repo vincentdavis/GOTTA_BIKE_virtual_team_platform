@@ -12,6 +12,7 @@
     <h2 class="text-xl font-bold">Squads &mdash; {{ event.title }}</h2>
     <div class="flex gap-2">
       <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-info btn-sm">Eligibility</a>
+      <a href="{% url 'events:event_racing_report' event.pk %}" class="btn btn-accent btn-sm">Racing Report</a>
       {% if can_manage_roles %}
       <a href="{% url 'events:manage_roles' event.pk %}" class="btn btn-primary btn-sm">Manage Roles</a>
       {% else %}
