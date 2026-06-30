@@ -354,6 +354,22 @@ def test_detail_page_renders(auth_client, team_member):
     assert b"Projected Score" in resp.content
 
 
+@pytest.mark.django_db
+def test_velo2_and_other_stats_tables_have_sortable_headers(auth_client, team_member):
+    matchup = _make_matchup(team_member)
+    _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={"rolling": 50}, name="Ours"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1600, handicaps={"rolling": -100}, name="Theirs"))
+    body = auth_client.get(f"/ladder/{matchup.pk}/").content.decode()
+
+    # The generic sort helper is defined and headers are wired to it.
+    assert "window.sortLadderTable = function" in body
+    assert 'onclick="window.sortLadderTable(this)"' in body
+    assert "vELO2 scores" in body
+    assert ">Phenotype<" in body  # Other Stats only column
+    # Both tables: Other Stats has 15 headers + vELO2 scores has 3 fixed headers.
+    assert body.count('onclick="window.sortLadderTable(this)"') >= 18
+
+
 # ----- cache layer -------------------------------------------------------------------------------
 
 

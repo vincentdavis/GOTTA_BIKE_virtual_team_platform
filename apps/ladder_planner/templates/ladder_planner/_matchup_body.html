@@ -261,8 +261,8 @@
       <table class="table table-xs">
         <thead>
           <tr>
-            <th class="text-left">Rider</th><th>Team</th><th>Rank</th>
-            {% for d in summary.velo2.disciplines %}<th class="text-center">{{ d }}</th>{% endfor %}
+            <th class="text-left cursor-pointer select-none" onclick="window.sortLadderTable(this)">Rider</th><th class="cursor-pointer select-none" onclick="window.sortLadderTable(this)">Team</th><th class="cursor-pointer select-none" onclick="window.sortLadderTable(this)">Rank</th>
+            {% for d in summary.velo2.disciplines %}<th class="text-center cursor-pointer select-none" onclick="window.sortLadderTable(this)">{{ d }}</th>{% endfor %}
           </tr>
         </thead>
         <tbody>
@@ -307,12 +307,12 @@
       <table class="table table-xs">
         <thead>
           <tr>
-            <th class="text-left">Rider</th><th>Team</th>
-            <th class="text-right">kg</th><th class="text-right">lb</th>
-            <th class="text-right">cm</th><th class="text-right">ft</th>
-            <th class="text-right">zFTP</th><th class="text-right">zFTP w/kg</th>
-            <th>Cat</th><th>Rank</th><th class="text-right">Podium %</th><th>Phenotype</th>
-            <th class="text-right">zRapp</th><th class="text-right">30d</th><th class="text-right">90d</th>
+            <th class="text-left cursor-pointer select-none" onclick="window.sortLadderTable(this)">Rider</th><th class="cursor-pointer select-none" onclick="window.sortLadderTable(this)">Team</th>
+            <th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">kg</th><th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">lb</th>
+            <th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">cm</th><th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">ft</th>
+            <th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">zFTP</th><th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">zFTP w/kg</th>
+            <th class="cursor-pointer select-none" onclick="window.sortLadderTable(this)">Cat</th><th class="cursor-pointer select-none" onclick="window.sortLadderTable(this)">Rank</th><th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">Podium %</th><th class="cursor-pointer select-none" onclick="window.sortLadderTable(this)">Phenotype</th>
+            <th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">zRapp</th><th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">30d</th><th class="text-right cursor-pointer select-none" onclick="window.sortLadderTable(this)">90d</th>
           </tr>
         </thead>
         <tbody>

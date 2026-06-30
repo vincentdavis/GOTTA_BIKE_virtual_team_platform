@@ -366,6 +366,61 @@
     if (unit) th.insertBefore(ind, unit); else th.appendChild(ind);
   };
 
+  // Generic column sort for simple ladder tables (vELO2 scores, Other Stats).
+  // Sorts by the clicked header's column index; numeric when the cell values
+  // look numeric, else case-insensitive text. "—"/blank always sink to the
+  // bottom. Click again to flip direction. Not re-applied after an HTMX swap
+  // (the server returns fresh rows in default order).
+  window.sortLadderTable = function (th) {
+    if (!th) return;
+    var table = th.closest("table");
+    if (!table) return;
+    var tbody = table.querySelector("tbody");
+    if (!tbody) return;
+    var col = Array.prototype.indexOf.call(th.parentNode.children, th);
+    if (col < 0) return;
+    var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr")).filter(function (r) {
+      return !r.querySelector("td[colspan]"); // drop the "No racing riders" placeholder
+    });
+    if (rows.length < 2) return;
+
+    var key = "c:" + col;
+    var dir = (table.getAttribute("data-sort-key") === key && table.getAttribute("data-sort-dir") === "asc")
+      ? "desc" : "asc";
+    table.setAttribute("data-sort-key", key);
+    table.setAttribute("data-sort-dir", dir);
+
+    function cellText(row) {
+      var td = row.children[col];
+      return td ? td.textContent.trim() : "";
+    }
+    function isBlank(s) { return s === "" || s === "—"; }
+    function asNum(s) {
+      var n = parseFloat(s.replace(/[^0-9.\-]/g, ""));
+      return isNaN(n) ? null : n;
+    }
+
+    var mult = dir === "asc" ? 1 : -1;
+    rows.sort(function (a, b) {
+      var sa = cellText(a), sb = cellText(b);
+      var ba = isBlank(sa), bb = isBlank(sb);
+      if (ba && bb) return 0;
+      if (ba) return 1;   // blanks always last, regardless of direction
+      if (bb) return -1;
+      var na = asNum(sa), nb = asNum(sb);
+      if (na !== null && nb !== null) return (na - nb) * mult;
+      return sa.toLowerCase().localeCompare(sb.toLowerCase()) * mult;
+    });
+    rows.forEach(function (r) { tbody.appendChild(r); });
+
+    // Direction indicator on the active header only.
+    table.querySelectorAll("th .ladder-sort-ind").forEach(function (s) { s.remove(); });
+    var ind = document.createElement("span");
+    ind.className = "ladder-sort-ind ml-1 text-base-content/60";
+    ind.textContent = dir === "asc" ? "▲" : "▼";
+    th.appendChild(ind);
+  };
+
   document.addEventListener("DOMContentLoaded", function () { window.applyLadderPerRiderGrouping(); });
   document.body.addEventListener("htmx:afterSwap", function (e) {
     if (e.target && e.target.id === "ladder-body") window.applyLadderPerRiderGrouping();
