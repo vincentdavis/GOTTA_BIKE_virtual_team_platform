@@ -479,6 +479,43 @@ def test_squad_captain_can_view_manage_page_with_own_controls_only(client, team_
 
 
 @pytest.mark.django_db
+def test_event_detail_shows_manage_squads_link_to_captain(client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    squad.captains.add(team_member)
+
+    client.force_login(team_member)
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+    # The captain has a visible route to the Manage Squads page.
+    assert reverse("events:squad_manage", args=[event.pk]) in body
+
+
+@pytest.mark.django_db
+def test_event_detail_hides_manage_squads_link_from_non_leader(client, team_member, user) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    squad.captains.add(user)  # someone else leads it
+
+    client.force_login(team_member)  # team member, leads no squad
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+    assert reverse("events:squad_manage", args=[event.pk]) not in body
+
+
+@pytest.mark.django_db
 def test_non_captain_team_member_cannot_view_manage_page(client, team_member, user) -> None:
     from django.urls import reverse
 

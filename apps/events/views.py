@@ -873,7 +873,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "zr_total_all": zr_total_all,
             "zr_avg_rating_all": zr_avg_rating_all,
             "can_manage_roles": _can_manage_event_roles(request.user, event),
-            "can_manage_squads": _can_manage_event_squads(request.user, event),
+            "can_view_squad_manage": _can_view_squad_manage(request.user, event),
             "can_add_members": _can_add_members(request.user, event),
             "can_view_v_report": _can_view_v_report(request.user, event),
         },

@@ -529,7 +529,7 @@
           {% if can_view_v_report %}
           <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-info btn-sm">Eligibility</a>
           {% endif %}
-          {% if can_manage_squads %}
+          {% if can_view_squad_manage %}
           <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-primary btn-sm">Manage Squads</a>
           {% endif %}
         </div>
