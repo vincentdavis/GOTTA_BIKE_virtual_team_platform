@@ -1930,6 +1930,28 @@
       opacity: 30%;
     }
   }
+  @layer daisyui.l1.l2 {
+    .tabs-border > .tab {
+      --tab-border-color: #0000 #0000 var(--tab-border-color) #0000;
+      position: relative;
+      border-radius: var(--radius-field);
+    }
+    .tabs-border > .tab:before {
+      content: "";
+      background-color: var(--tab-border-color);
+      transition: background-color 0.2s ease;
+      width: 80%;
+      height: 3px;
+      border-radius: var(--radius-field);
+      bottom: 0;
+      left: 10%;
+      position: absolute;
+    }
+    .tabs-border > .tab:is(.tab-active, [aria-selected="true"], [aria-current="true"], [aria-current="page"]):not( .tab-disabled, [disabled] ):before, .tabs-border > .tab:is(input:checked):before, .tabs-border > .tab:is(label:has(:checked)):before {
+      --tab-border-color: currentColor;
+      border-top: 3px solid;
+    }
+  }
   @layer daisyui.l1.l2.l3 {
     .select {
       border: var(--border) solid #0000;
@@ -2766,6 +2788,9 @@
   }
   .left-0 {
     left: calc(var(--spacing) * 0);
+  }
+  .left-2 {
+    left: calc(var(--spacing) * 2);
   }
   .join {
     display: inline-flex;
@@ -5529,6 +5554,14 @@
       background-color: color-mix(in oklab, var(--color-base-100) 50%, transparent);
     }
   }
+  .bg-base-100\/70 {
+    background-color: var(--color-base-100);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-base-100\/70 {
+      background-color: color-mix(in oklab, var(--color-base-100) 70%, transparent);
+    }
+  }
   .bg-base-200 {
     background-color: var(--color-base-200);
   }
@@ -6437,6 +6470,12 @@
     .badge-warning {
       --badge-color: var(--color-warning);
       --badge-fg: var(--color-warning-content);
+    }
+  }
+  @layer daisyui.l1.l2.l3 {
+    .btn-accent {
+      --btn-color: var(--color-accent);
+      --btn-fg: var(--color-accent-content);
     }
   }
   @layer daisyui.l1.l2.l3 {
