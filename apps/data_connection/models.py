@@ -172,7 +172,7 @@ class DataConnection(models.Model):
 
     @property
     def days_until_expiry(self) -> int | None:
-        """Get days until expiry.
+        """Days until expiry.
 
         Returns:
             Number of days until expiry (negative if expired), or None if no expiry set.
@@ -276,12 +276,25 @@ class DataConnection(models.Model):
         # Race rating - current
         ("zr_race_current_rating", "ZR Current Rating"),
         ("zr_race_current_category", "ZR Current Category"),
+        ("zr_race_current_category_num", "ZR Current Category Num"),
+        ("zr_race_current_date", "ZR Current Rating Date"),
+        # Race rating - last
+        ("zr_race_last_rating", "ZR Last Rating"),
+        ("zr_race_last_category", "ZR Last Category"),
+        ("zr_race_last_category_num", "ZR Last Category Num"),
+        ("zr_race_last_date", "ZR Last Rating Date"),
         # Race rating - max30
         ("zr_race_max30_rating", "ZR Max 30-day Rating"),
         ("zr_race_max30_category", "ZR Max 30-day Category"),
+        ("zr_race_max30_category_num", "ZR Max 30-day Category Num"),
+        ("zr_race_max30_date", "ZR Max 30-day Date"),
+        ("zr_race_max30_expires", "ZR Max 30-day Expires"),
         # Race rating - max90
         ("zr_race_max90_rating", "ZR Max 90-day Rating"),
         ("zr_race_max90_category", "ZR Max 90-day Category"),
+        ("zr_race_max90_category_num", "ZR Max 90-day Category Num"),
+        ("zr_race_max90_date", "ZR Max 90-day Date"),
+        ("zr_race_max90_expires", "ZR Max 90-day Expires"),
         # Race stats
         ("zr_race_finishes", "ZR Race Finishes"),
         ("zr_race_dnfs", "ZR DNFs"),
@@ -294,12 +307,14 @@ class DataConnection(models.Model):
         ("zr_handicap_mountainous", "ZR Handicap Mountainous"),
         # Phenotype
         ("zr_phenotype_value", "ZR Phenotype"),
+        ("zr_phenotype_bias", "ZR Phenotype Bias"),
         ("zr_phenotype_sprinter", "ZR Sprinter Score"),
         ("zr_phenotype_puncheur", "ZR Puncheur Score"),
         ("zr_phenotype_pursuiter", "ZR Pursuiter Score"),
         ("zr_phenotype_climber", "ZR Climber Score"),
         ("zr_phenotype_tt", "ZR TT Score"),
         # Club
+        ("zr_club_id", "ZR Club ID"),
         ("zr_club_name", "ZR Club Name"),
         ("zr_date_left", "ZR Date Left Club"),
         # Seed ratings
@@ -311,15 +326,18 @@ class DataConnection(models.Model):
         ("zr_seed_punch", "ZR Seed Punch"),
         ("zr_seed_climb", "ZR Seed Climb"),
         ("zr_seed_tt_factor", "ZR Seed TT Factor"),
-        # Velo ratings
-        ("zr_velo_race", "ZR Velo Race"),
-        ("zr_velo_time_trial", "ZR Velo Time Trial"),
-        ("zr_velo_endurance", "ZR Velo Endurance"),
-        ("zr_velo_pursuit", "ZR Velo Pursuit"),
-        ("zr_velo_sprint", "ZR Velo Sprint"),
-        ("zr_velo_punch", "ZR Velo Punch"),
-        ("zr_velo_climb", "ZR Velo Climb"),
-        ("zr_velo_tt_factor", "ZR Velo TT Factor"),
+        # vELO2 ratings
+        ("zr_velo_race", "ZR vELO2 Race"),
+        ("zr_velo_time_trial", "ZR vELO2 Time Trial"),
+        ("zr_velo_endurance", "ZR vELO2 Endurance"),
+        ("zr_velo_pursuit", "ZR vELO2 Pursuit"),
+        ("zr_velo_sprint", "ZR vELO2 Sprint"),
+        ("zr_velo_punch", "ZR vELO2 Punch"),
+        ("zr_velo_climb", "ZR vELO2 Climb"),
+        ("zr_velo_tt_factor", "ZR vELO2 TT Factor"),
+        # Timestamps
+        ("zr_date_created", "ZR Date Created"),
+        ("zr_date_modified", "ZR Date Modified"),
     ]
 
     # Filter choices

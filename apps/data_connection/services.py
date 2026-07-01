@@ -30,6 +30,7 @@ def _get_field_value(
         zr: Zwift Racing data dict (or None).
         race_ready_by_zwid: Mapping of zwid to race_ready status (for computed property).
         verification_by_zwid: Mapping of zwid to dict of verification type booleans.
+        sync_timestamp: Timestamp string returned for the ``sync_timestamp`` field.
 
     Returns:
         String value for the field, or empty string if not found.
@@ -318,10 +319,22 @@ def sync_connection(connection: DataConnection) -> int:
             "power_compound_score",
             "race_current_rating",
             "race_current_category",
+            "race_current_category_num",
+            "race_current_date",
+            "race_last_rating",
+            "race_last_category",
+            "race_last_category_num",
+            "race_last_date",
             "race_max30_rating",
             "race_max30_category",
+            "race_max30_category_num",
+            "race_max30_date",
+            "race_max30_expires",
             "race_max90_rating",
             "race_max90_category",
+            "race_max90_category_num",
+            "race_max90_date",
+            "race_max90_expires",
             "race_finishes",
             "race_dnfs",
             "race_wins",
@@ -331,13 +344,17 @@ def sync_connection(connection: DataConnection) -> int:
             "handicap_hilly",
             "handicap_mountainous",
             "phenotype_value",
+            "phenotype_bias",
             "phenotype_sprinter",
             "phenotype_puncheur",
             "phenotype_pursuiter",
             "phenotype_climber",
             "phenotype_tt",
+            "club_id",
             "club_name",
             "date_left",
+            "date_created",
+            "date_modified",
             "seed_race",
             "seed_time_trial",
             "seed_endurance",
