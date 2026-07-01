@@ -359,6 +359,7 @@
             <th>{{ m.our_label }}</th>
             <th>{{ m.opp_label }}</th>
             <th>Edge</th>
+            <th>Weighted edge</th>
           </tr>
         </thead>
         <tbody>
@@ -368,12 +369,23 @@
             <td class="tabular-nums">{{ r.weight }}%</td>
             <td class="tabular-nums">{{ r.ours|default_if_none:"—" }}</td>
             <td class="tabular-nums">{{ r.opp|default_if_none:"—" }}</td>
-            <td class="tabular-nums font-medium {% if r.edge > 0 %}text-success{% elif r.edge < 0 %}text-error{% endif %}">
+            <td class="tabular-nums {% if r.edge > 0 %}text-success{% elif r.edge < 0 %}text-error{% endif %}">
               {% if r.edge > 0 %}+{% endif %}{{ r.edge|default_if_none:"—" }}
+            </td>
+            <td class="tabular-nums font-medium {% if r.weighted_edge > 0 %}text-success{% elif r.weighted_edge < 0 %}text-error{% endif %}">
+              {% if r.weighted_edge > 0 %}+{% endif %}{{ r.weighted_edge|default_if_none:"—" }}
             </td>
           </tr>
           {% endfor %}
         </tbody>
+        <tfoot>
+          <tr class="text-right border-t border-base-300 font-semibold">
+            <td class="text-left" colspan="5">Weighted edge total (= margin)</td>
+            <td class="tabular-nums {% if m.weighted_edge_total > 0 %}text-success{% elif m.weighted_edge_total < 0 %}text-error{% endif %}">
+              {% if m.weighted_edge_total > 0 %}+{% endif %}{{ m.weighted_edge_total|default_if_none:"—" }}
+            </td>
+          </tr>
+        </tfoot>
       </table>
     </div>
     {% else %}

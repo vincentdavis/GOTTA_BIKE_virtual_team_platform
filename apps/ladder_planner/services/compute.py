@@ -718,7 +718,7 @@ def event_factor_match(matchup: LadderMatchup) -> dict[str, Any]:
         return base
 
     rows = []
-    our_fit = opp_fit = 0.0
+    our_fit = opp_fit = weighted_edge_total = 0.0
     for key, label, color, icon in route.VELO_FACTOR_META:
         raw = getattr(route, f"velo_{key}")
         weight = float(raw) if raw is not None else 0.0
@@ -731,6 +731,10 @@ def event_factor_match(matchup: LadderMatchup) -> dict[str, Any]:
             our_fit += weight / 100 * o
         if p is not None:
             opp_fit += weight / 100 * p
+        # Weighted edge = weight% * (ours - opp); these contributions sum to the margin.
+        weighted_edge = weight / 100 * (o - p) if (o is not None and p is not None) else None
+        if weighted_edge is not None:
+            weighted_edge_total += weighted_edge
         rows.append({
             "key": key,
             "label": label,
@@ -740,12 +744,14 @@ def event_factor_match(matchup: LadderMatchup) -> dict[str, Any]:
             "ours": _round_score(o),
             "opp": _round_score(p),
             "edge": _round_score(o - p) if (o is not None and p is not None) else None,
+            "weighted_edge": round(weighted_edge, 1) if weighted_edge is not None else None,
         })
     rows.sort(key=lambda r: r["weight"], reverse=True)
 
     our_fit_r = round(our_fit) if our_fit else None
     opp_fit_r = round(opp_fit) if opp_fit else None
-    margin = (our_fit_r - opp_fit_r) if (our_fit_r is not None and opp_fit_r is not None) else None
+    # Margin is the weighted-edge sum (= our_fit - opp_fit), so the table total matches.
+    margin = round(weighted_edge_total) if rows else None
     favored = None
     if margin:
         favored = our_label if margin > 0 else opp_label
@@ -756,6 +762,7 @@ def event_factor_match(matchup: LadderMatchup) -> dict[str, Any]:
         "rows": rows,
         "our_fit": our_fit_r,
         "opp_fit": opp_fit_r,
+        "weighted_edge_total": round(weighted_edge_total, 1) if rows else None,
         "margin": margin,
         "margin_abs": abs(margin) if margin is not None else None,
         "favored": favored,

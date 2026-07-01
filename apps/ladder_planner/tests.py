@@ -883,6 +883,11 @@ def test_event_factor_match_weighted_fit_and_rows(team_member):
     assert m["margin_abs"] == 140
     assert m["favored"] == "Us"
     assert m["rows"][0]["edge"] == 100  # Endurance: 600 - 500
+    # Weighted edge = weight% * edge; contributions sum to the margin.
+    assert m["rows"][0]["weighted_edge"] == pytest.approx(60.0)  # 0.60 * 100
+    assert m["rows"][1]["weighted_edge"] == pytest.approx(80.0)  # 0.40 * 200
+    assert m["weighted_edge_total"] == pytest.approx(140.0)
+    assert round(m["weighted_edge_total"]) == m["margin"]
 
 
 @pytest.mark.django_db
