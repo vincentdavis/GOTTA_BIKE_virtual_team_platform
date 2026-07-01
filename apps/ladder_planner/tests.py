@@ -379,6 +379,31 @@ def test_velo2_comparison_advantage_row_is_column_aligned(auth_client, team_memb
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("domain_label", ["Power: w/kg", "Power: Raw Watts"])
+def test_power_comparison_advantage_row_is_column_aligned(auth_client, team_member, domain_label):
+    from django.urls import reverse
+
+    matchup = _make_matchup(team_member)
+    _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={"rolling": 50}, name="Ours"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1600, handicaps={"rolling": -100}, name="Theirs"))
+    body = auth_client.get(reverse("ladder_planner:detail", args=[matchup.pk])).content.decode()
+
+    import re
+
+    # Isolate the power table for this domain (w/kg or Raw Watts).
+    table = body.split(domain_label, 1)[1].split("<table", 1)[1].split("</table>", 1)[0]
+    # `<th[ >]` avoids also matching the surrounding `<thead>` tag.
+    header_cols = len(re.findall(r"<th[ >]", table.split("</thead>", 1)[0]))
+    advantage_row = next(r for r in table.split("<tr") if "Advantage" in r)
+    advantage_cells = len(re.findall(r"<td[ >]", advantage_row))
+    # Advantage carries the label + every duration column, i.e. all columns
+    # except the row-spanned Metric column. (The old layout left it one short,
+    # shifting the row a column to the left.)
+    assert header_cols >= 3
+    assert advantage_cells == header_cols - 1
+
+
+@pytest.mark.django_db
 def test_velo2_and_other_stats_tables_have_sortable_headers(auth_client, team_member):
     matchup = _make_matchup(team_member)
     _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={"rolling": 50}, name="Ours"))
