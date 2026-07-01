@@ -971,6 +971,43 @@ def test_route_detail_renders(auth_client):
 
 
 @pytest.mark.django_db
+def test_velo_factor_bars_sorted_nonzero():
+    """velo_factor_bars drops zero factors and sorts high→low with colour + icon."""
+    route = Route.objects.create(
+        name="Weighted",
+        distance_km=2,
+        elevation_m=17,
+        velo_sprint=38.13,
+        velo_punch=21.87,
+        velo_climb=0,
+        velo_endurance=40.00,
+        velo_pursuit=0,
+    )
+    bars = route.velo_factor_bars()
+    assert [b["label"] for b in bars] == ["Endurance", "Sprint", "Punch"]
+    assert all(b["value"] > 0 and b["color"] and b["icon"] for b in bars)
+    assert Route.objects.create(name="Bare", distance_km=5, elevation_m=10).velo_factor_bars() == []
+
+
+@pytest.mark.django_db
+def test_route_detail_shows_velo_factor_weights(auth_client):
+    """The route detail page renders the vELO2 factor bars when populated."""
+    route = Route.objects.create(
+        name="Weighted Route",
+        distance_km=2,
+        elevation_m=17,
+        velo_sprint=38.13,
+        velo_punch=21.87,
+        velo_climb=0,
+        velo_endurance=40.00,
+        velo_pursuit=0,
+    )
+    body = auth_client.get(reverse("routes:detail", args=[route.pk])).content.decode()
+    assert "vELO2 Event Factor Weights" in body
+    assert "Endurance" in body
+
+
+@pytest.mark.django_db
 def test_gpx_upload_parses_and_stores(auth_client, tmp_path, settings):
     """Uploading a GPX parses it and stores the metrics on a RouteGpx."""
     settings.MEDIA_ROOT = str(tmp_path)

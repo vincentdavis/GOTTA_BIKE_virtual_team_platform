@@ -301,6 +301,35 @@
     </div>
   </div>
 
+  {# ===== Event Factors ===== #}
+  <input type="radio" name="ladder_tabs" role="tab" class="tab" aria-label="Event Factors" />
+  <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
+    {% if summary.event_factors.available %}
+    <div class="max-w-xl">
+      <h3 class="font-semibold mb-1">Event Factor Weights</h3>
+      <p class="text-xs text-base-content/60 mb-4">
+        vELO2 Race-rating blend for <span class="font-medium">{{ summary.event_factors.route_name }}</span>.
+        Factors sum to 100%.
+      </p>
+      <div class="space-y-2">
+        {% for f in summary.event_factors.factors %}
+        <div class="flex items-center gap-3">
+          <span class="w-5 text-center shrink-0">{{ f.icon }}</span>
+          <span class="w-20 text-sm shrink-0">{{ f.label }}</span>
+          <div class="flex-1 h-5 rounded bg-base-200 overflow-hidden">
+            <div class="h-full rounded flex items-center justify-end pr-1.5 text-[10px] font-semibold text-white"
+                 style="width: {{ f.value }}%; background: {{ f.color }};">{% if f.value >= 12 %}{{ f.value }}%{% endif %}</div>
+          </div>
+          <span class="w-12 text-right text-sm tabular-nums shrink-0">{{ f.value }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="text-center text-base-content/60 py-10">Select a route to see its vELO2 event factor weights.</div>
+    {% endif %}
+  </div>
+
   {# ===== Other Stats ===== #}
   <input type="radio" name="ladder_tabs" role="tab" class="tab" aria-label="Other Stats" />
   <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">

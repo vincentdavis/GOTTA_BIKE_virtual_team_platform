@@ -41,6 +41,36 @@ class Route(models.Model):
         "Segment", blank=True, related_name="routes", help_text="Climbs and sprints on this route"
     )
 
+    # ZwiftRacing vELO2 "Race" rating factor weights (percent, 0-100). Imported from the
+    # ZwiftRacing routes reference via `manage.py import_velo_weights`. They sum to ~100
+    # per route; Time Trial Speed is excluded because it feeds the TT rating, not Race.
+    velo_sprint = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Sprint (%)"
+    )
+    velo_punch = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Punch (%)"
+    )
+    velo_climb = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Climb (%)"
+    )
+    velo_endurance = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Endurance (%)"
+    )
+    velo_pursuit = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Pursuit (%)"
+    )
+
+    # (field suffix, label, bar colour, icon) for the vELO2 Race factors. Order is the
+    # canonical vELO2 order minus Time Trial Speed (which feeds the TT rating, not Race).
+    # Colours/icons mirror the ZwiftRacing "Event Factor Weights" chart.
+    VELO_FACTOR_META: ClassVar[list[tuple[str, str, str, str]]] = [
+        ("sprint", "Sprint", "#3b82f6", "🚀"),
+        ("punch", "Punch", "#f59e0b", "🥊"),
+        ("climb", "Climb", "#16a34a", "⛰️"),
+        ("endurance", "Endurance", "#a21caf", "🔋"),
+        ("pursuit", "Pursuit", "#ef4444", "⏱️"),
+    ]
+
     class Meta:
         """Meta options for Route."""
 
@@ -76,6 +106,36 @@ class Route(models.Model):
             return ""
         world_slug = _WOZ_WORLD_OVERRIDES.get(world_slug, world_slug)
         return f"https://whatsonzwift.com/world/{world_slug}/route/{route_slug}"
+
+    @property
+    def has_velo_factors(self) -> bool:
+        """Whether vELO2 Race factor weights have been imported for this route.
+
+        Returns:
+            True if the factor weights are populated.
+
+        """
+        return self.velo_sprint is not None
+
+    def velo_factor_bars(self) -> list[dict]:
+        """Non-zero vELO2 Race factor weights, sorted high→low, with colour + icon.
+
+        Shared by the route detail page and the ladder planner "Event Factors" tab.
+
+        Returns:
+            A list of ``{key, label, color, icon, value}`` dicts (empty if no data).
+
+        """
+        if not self.has_velo_factors:
+            return []
+        bars = []
+        for key, label, color, icon in self.VELO_FACTOR_META:
+            raw = getattr(self, f"velo_{key}")
+            value = float(raw) if raw is not None else 0.0
+            if value > 0:
+                bars.append({"key": key, "label": label, "color": color, "icon": icon, "value": round(value, 1)})
+        bars.sort(key=lambda b: b["value"], reverse=True)
+        return bars
 
 
 class RouteGpx(models.Model):

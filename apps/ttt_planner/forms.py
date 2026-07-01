@@ -52,6 +52,11 @@ class RouteForm(forms.ModelForm):
             "zwiftinsider_url",
             "segments",
             "is_active",
+            "velo_sprint",
+            "velo_punch",
+            "velo_climb",
+            "velo_endurance",
+            "velo_pursuit",
         ]
         widgets: ClassVar[dict] = {
             "name": forms.TextInput(attrs=_INPUT),
@@ -66,6 +71,11 @@ class RouteForm(forms.ModelForm):
             "zwiftinsider_url": forms.URLInput(attrs=_INPUT),
             "segments": forms.CheckboxSelectMultiple(),
             "is_active": forms.CheckboxInput(attrs=_CHECK),
+            "velo_sprint": forms.NumberInput(attrs={**_INPUT, "step": "0.01"}),
+            "velo_punch": forms.NumberInput(attrs={**_INPUT, "step": "0.01"}),
+            "velo_climb": forms.NumberInput(attrs={**_INPUT, "step": "0.01"}),
+            "velo_endurance": forms.NumberInput(attrs={**_INPUT, "step": "0.01"}),
+            "velo_pursuit": forms.NumberInput(attrs={**_INPUT, "step": "0.01"}),
         }
 
 

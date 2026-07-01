@@ -48,6 +48,20 @@
           </div>
         </div>
 
+        {# ---- vELO2 Race factor weights ---- #}
+        <div>
+          <h3 class="font-semibold text-sm text-base-content/70 mb-2">vELO2 Race factor weights (%)</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            {% include "ttt_planner/_field.html" with field=form.velo_sprint %}
+            {% include "ttt_planner/_field.html" with field=form.velo_punch %}
+            {% include "ttt_planner/_field.html" with field=form.velo_climb %}
+            {% include "ttt_planner/_field.html" with field=form.velo_endurance %}
+            {% include "ttt_planner/_field.html" with field=form.velo_pursuit %}
+          </div>
+          <p class="label-text-alt text-base-content/50 mt-1">ZwiftRacing vELO2 Race-rating blend; should sum to ~100%.
+            Bulk-import from the reference doc with <code>manage.py import_velo_weights</code>.</p>
+        </div>
+
         {# ---- Segments (searchable checkbox list) ---- #}
         <div>
           <h3 class="font-semibold text-sm text-base-content/70 mb-2">Segments on this route</h3>

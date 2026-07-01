@@ -726,3 +726,123 @@ def test_climb_advantage_unavailable_without_data(team_member):
     _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={}, name="O"))
     _add(matchup, Side.OPPONENT, _zr_data(rating=1500, handicaps={}, name="T"))
     assert compute.climb_advantage(matchup)["available"] is False
+
+
+# ----- Event factors (vELO2 Race weights) --------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_event_factors_sorted_desc_and_nonzero_only(team_member):
+    from apps.ladder_planner.services import compute
+    from apps.ttt_planner.models import Route
+
+    route = Route.objects.create(
+        name="Downtown Dolphin",
+        distance_km=2.0,
+        elevation_m=17,
+        velo_sprint=38.13,
+        velo_punch=21.87,
+        velo_climb=0,
+        velo_endurance=40.00,
+        velo_pursuit=0,
+    )
+    matchup = _make_matchup(team_member, route=route)
+    ef = compute.event_factors(matchup)
+
+    assert ef["available"] is True
+    assert ef["route_name"] == "Downtown Dolphin"
+    # Zero-weight factors (Climb, Pursuit) are dropped; the rest sort high→low.
+    assert [f["label"] for f in ef["factors"]] == ["Endurance", "Sprint", "Punch"]
+    assert ef["factors"][0]["value"] == pytest.approx(40.0)
+    assert all(f["value"] > 0 for f in ef["factors"])
+    assert all(f.get("color") and f.get("icon") for f in ef["factors"])
+
+
+@pytest.mark.django_db
+def test_event_factors_unavailable_without_route(team_member):
+    from apps.ladder_planner.services import compute
+
+    ef = compute.event_factors(_make_matchup(team_member))
+    assert ef["available"] is False
+    assert ef["factors"] == []
+
+
+@pytest.mark.django_db
+def test_event_factors_unavailable_when_route_has_no_weights(team_member):
+    from apps.ladder_planner.services import compute
+    from apps.ttt_planner.models import Route
+
+    route = Route.objects.create(name="Blank", distance_km=10, elevation_m=50)
+    ef = compute.event_factors(_make_matchup(team_member, route=route))
+    assert ef["available"] is False
+
+
+@pytest.mark.django_db
+def test_event_factors_tab_renders(auth_client, team_member):
+    from django.urls import reverse
+
+    from apps.ttt_planner.models import Route
+
+    route = Route.objects.create(
+        name="Watopia Flat Route",
+        distance_km=10.3,
+        elevation_m=61,
+        velo_sprint=33.04,
+        velo_punch=22.52,
+        velo_climb=0,
+        velo_endurance=44.44,
+        velo_pursuit=0,
+    )
+    matchup = _make_matchup(team_member, route=route)
+    body = auth_client.get(reverse("ladder_planner:detail", args=[matchup.pk])).content.decode()
+    assert "Event Factors" in body
+    assert "Event Factor Weights" in body
+    assert "Watopia Flat Route" in body
+
+
+@pytest.mark.django_db
+def test_event_factors_tab_empty_state(auth_client, team_member):
+    from django.urls import reverse
+
+    matchup = _make_matchup(team_member)
+    body = auth_client.get(reverse("ladder_planner:detail", args=[matchup.pk])).content.decode()
+    assert "Select a route to see" in body
+
+
+@pytest.mark.django_db
+def test_import_velo_weights_matches_by_name(tmp_path):
+    from django.core.management import call_command
+
+    from apps.ttt_planner.models import Route
+
+    route = Route.objects.create(name="Bon Voyage", distance_km=28.2, elevation_m=132)
+    doc = tmp_path / "weights.md"
+    doc.write_text(
+        "| World | Route | Sprint | Punch | Climb | Endurance | Pursuit |\n"
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: |\n"
+        "| France | [Bon Voyage](https://example/) | 25.77% | 18.47% | 0.00% | 7.65% | 48.11% |\n",
+    )
+    call_command("import_velo_weights", "--file", str(doc))
+    route.refresh_from_db()
+    assert float(route.velo_sprint) == pytest.approx(25.77)
+    assert float(route.velo_endurance) == pytest.approx(7.65)
+    assert float(route.velo_pursuit) == pytest.approx(48.11)
+
+
+@pytest.mark.django_db
+def test_import_velo_weights_if_empty_preserves_existing(tmp_path):
+    from django.core.management import call_command
+
+    from apps.ttt_planner.models import Route
+
+    # A route already carrying (manually edited) weights must not be overwritten.
+    edited = Route.objects.create(name="Bon Voyage", distance_km=28.2, elevation_m=132, velo_sprint=99)
+    doc = tmp_path / "weights.md"
+    doc.write_text(
+        "| World | Route | Sprint | Punch | Climb | Endurance | Pursuit |\n"
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: |\n"
+        "| France | [Bon Voyage](https://example/) | 25.77% | 18.47% | 0.00% | 7.65% | 48.11% |\n",
+    )
+    call_command("import_velo_weights", "--file", str(doc), "--if-empty")
+    edited.refresh_from_db()
+    assert float(edited.velo_sprint) == pytest.approx(99)  # untouched

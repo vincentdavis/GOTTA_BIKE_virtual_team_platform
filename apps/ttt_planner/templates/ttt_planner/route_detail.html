@@ -87,6 +87,34 @@
     </div>
   </div>
 
+  {# ---- vELO2 Race factor weights ---- #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="font-semibold mb-3">vELO2 Event Factor Weights</h3>
+      {% with bars=route.velo_factor_bars %}
+      {% if bars %}
+      <div class="space-y-2 max-w-lg">
+        {% for f in bars %}
+        <div class="flex items-center gap-3">
+          <span class="w-5 text-center shrink-0">{{ f.icon }}</span>
+          <span class="w-20 text-sm shrink-0">{{ f.label }}</span>
+          <div class="flex-1 h-5 rounded bg-base-300 overflow-hidden">
+            <div class="h-full rounded flex items-center justify-end pr-1.5 text-[10px] font-semibold text-white"
+                 style="width: {{ f.value }}%; background: {{ f.color }};">{% if f.value >= 12 %}{{ f.value }}%{% endif %}</div>
+          </div>
+          <span class="w-12 text-right text-sm tabular-nums shrink-0">{{ f.value }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="text-xs text-base-content/50 mt-3">ZwiftRacing vELO2 Race-rating blend (factors sum to ~100%).</p>
+      {% else %}
+      <p class="text-base-content/60">No vELO2 factor weights for this route yet.
+        {% if user.is_race_ready or user.is_superuser %}Add them via <span class="font-medium">Edit route</span>, or bulk-import with <code>manage.py import_velo_weights</code>.{% endif %}</p>
+      {% endif %}
+      {% endwith %}
+    </div>
+  </div>
+
   {# ---- GPX files ---- #}
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">

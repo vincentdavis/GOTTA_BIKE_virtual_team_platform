@@ -668,6 +668,30 @@ def climb_advantage(matchup: LadderMatchup) -> dict[str, Any]:
     }
 
 
+# ----- Event factors (vELO2 Race weights) --------------------------------------------------------
+
+
+def event_factors(matchup: LadderMatchup) -> dict[str, Any]:
+    """Build the vELO2 Race factor-weight breakdown for the matchup's route.
+
+    Delegates to ``Route.velo_factor_bars()`` (weights imported via
+    ``manage.py import_velo_weights``) so the ladder tab and the route detail
+    page render identical bars.
+
+    Args:
+        matchup: The matchup.
+
+    Returns:
+        A dict with ``available`` (bool), ``route_name``, and ``factors`` (a list
+        of ``{key, label, color, icon, value}`` dicts, sorted descending, non-zero).
+
+    """
+    route = matchup.route
+    if route is None or not route.has_velo_factors:
+        return {"available": False, "route_name": route.name if route else "", "factors": []}
+    return {"available": True, "route_name": route.name, "factors": route.velo_factor_bars()}
+
+
 def matchup_summary(matchup: LadderMatchup) -> dict[str, Any]:
     """Bundle all computed views for a matchup detail page.
 
@@ -686,6 +710,7 @@ def matchup_summary(matchup: LadderMatchup) -> dict[str, Any]:
         "per_rider": per_rider_power(matchup),
         "climb": climb_advantage(matchup),
         "velo2": velo2_comparison(matchup),
+        "event_factors": event_factors(matchup),
         "other": other_stats(matchup),
         "our_count": len(ours),
         "opp_count": len(opp),
