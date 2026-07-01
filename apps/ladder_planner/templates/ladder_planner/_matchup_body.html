@@ -325,6 +325,61 @@
         {% endfor %}
       </div>
     </div>
+
+    {# ----- Event Factor Match ----- #}
+    {% with m=summary.event_factor_match %}
+    <div class="divider"></div>
+    <h3 class="font-semibold mb-1">Event Factor Match</h3>
+    {% if m.available %}
+    <p class="text-xs text-base-content/60 mb-3">
+      How each lineup's vELO2 factor strengths line up with what this route rewards.
+      Fit = route-weighted average of each team's factor scores.
+    </p>
+    <div class="flex flex-wrap items-end gap-6 mb-4">
+      <div>
+        <div class="text-xs text-base-content/60">{{ m.our_label }} fit</div>
+        <div class="text-2xl font-bold">{{ m.our_fit|default_if_none:"—" }}</div>
+      </div>
+      <div>
+        <div class="text-xs text-base-content/60">{{ m.opp_label }} fit</div>
+        <div class="text-2xl font-bold">{{ m.opp_fit|default_if_none:"—" }}</div>
+      </div>
+      {% if m.favored %}
+      <div class="text-sm pb-1">Route favors <span class="font-bold text-primary">{{ m.favored }}</span> by {{ m.margin_abs }}</div>
+      {% elif m.our_fit is not None %}
+      <div class="text-sm pb-1 text-base-content/60">Evenly matched</div>
+      {% endif %}
+    </div>
+    <div class="overflow-x-auto max-w-2xl">
+      <table class="table table-xs">
+        <thead>
+          <tr class="text-right">
+            <th class="text-left">Factor</th>
+            <th>Route weight</th>
+            <th>{{ m.our_label }}</th>
+            <th>{{ m.opp_label }}</th>
+            <th>Edge</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in m.rows %}
+          <tr class="text-right">
+            <td class="text-left">{{ r.icon }} {{ r.label }}</td>
+            <td class="tabular-nums">{{ r.weight }}%</td>
+            <td class="tabular-nums">{{ r.ours|default_if_none:"—" }}</td>
+            <td class="tabular-nums">{{ r.opp|default_if_none:"—" }}</td>
+            <td class="tabular-nums font-medium {% if r.edge > 0 %}text-success{% elif r.edge < 0 %}text-error{% endif %}">
+              {% if r.edge > 0 %}+{% endif %}{{ r.edge|default_if_none:"—" }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/60">Add racing riders to both teams to see the factor match.</p>
+    {% endif %}
+    {% endwith %}
     {% else %}
     <div class="text-center text-base-content/60 py-10">Select a route to see its vELO2 event factor weights.</div>
     {% endif %}

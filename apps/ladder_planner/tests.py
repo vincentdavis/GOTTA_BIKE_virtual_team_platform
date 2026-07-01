@@ -846,3 +846,96 @@ def test_import_velo_weights_if_empty_preserves_existing(tmp_path):
     call_command("import_velo_weights", "--file", str(doc), "--if-empty")
     edited.refresh_from_db()
     assert float(edited.velo_sprint) == pytest.approx(99)  # untouched
+
+
+# ----- Event factor match ------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_event_factor_match_weighted_fit_and_rows(team_member):
+    from apps.ttt_planner.models import Route
+
+    route = Route.objects.create(
+        name="MatchRoute",
+        distance_km=10,
+        elevation_m=50,
+        velo_sprint=40,
+        velo_punch=0,
+        velo_climb=0,
+        velo_endurance=60,
+        velo_pursuit=0,
+    )
+    matchup = _make_matchup(team_member, route=route)
+    ours = _zr_data(rating=1, handicaps={}, name="Ours")
+    ours["velo"] = {**ours["velo"], "sprint": 700, "endurance": 600}
+    opp = _zr_data(rating=1, handicaps={}, name="Theirs")
+    opp["velo"] = {**opp["velo"], "sprint": 500, "endurance": 500}
+    _add(matchup, Side.OURS, ours)
+    _add(matchup, Side.OPPONENT, opp)
+
+    m = compute.event_factor_match(matchup)
+    assert m["available"] is True
+    # Zero-weight factors dropped; rows sorted by route weight descending.
+    assert [r["label"] for r in m["rows"]] == ["Endurance", "Sprint"]
+    assert m["our_fit"] == 640  # 0.40*700 + 0.60*600
+    assert m["opp_fit"] == 500  # 0.40*500 + 0.60*500
+    assert m["margin"] == 140
+    assert m["margin_abs"] == 140
+    assert m["favored"] == "Us"
+    assert m["rows"][0]["edge"] == 100  # Endurance: 600 - 500
+
+
+@pytest.mark.django_db
+def test_event_factor_match_unavailable_without_opponent(team_member):
+    from apps.ttt_planner.models import Route
+
+    route = Route.objects.create(
+        name="R",
+        distance_km=10,
+        elevation_m=50,
+        velo_sprint=50,
+        velo_punch=0,
+        velo_climb=0,
+        velo_endurance=50,
+        velo_pursuit=0,
+    )
+    matchup = _make_matchup(team_member, route=route)
+    _add(matchup, Side.OURS, _zr_data(rating=1, handicaps={}, name="Ours"))
+    assert compute.event_factor_match(matchup)["available"] is False
+
+
+@pytest.mark.django_db
+def test_event_factor_match_unavailable_without_route(team_member):
+    matchup = _make_matchup(team_member)
+    _add(matchup, Side.OURS, _zr_data(rating=1, handicaps={}, name="O"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1, handicaps={}, name="T"))
+    assert compute.event_factor_match(matchup)["available"] is False
+
+
+@pytest.mark.django_db
+def test_event_factor_match_tab_renders(auth_client, team_member):
+    from django.urls import reverse
+
+    from apps.ttt_planner.models import Route
+
+    route = Route.objects.create(
+        name="RenderRoute",
+        distance_km=10,
+        elevation_m=50,
+        velo_sprint=40,
+        velo_punch=0,
+        velo_climb=0,
+        velo_endurance=60,
+        velo_pursuit=0,
+    )
+    matchup = _make_matchup(team_member, route=route)
+    ours = _zr_data(rating=1, handicaps={}, name="Ours")
+    ours["velo"] = {**ours["velo"], "sprint": 700, "endurance": 600}
+    opp = _zr_data(rating=1, handicaps={}, name="Theirs")
+    opp["velo"] = {**opp["velo"], "sprint": 500, "endurance": 500}
+    _add(matchup, Side.OURS, ours)
+    _add(matchup, Side.OPPONENT, opp)
+
+    body = auth_client.get(reverse("ladder_planner:detail", args=[matchup.pk])).content.decode()
+    assert "Event Factor Match" in body
+    assert "Route favors" in body

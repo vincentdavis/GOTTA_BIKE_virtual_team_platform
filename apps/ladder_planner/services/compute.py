@@ -692,6 +692,76 @@ def event_factors(matchup: LadderMatchup) -> dict[str, Any]:
     return {"available": True, "route_name": route.name, "factors": route.velo_factor_bars()}
 
 
+def event_factor_match(matchup: LadderMatchup) -> dict[str, Any]:
+    """Weight each team's vELO2 factor strengths by what the route rewards.
+
+    For every factor the route weights, averages each side's racing riders'
+    vELO2 factor score, then blends those averages by the route weights into a
+    single "event-weighted factor rating" per team (same scale as the factor
+    scores). The per-factor rows show where each team's edge comes from.
+
+    Args:
+        matchup: The matchup.
+
+    Returns:
+        A dict with ``available`` (bool), team labels, per-factor ``rows``
+        (``weight``/``ours``/``opp``/``edge`` plus label/colour/icon), each
+        team's ``our_fit``/``opp_fit`` rating, and the ``favored`` side with
+        ``margin``/``margin_abs``.
+
+    """
+    route = matchup.route
+    our_label, opp_label = _labels(matchup)
+    ours, opp = _racing(matchup)
+    base = {"available": False, "our_label": our_label, "opp_label": opp_label, "rows": []}
+    if route is None or not route.has_velo_factors or not ours or not opp:
+        return base
+
+    rows = []
+    our_fit = opp_fit = 0.0
+    for key, label, color, icon in route.VELO_FACTOR_META:
+        raw = getattr(route, f"velo_{key}")
+        weight = float(raw) if raw is not None else 0.0
+        if weight <= 0:
+            continue
+        ov, pv = _velo_values(ours, key), _velo_values(opp, key)
+        o = statistics.mean(ov) if ov else None
+        p = statistics.mean(pv) if pv else None
+        if o is not None:
+            our_fit += weight / 100 * o
+        if p is not None:
+            opp_fit += weight / 100 * p
+        rows.append({
+            "key": key,
+            "label": label,
+            "color": color,
+            "icon": icon,
+            "weight": round(weight, 1),
+            "ours": _round_score(o),
+            "opp": _round_score(p),
+            "edge": _round_score(o - p) if (o is not None and p is not None) else None,
+        })
+    rows.sort(key=lambda r: r["weight"], reverse=True)
+
+    our_fit_r = round(our_fit) if our_fit else None
+    opp_fit_r = round(opp_fit) if opp_fit else None
+    margin = (our_fit_r - opp_fit_r) if (our_fit_r is not None and opp_fit_r is not None) else None
+    favored = None
+    if margin:
+        favored = our_label if margin > 0 else opp_label
+    return {
+        "available": True,
+        "our_label": our_label,
+        "opp_label": opp_label,
+        "rows": rows,
+        "our_fit": our_fit_r,
+        "opp_fit": opp_fit_r,
+        "margin": margin,
+        "margin_abs": abs(margin) if margin is not None else None,
+        "favored": favored,
+    }
+
+
 def matchup_summary(matchup: LadderMatchup) -> dict[str, Any]:
     """Bundle all computed views for a matchup detail page.
 
@@ -711,6 +781,7 @@ def matchup_summary(matchup: LadderMatchup) -> dict[str, Any]:
         "climb": climb_advantage(matchup),
         "velo2": velo2_comparison(matchup),
         "event_factors": event_factors(matchup),
+        "event_factor_match": event_factor_match(matchup),
         "other": other_stats(matchup),
         "our_count": len(ours),
         "opp_count": len(opp),
