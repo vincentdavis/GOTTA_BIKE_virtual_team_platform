@@ -575,4 +575,99 @@
     });
   })();
 </script>
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js"></script>
+<script>
+  // Adds a "copy tab as image" icon to the top-left of each ladder tabpanel.
+  // Clicking renders that panel to a PNG and copies it to the clipboard, falling
+  // back to a download when the Clipboard API is unavailable (e.g. insecure
+  // context). Buttons are re-injected after every HTMX swap of #ladder-body.
+  (function () {
+    var COPY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+    var DONE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>';
+
+    function slugify(s) {
+      return (s || "tab").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "tab";
+    }
+
+    function injectButtons() {
+      document.querySelectorAll('#ladder-body [role="tabpanel"]').forEach(function (panel) {
+        if (panel.querySelector(":scope > .ladder-capture-btn")) return;
+        panel.classList.add("relative");
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "ladder-capture-btn btn btn-ghost btn-xs btn-circle absolute left-2 top-2 z-10 bg-base-100/70";
+        btn.setAttribute("data-capture-btn", "");
+        btn.title = "Copy tab as image";
+        btn.setAttribute("aria-label", "Copy tab as image");
+        btn.innerHTML = COPY_ICON;
+        panel.prepend(btn);
+      });
+    }
+
+    function flash(btn, ok) {
+      var prev = btn.dataset.icon || COPY_ICON;
+      btn.innerHTML = DONE_ICON;
+      btn.classList.add(ok ? "text-success" : "text-error");
+      setTimeout(function () {
+        btn.innerHTML = prev;
+        btn.classList.remove("text-success", "text-error");
+      }, 1500);
+    }
+
+    function capture(panel, btn) {
+      if (typeof htmlToImage === "undefined") return;
+      btn.dataset.icon = COPY_ICON;
+      btn.disabled = true;
+      htmlToImage
+        .toBlob(panel, {
+          pixelRatio: 2,
+          backgroundColor: getComputedStyle(panel).backgroundColor || "#ffffff",
+          // Keep the capture button itself out of the screenshot.
+          filter: function (node) {
+            return !(node.classList && node.classList.contains("ladder-capture-btn"));
+          },
+        })
+        .then(function (blob) {
+          if (!blob) throw new Error("empty blob");
+          if (navigator.clipboard && window.ClipboardItem) {
+            return navigator.clipboard
+              .write([new ClipboardItem({ "image/png": blob })])
+              .then(function () { flash(btn, true); })
+              .catch(function () { download(panel, blob); flash(btn, true); });
+          }
+          download(panel, blob);
+          flash(btn, true);
+        })
+        .catch(function (err) {
+          console.error("[ladder] capture failed", err);
+          flash(btn, false);
+        })
+        .finally(function () { btn.disabled = false; });
+    }
+
+    function download(panel, blob) {
+      var input = panel.previousElementSibling;
+      var name = input ? input.getAttribute("aria-label") : "tab";
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "ladder-" + slugify(name) + ".png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    }
+
+    document.body.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest(".ladder-capture-btn");
+      if (!btn) return;
+      var panel = btn.closest('[role="tabpanel"]');
+      if (panel) capture(panel, btn);
+    });
+
+    document.addEventListener("DOMContentLoaded", injectButtons);
+    document.body.addEventListener("htmx:afterSwap", function (e) {
+      if (e.target && e.target.id === "ladder-body") injectButtons();
+    });
+  })();
+</script>
 {% endblock %}
