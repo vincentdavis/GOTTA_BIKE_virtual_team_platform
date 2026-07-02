@@ -440,52 +440,13 @@
     <p class="text-xs text-base-content/50 mt-2">Podium % is podiums / finishes over the last 90 days.</p>
   </div>
 
-  {# ===== Climb compare ===== #}
+  {# ===== Climb compare (lazy — computed on demand, see matchup_climb) ===== #}
   <input type="radio" name="ladder_tabs" role="tab" class="tab" aria-label="Climb compare" />
   <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
-    <h3 class="font-semibold mb-1">Climb advantage</h3>
-    <p class="text-xs text-base-content/60 mb-3">
-      Median climber's time gap by climb grade (rows) and length (columns), steady best effort with no draft.
-      <span class="font-medium" style="color:rgb(34,197,94)">Green</span> = {{ summary.climb.our_label }} faster,
-      <span class="font-medium" style="color:rgb(239,68,68)">red</span> = {{ summary.climb.opp_label }}; value is the time gap (+ = we're faster). Hover for medians and points.
-    </p>
-    {% if can_edit %}
-    <form class="flex items-end gap-2 mb-3" hx-post="{% url 'ladder_planner:update' matchup.pk %}"
-          hx-trigger="change" hx-target="#ladder-body" hx-swap="innerHTML">
-      <label class="form-control">
-        <span class="label-text text-xs mb-1">CdA coef <span class="text-base-content/40">(blank = {{ config.STD_CDA_COEF }} default)</span></span>
-        <input type="number" step="0.0005" min="0" name="cda_coef" value="{{ matchup.cda_coef|default_if_none:'' }}"
-               placeholder="{{ config.STD_CDA_COEF }}" class="input input-bordered input-xs w-36" />
-      </label>
-    </form>
-    {% endif %}
-    {% if summary.climb.available %}
-    <div class="overflow-x-auto">
-      <table data-no-gradient class="table table-xs text-center">
-        <thead>
-          <tr>
-            <th class="text-left">Grade \ Length</th>
-            {% for L in summary.climb.lengths %}<th class="text-center">{{ L }}</th>{% endfor %}
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in summary.climb.rows %}
-          <tr>
-            <td class="font-medium whitespace-nowrap text-left">{{ row.grade }}</td>
-            {% for c in row.cells %}<td class="text-center text-black font-medium" style="background:{{ c.rgb }}" title="{{ c.title }}">{{ c.label }}</td>{% endfor %}
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div hx-get="{% url 'ladder_planner:climb' matchup.pk %}" hx-trigger="intersect once"
+         hx-target="this" hx-swap="innerHTML">
+      <div class="flex justify-center py-10"><span class="loading loading-spinner loading-lg"></span></div>
     </div>
-    <p class="text-[10px] text-base-content/50 mt-2">
-      Power-duration curve is 90-day bests (fresh, optimistic — not fatigued mid-race). CdA estimated from height/weight.
-      Colour intensity is relative to the biggest gap in this grid.
-    </p>
-    {% include "_climb_method.html" %}
-    {% else %}
-    <p class="text-base-content/60 py-6 text-center">Add riders with power and weight data on both teams to compare climbs.</p>
-    {% endif %}
   </div>
   </div>
 </div>

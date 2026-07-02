@@ -564,6 +564,31 @@ def rider_toggle(request: HttpRequest, matchup_id: str, rider_id: int) -> HttpRe
 
 @login_required
 @team_member_required(raise_exception=True)
+@require_GET
+def matchup_climb(request: HttpRequest, matchup_id: str) -> HttpResponse:
+    """Render the Climb compare panel on demand.
+
+    Split out of the main body because ``climb_advantage`` is ~90% of the summary
+    compute cost; the Climb tab lazy-loads this so roster edits stay fast.
+
+    Returns:
+        The climb panel partial.
+
+    """
+    matchup = get_object_or_404(LadderMatchup, pk=matchup_id)
+    return render(
+        request,
+        "ladder_planner/_climb_panel.html",
+        {
+            "matchup": matchup,
+            "climb": compute.climb_advantage(matchup),
+            "can_edit": _can_edit(matchup, request.user),
+        },
+    )
+
+
+@login_required
+@team_member_required(raise_exception=True)
 @require_POST
 def matchup_refresh(request: HttpRequest, matchup_id: str) -> HttpResponse:
     """Re-snapshot all riders from the cache (no live ZR call).

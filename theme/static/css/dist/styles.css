@@ -2678,6 +2678,9 @@
       inset: 50% auto auto calc(var(--tt-tail) + 1px);
     }
   }
+  .inset-0 {
+    inset: calc(var(--spacing) * 0);
+  }
   @layer daisyui.l1.l2 {
     .toast-end {
       inset-inline-start: auto;
@@ -5198,6 +5201,9 @@
   .cursor-pointer {
     cursor: pointer;
   }
+  .cursor-wait {
+    cursor: wait;
+  }
   .cursor-zoom-in {
     cursor: zoom-in;
   }
@@ -5551,6 +5557,14 @@
       background-color: color-mix(in oklab, var(--color-base-100) 50%, transparent);
     }
   }
+  .bg-base-100\/60 {
+    background-color: var(--color-base-100);
+  }
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-base-100\/60 {
+      background-color: color-mix(in oklab, var(--color-base-100) 60%, transparent);
+    }
+  }
   .bg-base-100\/70 {
     background-color: var(--color-base-100);
   }
@@ -5876,6 +5890,9 @@
   }
   .pt-4 {
     padding-top: calc(var(--spacing) * 4);
+  }
+  .pt-24 {
+    padding-top: calc(var(--spacing) * 24);
   }
   .pr-1\.5 {
     padding-right: calc(var(--spacing) * 1.5);

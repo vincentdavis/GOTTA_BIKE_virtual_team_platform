@@ -785,7 +785,8 @@ def matchup_summary(matchup: LadderMatchup) -> dict[str, Any]:
         "power": power_comparison(matchup),
         "top": top_riders(matchup),
         "per_rider": per_rider_power(matchup),
-        "climb": climb_advantage(matchup),
+        # ``climb`` is intentionally omitted here — climb_advantage is ~90% of the
+        # summary cost, so the Climb tab lazy-loads it on demand (see matchup_climb).
         "velo2": velo2_comparison(matchup),
         "event_factors": event_factors(matchup),
         "event_factor_match": event_factor_match(matchup),

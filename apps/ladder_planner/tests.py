@@ -944,3 +944,30 @@ def test_event_factor_match_tab_renders(auth_client, team_member):
     body = auth_client.get(reverse("ladder_planner:detail", args=[matchup.pk])).content.decode()
     assert "Event Factor Match" in body
     assert "Route favors" in body
+
+
+# ----- lazy Climb tab ----------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_climb_tab_lazy_loads_in_body(auth_client, team_member):
+    from django.urls import reverse
+
+    matchup = _make_matchup(team_member)
+    body = auth_client.get(reverse("ladder_planner:detail", args=[matchup.pk])).content.decode()
+    # The heavy climb grid is no longer inlined; the tab lazy-loads it on demand.
+    assert reverse("ladder_planner:climb", args=[matchup.pk]) in body
+    assert "intersect once" in body
+    assert "Climb advantage" not in body
+
+
+@pytest.mark.django_db
+def test_climb_panel_endpoint_renders(auth_client, team_member):
+    from django.urls import reverse
+
+    matchup = _make_matchup(team_member)
+    _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={}, name="Ours"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1500, handicaps={}, name="Theirs"))
+    resp = auth_client.get(reverse("ladder_planner:climb", args=[matchup.pk]))
+    assert resp.status_code == 200
+    assert b"Climb advantage" in resp.content

@@ -138,8 +138,14 @@
   {% endif %}
 
   {# ---- Comparison body (HTMX swap target) ---- #}
-  <div id="ladder-body">
-    {% include "ladder_planner/_matchup_body.html" %}
+  <div class="relative">
+    {# Overlay shown while a full-body swap (add/remove/toggle/refresh) is in flight. #}
+    <div id="ladder-loading" class="hidden absolute inset-0 z-20 bg-base-100/60 flex items-start justify-center pt-24 rounded-box cursor-wait">
+      <span class="loading loading-spinner loading-lg text-primary"></span>
+    </div>
+    <div id="ladder-body" hx-disabled-elt="this">
+      {% include "ladder_planner/_matchup_body.html" %}
+    </div>
   </div>
 
   {% if can_edit %}
@@ -572,6 +578,27 @@
     document.addEventListener("DOMContentLoaded", window.applyLadderStatPrefs);
     document.body.addEventListener("htmx:afterSwap", function (e) {
       if (e.target && e.target.id === "ladder-body") window.applyLadderStatPrefs();
+    });
+  })();
+</script>
+<script>
+  // Show a loading overlay while a full comparison-body swap is in flight (add/
+  // remove/toggle rider, squad/opponent add, refresh, CdA change). Keyed on the
+  // swap target being #ladder-body, so the rider-search typeahead and the lazy
+  // Climb load (which have their own targets) don't trigger it.
+  (function () {
+    function isBodySwap(e) {
+      var t = e.detail && e.detail.target;
+      return t && t.id === "ladder-body";
+    }
+    function overlay() { return document.getElementById("ladder-loading"); }
+    document.body.addEventListener("htmx:beforeRequest", function (e) {
+      if (isBodySwap(e)) { var o = overlay(); if (o) o.classList.remove("hidden"); }
+    });
+    ["htmx:afterOnLoad", "htmx:responseError", "htmx:sendError", "htmx:timeout"].forEach(function (evt) {
+      document.body.addEventListener(evt, function (e) {
+        if (isBodySwap(e)) { var o = overlay(); if (o) o.classList.add("hidden"); }
+      });
     });
   })();
 </script>
