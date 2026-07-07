@@ -2701,6 +2701,7 @@ def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int)
             "squad": squad,
             "timezone_choices_json": json.dumps(TIMEZONE_CHOICES),
             "user_timezone": user_tz,
+            "event_requires_race_verified": bool(event.require_race_verified_availability),
         },
     )
 
@@ -2774,6 +2775,7 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         "max_races_question": grid.max_races_question,
         "rest_days_question": grid.rest_days_question,
         "hide_empty_days": grid.hide_empty_days,
+        "require_race_verified_availability": grid.require_race_verified_availability,
     }
     user_tz = getattr(request.user, "timezone", "") or "UTC"
     logfire.debug(
@@ -2793,6 +2795,7 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
             "user_timezone": user_tz,
             "initial_grid_json": json.dumps(initial_grid),
             "page_heading": "Edit Availability Grid",
+            "event_requires_race_verified": bool(event.require_race_verified_availability),
         },
     )
 
@@ -2887,6 +2890,11 @@ def _handle_availability_save(
         "max_races_question": bool(data.get("max_races_question", False)),
         "rest_days_question": bool(data.get("rest_days_question", False)),
         "hide_empty_days": bool(data.get("hide_empty_days", False)),
+        # Event-level requirement is a floor: it forces the grid setting on and
+        # cannot be turned off here, regardless of what the client sends.
+        "require_race_verified_availability": (
+            bool(data.get("require_race_verified_availability", False)) or event.require_race_verified_availability
+        ),
         "expires": expires,
     }
 
@@ -3307,6 +3315,7 @@ def availability_copy_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         blocked_cells=shifted_blocked,
         max_races_question=source.max_races_question,
         rest_days_question=source.rest_days_question,
+        require_race_verified_availability=source.require_race_verified_availability,
         expires=None,
         status=AvailabilityGrid.Status.DRAFT,
         created_by=request.user,
@@ -3560,7 +3569,7 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
         messages.error(request, "This availability grid is not open for responses.")
         return redirect("events:event_detail", pk=event_pk)
 
-    race_verified_required = bool(event.require_race_verified_availability)
+    race_verified_required = bool(event.require_race_verified_availability or grid.require_race_verified_availability)
     user_is_race_ready = bool(getattr(request.user, "is_race_ready", False))
 
     if request.method == "POST":

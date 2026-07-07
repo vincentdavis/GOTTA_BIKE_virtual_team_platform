@@ -944,6 +944,13 @@ class AvailabilityGrid(models.Model):
         default=False,
         help_text="Hide days where every time slot is blocked from the response/results grids",
     )
+    require_race_verified_availability = models.BooleanField(
+        default=False,
+        help_text=(
+            "Require Race Verified status before a member can submit this grid. "
+            "Forced on when the parent event requires it."
+        ),
+    )
     expires = models.DateField(null=True, blank=True, help_text="Date when this grid expires and is no longer visible")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -983,6 +990,20 @@ class AvailabilityGrid(models.Model):
         if not self.title:
             self.title = f"{self.squad.event.title} {self.squad.name} {self.start_date} - {self.end_date}"
         super().save(*args, **kwargs)
+
+    @property
+    def require_race_verified_effective(self) -> bool:
+        """Whether Race Verified status is required to submit this grid.
+
+        Combines the grid's own setting with the parent event's floor: the event
+        requirement forces the grid requirement on even if the grid was saved
+        before the event toggle was enabled.
+
+        Returns:
+            True when either the grid or its event requires Race Verified status.
+
+        """
+        return bool(self.squad.event.require_race_verified_availability or self.require_race_verified_availability)
 
     @property
     def dates(self) -> list[str]:

@@ -1526,6 +1526,122 @@ def test_respond_shows_race_verified_warning_banner(auth_client, team_member) ->
 
 
 @pytest.mark.django_db
+def test_respond_blocks_submit_when_grid_requires_race_verified(auth_client, team_member) -> None:
+    import json
+
+    from django.urls import reverse
+
+    event, squad = _avail_event_squad()  # event-level requirement OFF
+    team_member.is_race_ready = False
+    team_member.save(update_fields=["is_race_ready"])
+    grid = _published_grid(squad, hide_empty_days=False, require_race_verified_availability=True)
+
+    response = auth_client.post(
+        reverse("events:availability_respond", args=[event.pk, squad.pk, grid.id]),
+        data=json.dumps({"available_cells": []}),
+        content_type="application/json",
+    )
+    assert response.status_code == 403
+    assert "Race Verified" in response.json()["error"]
+
+
+@pytest.mark.django_db
+def test_respond_allows_submit_when_grid_requires_and_verified(auth_client, team_member) -> None:
+    import json
+
+    from django.urls import reverse
+
+    event, squad = _avail_event_squad()
+    team_member.is_race_ready = True
+    team_member.save(update_fields=["is_race_ready"])
+    grid = _published_grid(squad, hide_empty_days=False, require_race_verified_availability=True)
+
+    response = auth_client.post(
+        reverse("events:availability_respond", args=[event.pk, squad.pk, grid.id]),
+        data=json.dumps({"available_cells": []}),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_respond_event_requirement_forces_grid_even_when_grid_flag_off(auth_client, team_member) -> None:
+    import json
+
+    from django.urls import reverse
+
+    # Grid saved before the event toggle was turned on: grid flag is False,
+    # but the event-level floor must still block an unverified submission.
+    event, squad = _avail_event_squad()
+    team_member.is_race_ready = False
+    team_member.save(update_fields=["is_race_ready"])
+    grid = _published_grid(squad, hide_empty_days=False, require_race_verified_availability=False)
+    event.require_race_verified_availability = True
+    event.save(update_fields=["require_race_verified_availability"])
+
+    response = auth_client.post(
+        reverse("events:availability_respond", args=[event.pk, squad.pk, grid.id]),
+        data=json.dumps({"available_cells": []}),
+        content_type="application/json",
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_availability_save_forces_race_verified_when_event_requires(client, event_admin) -> None:
+    import json
+
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    event.require_race_verified_availability = True
+    event.save(update_fields=["require_race_verified_availability"])
+    payload = {
+        "title": "",
+        "start_date": "2026-06-15",
+        "end_date": "2026-06-16",
+        "start_time": "18:00",
+        "end_time": "20:00",
+        "slot_duration": 30,
+        "timezone": "UTC",
+        "blocked_cells": [],
+        "expires": None,
+        "max_races_question": False,
+        "rest_days_question": False,
+        "hide_empty_days": False,
+        # Client tries to turn it off — the event-level floor must override.
+        "require_race_verified_availability": False,
+    }
+    response = client.post(
+        reverse("events:availability_create", args=[event.pk, squad.pk]),
+        data=json.dumps(payload),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    grid = AvailabilityGrid.objects.get(squad=squad)
+    assert grid.require_race_verified_availability is True
+
+
+@pytest.mark.django_db
+def test_builder_locks_race_verified_toggle_when_event_requires(client, event_admin) -> None:
+    from django.urls import reverse
+
+    client.force_login(event_admin)
+    event, squad = _avail_event_squad()
+    event.require_race_verified_availability = True
+    event.save(update_fields=["require_race_verified_availability"])
+
+    response = client.get(reverse("events:availability_create", args=[event.pk, squad.pk]))
+    assert response.status_code == 200
+    body = response.content.decode()
+    assert 'id="cfg-require-race-verified"' in body
+    assert "var EVENT_REQUIRES_RACE_VERIFIED = true;" in body
+
+
+@pytest.mark.django_db
 def test_availability_save_stores_hide_empty_days(client, event_admin) -> None:
     import json
 

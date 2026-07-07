@@ -71,6 +71,13 @@
             <span class="label-text text-xs">Hide days with no available times</span>
           </label>
         </div>
+        <div class="flex items-center gap-3">
+          <label class="label cursor-pointer gap-1 py-0">
+            <input type="checkbox" id="cfg-require-race-verified" class="checkbox checkbox-xs">
+            <span class="label-text text-xs">Require Race Verified status to submit</span>
+          </label>
+          <span id="require-race-verified-locked" class="label-text-alt text-xs text-base-content/60 hidden">Enforced at the event level</span>
+        </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <div class="form-control">
@@ -182,6 +189,7 @@
   var TIMEZONE_CHOICES = {{ timezone_choices_json|safe }};
   var USER_TIMEZONE = '{{ user_timezone }}';
   var INITIAL_GRID = {% if initial_grid_json %}{{ initial_grid_json|safe }}{% else %}null{% endif %};
+  var EVENT_REQUIRES_RACE_VERIFIED = {% if event_requires_race_verified %}true{% else %}false{% endif %};
 
   // DOM refs
   var startDateEl = document.getElementById('cfg-start-date');
@@ -191,6 +199,8 @@
   var timezoneEl = document.getElementById('cfg-timezone');
   var slotDurationEl = document.getElementById('cfg-slot-duration');
   var hideEmptyDaysEl = document.getElementById('cfg-hide-empty-days');
+  var requireRaceVerifiedEl = document.getElementById('cfg-require-race-verified');
+  var requireRaceVerifiedLockedEl = document.getElementById('require-race-verified-locked');
   var btnGenerateDesktop = document.getElementById('btn-generate-desktop');
   var btnGenerateMobile = document.getElementById('btn-generate-mobile');
   var gridContainer = document.getElementById('grid-container');
@@ -773,7 +783,8 @@
       expires: expiresEl.value || null,
       max_races_question: maxRacesAnswer === 'yes',
       rest_days_question: restDaysAnswer === 'yes',
-      hide_empty_days: hideEmptyDaysEl.checked
+      hide_empty_days: hideEmptyDaysEl.checked,
+      require_race_verified_availability: requireRaceVerifiedEl.checked
     };
 
     btnSave.disabled = true;
@@ -918,10 +929,19 @@
     setRadioValue('cfg-max-races', INITIAL_GRID.max_races_question ? 'yes' : 'no');
     setRadioValue('cfg-rest-days', INITIAL_GRID.rest_days_question ? 'yes' : 'no');
     hideEmptyDaysEl.checked = !!INITIAL_GRID.hide_empty_days;
+    requireRaceVerifiedEl.checked = !!INITIAL_GRID.require_race_verified_availability;
     (INITIAL_GRID.blocked_cells || []).forEach(function(c) {
       cellStates[c.date + '|' + c.time] = 'blocked';
     });
     buildGrid();
+  }
+
+  // Event-level requirement is a floor: force the box on and lock it so it
+  // cannot be turned off here. Runs in both create and edit modes.
+  if (EVENT_REQUIRES_RACE_VERIFIED) {
+    requireRaceVerifiedEl.checked = true;
+    requireRaceVerifiedEl.disabled = true;
+    requireRaceVerifiedLockedEl.classList.remove('hidden');
   }
 })();
 </script>
