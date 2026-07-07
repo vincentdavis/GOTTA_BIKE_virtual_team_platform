@@ -1,13 +1,17 @@
 """Views for analytics app."""
 
+from typing import TYPE_CHECKING
+
 import logfire
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
 from apps.accounts.decorators import discord_permission_required
 from apps.analytics.services import get_analytics_data, get_date_range_for_period
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest, HttpResponse
 
 
 @login_required

@@ -208,7 +208,12 @@ class SiteSettings(models.Model):
         verbose_name_plural = "Site Settings"
 
     def __str__(self) -> str:
-        """Return string representation."""
+        """Return string representation.
+
+        Returns:
+            The human-readable name for the settings singleton.
+
+        """
         return "Site Settings"
 
     def save(self, *args, **kwargs):

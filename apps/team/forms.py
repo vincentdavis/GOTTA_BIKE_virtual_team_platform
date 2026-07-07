@@ -1,13 +1,13 @@
 """Forms for team app."""
 
 import json
-from datetime import date
 from typing import ClassVar
 from zoneinfo import available_timezones
 
 import logfire
 from constance import config
 from django import forms
+from django.utils import timezone
 from django_countries.widgets import CountrySelectWidget
 
 from apps.team.converters import inches_to_cm, lbs_to_kg
@@ -627,7 +627,7 @@ class MembershipApplicationApplicantForm(forms.ModelForm):
         """
         birth_year = self.cleaned_data.get("birth_year")
         if birth_year:
-            current_year = date.today().year
+            current_year = timezone.now().year
             if birth_year < 1900:
                 logfire.warning(
                     "MembershipApplicationApplicantForm birth year validation failed",

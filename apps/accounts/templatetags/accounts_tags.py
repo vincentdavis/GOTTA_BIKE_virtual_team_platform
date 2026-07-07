@@ -1,13 +1,16 @@
 """Template tags and filters for accounts app."""
 
 import json
-from decimal import Decimal
+from typing import TYPE_CHECKING
 
 import markdown
 from django import template
 from django.utils.safestring import mark_safe
 
 from apps.accounts.permission_registry import get_permission_help
+
+if TYPE_CHECKING:
+    from decimal import Decimal
 
 register = template.Library()
 
@@ -79,7 +82,7 @@ def render_markdown(value: str) -> str:
             "tables",      # Support tables
         ],
     )
-    return mark_safe(html)
+    return mark_safe(html)  # noqa: S308  # trusted admin-authored markdown (CMS/announcements)
 
 
 @register.filter

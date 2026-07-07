@@ -127,15 +127,11 @@ if DEBUG:
         "debug_toolbar",
         "django_browser_reload",
     ]
-    MIDDLEWARE = (
-        [
-            "debug_toolbar.middleware.DebugToolbarMiddleware",
-        ]
-        + MIDDLEWARE
-        + [
-            "django_browser_reload.middleware.BrowserReloadMiddleware",
-        ]
-    )
+    MIDDLEWARE = [
+        "debug_toolbar.middleware.DebugToolbarMiddleware",
+        *MIDDLEWARE,
+        "django_browser_reload.middleware.BrowserReloadMiddleware",
+    ]
 
 ROOT_URLCONF = "gotta_bike_platform.urls"
 
@@ -464,7 +460,8 @@ CONSTANCE_CONFIG = {
     "PERM_RACING_ADMIN_ROLES": ("[]", "Discord role IDs that grant racing admin permission", "json_list_field"),
     "PERM_TEAM_MEMBER_ROLES": (
         "[]",
-        "Discord role IDs for team members. Without this role, users can only see the index page and their personal profile page (including verifications). All other pages require this permission.",
+        "Discord role IDs for team members. Without this role, users can only see the index page and "
+        "their personal profile page (including verifications). All other pages require this permission.",
         "json_list_field",
     ),
     "PERM_RACE_READY_ROLES": ("[]", "Discord role IDs for race ready status", "json_list_field"),
@@ -638,7 +635,11 @@ CONSTANCE_CONFIG = {
         "textarea_field",
     ),
     # Site settings
-    "SITE_ANNOUNCEMENT": ("", "Announcement banner on all pages. Supports Markdown: **bold**, *italic*, [links](url)", str),
+    "SITE_ANNOUNCEMENT": (
+        "",
+        "Announcement banner on all pages. Supports Markdown: **bold**, *italic*, [links](url)",
+        str,
+    ),
     "MAINTENANCE_MODE": (False, "Enable maintenance mode (restricts access)", bool),
     "GOOGLE_ANALYTICS_ID": ("", "Google Analytics measurement ID (e.g., G-XXXXXXXXXX)", str),
     "LOGO_DISPLAY_MODE": (
@@ -764,7 +765,8 @@ CONSTANCE_CONFIG = {
     ),
     "SCHEDULER_WARN_EXPIRING_VERIFICATIONS_HOURS": (
         24,
-        "How often to check for expiring verifications and send DMs (hours). Requires scheduler restart to take effect.",
+        "How often to check for expiring verifications and send DMs (hours). "
+        "Requires scheduler restart to take effect.",
         int,
     ),
     "SCHEDULER_SYNC_DISCORD_ROLES_HOURS": (
@@ -804,7 +806,8 @@ CONSTANCE_CONFIG = {
     ),
     "SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS": (
         6,
-        "How often to sync New Member Discord role based on guild join date (hours). Requires scheduler restart to take effect.",
+        "How often to sync New Member Discord role based on guild join date (hours). "
+        "Requires scheduler restart to take effect.",
         int,
     ),
     "SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS": (
@@ -819,17 +822,20 @@ CONSTANCE_CONFIG = {
     ),
     "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS": (
         24,
-        "How often to purge user API keys that expired more than 90 days ago (hours). Requires scheduler restart to take effect.",
+        "How often to purge user API keys that expired more than 90 days ago (hours). "
+        "Requires scheduler restart to take effect.",
         int,
     ),
     "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS": (
         24,
-        "How often to remove squad roles from Directeurs Sportifs after their race has finished (hours). Requires scheduler restart to take effect.",
+        "How often to remove squad roles from Directeurs Sportifs after their race has finished (hours). "
+        "Requires scheduler restart to take effect.",
         int,
     ),
     "SCHEDULER_REFRESH_CACHED_CLUBS_HOURS": (
         24,
-        "How often to check for stale cached opponent clubs and refresh those used by recent ladder matchups (hours). Requires scheduler restart to take effect.",
+        "How often to check for stale cached opponent clubs and refresh those used by recent ladder matchups (hours). "
+        "Requires scheduler restart to take effect.",
         int,
     ),
     # TTT Planner physics constants (tunable; calibrate against Zwift Insider / zwiftgopher)
@@ -837,7 +843,11 @@ CONSTANCE_CONFIG = {
     "TTT_CRR": (0.004, "Coefficient of rolling resistance for the TTT power model", float),
     "TTT_BIKE_MASS_KG": (8.0, "Bike + wheels mass (kg) added to rider weight in the TTT power model", float),
     "TTT_DRIVETRAIN_EFFICIENCY": (1.0, "Drivetrain efficiency (1.0 = no loss) for the TTT power model", float),
-    "TTT_CDA_COEF": (0.0318, "Leading coefficient of the CdA estimate (folds in Cd) for the TTT aero-tuck position", float),
+    "TTT_CDA_COEF": (
+        0.0318,
+        "Leading coefficient of the CdA estimate (folds in Cd) for the TTT aero-tuck position",
+        float,
+    ),
     "STD_CDA_COEF": (
         0.0400,
         "Leading coefficient of the CdA estimate for general road/climbing racing "

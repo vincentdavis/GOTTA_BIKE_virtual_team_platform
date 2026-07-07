@@ -2,17 +2,19 @@
 
 import csv
 import json
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import path
 from django.utils.html import format_html
 
 from apps.accounts.models import GuildMember, Permissions, User, YouTubeVideo
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
 
 
 @admin.register(User)

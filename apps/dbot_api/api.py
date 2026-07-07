@@ -4,7 +4,7 @@ from datetime import timedelta
 
 import logfire
 from constance import config as constance_config
-from django.http import HttpRequest
+from django.http import HttpRequest  # noqa: TC002  # Django Ninja resolves endpoint annotations at runtime
 from django.urls import reverse
 from django.utils import timezone
 from ninja import NinjaAPI, Schema

@@ -24,30 +24,55 @@ class SiteSettingsAdmin(admin.ModelAdmin):
     readonly_fields = ("date_modified",)
 
     def has_logo(self, obj):
-        """Check if logo is uploaded."""
+        """Check if logo is uploaded.
+
+        Returns:
+            True if a logo is uploaded, otherwise False.
+
+        """
         return bool(obj.site_logo)
 
     has_logo.boolean = True
     has_logo.short_description = "Logo"
 
     def has_hero_image(self, obj):
-        """Check if hero image is uploaded."""
+        """Check if hero image is uploaded.
+
+        Returns:
+            True if a hero image is uploaded, otherwise False.
+
+        """
         return bool(obj.hero_image)
 
     has_hero_image.boolean = True
     has_hero_image.short_description = "Hero Image"
 
     def has_verification_emojis(self, obj):
-        """Check if any verification emoji is uploaded."""
+        """Check if any verification emoji is uploaded.
+
+        Returns:
+            True if any verification emoji is uploaded, otherwise False.
+
+        """
         return bool(obj.not_verified_emoji or obj.verified_emoji or obj.extra_verified_emoji)
 
     has_verification_emojis.boolean = True
     has_verification_emojis.short_description = "Verification Emojis"
 
     def has_add_permission(self, request):
-        """Prevent adding new instances if one exists."""
+        """Prevent adding new instances if one exists.
+
+        Returns:
+            True if no instance exists yet, otherwise False.
+
+        """
         return not SiteSettings.objects.exists()
 
     def has_delete_permission(self, request, obj=None):
-        """Prevent deletion of the singleton."""
+        """Prevent deletion of the singleton.
+
+        Returns:
+            Always False to disallow deletion.
+
+        """
         return False

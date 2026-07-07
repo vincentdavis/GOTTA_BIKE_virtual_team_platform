@@ -73,7 +73,7 @@ class UserApiKey(models.Model):
 
     @property
     def is_active(self) -> bool:
-        """Return True if the key has not been revoked and has not expired.
+        """Whether the key has not been revoked and has not expired.
 
         Returns:
             True when revoked_at is None and expires_at is in the future.
@@ -83,10 +83,10 @@ class UserApiKey(models.Model):
 
     @property
     def is_revoked(self) -> bool:
-        """Return True if the key has been revoked."""
+        """Whether the key has been revoked."""
         return self.revoked_at is not None
 
     @property
     def is_expired(self) -> bool:
-        """Return True if the key has expired."""
+        """Whether the key has expired."""
         return self.expires_at <= timezone.now()

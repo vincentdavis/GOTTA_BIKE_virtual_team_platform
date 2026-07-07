@@ -1,12 +1,16 @@
 """Views for magic link authentication."""
 
+from typing import TYPE_CHECKING
+
 from django.contrib import messages
 from django.contrib.auth import login
-from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.views.decorators.http import require_GET
 
 from apps.magic_links.models import MagicLink
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest, HttpResponse
 
 
 @require_GET

@@ -729,7 +729,7 @@ class User(AbstractUser):
 
     @property
     def discord_avatar_url(self) -> str | None:
-        """Get the full Discord avatar URL.
+        """The full Discord avatar URL.
 
         Returns:
             The Discord CDN URL for the avatar, or None if no avatar.
@@ -831,7 +831,7 @@ class User(AbstractUser):
 
     @property
     def profile_completion_status(self) -> dict[str, bool]:
-        """Get detailed profile completion status for each required field.
+        """Detailed profile completion status for each required field.
 
         Returns:
             Dictionary mapping field names to completion status.
@@ -941,7 +941,7 @@ class GuildMember(models.Model):
 
     @property
     def avatar_url(self) -> str | None:
-        """Get the full Discord avatar URL.
+        """The full Discord avatar URL.
 
         Returns:
             The Discord CDN URL for the avatar, or None if no avatar.
@@ -1028,7 +1028,7 @@ class YouTubeVideo(models.Model):
 
     @property
     def url(self) -> str:
-        """Get the YouTube video URL.
+        """The YouTube video URL.
 
         Returns:
             Full YouTube watch URL.

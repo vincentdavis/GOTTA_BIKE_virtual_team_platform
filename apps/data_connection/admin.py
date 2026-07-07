@@ -1,15 +1,17 @@
 """Admin configuration for data_connection app."""
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from django.contrib import admin, messages
-from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import path
 
 from apps.data_connection import gs_client
 from apps.data_connection.models import DataConnection
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest, HttpResponse
 
 
 @admin.register(DataConnection)

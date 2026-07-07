@@ -6,6 +6,13 @@ from django.db import migrations
 
 
 def convert_date_forward(apps, schema_editor):
+    """Roll post-midnight availability cells forward by one day.
+
+    Args:
+        apps: Historical app registry for the migration state.
+        schema_editor: Database schema editor for the migration.
+
+    """
     AvailabilityResponse = apps.get_model("events", "AvailabilityResponse")
     for response in AvailabilityResponse.objects.all():
         for cell in response.available_cells:
@@ -22,6 +29,13 @@ def convert_date_forward(apps, schema_editor):
 
 
 def convert_date_reverse(apps, schema_editor):
+    """Roll post-midnight availability cells back by one day.
+
+    Args:
+        apps: Historical app registry for the migration state.
+        schema_editor: Database schema editor for the migration.
+
+    """
     AvailabilityResponse = apps.get_model("events", "AvailabilityResponse")
     for response in AvailabilityResponse.objects.all():
         for cell in response.available_cells:

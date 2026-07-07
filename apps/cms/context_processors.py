@@ -1,9 +1,13 @@
 """Context processors for CMS app."""
 
+from typing import TYPE_CHECKING
+
 from django.core.cache import cache
-from django.http import HttpRequest
 
 from apps.cms.models import Page
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest
 
 CMS_NAV_CACHE_PREFIX = "cms_nav_pages"
 CMS_NAV_CACHE_TIMEOUT = 300  # 5 minutes

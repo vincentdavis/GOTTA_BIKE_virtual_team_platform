@@ -246,7 +246,7 @@ class RaceReadyRecord(models.Model):
 
     @property
     def embed_url(self) -> str:
-        """Get the embed URL for YouTube or Vimeo videos.
+        """The embed URL for YouTube or Vimeo videos.
 
         Returns:
             Embed URL if applicable, otherwise empty string.
@@ -275,7 +275,7 @@ class RaceReadyRecord(models.Model):
 
     @property
     def validity_days(self) -> int:
-        """Get the validity period in days for this verification type.
+        """The validity period in days for this verification type.
 
         Returns:
             Number of days the verification is valid (0 = forever).
@@ -293,7 +293,7 @@ class RaceReadyRecord(models.Model):
 
     @property
     def expires_date(self) -> date | None:
-        """Get the expiration date for this verification.
+        """The expiration date for this verification.
 
         Expiration is calculated from record_date (the date of the evidence),
         not the date it was reviewed.
@@ -336,7 +336,7 @@ class RaceReadyRecord(models.Model):
 
     @property
     def days_remaining(self) -> int | None:
-        """Get the number of days remaining until expiration.
+        """The number of days remaining until expiration.
 
         Returns:
             Days remaining (negative if expired), None if never expires or not verified.
@@ -350,7 +350,7 @@ class RaceReadyRecord(models.Model):
 
     @property
     def validity_status(self) -> str:
-        """Get a human-readable validity status.
+        """A human-readable validity status.
 
         Returns:
             Status string: 'Valid (X days)', 'Expired', 'Never expires', or 'Not verified'.
@@ -496,7 +496,7 @@ class TeamLink(models.Model):
 
     @property
     def link_types_display(self) -> str:
-        """Return comma-separated display names of link types.
+        """Comma-separated display names of link types.
 
         Returns:
             Formatted string of link type labels.
@@ -596,7 +596,7 @@ class DiscordRole(models.Model):
 
     @property
     def color_hex(self) -> str:
-        """Return the role color as a hex string.
+        """The role color as a hex string.
 
         Returns:
             Hex color string (e.g., '#3498db') or empty if no color.
@@ -747,7 +747,7 @@ class RosterFilter(models.Model):
 
     @property
     def member_count(self) -> int:
-        """Get the number of Discord IDs in this filter.
+        """The number of Discord IDs in this filter.
 
         Returns:
             Count of Discord IDs.
@@ -1058,7 +1058,7 @@ class MembershipApplication(models.Model):
 
     @property
     def display_name(self) -> str:
-        """Return the best display name available.
+        """The best display name available.
 
         Returns:
             Server nickname if set, otherwise Discord username.
@@ -1068,7 +1068,7 @@ class MembershipApplication(models.Model):
 
     @property
     def full_name(self) -> str:
-        """Return full name if available.
+        """Full name if available.
 
         Returns:
             Combined first and last name, or partial if only one set.
@@ -1120,7 +1120,7 @@ class MembershipApplication(models.Model):
 
     @property
     def profile_completion_status(self) -> dict[str, bool]:
-        """Get detailed profile completion status for recommended fields.
+        """Detailed profile completion status for recommended fields.
 
         Returns:
             Dictionary mapping field names to completion status.

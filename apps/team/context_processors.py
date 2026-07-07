@@ -1,11 +1,15 @@
 """Context processors for team app."""
 
+from typing import TYPE_CHECKING
+
 import logfire
 from django.core.cache import cache
 from django.db.models import Q
-from django.http import HttpRequest
 
 from apps.team.models import RaceReadyRecord
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest
 
 PENDING_VERIFICATION_CACHE_PREFIX = "pending_verification_count:v1"
 PENDING_VERIFICATION_CACHE_TIMEOUT = 60  # seconds

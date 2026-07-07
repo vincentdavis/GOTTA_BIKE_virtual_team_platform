@@ -57,7 +57,7 @@ class ClubActivity(models.Model):
 
     @property
     def distance_km(self) -> float:
-        """Return distance in kilometers.
+        """Distance in kilometers.
 
         Returns:
             Distance converted to kilometers.
@@ -67,7 +67,7 @@ class ClubActivity(models.Model):
 
     @property
     def distance_miles(self) -> float:
-        """Return distance in miles.
+        """Distance in miles.
 
         Returns:
             Distance converted to miles.
@@ -77,7 +77,7 @@ class ClubActivity(models.Model):
 
     @property
     def moving_time_formatted(self) -> str:
-        """Return moving time as HH:MM:SS string.
+        """Moving time as HH:MM:SS string.
 
         Returns:
             Formatted time string.
@@ -91,7 +91,7 @@ class ClubActivity(models.Model):
 
     @property
     def elevation_gain_ft(self) -> float | None:
-        """Return elevation gain in feet.
+        """Elevation gain in feet.
 
         Returns:
             Elevation converted to feet, or None if no elevation data.

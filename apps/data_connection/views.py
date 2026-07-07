@@ -1,12 +1,12 @@
 """Views for data_connection app."""
 
 import contextlib
+from typing import TYPE_CHECKING
 
 import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
-from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -16,6 +16,9 @@ from apps.data_connection import gs_client
 from apps.data_connection.forms import DataConnectionFilterForm, DataConnectionForm
 from apps.data_connection.gs_client import GSClientError, GSSpreadsheetNotFoundError
 from apps.data_connection.models import DataConnection
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest, HttpResponse
 
 
 @login_required

@@ -220,7 +220,7 @@ class Page(models.Model):
 
     @property
     def display_nav_title(self) -> str:
-        """Return the title to display in navigation.
+        """The title to display in navigation.
 
         Returns:
             nav_title if set, otherwise title.
@@ -230,7 +230,7 @@ class Page(models.Model):
 
     @property
     def display_hero_title(self) -> str:
-        """Return the title to display in the hero section.
+        """The title to display in the hero section.
 
         Returns:
             hero_title if set, otherwise title.

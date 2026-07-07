@@ -1,7 +1,7 @@
 """API endpoints for analytics tracking."""
 
 import logfire
-from django.http import HttpRequest
+from django.http import HttpRequest  # noqa: TC002  # Django Ninja resolves endpoint annotations at runtime
 from ninja import NinjaAPI, Schema
 
 from apps.analytics.models import PageVisit

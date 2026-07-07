@@ -1,7 +1,7 @@
 """Views for team app."""
 
-import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 import logfire
@@ -37,6 +37,9 @@ from apps.team.tasks import notify_application_update, notify_captains_verificat
 from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
+
+if TYPE_CHECKING:
+    import uuid
 
 
 def _format_field_value_for_notification(field_name: str, value) -> str:

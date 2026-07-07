@@ -1,3 +1,5 @@
+"""Utility helpers for resolving Zwift account data."""
+
 from urllib.parse import urlencode
 
 import httpx

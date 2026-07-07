@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 import logfire
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
@@ -18,6 +18,9 @@ from apps.accounts.decorators import team_member_required
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPEvent, ZPRiderResults, ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest, HttpResponse
 
 User = get_user_model()
 

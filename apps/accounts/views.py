@@ -107,7 +107,12 @@ def profile_view(request: HttpRequest) -> HttpResponse:
 
     # Build required verification summary with status
     required_types = get_user_required_verification_types(request.user)
-    type_labels = {"weight_full": "Weight (Full)", "weight_light": "Weight (Light)", "height": "Height", "power": "Power"}
+    type_labels = {
+        "weight_full": "Weight (Full)",
+        "weight_light": "Weight (Light)",
+        "height": "Height",
+        "power": "Power",
+    }
     verified_records = request.user.race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
     pending_records = request.user.race_ready_records.filter(status=RaceReadyRecord.Status.PENDING)
     latest_verified = {}
@@ -216,7 +221,12 @@ def verification_view(request: HttpRequest) -> HttpResponse:
             latest_verified[record.verify_type] = record
 
     required_types = get_user_required_verification_types(request.user)
-    type_labels = {"weight_full": "Weight (Full)", "weight_light": "Weight (Light)", "height": "Height", "power": "Power"}
+    type_labels = {
+        "weight_full": "Weight (Full)",
+        "weight_light": "Weight (Light)",
+        "height": "Height",
+        "power": "Power",
+    }
     required_summary = []
     for vtype in required_types:
         record = latest_verified.get(vtype)

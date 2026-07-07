@@ -42,7 +42,7 @@ class ZPClient:
 
     @property
     def session(self) -> httpx.Client | None:
-        """Return the current session."""
+        """The current session."""
         return self._session
 
     def close(self) -> None:
@@ -223,7 +223,9 @@ class ZPClient:
 
         team_riders url: https://zwiftpower.com/api3.php?do=team_riders&id=11991
 
-        returns the list of team_riders
+        Returns:
+            The list of team_riders.
+
         """
         self.init_client()
         if team_id is None:

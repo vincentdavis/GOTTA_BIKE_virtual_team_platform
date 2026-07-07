@@ -11,7 +11,7 @@ def backfill_record_date(apps, schema_editor):
     default_date = date(2026, 1, 1)
     updated = RaceReadyRecord.objects.filter(record_date__isnull=True).update(record_date=default_date)
     if updated:
-        print(f"  Backfilled {updated} RaceReadyRecord(s) with record_date={default_date}")
+        print(f"  Backfilled {updated} RaceReadyRecord(s) with record_date={default_date}")  # noqa: T201  # migration progress output
 
 
 def reverse_backfill(apps, schema_editor):

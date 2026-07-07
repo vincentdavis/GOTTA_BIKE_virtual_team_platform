@@ -261,22 +261,22 @@ class UnifiedRider:
 
     @property
     def display_name(self) -> str:
-        """Return best available name."""
+        """Best available name."""
         return self.zp_name or self.zr_name or self.username or f"Rider {self.zwid}"
 
     @property
     def zp_category(self) -> str:
-        """Return ZwiftPower category letter from division number."""
+        """ZwiftPower category letter from division number."""
         return ZP_DIV_TO_CATEGORY.get(self.zp_div, "")
 
     @property
     def zp_category_w(self) -> str:
-        """Return ZwiftPower women's category letter from division number."""
+        """ZwiftPower women's category letter from division number."""
         return ZP_DIV_TO_CATEGORY.get(self.zp_divw, "")
 
     @property
     def gender(self) -> str:
-        """Return gender with fallback logic.
+        """Gender with fallback logic.
 
         Priority: user profile gender > ZP divw (if > 0 = F, else M).
 
@@ -313,7 +313,7 @@ class UnifiedRider:
 
     @property
     def membership_status(self) -> str:
-        """Return detailed membership status.
+        """Detailed membership status.
 
         Returns:
             One of: 'both', 'zp_only', 'zr_only', 'left', 'none'
@@ -343,7 +343,7 @@ class UnifiedRider:
 
     @property
     def member_since(self) -> str:
-        """Return human-readable duration since guild join.
+        """Human-readable duration since guild join.
 
         Returns:
             String like '2y 3m' or '--' if no join date.
@@ -364,7 +364,7 @@ class UnifiedRider:
 
     @property
     def member_since_sort_key(self) -> int:
-        """Return sortable value for member since (days since join, 0 if unknown)."""
+        """Sortable value for member since (days since join, 0 if unknown)."""
         if not self.guild_joined_at:
             return 0
         from django.utils import timezone
@@ -549,17 +549,17 @@ class PerformanceRider:
 
     @property
     def zp_category(self) -> str:
-        """Return ZwiftPower category letter from division number."""
+        """ZwiftPower category letter from division number."""
         return ZP_DIV_TO_CATEGORY.get(self.zp_div, "")
 
     @property
     def zp_category_w(self) -> str:
-        """Return ZwiftPower women's category letter from division number."""
+        """ZwiftPower women's category letter from division number."""
         return ZP_DIV_TO_CATEGORY.get(self.zp_divw, "")
 
     @property
     def latest_verification_weight(self) -> Decimal | None:
-        """Return the most recent verification weight (full or light)."""
+        """The most recent verification weight (full or light)."""
         if self.weight_full_date and self.weight_light_date:
             if self.weight_full_date >= self.weight_light_date:
                 return self.weight_full_value
@@ -877,12 +877,12 @@ class MembershipReviewRider:
 
     @property
     def zp_category(self) -> str:
-        """Return ZwiftPower category letter from division number."""
+        """ZwiftPower category letter from division number."""
         return ZP_DIV_TO_CATEGORY.get(self.zp_div, "")
 
     @property
     def days_since_result(self) -> int | None:
-        """Return days since last result, or None if no results."""
+        """Days since last result, or None if no results."""
         if not self.last_result_date:
             return None
         from django.utils import timezone
@@ -891,7 +891,7 @@ class MembershipReviewRider:
 
     @property
     def days_since_zp_left(self) -> int | None:
-        """Return days since rider left ZwiftPower, or None if still active."""
+        """Days since rider left ZwiftPower, or None if still active."""
         if not self.zp_date_left:
             return None
         from django.utils import timezone
@@ -900,7 +900,7 @@ class MembershipReviewRider:
 
     @property
     def guild_membership_duration(self) -> str:
-        """Return formatted guild membership duration as 'Xy Xd'."""
+        """Formatted guild membership duration as 'Xy Xd'."""
         if not self.guild_joined_at:
             return ""
         from django.utils import timezone
@@ -914,7 +914,7 @@ class MembershipReviewRider:
 
     @property
     def guild_membership_days(self) -> int | None:
-        """Return total days of guild membership, or None if unknown."""
+        """Total days of guild membership, or None if unknown."""
         if not self.guild_joined_at:
             return None
         from django.utils import timezone
@@ -922,7 +922,7 @@ class MembershipReviewRider:
 
     @property
     def discord_profile_url(self) -> str:
-        """Return Discord profile URL for this user."""
+        """Discord profile URL for this user."""
         if self.discord_id:
             return f"https://discord.com/users/{self.discord_id}"
         return ""
@@ -944,7 +944,7 @@ class MembershipReviewRider:
 
     @property
     def membership_status(self) -> str:
-        """Return detailed membership status.
+        """Detailed membership status.
 
         Returns:
             One of: 'both', 'zp_only', 'zr_only', 'left', 'none'

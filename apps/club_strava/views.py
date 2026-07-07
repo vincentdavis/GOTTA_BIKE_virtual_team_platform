@@ -1,15 +1,19 @@
 """Views for club_strava app."""
 
+from typing import TYPE_CHECKING
+
 import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.decorators import team_member_required
 from apps.club_strava.models import ClubActivity
 from apps.club_strava.strava_client import sync_club_activities
+
+if TYPE_CHECKING:
+    from django.http import HttpRequest, HttpResponse
 
 
 @login_required

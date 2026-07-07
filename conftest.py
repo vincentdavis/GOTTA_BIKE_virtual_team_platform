@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from apps.accounts.models import User as UserType
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(autouse=True)  # noqa: RUF076  # must apply to every test that renders templates
 def _use_plain_static_storage(settings):
     """Swap WhiteNoise manifest storage for plain storage during tests.
 

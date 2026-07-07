@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def allowed_hosts(self) -> list[str]:
-        """Get allowed hosts as a list.
+        """Allowed hosts as a list.
 
         Returns:
             List of allowed host strings.
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def internal_ips(self) -> list[str]:
-        """Get internal IPs as a list.
+        """Internal IPs as a list.
 
         Returns:
             List of internal IP strings.
@@ -141,7 +141,7 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_allowed_origins(self) -> list[str]:
-        """Get CORS allowed origins as a list.
+        """CORS allowed origins as a list.
 
         Returns:
             List of allowed origin strings.

@@ -6,7 +6,12 @@ import sys
 
 
 def main():
-    """Run administrative tasks."""
+    """Run administrative tasks.
+
+    Raises:
+        ImportError: If Django is not installed or not on the PYTHONPATH.
+
+    """
     os.environ.setdefault(
         "DJANGO_SETTINGS_MODULE", "gotta_bike_platform.settings"
     )

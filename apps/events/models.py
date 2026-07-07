@@ -570,12 +570,12 @@ class Squad(models.Model):
 
     @property
     def captain_pks(self) -> set[int]:
-        """Return the set of captain user PKs (uses prefetched ``captains`` when available)."""
+        """The set of captain user PKs (uses prefetched ``captains`` when available)."""
         return {u.pk for u in self.captains.all()}
 
     @property
     def vice_captain_pks(self) -> set[int]:
-        """Return the set of vice-captain user PKs (uses prefetched ``vice_captains`` when available)."""
+        """The set of vice-captain user PKs (uses prefetched ``vice_captains`` when available)."""
         return {u.pk for u in self.vice_captains.all()}
 
     def is_leader(self, user) -> bool:
@@ -594,7 +594,7 @@ class Squad(models.Model):
 
     @property
     def zr_requirement_text(self) -> str:
-        """Return a human description of the enforced ZR category bounds (empty if none enforced).
+        """A human description of the enforced ZR category bounds (empty if none enforced).
 
         ZR tiers rank Diamond (strongest) to Copper (weakest). ``min_zwift_racing_category`` is the
         weakest tier allowed and ``max_zwift_racing_category`` is the strongest tier allowed.
@@ -778,7 +778,7 @@ class Squad(models.Model):
 
     @property
     def enforcement_summary(self) -> list[str]:
-        """Return short labels for each membership requirement this squad enforces.
+        """Short labels for each membership requirement this squad enforces.
 
         Used to show enforcement status on the squad list. Empty when nothing is enforced.
         """
@@ -986,7 +986,7 @@ class AvailabilityGrid(models.Model):
 
     @property
     def dates(self) -> list[str]:
-        """Return list of date strings from start_date to end_date.
+        """List of date strings from start_date to end_date.
 
         Returns:
             List of "YYYY-MM-DD" strings for each day in the grid range.
@@ -1001,7 +1001,7 @@ class AvailabilityGrid(models.Model):
 
     @property
     def response_count(self) -> int:
-        """Return the number of responses for this grid.
+        """The number of responses for this grid.
 
         Returns:
             Count of AvailabilityResponse objects linked to this grid.
@@ -1253,7 +1253,7 @@ class AvailabilitySlotSelection(models.Model):
 
     @property
     def race_datetime_utc(self) -> datetime:
-        """Return the race start as a tz-aware UTC datetime (combining slot_date + slot_time)."""
+        """The race start as a tz-aware UTC datetime (combining slot_date + slot_time)."""
         try:
             slot_t = time.fromisoformat(self.slot_time)
         except ValueError:
@@ -1262,7 +1262,7 @@ class AvailabilitySlotSelection(models.Model):
 
     @property
     def powerup_objects(self) -> list:
-        """Return the enabled ``PowerUp`` records, in their configured display order.
+        """The enabled ``PowerUp`` records, in their configured display order.
 
         Resolves the stored slugs against ``ttt_planner.PowerUp``. Unknown slugs
         (e.g. a power-up later deleted) are skipped.
@@ -1280,7 +1280,7 @@ class AvailabilitySlotSelection(models.Model):
 
     @property
     def powerup_labels(self) -> list[str]:
-        """Return the enabled power-up names, in their configured display order."""
+        """The enabled power-up names, in their configured display order."""
         return [p.name for p in self.powerup_objects]
 
 
