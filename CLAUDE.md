@@ -351,6 +351,7 @@ Tests use **pytest + pytest-django**. Config lives in `[tool.pytest.ini_options]
 - Discovery: `tests.py`, `test_*.py`, `*_tests.py` under `apps/` and `gotta_bike_platform/`.
 - Test DB is built from current model state via `--no-migrations` (migrations are **not** replayed). `--reuse-db` keeps the test DB between runs — pass `--create-db` after a model change to force regeneration.
 - Why `--no-migrations`: a latent bug in `apps/accounts/migrations/0013_add_is_race_ready_cached_field.py` makes fresh migrations fail (the data migration imports the live `User` model, which selects columns added in 0017). Production missed this because 0013 ran before 0017 was created. Tracked in TODO.md P0; remove `--no-migrations` once fixed.
+- **Gotcha — a green test run does not mean your local dev DB is migrated.** Because tests build their schema from model state (`--no-migrations`), a new migration you just created can pass every test while the running dev server still errors with `OperationalError: no such column ...`. After `makemigrations`, always run `uv run python manage.py migrate` before hitting the app locally. (Production/Railway applies migrations on deploy, so this is a local-only trap.)
 
 ### Shared fixtures (`conftest.py`)
 
