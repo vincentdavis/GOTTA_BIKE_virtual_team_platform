@@ -355,6 +355,81 @@ def test_detail_page_renders(auth_client, team_member):
 
 
 @pytest.mark.django_db
+def test_matchup_list_default_order_most_recently_modified_first(auth_client, team_member):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    older = _make_matchup(team_member, name="Older")
+    newer = _make_matchup(team_member, name="Newer")
+    # auto_now stamps both near-identically; force a clear gap via .update (bypasses auto_now).
+    now = timezone.now()
+    LadderMatchup.objects.filter(pk=older.pk).update(updated_at=now - timedelta(days=2))
+    LadderMatchup.objects.filter(pk=newer.pk).update(updated_at=now)
+
+    body = auth_client.get("/ladder/").content.decode()
+    assert body.index("Newer") < body.index("Older")
+
+
+@pytest.mark.django_db
+def test_matchup_list_sort_by_name_ascending(auth_client, team_member):
+    _make_matchup(team_member, name="Bravo")
+    _make_matchup(team_member, name="Alpha")
+
+    body = auth_client.get("/ladder/?my_sort=name&my_dir=asc").content.decode()
+    assert body.index("Alpha") < body.index("Bravo")
+
+    body_desc = auth_client.get("/ladder/?my_sort=name&my_dir=desc").content.decode()
+    assert body_desc.index("Bravo") < body_desc.index("Alpha")
+
+
+@pytest.mark.django_db
+def test_matchup_list_unknown_sort_falls_back_to_updated(auth_client, team_member):
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    older = _make_matchup(team_member, name="Older")
+    newer = _make_matchup(team_member, name="Newer")
+    now = timezone.now()
+    LadderMatchup.objects.filter(pk=older.pk).update(updated_at=now - timedelta(days=2))
+    LadderMatchup.objects.filter(pk=newer.pk).update(updated_at=now)
+
+    # Bogus column + direction must not error and must keep the recency default.
+    body = auth_client.get("/ladder/?my_sort=bogus&my_dir=sideways").content.decode()
+    assert body.index("Newer") < body.index("Older")
+
+
+@pytest.mark.django_db
+def test_matchup_lists_sort_independently(auth_client, team_member, user_model):
+    other_user = user_model.objects.create(username="ladder_other", discord_nickname="Zed")
+    _make_matchup(team_member, name="MyBravo")
+    _make_matchup(team_member, name="MyAlpha")
+    _make_matchup(other_user, name="OtherBravo")
+    _make_matchup(other_user, name="OtherAlpha")
+
+    # Sort only my list by name asc; the other list keeps its own (default) order.
+    body = auth_client.get("/ladder/?my_sort=name&my_dir=asc").content.decode()
+    mine = body.split("Other team members' matchups", 1)[0]
+    assert mine.index("MyAlpha") < mine.index("MyBravo")
+    # My list's header links must preserve the other list's namespaced sort params.
+    assert "other_sort=" in mine
+
+
+@pytest.mark.django_db
+def test_matchup_list_headers_are_sortable_for_both_lists(auth_client, team_member, user_model):
+    other_user = user_model.objects.create(username="ladder_other2", discord_nickname="Zed")
+    _make_matchup(team_member, name="Mine")
+    _make_matchup(other_user, name="Theirs")
+
+    body = auth_client.get("/ladder/").content.decode()
+    assert "my_sort=name" in body
+    assert "my_sort=updated" in body
+    assert "other_sort=name" in body
+    assert "other_sort=created_by" in body
+
+
+@pytest.mark.django_db
 def test_velo2_comparison_advantage_row_is_column_aligned(auth_client, team_member):
     from django.urls import reverse
 

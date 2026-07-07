@@ -55,7 +55,15 @@
       <div class="overflow-x-auto">
         <table class="table table-zebra">
           <thead>
-            <tr><th>Name</th><th>Our team</th><th>Opponent</th><th>Profile</th><th class="text-right">Riders</th><th>Updated</th><th></th></tr>
+            <tr>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="my" key="name" label="Name" default_dir="asc" cur_sort=my_sort cur_dir=my_dir keep_qs=my_keep_qs %}</th>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="my" key="our_team" label="Our team" default_dir="asc" cur_sort=my_sort cur_dir=my_dir keep_qs=my_keep_qs %}</th>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="my" key="opponent" label="Opponent" default_dir="asc" cur_sort=my_sort cur_dir=my_dir keep_qs=my_keep_qs %}</th>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="my" key="profile" label="Profile" default_dir="asc" cur_sort=my_sort cur_dir=my_dir keep_qs=my_keep_qs %}</th>
+              <th class="text-right">{% include "ladder_planner/_sort_link.html" with prefix="my" key="riders" label="Riders" cur_sort=my_sort cur_dir=my_dir keep_qs=my_keep_qs %}</th>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="my" key="updated" label="Updated" cur_sort=my_sort cur_dir=my_dir keep_qs=my_keep_qs %}</th>
+              <th></th>
+            </tr>
           </thead>
           <tbody>
             {% for m in matchups %}
@@ -87,7 +95,15 @@
       <div class="overflow-x-auto">
         <table class="table table-zebra">
           <thead>
-            <tr><th>Name</th><th>Created by</th><th>Our team</th><th>Opponent</th><th>Profile</th><th class="text-right">Riders</th><th>Updated</th></tr>
+            <tr>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="other" key="name" label="Name" default_dir="asc" cur_sort=other_sort cur_dir=other_dir keep_qs=other_keep_qs %}</th>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="other" key="created_by" label="Created by" default_dir="asc" cur_sort=other_sort cur_dir=other_dir keep_qs=other_keep_qs %}</th>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="other" key="our_team" label="Our team" default_dir="asc" cur_sort=other_sort cur_dir=other_dir keep_qs=other_keep_qs %}</th>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="other" key="opponent" label="Opponent" default_dir="asc" cur_sort=other_sort cur_dir=other_dir keep_qs=other_keep_qs %}</th>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="other" key="profile" label="Profile" default_dir="asc" cur_sort=other_sort cur_dir=other_dir keep_qs=other_keep_qs %}</th>
+              <th class="text-right">{% include "ladder_planner/_sort_link.html" with prefix="other" key="riders" label="Riders" cur_sort=other_sort cur_dir=other_dir keep_qs=other_keep_qs %}</th>
+              <th>{% include "ladder_planner/_sort_link.html" with prefix="other" key="updated" label="Updated" cur_sort=other_sort cur_dir=other_dir keep_qs=other_keep_qs %}</th>
+            </tr>
           </thead>
           <tbody>
             {% for m in other_matchups %}

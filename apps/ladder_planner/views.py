@@ -18,6 +18,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.http import urlencode
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.decorators import team_member_required
@@ -141,23 +142,78 @@ def _next_order(matchup: LadderMatchup, side: str) -> int:
     return (last.order + 1) if last else 0
 
 
+# Whitelist of sortable columns -> (ascending, descending) ORM expressions.
+# `rider_count` is the Count("riders") annotation added in the view.
+LADDER_MATCHUP_SORT: dict[str, tuple[str, str]] = {
+    "name": ("name", "-name"),
+    "created_by": ("created_by__discord_nickname", "-created_by__discord_nickname"),
+    "our_team": ("our_team_name", "-our_team_name"),
+    "opponent": ("opponent_team_name", "-opponent_team_name"),
+    "profile": ("course_profile", "-course_profile"),
+    "riders": ("rider_count", "-rider_count"),
+    "updated": ("updated_at", "-updated_at"),
+}
+
+
+def _resolve_ladder_sort(raw_sort: str, raw_dir: str) -> tuple[str, str, str]:
+    """Resolve a matchup-list sort request against the whitelist.
+
+    Falls back to ``updated`` descending (most recently modified first) for any
+    unknown column or direction.
+
+    Args:
+        raw_sort: The raw sort-key querystring value.
+        raw_dir: The raw direction querystring value.
+
+    Returns:
+        Tuple of (resolved key, resolved direction, ORM order_by expression).
+
+    """
+    key = raw_sort if raw_sort in LADDER_MATCHUP_SORT else "updated"
+    direction = raw_dir if raw_dir in {"asc", "desc"} else "desc"
+    expr = LADDER_MATCHUP_SORT[key][0 if direction == "asc" else 1]
+    return key, direction, expr
+
+
 @login_required
 @team_member_required(raise_exception=True)
 @require_GET
 def matchup_list(request: HttpRequest) -> HttpResponse:
     """List ladder matchups: the current user's first, then other members'.
 
+    Each list sorts independently via namespaced querystring params
+    (``my_sort``/``my_dir`` and ``other_sort``/``other_dir``). Both default to
+    most-recently-modified first.
+
     Returns:
         The matchup list page.
 
     """
     all_matchups = LadderMatchup.objects.annotate(rider_count=Count("riders")).select_related("created_by")
-    matchups = all_matchups.filter(created_by=request.user)
-    other_matchups = all_matchups.exclude(created_by=request.user)
+
+    my_sort, my_dir, my_expr = _resolve_ladder_sort(request.GET.get("my_sort", ""), request.GET.get("my_dir", ""))
+    other_sort, other_dir, other_expr = _resolve_ladder_sort(
+        request.GET.get("other_sort", ""), request.GET.get("other_dir", "")
+    )
+
+    # `pk` is a stable tiebreaker so equal sort values keep a deterministic order.
+    matchups = all_matchups.filter(created_by=request.user).order_by(my_expr, "pk")
+    other_matchups = all_matchups.exclude(created_by=request.user).order_by(other_expr, "pk")
+
     return render(
         request,
         "ladder_planner/list.html",
-        {"matchups": matchups, "other_matchups": other_matchups},
+        {
+            "matchups": matchups,
+            "other_matchups": other_matchups,
+            "my_sort": my_sort,
+            "my_dir": my_dir,
+            "other_sort": other_sort,
+            "other_dir": other_dir,
+            # Each list's header links preserve the other list's current sort.
+            "my_keep_qs": urlencode({"other_sort": other_sort, "other_dir": other_dir}),
+            "other_keep_qs": urlencode({"my_sort": my_sort, "my_dir": my_dir}),
+        },
     )
 
 

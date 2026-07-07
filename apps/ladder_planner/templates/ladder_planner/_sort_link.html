@@ -1,0 +1,15 @@
+{% comment %}
+Sortable column header for the matchup lists. Two independent lists share one
+page, so sort params are namespaced by `prefix` (my / other).
+Required: prefix, key, label, cur_sort, cur_dir, keep_qs (the other list's sort params).
+Optional: default_dir (asc|desc, default desc) for the first click.
+{% endcomment %}
+{% if key == cur_sort %}
+  {% if cur_dir == "asc" %}
+  <a class="link link-hover" href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}{{ prefix }}_sort={{ key }}&{{ prefix }}_dir=desc">{{ label }} ▲</a>
+  {% else %}
+  <a class="link link-hover" href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}{{ prefix }}_sort={{ key }}&{{ prefix }}_dir=asc">{{ label }} ▼</a>
+  {% endif %}
+{% else %}
+<a class="link link-hover" href="?{% if keep_qs %}{{ keep_qs }}&{% endif %}{{ prefix }}_sort={{ key }}&{{ prefix }}_dir={{ default_dir|default:'desc' }}">{{ label }}</a>
+{% endif %}
