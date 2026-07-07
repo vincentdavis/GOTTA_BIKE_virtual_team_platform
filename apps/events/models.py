@@ -122,6 +122,10 @@ class Event(models.Model):
         default=False,
         help_text="Require squad gender preference at signup (also gates whether the field appears)",
     )
+    require_race_verified_availability = models.BooleanField(
+        default=False,
+        help_text="Require Race Verified status before a member can submit availability for this event",
+    )
     logo = models.ImageField(upload_to="event_logos/", blank=True, help_text="Optional logo image for the event")
     url = models.URLField(max_length=500, blank=True, help_text="External URL for event details or signup")
     discord_channel_id = models.BigIntegerField(

@@ -3560,7 +3560,28 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
         messages.error(request, "This availability grid is not open for responses.")
         return redirect("events:event_detail", pk=event_pk)
 
+    race_verified_required = bool(event.require_race_verified_availability)
+    user_is_race_ready = bool(getattr(request.user, "is_race_ready", False))
+
     if request.method == "POST":
+        if race_verified_required and not user_is_race_ready:
+            logfire.warning(
+                "Availability submission blocked: race verified required",
+                grid_id=str(grid.id),
+                squad_id=squad_pk,
+                event_id=event_pk,
+                user_id=request.user.id,
+            )
+            return JsonResponse(
+                {
+                    "error": (
+                        "You must be Race Verified to submit availability for this event. "
+                        "Complete your verification and try again."
+                    )
+                },
+                status=403,
+            )
+
         try:
             data = json.loads(request.body)
         except json.JSONDecodeError, ValueError:
@@ -3659,6 +3680,8 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
             "tz_is_default": tz_is_default,
             "existing_max_races": existing_response.max_races if existing_response else None,
             "existing_rest_days": existing_response.rest_days if existing_response else None,
+            "race_verified_required": race_verified_required,
+            "user_is_race_ready": user_is_race_ready,
         },
     )
 

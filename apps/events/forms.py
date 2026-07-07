@@ -144,6 +144,7 @@ class EventForm(forms.ModelForm):
             "timezone_options",
             "timezone_required",
             "squad_gender_required",
+            "require_race_verified_availability",
         ]
         widgets: ClassVar[dict] = {
             "title": forms.TextInput(
@@ -194,6 +195,9 @@ class EventForm(forms.ModelForm):
                 attrs={"class": "checkbox"},
             ),
             "squad_gender_required": forms.CheckboxInput(
+                attrs={"class": "checkbox"},
+            ),
+            "require_race_verified_availability": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
         }
