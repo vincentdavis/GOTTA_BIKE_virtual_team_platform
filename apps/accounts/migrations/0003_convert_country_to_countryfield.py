@@ -12,7 +12,6 @@ def set_all_countries_to_us(apps, schema_editor):
 
 def reverse_noop(apps, schema_editor):
     """No-op reverse migration - country values cannot be restored."""
-    pass
 
 
 class Migration(migrations.Migration):

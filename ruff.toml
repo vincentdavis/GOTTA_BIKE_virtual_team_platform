@@ -9,6 +9,22 @@ select = [
     "B",
     # flake8-comprehensions
     "C4",
+    # flake8-builtins (shadowing builtins)
+    "A",
+    # flake8-pie (misc lints)
+    "PIE",
+    # flake8-raise (unnecessary parens on raise)
+    "RSE",
+    # flake8-tidy-imports (ban relative imports)
+    "TID",
+    # flake8-future-annotations
+    "FA",
+    # flake8-2020 (sys.version misuse)
+    "YTT",
+    # Pylint errors only (genuine bugs, no style opinions)
+    "PLE",
+    # pygrep-hooks (blanket noqa/type-ignore, eval)
+    "PGH",
     #pydoclint
     "DOC",
     # pydocstyle

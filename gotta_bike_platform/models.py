@@ -219,7 +219,6 @@ class SiteSettings(models.Model):
 
     def delete(self, *args, **kwargs):
         """Prevent deletion of the singleton instance."""
-        pass
 
     @classmethod
     def get_settings(cls) -> SiteSettings:
