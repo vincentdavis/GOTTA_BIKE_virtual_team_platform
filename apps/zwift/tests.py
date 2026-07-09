@@ -53,7 +53,7 @@ def test_zauth_shows_not_connected_with_connect_button(logged_in_client, monkeyp
     resp = logged_in_client.get(reverse("zwift:zauth"))
     assert resp.status_code == 200
     assert b"Not connected" in resp.content
-    assert b"Connect to Zwift" in resp.content
+    assert b"Connect with Zwift" in resp.content
 
 
 @pytest.mark.django_db

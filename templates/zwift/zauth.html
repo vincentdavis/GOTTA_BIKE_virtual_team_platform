@@ -1,17 +1,37 @@
 {% extends "base.html" %}
+{% load static %}
 
-{% block title %}Connect Zwift - The Coalition{% endblock %}
+{% block title %}Connect with Zwift - The Coalition{% endblock %}
 
 {% block content %}
   <div class="max-w-2xl mx-auto">
     <div class="card bg-base-200 shadow-xl">
       <div class="card-body">
-        <h2 class="card-title text-2xl mb-2">Zwift Connection</h2>
-        <p class="text-base-content/70 mb-6">
-          Connect your Zwift account so the team platform can access your official
-          Zwift activity and racing data. Your Zwift login is handled by Zwift —
-          we never see your password, and your access tokens are never stored on
-          this site.
+
+        {# Zwift Link partner lockup: "Zwift x <team>". Presented on a white #}
+        {# panel so the black Zwift wordmark stays legible in light and dark #}
+        {# themes (only the black "positive" mark is available as raster). #}
+        <div class="flex justify-center mb-6">
+          <div class="bg-white rounded-xl px-6 py-4 flex items-center gap-3 md:gap-4 shadow-sm">
+            <img src="{% static 'images/zwift/zwift-link-lockup.png' %}" alt="Zwift"
+                 class="h-7 md:h-9 object-contain">
+            {% if site_settings.site_logo %}
+              <img src="{{ site_settings.site_logo.url }}" alt="{{ config.TEAM_NAME }}"
+                   class="h-7 md:h-9 max-w-[10rem] object-contain">
+            {% else %}
+              <span class="text-neutral-900 font-black text-xl md:text-2xl tracking-tight">
+                {{ config.TEAM_NAME }}
+              </span>
+            {% endif %}
+          </div>
+        </div>
+
+        <h2 class="card-title text-2xl mb-2 justify-center text-center">Connect with Zwift</h2>
+        <p class="text-base-content/70 mb-6 text-center">
+          Use <span class="font-semibold">Zwift Link</span> to connect your Zwift account so
+          {{ config.TEAM_NAME }} can access your official Zwift activity and racing data. Your Zwift
+          login happens on Zwift — we never see your password, and your access tokens are never
+          stored on this site.
         </p>
 
         {% if not configured %}
@@ -21,7 +41,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
             </svg>
-            <span>Zwift connection isn't configured yet. Please check back later.</span>
+            <span>Zwift Link isn't configured yet. Please check back later.</span>
           </div>
 
         {% elif service_error %}
@@ -35,7 +55,7 @@
           </div>
 
         {% elif connected %}
-          <div class="flex items-center gap-3 mb-4">
+          <div class="flex justify-center mb-4">
             <div class="badge badge-success gap-2 py-3">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
                    viewBox="0 0 24 24" stroke="currentColor">
@@ -45,7 +65,7 @@
               Connected
             </div>
           </div>
-          <ul class="mb-6 space-y-1 text-sm">
+          <ul class="mb-6 space-y-1 text-sm text-center">
             {% if zwid %}
               <li><span class="text-base-content/60">Zwift ID:</span> <span class="font-mono">{{ zwid }}</span></li>
             {% endif %}
@@ -53,7 +73,7 @@
               <li><span class="text-base-content/60">Connected since:</span> {{ connected_at|slice:":10" }}</li>
             {% endif %}
           </ul>
-          <div class="card-actions">
+          <div class="card-actions justify-center">
             <form method="post" action="{% url 'zwift:zauth_disconnect' %}">
               {% csrf_token %}
               <button type="submit" class="btn btn-outline btn-error">Disconnect Zwift</button>
@@ -61,7 +81,7 @@
           </div>
 
         {% else %}
-          <div class="flex items-center gap-3 mb-6">
+          <div class="flex justify-center mb-6">
             <div class="badge badge-ghost gap-2 py-3">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
                    viewBox="0 0 24 24" stroke="currentColor">
@@ -71,10 +91,17 @@
               Not connected
             </div>
           </div>
-          <div class="card-actions">
+          <div class="card-actions justify-center">
             <form method="post" action="{% url 'zwift:zauth_connect' %}">
               {% csrf_token %}
-              <button type="submit" class="btn btn-primary">Connect to Zwift</button>
+              <button type="submit" class="btn btn-primary gap-2">
+                Connect with Zwift
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
+                     viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                </svg>
+              </button>
             </form>
           </div>
         {% endif %}
