@@ -46,6 +46,7 @@ urlpatterns = [
     path("accounts/", include("allauth.urls")),
     path("user/", include("apps.accounts.urls")),
     path("user/api-keys/", include("apps.user_api.urls")),
+    path("user/zauth/", include("apps.zwift.urls")),
     path("team/", include("apps.team.urls")),
     path("data-connections/", include("apps.data_connection.urls")),
     path("m/", include("apps.magic_links.urls")),

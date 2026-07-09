@@ -131,6 +131,20 @@ class Settings(BaseSettings):
         description="zwiftgopher.com API key (Bearer token) for the TTT optimize endpoint",
     )
 
+    # GOTTA_BIKE Zwift API service (official Zwift OAuth connect flow). The
+    # platform talks to this private microservice over the internal Railway
+    # network for the /user/zauth page. See apps/zwift/client.py.
+    zwift_api_base_url: str | None = Field(
+        default=None,
+        alias="ZWIFT_API_BASE_URL",
+        description="Base URL of the GOTTA_BIKE Zwift API service (internal Railway URL)",
+    )
+    zwift_app_api_key: str | None = Field(
+        default=None,
+        alias="ZWIFT_APP_API_KEY",
+        description="Per-app X-API-Key for the Zwift API service OAuth/status endpoints",
+    )
+
     # CORS
     cors_allowed_origins_str: str = Field(
         default="",

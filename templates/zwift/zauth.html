@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Connect Zwift - The Coalition{% endblock %}
+
+{% block content %}
+  <div class="max-w-2xl mx-auto">
+    <div class="card bg-base-200 shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title text-2xl mb-2">Zwift Connection</h2>
+        <p class="text-base-content/70 mb-6">
+          Connect your Zwift account so the team platform can access your official
+          Zwift activity and racing data. Your Zwift login is handled by Zwift —
+          we never see your password, and your access tokens are never stored on
+          this site.
+        </p>
+
+        {% if not configured %}
+          <div class="alert alert-warning">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <span>Zwift connection isn't configured yet. Please check back later.</span>
+          </div>
+
+        {% elif service_error %}
+          <div class="alert alert-error">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>We couldn't reach the Zwift service right now. Please try again in a moment.</span>
+          </div>
+
+        {% elif connected %}
+          <div class="flex items-center gap-3 mb-4">
+            <div class="badge badge-success gap-2 py-3">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
+                   viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              Connected
+            </div>
+          </div>
+          <ul class="mb-6 space-y-1 text-sm">
+            {% if zwid %}
+              <li><span class="text-base-content/60">Zwift ID:</span> <span class="font-mono">{{ zwid }}</span></li>
+            {% endif %}
+            {% if connected_at %}
+              <li><span class="text-base-content/60">Connected since:</span> {{ connected_at|slice:":10" }}</li>
+            {% endif %}
+          </ul>
+          <div class="card-actions">
+            <form method="post" action="{% url 'zwift:zauth_disconnect' %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline btn-error">Disconnect Zwift</button>
+            </form>
+          </div>
+
+        {% else %}
+          <div class="flex items-center gap-3 mb-6">
+            <div class="badge badge-ghost gap-2 py-3">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none"
+                   viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.656-6.656l1.5-1.5a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656 0"/>
+              </svg>
+              Not connected
+            </div>
+          </div>
+          <div class="card-actions">
+            <form method="post" action="{% url 'zwift:zauth_connect' %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary">Connect to Zwift</button>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
