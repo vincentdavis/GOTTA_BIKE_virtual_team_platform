@@ -440,6 +440,16 @@
   #ladder-body table.lfs-sm th, #ladder-body table.lfs-sm td { font-size: 0.80rem; line-height: 1.2rem; }
   #ladder-body table.lfs-lg th, #ladder-body table.lfs-lg td { font-size: 1.05rem; line-height: 1.5rem; }
   #ladder-body table.lfs-xl th, #ladder-body table.lfs-xl td { font-size: 1.30rem; line-height: 1.8rem; }
+
+  /* Applied to a tabpanel only while it is being captured as an image. Flips
+     scroll wrappers to visible so the full table is laid out (no clipped
+     scrollbars baked into the PNG), and stacks side-by-side grids so the
+     widened tables don't overlap each other. Removed immediately after. */
+  .ladder-capturing .overflow-x-auto,
+  .ladder-capturing .overflow-y-auto,
+  .ladder-capturing .overflow-auto { overflow: visible !important; }
+  .ladder-capturing .grid { display: block !important; }
+  .ladder-capturing .grid > * + * { margin-top: 1rem; }
 </style>
 <script>
   // Display preferences for all stat tables (the .tab-content tables): font size,
@@ -645,9 +655,31 @@
       if (typeof htmlToImage === "undefined") return;
       btn.dataset.icon = COPY_ICON;
       btn.disabled = true;
+
+      // Expand the panel to its full content so scrollbars/clipping aren't baked
+      // into the image. The class flips scroll wrappers to visible and stacks
+      // grids; we then pin the panel to its full scroll extent so html-to-image
+      // captures everything below and to the right of the visible viewport.
+      var prevWidth = panel.style.width;
+      var prevMaxWidth = panel.style.maxWidth;
+      panel.classList.add("ladder-capturing");
+      panel.style.maxWidth = "none";
+      var fullW = Math.ceil(panel.scrollWidth);
+      panel.style.width = fullW + "px";
+      var fullH = Math.ceil(panel.scrollHeight);
+
+      function cleanup() {
+        panel.classList.remove("ladder-capturing");
+        panel.style.width = prevWidth;
+        panel.style.maxWidth = prevMaxWidth;
+        btn.disabled = false;
+      }
+
       htmlToImage
         .toBlob(panel, {
           pixelRatio: 2,
+          width: fullW,
+          height: fullH,
           backgroundColor: getComputedStyle(panel).backgroundColor || "#ffffff",
           // Keep the capture button itself out of the screenshot.
           filter: function (node) {
@@ -669,7 +701,7 @@
           console.error("[ladder] capture failed", err);
           flash(btn, false);
         })
-        .finally(function () { btn.disabled = false; });
+        .finally(cleanup);
     }
 
     function download(panel, blob) {
