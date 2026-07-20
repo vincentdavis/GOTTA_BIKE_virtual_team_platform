@@ -9,23 +9,26 @@ page in sync after every edit. CSRF is supplied globally via ``hx-headers`` on
 from __future__ import annotations
 
 import contextlib
-from collections import Counter
 
 import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_GET, require_POST
 
-from apps.accounts.decorators import race_verified_required, team_member_required
+from apps.accounts.decorators import (
+    discord_permission_required,
+    race_verified_required,
+    team_member_required,
+)
 from apps.events import squads as event_squads
 from apps.events.models import Squad
-from apps.ttt_planner import terrain, worlds
+from apps.ttt_planner import terrain
 from apps.ttt_planner.forms import PowerUpForm, RouteForm, SegmentForm
-from apps.ttt_planner.models import PlanRider, PowerUp, Route, RouteGpx, Segment, TttPlan
+from apps.ttt_planner.models import PlanRider, PowerUp, Route, Segment, TttPlan
 from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
     climb_strength,
@@ -34,8 +37,10 @@ from apps.ttt_planner.services.compute import (
     quick_finish_time,
     sustainable_speed,
 )
-from apps.ttt_planner.services.gpx import parse_gpx
 from apps.ttt_planner.tasks import run_zwiftgopher_optimize
+from apps.zwift_data import catalog
+from apps.zwift_data.models import ZwiftDataset, ZwiftRoute, ZwiftSegment, ZwiftWorld
+from apps.zwift_data.tasks import sync_zwift_data
 
 
 def _can_edit(plan: TttPlan, user) -> bool:
@@ -95,45 +100,45 @@ def _plan_body_with_speed_oob(request: HttpRequest, plan: TttPlan) -> str:
 @team_member_required(raise_exception=True)
 @require_GET
 def route_list(request: HttpRequest) -> HttpResponse:
-    """List all known routes with their derived terrain type.
+    """Render the reference page for the canonical Zwift dataset (worlds/routes/segments).
+
+    Routes, worlds, and segments come from the synced Zwift Speed Lab dataset
+    (:mod:`apps.zwift_data`); power-ups remain locally curated.
 
     Returns:
         The routes reference page.
 
     """
-    rows = []
-    for route in Route.objects.annotate(gpx_count=Count("gpx_files")).order_by("world", "name"):
-        distance = float(route.distance_km)
-        terrain_value = terrain.derive_terrain(distance, route.elevation_m)
-        rows.append({
-            "pk": route.pk,
-            "name": route.name,
-            "world": route.world,
-            "distance_km": route.distance_km,
-            "elevation_m": route.elevation_m,
-            "m_per_km": round(route.elevation_m / distance, 1) if distance else 0,
-            "terrain": terrain.terrain_label(terrain_value),
-            "terrain_rank": terrain.TERRAIN_RANK.get(terrain_value, 0),
-            "is_active": route.is_active,
-            "gpx_count": route.gpx_count,
-            "whatsonzwift_url": route.whatsonzwift_url,
-        })
-    segments = list(Segment.objects.all())
-    route_counts = Counter(r["world"] for r in rows if r["world"])
-    segment_counts = Counter(s.world for s in segments if s.world)
-    worlds_rows = [
-        {**w, "our_routes": route_counts.get(w["name"], 0), "our_segments": segment_counts.get(w["name"], 0)}
-        for w in worlds.WORLDS
+    rows = [
+        {
+            "name": r.name,
+            "world": r.world,
+            "world_id": r.world_id,
+            "name_hash": r.name_hash,
+            "sport": r.sport,
+            "distance_km": r.distance_km,
+            "ascent_m": r.ascent_m,
+            "avg_gradient_pct": r.avg_gradient_pct,
+            "m_per_km": round(r.ascent_m / r.distance_km, 1) if r.distance_km else 0,
+            "supports_tt": r.supports_tt,
+            "event_only": r.event_only,
+            "level_locked": r.level_locked,
+            "total_km": r.total_distance_km,
+        }
+        for r in ZwiftRoute.objects.all()
     ]
+    segments = list(ZwiftSegment.objects.all())
     return render(
         request,
         "ttt_planner/route_list.html",
         {
             "rows": rows,
-            "worlds": worlds_rows,
+            "worlds": ZwiftWorld.objects.all(),
             "segments": segments,
             "segment_worlds": sorted({s.world for s in segments if s.world}),
             "powerups": PowerUp.objects.filter(is_active=True),
+            "dataset": ZwiftDataset.get(),
+            "can_check_updates": request.user.is_superuser or request.user.has_permission("racing_admin"),
         },
     )
 
@@ -141,24 +146,24 @@ def route_list(request: HttpRequest) -> HttpResponse:
 @login_required
 @team_member_required(raise_exception=True)
 @require_GET
-def route_detail(request: HttpRequest, route_id: int) -> HttpResponse:
-    """Show a route with its uploaded GPX files and an upload form.
+def route_detail(request: HttpRequest, name_hash: str) -> HttpResponse:
+    """Show a canonical route with its elevation profile, map, and segments.
 
     Returns:
         The route detail page.
 
     """
-    route = get_object_or_404(Route, pk=route_id)
-    gpx_files = route.gpx_files.select_related("uploaded_by")
-    estimated = terrain.terrain_label(terrain.derive_terrain(float(route.distance_km), route.elevation_m))
+    route = get_object_or_404(ZwiftRoute, name_hash=name_hash)
+    # Bridge to the curated planner Route (vELO2 factor weights aren't in the canonical
+    # dataset) by name + world; None when this route isn't curated for the planners.
+    planner_route = Route.objects.filter(name__iexact=route.name, world__iexact=route.world).first()
     return render(
         request,
         "ttt_planner/route_detail.html",
         {
             "route": route,
-            "gpx_files": gpx_files,
-            "estimated_terrain": estimated,
-            "total_distance_km": route.distance_km + route.lead_in_distance_km,
+            "segments": catalog.route_segments(route.world_id, route.name_hash),
+            "planner_route": planner_route,
         },
     )
 
@@ -166,15 +171,68 @@ def route_detail(request: HttpRequest, route_id: int) -> HttpResponse:
 @login_required
 @team_member_required(raise_exception=True)
 @require_GET
-def segment_detail(request: HttpRequest, segment_id: int) -> HttpResponse:
-    """Show a segment with its stats and the routes that include it.
+def segment_detail(request: HttpRequest, segment_id: str) -> HttpResponse:
+    """Show a canonical segment with its stats and the routes that cross it.
 
     Returns:
         The segment detail page.
 
     """
-    segment = get_object_or_404(Segment, pk=segment_id)
-    return render(request, "ttt_planner/segment_detail.html", {"segment": segment})
+    segment = get_object_or_404(ZwiftSegment, segment_id=int(segment_id))
+    return render(
+        request,
+        "ttt_planner/segment_detail.html",
+        {"segment": segment, "routes": catalog.segment_routes(segment.segment_id)},
+    )
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_GET
+def route_profile_json(request: HttpRequest, world_id: int, name_hash: str) -> JsonResponse:
+    """Elevation + GPS profile for one route (chart data), or 404.
+
+    Returns:
+        JSON of the profile (d/e/lat/lon arrays + summary stats).
+
+    """
+    profile = catalog.route_profile(world_id, name_hash)
+    if profile is None:
+        return JsonResponse({"error": "no elevation profile for this route"}, status=404)
+    return JsonResponse(profile)
+
+
+@login_required
+@team_member_required(raise_exception=True)
+@require_GET
+def route_segments_json(request: HttpRequest, world_id: int, name_hash: str) -> JsonResponse:
+    """Segments a route crosses, in ride order (chart bands + list).
+
+    Returns:
+        JSON ``{"segments": [...]}``.
+
+    """
+    return JsonResponse({"segments": catalog.route_segments(world_id, name_hash)})
+
+
+@login_required
+@discord_permission_required("racing_admin", raise_exception=True)
+@require_POST
+def route_check_updates(request: HttpRequest) -> HttpResponse:
+    """Enqueue a background re-sync of the Zwift Speed Lab dataset (racing_admin).
+
+    Returns:
+        Redirect back to the routes page.
+
+    """
+    dataset = ZwiftDataset.get()
+    if dataset.syncing:
+        messages.info(request, "A data update is already in progress.")
+    else:
+        sync_zwift_data.enqueue()
+        messages.success(request, "Checking for updates — routes & segments will refresh in the background.")
+        logfire.info("zwift_data sync enqueued from routes page", user_id=request.user.id)
+    return redirect("routes:list")
 
 
 @login_required
@@ -190,7 +248,7 @@ def route_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and form.is_valid():
         route = form.save()
         messages.success(request, f"Route “{route.name}” created.")
-        return redirect("routes:detail", route_id=route.pk)
+        return redirect("routes:list")
     return render(request, "ttt_planner/route_form.html", {"form": form, "mode": "create"})
 
 
@@ -208,7 +266,7 @@ def route_edit(request: HttpRequest, route_id: int) -> HttpResponse:
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Route updated.")
-        return redirect("routes:detail", route_id=route.pk)
+        return redirect("routes:list")
     return render(request, "ttt_planner/route_form.html", {"form": form, "mode": "edit", "route": route})
 
 
@@ -288,73 +346,6 @@ def powerup_edit(request: HttpRequest, powerup_id: int) -> HttpResponse:
         logfire.info("PowerUp updated", powerup_id=powerup.pk, user_id=request.user.id)
         return redirect("routes:list")
     return render(request, "ttt_planner/powerup_form.html", {"form": form, "mode": "edit", "powerup": powerup})
-
-
-@login_required
-@team_member_required(raise_exception=True)
-@require_POST
-def route_gpx_upload(request: HttpRequest, route_id: int) -> HttpResponse:
-    """Upload a GPX file for a route, parsing it for distance/elevation/terrain.
-
-    Returns:
-        Redirect back to the route detail page.
-
-    """
-    route = get_object_or_404(Route, pk=route_id)
-    upload = request.FILES.get("file")
-    if not upload:
-        messages.error(request, "Choose a .gpx file to upload.")
-        return redirect("routes:detail", route_id=route.pk)
-    if not upload.name.lower().endswith(".gpx"):
-        messages.error(request, "That doesn't look like a .gpx file.")
-        return redirect("routes:detail", route_id=route.pk)
-
-    content = upload.read()
-    upload.seek(0)  # rewind so the FileField saves the full content
-    gpx = RouteGpx(
-        route=route,
-        label=request.POST.get("label", "").strip(),
-        notes=request.POST.get("notes", "").strip(),
-        uploaded_by=request.user,
-        file=upload,
-    )
-    try:
-        stats = parse_gpx(content)
-        gpx.distance_km = stats.distance_km
-        gpx.elevation_m = stats.elevation_m
-        gpx.terrain = stats.terrain
-        gpx.point_count = stats.point_count
-        gpx.profile = stats.profile
-    except ValueError as exc:
-        gpx.parse_error = str(exc)[:300]
-        logfire.warning("GPX parse failed", route_id=route.pk, error=str(exc))
-    gpx.save()
-
-    if gpx.parse_error:
-        messages.warning(request, "File saved, but it couldn't be parsed as GPX.")
-    else:
-        messages.success(request, f"Uploaded — {gpx.distance_km} km / {gpx.elevation_m} m ({gpx.terrain}).")
-    logfire.info("Route GPX uploaded", route_id=route.pk, gpx_id=gpx.pk, user_id=request.user.id)
-    return redirect("routes:detail", route_id=route.pk)
-
-
-@login_required
-@team_member_required(raise_exception=True)
-@require_POST
-def route_gpx_delete(request: HttpRequest, route_id: int, gpx_id: int) -> HttpResponse:
-    """Delete a GPX file (uploader or an app admin/superuser).
-
-    Returns:
-        Redirect back to the route detail page.
-
-    """
-    gpx = get_object_or_404(RouteGpx, pk=gpx_id, route_id=route_id)
-    if request.user.is_superuser or request.user.is_app_admin or gpx.uploaded_by_id == request.user.id:
-        gpx.delete()
-        messages.success(request, "GPX file deleted.")
-    else:
-        messages.error(request, "You can only delete GPX files you uploaded.")
-    return redirect("routes:detail", route_id=route_id)
 
 
 @login_required

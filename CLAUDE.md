@@ -78,6 +78,8 @@ Read each app's `models.py` for full field lists. Bullets below capture purpose 
 - `user_api` - Per-user API keys with bearer auth (Django Ninja). `ApiKey`: 30-day default expiry, hashed at rest, scoped to one user. `purge_expired_api_keys` scheduled task hard-deletes keys expired > 90 days
 - `tickets` - **Internal only** (sidebar link intentionally disabled). Member-support / team-management ticket queue. Non-obvious: `Ticket.closed_at` is auto-managed by `save()` on status transitions to/from `closed`; `apps/tickets/services.py:create_member_left_ticket` fires from the guild-member sync when `date_left` is freshly stamped (idempotent while a non-closed ticket exists for that `GuildMember`). Gated by `team_member_required`; no finer-grained permissions yet
 - `cms` - Dynamic CMS pages (`Page` model) with markdown body, draft/published workflow, sidebar/user-menu placement (`nav_location` = `main_nav` or `user_menu`), per-page `require_login` / `require_team_member`. Context processor exposes `cms_nav_pages` + `cms_user_menu_pages`
+- `zwift_data` - **Canonical** Zwift worlds/routes/segments, synced from the [Zwift Speed Lab](https://zwiftspeedlab.coalitionracing.com) `/api/data/all.zip` bundle. Models `ZwiftWorld` / `ZwiftRoute` / `ZwiftSegment` + a `ZwiftDataset` version singleton. `services/sync.py:sync_dataset()` downloads the bundle, stores `routes.json` / `segments.json` / `route_profiles.json` in object storage (bucket) under `zwift_data/`, and delete-and-recreates the DB rows. `catalog.py` serves the bulk geometry (per-route elevation/GPS profile, route↔segment crossings) from storage via a **synced_at-stamped in-process cache** (reloads only when a newer sync lands — safe across web workers). Scheduled weekly (`SCHEDULER_SYNC_ZWIFT_DATA_HOURS`); manual seed via `manage.py sync_zwift_data`. This is the source of truth for the `/routes/` reference page — see Routes Page below
+- `ttt_planner` - TTT planner + the shared `/routes/` reference page. **Note the two route/segment concepts**: `ttt_planner.Route` / `Segment` are *planner* data (curated vELO2 factor weights, recommended laps, plan/ladder FKs — `apps/ladder_planner` FKs `ttt_planner.Route`), edited via admin / the `routes:create`/`edit` forms; the `/routes/` *page* itself now renders the canonical `zwift_data` dataset (linked to old rows by name+world when a planner needs detail)
 
 #### Event Permission Gates (`apps/events/views.py`)
 
@@ -326,6 +328,16 @@ Usage: `from constance import config; config.SETTING_NAME`. Add new settings in 
 ## Home Page Logic
 
 Home page (`gotta_bike_platform/views.py: home()`): uses `HOME_PAGE_SLUG_AUTHENTICATED` for logged-in users, `HOME_PAGE_SLUG` for anonymous, falls back to `templates/index.html`.
+
+## Routes Reference Page (`/routes/`)
+
+Served by `apps.ttt_planner` views but driven by the canonical `zwift_data` dataset (see the `zwift_data` app bullet). Mounted via `apps/ttt_planner/routes_urls.py` (namespace `routes:`).
+
+- **Tabs**: Routes / Worlds / Segments come from `ZwiftRoute` / `ZwiftWorld` / `ZwiftSegment`; Power-ups stays `ttt_planner.PowerUp` (locally curated).
+- **Detail pages use stable keys** so links survive a re-sync: routes at `routes:detail` keyed by `name_hash` (`/routes/r/<name_hash>/`), segments at `routes:segment_detail` keyed by the signed 64-bit `segment_id` (`/routes/segments/s/<segment_id>/`).
+- **Charts** are framework-free inline SVG (no chart library), ported from Zwift Speed Lab: `apps/zwift_data/static/zwift_data/profile_chart.js` renders the grade-coloured elevation profile (+ segment bands, lead-in shading, hover crosshair) and the VeloViewer-style route map; `route_detail.js` fetches the data and draws it; `chart.css` scopes a fixed-dark palette under `.zsl-chart` (the SVG grid colours are hardcoded, so it stays legible in any DaisyUI theme). Chart data is lazy-fetched from `routes:profile_json` / `routes:route_segments_json` (both `team_member`-gated JSON endpoints).
+- **"Check for updates" button** (`routes:check_updates`, POST, `@discord_permission_required("racing_admin")`) enqueues the `sync_zwift_data` background task. Guarded against concurrent runs by `ZwiftDataset.syncing`.
+- **GPX upload was removed** — the canonical dataset supplies profiles, so the old `RouteGpx` model, `services/gpx.py`, the `gpxpy` dependency, and the upload/delete views/URLs are gone (migration `ttt_planner/0021_delete_routegpx`).
 
 ## Analytics
 

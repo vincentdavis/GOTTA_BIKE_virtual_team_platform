@@ -1,0 +1,81 @@
+/* Elevation-profile + route-map chart styles, ported from Zwift Speed Lab.
+   Scoped under .zsl-chart with a fixed dark palette so the inline-SVG grid/line
+   colours (hardcoded in profile_chart.js) stay legible under any DaisyUI theme. */
+
+.zsl-chart {
+  --fg: #e6edf3;
+  --bg: #0f1419;
+  --panel2: #161b22;
+  --border: #2d3742;
+  --muted: #8b98a5;
+  --accent: #fc6719;
+  --accent2: #4aa8ff;
+  --good: #3fb950;
+  color: var(--fg);
+}
+
+/* ---- route elevation profile ---- */
+.zsl-chart .route-chart { margin: 6px 0 8px; }
+.zsl-chart .rp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap; margin-bottom: 4px; }
+.zsl-chart .rp-title { color: var(--accent2); font-size: .68rem; text-transform: uppercase; letter-spacing: .03em; }
+.zsl-chart .rp-maxgrade { color: var(--muted); font-variant-numeric: tabular-nums; }
+.zsl-chart .rp-legend { color: var(--muted); font-size: .68rem; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.zsl-chart .rp-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 2px;
+  vertical-align: -1px; }
+.zsl-chart .rp-body { position: relative; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 4px 2px; }
+.zsl-chart .rp-body svg { display: block; width: 100%; height: auto; cursor: crosshair; }
+.zsl-chart .rp-cross { stroke: var(--fg); stroke-opacity: .4; stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.zsl-chart .rp-dot { fill: var(--accent2); stroke: var(--bg); stroke-width: 1.5; pointer-events: none; }
+.zsl-chart .rp-tip { position: absolute; top: 3px; transform: translateX(-50%); background: var(--panel2);
+  border: 1px solid var(--border); color: var(--fg); font-size: .72rem; padding: 2px 8px;
+  border-radius: 6px; white-space: nowrap; pointer-events: none; display: none;
+  font-variant-numeric: tabular-nums; z-index: 3; }
+.zsl-chart .rp-t { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.zsl-chart .rp-unit { fill: var(--muted); opacity: .7; }
+.zsl-chart .rp-spd { fill: var(--accent2); }
+.zsl-chart .rp-leadin-lbl { fill: #8b98a5; font-size: 9.5px; letter-spacing: .06em; text-transform: uppercase; }
+.zsl-chart .rp-leadin-tip { color: #b3bcc6; font-weight: 600; text-transform: uppercase; font-size: .82em; letter-spacing: .04em; }
+.zsl-chart .rp-msg { color: var(--muted); font-size: .82rem; display: inline-block; padding: 10px 4px; }
+.zsl-chart .rp-tip .rp-seg { font-weight: 700; }
+
+/* ---- route map (decoded WGS84 track) ---- */
+.zsl-chart .route-shape { margin: 12px 0 2px; }
+.zsl-chart .rs-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.zsl-chart .rs-shape-body { flex: 0 0 auto; width: 240px; height: 240px; background: var(--bg);
+  border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.zsl-chart .rs-shape-body .rshape { display: block; width: 240px; height: 240px; }
+.zsl-chart .rs-shape-body .rp-msg { padding: 0 10px; text-align: center; }
+.zsl-chart .rs-side { display: flex; flex-direction: column; gap: 12px; }
+.zsl-chart .rs-grades { flex-direction: column; align-items: flex-start; gap: 5px; }
+.zsl-chart .rs-leadnote { color: var(--muted); font-size: .72rem; }
+
+/* ---- segment bands toggle ---- */
+.zsl-chart .seg-toggle-l { display: inline-flex; align-items: center; gap: 5px; margin: 0;
+  color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .03em;
+  cursor: pointer; white-space: nowrap; user-select: none; }
+.zsl-chart .seg-toggle-l input { width: auto; min-width: 0; margin: 0; accent-color: var(--accent); cursor: pointer; }
+
+/* ---- segments on a route ---- */
+.zsl-chart .route-segs { margin: 12px 0 2px; }
+.zsl-chart .route-segs-title { color: var(--accent2); font-size: .68rem; text-transform: uppercase;
+  letter-spacing: .03em; margin: 10px 0 7px; }
+.zsl-chart .route-segs-list { display: flex; flex-direction: column; gap: 0; }
+.zsl-chart .route-seg { display: grid; grid-template-columns: 3.4em 1fr auto auto; gap: 10px;
+  align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: .84rem; }
+.zsl-chart .route-seg .rs-at { color: var(--muted); font-variant-numeric: tabular-nums; font-size: .78rem; }
+.zsl-chart .route-seg .rs-name { color: var(--fg); font-weight: 600; }
+.zsl-chart .route-seg .rs-name a { color: var(--accent2); text-decoration: none; }
+.zsl-chart .route-seg .rs-name a:hover { text-decoration: underline; }
+.zsl-chart .route-seg .rs-meta { color: var(--muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.zsl-chart .route-seg .pu { color: var(--accent); }
+.zsl-chart .route-segs-none { color: var(--muted); font-size: .84rem; padding: 4px 8px; }
+
+/* ---- segment type badges ---- */
+.zsl-chart .sbadge { display: inline-block; font-size: .64rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .02em; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.zsl-chart .sbadge.sprint { background: rgba(63,185,80,.14);  color: var(--good);    border: 1px solid rgba(63,185,80,.42); }
+.zsl-chart .sbadge.kom { background: rgba(208,59,59,.15);  color: #e2622f;        border: 1px solid rgba(208,59,59,.45); }
+.zsl-chart .sbadge.climb { background: rgba(239,159,39,.15); color: #ef9f27;        border: 1px solid rgba(239,159,39,.45); }
+.zsl-chart .sbadge.lap { background: rgba(74,168,255,.14); color: var(--accent2); border: 1px solid rgba(74,168,255,.4); }
+.zsl-chart .sbadge.segment { background: rgba(154,167,179,.13); color: var(--muted);  border: 1px solid rgba(154,167,179,.34); }

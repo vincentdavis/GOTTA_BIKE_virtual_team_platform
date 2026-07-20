@@ -1,18 +1,15 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ route.name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'zwift_data/chart.css' %}" />
+{% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6">
   <a href="{% url 'routes:list' %}" class="btn btn-ghost btn-sm">&larr; All routes</a>
-
-  {% if messages %}
-  <div class="space-y-2">
-    {% for m in messages %}
-    <div class="alert {% if m.tags == 'error' %}alert-error{% elif m.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} py-2">{{ m }}</div>
-    {% endfor %}
-  </div>
-  {% endif %}
 
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
@@ -20,78 +17,56 @@
         <div>
           <h2 class="card-title text-2xl">{{ route.name }}</h2>
           <p class="text-sm text-base-content/70">
-            {% if route.world %}{{ route.world }} · {% endif %}
-            {{ route.distance_km }} km · {{ route.elevation_m }} m ·
-            <span class="badge badge-outline badge-sm">{{ estimated_terrain }}</span>
-            <span class="text-base-content/40">(estimated)</span>
+            {{ route.world }} · {{ route.total_distance_km }} km · {{ route.ascent_m }} m · avg {{ route.avg_gradient_pct }}%
+            <span class="badge badge-ghost badge-sm ml-1">{{ route.get_sport_display }}</span>
           </p>
         </div>
-        <div class="flex flex-wrap gap-2">
-          {% if user.is_race_ready or user.is_superuser %}
-          <a href="{% url 'routes:edit' route.pk %}" class="btn btn-primary btn-sm">Edit route</a>
-          {% endif %}
-          {% if route.zwiftinsider_url %}
-          <a href="{{ route.zwiftinsider_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">ZwiftInsider ↗</a>
-          {% endif %}
-          {% if route.whatsonzwift_url %}
-          <a href="{{ route.whatsonzwift_url }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">whatsonzwift ↗</a>
-          {% endif %}
+        <div class="flex flex-wrap gap-1">
+          {% if route.event_only %}<span class="badge badge-warning badge-sm">event-only</span>{% endif %}
+          {% if route.supports_tt %}<span class="badge badge-info badge-sm">TT mode</span>{% endif %}
+          {% if route.level_locked %}<span class="badge badge-ghost badge-sm">Level {{ route.level_locked }}</span>{% endif %}
         </div>
       </div>
     </div>
   </div>
 
-  {# ---- Details (lead-in, laps, segments) ---- #}
+  {# ---- Details ---- #}
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
       <h3 class="font-semibold mb-3">Details</h3>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
         <div>
+          <div class="text-xs text-base-content/60">Distance</div>
+          <div class="font-medium">{{ route.distance_km }} km</div>
+        </div>
+        <div>
+          <div class="text-xs text-base-content/60">Elevation gain</div>
+          <div class="font-medium">{{ route.ascent_m }} m</div>
+        </div>
+        <div>
           <div class="text-xs text-base-content/60">Lead-in</div>
-          <div class="font-medium">{{ route.lead_in_distance_km }} km · {{ route.lead_in_elevation_m }} m</div>
-        </div>
-        <div>
-          <div class="text-xs text-base-content/60">Laps</div>
-          <div class="font-medium">{% if route.supports_laps %}Supported{% else %}Single lap{% endif %}</div>
-        </div>
-        <div>
-          <div class="text-xs text-base-content/60">Recommended laps <span class="text-base-content/40">(Club Ladder)</span></div>
-          <div class="font-medium">{{ route.recommended_laps|default:"—" }}</div>
+          <div class="font-medium">{{ route.leadin_km }} km · {{ route.leadin_ascent_m }} m</div>
         </div>
         <div>
           <div class="text-xs text-base-content/60">Total w/ lead-in</div>
-          <div class="font-medium">{{ total_distance_km }} km</div>
+          <div class="font-medium">{{ route.total_distance_km }} km</div>
         </div>
       </div>
-
-      <h4 class="font-semibold text-sm mt-5 mb-2">Climbs &amp; sprints</h4>
-      {% with segs=route.segments.all %}
-      {% if segs %}
-      <ul class="space-y-1.5 text-sm">
-        {% for s in segs %}
-        <li class="flex flex-wrap items-center gap-2">
-          <span class="badge badge-sm {% if s.segment_type == 'climb' %}badge-warning{% else %}badge-info{% endif %}">{{ s.get_segment_type_display }}</span>
-          <a href="{% url 'routes:segment_detail' s.pk %}" class="link link-primary font-medium">{{ s.name }}</a>
-          <span class="text-base-content/50">{{ s.length_m }} m{% if s.elevation_m %} · {{ s.elevation_m }} m climb{% endif %}</span>
-          {% if s.strava_url %}<a href="{{ s.strava_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="Strava">Strava</a>{% endif %}
-          {% if s.zwiftinsider_url %}<a href="{{ s.zwiftinsider_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="ZwiftInsider">ZI</a>{% endif %}
-          {% if s.whatsonzwift_url %}<a href="{{ s.whatsonzwift_url }}" target="_blank" rel="noopener" class="badge badge-outline badge-xs" title="whatsonzwift">WoZ</a>{% endif %}
-          {% if user.is_race_ready or user.is_superuser %}<a href="{% url 'routes:segment_edit' s.pk %}" class="link link-primary text-xs">Edit</a>{% endif %}
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="text-base-content/60">No climbs or sprints linked yet — add them in admin.</p>
-      {% endif %}
-      {% endwith %}
     </div>
   </div>
 
-  {# ---- vELO2 Race factor weights ---- #}
+  {# ---- vELO2 Race factor weights (curated planner data, matched by name + world) ---- #}
+  {% if planner_route %}
+  {% with bars=planner_route.velo_factor_bars %}
+  {% if bars or user.is_race_ready or user.is_superuser %}
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <h3 class="font-semibold mb-3">vELO2 Event Factor Weights</h3>
-      {% with bars=route.velo_factor_bars %}
+      <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
+        <h3 class="font-semibold">vELO2 Event Factor Weights</h3>
+        {% if user.is_race_ready or user.is_superuser %}
+        <a href="{% url 'routes:edit' planner_route.pk %}" class="btn btn-ghost btn-xs">Edit racing factors</a>
+        {% endif %}
+      </div>
       {% if bars %}
       <div class="space-y-2 max-w-lg">
         {% for f in bars %}
@@ -109,113 +84,72 @@
       <p class="text-xs text-base-content/50 mt-3">ZwiftRacing vELO2 Race-rating blend (factors sum to ~100%).</p>
       {% else %}
       <p class="text-base-content/60">No vELO2 factor weights for this route yet.
-        {% if user.is_race_ready or user.is_superuser %}Add them via <span class="font-medium">Edit route</span>, or bulk-import with <code>manage.py import_velo_weights</code>.{% endif %}</p>
+        {% if user.is_race_ready or user.is_superuser %}Add them via <span class="font-medium">Edit racing factors</span>, or bulk-import with <code>manage.py import_velo_weights</code>.{% endif %}</p>
       {% endif %}
-      {% endwith %}
     </div>
   </div>
+  {% endif %}
+  {% endwith %}
+  {% endif %}
 
-  {# ---- GPX files ---- #}
+  {# ---- Elevation profile, map & segments (Speed Lab charts) ---- #}
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <h3 class="font-semibold mb-2">GPX tracks</h3>
-      {% if gpx_files %}
-      <div class="space-y-3">
-        {% for g in gpx_files %}
-        <div class="rounded-box border border-base-300 p-3">
-          <div class="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <a href="{{ g.file.url }}" class="link link-primary font-medium">{{ g.label|default:"GPX" }}</a>
-              {% if g.parse_error %}<span class="badge badge-error badge-xs" title="{{ g.parse_error }}">parse error</span>{% endif %}
-              <div class="text-xs text-base-content/40">
-                {{ g.uploaded_by.get_full_name|default:g.uploaded_by.username|default:"—" }} · {{ g.uploaded_at|date:"M j, Y" }}
+      <div id="zsl-route" class="zsl-chart"
+           data-name="{{ route.name }}"
+           data-world-id="{{ route.world_id }}"
+           data-name-hash="{{ route.name_hash }}"
+           data-distance-km="{{ route.distance_km }}"
+           data-leadin-km="{{ route.leadin_km }}"
+           data-ascent-m="{{ route.ascent_m }}"
+           data-avg-gradient="{{ route.avg_gradient_pct }}"
+           data-profile-url="{% url 'routes:profile_json' route.world_id route.name_hash %}"
+           data-segments-url="{% url 'routes:route_segments_json' route.world_id route.name_hash %}"
+           data-seg-detail-url0="{% url 'routes:segment_detail' 0 %}">
+
+        <div class="route-chart">
+          <div class="rp-head">
+            <span class="rp-title">Elevation profile<span class="rp-maxgrade"></span></span>
+            <label class="seg-toggle-l" hidden><input type="checkbox" class="seg-toggle" checked /> segments</label>
+            <span class="rp-legend">
+              <i style="background:#6cc551"></i>&lt;3%
+              <i style="background:#f2c744"></i>3–6
+              <i style="background:#ef9f27"></i>6–9
+              <i style="background:#e2622f"></i>9–12
+              <i style="background:#d03b3b"></i>&gt;12
+            </span>
+          </div>
+          <div class="rp-body"><span class="rp-msg">Loading…</span></div>
+        </div>
+
+        <div class="route-shape">
+          <div class="rp-title">Map</div>
+          <div class="rs-row">
+            <div class="rs-shape-body"><span class="rp-msg">Loading…</span></div>
+            <div class="rs-side">
+              <div class="rp-legend rs-grades">
+                <i style="background:#6cc551"></i>&lt;3%
+                <i style="background:#f2c744"></i>3–6
+                <i style="background:#ef9f27"></i>6–9
+                <i style="background:#e2622f"></i>9–12
+                <i style="background:#d03b3b"></i>&gt;12
               </div>
-            </div>
-            <div class="flex items-center gap-2 text-sm">
-              {% if g.distance_km %}<span>{{ g.distance_km }} km</span>{% endif %}
-              {% if g.elevation_m is not None %}<span>· {{ g.elevation_m }} m</span>{% endif %}
-              {% if g.terrain %}<span class="badge badge-outline badge-sm">{{ g.terrain }}</span>{% endif %}
-              <form method="post" action="{% url 'routes:gpx_delete' route.pk g.pk %}"
-                    onsubmit="return confirm('Delete this GPX file?');">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-ghost btn-xs text-error">Delete</button>
-              </form>
+              <span class="rs-leadnote">lead-in shown dashed</span>
             </div>
           </div>
-
-          {% if g.profile %}
-          <div style="height:160px" class="mt-2"><canvas class="gpx-profile-chart" data-src="{{ g.pk }}"></canvas></div>
-          {{ g.profile|json_script:g.pk }}
-          {% endif %}
-
-          {% if g.notes %}<p class="text-sm text-base-content/70 whitespace-pre-line mt-2">{{ g.notes }}</p>{% endif %}
         </div>
-        {% endfor %}
+
+        <div class="route-segs">
+          <div class="route-segs-title">Segments on this route</div>
+          <div class="route-segs-body"><span class="rp-msg">Loading…</span></div>
+        </div>
       </div>
-      {% else %}
-      <p class="text-base-content/60">No GPX files uploaded yet.</p>
-      {% endif %}
-
-      {# ---- Upload form ---- #}
-      <form method="post" action="{% url 'routes:gpx_upload' route.pk %}" enctype="multipart/form-data" class="mt-4 space-y-3">
-        {% csrf_token %}
-        <h4 class="font-semibold text-sm">Upload a GPX file</h4>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <label class="form-control">
-            <span class="label-text mb-1">GPX file</span>
-            <input type="file" name="file" accept=".gpx" required class="file-input file-input-bordered file-input-sm w-full" />
-          </label>
-          <label class="form-control">
-            <span class="label-text mb-1">Label <span class="text-base-content/40">(e.g. spawn / lead-in)</span></span>
-            <input type="text" name="label" class="input input-bordered input-sm w-full" />
-          </label>
-        </div>
-        <label class="form-control">
-          <span class="label-text mb-1">Notes — start point &amp; lead-in</span>
-          <textarea name="notes" rows="2" class="textarea textarea-bordered textarea-sm w-full"
-                    placeholder="e.g. Start at the Watopia banner; ~1.2 km lead-in from the pens."></textarea>
-        </label>
-        <button type="submit" class="btn btn-primary btn-sm">Upload &amp; parse</button>
-      </form>
     </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    if (typeof Chart === "undefined") return;
-    document.querySelectorAll(".gpx-profile-chart").forEach(function (canvas) {
-      var src = document.getElementById(canvas.dataset.src);
-      if (!src) return;
-      var points = JSON.parse(src.textContent);  // [[distance_km, elevation_m], ...]
-      new Chart(canvas, {
-        type: "line",
-        data: {
-          datasets: [{
-            data: points.map(function (p) { return { x: p[0], y: p[1] }; }),
-            borderColor: "#2563eb",
-            backgroundColor: "rgba(37,99,235,0.15)",
-            fill: true,
-            pointRadius: 0,
-            borderWidth: 1.5,
-            tension: 0.1,
-          }],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          plugins: { legend: { display: false }, tooltip: { intersect: false, mode: "index" } },
-          scales: {
-            x: { type: "linear", title: { display: true, text: "km" }, ticks: { maxTicksLimit: 8 } },
-            y: { title: { display: true, text: "m" } },
-          },
-        },
-      });
-    });
-  });
-</script>
+<script src="{% static 'zwift_data/profile_chart.js' %}"></script>
+<script src="{% static 'zwift_data/route_detail.js' %}"></script>
 {% endblock %}

@@ -32,6 +32,7 @@ from apps.events.tasks import remove_expired_ds_roles
 from apps.ladder_planner.tasks import refresh_cached_clubs
 from apps.team.tasks import sync_discord_channels, sync_discord_roles, warn_expiring_verifications
 from apps.user_api.tasks import purge_expired_api_keys
+from apps.zwift_data.tasks import sync_zwift_data
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.tasks import sync_zr_riders
 
@@ -153,6 +154,12 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Refresh cached opponent clubs used by recent ladder matchups",
         "scheduled": True,
         "hours_setting": "SCHEDULER_REFRESH_CACHED_CLUBS_HOURS",
+    },
+    "sync_zwift_data": {
+        "task": sync_zwift_data,
+        "description": "Re-sync the Zwift Speed Lab route/segment/world dataset",
+        "scheduled": True,
+        "hours_setting": "SCHEDULER_SYNC_ZWIFT_DATA_HOURS",
     },
 }
 

@@ -4,28 +4,18 @@ from django.contrib import admin, messages
 from django.http import HttpRequest, HttpResponseRedirect
 from django.urls import path, reverse
 
-from apps.ttt_planner.models import PlanRider, PowerUp, Route, RouteGpx, Segment, TttPlan
+from apps.ttt_planner.models import PlanRider, PowerUp, Route, Segment, TttPlan
 from apps.ttt_planner.services.segment_import import import_segments
-
-
-class RouteGpxInline(admin.TabularInline):
-    """Inline editor for a route's GPX files."""
-
-    model = RouteGpx
-    extra = 0
-    fields = ("label", "file", "distance_km", "elevation_m", "terrain", "uploaded_by", "uploaded_at")
-    readonly_fields = ("distance_km", "elevation_m", "terrain", "uploaded_by", "uploaded_at")
 
 
 @admin.register(Route)
 class RouteAdmin(admin.ModelAdmin):
-    """Admin for TTT routes."""
+    """Admin for TTT routes (planner data: vELO2 weights, recommended laps)."""
 
     list_display = ("name", "world", "distance_km", "elevation_m", "supports_laps", "recommended_laps", "is_active")
     list_filter = ("is_active", "world", "supports_laps")
     search_fields = ("name", "world")
     filter_horizontal = ("segments",)
-    inlines = (RouteGpxInline,)
 
 
 @admin.register(Segment)

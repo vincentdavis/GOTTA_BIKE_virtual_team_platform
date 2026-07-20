@@ -1,10 +1,9 @@
 """Tests for the TTT planner: physics, computation, roster merge, and sharing."""
 
 import pytest
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
-from apps.ttt_planner.models import PlanRider, Route, RouteGpx, TttPlan
+from apps.ttt_planner.models import PlanRider, Route, TttPlan
 from apps.ttt_planner.services import physics, zwiftgopher
 from apps.ttt_planner.services.compute import compute_auto_balance, compute_plan, sustainable_speed
 from apps.ttt_planner.services.roster import get_rider_data
@@ -902,51 +901,18 @@ def test_plan_update_rejects_invalid_course_type(auth_client, team_member):
 
 @pytest.mark.django_db
 def test_route_list_page_renders(auth_client):
-    """The routes reference page lists routes with a derived terrain type."""
-    Route.objects.create(name="Climby Loop", world="Watopia", distance_km=10, elevation_m=300)
+    """The routes reference page lists canonical Zwift routes."""
+    from apps.zwift_data.models import ZwiftRoute
+
+    ZwiftRoute.objects.create(
+        name="Climby Loop", world="Watopia", world_id=1, name_hash="123", distance_km=10, ascent_m=300
+    )
     resp = auth_client.get(reverse("routes:list"))
     assert resp.status_code == 200
     assert b"Climby Loop" in resp.content
-    assert b"Mountainous" in resp.content
     # Columns are sortable.
     assert b"sortRoutes" in resp.content
     assert b'data-sort=' in resp.content
-
-
-# ----- route GPX uploads -------------------------------------------------------------------------
-
-GPX_SAMPLE = b"""<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="test">
-  <trk><trkseg>
-    <trkpt lat="0.0" lon="0.00"><ele>0</ele></trkpt>
-    <trkpt lat="0.0" lon="0.01"><ele>10</ele></trkpt>
-    <trkpt lat="0.0" lon="0.02"><ele>20</ele></trkpt>
-  </trkseg></trk>
-</gpx>
-"""
-
-
-def test_parse_gpx_computes_metrics():
-    """parse_gpx returns distance, elevation gain, terrain and point count."""
-    from apps.ttt_planner.services.gpx import parse_gpx
-
-    stats = parse_gpx(GPX_SAMPLE)
-    assert stats.point_count == 3
-    assert stats.distance_km > 0
-    assert stats.elevation_m == 20
-    assert stats.terrain in {"flat", "rolling", "hilly", "mountainous"}
-    # Elevation profile: [distance_km, elevation_m] pairs, rising from 0 to 20 m.
-    assert len(stats.profile) == 3
-    assert stats.profile[0][1] == pytest.approx(0.0)
-    assert stats.profile[-1][1] == pytest.approx(20.0)
-
-
-def test_parse_gpx_rejects_garbage():
-    """parse_gpx raises ValueError on non-GPX content."""
-    from apps.ttt_planner.services.gpx import parse_gpx
-
-    with pytest.raises(ValueError):
-        parse_gpx(b"not a gpx file")
 
 
 @pytest.mark.django_db
@@ -963,11 +929,45 @@ def test_whatsonzwift_url():
 
 @pytest.mark.django_db
 def test_route_detail_renders(auth_client):
-    """The route detail page renders with the upload form."""
-    route = Route.objects.create(name="Test Route", distance_km=20, elevation_m=100)
-    resp = auth_client.get(reverse("routes:detail", args=[route.pk]))
+    """The canonical route detail page renders and wires up the Speed Lab charts."""
+    from apps.zwift_data.models import ZwiftRoute
+
+    ZwiftRoute.objects.create(
+        name="Test Route", world="Watopia", world_id=1, name_hash="777", distance_km=20, ascent_m=100
+    )
+    resp = auth_client.get(reverse("routes:detail", args=["777"]))
     assert resp.status_code == 200
-    assert b"Upload a GPX file" in resp.content
+    assert b"Elevation profile" in resp.content
+    assert b"zsl-route" in resp.content
+
+
+@pytest.mark.django_db
+def test_route_detail_surfaces_velo_bars_from_planner_route(auth_client):
+    """A canonical route shows vELO2 bars from the planner Route matched by name+world."""
+    from apps.zwift_data.models import ZwiftRoute
+
+    ZwiftRoute.objects.create(
+        name="Bon Voyage", world="France", world_id=10, name_hash="555", distance_km=28, ascent_m=132
+    )
+    Route.objects.create(
+        name="Bon Voyage", world="France", distance_km=28, elevation_m=132,
+        velo_sprint=38.13, velo_punch=21.87, velo_climb=0, velo_endurance=40.0, velo_pursuit=0,
+    )
+    body = auth_client.get(reverse("routes:detail", args=["555"])).content.decode()
+    assert "vELO2 Event Factor Weights" in body
+    assert "Endurance" in body
+
+
+@pytest.mark.django_db
+def test_route_detail_hides_velo_card_without_planner_match(auth_client):
+    """A canonical route with no matching planner Route shows no vELO2 card."""
+    from apps.zwift_data.models import ZwiftRoute
+
+    ZwiftRoute.objects.create(
+        name="Orphan Route", world="Watopia", world_id=1, name_hash="556", distance_km=10, ascent_m=20
+    )
+    body = auth_client.get(reverse("routes:detail", args=["556"])).content.decode()
+    assert "vELO2 Event Factor Weights" not in body
 
 
 @pytest.mark.django_db
@@ -987,71 +987,6 @@ def test_velo_factor_bars_sorted_nonzero():
     assert [b["label"] for b in bars] == ["Endurance", "Sprint", "Punch"]
     assert all(b["value"] > 0 and b["color"] and b["icon"] for b in bars)
     assert Route.objects.create(name="Bare", distance_km=5, elevation_m=10).velo_factor_bars() == []
-
-
-@pytest.mark.django_db
-def test_route_detail_shows_velo_factor_weights(auth_client):
-    """The route detail page renders the vELO2 factor bars when populated."""
-    route = Route.objects.create(
-        name="Weighted Route",
-        distance_km=2,
-        elevation_m=17,
-        velo_sprint=38.13,
-        velo_punch=21.87,
-        velo_climb=0,
-        velo_endurance=40.00,
-        velo_pursuit=0,
-    )
-    body = auth_client.get(reverse("routes:detail", args=[route.pk])).content.decode()
-    assert "vELO2 Event Factor Weights" in body
-    assert "Endurance" in body
-
-
-@pytest.mark.django_db
-def test_gpx_upload_parses_and_stores(auth_client, tmp_path, settings):
-    """Uploading a GPX parses it and stores the metrics on a RouteGpx."""
-    settings.MEDIA_ROOT = str(tmp_path)
-    route = Route.objects.create(name="Upload Route", distance_km=20, elevation_m=100)
-    upload = SimpleUploadedFile("track.gpx", GPX_SAMPLE, content_type="application/gpx+xml")
-
-    resp = auth_client.post(
-        reverse("routes:gpx_upload", args=[route.pk]),
-        {"label": "Main spawn", "notes": "1km lead-in", "file": upload},
-    )
-    assert resp.status_code == 302
-    gpx = route.gpx_files.get()
-    assert gpx.label == "Main spawn"
-    assert gpx.notes == "1km lead-in"
-    assert gpx.distance_km > 0
-    assert gpx.elevation_m == 20
-    assert gpx.point_count == 3
-    assert gpx.profile  # elevation profile stored for charting
-    assert not gpx.parse_error
-
-
-@pytest.mark.django_db
-def test_gpx_upload_rejects_non_gpx(auth_client, tmp_path, settings):
-    """A non-.gpx upload is rejected without creating a record."""
-    settings.MEDIA_ROOT = str(tmp_path)
-    route = Route.objects.create(name="Reject Route", distance_km=20, elevation_m=100)
-    upload = SimpleUploadedFile("notes.txt", b"hello", content_type="text/plain")
-
-    resp = auth_client.post(reverse("routes:gpx_upload", args=[route.pk]), {"file": upload})
-    assert resp.status_code == 302
-    assert route.gpx_files.count() == 0
-
-
-@pytest.mark.django_db
-def test_gpx_delete_by_uploader(auth_client, team_member, tmp_path, settings):
-    """The uploader can delete their GPX file."""
-    settings.MEDIA_ROOT = str(tmp_path)
-    route = Route.objects.create(name="Del Route", distance_km=20, elevation_m=100)
-    gpx = RouteGpx.objects.create(
-        route=route, label="x", file=SimpleUploadedFile("t.gpx", GPX_SAMPLE), uploaded_by=team_member
-    )
-    resp = auth_client.post(reverse("routes:gpx_delete", args=[route.pk, gpx.pk]))
-    assert resp.status_code == 302
-    assert route.gpx_files.count() == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -1260,20 +1195,16 @@ def test_admin_segment_import_button(client, superuser):
 
 @pytest.mark.django_db
 def test_segment_detail_view(auth_client):
-    from apps.ttt_planner.models import Route, Segment
+    """The canonical segment detail page renders a Zwift segment by its id."""
+    from apps.zwift_data.models import ZwiftSegment
 
-    seg = Segment.objects.create(
-        name="Epic KOM", segment_type="climb", direction="forward", world="Watopia",
-        length_m=9500, grade_pct=4, elevation_m=380, category="2",
+    seg = ZwiftSegment.objects.create(
+        segment_id=1047919487, name="Epic KOM", segment_type="climb", world="Watopia",
+        world_id=1, length_m=9500, avg_grade_pct=4, max_grade_pct=9, ascent_m=380,
     )
-    route = Route.objects.create(name="Hilly Loop", world="Watopia", distance_km=20, elevation_m=400)
-    route.segments.add(seg)
-
-    resp = auth_client.get(reverse("routes:segment_detail", args=[seg.pk]))
+    resp = auth_client.get(reverse("routes:segment_detail", args=[seg.segment_id]))
     assert resp.status_code == 200
-    body = resp.content.decode()
-    assert "Epic KOM" in body
-    assert "Hilly Loop" in body  # lists routes containing the segment
+    assert "Epic KOM" in resp.content.decode()
 
 
 @pytest.mark.django_db

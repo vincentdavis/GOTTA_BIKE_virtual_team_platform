@@ -1,9 +1,33 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}Routes{% endblock %}
 
 {% block content %}
 <div class="max-w-5xl mx-auto">
+
+  <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+    <div>
+      <h1 class="text-2xl font-bold">Zwift routes &amp; segments</h1>
+      <p class="text-sm text-base-content/60">
+        Canonical data from
+        <a href="{{ dataset.source_url|default:'https://zwiftspeedlab.coalitionracing.com' }}" target="_blank" rel="noopener" class="link">Zwift Speed Lab</a>.
+        {% if dataset.synced_at %}Updated {{ dataset.synced_at|timesince }} ago.{% else %}Not yet synced.{% endif %}
+      </p>
+    </div>
+    {% if can_check_updates %}
+    <form method="post" action="{% url 'routes:check_updates' %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline btn-sm" {% if dataset.syncing %}disabled{% endif %}>
+        {% if dataset.syncing %}<span class="loading loading-spinner loading-xs"></span> Updating…{% else %}⟳ Check for updates{% endif %}
+      </button>
+    </form>
+    {% endif %}
+  </div>
+  {% if dataset.last_error %}
+  <div class="alert alert-warning mb-4 py-2 text-sm">Last update failed: {{ dataset.last_error }}</div>
+  {% endif %}
+
   <div role="tablist" class="tabs tabs-lifted tabs-lg">
 
     {# ===== Routes ===== #}
@@ -12,16 +36,10 @@
       <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
         <div>
           <h2 class="text-xl font-semibold">Routes</h2>
-          <p class="text-sm text-base-content/70">{{ rows|length }} known routes · terrain type is estimated from climbing density (m/km)</p>
+          <p class="text-sm text-base-content/70">{{ rows|length }} routes · click a route for its elevation profile, map &amp; segments</p>
         </div>
-        <div class="flex items-center gap-2">
-          <input type="text" placeholder="Filter by name or world…"
-                 class="input input-bordered input-sm w-64"
-                 oninput="filterRoutes(this.value)" />
-          {% if user.is_race_ready or user.is_superuser %}
-          <a href="{% url 'routes:create' %}" class="btn btn-primary btn-sm">+ Add route</a>
-          {% endif %}
-        </div>
+        <input type="text" placeholder="Filter by name or world…"
+               class="input input-bordered input-sm w-64" oninput="filterRoutes(this.value)" />
       </div>
 
       <div class="overflow-x-auto">
@@ -30,31 +48,32 @@
             <tr>
               <th class="cursor-pointer select-none" onclick="sortRoutes(0,'text',this)">Route <span class="sort-ind"></span></th>
               <th class="cursor-pointer select-none" onclick="sortRoutes(1,'text',this)">World <span class="sort-ind"></span></th>
-              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(2,'num',this)">Distance <span class="sort-ind"></span></th>
-              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(3,'num',this)">Elevation <span class="sort-ind"></span></th>
-              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(4,'num',this)">m/km <span class="sort-ind"></span></th>
-              <th class="cursor-pointer select-none" onclick="sortRoutes(5,'num',this)">Type <span class="sort-ind"></span></th>
-              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(6,'num',this)">GPX <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none" onclick="sortRoutes(2,'text',this)">Sport <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(3,'num',this)">Distance <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(4,'num',this)">Ascent <span class="sort-ind"></span></th>
+              <th class="cursor-pointer select-none text-right" onclick="sortRoutes(5,'num',this)">avg % <span class="sort-ind"></span></th>
+              <th>Flags</th>
             </tr>
           </thead>
           <tbody>
             {% for r in rows %}
-            <tr class="route-row {% if not r.is_active %}opacity-50{% endif %}"
-                data-search="{{ r.name|lower }} {{ r.world|lower }}">
+            <tr class="route-row" data-search="{{ r.name|lower }} {{ r.world|lower }}">
               <td class="font-medium" data-sort="{{ r.name|lower }}">
-                <a href="{% url 'routes:detail' r.pk %}" class="link link-primary">{{ r.name }}</a>
-                {% if r.whatsonzwift_url %}<a href="{{ r.whatsonzwift_url }}" target="_blank" rel="noopener" class="text-xs text-base-content/40 ml-1" title="View on whatsonzwift">↗</a>{% endif %}
-                {% if not r.is_active %} <span class="badge badge-ghost badge-xs">inactive</span>{% endif %}
+                <a href="{% url 'routes:detail' r.name_hash %}" class="link link-primary">{{ r.name }}</a>
               </td>
-              <td data-sort="{{ r.world|lower }}">{{ r.world|default:"—" }}</td>
-              <td class="text-right" data-sort="{{ r.distance_km }}">{{ r.distance_km }} km</td>
-              <td class="text-right" data-sort="{{ r.elevation_m }}">{{ r.elevation_m }} m</td>
-              <td class="text-right" data-sort="{{ r.m_per_km }}">{{ r.m_per_km }}</td>
-              <td data-sort="{{ r.terrain_rank }}"><span class="badge badge-outline badge-sm">{{ r.terrain }}</span></td>
-              <td class="text-right" data-sort="{{ r.gpx_count }}">{% if r.gpx_count %}<span class="badge badge-success badge-sm">{{ r.gpx_count }}</span>{% else %}—{% endif %}</td>
+              <td data-sort="{{ r.world|lower }}">{{ r.world }}</td>
+              <td data-sort="{{ r.sport }}"><span class="badge badge-ghost badge-sm">{{ r.sport }}</span></td>
+              <td class="text-right" data-sort="{{ r.total_km }}">{{ r.total_km }} km</td>
+              <td class="text-right" data-sort="{{ r.ascent_m }}">{{ r.ascent_m }} m</td>
+              <td class="text-right" data-sort="{{ r.avg_gradient_pct }}">{{ r.avg_gradient_pct }}</td>
+              <td class="whitespace-nowrap">
+                {% if r.event_only %}<span class="badge badge-warning badge-xs">event</span>{% endif %}
+                {% if r.supports_tt %}<span class="badge badge-info badge-xs">TT</span>{% endif %}
+                {% if r.level_locked %}<span class="badge badge-ghost badge-xs">Lv {{ r.level_locked }}</span>{% endif %}
+              </td>
             </tr>
             {% empty %}
-            <tr><td colspan="7" class="text-center text-base-content/60 py-6">No routes found.</td></tr>
+            <tr><td colspan="7" class="text-center text-base-content/60 py-6">No routes yet — use “Check for updates”.</td></tr>
             {% endfor %}
           </tbody>
         </table>
@@ -65,30 +84,19 @@
     <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Worlds" />
     <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
       <h2 class="text-xl font-semibold mb-1">Worlds</h2>
-      <p class="text-sm text-base-content/70 mb-4">{{ worlds|length }} Zwift worlds · "Ours" = routes/segments loaded here</p>
+      <p class="text-sm text-base-content/70 mb-4">{{ worlds|length }} Zwift worlds in the dataset</p>
       <div class="overflow-x-auto">
         <table class="table table-sm table-zebra">
           <thead>
-            <tr>
-              <th>World</th>
-              <th></th>
-              <th class="text-right">Our routes</th>
-              <th class="text-right">Our segments</th>
-              <th class="text-right">Zwift routes</th>
-              <th class="text-right">Zwift segments</th>
-              <th></th>
-            </tr>
+            <tr><th>World</th><th class="text-right">World ID</th><th class="text-right">Routes</th><th class="text-right">Segments</th></tr>
           </thead>
           <tbody>
             {% for w in worlds %}
             <tr>
               <td class="font-medium">{{ w.name }}</td>
-              <td>{% if w.popular %}<span class="badge badge-primary badge-xs">popular</span>{% endif %}</td>
-              <td class="text-right">{{ w.our_routes }}</td>
-              <td class="text-right">{{ w.our_segments }}</td>
-              <td class="text-right text-base-content/50">{{ w.routes }}</td>
-              <td class="text-right text-base-content/50">{{ w.segments }}</td>
-              <td class="text-right">{% if w.url %}<a href="{{ w.url }}" target="_blank" rel="noopener" class="link link-primary text-xs">whatsonzwift ↗</a>{% endif %}</td>
+              <td class="text-right text-base-content/50">{{ w.world_id }}</td>
+              <td class="text-right">{{ w.route_count }}</td>
+              <td class="text-right">{{ w.segment_count }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -96,25 +104,19 @@
       </div>
     </div>
 
-    {# ===== Segments (combined, filterable) ===== #}
+    {# ===== Segments ===== #}
     <input type="radio" name="routes_tabs" role="tab" class="tab" aria-label="Segments" />
     <div role="tabpanel" class="tab-content bg-base-200 border-base-300 rounded-box p-4">
-      <div class="flex flex-wrap justify-between items-end gap-3 mb-3">
-        <div>
-          <h2 class="text-xl font-semibold">Segments</h2>
-          <p class="text-sm text-base-content/70">{{ segments|length }} climbs, sprints &amp; other segments</p>
-        </div>
-        {% if user.is_race_ready or user.is_superuser %}
-        <a href="{% url 'routes:segment_create' %}" class="btn btn-primary btn-sm">+ Add segment</a>
-        {% endif %}
-      </div>
+      <h2 class="text-xl font-semibold">Segments</h2>
+      <p class="text-sm text-base-content/70 mb-3">{{ segments|length }} live segments — sprints, KOMs, climbs &amp; laps</p>
 
       <div class="flex flex-wrap items-center gap-2 mb-3">
         <div class="join" role="group" aria-label="Type filter">
           <button type="button" class="btn btn-xs join-item btn-active" data-seg-type="" onclick="segSetType(this)">All</button>
-          <button type="button" class="btn btn-xs join-item" data-seg-type="climb" onclick="segSetType(this)">Climbs</button>
           <button type="button" class="btn btn-xs join-item" data-seg-type="sprint" onclick="segSetType(this)">Sprints</button>
-          <button type="button" class="btn btn-xs join-item" data-seg-type="segment" onclick="segSetType(this)">Other</button>
+          <button type="button" class="btn btn-xs join-item" data-seg-type="kom" onclick="segSetType(this)">KOMs</button>
+          <button type="button" class="btn btn-xs join-item" data-seg-type="climb" onclick="segSetType(this)">Climbs</button>
+          <button type="button" class="btn btn-xs join-item" data-seg-type="lap" onclick="segSetType(this)">Laps</button>
         </div>
         <select id="seg-world" class="select select-bordered select-xs" onchange="segApplyFilters()">
           <option value="">All worlds</option>
@@ -124,7 +126,33 @@
                class="input input-bordered input-xs w-44" oninput="segApplyFilters()" />
       </div>
 
-      {% include "ttt_planner/_segment_table.html" with segments=segments empty_label="No segments yet." %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm table-zebra" id="segments-table">
+          <thead>
+            <tr>
+              <th>Segment</th><th>Type</th><th>World</th>
+              <th class="text-right">Length</th><th class="text-right">avg %</th><th class="text-right">Routes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for s in segments %}
+            <tr data-seg-type="{{ s.segment_type }}" data-seg-world="{{ s.world }}"
+                data-search="{{ s.display_name|lower }}">
+              <td class="font-medium">
+                <a href="{% url 'routes:segment_detail' s.segment_id %}" class="link link-primary">{{ s.display_name }}</a>
+                {% if s.gives_powerup %}<span title="Awards a power-up">⚡</span>{% endif %}
+              </td>
+              <td><span class="badge badge-outline badge-sm">{{ s.get_segment_type_display }}</span></td>
+              <td>{{ s.world }}</td>
+              <td class="text-right">{{ s.length_m }} m</td>
+              <td class="text-right">{{ s.avg_grade_pct }}</td>
+              <td class="text-right">{{ s.route_count }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        <p id="segments-no-match" class="hidden text-center text-base-content/60 py-6">No segments match your filters.</p>
+      </div>
     </div>
 
     {# ===== Power-ups ===== #}
@@ -143,11 +171,7 @@
         <table class="table table-sm table-zebra">
           <thead>
             <tr>
-              <th></th>
-              <th>PowerUp</th>
-              <th>Effect</th>
-              <th class="text-right">Duration</th>
-              <th></th>
+              <th></th><th>PowerUp</th><th>Effect</th><th class="text-right">Duration</th><th></th>
               {% if user.is_race_ready or user.is_superuser %}<th></th>{% endif %}
             </tr>
           </thead>
@@ -196,16 +220,13 @@
     });
   }
 
-  // ----- Segments tab: combined list filtered by type, world, and name -----
   var segType = "";
-
   function segSetType(btn) {
     segType = btn.getAttribute("data-seg-type");
     btn.parentNode.querySelectorAll("button").forEach(function (b) { b.classList.remove("btn-active"); });
     btn.classList.add("btn-active");
     segApplyFilters();
   }
-
   function segApplyFilters() {
     var world = (document.getElementById("seg-world") || {}).value || "";
     var q = ((document.getElementById("seg-search") || {}).value || "").trim().toLowerCase();
@@ -224,8 +245,7 @@
   function sortRoutes(col, type, header) {
     var table = document.getElementById("routes-table");
     var tbody = table.tBodies[0];
-    var asc = header.dataset.asc !== "true";  // toggle
-    // Reset all indicators, then mark this column.
+    var asc = header.dataset.asc !== "true";
     table.querySelectorAll("th").forEach(function (th) {
       delete th.dataset.asc;
       var ind = th.querySelector(".sort-ind");
@@ -234,7 +254,6 @@
     header.dataset.asc = asc;
     var ind = header.querySelector(".sort-ind");
     if (ind) ind.textContent = asc ? "▲" : "▼";
-
     var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr.route-row"));
     rows.sort(function (a, b) {
       var x = a.children[col].dataset.sort || "";

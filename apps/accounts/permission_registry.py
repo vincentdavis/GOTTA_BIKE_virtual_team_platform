@@ -50,7 +50,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "name": "Racing Admin",
         "description": "Manage racing-related settings",
         "views": [
-            "(Currently no view restrictions - used for role identification)",
+            "/routes/check-updates/ - Re-sync the Zwift Speed Lab route/segment dataset",
         ],
     },
     Permissions.TEAM_MEMBER: {

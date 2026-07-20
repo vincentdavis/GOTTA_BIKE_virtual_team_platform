@@ -97,6 +97,7 @@ INSTALLED_APPS = [
     "apps.tickets.apps.TicketsConfig",
     "apps.ttt_planner.apps.TttPlannerConfig",
     "apps.ladder_planner.apps.LadderPlannerConfig",
+    "apps.zwift_data.apps.ZwiftDataConfig",
     "django_tasks",
     "django_tasks_db",
 ]
@@ -730,6 +731,12 @@ CONSTANCE_CONFIG = {
         "List of event types available for event creation",
         "string_list_field",
     ),
+    # Zwift Speed Lab (canonical route/segment/world dataset)
+    "ZWIFT_SPEED_LAB_URL": (
+        "https://zwiftspeedlab.coalitionracing.com",
+        "Base URL of the Zwift Speed Lab app; its /api/data/all.zip bundle seeds the canonical dataset",
+        str,
+    ),
     # Strava API
     "STRAVA_CLUB_ID": (0, "Strava club ID for fetching club activities", int),
     "STRAVA_CLUB_URL": ("", "Strava club URL (e.g., https://www.strava.com/clubs/your-club)", str),
@@ -835,6 +842,12 @@ CONSTANCE_CONFIG = {
     "SCHEDULER_REFRESH_CACHED_CLUBS_HOURS": (
         24,
         "How often to check for stale cached opponent clubs and refresh those used by recent ladder matchups (hours). "
+        "Requires scheduler restart to take effect.",
+        int,
+    ),
+    "SCHEDULER_SYNC_ZWIFT_DATA_HOURS": (
+        168,
+        "How often to re-sync the Zwift Speed Lab route/segment dataset (hours; default weekly). "
         "Requires scheduler restart to take effect.",
         int,
     ),
@@ -1014,7 +1027,9 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS",
         "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS",
         "SCHEDULER_REFRESH_CACHED_CLUBS_HOURS",
+        "SCHEDULER_SYNC_ZWIFT_DATA_HOURS",
     ),
+    "Zwift Data": ("ZWIFT_SPEED_LAB_URL",),
     "TTT Planner": (
         "TTT_AIR_DENSITY",
         "TTT_CRR",
