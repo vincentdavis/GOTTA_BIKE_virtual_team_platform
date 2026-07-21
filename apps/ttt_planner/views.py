@@ -40,6 +40,7 @@ from apps.ttt_planner.services.compute import (
 from apps.ttt_planner.tasks import run_zwiftgopher_optimize
 from apps.zwift_data import catalog
 from apps.zwift_data.models import ZwiftDataset, ZwiftRoute, ZwiftSegment, ZwiftWorld
+from apps.zwift_data.services.velo import import_velo_from_file
 from apps.zwift_data.tasks import sync_zwift_data
 
 
@@ -154,17 +155,10 @@ def route_detail(request: HttpRequest, name_hash: str) -> HttpResponse:
 
     """
     route = get_object_or_404(ZwiftRoute, name_hash=name_hash)
-    # Bridge to the curated planner Route (vELO2 factor weights aren't in the canonical
-    # dataset) by name + world; None when this route isn't curated for the planners.
-    planner_route = Route.objects.filter(name__iexact=route.name, world__iexact=route.world).first()
     return render(
         request,
         "ttt_planner/route_detail.html",
-        {
-            "route": route,
-            "segments": catalog.route_segments(route.world_id, route.name_hash),
-            "planner_route": planner_route,
-        },
+        {"route": route, "segments": catalog.route_segments(route.world_id, route.name_hash)},
     )
 
 
@@ -232,6 +226,33 @@ def route_check_updates(request: HttpRequest) -> HttpResponse:
         sync_zwift_data.enqueue()
         messages.success(request, "Checking for updates — routes & segments will refresh in the background.")
         logfire.info("zwift_data sync enqueued from routes page", user_id=request.user.id)
+    return redirect("routes:list")
+
+
+@login_required
+@discord_permission_required("racing_admin", raise_exception=True)
+@require_POST
+def route_load_velo(request: HttpRequest) -> HttpResponse:
+    """Import ZwiftRacing vELO2 Race weights onto canonical routes (racing_admin).
+
+    Reads the bundled ZwiftRacing routes JSON and matches by ``name_hash``.
+
+    Returns:
+        Redirect back to the routes page.
+
+    """
+    try:
+        result = import_velo_from_file()
+    except (FileNotFoundError, ValueError) as exc:
+        messages.error(request, f"Couldn't load vELO weights: {exc}")
+        logfire.error("vELO import failed", error=str(exc), user_id=request.user.id)
+        return redirect("routes:list")
+    messages.success(
+        request,
+        f"vELO weights loaded — {result.updated} routes updated"
+        + (f", {result.unmatched} unmatched." if result.unmatched else "."),
+    )
+    logfire.info("vELO weights imported from routes page", updated=result.updated, user_id=request.user.id)
     return redirect("routes:list")
 
 

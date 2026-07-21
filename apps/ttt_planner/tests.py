@@ -942,15 +942,12 @@ def test_route_detail_renders(auth_client):
 
 
 @pytest.mark.django_db
-def test_route_detail_surfaces_velo_bars_from_planner_route(auth_client):
-    """A canonical route shows vELO2 bars from the planner Route matched by name+world."""
+def test_route_detail_surfaces_velo_bars(auth_client):
+    """A canonical route shows its vELO2 bars from the imported factor weights."""
     from apps.zwift_data.models import ZwiftRoute
 
     ZwiftRoute.objects.create(
-        name="Bon Voyage", world="France", world_id=10, name_hash="555", distance_km=28, ascent_m=132
-    )
-    Route.objects.create(
-        name="Bon Voyage", world="France", distance_km=28, elevation_m=132,
+        name="Bon Voyage", world="France", world_id=10, name_hash="555", distance_km=28, ascent_m=132,
         velo_sprint=38.13, velo_punch=21.87, velo_climb=0, velo_endurance=40.0, velo_pursuit=0,
     )
     body = auth_client.get(reverse("routes:detail", args=["555"])).content.decode()
@@ -959,8 +956,8 @@ def test_route_detail_surfaces_velo_bars_from_planner_route(auth_client):
 
 
 @pytest.mark.django_db
-def test_route_detail_hides_velo_card_without_planner_match(auth_client):
-    """A canonical route with no matching planner Route shows no vELO2 card."""
+def test_route_detail_hides_velo_card_without_weights(auth_client):
+    """A canonical route with no vELO2 weights shows no vELO2 card."""
     from apps.zwift_data.models import ZwiftRoute
 
     ZwiftRoute.objects.create(

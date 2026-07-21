@@ -80,31 +80,37 @@ def _upsert_worlds(routes: list[dict], segments: list[dict]) -> int:
 
 
 def _upsert_routes(routes: list[dict]) -> int:
-    """Replace all ZwiftRoute rows from the routes payload.
+    """Upsert ZwiftRoute rows from the routes payload, preserving curated fields.
+
+    Unlike worlds/segments, ZwiftRoute rows are FK targets (ladder + TTT planners) and
+    carry curated data (vELO2 weights, recommended_laps), so this updates in place by
+    ``name_hash`` — writing only ``SYNCED_FIELDS`` — and deletes routes that dropped out
+    of the dataset, rather than delete-and-recreate.
 
     Returns:
-        The number of routes written.
+        The number of routes in the payload.
 
     """
-    ZwiftRoute.objects.all().delete()
-    ZwiftRoute.objects.bulk_create([
-        ZwiftRoute(
-            name=r["name"],
-            world=r["world"],
-            world_id=r["world_id"],
-            name_hash=str(r["name_hash"]),
-            sport=r.get("sport") or ZwiftRoute.Sport.CYCLING,
-            distance_km=r.get("distance_km") or 0.0,
-            ascent_m=r.get("ascent_m") or 0,
-            avg_gradient_pct=r.get("avg_gradient_pct") or 0.0,
-            leadin_km=r.get("leadin_km") or 0.0,
-            leadin_ascent_m=r.get("leadin_ascent_m") or 0,
-            supports_tt=bool(r.get("supports_tt")),
-            event_only=bool(r.get("event_only")),
-            level_locked=r.get("level_locked") or 0,
-        )
-        for r in routes
-    ])
+    seen: set[str] = set()
+    for r in routes:
+        name_hash = str(r["name_hash"])
+        seen.add(name_hash)
+        synced = {
+            "name": r["name"],
+            "world": r["world"],
+            "sport": r.get("sport") or ZwiftRoute.Sport.CYCLING,
+            "distance_km": r.get("distance_km") or 0.0,
+            "ascent_m": r.get("ascent_m") or 0,
+            "avg_gradient_pct": r.get("avg_gradient_pct") or 0.0,
+            "leadin_km": r.get("leadin_km") or 0.0,
+            "leadin_ascent_m": r.get("leadin_ascent_m") or 0,
+            "supports_tt": bool(r.get("supports_tt")),
+            "event_only": bool(r.get("event_only")),
+            "level_locked": r.get("level_locked") or 0,
+        }
+        ZwiftRoute.objects.update_or_create(world_id=r["world_id"], name_hash=name_hash, defaults=synced)
+    # Drop routes no longer present in the dataset (SET_NULL cascades to any FK refs).
+    ZwiftRoute.objects.exclude(name_hash__in=seen).delete()
     return len(routes)
 
 

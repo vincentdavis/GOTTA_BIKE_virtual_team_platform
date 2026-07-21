@@ -16,12 +16,18 @@
       </p>
     </div>
     {% if can_check_updates %}
-    <form method="post" action="{% url 'routes:check_updates' %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-outline btn-sm" {% if dataset.syncing %}disabled{% endif %}>
-        {% if dataset.syncing %}<span class="loading loading-spinner loading-xs"></span> Updating…{% else %}⟳ Check for updates{% endif %}
-      </button>
-    </form>
+    <div class="flex flex-wrap gap-2">
+      <form method="post" action="{% url 'routes:check_updates' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline btn-sm" {% if dataset.syncing %}disabled{% endif %}>
+          {% if dataset.syncing %}<span class="loading loading-spinner loading-xs"></span> Updating…{% else %}⟳ Check for updates{% endif %}
+        </button>
+      </form>
+      <form method="post" action="{% url 'routes:load_velo' %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline btn-sm" title="Import ZwiftRacing vELO2 Race weights">⚙ Load vELO weights</button>
+      </form>
+    </div>
     {% endif %}
   </div>
   {% if dataset.last_error %}

@@ -16,6 +16,7 @@ app_name = "routes"
 urlpatterns = [
     path("", views.route_list, name="list"),
     path("check-updates/", views.route_check_updates, name="check_updates"),
+    path("load-velo/", views.route_load_velo, name="load_velo"),
     # chart data, fetched lazily when a route detail is opened
     path("api/<int:world_id>/<str:name_hash>/profile/", views.route_profile_json, name="profile_json"),
     path("api/<int:world_id>/<str:name_hash>/segments/", views.route_segments_json, name="route_segments_json"),

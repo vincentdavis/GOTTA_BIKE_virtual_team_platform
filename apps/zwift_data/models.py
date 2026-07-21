@@ -1,14 +1,15 @@
-"""Canonical Zwift worlds / routes / segments, synced from Zwift Speed Lab.
+"""Canonical Zwift worlds / routes / segments — the single source of truth.
 
-These are the *reference* dataset (source of truth for what routes and segments exist
-in Zwift), distinct from ``apps.ttt_planner.Route`` / ``Segment`` which stay for the
-TTT and Ladder planners (curated vELO2 weights, recommended laps, plan FKs). The two
-sets link by ``name`` + ``world`` when a planner needs canonical detail.
+Populated by ``apps.zwift_data.services.sync.sync_dataset`` from the Speed Lab
+``/api/data/all.zip`` bundle. ``ZwiftRoute`` also carries **curated** fields not in that
+dataset — the ZwiftRacing vELO2 Race factor weights (imported from JSON by
+``services.velo``) and Club Ladder ``recommended_laps`` — which the route sync preserves
+by upserting only ``SYNCED_FIELDS`` (see ``services.sync._upsert_routes``). The ladder
+and TTT planners FK straight to ``ZwiftRoute``.
 
-Rows are populated by ``apps.zwift_data.services.sync.sync_dataset`` from the
-``/api/data/all.zip`` bundle. Per-route elevation/GPS profiles are **not** stored here
-— they live as JSON in object storage and are served through ``catalog.py`` (see the
-``bucket file + memory cache`` decision).
+Per-route elevation/GPS profiles are **not** stored here — they live as JSON in object
+storage and are served through ``catalog.py`` (the ``bucket file + memory cache``
+decision).
 """
 
 from __future__ import annotations
@@ -65,6 +66,59 @@ class ZwiftRoute(models.Model):
     event_only = models.BooleanField(default=False, help_text="Only available inside an event")
     level_locked = models.PositiveIntegerField(default=0, help_text="Rider level required (0 = none)")
 
+    # ---- Curated fields (NOT from the Speed Lab dataset; preserved across syncs) ----
+    # ZwiftRacing vELO2 "Race" rating factor weights (percent, 0-100). Imported from the
+    # ZwiftRacing routes JSON (`import_velo_from_json`), matched by name_hash == routeId.
+    # They sum to ~100 per route; Time Trial Speed is excluded (it feeds the TT rating).
+    velo_sprint = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Sprint (%)"
+    )
+    velo_punch = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Punch (%)"
+    )
+    velo_climb = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Climb (%)"
+    )
+    velo_endurance = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Endurance (%)"
+    )
+    velo_pursuit = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Pursuit (%)"
+    )
+    velo_num_events = models.PositiveIntegerField(
+        null=True, blank=True, help_text="ZwiftRacing sample size the vELO2 weights are derived from"
+    )
+    recommended_laps = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Club Ladder recommended number of laps (curated)"
+    )
+    supports_laps = models.BooleanField(default=False, help_text="Route can be ridden as multiple laps (curated)")
+
+    # (field suffix, label, bar colour, icon) for the vELO2 Race factors, in canonical
+    # vELO2 order minus Time Trial Speed. Mirrors the ZwiftRacing "Event Factor Weights".
+    VELO_FACTOR_META: ClassVar[list[tuple[str, str, str, str]]] = [
+        ("sprint", "Sprint", "#3b82f6", "🚀"),
+        ("punch", "Punch", "#f59e0b", "🥊"),
+        ("climb", "Climb", "#16a34a", "⛰️"),
+        ("endurance", "Endurance", "#a21caf", "🔋"),
+        ("pursuit", "Pursuit", "#ef4444", "⏱️"),
+    ]
+
+    #: Synced fields written by the dataset sync — the upsert only touches these, so the
+    #: curated fields above survive a re-sync. Keep in step with ``services.sync``.
+    SYNCED_FIELDS: ClassVar[tuple[str, ...]] = (
+        "name",
+        "world",
+        "sport",
+        "distance_km",
+        "ascent_m",
+        "avg_gradient_pct",
+        "leadin_km",
+        "leadin_ascent_m",
+        "supports_tt",
+        "event_only",
+        "level_locked",
+    )
+
     class Meta:
         """Meta options for ZwiftRoute."""
 
@@ -93,6 +147,36 @@ class ZwiftRoute(models.Model):
 
         """
         return round(self.distance_km + self.leadin_km, 2)
+
+    @property
+    def has_velo_factors(self) -> bool:
+        """Whether vELO2 Race factor weights have been imported for this route.
+
+        Returns:
+            True if the factor weights are populated.
+
+        """
+        return self.velo_sprint is not None
+
+    def velo_factor_bars(self) -> list[dict]:
+        """Non-zero vELO2 Race factor weights, sorted high→low, with colour + icon.
+
+        Shared by the route detail page and the ladder planner "Event Factors" tab.
+
+        Returns:
+            A list of ``{key, label, color, icon, value}`` dicts (empty if no data).
+
+        """
+        if not self.has_velo_factors:
+            return []
+        bars = []
+        for key, label, color, icon in self.VELO_FACTOR_META:
+            raw = getattr(self, f"velo_{key}")
+            value = float(raw) if raw is not None else 0.0
+            if value > 0:
+                bars.append({"key": key, "label": label, "color": color, "icon": icon, "value": round(value, 1)})
+        bars.sort(key=lambda b: b["value"], reverse=True)
+        return bars
 
 
 class ZwiftSegment(models.Model):

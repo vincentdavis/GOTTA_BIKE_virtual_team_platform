@@ -16,12 +16,36 @@ ROUTES_DOC = {
     "count": 2,
     "worlds": ["Watopia", "London"],
     "routes": [
-        {"name": "Flat Route", "world": "Watopia", "world_id": 1, "name_hash": "111", "sport": "cycling",
-         "distance_km": 10.0, "ascent_m": 50, "avg_gradient_pct": 0.5, "leadin_km": 0.5, "leadin_ascent_m": 2,
-         "supports_tt": True, "event_only": False, "level_locked": 0},
-        {"name": "Box Hill", "world": "London", "world_id": 3, "name_hash": "222", "sport": "cycling",
-         "distance_km": 5.0, "ascent_m": 120, "avg_gradient_pct": 2.4, "leadin_km": 0.0, "leadin_ascent_m": 0,
-         "supports_tt": False, "event_only": True, "level_locked": 5},
+        {
+            "name": "Flat Route",
+            "world": "Watopia",
+            "world_id": 1,
+            "name_hash": "111",
+            "sport": "cycling",
+            "distance_km": 10.0,
+            "ascent_m": 50,
+            "avg_gradient_pct": 0.5,
+            "leadin_km": 0.5,
+            "leadin_ascent_m": 2,
+            "supports_tt": True,
+            "event_only": False,
+            "level_locked": 0,
+        },
+        {
+            "name": "Box Hill",
+            "world": "London",
+            "world_id": 3,
+            "name_hash": "222",
+            "sport": "cycling",
+            "distance_km": 5.0,
+            "ascent_m": 120,
+            "avg_gradient_pct": 2.4,
+            "leadin_km": 0.0,
+            "leadin_ascent_m": 0,
+            "supports_tt": False,
+            "event_only": True,
+            "level_locked": 5,
+        },
     ],
 }
 SEGMENTS_DOC = {
@@ -29,19 +53,52 @@ SEGMENTS_DOC = {
     "named": 1,
     "worlds": ["Watopia"],
     "segments": [
-        {"id": "-500", "name": "Sprint A", "type": "sprint", "direction": "Forward", "world": "Watopia",
-         "world_id": 1, "course_id": 6, "road_id": 1, "length_m": 200, "ascent_m": 2.0, "avg_grade_pct": 1.0,
-         "max_grade_pct": 2.0, "gives_powerup": True, "type_": "sprint", "route_count": 1,
-         "routes": [{"name": "Flat Route", "name_hash": "111", "world_id": 1,
-                     "pct_start": 0.1, "pct_end": 0.12, "start_m": 1000, "end_m": 1200, "span_m": 200}]},
+        {
+            "id": "-500",
+            "name": "Sprint A",
+            "type": "sprint",
+            "direction": "Forward",
+            "world": "Watopia",
+            "world_id": 1,
+            "course_id": 6,
+            "road_id": 1,
+            "length_m": 200,
+            "ascent_m": 2.0,
+            "avg_grade_pct": 1.0,
+            "max_grade_pct": 2.0,
+            "gives_powerup": True,
+            "type_": "sprint",
+            "route_count": 1,
+            "routes": [
+                {
+                    "name": "Flat Route",
+                    "name_hash": "111",
+                    "world_id": 1,
+                    "pct_start": 0.1,
+                    "pct_end": 0.12,
+                    "start_m": 1000,
+                    "end_m": 1200,
+                    "span_m": 200,
+                }
+            ],
+        },
     ],
 }
 PROFILES_DOC = {
     "count": 1,
     "profiles": {
-        "1:111": {"d": [0, 500, 1000], "e": [0, 5, 10], "lat": [1.0, 1.001, 1.002],
-                  "lon": [2.0, 2.001, 2.002], "leadin_m": 0, "dist_m": 1000, "ascent_m": 10,
-                  "elev_min": 0, "elev_max": 10, "max_grade_pct": 2.0},
+        "1:111": {
+            "d": [0, 500, 1000],
+            "e": [0, 5, 10],
+            "lat": [1.0, 1.001, 1.002],
+            "lon": [2.0, 2.001, 2.002],
+            "leadin_m": 0,
+            "dist_m": 1000,
+            "ascent_m": 10,
+            "elev_min": 0,
+            "elev_max": 10,
+            "max_grade_pct": 2.0,
+        },
     },
 }
 
@@ -99,6 +156,44 @@ def test_sync_populates_models_and_dataset(synced):
     assert ds.profiles_count == 1
     world = ZwiftWorld.objects.get(name="Watopia")
     assert world.route_count == 1 and world.segment_count == 1
+
+
+@pytest.mark.django_db
+def test_velo_import_and_survives_resync(synced):
+    """Import vELO weights onto routes by name_hash; they survive a re-sync (upsert)."""
+    from apps.zwift_data.services.velo import import_velo_weights
+
+    velo_json = [
+        {
+            "routeId": "111",
+            "name": "Flat Route",
+            "numEvents": 50,
+            "velo": {"race": {"endurance": 0.4, "pursuit": 0.4, "sprint": 0.2, "punch": 0, "climb": 0, "timeTrial": 0}},
+        },
+        {"routeId": "999", "name": "Ghost Route", "velo": {"race": {"sprint": 1.0}}},
+    ]
+    result = import_velo_weights(velo_json)
+    assert result.updated == 1 and result.unmatched == 1
+    route = ZwiftRoute.objects.get(name_hash="111")
+    assert route.has_velo_factors
+    assert route.velo_num_events == 50
+    # fractions stored as percent, TT dropped
+    bars = {b["label"]: b["value"] for b in route.velo_factor_bars()}
+    assert bars["Endurance"] == pytest.approx(40.0)
+    assert bars["Sprint"] == pytest.approx(20.0)
+    # a re-sync (upsert) preserves the curated vELO and keeps the PK stable
+    pk = route.pk
+    with patch.object(sync, "_download", return_value=(_make_bundle(), "x")):
+        sync.sync_dataset()
+    route.refresh_from_db()
+    assert route.pk == pk and route.has_velo_factors
+
+
+@pytest.mark.django_db
+def test_load_velo_forbidden_for_team_member(synced, auth_client):
+    """A plain team member cannot trigger the vELO import."""
+    resp = auth_client.post(reverse("routes:load_velo"))
+    assert resp.status_code == 403
 
 
 @pytest.mark.django_db
