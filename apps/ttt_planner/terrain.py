@@ -65,21 +65,23 @@ def terrain_label(value: str) -> str:
 
 
 def route_options() -> list[dict[str, Any]]:
-    """Build the active-route list for course pickers, with a derived terrain type.
+    """Build the cycling-route list for course pickers, with a derived terrain type.
+
+    Reads the canonical :class:`~apps.zwift_data.models.ZwiftRoute` dataset.
 
     Returns:
         A list of dicts with ``pk``, ``name``, ``label``, and ``terrain`` per
-        active route, ordered by name.
+        cycling route, ordered by world then name.
 
     """
-    from apps.ttt_planner.models import Route  # local import to avoid app-load ordering issues
+    from apps.zwift_data.models import ZwiftRoute  # local import to avoid app-load ordering issues
 
     return [
         {
             "pk": route.pk,
             "name": route.name,
-            "label": f"{route.name} ({route.distance_km} km / {route.elevation_m} m)",
-            "terrain": derive_terrain(float(route.distance_km), route.elevation_m),
+            "label": f"{route.name} — {route.world} ({route.distance_km:g} km / {route.ascent_m} m)",
+            "terrain": derive_terrain(float(route.distance_km), route.ascent_m),
         }
-        for route in Route.objects.filter(is_active=True)
+        for route in ZwiftRoute.objects.filter(sport=ZwiftRoute.Sport.CYCLING)
     ]

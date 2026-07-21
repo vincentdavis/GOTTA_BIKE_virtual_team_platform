@@ -3,13 +3,35 @@
 import pytest
 from django.urls import reverse
 
-from apps.ttt_planner.models import PlanRider, Route, TttPlan
+from apps.ttt_planner.models import PlanRider, TttPlan
 from apps.ttt_planner.services import physics, zwiftgopher
 from apps.ttt_planner.services.compute import compute_auto_balance, compute_plan, sustainable_speed
 from apps.ttt_planner.services.roster import get_rider_data
 from apps.ttt_planner.tasks import run_zwiftgopher_optimize
+from apps.zwift_data.models import ZwiftRoute
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
+
+
+def make_route(name="Route", distance_km=10, elevation_m=0, world="Watopia", world_id=1, name_hash=None, **velo):
+    """Create a canonical ZwiftRoute for planner tests (ascent from elevation_m).
+
+    Extra keyword args (velo_sprint, recommended_laps, …) pass straight to the model.
+
+    Returns:
+        The created ZwiftRoute.
+
+    """
+    return ZwiftRoute.objects.create(
+        name=name,
+        world=world,
+        world_id=world_id,
+        name_hash=name_hash or name[:32],
+        distance_km=distance_km,
+        ascent_m=elevation_m,
+        **velo,
+    )
+
 
 # --------------------------------------------------------------------------- #
 # Physics
@@ -102,7 +124,7 @@ def test_training_stress_score():
 @pytest.mark.django_db
 def test_compute_plan_np_tss_with_route(team_member):
     """With a route (finish time), riders get Normalized Power and TSS."""
-    route = Route.objects.create(name="NP Route", distance_km=20, elevation_m=0)
+    route = make_route(name="NP Route", distance_km=20, elevation_m=0)
     plan = TttPlan.objects.create(created_by=team_member, route=route, target_speed_kph=42)
     PlanRider.objects.create(plan=plan, order=0, name="A", weight_kg=72, height_cm=178, ftp_w=300, pull_duration_s=45)
     PlanRider.objects.create(plan=plan, order=1, name="B", weight_kg=78, height_cm=182, ftp_w=300, pull_duration_s=45)
@@ -128,7 +150,7 @@ def test_compute_plan_no_np_without_route(team_member):
 @pytest.mark.django_db
 def test_np_tss_none_without_ftp(team_member):
     """A rider with no FTP gets NP but no TSS."""
-    route = Route.objects.create(name="NP Route 2", distance_km=15, elevation_m=0)
+    route = make_route(name="NP Route 2", distance_km=15, elevation_m=0)
     plan = TttPlan.objects.create(created_by=team_member, route=route, target_speed_kph=40)
     PlanRider.objects.create(plan=plan, order=0, name="NoFTP", weight_kg=70, height_cm=175)
     result = compute_plan(plan)
@@ -202,7 +224,7 @@ def test_auto_balance_view_applies(auth_client, team_member):
 @pytest.mark.django_db
 def test_compute_plan_basic(team_member):
     """compute_plan produces per-rider pull power and a team average."""
-    route = Route.objects.create(name="Test Flat", distance_km=20, elevation_m=0)
+    route = make_route(name="Test Flat", distance_km=20, elevation_m=0)
     plan = TttPlan.objects.create(created_by=team_member, route=route, target_speed_kph=40)
     PlanRider.objects.create(plan=plan, order=0, name="A", weight_kg=70, height_cm=175, ftp_w=300)
     PlanRider.objects.create(plan=plan, order=1, name="B", weight_kg=80, height_cm=185, ftp_w=320)
@@ -314,7 +336,7 @@ def test_add_manual_rider_flow(auth_client, team_member):
 @pytest.mark.django_db
 def test_plan_update_changes_speed_and_route(auth_client, team_member):
     """Posting plan settings updates the speed and route and recomputes."""
-    route = Route.objects.create(name="Update Route", distance_km=15, elevation_m=0)
+    route = make_route(name="Update Route", distance_km=15, elevation_m=0)
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
     resp = auth_client.post(
         reverse("ttt_planner:update", args=[plan.pk]),
@@ -607,7 +629,7 @@ def test_plan_update_stores_event_type(auth_client, team_member):
 @pytest.mark.django_db
 def test_plan_list_shows_event_riders_team_and_time(auth_client, team_member):
     """The plan list shows team name, event, rider count, and an estimated time."""
-    route = Route.objects.create(name="List Route", distance_km=20, elevation_m=0)
+    route = make_route(name="List Route", distance_km=20, elevation_m=0)
     plan = TttPlan.objects.create(
         created_by=team_member,
         name="My Plan",
@@ -866,8 +888,8 @@ def test_route_options_includes_terrain():
     """route_options exposes a derived terrain type per active route."""
     from apps.ttt_planner import terrain
 
-    Route.objects.create(name="Flatland", distance_km=30, elevation_m=120)
-    Route.objects.create(name="Climby", distance_km=10, elevation_m=300)
+    make_route(name="Flatland", distance_km=30, elevation_m=120)
+    make_route(name="Climby", distance_km=10, elevation_m=300)
     by_name = {o["name"]: o for o in terrain.route_options()}
     assert by_name["Flatland"]["terrain"] == "flat"
     assert by_name["Climby"]["terrain"] == "mountainous"
@@ -877,7 +899,7 @@ def test_route_options_includes_terrain():
 def test_plan_update_sets_course_name_and_type(auth_client, team_member):
     """The plan update endpoint persists the course name and type."""
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
-    route = Route.objects.create(name="Bon Voyage", distance_km=28.21, elevation_m=132)
+    route = make_route(name="Bon Voyage", distance_km=28.21, elevation_m=132)
     resp = auth_client.post(
         reverse("ttt_planner:update", args=[plan.pk]),
         {"route": route.pk, "course_name": "Bon Voyage", "course_type": "flat"},
@@ -912,19 +934,7 @@ def test_route_list_page_renders(auth_client):
     assert b"Climby Loop" in resp.content
     # Columns are sortable.
     assert b"sortRoutes" in resp.content
-    assert b'data-sort=' in resp.content
-
-
-@pytest.mark.django_db
-def test_whatsonzwift_url():
-    """The route builds a whatsonzwift link from world + name (name-based slug)."""
-    bon = Route.objects.create(name="Bon Voyage", world="France", distance_km=28.21, elevation_m=132)
-    assert bon.whatsonzwift_url == "https://whatsonzwift.com/world/france/route/bon-voyage"
-    # Bologna world is slugged "bologna-tt" on whatsonzwift; route slug from the name.
-    bologna = Route.objects.create(name="Bologna Time Trial", world="Bologna", distance_km=8.05, elevation_m=236)
-    assert bologna.whatsonzwift_url == "https://whatsonzwift.com/world/bologna-tt/route/bologna-time-trial"
-    # No world -> no link.
-    assert Route.objects.create(name="Nowhere", world="", distance_km=5, elevation_m=10).whatsonzwift_url == ""
+    assert b"data-sort=" in resp.content
 
 
 @pytest.mark.django_db
@@ -947,8 +957,17 @@ def test_route_detail_surfaces_velo_bars(auth_client):
     from apps.zwift_data.models import ZwiftRoute
 
     ZwiftRoute.objects.create(
-        name="Bon Voyage", world="France", world_id=10, name_hash="555", distance_km=28, ascent_m=132,
-        velo_sprint=38.13, velo_punch=21.87, velo_climb=0, velo_endurance=40.0, velo_pursuit=0,
+        name="Bon Voyage",
+        world="France",
+        world_id=10,
+        name_hash="555",
+        distance_km=28,
+        ascent_m=132,
+        velo_sprint=38.13,
+        velo_punch=21.87,
+        velo_climb=0,
+        velo_endurance=40.0,
+        velo_pursuit=0,
     )
     body = auth_client.get(reverse("routes:detail", args=["555"])).content.decode()
     assert "vELO2 Event Factor Weights" in body
@@ -970,7 +989,7 @@ def test_route_detail_hides_velo_card_without_weights(auth_client):
 @pytest.mark.django_db
 def test_velo_factor_bars_sorted_nonzero():
     """velo_factor_bars drops zero factors and sorts high→low with colour + icon."""
-    route = Route.objects.create(
+    route = make_route(
         name="Weighted",
         distance_km=2,
         elevation_m=17,
@@ -983,7 +1002,7 @@ def test_velo_factor_bars_sorted_nonzero():
     bars = route.velo_factor_bars()
     assert [b["label"] for b in bars] == ["Endurance", "Sprint", "Punch"]
     assert all(b["value"] > 0 and b["color"] and b["icon"] for b in bars)
-    assert Route.objects.create(name="Bare", distance_km=5, elevation_m=10).velo_factor_bars() == []
+    assert make_route(name="Bare", distance_km=5, elevation_m=10).velo_factor_bars() == []
 
 
 # --------------------------------------------------------------------------- #
@@ -1050,8 +1069,13 @@ def test_climb_strength_per_rider_gaps(team_member):
 
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
     strong_w = {
-        "power_w5": 1100, "power_w15": 880, "power_w30": 770, "power_w60": 560,
-        "power_w120": 500, "power_w300": 420, "power_w1200": 360,
+        "power_w5": 1100,
+        "power_w15": 880,
+        "power_w30": 770,
+        "power_w60": 560,
+        "power_w120": 500,
+        "power_w300": 420,
+        "power_w1200": 360,
     }
     weak_w = {k: int(v * 0.75) for k, v in strong_w.items()}
     ZRRider.objects.create(zwid=101, name="Strong", weight=66, height=178, **strong_w)
@@ -1082,136 +1106,22 @@ def test_climb_strength_unavailable_without_zr(team_member):
 
 
 @pytest.mark.django_db
-def test_route_create_gated_on_race_verified(client, user_model):
-    member = user_model.objects.create_user(
-        username="rv_member", permission_overrides={"team_member": True}, is_race_ready=False
-    )
-    client.force_login(member)
-    assert client.get("/routes/new/").status_code == 403  # team member but not verified
-
-    member.is_race_ready = True
-    member.save(update_fields=["is_race_ready"])
-    assert client.get("/routes/new/").status_code == 200
-
-    resp = client.post(
-        "/routes/new/",
-        {
-            "name": "Test Climb Route", "world": "Watopia", "distance_km": "12.5",
-            "elevation_m": "180", "lead_in_distance_km": "0.3", "lead_in_elevation_m": "5",
-            "recommended_laps": "3", "supports_laps": "on", "is_active": "on",
-        },
-    )
-    assert resp.status_code == 302
-    assert Route.objects.filter(name="Test Climb Route", recommended_laps=3, supports_laps=True).exists()
-
-
-@pytest.mark.django_db
-def test_segment_create_and_edit_race_verified(client, user_model):
-    from apps.ttt_planner.models import Segment
-
-    verified = user_model.objects.create_user(
-        username="rv2", permission_overrides={"team_member": True}, is_race_ready=True
-    )
-    client.force_login(verified)
-
-    # Preselects type from the query string.
-    assert 'value="climb" selected' in client.get("/routes/segments/new/?type=climb").content.decode()
-
-    resp = client.post(
-        "/routes/segments/new/",
-        {"segment_type": "climb", "name": "Epic KOM", "world": "Watopia", "length_m": "4100", "elevation_m": "320"},
-    )
-    assert resp.status_code == 302
-    seg = Segment.objects.get(name="Epic KOM")
-    assert seg.segment_type == "climb"
-
-    resp = client.post(
-        f"/routes/segments/{seg.pk}/edit/",
-        {"segment_type": "climb", "name": "Epic KOM (rev)", "world": "Watopia",
-         "length_m": "4200", "elevation_m": "350"},
-    )
-    assert resp.status_code == 302
-    seg.refresh_from_db()
-    assert seg.name == "Epic KOM (rev)" and seg.length_m == 4200
-
-
-@pytest.mark.django_db
-def test_segment_create_denied_for_unverified(client, user_model):
-    member = user_model.objects.create_user(
-        username="rv3", permission_overrides={"team_member": True}, is_race_ready=False
-    )
-    client.force_login(member)
-    assert client.get("/routes/segments/new/").status_code == 403
-
-
-# ----- segment import command --------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-def test_import_segments_command(tmp_path):
-    import json
-
-    from django.core.management import call_command
-
-    from apps.ttt_planner.models import Segment
-
-    data = [
-        {"name": "Test KOM", "type": "Climb", "category": "2", "direction": "Forward",
-         "distance_km": 5.0, "grade_pct": 6.0,
-         "url": "https://whatsonzwift.com/world/watopia/segment/test-kom/forward"},
-        {"name": "Test Sprint", "type": "Sprint", "direction": "Reverse", "distance_m": 300,
-         "grade_pct": None, "url": "https://whatsonzwift.com/world/london/segment/test-sprint/reverse"},
-    ]
-    f = tmp_path / "seg.json"
-    f.write_text(json.dumps(data))
-
-    call_command("import_segments", file=str(f))
-
-    kom = Segment.objects.get(name="Test KOM")
-    assert kom.segment_type == "climb" and kom.direction == "forward" and kom.world == "Watopia"
-    assert kom.length_m == 5000 and kom.elevation_m == 300 and kom.category == "2"
-
-    sprint = Segment.objects.get(name="Test Sprint")
-    assert sprint.segment_type == "sprint" and sprint.direction == "reverse"
-    assert sprint.world == "London" and sprint.length_m == 300
-
-    call_command("import_segments", file=str(f))  # idempotent
-    assert Segment.objects.filter(name="Test KOM").count() == 1
-
-
-@pytest.mark.django_db
-def test_admin_segment_import_button(client, superuser):
-    from apps.ttt_planner.models import Segment
-
-    client.force_login(superuser)
-    resp = client.get(reverse("admin:ttt_planner_segment_import"))
-    assert resp.status_code == 302  # redirects back to the changelist
-    assert resp.url == reverse("admin:ttt_planner_segment_changelist")
-    assert Segment.objects.count() > 100  # bundled dataset loaded
-
-
 @pytest.mark.django_db
 def test_segment_detail_view(auth_client):
     """The canonical segment detail page renders a Zwift segment by its id."""
     from apps.zwift_data.models import ZwiftSegment
 
     seg = ZwiftSegment.objects.create(
-        segment_id=1047919487, name="Epic KOM", segment_type="climb", world="Watopia",
-        world_id=1, length_m=9500, avg_grade_pct=4, max_grade_pct=9, ascent_m=380,
+        segment_id=1047919487,
+        name="Epic KOM",
+        segment_type="climb",
+        world="Watopia",
+        world_id=1,
+        length_m=9500,
+        avg_grade_pct=4,
+        max_grade_pct=9,
+        ascent_m=380,
     )
     resp = auth_client.get(reverse("routes:segment_detail", args=[seg.segment_id]))
     assert resp.status_code == 200
     assert "Epic KOM" in resp.content.decode()
-
-
-@pytest.mark.django_db
-def test_route_form_segments_filtered_to_world():
-    from apps.ttt_planner.forms import RouteForm
-    from apps.ttt_planner.models import Route, Segment
-
-    Segment.objects.create(name="Watopia Climb", segment_type="climb", world="Watopia", length_m=1000)
-    Segment.objects.create(name="London Climb", segment_type="climb", world="London", length_m=1000)
-    route = Route.objects.create(name="Wato Route", world="Watopia", distance_km=10, elevation_m=0)
-
-    offered = set(RouteForm(instance=route).fields["segments"].queryset.values_list("name", flat=True))
-    assert offered == {"Watopia Climb"}  # only this route's world is offered

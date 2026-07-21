@@ -2,9 +2,7 @@
 
 The reference data (worlds/routes/segments) is the canonical Zwift Speed Lab dataset
 (:mod:`apps.zwift_data`); routes are keyed by their stable ``name_hash`` and segments by
-their ``segment_id`` so links survive a data re-sync. Power-ups remain locally curated,
-and the old ``ttt_planner.Route`` / ``Segment`` CRUD stays for planner curation (vELO2
-weights, recommended laps — data not present in the canonical dataset).
+their ``segment_id`` so links survive a data re-sync. Power-ups remain locally curated.
 """
 
 from django.urls import path
@@ -23,11 +21,7 @@ urlpatterns = [
     # canonical detail pages (stable keys, survive a re-sync)
     path("r/<str:name_hash>/", views.route_detail, name="detail"),
     path("segments/s/<str:segment_id>/", views.segment_detail, name="segment_detail"),
-    # locally-curated planner data (old Route/Segment + PowerUps)
-    path("new/", views.route_create, name="create"),
-    path("<int:route_id>/edit/", views.route_edit, name="edit"),
-    path("segments/new/", views.segment_create, name="segment_create"),
-    path("segments/<int:segment_id>/edit/", views.segment_edit, name="segment_edit"),
+    # locally-curated PowerUps
     path("powerups/new/", views.powerup_create, name="powerup_create"),
     path("powerups/<int:powerup_id>/edit/", views.powerup_edit, name="powerup_edit"),
 ]

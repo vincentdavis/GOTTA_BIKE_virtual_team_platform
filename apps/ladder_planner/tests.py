@@ -15,9 +15,29 @@ from apps.ladder_planner import tasks as lp_tasks
 from apps.ladder_planner import views as lp_views
 from apps.ladder_planner.models import CachedClub, CachedRider, CourseProfile, LadderMatchup, LadderRider, Side
 from apps.ladder_planner.services import cache, compute, courses, normalize, roster, squads
+from apps.zwift_data.models import ZwiftRoute
 from apps.zwiftracing.models import ZRRider
 
 # ----- fixtures / helpers ------------------------------------------------------------------------
+
+
+def make_route(name="Route", distance_km=10, elevation_m=0, world="Watopia", world_id=1, name_hash=None, **velo):
+    """Create a canonical ZwiftRoute for ladder tests (ascent from elevation_m).
+
+    Returns:
+        The created ZwiftRoute.
+
+    """
+    return ZwiftRoute.objects.create(
+        name=name,
+        world=world,
+        world_id=world_id,
+        name_hash=name_hash or name[:32],
+        distance_km=distance_km,
+        ascent_m=elevation_m,
+        **velo,
+    )
+
 
 API_RIDER = {
     "riderId": 87402,
@@ -636,10 +656,9 @@ def test_derive_profile_from_climbing_density(distance_km, elevation_m, expected
 
 @pytest.mark.django_db
 def test_route_options_includes_derived_profile():
-    from apps.ttt_planner.models import Route
 
-    Route.objects.create(name="Flatland", distance_km=30, elevation_m=120)
-    Route.objects.create(name="Climby", distance_km=10, elevation_m=300)
+    make_route(name="Flatland", distance_km=30, elevation_m=120)
+    make_route(name="Climby", distance_km=10, elevation_m=300)
     by_name = {o["name"]: o for o in courses.route_options()}
     assert by_name["Flatland"]["profile"] == CourseProfile.FLAT
     assert by_name["Climby"]["profile"] == CourseProfile.MOUNTAINOUS
@@ -647,10 +666,9 @@ def test_route_options_includes_derived_profile():
 
 @pytest.mark.django_db
 def test_matchup_update_sets_route(auth_client, team_member):
-    from apps.ttt_planner.models import Route
 
     matchup = _make_matchup(team_member)
-    route = Route.objects.create(name="Bon Voyage", distance_km=28.21, elevation_m=132)
+    route = make_route(name="Bon Voyage", distance_km=28.21, elevation_m=132)
     resp = auth_client.post(
         f"/ladder/{matchup.pk}/update/",
         {"route": route.pk, "course_name": "Bon Voyage", "course_profile": "flat"},
@@ -809,9 +827,8 @@ def test_climb_advantage_unavailable_without_data(team_member):
 @pytest.mark.django_db
 def test_event_factors_sorted_desc_and_nonzero_only(team_member):
     from apps.ladder_planner.services import compute
-    from apps.ttt_planner.models import Route
 
-    route = Route.objects.create(
+    route = make_route(
         name="Downtown Dolphin",
         distance_km=2.0,
         elevation_m=17,
@@ -845,9 +862,8 @@ def test_event_factors_unavailable_without_route(team_member):
 @pytest.mark.django_db
 def test_event_factors_unavailable_when_route_has_no_weights(team_member):
     from apps.ladder_planner.services import compute
-    from apps.ttt_planner.models import Route
 
-    route = Route.objects.create(name="Blank", distance_km=10, elevation_m=50)
+    route = make_route(name="Blank", distance_km=10, elevation_m=50)
     ef = compute.event_factors(_make_matchup(team_member, route=route))
     assert ef["available"] is False
 
@@ -856,9 +872,7 @@ def test_event_factors_unavailable_when_route_has_no_weights(team_member):
 def test_event_factors_tab_renders(auth_client, team_member):
     from django.urls import reverse
 
-    from apps.ttt_planner.models import Route
-
-    route = Route.objects.create(
+    route = make_route(
         name="Watopia Flat Route",
         distance_km=10.3,
         elevation_m=61,
@@ -884,53 +898,13 @@ def test_event_factors_tab_empty_state(auth_client, team_member):
     assert "Select a route to see" in body
 
 
-@pytest.mark.django_db
-def test_import_velo_weights_matches_by_name(tmp_path):
-    from django.core.management import call_command
-
-    from apps.ttt_planner.models import Route
-
-    route = Route.objects.create(name="Bon Voyage", distance_km=28.2, elevation_m=132)
-    doc = tmp_path / "weights.md"
-    doc.write_text(
-        "| World | Route | Sprint | Punch | Climb | Endurance | Pursuit |\n"
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: |\n"
-        "| France | [Bon Voyage](https://example/) | 25.77% | 18.47% | 0.00% | 7.65% | 48.11% |\n",
-    )
-    call_command("import_velo_weights", "--file", str(doc))
-    route.refresh_from_db()
-    assert float(route.velo_sprint) == pytest.approx(25.77)
-    assert float(route.velo_endurance) == pytest.approx(7.65)
-    assert float(route.velo_pursuit) == pytest.approx(48.11)
-
-
-@pytest.mark.django_db
-def test_import_velo_weights_if_empty_preserves_existing(tmp_path):
-    from django.core.management import call_command
-
-    from apps.ttt_planner.models import Route
-
-    # A route already carrying (manually edited) weights must not be overwritten.
-    edited = Route.objects.create(name="Bon Voyage", distance_km=28.2, elevation_m=132, velo_sprint=99)
-    doc = tmp_path / "weights.md"
-    doc.write_text(
-        "| World | Route | Sprint | Punch | Climb | Endurance | Pursuit |\n"
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: |\n"
-        "| France | [Bon Voyage](https://example/) | 25.77% | 18.47% | 0.00% | 7.65% | 48.11% |\n",
-    )
-    call_command("import_velo_weights", "--file", str(doc), "--if-empty")
-    edited.refresh_from_db()
-    assert float(edited.velo_sprint) == pytest.approx(99)  # untouched
-
-
 # ----- Event factor match ------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
 def test_event_factor_match_weighted_fit_and_rows(team_member):
-    from apps.ttt_planner.models import Route
 
-    route = Route.objects.create(
+    route = make_route(
         name="MatchRoute",
         distance_km=10,
         elevation_m=50,
@@ -967,9 +941,8 @@ def test_event_factor_match_weighted_fit_and_rows(team_member):
 
 @pytest.mark.django_db
 def test_event_factor_match_unavailable_without_opponent(team_member):
-    from apps.ttt_planner.models import Route
 
-    route = Route.objects.create(
+    route = make_route(
         name="R",
         distance_km=10,
         elevation_m=50,
@@ -996,9 +969,7 @@ def test_event_factor_match_unavailable_without_route(team_member):
 def test_event_factor_match_tab_renders(auth_client, team_member):
     from django.urls import reverse
 
-    from apps.ttt_planner.models import Route
-
-    route = Route.objects.create(
+    route = make_route(
         name="RenderRoute",
         distance_km=10,
         elevation_m=50,

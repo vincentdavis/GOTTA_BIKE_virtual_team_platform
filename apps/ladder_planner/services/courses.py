@@ -1,9 +1,9 @@
 """Course / route helpers for the ladder planner.
 
-Routes come from the shared ``ttt_planner.Route`` library, which carries distance
-and elevation but no terrain type. ``derive_profile`` estimates a terrain profile
-from climbing density (metres of climb per km) so picking a route can suggest the
-``CourseProfile`` that drives the projected-score handicap. The suggestion stays
+Routes come from the canonical ``zwift_data.ZwiftRoute`` library, which carries
+distance and elevation but no terrain type. ``derive_profile`` estimates a terrain
+profile from climbing density (metres of climb per km) so picking a route can suggest
+the ``CourseProfile`` that drives the projected-score handicap. The suggestion stays
 editable — it is only a prefill.
 """
 
@@ -32,22 +32,24 @@ def derive_profile(distance_km: float | None, elevation_m: float | None) -> str:
 
 
 def route_options() -> list[dict[str, Any]]:
-    """Build the active-route list for the course picker, with a derived profile.
+    """Build the cycling-route list for the course picker, with a derived profile.
+
+    Reads the canonical :class:`~apps.zwift_data.models.ZwiftRoute` dataset.
 
     Returns:
         A list of dicts with ``pk``, ``name``, ``label``, and ``profile`` (the
-        derived ``CourseProfile`` value) per active route, ordered by name.
+        derived ``CourseProfile`` value) per cycling route, ordered by world then name.
 
     """
-    from apps.ttt_planner.models import Route  # local import to avoid app-load ordering issues
+    from apps.zwift_data.models import ZwiftRoute  # local import to avoid app-load ordering issues
 
     options = []
-    for route in Route.objects.filter(is_active=True):
-        profile = derive_profile(float(route.distance_km), route.elevation_m)
+    for route in ZwiftRoute.objects.filter(sport=ZwiftRoute.Sport.CYCLING):
+        profile = derive_profile(float(route.distance_km), route.ascent_m)
         options.append({
             "pk": route.pk,
             "name": route.name,
-            "label": f"{route.name} ({route.distance_km} km / {route.elevation_m} m)",
+            "label": f"{route.name} — {route.world} ({route.distance_km:g} km / {route.ascent_m} m)",
             "profile": profile,
         })
     return options

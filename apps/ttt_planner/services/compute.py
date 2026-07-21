@@ -128,7 +128,7 @@ def quick_finish_time(plan: TttPlan, params: physics.PhysicsParams | None = None
 
     return physics.estimate_time_seconds(
         float(plan.route.distance_km),
-        plan.route.elevation_m,
+        plan.route.ascent_m,
         float(plan.target_speed_kph),
         avg_weight_kg=avg_weight,
         avg_height_cm=avg_height,
@@ -201,7 +201,7 @@ def _grade(plan: TttPlan) -> float:
     """
     if not plan.route:
         return 0.0
-    return physics.average_grade(float(plan.route.distance_km), plan.route.elevation_m)
+    return physics.average_grade(float(plan.route.distance_km), plan.route.ascent_m)
 
 
 def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> PlanResult:
@@ -297,7 +297,7 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
     if plan.route:
         estimated_time = physics.estimate_time_seconds(
             float(plan.route.distance_km),
-            plan.route.elevation_m,
+            plan.route.ascent_m,
             target,
             avg_weight_kg=avg_weight,
             avg_height_cm=avg_height,

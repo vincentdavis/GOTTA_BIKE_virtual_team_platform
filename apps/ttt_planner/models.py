@@ -1,4 +1,8 @@
-"""Models for the TTT planner: routes, plans, and per-plan riders."""
+"""Models for the TTT planner: power-ups, plans, and per-plan riders.
+
+Routes and segments are the canonical ``apps.zwift_data`` models — the planner's
+``TttPlan.route`` FKs ``zwift_data.ZwiftRoute`` directly.
+"""
 
 from __future__ import annotations
 
@@ -10,202 +14,14 @@ from django.db import models
 from django.utils.text import slugify
 
 from apps.ttt_planner import terrain
-from apps.ttt_planner.worlds import world_choices
-
-# whatsonzwift world slugs that don't match slugify(world).
-_WOZ_WORLD_OVERRIDES = {"bologna": "bologna-tt"}
-
-
-class Route(models.Model):
-    """A Zwift route a TTT can be planned on.
-
-    Seeded with popular WTRL TTT routes; admins can add more in Django admin.
-    """
-
-    name = models.CharField(max_length=200, help_text="Route name")
-    world = models.CharField(max_length=100, blank=True, choices=world_choices, help_text="Zwift world")
-    distance_km = models.DecimalField(max_digits=6, decimal_places=2, help_text="Route distance in km")
-    elevation_m = models.PositiveIntegerField(default=0, help_text="Total elevation gain in metres")
-    zwift_route_id = models.CharField(max_length=50, blank=True, help_text="Zwift route identifier, if known")
-    is_active = models.BooleanField(default=True, help_text="Show in the route picker")
-    lead_in_distance_km = models.DecimalField(
-        max_digits=6, decimal_places=2, default=0, help_text="Lead-in distance in km (before the lap starts)"
-    )
-    lead_in_elevation_m = models.PositiveIntegerField(default=0, help_text="Lead-in elevation gain in metres")
-    supports_laps = models.BooleanField(default=False, help_text="Route can be ridden as multiple laps")
-    recommended_laps = models.PositiveSmallIntegerField(
-        null=True, blank=True, help_text="Club Ladder recommended number of laps"
-    )
-    zwiftinsider_url = models.URLField(blank=True, help_text="ZwiftInsider route page URL")
-    segments = models.ManyToManyField(
-        "Segment", blank=True, related_name="routes", help_text="Climbs and sprints on this route"
-    )
-
-    # ZwiftRacing vELO2 "Race" rating factor weights (percent, 0-100). Imported from the
-    # ZwiftRacing routes reference via `manage.py import_velo_weights`. They sum to ~100
-    # per route; Time Trial Speed is excluded because it feeds the TT rating, not Race.
-    velo_sprint = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Sprint (%)"
-    )
-    velo_punch = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Punch (%)"
-    )
-    velo_climb = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Climb (%)"
-    )
-    velo_endurance = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Endurance (%)"
-    )
-    velo_pursuit = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="vELO2 Race weight: Pursuit (%)"
-    )
-
-    # (field suffix, label, bar colour, icon) for the vELO2 Race factors. Order is the
-    # canonical vELO2 order minus Time Trial Speed (which feeds the TT rating, not Race).
-    # Colours/icons mirror the ZwiftRacing "Event Factor Weights" chart.
-    VELO_FACTOR_META: ClassVar[list[tuple[str, str, str, str]]] = [
-        ("sprint", "Sprint", "#3b82f6", "🚀"),
-        ("punch", "Punch", "#f59e0b", "🥊"),
-        ("climb", "Climb", "#16a34a", "⛰️"),
-        ("endurance", "Endurance", "#a21caf", "🔋"),
-        ("pursuit", "Pursuit", "#ef4444", "⏱️"),
-    ]
-
-    class Meta:
-        """Meta options for Route."""
-
-        verbose_name = "TTT Route"
-        verbose_name_plural = "TTT Routes"
-        ordering: ClassVar[list[str]] = ["name"]
-
-    def __str__(self) -> str:
-        """Return the route name with distance.
-
-        Returns:
-            Human-readable route label.
-
-        """
-        return f"{self.name} ({self.distance_km} km)"
-
-    @property
-    def whatsonzwift_url(self) -> str:
-        """Build a best-effort whatsonzwift.com link from the world + name.
-
-        The route slug is derived from the route name (not ``zwift_route_id``,
-        which doesn't always match whatsonzwift). A small override map handles
-        worlds whose slug differs (e.g. Bologna → bologna-tt). Coverage is high
-        but not guaranteed for every route.
-
-        Returns:
-            The whatsonzwift URL, or empty string if world/name is missing.
-
-        """
-        world_slug = slugify(self.world)
-        route_slug = slugify(self.name)
-        if not world_slug or not route_slug:
-            return ""
-        world_slug = _WOZ_WORLD_OVERRIDES.get(world_slug, world_slug)
-        return f"https://whatsonzwift.com/world/{world_slug}/route/{route_slug}"
-
-    @property
-    def has_velo_factors(self) -> bool:
-        """Whether vELO2 Race factor weights have been imported for this route.
-
-        Returns:
-            True if the factor weights are populated.
-
-        """
-        return self.velo_sprint is not None
-
-    def velo_factor_bars(self) -> list[dict]:
-        """Non-zero vELO2 Race factor weights, sorted high→low, with colour + icon.
-
-        Shared by the route detail page and the ladder planner "Event Factors" tab.
-
-        Returns:
-            A list of ``{key, label, color, icon, value}`` dicts (empty if no data).
-
-        """
-        if not self.has_velo_factors:
-            return []
-        bars = []
-        for key, label, color, icon in self.VELO_FACTOR_META:
-            raw = getattr(self, f"velo_{key}")
-            value = float(raw) if raw is not None else 0.0
-            if value > 0:
-                bars.append({"key": key, "label": label, "color": color, "icon": icon, "value": round(value, 1)})
-        bars.sort(key=lambda b: b["value"], reverse=True)
-        return bars
-
-
-class Segment(models.Model):
-    """A timed Zwift segment (climb or sprint) that routes can contain.
-
-    Modelled standalone and linked to routes via ``Route.segments`` (many-to-many),
-    since the same segment (e.g. the Epic KOM) appears on many routes.
-    """
-
-    class SegmentType(models.TextChoices):
-        """Climb, Sprint, or a generic timed segment."""
-
-        CLIMB = "climb", "Climb"
-        SPRINT = "sprint", "Sprint"
-        SEGMENT = "segment", "Segment"
-
-    class Direction(models.TextChoices):
-        """Which way the segment is ridden."""
-
-        FORWARD = "forward", "Forward"
-        REVERSE = "reverse", "Reverse"
-
-    segment_type = models.CharField(
-        max_length=10, choices=SegmentType.choices, help_text="Climb, Sprint, or generic Segment"
-    )
-    direction = models.CharField(
-        max_length=10, choices=Direction.choices, blank=True, help_text="Forward or Reverse (blank if single-direction)"
-    )
-    name = models.CharField(max_length=200, help_text="Segment name")
-    category = models.CharField(max_length=5, blank=True, help_text="Climb category (HC, 1-4) if applicable")
-    notes = models.TextField(blank=True, help_text="Free-text notes")
-    length_m = models.PositiveIntegerField(default=0, help_text="Segment length in metres")
-    elevation_m = models.PositiveIntegerField(default=0, help_text="Segment elevation gain in metres")
-    grade_pct = models.DecimalField(
-        max_digits=5, decimal_places=1, null=True, blank=True, help_text="Average grade %"
-    )
-    world = models.CharField(
-        max_length=100, blank=True, choices=world_choices, help_text="Zwift world"
-    )
-    strava_url = models.URLField(blank=True, help_text="Strava segment URL")
-    zwiftinsider_url = models.URLField(blank=True, help_text="ZwiftInsider segment URL")
-    whatsonzwift_url = models.URLField(blank=True, help_text="whatsonzwift.com segment URL")
-
-    class Meta:
-        """Meta options for Segment."""
-
-        verbose_name = "Segment"
-        verbose_name_plural = "Segments"
-        ordering: ClassVar[list[str]] = ["world", "name", "direction"]
-        constraints: ClassVar[list] = [
-            models.UniqueConstraint(fields=["name", "world", "direction"], name="unique_segment_name_world_direction"),
-        ]
-
-    def __str__(self) -> str:
-        """Return a label for the segment.
-
-        Returns:
-            Human-readable label with its type and direction.
-
-        """
-        direction = f", {self.get_direction_display()}" if self.direction else ""
-        return f"{self.name} ({self.get_segment_type_display()}{direction})"
 
 
 class PowerUp(models.Model):
     """A Zwift PowerUp, shown on the routes reference page.
 
-    Shared reference data that race-verified members can curate (same pattern as
-    ``Route`` / ``Segment``). The ``excluded_from_ladder`` flag marks PowerUps
-    that do not count for the Club Ladder (the XP bonuses and Boost).
+    Shared reference data that race-verified members can curate. The
+    ``excluded_from_ladder`` flag marks PowerUps that do not count for the Club
+    Ladder (the XP bonuses and Boost).
     """
 
     name = models.CharField(max_length=100, unique=True, help_text="PowerUp name (e.g. Feather)")
@@ -271,7 +87,12 @@ class TttPlan(models.Model):
         max_length=20, blank=True, default="", choices=EventType.choices, help_text="Event this plan targets"
     )
     route = models.ForeignKey(
-        Route, on_delete=models.SET_NULL, null=True, blank=True, related_name="plans", help_text="Selected route"
+        "zwift_data.ZwiftRoute",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ttt_plans",
+        help_text="Selected route",
     )
     course_name = models.CharField(max_length=200, blank=True, help_text="Course / route name (free text)")
     course_type = models.CharField(

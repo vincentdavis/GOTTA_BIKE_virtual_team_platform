@@ -26,7 +26,7 @@ from apps.events.models import Squad
 from apps.ladder_planner.models import CourseProfile, LadderMatchup, LadderRider, Side
 from apps.ladder_planner.services import cache, compute, courses, normalize, roster, squads
 from apps.ladder_planner.tasks import warm_club
-from apps.ttt_planner.models import Route
+from apps.zwift_data.models import ZwiftRoute
 
 _MAX_OPPONENTS_PER_REQUEST = 50
 
@@ -309,7 +309,7 @@ def matchup_update(request: HttpRequest, matchup_id: str) -> HttpResponse:
         matchup.opponent_team_name = request.POST.get("opponent_team_name", "").strip()
     if "route" in request.POST:
         route_id = request.POST.get("route")
-        matchup.route = Route.objects.filter(pk=route_id).first() if route_id else None
+        matchup.route = ZwiftRoute.objects.filter(pk=route_id).first() if route_id else None
     if "course_name" in request.POST:
         matchup.course_name = request.POST.get("course_name", "").strip()
     if "course_profile" in request.POST:
