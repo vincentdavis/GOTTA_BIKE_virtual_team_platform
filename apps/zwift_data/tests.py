@@ -197,6 +197,32 @@ def test_load_velo_forbidden_for_team_member(synced, auth_client):
 
 
 @pytest.mark.django_db
+def test_import_velo_if_empty_is_noop_when_present(synced):
+    """import_velo_weights --if-empty skips when a route already has weights (deploy-safe)."""
+    from django.core.management import call_command
+
+    route = ZwiftRoute.objects.get(name_hash="111")
+    route.velo_sprint = 50
+    route.save(update_fields=["velo_sprint"])
+    # Would otherwise overwrite from the bundled JSON; --if-empty must leave it untouched.
+    call_command("import_velo_weights", "--if-empty")
+    route.refresh_from_db()
+    assert float(route.velo_sprint) == pytest.approx(50)
+
+
+@pytest.mark.django_db
+def test_sync_if_empty_is_noop_when_populated(synced):
+    """sync_zwift_data --if-empty skips when routes already exist (deploy-safe seed)."""
+    from django.core.management import call_command
+
+    from apps.zwift_data.services import sync as sync_mod
+
+    with patch.object(sync_mod, "_download") as dl:
+        call_command("sync_zwift_data", "--if-empty")
+    dl.assert_not_called()
+
+
+@pytest.mark.django_db
 def test_catalog_reads_profile_and_segments(synced):
     """The catalog serves per-route profile + segment crossings from storage."""
     profile = catalog.route_profile(1, "111")
