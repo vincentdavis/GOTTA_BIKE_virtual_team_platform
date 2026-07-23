@@ -7,15 +7,90 @@
   <div class="alert alert-error mb-4 py-2">{{ error }}</div>
 {% endif %}
 
-{# ---- Rider rosters (owner editing) ---- #}
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-  <div class="card bg-base-100 border border-base-300 overflow-visible">
-    <div class="card-body p-4">
-      <h3 class="font-semibold text-sm flex items-center justify-between">
-        <span>{{ summary.projected.our_label }}</span>
-        <span class="badge badge-sm">{{ summary.our_count }} racing</span>
-      </h3>
-      <ul class="divide-y divide-base-200">
+{# ---- Riders: add controls + rosters, collapsible (open when empty) ---- #}
+<details id="ladder-riders" class="card bg-base-200 shadow-xl overflow-visible group mb-6" {% if not matchup.riders.all %}open{% endif %}>
+  <summary class="card-body py-3 cursor-pointer select-none list-none marker:hidden [&::-webkit-details-marker]:hidden flex-row items-center justify-between gap-3">
+    <span class="flex items-center gap-2">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      <span class="card-title text-lg">Riders</span>
+    </span>
+    <span class="flex gap-2 shrink-0">
+      <span class="badge badge-sm">{{ summary.our_count }} {{ summary.projected.our_label|default:"ours" }}</span>
+      <span class="badge badge-sm badge-ghost">{{ summary.opp_count }} opp</span>
+    </span>
+  </summary>
+  <div class="card-body pt-0">
+
+  {% if can_edit %}
+  {# ---- Add riders ---- #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-4">
+    <div class="space-y-3">
+      {% if my_squads or other_squads %}
+      <form hx-post="{% url 'ladder_planner:our_squad_add' matchup.pk %}"
+            hx-target="#ladder-body" hx-swap="innerHTML"
+            hx-on::after-request="if(event.detail.successful) this.reset()">
+        <span class="label-text mb-1 block">Our team — add a whole squad</span>
+        <select name="squad" class="select select-bordered select-sm w-full"
+                onchange="if(this.value) this.form.requestSubmit()">
+          <option value="">Choose squad…</option>
+          {% if my_squads %}
+          <optgroup label="Your squads">
+            {% for s in my_squads %}<option value="{{ s.pk }}">{{ s.label }}</option>{% endfor %}
+          </optgroup>
+          {% endif %}
+          {% if other_squads %}
+          <optgroup label="Other active squads">
+            {% for s in other_squads %}<option value="{{ s.pk }}">{{ s.label }}</option>{% endfor %}
+          </optgroup>
+          {% endif %}
+        </select>
+      </form>
+      {% endif %}
+
+      <div class="relative">
+        <span class="label-text mb-1 block">Our team — search our roster</span>
+        <input type="text" name="q" placeholder="Name or Zwift ID…"
+               class="input input-bordered input-sm w-full"
+               hx-get="{% url 'ladder_planner:our_rider_search' matchup.pk %}"
+               hx-trigger="keyup changed delay:300ms, search"
+               hx-target="#ladder-our-search" hx-swap="innerHTML" />
+        <div id="ladder-our-search"></div>
+      </div>
+    </div>
+
+    <div class="space-y-3">
+      <div class="relative">
+        <span class="label-text mb-1 block">Opponent — search cached riders</span>
+        <input type="text" name="q" placeholder="Name or Zwift ID…"
+               class="input input-bordered input-sm w-full"
+               hx-get="{% url 'ladder_planner:opponent_search' matchup.pk %}"
+               hx-trigger="keyup changed delay:300ms, search"
+               hx-target="#ladder-opp-search" hx-swap="innerHTML" />
+        <div id="ladder-opp-search"></div>
+        <span class="label-text-alt text-base-content/50">Searches the cache; unknown riders offer a live fetch.</span>
+      </div>
+
+      <form hx-post="{% url 'ladder_planner:opponents_add' matchup.pk %}"
+            hx-target="#ladder-body" hx-swap="innerHTML"
+            hx-on::after-request="if(event.detail.successful) this.reset()">
+        <span class="label-text mb-1 block">…or paste many Zwift IDs at once</span>
+        <textarea name="zwids" rows="2" placeholder="e.g. 12345, 67890 123456"
+                  class="textarea textarea-bordered textarea-sm w-full font-mono"></textarea>
+        <button type="submit" class="btn btn-primary btn-sm mt-2">Add opponents</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ---- Rider rosters ---- #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="card bg-base-100 border border-base-300 overflow-visible">
+      <div class="card-body p-4">
+        <h3 class="font-semibold text-sm flex items-center justify-between">
+          <span>{{ summary.projected.our_label }}</span>
+          <span class="badge badge-sm">{{ summary.our_count }} racing</span>
+        </h3>
+        <ul class="divide-y divide-base-200">
         {% for rider in matchup.riders.all %}{% if rider.side == Side.OURS %}
           <li class="flex items-center justify-between gap-2 py-1 text-sm {% if not rider.is_racing %}opacity-40{% endif %}">
             <span class="min-w-0">{% include "accounts/_user_tooltip.html" with display_name=rider.name zwid=rider.zwid zp_category=rider.zr_data.zp_category zr_category=rider.zr_data.rank zr_rating=rider.zr_data.rating_current zr_phenotype=rider.zr_data.phenotype in_zwiftpower=rider.zr_data.zp_category in_zwiftracing=True hide_verification=True %}</span>
@@ -66,7 +141,9 @@
       </ul>
     </div>
   </div>
-</div>
+  </div>
+  </div>
+</details>
 
 {# ---- Tabs ---- #}
 <div class="relative">

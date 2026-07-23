@@ -773,6 +773,66 @@ def test_our_squad_add_dedupes(auth_client, team_member, user_model):
     assert matchup.riders.filter(side=Side.OURS, zwid=5001).count() == 1
 
 
+# ----- edit-squad permissions --------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_can_edit_owner_and_superuser(team_member, superuser):
+    matchup = _make_matchup(team_member)
+    assert lp_views._can_edit(matchup, team_member) is True
+    assert lp_views._can_edit(matchup, superuser) is True
+
+
+@pytest.mark.django_db
+def test_can_edit_grants_edit_squad_members(team_member, user_model):
+    owner = user_model.objects.create(username="owner", zwid=9001)
+    squad = Squad.objects.create(event=_event("Series"), name="Alpha")
+    matchup = _make_matchup(owner, edit_squad=squad)
+
+    cap = user_model.objects.create(username="cap9", zwid=9002)
+    vice = user_model.objects.create(username="vice9", zwid=9003)
+    member = user_model.objects.create(username="mem9", zwid=9004)
+    outsider = user_model.objects.create(username="out9", zwid=9005)
+    squad.captains.add(cap)
+    squad.vice_captains.add(vice)
+    SquadMember.objects.create(squad=squad, user=member, status=SquadMember.Status.MEMBER)
+
+    assert lp_views._can_edit(matchup, cap) is True
+    assert lp_views._can_edit(matchup, vice) is True
+    assert lp_views._can_edit(matchup, member) is True
+    assert lp_views._can_edit(matchup, outsider) is False
+
+
+@pytest.mark.django_db
+def test_matchup_update_sets_and_clears_edit_squad(auth_client, team_member):
+    matchup = _make_matchup(team_member)
+    squad = Squad.objects.create(event=_event("Series"), name="Alpha")
+
+    resp = auth_client.post(f"/ladder/{matchup.pk}/update/", {"edit_squad": str(squad.pk)}, HTTP_HX_REQUEST="true")
+    assert resp.status_code == 200
+    matchup.refresh_from_db()
+    assert matchup.edit_squad_id == squad.pk
+
+    auth_client.post(f"/ladder/{matchup.pk}/update/", {"edit_squad": ""}, HTTP_HX_REQUEST="true")
+    matchup.refresh_from_db()
+    assert matchup.edit_squad_id is None
+
+
+@pytest.mark.django_db
+def test_edit_squad_member_can_update_matchup(client, team_member, user_model):
+    """A squad member who is not the owner may POST edits."""
+    owner = user_model.objects.create(username="other-owner", zwid=8001)
+    squad = Squad.objects.create(event=_event("Series"), name="Alpha")
+    matchup = _make_matchup(owner, edit_squad=squad)
+    SquadMember.objects.create(squad=squad, user=team_member, status=SquadMember.Status.MEMBER)
+
+    client.force_login(team_member)
+    resp = client.post(f"/ladder/{matchup.pk}/update/", {"name": "Renamed"}, HTTP_HX_REQUEST="true")
+    assert resp.status_code == 200
+    matchup.refresh_from_db()
+    assert matchup.name == "Renamed"
+
+
 # ----- climb advantage heatmap -------------------------------------------------------------------
 
 

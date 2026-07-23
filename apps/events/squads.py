@@ -60,6 +60,27 @@ def squads_for_picker(user: User) -> tuple[list[dict[str, Any]], list[dict[str, 
     return mine, other
 
 
+def user_in_squad(squad: Squad, user: User) -> bool:
+    """Return whether a user belongs to a squad's roster.
+
+    Roster membership mirrors :func:`squad_member_users`: MEMBER ``SquadMember``
+    users plus the squad's captains and vice-captains.
+
+    Args:
+        squad: The squad.
+        user: The user to test.
+
+    Returns:
+        True if the user is a member, captain, or vice-captain of the squad.
+
+    """
+    if squad.captains.filter(pk=user.pk).exists():
+        return True
+    if squad.vice_captains.filter(pk=user.pk).exists():
+        return True
+    return SquadMember.objects.filter(squad=squad, user=user, status=SquadMember.Status.MEMBER).exists()
+
+
 def squad_member_users(squad: Squad) -> list[User]:
     """Return a squad's roster: MEMBER users plus captains and vice-captains.
 

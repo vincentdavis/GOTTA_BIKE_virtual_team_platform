@@ -65,6 +65,14 @@ class LadderMatchup(models.Model):
         related_name="ladder_matchups",
         help_text="User who created the matchup",
     )
+    edit_squad = models.ForeignKey(
+        "events.Squad",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Optional squad whose members (incl. captains/vice-captains) may also edit this matchup",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

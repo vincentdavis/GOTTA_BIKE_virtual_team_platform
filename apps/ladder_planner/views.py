@@ -71,10 +71,13 @@ def _can_edit(matchup: LadderMatchup, user) -> bool:
         user: The requesting user.
 
     Returns:
-        True for the matchup owner or a superuser.
+        True for the matchup owner, a superuser, or a member of the matchup's
+        ``edit_squad`` (member, captain, or vice-captain).
 
     """
-    return user.is_superuser or matchup.created_by_id == user.id
+    if user.is_superuser or matchup.created_by_id == user.id:
+        return True
+    return bool(matchup.edit_squad_id) and squads.user_in_squad(matchup.edit_squad, user)
 
 
 def _render_body(
@@ -98,6 +101,9 @@ def _render_body(
         Rendered HTML string of the ``_matchup_body`` partial.
 
     """
+    # The add-riders controls live inside the body partial (combined with the
+    # rider list), so the squad picker must be supplied on every body swap too.
+    my_squads, other_squads = squads.squads_for_picker(request.user) if can_edit else ([], [])
     return render_to_string(
         "ladder_planner/_matchup_body.html",
         {
@@ -106,6 +112,8 @@ def _render_body(
             "can_edit": can_edit,
             "notice": notice,
             "error": error,
+            "my_squads": my_squads,
+            "other_squads": other_squads,
             "Side": Side,
         },
         request=request,
@@ -250,9 +258,13 @@ def matchup_detail(request: HttpRequest, matchup_id: str) -> HttpResponse:
         The matchup detail page.
 
     """
-    matchup = get_object_or_404(LadderMatchup, pk=matchup_id)
+    matchup = get_object_or_404(LadderMatchup.objects.select_related("edit_squad__event"), pk=matchup_id)
     can_edit = _can_edit(matchup, request.user)
     my_squads, other_squads = squads.squads_for_picker(request.user) if can_edit else ([], [])
+    # Whether the currently-selected edit squad appears in the active-event picker.
+    # If not (its event has ended), the template renders it as a standalone option
+    # so a settings save doesn't silently clear the grant.
+    picker_pks = {s["pk"] for s in my_squads} | {s["pk"] for s in other_squads}
     return render(
         request,
         "ladder_planner/detail.html",
@@ -264,6 +276,7 @@ def matchup_detail(request: HttpRequest, matchup_id: str) -> HttpResponse:
             "route_options": courses.route_options() if can_edit else [],
             "my_squads": my_squads,
             "other_squads": other_squads,
+            "edit_squad_active": matchup.edit_squad_id in picker_pks,
             "Side": Side,
         },
     )
@@ -316,6 +329,9 @@ def matchup_update(request: HttpRequest, matchup_id: str) -> HttpResponse:
         profile = request.POST.get("course_profile", "")
         if profile in CourseProfile.values:
             matchup.course_profile = profile
+    if "edit_squad" in request.POST:
+        squad_id = request.POST.get("edit_squad")
+        matchup.edit_squad = Squad.objects.filter(pk=squad_id).first() if squad_id else None
     if "cda_coef" in request.POST:
         raw = request.POST.get("cda_coef", "").strip()
         if not raw:

@@ -17,9 +17,19 @@
     {% endif %}
   </div>
 
-  {# ---- Matchup settings ---- #}
-  <div class="card bg-base-200 shadow-xl">
-    <div class="card-body">
+  {# ---- Match Details (collapsible; open when the matchup has no name yet) ---- #}
+  <details class="card bg-base-200 shadow-xl group" {% if not matchup.name %}open{% endif %}>
+    <summary class="card-body py-3 cursor-pointer select-none list-none marker:hidden [&::-webkit-details-marker]:hidden flex-row items-center justify-between gap-3">
+      <span class="flex items-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        <span class="card-title text-lg">Match Details</span>
+      </span>
+      <span class="text-sm text-base-content/60 truncate group-open:hidden">
+        {{ matchup.name|default:"Unnamed matchup" }}
+        · {{ matchup.our_team_name|default:"Our team" }} vs {{ matchup.opponent_team_name|default:"Opponent" }}
+      </span>
+    </summary>
+    <div class="card-body pt-0">
       {% if can_edit %}
       <form class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
             hx-post="{% url 'ladder_planner:update' matchup.pk %}"
@@ -60,6 +70,28 @@
             {% endfor %}
           </select>
         </label>
+        <label class="form-control md:col-span-2 lg:col-span-3">
+          <span class="label-text mb-1">Edit squad
+            <span class="text-base-content/40">(let a squad's members edit this matchup — you and admins always can)</span></span>
+          <select name="edit_squad" class="select select-bordered select-sm">
+            <option value="">— No shared editing —</option>
+            {% if matchup.edit_squad_id and not edit_squad_active %}
+              <option value="{{ matchup.edit_squad_id }}" selected>
+                {{ matchup.edit_squad.event.title }} — {{ matchup.edit_squad.name }} (event ended)
+              </option>
+            {% endif %}
+            {% if my_squads %}
+            <optgroup label="Your squads">
+              {% for s in my_squads %}<option value="{{ s.pk }}" {% if matchup.edit_squad_id == s.pk %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
+            </optgroup>
+            {% endif %}
+            {% if other_squads %}
+            <optgroup label="Other active squads">
+              {% for s in other_squads %}<option value="{{ s.pk }}" {% if matchup.edit_squad_id == s.pk %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
+            </optgroup>
+            {% endif %}
+          </select>
+        </label>
       </form>
       {% else %}
         <h2 class="card-title text-2xl">{{ matchup.name|default:"Ladder Matchup" }}</h2>
@@ -69,73 +101,7 @@
         </p>
       {% endif %}
     </div>
-  </div>
-
-  {# ---- Add riders (owner only) ---- #}
-  {% if can_edit %}
-  <div class="card bg-base-200 shadow-xl">
-    <div class="card-body">
-      <h3 class="font-semibold">Add riders</h3>
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div class="space-y-3">
-          {% if my_squads or other_squads %}
-          <form hx-post="{% url 'ladder_planner:our_squad_add' matchup.pk %}"
-                hx-target="#ladder-body" hx-swap="innerHTML"
-                hx-on::after-request="if(event.detail.successful) this.reset()">
-            <span class="label-text mb-1 block">Our team — add a whole squad</span>
-            <select name="squad" class="select select-bordered select-sm w-full"
-                    onchange="if(this.value) this.form.requestSubmit()">
-              <option value="">Choose squad…</option>
-              {% if my_squads %}
-              <optgroup label="Your squads">
-                {% for s in my_squads %}<option value="{{ s.pk }}">{{ s.label }}</option>{% endfor %}
-              </optgroup>
-              {% endif %}
-              {% if other_squads %}
-              <optgroup label="Other active squads">
-                {% for s in other_squads %}<option value="{{ s.pk }}">{{ s.label }}</option>{% endfor %}
-              </optgroup>
-              {% endif %}
-            </select>
-          </form>
-          {% endif %}
-
-          <div class="relative">
-            <span class="label-text mb-1 block">Our team — search our roster</span>
-            <input type="text" name="q" placeholder="Name or Zwift ID…"
-                   class="input input-bordered input-sm w-full"
-                   hx-get="{% url 'ladder_planner:our_rider_search' matchup.pk %}"
-                   hx-trigger="keyup changed delay:300ms, search"
-                   hx-target="#ladder-our-search" hx-swap="innerHTML" />
-            <div id="ladder-our-search"></div>
-          </div>
-        </div>
-
-        <div class="space-y-3">
-          <div class="relative">
-            <span class="label-text mb-1 block">Opponent — search cached riders</span>
-            <input type="text" name="q" placeholder="Name or Zwift ID…"
-                   class="input input-bordered input-sm w-full"
-                   hx-get="{% url 'ladder_planner:opponent_search' matchup.pk %}"
-                   hx-trigger="keyup changed delay:300ms, search"
-                   hx-target="#ladder-opp-search" hx-swap="innerHTML" />
-            <div id="ladder-opp-search"></div>
-            <span class="label-text-alt text-base-content/50">Searches the cache; unknown riders offer a live fetch.</span>
-          </div>
-
-          <form hx-post="{% url 'ladder_planner:opponents_add' matchup.pk %}"
-                hx-target="#ladder-body" hx-swap="innerHTML"
-                hx-on::after-request="if(event.detail.successful) this.reset()">
-            <span class="label-text mb-1 block">…or paste many Zwift IDs at once</span>
-            <textarea name="zwids" rows="2" placeholder="e.g. 12345, 67890 123456"
-                      class="textarea textarea-bordered textarea-sm w-full font-mono"></textarea>
-            <button type="submit" class="btn btn-primary btn-sm mt-2">Add opponents</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-  {% endif %}
+  </details>
 
   {# ---- Comparison body (HTMX swap target) ---- #}
   <div class="relative">
@@ -250,6 +216,27 @@
       if (e.target && e.target.id === "ladder-body" && activeTab) {
         var el = document.querySelector('#ladder-body input[name="ladder_tabs"][aria-label="' + activeTab + '"]');
         if (el) el.checked = true;
+      }
+    });
+  })();
+</script>
+<script>
+  // Preserve the "Riders" disclosure (add-riders + roster) open/closed state
+  // across HTMX swaps of #ladder-body. Server default is open when there are no
+  // riders yet; after that the user's manual toggle sticks so adding a rider
+  // doesn't slam the panel shut.
+  (function () {
+    var open = null;
+    document.body.addEventListener("htmx:beforeSwap", function (e) {
+      if (e.target && e.target.id === "ladder-body") {
+        var d = document.getElementById("ladder-riders");
+        open = d ? d.open : null;
+      }
+    });
+    document.body.addEventListener("htmx:afterSwap", function (e) {
+      if (e.target && e.target.id === "ladder-body" && open !== null) {
+        var d = document.getElementById("ladder-riders");
+        if (d) d.open = open;
       }
     });
   })();
