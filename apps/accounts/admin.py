@@ -67,6 +67,8 @@ class UserAdmin(BaseUserAdmin):
                 "fields": (
                     "zwid",
                     "zwid_verified",
+                    "zwid_verification_method",
+                    "zwid_verified_at",
                     "is_race_ready",
                     "is_extra_verified",
                 ),

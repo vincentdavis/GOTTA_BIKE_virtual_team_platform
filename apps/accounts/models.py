@@ -120,6 +120,18 @@ class User(AbstractUser):
         METRIC = "metric", "Metric (kg, cm)"
         IMPERIAL = "imperial", "Imperial (lbs, in)"
 
+    class VerificationMethod(models.TextChoices):
+        """How a user's Zwift account verification was obtained.
+
+        ``LEGACY`` is the old Sauce-mod email/password flow (grandfathered);
+        ``ZAUTH`` is the official Zwift OAuth via the zauth service; ``ADMIN`` is
+        a manual staff verification. Blank means never verified.
+        """
+
+        LEGACY = "legacy", "Legacy (Sauce mod)"
+        ZAUTH = "zauth", "Zwift OAuth (zauth)"
+        ADMIN = "admin", "Admin (manual)"
+
     # Discord integration
     discord_id = models.CharField(
         max_length=20,
@@ -157,6 +169,18 @@ class User(AbstractUser):
     zwid_verified = models.BooleanField(
         default=False,
         help_text="Zwift user ID has been verified",
+    )
+    zwid_verification_method = models.CharField(
+        max_length=10,
+        choices=VerificationMethod.choices,
+        blank=True,
+        default="",
+        help_text="How the current Zwift verification was obtained (legacy / zauth / admin)",
+    )
+    zwid_verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the current Zwift verification was recorded",
     )
 
     # Personal info
