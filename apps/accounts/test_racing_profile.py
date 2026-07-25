@@ -8,6 +8,7 @@ import pytest
 from django.urls import reverse
 
 _PROFILE = {
+    "zwift_user_id": "41c49fb6-3a6a-41a5-a0e5-1ac65ceec060",
     "zwid": "555",
     "first_name": "Alice",
     "last_name": "Rider",
@@ -36,6 +37,8 @@ def test_public_profile_shows_racing_profile_when_connected(auth_client, user_mo
     assert "Racing Score" in body  # a label only in the rendered card
     assert "435" in body  # racing score value
     assert "66.0 kg" in body  # weight derived from grams
+    # Link out to the zwift.com athlete page uses the account UUID.
+    assert "https://www.zwift.com/uk/athlete/41c49fb6-3a6a-41a5-a0e5-1ac65ceec060" in body
 
 
 @pytest.mark.django_db

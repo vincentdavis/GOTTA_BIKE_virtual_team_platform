@@ -55,6 +55,15 @@ Expects `racing_profile` in context (see accounts.views._fetch_racing_profile).
       </div>
     {% endif %}
   </div>
+  {% if racing_profile.zwift_user_id %}
+    <a href="https://www.zwift.com/uk/athlete/{{ racing_profile.zwift_user_id }}" target="_blank" rel="noopener"
+       class="btn btn-sm btn-ghost mt-3 w-full">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+      </svg>
+      View on Zwift
+    </a>
+  {% endif %}
   {% if racing_profile.fetched_at %}
     <p class="text-base-content/40 text-xs mt-3">Updated {{ racing_profile.fetched_at|slice:":10" }}</p>
   {% endif %}
