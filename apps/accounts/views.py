@@ -78,6 +78,13 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
             # No record yet — allow an initial fetch.
             zr_can_refresh = True
 
+    # Official Zwift OAuth (zauth) connection status — independent of zwid_verified.
+    from apps.zwift import client as zwift_client
+
+    zauth_configured = zwift_client.is_configured()
+    zauth = zwift_client.get_connection_status(str(user.pk)) if zauth_configured else None
+    zauth_uuid = (zauth or {}).get("zwift_user_id") or ""
+
     return {
         "user": user,
         "zp_data": zp_data,
@@ -85,6 +92,11 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
         "zr_last_updated": zr_last_updated,
         "zr_can_refresh": zr_can_refresh,
         "zr_refresh_error": zr_refresh_error,
+        "zauth_configured": zauth_configured,
+        "zauth_connected": bool(zauth and zauth.get("connected")),
+        "zauth_zwid": (zauth or {}).get("zwid"),
+        "zauth_connected_at": (zauth or {}).get("connected_at"),
+        "zauth_uuid_tail": zauth_uuid.split("-")[-1] if zauth_uuid else None,
     }
 
 

@@ -168,3 +168,55 @@ def test_fetch_activity_window_none_when_service_returns_none(monkeypatch, user)
     monkeypatch.setattr("apps.zwift.client.get_activity_stats", lambda user_id, days=30: None)
 
     assert _fetch_activity_window(user) is None
+
+
+# --- zauth official OAuth status line (own profile) --------------------------
+
+
+def _stub_zauth(monkeypatch, status):
+    """Patch the client so the zauth status line has data; keep other calls inert."""
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: status is not None)
+    monkeypatch.setattr("apps.zwift.client.get_connection_status", lambda user_id: status)
+    monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda user_id: None)
+
+
+@pytest.mark.django_db
+def test_profile_shows_zauth_connected_line(client, user, monkeypatch):
+    _stub_zauth(
+        monkeypatch,
+        {
+            "connected": True,
+            "zwid": "555",
+            "zwift_user_id": "41c49fb6-3a6a-41a5-a0e5-1ac65ceec060",
+            "connected_at": "2026-07-01T10:00:00Z",
+        },
+    )
+    client.force_login(user)
+
+    body = client.get(reverse("accounts:profile")).content.decode()
+
+    assert "Zwift Official Auth" in body
+    assert "555" in body  # zwid
+    assert "1ac65ceec060" in body  # last part of the UUID
+    assert "2026-07-01" in body  # connected-since date
+
+
+@pytest.mark.django_db
+def test_profile_shows_zauth_connect_link_when_not_connected(client, user, monkeypatch):
+    _stub_zauth(monkeypatch, {"connected": False, "zwid": None, "zwift_user_id": None, "connected_at": None})
+    client.force_login(user)
+
+    body = client.get(reverse("accounts:profile")).content.decode()
+
+    assert "Zwift Official Auth" in body
+    assert reverse("zwift:zauth") in body  # link to the connect page
+
+
+@pytest.mark.django_db
+def test_profile_hides_zauth_line_when_unconfigured(client, user, monkeypatch):
+    _stub_zauth(monkeypatch, None)  # is_configured -> False
+    client.force_login(user)
+
+    body = client.get(reverse("accounts:profile")).content.decode()
+
+    assert "Zwift Official Auth" not in body

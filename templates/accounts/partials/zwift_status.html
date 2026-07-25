@@ -149,3 +149,30 @@
     </button>
 </div>
 {% endif %}
+
+{# Official Zwift OAuth (Zwift Link / zauth) status — separate from the Sauce-based zwid verification above. #}
+{% if zauth_configured %}
+<div class="mt-3 p-3 rounded-lg border {% if zauth_connected %}border-success/30 bg-success/10{% else %}border-base-300 bg-base-300{% endif %} flex items-center justify-between gap-3">
+    <div class="flex items-center gap-3 min-w-0">
+        <span class="px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary rounded shrink-0">Z</span>
+        <div class="min-w-0">
+            <p class="text-sm font-medium">
+                Zwift Official Auth
+                {% if zauth_connected %}<span class="text-success">· Verified</span>{% else %}<span class="text-base-content/50">· Not connected</span>{% endif %}
+            </p>
+            {% if zauth_connected %}
+            <p class="text-xs text-base-content/60 truncate">
+                zwid <span class="font-mono">{{ zauth_zwid|default:"—" }}</span>
+                {% if zauth_uuid_tail %} · UUID …<span class="font-mono">{{ zauth_uuid_tail }}</span>{% endif %}
+                {% if zauth_connected_at %} · since {{ zauth_connected_at|slice:":10" }}{% endif %}
+            </p>
+            {% else %}
+            <p class="text-xs text-base-content/60">Connect your official Zwift account via Zwift Link.</p>
+            {% endif %}
+        </div>
+    </div>
+    {% if not zauth_connected %}
+    <a href="{% url 'zwift:zauth' %}" class="btn btn-primary btn-xs shrink-0">Connect</a>
+    {% endif %}
+</div>
+{% endif %}
