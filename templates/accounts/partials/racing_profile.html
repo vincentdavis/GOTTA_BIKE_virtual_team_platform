@@ -1,0 +1,60 @@
+{# Official Zwift racing profile card (data from the zauth Zwift API service).
+   Expects `racing_profile` in context (see accounts.views._fetch_racing_profile). #}
+{% if racing_profile %}
+<div class="card bg-base-300 p-4">
+  <h3 class="font-semibold mb-3 flex items-center gap-2">
+    <span class="px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary rounded">Z</span>
+    Racing Profile
+    <span class="text-xs font-normal text-base-content/50">· official Zwift</span>
+  </h3>
+  <div class="space-y-2">
+    {% if racing_profile.category or racing_profile.category_women %}
+      <div class="flex items-center justify-between">
+        <span class="text-base-content/70">Category</span>
+        <span class="font-semibold">
+          {{ racing_profile.category|default:"—" }}{% if racing_profile.category_women %} <span class="text-base-content/50 font-normal">/ {{ racing_profile.category_women }} (W)</span>{% endif %}
+        </span>
+      </div>
+    {% endif %}
+    {% if racing_profile.racing_score %}
+      <div class="flex items-center justify-between">
+        <span class="text-base-content/70">Racing Score</span>
+        <span class="font-mono">{{ racing_profile.racing_score|floatformat:0 }}</span>
+      </div>
+    {% endif %}
+    {% if racing_profile.ftp %}
+      <div class="flex items-center justify-between">
+        <span class="text-base-content/70">FTP</span>
+        <span class="font-mono">{{ racing_profile.ftp|floatformat:0 }}w</span>
+      </div>
+    {% endif %}
+    {% if racing_profile.z_ftp %}
+      <div class="flex items-center justify-between">
+        <span class="text-base-content/70">zFTP</span>
+        <span class="font-mono">{{ racing_profile.z_ftp|floatformat:0 }}w</span>
+      </div>
+    {% endif %}
+    {% if racing_profile.z_map %}
+      <div class="flex items-center justify-between">
+        <span class="text-base-content/70">zMAP</span>
+        <span class="font-mono">{{ racing_profile.z_map|floatformat:0 }}w</span>
+      </div>
+    {% endif %}
+    {% if racing_profile.vo2max %}
+      <div class="flex items-center justify-between">
+        <span class="text-base-content/70">VO2max</span>
+        <span class="font-mono">{{ racing_profile.vo2max|floatformat:1 }}</span>
+      </div>
+    {% endif %}
+    {% if racing_profile.weight_kg %}
+      <div class="flex items-center justify-between">
+        <span class="text-base-content/70">Weight</span>
+        <span class="font-mono">{{ racing_profile.weight_kg }} kg</span>
+      </div>
+    {% endif %}
+  </div>
+  {% if racing_profile.fetched_at %}
+    <p class="text-base-content/40 text-xs mt-3">Updated {{ racing_profile.fetched_at|slice:":10" }}</p>
+  {% endif %}
+</div>
+{% endif %}

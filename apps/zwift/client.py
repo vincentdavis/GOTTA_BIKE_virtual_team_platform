@@ -113,6 +113,36 @@ def get_authorize_url(user_id: str, return_url: str, *, prompt_login: bool = Fal
         return None
 
 
+def get_racing_profile(user_id: str) -> dict | None:
+    """Fetch a connected user's Zwift racing profile from the service.
+
+    Args:
+        user_id: The platform user identifier (stable primary key).
+
+    Returns:
+        The racing-profile dict (denormalized metrics + full ``data`` DTO), or
+        None if the service is unconfigured, the user isn't connected (404), or
+        the call failed. A live upstream fetch may be triggered service-side when
+        no snapshot is stored yet.
+
+    """
+    if not is_configured():
+        return None
+    try:
+        response = httpx.get(
+            _url(f"/api/zwift/users/{user_id}/profile"),
+            headers=_headers(),
+            timeout=_TIMEOUT,
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPError as e:
+        logfire.error("Zwift racing profile fetch failed", user_id=user_id, error=str(e))
+        return None
+
+
 def list_connections() -> list[dict] | None:
     """Fetch all of this app's connected users from the service (admin view).
 

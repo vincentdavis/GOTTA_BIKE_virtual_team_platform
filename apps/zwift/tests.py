@@ -157,7 +157,61 @@ def test_client_returns_none_when_unconfigured(monkeypatch):
     assert client.get_connection_status("42") is None
     assert client.get_authorize_url("42", "https://x") is None
     assert client.list_connections() is None
+    assert client.get_racing_profile("42") is None
     assert client.disconnect("42") is False
+
+
+@pytest.mark.django_db
+def test_client_get_racing_profile_returns_data(monkeypatch):
+    from apps.zwift import client
+    from gotta_bike_platform.config import settings as config
+
+    monkeypatch.setattr(config, "zwift_api_base_url", "http://svc.internal:8000")
+    monkeypatch.setattr(config, "zwift_app_api_key", "app-key-123")
+
+    captured = {}
+
+    class _Resp:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"zwid": "555", "category": "B", "racing_score": 435.0}
+
+    def _fake_get(url, *, headers, timeout):
+        captured["url"] = url
+        return _Resp()
+
+    monkeypatch.setattr("apps.zwift.client.httpx.get", _fake_get)
+
+    result = client.get_racing_profile("62")
+
+    assert result["category"] == "B"
+    assert captured["url"] == "http://svc.internal:8000/api/zwift/users/62/profile"
+
+
+@pytest.mark.django_db
+def test_client_get_racing_profile_404_returns_none(monkeypatch):
+    from apps.zwift import client
+    from gotta_bike_platform.config import settings as config
+
+    monkeypatch.setattr(config, "zwift_api_base_url", "http://svc.internal:8000")
+    monkeypatch.setattr(config, "zwift_app_api_key", "app-key-123")
+
+    class _Resp:
+        status_code = 404
+
+        def raise_for_status(self):  # pragma: no cover - not reached on 404
+            raise AssertionError("should short-circuit on 404")
+
+        def json(self):  # pragma: no cover
+            return {}
+
+    monkeypatch.setattr("apps.zwift.client.httpx.get", lambda url, *, headers, timeout: _Resp())
+
+    assert client.get_racing_profile("999") is None
 
 
 # --- admin connections page -------------------------------------------------

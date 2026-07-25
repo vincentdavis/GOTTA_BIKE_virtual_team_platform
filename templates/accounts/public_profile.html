@@ -320,6 +320,9 @@
             {% endif %}
           </div>
 
+          <!-- Racing Profile (official Zwift API) -->
+          {% include "accounts/partials/racing_profile.html" %}
+
           <!-- Verification Records -->
           {% if verification_summary or pending_records %}
           <div class="card bg-base-300 p-4">

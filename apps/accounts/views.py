@@ -88,6 +88,30 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
     }
 
 
+def _fetch_racing_profile(user: User) -> dict | None:
+    """Fetch a user's official Zwift racing profile from the zauth service.
+
+    Returns the service's racing-profile dict enriched with a ``weight_kg``
+    convenience field, or None when unconfigured / not connected / on error. Kept
+    resilient so a slow or down service never breaks a profile page render.
+
+    Args:
+        user: The profile owner.
+
+    Returns:
+        The racing-profile context dict, or None.
+
+    """
+    from apps.zwift import client as zwift_client
+
+    profile = zwift_client.get_racing_profile(str(user.pk))
+    if not profile:
+        return None
+    grams = profile.get("weight_in_grams")
+    profile["weight_kg"] = round(grams / 1000, 1) if grams else None
+    return profile
+
+
 @login_required
 @require_GET
 def profile_view(request: HttpRequest) -> HttpResponse:
@@ -135,6 +159,7 @@ def profile_view(request: HttpRequest) -> HttpResponse:
     context = _build_zwift_status_context(request.user)
     context["form"] = form
     context["required_summary"] = required_summary
+    context["racing_profile"] = _fetch_racing_profile(request.user)
     return render(request, "accounts/profile.html", context)
 
 
@@ -360,6 +385,7 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
             "profile_user": profile_user,
             "zp_data": zp_data,
             "zr_data": zr_data,
+            "racing_profile": _fetch_racing_profile(profile_user),
             "is_own_profile": is_own_profile,
             "recent_results": recent_results,
             "youtube_videos": youtube_videos,

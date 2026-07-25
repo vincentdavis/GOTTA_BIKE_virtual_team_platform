@@ -32,6 +32,13 @@
           </div>
         </div>
 
+        <!-- Racing Profile (official Zwift API) -->
+        {% if racing_profile %}
+        <div class="mb-6">
+          {% include "accounts/partials/racing_profile.html" %}
+        </div>
+        {% endif %}
+
         <!-- Zwift Verification Modal -->
         <dialog id="zwift-verify-modal" class="modal">
           <div class="modal-box">
