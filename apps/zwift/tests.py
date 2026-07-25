@@ -158,6 +158,7 @@ def test_client_returns_none_when_unconfigured(monkeypatch):
     assert client.get_authorize_url("42", "https://x") is None
     assert client.list_connections() is None
     assert client.get_racing_profile("42") is None
+    assert client.get_activity_stats("42") is None
     assert client.disconnect("42") is False
 
 

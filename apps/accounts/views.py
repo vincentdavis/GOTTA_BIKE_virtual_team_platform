@@ -112,6 +112,69 @@ def _fetch_racing_profile(user: User) -> dict | None:
     return profile
 
 
+def _fmt_hm(seconds: float | None) -> str | None:
+    """Format a duration in seconds as ``Hh MMm`` (or ``Mm`` under an hour).
+
+    Args:
+        seconds: Duration in seconds, or None.
+
+    Returns:
+        A short human string, or None when there is no duration.
+
+    """
+    if not seconds:
+        return None
+    total = round(seconds)
+    hours, remainder = divmod(total, 3600)
+    minutes = remainder // 60
+    return f"{hours}h {minutes:02d}m" if hours else f"{minutes}m"
+
+
+def _fetch_activity_window(user: User) -> dict | None:
+    """Fetch a user's recent Zwift activities + 30-day stats from the zauth service.
+
+    Returns a template-friendly dict (distances in km, durations pre-formatted),
+    or None when unconfigured / not connected / on error. Kept resilient so a
+    slow or down service never breaks a profile page render.
+
+    Args:
+        user: The profile owner.
+
+    Returns:
+        The processed activity-window context, or None.
+
+    """
+    from apps.zwift import client as zwift_client
+
+    data = zwift_client.get_activity_stats(str(user.pk))
+    if not data:
+        return None
+
+    activities = []
+    for row in data.get("activities", []):
+        distance_m = row.get("distance_m")
+        activities.append(
+            {
+                "date": row.get("start_date_time"),
+                "name": row.get("name"),
+                "sport": row.get("sport"),
+                "distance_km": round(distance_m / 1000, 1) if distance_m else None,
+                "duration": _fmt_hm(row.get("duration_s")),
+            }
+        )
+
+    stats = data.get("stats") or {}
+    total_distance_m = stats.get("total_distance_m") or 0
+    return {
+        "days": stats.get("days", 30),
+        "count": stats.get("count", 0),
+        "sports": stats.get("sports") or {},
+        "total_distance_km": round(total_distance_m / 1000, 1),
+        "total_duration": _fmt_hm(stats.get("total_duration_s")),
+        "activities": activities,
+    }
+
+
 @login_required
 @require_GET
 def profile_view(request: HttpRequest) -> HttpResponse:
@@ -386,6 +449,7 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
             "zp_data": zp_data,
             "zr_data": zr_data,
             "racing_profile": _fetch_racing_profile(profile_user),
+            "activity_window": _fetch_activity_window(profile_user),
             "is_own_profile": is_own_profile,
             "recent_results": recent_results,
             "youtube_videos": youtube_videos,

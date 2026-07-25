@@ -143,6 +143,37 @@ def get_racing_profile(user_id: str) -> dict | None:
         return None
 
 
+def get_activity_stats(user_id: str, days: int = 30) -> dict | None:
+    """Fetch a connected user's recent activities + aggregate stats.
+
+    Args:
+        user_id: The platform user identifier (stable primary key).
+        days: Rolling window in days (service clamps to 1-90).
+
+    Returns:
+        A dict ``{"stats": {...}, "activities": [...]}`` for the window, or None
+        if the service is unconfigured, the user isn't connected (404), or the
+        call failed.
+
+    """
+    if not is_configured():
+        return None
+    try:
+        response = httpx.get(
+            _url(f"/api/zwift/users/{user_id}/activity-stats"),
+            params={"days": days},
+            headers=_headers(),
+            timeout=_TIMEOUT,
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPError as e:
+        logfire.error("Zwift activity stats fetch failed", user_id=user_id, error=str(e))
+        return None
+
+
 def list_connections() -> list[dict] | None:
     """Fetch all of this app's connected users from the service (admin view).
 

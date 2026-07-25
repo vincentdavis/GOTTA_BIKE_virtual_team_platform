@@ -577,6 +577,56 @@
           </div>
         {% endif %}
 
+        <!-- Recent Zwift Activities (last 30 days, from the zauth service) -->
+        {% if activity_window and activity_window.activities %}
+          <div class="mb-6">
+            <h3 class="font-semibold mb-3 flex items-center gap-2">
+              <span class="px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary rounded">Z</span>
+              Recent Activities
+              <span class="text-xs font-normal text-base-content/50">· last {{ activity_window.days }} days</span>
+            </h3>
+
+            <!-- 30-day stats -->
+            <div class="flex flex-wrap gap-2 mb-3">
+              <span class="badge badge-lg">{{ activity_window.count }} activit{{ activity_window.count|pluralize:"y,ies" }}</span>
+              {% for sport, n in activity_window.sports.items %}
+                <span class="badge badge-lg badge-outline">{{ sport|title }}: {{ n }}</span>
+              {% endfor %}
+              {% if activity_window.total_distance_km %}
+                <span class="badge badge-lg badge-ghost">{{ activity_window.total_distance_km }} km total</span>
+              {% endif %}
+              {% if activity_window.total_duration %}
+                <span class="badge badge-lg badge-ghost">{{ activity_window.total_duration }} total</span>
+              {% endif %}
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Activity</th>
+                    <th>Sport</th>
+                    <th class="text-right">Distance</th>
+                    <th class="text-right">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for a in activity_window.activities %}
+                    <tr>
+                      <td class="text-base-content/70 whitespace-nowrap">{{ a.date|default:""|slice:":10"|default:"—" }}</td>
+                      <td>{{ a.name|default:"Activity"|truncatechars:40 }}</td>
+                      <td>{% if a.sport %}<span class="badge badge-sm badge-outline">{{ a.sport|title }}</span>{% else %}—{% endif %}</td>
+                      <td class="text-right whitespace-nowrap">{% if a.distance_km %}{{ a.distance_km }} km{% else %}—{% endif %}</td>
+                      <td class="text-right whitespace-nowrap">{{ a.duration|default:"—" }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        {% endif %}
+
         <!-- Recent Results -->
         {% if recent_results %}
           <div class="mb-6">
