@@ -1,5 +1,7 @@
-{# Official Zwift racing profile card (data from the zauth Zwift API service).
-   Expects `racing_profile` in context (see accounts.views._fetch_racing_profile). #}
+{% comment %}
+Official Zwift racing profile card (data from the zauth Zwift API service).
+Expects `racing_profile` in context (see accounts.views._fetch_racing_profile).
+{% endcomment %}
 {% if racing_profile %}
 <div class="card bg-base-300 p-4">
   <h3 class="font-semibold mb-3 flex items-center gap-2">
