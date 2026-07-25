@@ -27,6 +27,7 @@ urlpatterns = [
     # Membership
     path("discord-review/", views.discord_review_view, name="discord_review"),
     path("discord-review/export/", views.discord_review_export_csv, name="discord_review_export"),
+    path("zwift-connections/", views.zwift_connections_view, name="zwift_connections"),
     path("membership-review/", views.membership_review_view, name="membership_review"),
     path("membership-review/jersey-upload/", views.membership_jersey_csv_upload, name="membership_jersey_csv_upload"),
     path(

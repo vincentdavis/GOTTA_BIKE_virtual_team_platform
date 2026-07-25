@@ -196,6 +196,16 @@
                 Discord Review
             </a>
         </li>
+        {% if user.is_membership_admin %}
+        <li>
+            <a href="{% url 'team:zwift_connections' %}" class="{% if request.resolver_match.url_name == 'zwift_connections' %}active{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m6.656-6.656l1.5-1.5a4 4 0 015.656 5.656l-3 3a4 4 0 01-5.656 0" />
+                </svg>
+                Zwift Connections
+            </a>
+        </li>
+        {% endif %}
         {% endif %}
 
         <!-- Team Performance Section (conditional) -->

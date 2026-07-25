@@ -34,6 +34,7 @@ from apps.team.services import (
     get_unified_team_roster,
 )
 from apps.team.tasks import notify_application_update, notify_captains_verification, notify_race_ready_change
+from apps.zwift import client as zwift_client
 from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -2575,6 +2576,57 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
     )
 
     return render(request, "team/discord_review.html", context)
+
+
+@login_required
+@discord_permission_required("membership_admin", raise_exception=True)
+@require_GET
+def zwift_connections_view(request: HttpRequest) -> HttpResponse:
+    """List platform users who have connected their Zwift account via the zauth service.
+
+    The zwift_api service is the source of truth; this fetches its connections
+    list live and joins each ``user_id`` (a stringified User pk) back to the
+    local User for display.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Rendered Zwift connections admin page.
+
+    """
+    configured = zwift_client.is_configured()
+    connections = zwift_client.list_connections() if configured else None
+    service_error = configured and connections is None
+
+    connections = connections or []
+    int_ids = [int(c["user_id"]) for c in connections if str(c.get("user_id", "")).isdigit()]
+    users = {str(u.pk): u for u in User.objects.filter(pk__in=int_ids)}
+
+    rows = [
+        {
+            "user": users.get(str(c.get("user_id"))),
+            "user_id": c.get("user_id"),
+            "zwid": c.get("zwid"),
+            "connected_at": c.get("connected_at"),
+            "zwift_name": c.get("zwift_name"),
+            "category": c.get("category"),
+            "category_women": c.get("category_women"),
+        }
+        for c in connections
+    ]
+
+    logfire.info("Zwift connections admin viewed", user_id=request.user.id, count=len(rows))
+    return render(
+        request,
+        "team/zwift_connections.html",
+        {
+            "configured": configured,
+            "service_error": service_error,
+            "rows": rows,
+            "connected_count": len(rows),
+        },
+    )
 
 
 @login_required

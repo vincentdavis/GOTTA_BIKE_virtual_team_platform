@@ -113,6 +113,30 @@ def get_authorize_url(user_id: str, return_url: str, *, prompt_login: bool = Fal
         return None
 
 
+def list_connections() -> list[dict] | None:
+    """Fetch all of this app's connected users from the service (admin view).
+
+    Returns:
+        A list of ``{"user_id", "zwid", "connected_at", "updated_at",
+        "zwift_name", "category", "category_women"}`` dicts (newest first), or
+        None if the service is unconfigured or the call failed.
+
+    """
+    if not is_configured():
+        return None
+    try:
+        response = httpx.get(
+            _url("/api/zwift/oauth/connections"),
+            headers=_headers(),
+            timeout=_TIMEOUT,
+        )
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPError as e:
+        logfire.error("Zwift connections fetch failed", error=str(e))
+        return None
+
+
 def disconnect(user_id: str) -> bool:
     """Disconnect a user's Zwift account link in the service.
 

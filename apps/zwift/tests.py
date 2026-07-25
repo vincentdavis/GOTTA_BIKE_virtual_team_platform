@@ -156,4 +156,64 @@ def test_client_returns_none_when_unconfigured(monkeypatch):
     assert client.is_configured() is False
     assert client.get_connection_status("42") is None
     assert client.get_authorize_url("42", "https://x") is None
+    assert client.list_connections() is None
     assert client.disconnect("42") is False
+
+
+# --- admin connections page -------------------------------------------------
+
+
+@pytest.fixture
+def membership_admin_client(client, user_model):
+    admin = user_model.objects.create_user(
+        username="mem_admin", email="mem_admin@example.test", permission_overrides={"membership_admin": True}
+    )
+    client.force_login(admin)
+    return client
+
+
+@pytest.mark.django_db
+def test_zwift_connections_requires_membership_admin(auth_client):
+    # A plain team_member (no membership_admin) is forbidden.
+    resp = auth_client.get(reverse("team:zwift_connections"))
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_zwift_connections_lists_and_joins_users(membership_admin_client, user_model, monkeypatch):
+    linked = user_model.objects.create_user(username="linked", email="linked@example.test")
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    monkeypatch.setattr(
+        "apps.zwift.client.list_connections",
+        lambda: [
+            {
+                "user_id": str(linked.pk),
+                "zwid": "12345",
+                "connected_at": "2026-07-01T10:00:00Z",
+                "zwift_name": "Linked Rider",
+                "category": "B",
+                "category_women": None,
+            },
+            {"user_id": "999999", "zwid": "888", "connected_at": None, "zwift_name": None, "category": None},
+        ],
+    )
+
+    resp = membership_admin_client.get(reverse("team:zwift_connections"))
+
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "12345" in body
+    assert "Linked Rider" in body
+    assert "2 connected" in body
+    assert "id 999999" in body  # unmatched local user shows the raw id
+
+
+@pytest.mark.django_db
+def test_zwift_connections_service_error(membership_admin_client, monkeypatch):
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    monkeypatch.setattr("apps.zwift.client.list_connections", lambda: None)
+
+    resp = membership_admin_client.get(reverse("team:zwift_connections"))
+
+    assert resp.status_code == 200
+    assert b"reach the Zwift service" in resp.content

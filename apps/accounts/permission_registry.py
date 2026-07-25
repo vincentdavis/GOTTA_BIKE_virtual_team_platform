@@ -44,6 +44,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/team/applications/{uuid}/ - Individual application review",
             "/team/applications/{uuid}/zwid-action/ - Verify/reject ZWID on membership application",
             "/team/discord-review/ - Discord guild member review",
+            "/team/zwift-connections/ - Zwift account connections (Zwift Link) list",
         ],
     },
     Permissions.RACING_ADMIN: {

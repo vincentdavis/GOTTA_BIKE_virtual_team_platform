@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Zwift Connections{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto space-y-6">
+
+  <div class="flex items-center justify-between gap-4 flex-wrap">
+    <div>
+      <h1 class="text-2xl font-bold">Zwift Connections</h1>
+      <p class="text-sm text-base-content/60">
+        Members who have connected their Zwift account via Zwift Link.
+      </p>
+    </div>
+    <span class="badge badge-lg badge-primary">{{ connected_count }} connected</span>
+  </div>
+
+  {% if not configured %}
+    <div class="alert alert-warning">
+      <span>The Zwift API service isn't configured, so connection data is unavailable.</span>
+    </div>
+  {% elif service_error %}
+    <div class="alert alert-error">
+      <span>Couldn't reach the Zwift service right now. Please try again in a moment.</span>
+    </div>
+  {% else %}
+    <div class="card bg-base-100 border border-base-300">
+      <div class="card-body p-0 overflow-x-auto">
+        <table class="table table-zebra">
+          <thead>
+            <tr>
+              <th>Member</th>
+              <th>Discord</th>
+              <th>Zwift ID</th>
+              <th>Zwift name</th>
+              <th>Category</th>
+              <th>Connected</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td class="font-medium">
+                {% if row.user %}
+                  <a href="{% url 'accounts:public_profile' user_id=row.user.pk %}" class="link link-hover">
+                    {{ row.user.get_full_name|default:row.user.discord_username|default:row.user.username }}
+                  </a>
+                {% else %}
+                  <span class="text-base-content/50" title="No local user matched this id">id {{ row.user_id }}</span>
+                {% endif %}
+              </td>
+              <td class="text-sm">{{ row.user.discord_username|default:"—" }}</td>
+              <td class="font-mono text-sm">{{ row.zwid|default:"—" }}</td>
+              <td class="text-sm">{{ row.zwift_name|default:"—" }}</td>
+              <td class="text-sm">
+                {% if row.category %}{{ row.category }}{% endif %}{% if row.category_women %} / {{ row.category_women }}{% endif %}{% if not row.category and not row.category_women %}—{% endif %}
+              </td>
+              <td class="text-sm whitespace-nowrap">{{ row.connected_at|default:""|slice:":10"|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-base-content/60 py-8">No members have connected their Zwift account yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
+
+</div>
+{% endblock %}
