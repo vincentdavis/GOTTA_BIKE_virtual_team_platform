@@ -18,7 +18,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from apps.zwift import client
+from apps.zwift import client, verification
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -49,6 +49,13 @@ def zauth_view(request: HttpRequest) -> HttpResponse:
     configured = client.is_configured()
     status = client.get_connection_status(str(request.user.pk)) if configured else None
     service_error = configured and status is None
+
+    # Reconcile platform verification from the authoritative status (not the
+    # user-controllable ?status= querystring). This is the on-connect fast path;
+    # the hourly task catches everyone else. Never revokes on a None status.
+    outcome = verification.apply_status(request.user, status)
+    if outcome in ("granted", "revoked"):
+        logfire.info("zauth verification synced on view", user_id=request.user.pk, outcome=outcome)
 
     context = {
         "configured": configured,

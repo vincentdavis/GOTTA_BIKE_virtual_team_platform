@@ -44,6 +44,23 @@ def test_zauth_shows_connected(logged_in_client, monkeypatch):
 
 
 @pytest.mark.django_db
+def test_zauth_view_stamps_verification_on_connect(logged_in_client, user, monkeypatch):
+    """Visiting the zauth page while connected reconciles platform verification."""
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    monkeypatch.setattr(
+        "apps.zwift.client.get_connection_status",
+        lambda user_id: {"connected": True, "zwid": "12345", "zwift_user_id": "uuid-1", "connected_at": None},
+    )
+
+    logged_in_client.get(reverse("zwift:zauth"))
+
+    user.refresh_from_db()
+    assert user.zwid == 12345
+    assert user.zwid_verified is True
+    assert user.zwid_verification_method == "zauth"
+
+
+@pytest.mark.django_db
 def test_zauth_shows_not_connected_with_connect_button(logged_in_client, monkeypatch):
     monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
     monkeypatch.setattr(

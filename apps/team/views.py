@@ -198,8 +198,16 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
             else:
                 zr_m_counts[r.zr_category] = zr_m_counts.get(r.zr_category, 0) + 1
     zr_cat_order = [
-        "Diamond", "Ruby", "Emerald", "Sapphire", "Amethyst",
-        "Platinum", "Gold", "Silver", "Bronze", "Copper",
+        "Diamond",
+        "Ruby",
+        "Emerald",
+        "Sapphire",
+        "Amethyst",
+        "Platinum",
+        "Gold",
+        "Silver",
+        "Bronze",
+        "Copper",
     ]
     zr_dist_max = max(
         [zr_m_counts.get(c, 0) + zr_w_counts.get(c, 0) for c in zr_cat_order],
@@ -705,7 +713,8 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
 
     # Query users with pending ZWID verification (zwid set but not verified)
     pending_zwid_users = (
-        User.objects.filter(zwid__isnull=False, zwid_verified=False)
+        User.objects
+        .filter(zwid__isnull=False, zwid_verified=False)
         .exclude(zwid=0)
         .order_by("discord_username", "username")
     )
@@ -857,7 +866,9 @@ def zwid_verification_action_view(request: HttpRequest, user_id: int) -> HttpRes
         if edited_zwid and edited_zwid.isdigit() and int(edited_zwid) > 0:
             target_user.zwid = int(edited_zwid)
         target_user.zwid_verified = True
-        target_user.save(update_fields=["zwid", "zwid_verified"])
+        target_user.zwid_verification_method = User.VerificationMethod.ADMIN
+        target_user.zwid_verified_at = timezone.now()
+        target_user.save(update_fields=["zwid", "zwid_verified", "zwid_verification_method", "zwid_verified_at"])
         logfire.info(
             "ZWID verified by admin",
             admin_id=request.user.id,
@@ -868,9 +879,16 @@ def zwid_verification_action_view(request: HttpRequest, user_id: int) -> HttpRes
         )
     elif action == "reject":
         old_zwid = target_user.zwid
+        old_method = target_user.zwid_verification_method
+        # Sever the zauth link first. Clearing the local fields alone is not
+        # enough: the hourly reconcile grants verification to every user the
+        # service still reports as connected, which would undo this rejection.
+        disconnected = zwift_client.disconnect(str(target_user.pk))
         target_user.zwid = None
         target_user.zwid_verified = False
-        target_user.save(update_fields=["zwid", "zwid_verified"])
+        target_user.zwid_verification_method = ""
+        target_user.zwid_verified_at = None
+        target_user.save(update_fields=["zwid", "zwid_verified", "zwid_verification_method", "zwid_verified_at"])
         logfire.info(
             "ZWID rejected by admin",
             admin_id=request.user.id,
@@ -878,7 +896,15 @@ def zwid_verification_action_view(request: HttpRequest, user_id: int) -> HttpRes
             target_user_id=target_user.id,
             target_username=target_user.username,
             old_zwid=old_zwid,
+            old_method=old_method,
+            zauth_disconnected=disconnected,
         )
+        if old_method == User.VerificationMethod.ZAUTH and not disconnected:
+            logfire.warning(
+                "ZWID rejected but the zauth link was not confirmed disconnected; "
+                "the reconcile task may re-verify this user",
+                target_user_id=target_user.id,
+            )
 
     return HttpResponse("")
 
@@ -966,7 +992,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         if new_weight_str:
             try:
                 new_weight = Decimal(new_weight_str)
-            except (InvalidOperation, ValueError):
+            except InvalidOperation, ValueError:
                 messages.error(request, "Invalid weight value.")
                 return redirect("team:verification_record_detail", pk=pk)
             if new_weight != record.weight:
@@ -1180,7 +1206,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         try:
             checklist_data = json.loads(config.VERIFICATION_CHECK_LIST or "{}")
             checklist_items = checklist_data.get(record.verify_type, [])
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             pass
 
     # Get other verification records for the same user (excluding current)
@@ -1592,7 +1618,8 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     if guild_duration_filter in guild_duration_bounds:
         min_days, max_days = guild_duration_bounds[guild_duration_filter]
         riders = [
-            r for r in riders
+            r
+            for r in riders
             if r.guild_membership_days is not None
             and (min_days is None or r.guild_membership_days >= min_days)
             and (max_days is None or r.guild_membership_days < max_days)
@@ -1708,7 +1735,8 @@ def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
     if "zwid" not in fieldnames or "has_jersey" not in fieldnames:
         missing = [c for c in ("zwid", "has_jersey") if c not in fieldnames]
         return render(
-            request, "team/partials/_jersey_csv_preview.html",
+            request,
+            "team/partials/_jersey_csv_preview.html",
             {"error": f"Missing required column(s): {', '.join(missing)}"},
         )
 
@@ -1735,7 +1763,9 @@ def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
         new_val = _parse_has_jersey(raw_jersey)
         if new_val is None and raw_jersey:
             invalid_rows.append({
-                "row": row_num, "zwid": raw_zwid, "reason": f"Invalid has_jersey value: '{raw_jersey}'",
+                "row": row_num,
+                "zwid": raw_zwid,
+                "reason": f"Invalid has_jersey value: '{raw_jersey}'",
             })
             continue
         if new_val is None:
@@ -1745,7 +1775,8 @@ def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
 
     if not parsed_rows:
         return render(
-            request, "team/partials/_jersey_csv_preview.html",
+            request,
+            "team/partials/_jersey_csv_preview.html",
             {"error": "No valid rows found in CSV.", "invalid_rows": invalid_rows},
         )
 
@@ -1756,9 +1787,16 @@ def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
     users_by_zwid = {
         u.zwid: u
         for u in User.objects.filter(zwid__in=zwid_list).only(
-            "id", "zwid", "first_name", "last_name",
-            "discord_id", "discord_nickname", "discord_avatar",
-            "has_jersey", "is_race_ready", "is_extra_verified",
+            "id",
+            "zwid",
+            "first_name",
+            "last_name",
+            "discord_id",
+            "discord_nickname",
+            "discord_avatar",
+            "has_jersey",
+            "is_race_ready",
+            "is_extra_verified",
         )
     }
 
@@ -1770,14 +1808,8 @@ def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
     }
 
     # Look up ZP/ZR data for tooltips
-    zp_by_zwid = {
-        r["zwid"]: r
-        for r in ZPTeamRiders.objects.filter(zwid__in=zwid_list).values("zwid", "div", "divw")
-    }
-    zr_by_zwid = {
-        r["zwid"]: r
-        for r in ZRRider.objects.filter(zwid__in=zwid_list).values("zwid", "phenotype_value")
-    }
+    zp_by_zwid = {r["zwid"]: r for r in ZPTeamRiders.objects.filter(zwid__in=zwid_list).values("zwid", "div", "divw")}
+    zr_by_zwid = {r["zwid"]: r for r in ZRRider.objects.filter(zwid__in=zwid_list).values("zwid", "phenotype_value")}
 
     changes: list[dict] = []
     unmatched_zwids: list[int] = []
@@ -1787,15 +1819,11 @@ def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
             unmatched_zwids.append(zwid)
             continue
         if user.has_jersey != new_val:
-            display_name = (
-                f"{user.first_name} {user.last_name}".strip() or user.discord_nickname or f"User #{user.id}"
-            )
+            display_name = f"{user.first_name} {user.last_name}".strip() or user.discord_nickname or f"User #{user.id}"
             guild_joined = guild_by_discord_id.get(user.discord_id)
             avatar_url = ""
             if user.discord_id and user.discord_avatar:
-                avatar_url = (
-                    f"https://cdn.discordapp.com/avatars/{user.discord_id}/{user.discord_avatar}.png"
-                )
+                avatar_url = f"https://cdn.discordapp.com/avatars/{user.discord_id}/{user.discord_avatar}.png"
             zp = zp_by_zwid.get(zwid, {})
             zr = zr_by_zwid.get(zwid, {})
             zp_cat = ZP_DIV_TO_CATEGORY.get(zp.get("div", 0), "")
@@ -1820,12 +1848,11 @@ def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
             })
 
     # Store minimal data in session for confirm step
-    request.session["jersey_csv_preview"] = [
-        {"user_id": c["user_id"], "new": c["new"]} for c in changes
-    ]
+    request.session["jersey_csv_preview"] = [{"user_id": c["user_id"], "new": c["new"]} for c in changes]
 
     return render(
-        request, "team/partials/_jersey_csv_preview.html",
+        request,
+        "team/partials/_jersey_csv_preview.html",
         {
             "changes": changes,
             "unmatched_zwids": unmatched_zwids,
@@ -1851,7 +1878,8 @@ def membership_jersey_csv_confirm(request: HttpRequest) -> HttpResponse:
     changes = request.session.pop("jersey_csv_preview", None)
     if not changes:
         return render(
-            request, "team/partials/_jersey_csv_preview.html",
+            request,
+            "team/partials/_jersey_csv_preview.html",
             {"error": "No pending changes found. Please re-upload the CSV."},
         )
 
@@ -1873,7 +1901,8 @@ def membership_jersey_csv_confirm(request: HttpRequest) -> HttpResponse:
     )
 
     return render(
-        request, "team/partials/_jersey_csv_preview.html",
+        request,
+        "team/partials/_jersey_csv_preview.html",
         {"result": {"updated": updated}},
     )
 
@@ -1896,9 +1925,7 @@ def membership_application_list_view(request: HttpRequest) -> HttpResponse:
     applications = MembershipApplication.objects.select_related("modified_by").order_by("-date_created")
 
     # Build set of discord IDs still in the guild (date_left is null)
-    active_guild_ids = set(
-        GuildMember.objects.filter(date_left__isnull=True).values_list("discord_id", flat=True)
-    )
+    active_guild_ids = set(GuildMember.objects.filter(date_left__isnull=True).values_list("discord_id", flat=True))
 
     # Get filter parameters
     search_query = request.GET.get("q", "").strip()

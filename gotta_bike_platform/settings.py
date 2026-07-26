@@ -851,6 +851,12 @@ CONSTANCE_CONFIG = {
         "Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_SYNC_ZAUTH_VERIFICATIONS_HOURS": (
+        1,
+        "How often to reconcile Zwift OAuth (zauth) verification status from the zwift service "
+        "(hours; default hourly). Requires scheduler restart to take effect.",
+        int,
+    ),
     # TTT Planner physics constants (tunable; calibrate against Zwift Insider / zwiftgopher)
     "TTT_AIR_DENSITY": (1.225, "Air density rho (kg/m^3) for the TTT power model", float),
     "TTT_CRR": (0.004, "Coefficient of rolling resistance for the TTT power model", float),
@@ -1028,6 +1034,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS",
         "SCHEDULER_REFRESH_CACHED_CLUBS_HOURS",
         "SCHEDULER_SYNC_ZWIFT_DATA_HOURS",
+        "SCHEDULER_SYNC_ZAUTH_VERIFICATIONS_HOURS",
     ),
     "Zwift Data": ("ZWIFT_SPEED_LAB_URL",),
     "TTT Planner": (

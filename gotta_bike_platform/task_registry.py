@@ -32,6 +32,7 @@ from apps.events.tasks import remove_expired_ds_roles
 from apps.ladder_planner.tasks import refresh_cached_clubs
 from apps.team.tasks import sync_discord_channels, sync_discord_roles, warn_expiring_verifications
 from apps.user_api.tasks import purge_expired_api_keys
+from apps.zwift.tasks import sync_zauth_verifications
 from apps.zwift_data.tasks import sync_zwift_data
 from apps.zwiftpower.tasks import update_team_results, update_team_riders
 from apps.zwiftracing.tasks import sync_zr_riders
@@ -160,6 +161,12 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Re-sync the Zwift Speed Lab route/segment/world dataset",
         "scheduled": True,
         "hours_setting": "SCHEDULER_SYNC_ZWIFT_DATA_HOURS",
+    },
+    "sync_zauth_verifications": {
+        "task": sync_zauth_verifications,
+        "description": "Reconcile Zwift OAuth (zauth) verification status from the zwift service",
+        "scheduled": True,
+        "hours_setting": "SCHEDULER_SYNC_ZAUTH_VERIFICATIONS_HOURS",
     },
 }
 
