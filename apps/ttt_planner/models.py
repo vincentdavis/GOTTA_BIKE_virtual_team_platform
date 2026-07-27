@@ -10,6 +10,7 @@ import uuid
 from typing import ClassVar
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.utils.text import slugify
 
@@ -177,6 +178,14 @@ class PlanRider(models.Model):
     do not mutate a saved plan.
     """
 
+    # Ceilings for manually entered values. Auto-balance never generates more than
+    # _BALANCE_MAX_PULL_S (180s), so the duration cap is the looser manual bound. Both
+    # are enforced three ways: as field validators (the admin inline, which is where
+    # Pull W is actually set, runs full_clean), as a clamp in the inline edit view
+    # (which does not), and as the number input's max attribute.
+    MAX_PULL_DURATION_S = 300
+    MAX_PULL_POWER_W = 1500
+
     plan = models.ForeignKey(TttPlan, on_delete=models.CASCADE, related_name="riders")
     order = models.PositiveIntegerField(default=0, help_text="Pull order (0-based)")
     zwid = models.PositiveIntegerField(null=True, blank=True, help_text="Zwift ID, if linked to team data")
@@ -184,8 +193,17 @@ class PlanRider(models.Model):
     weight_kg = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True, help_text="Weight in kg")
     height_cm = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Height in cm")
     ftp_w = models.PositiveSmallIntegerField(null=True, blank=True, help_text="FTP in watts")
-    pull_power_w = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Override pull power in watts")
-    pull_duration_s = models.PositiveIntegerField(default=60, help_text="Pull duration in seconds")
+    pull_power_w = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MaxValueValidator(MAX_PULL_POWER_W)],
+        help_text="Override pull power in watts",
+    )
+    pull_duration_s = models.PositiveIntegerField(
+        default=60,
+        validators=[MaxValueValidator(MAX_PULL_DURATION_S)],
+        help_text="Pull duration in seconds",
+    )
     zero_pull = models.BooleanField(default=False, help_text="Rider takes no pulls (sits in for recovery)")
 
     class Meta:

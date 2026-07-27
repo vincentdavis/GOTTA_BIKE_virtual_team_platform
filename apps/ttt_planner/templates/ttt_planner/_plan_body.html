@@ -76,14 +76,19 @@
               {% if can_edit %}
               <td>
                 <input type="number" name="pull_duration_s" value="{{ rr.rider.pull_duration_s }}"
+                       min="0" max="{{ rr.rider.MAX_PULL_DURATION_S }}"
+                       title="0–{{ rr.rider.MAX_PULL_DURATION_S }} seconds"
                        class="input input-bordered input-xs w-16"
                        hx-post="{% url 'ttt_planner:rider_update' plan.pk rr.rider.pk %}"
                        hx-trigger="change" hx-target="#ttt-plan-body" hx-swap="innerHTML" />
               </td>
               <td>
+                {# hx-vals marks the request as being about zero_pull: an unchecked box
+                   sends no value at all, so without it the flag could never be cleared. #}
                 <input type="checkbox" name="zero_pull" class="checkbox checkbox-xs"
                        {% if rr.rider.zero_pull %}checked{% endif %}
                        hx-post="{% url 'ttt_planner:rider_update' plan.pk rr.rider.pk %}"
+                       hx-vals='{"zero_pull_submitted": "1"}'
                        hx-trigger="change" hx-target="#ttt-plan-body" hx-swap="innerHTML" />
               </td>
               <td class="whitespace-nowrap">

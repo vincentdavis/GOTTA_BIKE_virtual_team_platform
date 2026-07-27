@@ -398,6 +398,26 @@ def plan_delete(request: HttpRequest, plan_id: str) -> HttpResponse:
     return redirect("ttt_planner:list")
 
 
+def _clamp(value: int, ceiling: int) -> int:
+    """Clamp an integer into the non-negative range the caller allows.
+
+    This endpoint writes straight to the model without ``full_clean``, so the
+    ``PlanRider`` field validators never run here — the clamp is what keeps an
+    out-of-range value from reaching the column (a negative violates the positive-int
+    CHECK constraint, and anything over smallint raises DataError on PostgreSQL while
+    SQLite stores it happily, i.e. a 500 that only reproduces in production).
+
+    Args:
+        value: The parsed input value.
+        ceiling: The maximum to allow.
+
+    Returns:
+        The value bounded to ``[0, ceiling]``.
+
+    """
+    return min(max(value, 0), ceiling)
+
+
 def _get_editable_plan(request: HttpRequest, plan_id: str) -> TttPlan | None:
     """Fetch a plan if the user may edit it, else None.
 
@@ -861,15 +881,21 @@ def rider_update(request: HttpRequest, plan_id: str, rider_id: int) -> HttpRespo
     if "pull_power_w" in request.POST:
         raw = request.POST.get("pull_power_w", "").strip()
         try:
-            rider.pull_power_w = int(float(raw)) if raw else None
+            rider.pull_power_w = _clamp(int(float(raw)), PlanRider.MAX_PULL_POWER_W) if raw else None
         except ValueError:
             rider.pull_power_w = None
         fields.append("pull_power_w")
     if "pull_duration_s" in request.POST:
         with contextlib.suppress(ValueError):
-            rider.pull_duration_s = max(0, int(float(request.POST.get("pull_duration_s") or 0)))
+            rider.pull_duration_s = _clamp(
+                int(float(request.POST.get("pull_duration_s") or 0)), PlanRider.MAX_PULL_DURATION_S
+            )
         fields.append("pull_duration_s")
-    if "zero_pull" in request.POST:
+    # An unchecked checkbox is not submitted at all, so keying off "is zero_pull in
+    # POST?" alone can only ever turn this on. The marker (sent via hx-vals on the
+    # checkbox) says "this request is about zero_pull", which lets an absent value
+    # mean False without the pull power/duration updates clobbering the flag.
+    if "zero_pull_submitted" in request.POST or "zero_pull" in request.POST:
         rider.zero_pull = request.POST.get("zero_pull") in ("on", "true", "1")
         fields.append("zero_pull")
 
