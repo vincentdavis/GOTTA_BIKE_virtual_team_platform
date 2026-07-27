@@ -52,10 +52,13 @@ def _can_edit(plan: TttPlan, user) -> bool:
         user: The requesting user.
 
     Returns:
-        True for the plan owner or a superuser.
+        True for the plan owner, a superuser, or a member of the plan's
+        ``edit_squad`` (member, captain, or vice-captain).
 
     """
-    return user.is_superuser or plan.created_by_id == user.id
+    if user.is_superuser or plan.created_by_id == user.id:
+        return True
+    return bool(plan.edit_squad_id) and event_squads.user_in_squad(plan.edit_squad, user)
 
 
 def _render_plan_body(request: HttpRequest, plan: TttPlan, *, can_edit: bool) -> str:
@@ -359,11 +362,15 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
         The plan detail page.
 
     """
-    plan = get_object_or_404(TttPlan.objects.select_related("route"), pk=plan_id)
+    plan = get_object_or_404(TttPlan.objects.select_related("route", "edit_squad__event"), pk=plan_id)
     can_edit = _can_edit(plan, request.user)
     result = compute_plan(plan)
     route_options = terrain.route_options() if can_edit else []
     my_squads, other_squads = event_squads.squads_for_picker(request.user) if can_edit else ([], [])
+    # Whether the currently-selected edit squad appears in the active-event picker.
+    # If not (its event has ended), the template renders it as a standalone option
+    # so a settings save doesn't silently clear the grant.
+    picker_pks = {s["pk"] for s in my_squads} | {s["pk"] for s in other_squads}
     return render(
         request,
         "ttt_planner/planner_detail.html",
@@ -376,6 +383,7 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
             "event_types": TttPlan.EventType.choices,
             "my_squads": my_squads,
             "other_squads": other_squads,
+            "edit_squad_active": plan.edit_squad_id in picker_pks,
         },
     )
 
@@ -475,6 +483,9 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
     if "target_if" in request.POST:
         with contextlib.suppress(ValueError):
             plan.target_if = min(max(float(request.POST.get("target_if") or 0.95), 0.1), 1.5)
+    if "edit_squad" in request.POST:
+        squad_id = request.POST.get("edit_squad")
+        plan.edit_squad = Squad.objects.filter(pk=squad_id).first() if squad_id else None
 
     plan.save()
     return HttpResponse(_render_plan_body(request, plan, can_edit=True))

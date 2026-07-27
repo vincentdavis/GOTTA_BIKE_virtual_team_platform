@@ -151,6 +151,14 @@ class TttPlan(models.Model):
         related_name="ttt_plans",
         help_text="User who created the plan",
     )
+    edit_squad = models.ForeignKey(
+        "events.Squad",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Optional squad whose members (incl. captains/vice-captains) may also edit this plan",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

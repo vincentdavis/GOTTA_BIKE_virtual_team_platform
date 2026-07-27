@@ -88,6 +88,28 @@
                  class="input input-bordered input-sm" />
           <span class="label-text-alt mt-1 text-base-content/50">Clear to use the team default.</span>
         </label>
+        <label class="form-control md:col-span-2 lg:col-span-4">
+          <span class="label-text mb-1">Edit squad
+            <span class="text-base-content/40">(let a squad's members edit this plan — you and admins always can)</span></span>
+          <select name="edit_squad" class="select select-bordered select-sm">
+            <option value="">— No shared editing —</option>
+            {% if plan.edit_squad_id and not edit_squad_active %}
+              <option value="{{ plan.edit_squad_id }}" selected>
+                {{ plan.edit_squad.event.title }} — {{ plan.edit_squad.name }} (event ended)
+              </option>
+            {% endif %}
+            {% if my_squads %}
+            <optgroup label="Your squads">
+              {% for s in my_squads %}<option value="{{ s.pk }}" {% if plan.edit_squad_id == s.pk %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
+            </optgroup>
+            {% endif %}
+            {% if other_squads %}
+            <optgroup label="Other active squads">
+              {% for s in other_squads %}<option value="{{ s.pk }}" {% if plan.edit_squad_id == s.pk %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
+            </optgroup>
+            {% endif %}
+          </select>
+        </label>
       </form>
       {% else %}
         <h2 class="card-title text-2xl">{{ plan.name|default:"TTT Plan" }}</h2>
