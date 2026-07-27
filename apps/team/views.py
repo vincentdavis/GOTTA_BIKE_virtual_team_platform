@@ -2691,17 +2691,22 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
 @discord_permission_required("membership_admin", raise_exception=True)
 @require_GET
 def zwift_connections_view(request: HttpRequest) -> HttpResponse:
-    """List platform users who have connected their Zwift account via the zauth service.
+    """Report how each member verified their Zwift account, and who has not.
 
-    The zwift_api service is the source of truth; this fetches its connections
-    list live and joins each ``user_id`` (a stringified User pk) back to the
-    local User for display.
+    Lists every Discord-linked member with their verification method, joined to
+    the zauth service's live connection list. Drives the migration off the legacy
+    password flow: the "Legacy" and "Not verified" counts are what has to reach
+    zero before ``ZAUTH_VERIFICATION_REQUIRED`` can be turned on.
+
+    Service connections that match no local user (including membership
+    applications, which key on their own UUID) are listed separately rather than
+    dropped, so they stay visible to an admin.
 
     Args:
         request: The HTTP request.
 
     Returns:
-        Rendered Zwift connections admin page.
+        Rendered Zwift verification admin page.
 
     """
     configured = zwift_client.is_configured()
@@ -2709,23 +2714,75 @@ def zwift_connections_view(request: HttpRequest) -> HttpResponse:
     service_error = configured and connections is None
 
     connections = connections or []
-    int_ids = [int(c["user_id"]) for c in connections if str(c.get("user_id", "")).isdigit()]
-    users = {str(u.pk): u for u in User.objects.filter(pk__in=int_ids)}
+    by_user_id: dict[str, dict] = {}
+    unmatched: list[dict] = []
+    for conn in connections:
+        raw_id = str(conn.get("user_id", ""))
+        if raw_id.isdigit():
+            by_user_id[raw_id] = conn
+        else:
+            unmatched.append(conn)
 
-    rows = [
-        {
-            "user": users.get(str(c.get("user_id"))),
-            "user_id": c.get("user_id"),
-            "zwid": c.get("zwid"),
-            "connected_at": c.get("connected_at"),
-            "zwift_name": c.get("zwift_name"),
-            "category": c.get("category"),
-            "category_women": c.get("category_women"),
-        }
-        for c in connections
-    ]
+    members = User.objects.filter(is_active=True).exclude(discord_id="").order_by("first_name", "last_name", "username")
 
-    logfire.info("Zwift connections admin viewed", user_id=request.user.id, count=len(rows))
+    method_filter = request.GET.get("method", "")
+    connected_filter = request.GET.get("connected", "")
+    search = request.GET.get("q", "").strip()
+
+    counts = {"total": 0, "zauth": 0, "legacy": 0, "admin": 0, "unmethoded": 0, "unverified": 0, "connected": 0}
+    rows = []
+    for user in members:
+        conn = by_user_id.pop(str(user.pk), None)
+        method = user.zwid_verification_method or ""
+        # Verified with no method recorded: the retired self-serve password flow
+        # never stamped one, so these predate (or slipped past) the migration.
+        bucket = method if method else ("unmethoded" if user.zwid_verified else "unverified")
+        counts["total"] += 1
+        counts[bucket] = counts.get(bucket, 0) + 1
+        if conn:
+            counts["connected"] += 1
+
+        if method_filter and bucket != method_filter:
+            continue
+        if connected_filter == "yes" and not conn:
+            continue
+        if connected_filter == "no" and conn:
+            continue
+        if search:
+            haystack = " ".join(
+                filter(None, [user.get_full_name(), user.discord_username, user.username, str(user.zwid or "")])
+            ).lower()
+            if search.lower() not in haystack:
+                continue
+
+        rows.append({
+            "user": user,
+            "bucket": bucket,
+            "method": method,
+            "verified": user.zwid_verified,
+            "verified_at": user.zwid_verified_at,
+            "zwid": user.zwid,
+            "connected": bool(conn),
+            "connected_at": conn.get("connected_at") if conn else None,
+            "service_zwid": conn.get("zwid") if conn else None,
+            "zwift_name": conn.get("zwift_name") if conn else None,
+            "category": conn.get("category") if conn else None,
+            "category_women": conn.get("category_women") if conn else None,
+        })
+
+    # Anything left in by_user_id is a numeric id with no matching active member
+    # (deactivated, or the user was deleted); surface those alongside the UUIDs.
+    orphans = unmatched + list(by_user_id.values())
+
+    logfire.info(
+        "Zwift verification report viewed",
+        user_id=request.user.id,
+        shown=len(rows),
+        total=counts["total"],
+        zauth=counts["zauth"],
+        legacy=counts["legacy"],
+        unverified=counts["unverified"],
+    )
     return render(
         request,
         "team/zwift_connections.html",
@@ -2733,7 +2790,18 @@ def zwift_connections_view(request: HttpRequest) -> HttpResponse:
             "configured": configured,
             "service_error": service_error,
             "rows": rows,
-            "connected_count": len(rows),
+            "orphans": orphans,
+            "counts": counts,
+            "method_filter": method_filter,
+            "connected_filter": connected_filter,
+            "search_query": search,
+            "method_choices": [
+                ("zauth", "Zwift OAuth (zauth)"),
+                ("legacy", "Legacy (Sauce mod)"),
+                ("admin", "Admin (manual)"),
+                ("unmethoded", "Verified, no method"),
+                ("unverified", "Not verified"),
+            ],
         },
     )
 

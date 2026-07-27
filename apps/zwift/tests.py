@@ -253,7 +253,9 @@ def test_zwift_connections_requires_membership_admin(auth_client):
 
 @pytest.mark.django_db
 def test_zwift_connections_lists_and_joins_users(membership_admin_client, user_model, monkeypatch):
-    linked = user_model.objects.create_user(username="linked", email="linked@example.test")
+    # The page reports on Discord-linked members, so the joined user needs a discord_id;
+    # a connection whose id matches no member is surfaced in the orphans table instead.
+    linked = user_model.objects.create_user(username="linked", email="linked@example.test", discord_id="42")
     monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
     monkeypatch.setattr(
         "apps.zwift.client.list_connections",
@@ -276,8 +278,8 @@ def test_zwift_connections_lists_and_joins_users(membership_admin_client, user_m
     body = resp.content.decode()
     assert "12345" in body
     assert "Linked Rider" in body
-    assert "2 connected" in body
-    assert "id 999999" in body  # unmatched local user shows the raw id
+    assert "1 connected now" in body  # only the id matching a member counts
+    assert "999999" in body  # the unmatched id is still surfaced
 
 
 @pytest.mark.django_db
