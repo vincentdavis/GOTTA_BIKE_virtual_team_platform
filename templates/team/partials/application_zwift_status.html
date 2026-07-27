@@ -40,6 +40,19 @@
         </div>
     </div>
     {% if application.is_editable %}
+    <form method="post" action="{% url 'team:application_zauth_connect' application.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary btn-sm">
+            <span class="px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary/60 rounded shrink-0">Z</span>
+            Connect Zwift
+        </button>
+    </form>
+    {% endif %}
+
+    {# TODO(zauth-cleanup): legacy Sauce-mod password verification, retired in favour of
+       Zwift OAuth above. Hidden rather than deleted so the flow can be restored if the
+       zauth rollout is reverted. See TODO.md "zauth migration cleanup". #}
+    {% comment %}
     <button onclick="document.getElementById('zwift-verify-modal').showModal()"
             hx-get="{% url 'team:application_verify_zwift' application.pk %}"
             hx-target="#zwift-modal-content"
@@ -50,6 +63,6 @@
         </svg>
         Verify
     </button>
-    {% endif %}
+    {% endcomment %}
 </div>
 {% endif %}

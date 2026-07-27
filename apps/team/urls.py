@@ -47,6 +47,7 @@ urlpatterns = [
         name="application_manual_zwift_verify",
     ),
     path("apply/<uuid:pk>/unverify-zwift/", views.application_unverify_zwift, name="application_unverify_zwift"),
+    path("apply/<uuid:pk>/zauth-connect/", views.application_zauth_connect, name="application_zauth_connect"),
     path(
         "applications/<uuid:pk>/zwid-action/",
         views.application_zwid_admin_action_view,

@@ -137,6 +137,15 @@
             <p class="text-sm text-base-content/50">Verify your Zwift account to link your profile</p>
         </div>
     </div>
+    <a href="{% url 'zwift:zauth' %}" class="btn btn-primary btn-sm">
+        <span class="px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary/60 rounded shrink-0">Z</span>
+        Connect Zwift
+    </a>
+
+    {# TODO(zauth-cleanup): legacy Sauce-mod password verification, retired in favour of
+       Zwift OAuth. Hidden rather than deleted so the flow can be restored if the zauth
+       rollout is reverted. See TODO.md "zauth migration cleanup". #}
+    {% comment %}
     <button onclick="document.getElementById('zwift-verify-modal').showModal()"
             hx-get="{% url 'accounts:verify_zwift' %}"
             hx-target="#zwift-modal-content"
@@ -147,6 +156,7 @@
         </svg>
         Verify
     </button>
+    {% endcomment %}
 </div>
 {% endif %}
 

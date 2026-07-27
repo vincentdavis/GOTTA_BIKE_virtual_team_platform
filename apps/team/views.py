@@ -2246,17 +2246,99 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
     else:
         form = MembershipApplicationApplicantForm(instance=application)
 
+    # Pick up a Zwift OAuth (zauth) connection completed on the return trip from
+    # the service. Skipped once verified so the public page isn't making a service
+    # call on every load.
+    if not application.zwift_verified:
+        _sync_application_zauth(application)
+
     return render(
         request,
         "team/application_public.html",
         {
             "application": application,
             "form": form,
+            "zauth_configured": zwift_client.is_configured(),
             "privacy_policy_url": config.PRIVACY_POLICY_URL,
             "terms_of_service_url": config.TERMS_OF_SERVICE_URL,
             "application_form_instructions": config.REGISTRATION_FORM_INSTRUCTIONS,
         },
     )
+
+
+def _sync_application_zauth(application: MembershipApplication) -> bool:
+    """Stamp an application's Zwift verification from the zauth service.
+
+    The service keys connections by an arbitrary app-side string, so an
+    application uses its own UUID rather than a user PK (it has no User yet).
+    ``reconcile_all`` ignores non-numeric ids, so these never collide with the
+    per-user reconcile.
+
+    Args:
+        application: The application to reconcile.
+
+    Returns:
+        The application's ``zwift_verified`` state after the sync.
+
+    """
+    status = zwift_client.get_connection_status(str(application.pk))
+    if not status or not status.get("connected"):
+        return application.zwift_verified
+
+    # Same rule as the user-side grant: no usable official zwid, no verification.
+    zwid = str(status.get("zwid") or "").strip()
+    if not zwid.isdigit() or int(zwid) <= 0:
+        logfire.warning(
+            "zauth connected but reported no usable zwid for application",
+            application_id=str(application.pk),
+        )
+        return application.zwift_verified
+
+    fields = []
+    if application.zwift_id != zwid:
+        application.zwift_id = zwid
+        fields.append("zwift_id")
+    if not application.zwift_verified:
+        application.zwift_verified = True
+        fields.append("zwift_verified")
+    if fields:
+        application.save(update_fields=fields)
+        logfire.info(
+            "Zwift account verified via zauth for application",
+            application_id=str(application.pk),
+            applicant_discord_id=application.discord_id,
+            zwift_id=zwid,
+        )
+    return application.zwift_verified
+
+
+@require_POST
+def application_zauth_connect(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
+    """Start the Zwift OAuth connect flow for a membership application.
+
+    No login required — as with the rest of this page, knowing the application
+    UUID is the credential. The service is keyed by that same UUID.
+
+    Args:
+        request: The HTTP request.
+        pk: UUID of the MembershipApplication.
+
+    Returns:
+        A redirect to the Zwift consent URL, or back to the application on error.
+
+    """
+    application = get_object_or_404(MembershipApplication, pk=pk)
+    if not application.is_editable:
+        messages.error(request, "This application is no longer editable.")
+        return redirect("team:application_public", pk=pk)
+
+    return_url = request.build_absolute_uri(reverse("team:application_public", kwargs={"pk": pk}))
+    authorize_url = zwift_client.get_authorize_url(str(application.pk), return_url)
+    if not authorize_url:
+        logfire.error("Could not start Zwift connect for application", application_id=str(pk))
+        messages.error(request, "Could not start the Zwift connection right now. Please try again later.")
+        return redirect("team:application_public", pk=pk)
+    return redirect(authorize_url)
 
 
 @require_http_methods(["GET", "POST"])

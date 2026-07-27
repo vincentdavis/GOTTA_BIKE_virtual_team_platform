@@ -62,6 +62,22 @@
 ### Verifications
 
 - [ ] Group `warn_expiring_verifications` DMs by user (currently one DM per matching record per day; consolidate)
+- [ ] **zauth migration cleanup** — the legacy Sauce-mod password verification is now *hidden, not removed*.
+  The UI triggers are wrapped in `{% comment %}` blocks marked `TODO(zauth-cleanup)` in
+  `templates/accounts/partials/zwift_status.html`, `templates/accounts/partials/profile_form.html`, and
+  `templates/team/partials/application_zwift_status.html`. Once zauth has proven out, delete:
+  - views `accounts:verify_zwift` / `accounts:unverify_zwift` and `team:application_verify_zwift` /
+    `team:application_unverify_zwift`, plus their URL entries
+  - templates `accounts/partials/zwift_verify_modal.html`, `team/partials/application_zwift_verify_modal.html`,
+    and the `<dialog id="zwift-verify-modal">` blocks that host them
+  - forms `ZwiftVerificationForm` / `ApplicationZwiftVerificationForm`
+  - `apps/zwift/utils.py:fetch_zwift_id` (sends Zwift credentials as URL query params to a third-party
+    endpoint — the reason for the migration) once no caller remains
+  Keep `manual_zwift_verify` / `application_manual_zwift_verify`: those are the admin-reviewed fallback for
+  members who can't use Zwift OAuth, and are unrelated to the password flow.
+- [ ] A membership application's zauth connection is keyed by the application UUID, so it does **not** carry
+  over to the User account created at first login (the reconcile ignores non-numeric ids by design). New
+  members currently have to connect again from their profile — decide whether to re-key on approval or leave as is.
 
 ### User Profile
 
