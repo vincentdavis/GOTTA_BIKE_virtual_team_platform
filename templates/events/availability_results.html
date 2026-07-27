@@ -748,12 +748,28 @@
         </div>
         <div id="slot-modal-riders" class="max-h-60 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
         </div>
+        <details id="slot-modal-others-wrap" class="mt-2">
+          <summary class="text-xs cursor-pointer text-base-content/60 hover:text-base-content select-none">
+            Everyone else on this squad (<span id="slot-modal-others-count">0</span>)
+          </summary>
+          <p class="text-xs text-base-content/50 mt-1">These riders did not mark themselves available at this time.</p>
+          <div id="slot-modal-others" class="mt-1 max-h-48 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
+          </div>
+        </details>
       </div>
 
       <div class="form-control mb-3">
         <label class="label"><span class="label-text">Substitutes (optional)</span></label>
         <div id="slot-modal-substitutes" class="max-h-60 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
         </div>
+        <details id="slot-modal-sub-others-wrap" class="mt-2">
+          <summary class="text-xs cursor-pointer text-base-content/60 hover:text-base-content select-none">
+            Everyone else on this squad (<span id="slot-modal-sub-others-count">0</span>)
+          </summary>
+          <p class="text-xs text-base-content/50 mt-1">These riders did not mark themselves available at this time.</p>
+          <div id="slot-modal-sub-others" class="mt-1 max-h-48 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
+          </div>
+        </details>
       </div>
 
       <div id="slot-modal-error" class="alert alert-error py-2 mb-3 text-xs hidden"></div>
@@ -805,6 +821,7 @@
 <script>
   const utcCellUsers = {{ utc_cell_users_json|safe }};
   const userData = {{ user_data_json|safe }};
+  const squadRosterIds = {{ squad_roster_ids_json|default:"[]"|safe }};
   const existingSelections = {{ selections_json|safe }};
   const createUrl = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}";
   const updateUrlBase = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}".replace(/slots\/$/, "slots/");
@@ -826,6 +843,10 @@
     const timeInput = document.getElementById('slot-modal-time');
     const ridersDiv = document.getElementById('slot-modal-riders');
     const substitutesDiv = document.getElementById('slot-modal-substitutes');
+    const othersDiv = document.getElementById('slot-modal-others');
+    const subOthersDiv = document.getElementById('slot-modal-sub-others');
+    const othersWrap = document.getElementById('slot-modal-others-wrap');
+    const subOthersWrap = document.getElementById('slot-modal-sub-others-wrap');
     const title = document.getElementById('slot-modal-title');
     const threadBtn = document.getElementById('slot-modal-create-thread');
     const errorBox = document.getElementById('slot-modal-error');
@@ -877,59 +898,65 @@
     }
     window.__slotModalExisting = existing || null;
 
-    // Build rider checkboxes
-    ridersDiv.innerHTML = '';
-    if (available.length === 0) {
-      ridersDiv.innerHTML = '<p class="text-xs text-base-content/50">No riders available at this slot</p>';
-    } else {
-      available.forEach(function(uid) {
-        const u = userData[uid];
-        if (!u) return;
-        const checked = existing && existing.selected_user_ids.includes(uid);
-        const label = document.createElement('label');
-        label.className = 'flex items-center gap-2 cursor-pointer text-sm py-0.5';
-        let extra = '';
-        if (u.zr_category) extra += ' <span class="badge badge-xs badge-outline">' + u.zr_category + '</span>';
-        if (u.zr_rating) extra += ' <span class="text-xs text-base-content/50">' + u.zr_rating + '</span>';
-        label.innerHTML = '<input type="checkbox" name="selected_users" value="' + uid + '" class="checkbox checkbox-xs checkbox-primary rider-cb"' + (checked ? ' checked' : '') + '> ' + u.display_name + extra;
-        ridersDiv.appendChild(label);
-      });
-    }
-
-    // Build substitute checkboxes from the same available pool, pre-checking any
-    // saved subs. Previously-saved subs who are no longer available still render
-    // (checked, flagged) so the existing choice stays visible/editable.
-    substitutesDiv.innerHTML = '';
+    // Riders and substitutes are both drawn from the availability pool for this
+    // slot, with an "everyone else on this squad" list underneath so a captain can
+    // pick someone who never marked availability (or is not free at this time).
+    const availableIds = available.map(String);
+    const availableSet = new Set(availableIds);
+    const rosterIds = (typeof squadRosterIds !== 'undefined' ? squadRosterIds : []).map(String);
+    const selectedIds = (existing && existing.selected_user_ids ? existing.selected_user_ids : []).map(String);
     const subIds = (existing && existing.substitute_ids ? existing.substitute_ids : []).map(String);
-    const seenSubIds = new Set();
-    const addSubCheckbox = function(uid, note) {
+
+    // Everyone on the squad who is not in the available pool. Saved picks that are
+    // no longer available are appended even if they have left the squad, so an
+    // existing choice stays visible and editable instead of vanishing on next save.
+    const othersFor = function(chosenIds) {
+      const ids = rosterIds.filter(function(uid) { return !availableSet.has(uid); });
+      chosenIds.forEach(function(uid) {
+        if (!availableSet.has(uid) && ids.indexOf(uid) === -1) ids.push(uid);
+      });
+      return ids;
+    };
+
+    const makeRow = function(uid, inputName, cssClass, checked, note) {
       const u = userData[uid];
-      if (!u) return;
-      const checked = subIds.includes(String(uid));
+      if (!u) return null;
       const label = document.createElement('label');
       label.className = 'flex items-center gap-2 cursor-pointer text-sm py-0.5';
       let extra = '';
       if (u.zr_category) extra += ' <span class="badge badge-xs badge-outline">' + u.zr_category + '</span>';
       if (u.zr_rating) extra += ' <span class="text-xs text-base-content/50">' + u.zr_rating + '</span>';
       if (note) extra += ' <span class="text-xs text-warning">' + note + '</span>';
-      label.innerHTML = '<input type="checkbox" name="substitutes" value="' + uid + '" class="checkbox checkbox-xs checkbox-secondary sub-cb"' + (checked ? ' checked' : '') + '> ' + u.display_name + extra;
-      substitutesDiv.appendChild(label);
+      label.innerHTML = '<input type="checkbox" name="' + inputName + '" value="' + uid + '" class="checkbox checkbox-xs ' + cssClass + '"' + (checked ? ' checked' : '') + '> ' + u.display_name + extra;
+      return label;
     };
-    if (available.length === 0 && subIds.length === 0) {
-      substitutesDiv.innerHTML = '<p class="text-xs text-base-content/50">No riders available at this slot</p>';
-    } else {
-      available.forEach(function(uid) {
-        seenSubIds.add(String(uid));
-        addSubCheckbox(uid, '');
+
+    const fillList = function(container, ids, inputName, cssClass, chosenIds, note, emptyText) {
+      container.innerHTML = '';
+      let count = 0;
+      ids.forEach(function(uid) {
+        const row = makeRow(uid, inputName, cssClass, chosenIds.indexOf(String(uid)) !== -1, note);
+        if (row) { container.appendChild(row); count += 1; }
       });
-      // Saved subs no longer in the available pool are still shown so they can be kept/removed.
-      subIds.forEach(function(uid) {
-        if (!seenSubIds.has(String(uid))) {
-          seenSubIds.add(String(uid));
-          addSubCheckbox(uid, '(not available this slot)');
-        }
-      });
-    }
+      if (count === 0) container.innerHTML = '<p class="text-xs text-base-content/50">' + emptyText + '</p>';
+      return count;
+    };
+
+    const noneAvailable = 'No riders available at this slot';
+    const allAvailable = 'Everyone on this squad is available at this slot';
+    fillList(ridersDiv, availableIds, 'selected_users', 'checkbox-primary rider-cb', selectedIds, '', noneAvailable);
+    fillList(substitutesDiv, availableIds, 'substitutes', 'checkbox-secondary sub-cb', subIds, '', noneAvailable);
+
+    const riderOtherIds = othersFor(selectedIds);
+    const subOtherIds = othersFor(subIds);
+    const othersCount = fillList(othersDiv, riderOtherIds, 'selected_users', 'checkbox-primary rider-cb', selectedIds, '(not available)', allAvailable);
+    const subOthersCount = fillList(subOthersDiv, subOtherIds, 'substitutes', 'checkbox-secondary sub-cb', subIds, '(not available)', allAvailable);
+    document.getElementById('slot-modal-others-count').textContent = othersCount;
+    document.getElementById('slot-modal-sub-others-count').textContent = subOthersCount;
+    // Open the disclosure when it already holds a pick, so a rider chosen from it
+    // is never hidden behind a collapsed section.
+    othersWrap.open = riderOtherIds.some(function(uid) { return selectedIds.indexOf(uid) !== -1; });
+    subOthersWrap.open = subOtherIds.some(function(uid) { return subIds.indexOf(uid) !== -1; });
 
     // Re-process HTMX attributes after changing hx-post
     htmx.process(form);
@@ -940,15 +967,25 @@
     }
   }
 
+  // Both selectors span the available list and the "everyone else" disclosure, so
+  // a rider picked from either counts towards the thread/update gating.
+  // ":checked" has to be repeated per selector — appending it to a comma-joined
+  // list would only qualify the final one.
+  const RIDER_CB_SELECTOR = '#slot-modal-riders .rider-cb, #slot-modal-others .rider-cb';
+  const RIDER_CB_CHECKED_SELECTOR = '#slot-modal-riders .rider-cb:checked, #slot-modal-others .rider-cb:checked';
+
   function toggleAllRiders(selectAll) {
-    document.querySelectorAll('#slot-modal-riders .rider-cb').forEach(function(cb) {
+    // Select All applies to the available pool only — it should not silently pull
+    // in riders who never marked themselves available. Deselect All clears both.
+    const scope = selectAll ? '#slot-modal-riders .rider-cb' : RIDER_CB_SELECTOR;
+    document.querySelectorAll(scope).forEach(function(cb) {
       cb.checked = selectAll;
     });
     updateActionButtons();
   }
 
   function selectedRiderCount() {
-    return document.querySelectorAll('#slot-modal-riders .rider-cb:checked').length;
+    return document.querySelectorAll(RIDER_CB_CHECKED_SELECTOR).length;
   }
 
   // Drive the action buttons (Save & Create Thread / Save & Post Update / Open
@@ -1043,10 +1080,15 @@
 
   // Status change / rider toggle → re-evaluate button eligibility live.
   document.getElementById('slot-modal-status').addEventListener('change', updateActionButtons);
-  document.getElementById('slot-modal-riders').addEventListener('change', function(e) {
-    if (e.target && e.target.classList && e.target.classList.contains('rider-cb')) {
-      updateActionButtons();
-    }
+  // Both containers hold rider checkboxes, so both have to re-evaluate.
+  ['slot-modal-riders', 'slot-modal-others'].forEach(function(id) {
+    const container = document.getElementById(id);
+    if (!container) return;
+    container.addEventListener('change', function(e) {
+      if (e.target && e.target.classList && e.target.classList.contains('rider-cb')) {
+        updateActionButtons();
+      }
+    });
   });
 
   // For NEW slots the Save & Create Thread button has no hx-post. Intercept

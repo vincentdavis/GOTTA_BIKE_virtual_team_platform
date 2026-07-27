@@ -48,6 +48,7 @@ from apps.events.models import (
     Squad,
     SquadMember,
 )
+from apps.events.squads import squad_member_users as squad_roster_users
 from apps.events.tz_utils import (
     TIMEZONE_CHOICES,
     convert_blocked_cells_to_utc,
@@ -3895,6 +3896,28 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
             "is_race_ready": entry["is_race_ready"],
         }
+    # Full squad roster for the modal's "others" picker, so a race can include
+    # someone who never marked availability or is not free at that slot. Uses the
+    # canonical roster helper (MEMBER rows plus captains and vice-captains) rather
+    # than the MEMBER-only list the non-responder table above is built from —
+    # captains race too. Any roster user not already in user_data_json needs their
+    # display data adding, which is one extra ZR lookup at most.
+    roster_users = squad_roster_users(squad)
+    squad_roster_ids_json = [u.pk for u in roster_users]
+    missing_roster = [u for u in roster_users if u.pk not in user_data_json]
+    if missing_roster:
+        extra_zwids = [u.zwid for u in missing_roster if u.zwid]
+        extra_zr = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=extra_zwids)} if extra_zwids else {}
+        for user in missing_roster:
+            zr = extra_zr.get(user.zwid)
+            rating = getattr(zr, "race_current_rating", None) if zr else None
+            user_data_json[user.pk] = {
+                "display_name": user.get_full_name() or user.discord_username,
+                "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+                "zr_rating": float(rating) if rating is not None else None,
+                "is_race_ready": user.is_race_ready,
+            }
+
     # Slot selections with selected user IDs for pre-filling the modal
     selections_json = {}
     for sel in slot_selections:
@@ -3978,6 +4001,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "slot_selections_enriched": enriched_selections,
             "utc_cell_users_json": json.dumps(utc_cell_users_json),
             "user_data_json": json.dumps(user_data_json),
+            "squad_roster_ids_json": json.dumps(squad_roster_ids_json),
             "selections_json": json.dumps(selections_json),
             "powerup_choices": _powerup_choices(),
         },
