@@ -12,3 +12,30 @@
   * the scope of this path.
   */
 @source "../../../**/*.{html,py,js}";
+
+/**
+  * HTMX hides idle indicators with `opacity: 0`, so the spinner still occupies
+  * layout space. Inside a DaisyUI `.btn` (inline-flex with a gap) that offsets the
+  * label, which reads as a button with a missing icon. Collapse the indicator
+  * instead, and restore it only while a request is in flight.
+  *
+  * Every `.htmx-indicator` in this project is a `loading loading-spinner` span,
+  * so `inline-block` (the DaisyUI default for `.loading`) is the right restore.
+  */
+.htmx-indicator {
+  display: none;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+  display: inline-block;
+}
+
+/**
+  * The inverse: mark an element `htmx-request-hide` to swap it out while a
+  * request is in flight (e.g. a button's own icon giving way to the spinner).
+  */
+.htmx-request .htmx-request-hide,
+.htmx-request.htmx-request-hide {
+  display: none;
+}

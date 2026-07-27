@@ -5,11 +5,6 @@
 
 {% block extra_css %}
 <style>
-  /* HTMX indicator - hidden by default (no layout gap), shown during request. */
-  .htmx-indicator { display: none; }
-  .htmx-request .htmx-indicator,
-  .htmx-request.htmx-indicator { display: inline-block; }
-
   /* On mobile, the wrapper becomes the scroll container so the sticky-top
      date header stays visible while scrolling through hours. Desktop keeps
      its natural height (page handles scrolling). */
