@@ -49,10 +49,11 @@
     </form>
     {% endif %}
 
-    {# TODO(zauth-cleanup): legacy Sauce-mod password verification, retired in favour of
-       Zwift OAuth above. Hidden rather than deleted so the flow can be restored if the
-       zauth rollout is reverted. See TODO.md "zauth migration cleanup". #}
     {% comment %}
+    TODO(zauth-cleanup): legacy Sauce-mod password verification, retired in favour of
+    Zwift OAuth above. Hidden rather than deleted so the flow can be restored if the
+    zauth rollout is reverted. See TODO.md "zauth migration cleanup".
+
     <button onclick="document.getElementById('zwift-verify-modal').showModal()"
             hx-get="{% url 'team:application_verify_zwift' application.pk %}"
             hx-target="#zwift-modal-content"

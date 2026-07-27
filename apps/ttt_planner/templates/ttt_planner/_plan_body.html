@@ -83,8 +83,7 @@
                        hx-trigger="change" hx-target="#ttt-plan-body" hx-swap="innerHTML" />
               </td>
               <td>
-                {# hx-vals marks the request as being about zero_pull: an unchecked box
-                   sends no value at all, so without it the flag could never be cleared. #}
+                {# hx-vals marks this request as about zero_pull: an unchecked box sends nothing. #}
                 <input type="checkbox" name="zero_pull" class="checkbox checkbox-xs"
                        {% if rr.rider.zero_pull %}checked{% endif %}
                        hx-post="{% url 'ttt_planner:rider_update' plan.pk rr.rider.pk %}"
