@@ -589,6 +589,14 @@ CONSTANCE_CONFIG = {
         "Text shown in the Zwift OAuth banner. Supports Markdown.",
         "textarea_field",
     ),
+    "ZAUTH_VERIFICATION_REQUIRED": (
+        False,
+        "NOT YET ENFORCED — the cutover switch for Zwift OAuth. When it is wired up, turning "
+        "this on will make legacy and admin verifications count as unverified for gating, so "
+        "only Zwift OAuth counts. Leave off until the Zwift Verification report shows the "
+        "legacy and not-verified counts at or near zero.",
+        bool,
+    ),
     # Verification instructions
     "VERIFICATION_FORM_MESSAGE": (
         "",
@@ -997,6 +1005,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "HEIGHT_INSTRUCTIONS_URL",
         "ZAUTH_BANNER_ENABLED",
         "ZAUTH_BANNER_MESSAGE",
+        "ZAUTH_VERIFICATION_REQUIRED",
     ),
     "Equipment": (
         "TRAINER_OPTIONS",
