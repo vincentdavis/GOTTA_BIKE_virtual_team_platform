@@ -2770,9 +2770,34 @@ def zwift_connections_view(request: HttpRequest) -> HttpResponse:
             "category_women": conn.get("category_women") if conn else None,
         })
 
+    # Sorting runs over the assembled rows rather than the queryset: the bucket and
+    # every connection column come from the service, not the database. Keys must
+    # never return None — a null mixed with dates or ints raises TypeError in sorted().
+    sort_by = request.GET.get("sort", "name")
+    sort_dir = request.GET.get("dir", "asc")
+    # Ordered by migration priority so sorting groups "still to do" together rather
+    # than alphabetically, where "admin" and "unverified" would sit side by side.
+    bucket_rank = {"unverified": 0, "unmethoded": 1, "legacy": 2, "admin": 3, "zauth": 4}
+    sort_keys = {
+        "name": lambda r: (r["user"].get_full_name() or r["user"].username).lower(),
+        "discord": lambda r: (r["user"].discord_username or "").lower(),
+        "method": lambda r: bucket_rank.get(r["bucket"], 99),
+        "verified_at": lambda r: r["verified_at"].timestamp() if r["verified_at"] else 0.0,
+        "zwid": lambda r: r["zwid"] or 0,
+        "connected": lambda r: r["connected"],
+        "zwift_name": lambda r: (r["zwift_name"] or "").lower(),
+        "category": lambda r: (r["category"] or "").lower(),
+    }
+    if sort_by in sort_keys:
+        rows.sort(key=sort_keys[sort_by], reverse=sort_dir == "desc")
+
     # Anything left in by_user_id is a numeric id with no matching active member
     # (deactivated, or the user was deleted); surface those alongside the UUIDs.
     orphans = unmatched + list(by_user_id.values())
+
+    # Lets the sort links carry the active filters instead of resetting them.
+    active_filters = {"q": search, "method": method_filter, "connected": connected_filter}
+    filter_qs = urlencode({k: v for k, v in active_filters.items() if v})
 
     logfire.info(
         "Zwift verification report viewed",
@@ -2795,6 +2820,20 @@ def zwift_connections_view(request: HttpRequest) -> HttpResponse:
             "method_filter": method_filter,
             "connected_filter": connected_filter,
             "search_query": search,
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+            "filter_qs": filter_qs,
+            # Column order here drives the table header; keys must match sort_keys.
+            "sortable_columns": [
+                ("name", "Member"),
+                ("discord", "Discord"),
+                ("method", "Verification"),
+                ("verified_at", "Verified on"),
+                ("zwid", "Zwift ID"),
+                ("connected", "Connected"),
+                ("zwift_name", "Zwift name"),
+                ("category", "Category"),
+            ],
             "method_choices": [
                 ("zauth", "Zwift OAuth (zauth)"),
                 ("legacy", "Legacy (Sauce mod)"),

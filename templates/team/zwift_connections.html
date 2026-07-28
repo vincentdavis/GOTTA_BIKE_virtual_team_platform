@@ -24,30 +24,33 @@
 
   {# Summary across all members, independent of the filters below. #}
   <div class="flex flex-wrap gap-2">
-    <a href="?" class="badge badge-lg {% if not method_filter %}badge-neutral{% else %}badge-ghost{% endif %}">
+    <a href="?sort={{ sort_by }}&amp;dir={{ sort_dir }}" class="badge badge-lg {% if not method_filter %}badge-neutral{% else %}badge-ghost{% endif %}">
       {{ counts.total }} members
     </a>
-    <a href="?method=zauth" class="badge badge-lg {% if method_filter == 'zauth' %}badge-success{% else %}badge-ghost{% endif %}">
+    <a href="?method=zauth&amp;sort={{ sort_by }}&amp;dir={{ sort_dir }}" class="badge badge-lg {% if method_filter == 'zauth' %}badge-success{% else %}badge-ghost{% endif %}">
       {{ counts.zauth }} Zwift OAuth
     </a>
-    <a href="?method=legacy" class="badge badge-lg {% if method_filter == 'legacy' %}badge-warning{% else %}badge-ghost{% endif %}">
+    <a href="?method=legacy&amp;sort={{ sort_by }}&amp;dir={{ sort_dir }}" class="badge badge-lg {% if method_filter == 'legacy' %}badge-warning{% else %}badge-ghost{% endif %}">
       {{ counts.legacy }} legacy
     </a>
-    <a href="?method=admin" class="badge badge-lg {% if method_filter == 'admin' %}badge-info{% else %}badge-ghost{% endif %}">
+    <a href="?method=admin&amp;sort={{ sort_by }}&amp;dir={{ sort_dir }}" class="badge badge-lg {% if method_filter == 'admin' %}badge-info{% else %}badge-ghost{% endif %}">
       {{ counts.admin }} admin
     </a>
     {% if counts.unmethoded %}
-    <a href="?method=unmethoded" class="badge badge-lg {% if method_filter == 'unmethoded' %}badge-warning{% else %}badge-ghost{% endif %}">
+    <a href="?method=unmethoded&amp;sort={{ sort_by }}&amp;dir={{ sort_dir }}" class="badge badge-lg {% if method_filter == 'unmethoded' %}badge-warning{% else %}badge-ghost{% endif %}">
       {{ counts.unmethoded }} no method
     </a>
     {% endif %}
-    <a href="?method=unverified" class="badge badge-lg {% if method_filter == 'unverified' %}badge-error{% else %}badge-ghost{% endif %}">
+    <a href="?method=unverified&amp;sort={{ sort_by }}&amp;dir={{ sort_dir }}" class="badge badge-lg {% if method_filter == 'unverified' %}badge-error{% else %}badge-ghost{% endif %}">
       {{ counts.unverified }} not verified
     </a>
     <span class="badge badge-lg badge-outline">{{ counts.connected }} connected now</span>
   </div>
 
   <form method="get" class="flex flex-wrap items-end gap-3">
+    {# Carry the active sort through a filter submit, which would otherwise reset it. #}
+    <input type="hidden" name="sort" value="{{ sort_by }}">
+    <input type="hidden" name="dir" value="{{ sort_dir }}">
     <label class="form-control">
       <span class="label-text text-xs mb-1">Search</span>
       <input type="search" name="q" value="{{ search_query }}" placeholder="Name, Discord, or Zwift ID"
@@ -79,14 +82,21 @@
       <table class="table table-zebra table-sm">
         <thead>
           <tr>
-            <th>Member</th>
-            <th>Discord</th>
-            <th>Verification</th>
-            <th>Verified on</th>
-            <th>Zwift ID</th>
-            <th>Connected</th>
-            <th>Zwift name</th>
-            <th>Category</th>
+            {% comment %}
+            Each header toggles direction when it is already the active sort, and
+            carries filter_qs so sorting never silently resets the filters.
+            {% endcomment %}
+            {% for key, label in sortable_columns %}
+              <th>
+                <a href="?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ key }}&amp;dir={% if sort_by == key and sort_dir == 'asc' %}desc{% else %}asc{% endif %}"
+                   class="flex items-center gap-1 hover:text-primary whitespace-nowrap">
+                  {{ label }}
+                  {% if sort_by == key %}
+                    <span class="text-primary">{% if sort_dir == "asc" %}&#9650;{% else %}&#9660;{% endif %}</span>
+                  {% endif %}
+                </a>
+              </th>
+            {% endfor %}
           </tr>
         </thead>
         <tbody>

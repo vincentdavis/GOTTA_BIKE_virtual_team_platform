@@ -155,6 +155,96 @@ def test_application_uuid_connections_are_listed_as_orphans(admin_client_, monke
     assert resp.context["rows"] == [] or all(not r["connected"] for r in resp.context["rows"])
 
 
+# --- sorting ------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_no_service")
+def test_sorts_by_name_ascending_by_default(admin_client_, user_model):
+    _member(user_model, "b", first_name="Bea")
+    _member(user_model, "a", first_name="Ada")
+    _member(user_model, "c", first_name="Cas")
+
+    resp = admin_client_.get(URL)
+    names = [r["user"].first_name for r in resp.context["rows"] if r["user"].first_name]
+
+    assert names == ["Ada", "Bea", "Cas"]
+    assert resp.context["sort_by"] == "name"
+    assert resp.context["sort_dir"] == "asc"
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_no_service")
+def test_sort_direction_reverses(admin_client_, user_model):
+    _member(user_model, "a", first_name="Ada")
+    _member(user_model, "b", first_name="Bea")
+
+    rows = admin_client_.get(URL, {"sort": "name", "dir": "desc"}).context["rows"]
+    names = [r["user"].first_name for r in rows if r["user"].first_name]
+
+    assert names == ["Bea", "Ada"]
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_no_service")
+def test_verification_sorts_by_migration_priority_not_alphabetically(admin_client_, user_model):
+    """Alphabetical would interleave admin and unverified; priority groups the work."""
+    _member(user_model, "z", zwid_verified=True, zwid_verification_method="zauth")
+    _member(user_model, "l", zwid_verified=True, zwid_verification_method="legacy")
+    _member(user_model, "a", zwid_verified=True, zwid_verification_method="admin")
+    _member(user_model, "n")
+
+    rows = admin_client_.get(URL, {"sort": "method"}).context["rows"]
+    buckets = [r["bucket"] for r in rows]
+
+    assert buckets.index("unverified") < buckets.index("legacy") < buckets.index("admin") < buckets.index("zauth")
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_no_service")
+def test_sorting_by_a_nullable_column_does_not_error(admin_client_, user_model):
+    """A None mixed with real values raises TypeError in sorted() if unguarded."""
+    _member(user_model, "has", zwid=500, zwid_verified=True, zwid_verification_method="zauth")
+    _member(user_model, "none")  # zwid and verified_at both None
+
+    for column in ("zwid", "verified_at", "zwift_name", "category", "discord", "connected"):
+        resp = admin_client_.get(URL, {"sort": column})
+        assert resp.status_code == 200, column
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_no_service")
+def test_an_unknown_sort_key_is_ignored(admin_client_, user_model):
+    _member(user_model, "a", first_name="Ada")
+
+    resp = admin_client_.get(URL, {"sort": "'; DROP TABLE"})
+
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_no_service")
+def test_sorting_preserves_the_active_filters(admin_client_, user_model):
+    _member(user_model, "l1", first_name="Ada", zwid_verified=True, zwid_verification_method="legacy")
+    _member(user_model, "z1", first_name="Bea", zwid_verified=True, zwid_verification_method="zauth")
+
+    resp = admin_client_.get(URL, {"method": "legacy", "sort": "name", "dir": "desc"})
+
+    assert [r["user"].username for r in resp.context["rows"]] == ["l1"]
+    assert "method=legacy" in resp.context["filter_qs"]
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_no_service")
+def test_headers_link_with_filters_and_toggle_direction(admin_client_, user_model):
+    _member(user_model, "l1", zwid_verified=True, zwid_verification_method="legacy")
+
+    body = admin_client_.get(URL, {"method": "legacy", "sort": "name", "dir": "asc"}).content.decode()
+
+    assert "method=legacy&amp;sort=zwid&amp;dir=asc" in body  # other columns start ascending
+    assert "method=legacy&amp;sort=name&amp;dir=desc" in body  # the active one flips
+
+
 @pytest.mark.django_db
 def test_a_service_outage_still_renders_local_verification_data(admin_client_, user_model, monkeypatch):
     _member(user_model, "l", zwid_verified=True, zwid_verification_method="legacy")
