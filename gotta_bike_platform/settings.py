@@ -576,6 +576,19 @@ CONSTANCE_CONFIG = {
         "Message displayed by the Discord bot /help command. Supports Markdown.",
         "textarea_field",
     ),
+    # Zwift OAuth (zauth) migration prompt
+    "ZAUTH_BANNER_ENABLED": (
+        False,
+        "Show a site banner to members who have not verified via Zwift OAuth, linking them to "
+        "the connect page. Separate from the profile-incomplete banner.",
+        bool,
+    ),
+    "ZAUTH_BANNER_MESSAGE": (
+        "Zwift now supports connecting your account directly. Please link your Zwift account "
+        "to keep your race verification up to date.",
+        "Text shown in the Zwift OAuth banner. Supports Markdown.",
+        "textarea_field",
+    ),
     # Verification instructions
     "VERIFICATION_FORM_MESSAGE": (
         "",
@@ -982,6 +995,8 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "VERIFICATION_CHECK_LIST",
         "WEIGHT_INSTRUCTIONS_URL",
         "HEIGHT_INSTRUCTIONS_URL",
+        "ZAUTH_BANNER_ENABLED",
+        "ZAUTH_BANNER_MESSAGE",
     ),
     "Equipment": (
         "TRAINER_OPTIONS",

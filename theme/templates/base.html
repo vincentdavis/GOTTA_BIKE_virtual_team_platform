@@ -90,6 +90,36 @@
     </div>
   </div>
 {% endif %}
+{% comment %}
+Zwift OAuth migration prompt. Separate from the profile-incomplete banner above:
+that one fires on missing profile fields and only flags never-verified members,
+which leaves legacy- and admin-verified members with no signal at all — and they
+are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
+{% endcomment %}
+{% if config.ZAUTH_BANNER_ENABLED and user.is_authenticated and not user.is_zauth_verified and not request.session.zauth_banner_dismissed %}
+  <div id="zauth-banner" class="bg-info text-info-content py-3 px-4 text-sm font-medium flex-shrink-0">
+    <div class="container mx-auto">
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
+        <div class="flex items-center gap-2">
+          <span class="px-1.5 py-0.5 text-xs font-bold bg-info-content text-info rounded shrink-0">Z</span>
+          <span class="prose prose-sm max-w-none prose-a:text-info-content prose-a:underline">
+            {{ config.ZAUTH_BANNER_MESSAGE|render_markdown }}
+          </span>
+        </div>
+        <a href="{% url 'zwift:zauth' %}"
+           class="btn btn-sm btn-outline border-info-content text-info-content hover:bg-info-content hover:text-info">
+          Connect Zwift
+        </a>
+        <button type="button"
+                hx-post="{% url 'accounts:dismiss_zauth_banner' %}"
+                hx-target="#zauth-banner"
+                hx-swap="outerHTML"
+                class="btn btn-sm btn-ghost text-info-content"
+                aria-label="Dismiss for this session">Dismiss</button>
+      </div>
+    </div>
+  </div>
+{% endif %}
 {% if expiring_verifications %}
   <div class="bg-warning text-warning-content py-3 px-4 text-sm font-medium flex-shrink-0">
     <div class="container mx-auto">

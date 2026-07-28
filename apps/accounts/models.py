@@ -794,6 +794,20 @@ class User(AbstractUser):
         return list((self.discord_roles or {}).values())
 
     @property
+    def is_zauth_verified(self) -> bool:
+        """Whether this account was verified through the official Zwift OAuth flow.
+
+        Reads the stored provenance rather than asking the service, so it costs
+        nothing per request. Legacy and admin verifications return False: they are
+        still accepted today, but they are what the zauth migration is replacing.
+
+        Returns:
+            True if the current verification came from Zwift OAuth.
+
+        """
+        return self.zwid_verification_method == self.VerificationMethod.ZAUTH
+
+    @property
     def is_profile_complete(self) -> bool:
         """Check if user has completed all required profile fields.
 

@@ -788,6 +788,29 @@ def verify_zwift(request: HttpRequest) -> HttpResponse:
     )
 
 
+ZAUTH_BANNER_DISMISSED_KEY = "zauth_banner_dismissed"
+
+
+@login_required
+@require_POST
+def dismiss_zauth_banner(request: HttpRequest) -> HttpResponse:
+    """Hide the Zwift OAuth banner for the rest of this browser session.
+
+    Session-scoped on purpose: the prompt is an invitation rather than an error,
+    so it should not nag on every page load, but it should come back next session
+    until the account is actually connected. No model field, no migration.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        An empty 200 so htmx can swap the banner away.
+
+    """
+    request.session[ZAUTH_BANNER_DISMISSED_KEY] = True
+    return HttpResponse("")
+
+
 @login_required
 @require_POST
 def unverify_zwift(request: HttpRequest) -> HttpResponse:
