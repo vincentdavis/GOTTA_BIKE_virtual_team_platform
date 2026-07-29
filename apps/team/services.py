@@ -30,6 +30,27 @@ ZP_DIV_TO_CATEGORY: dict[int, str] = {
 }
 
 
+def verification_accepted(user_row: dict) -> bool:
+    """Apply the zauth cutover policy to a ``.values()`` roster row.
+
+    Mirrors ``User.has_accepted_zwid_verification``. That property cannot be reused
+    here because these rosters read ``.values()`` dicts for efficiency rather than
+    model instances, and a Python property is invisible to the ORM.
+
+    Args:
+        user_row: A row carrying ``zwid_verified`` and ``zwid_verification_method``.
+
+    Returns:
+        Whether the row's verification counts under the active policy.
+
+    """
+    if not user_row.get("zwid_verified"):
+        return False
+    if not config.ZAUTH_VERIFICATION_REQUIRED:
+        return True
+    return user_row.get("zwid_verification_method") == "zauth"
+
+
 def get_user_required_verification_types(user: User) -> list[str]:
     """Get required verification types for race-ready status based on ZwiftPower category.
 
@@ -382,6 +403,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     # Query each source with .values() for efficiency
     users = User.objects.filter(zwid__isnull=False).values(
         "id", "zwid", "username", "discord_username", "discord_id", "discord_avatar", "zwid_verified", "gender",
+        "zwid_verification_method",
         "is_race_ready", "is_extra_verified",
     )
     zp_riders = ZPTeamRiders.objects.all().values(
@@ -424,7 +446,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.username = u["username"]
             rider.discord_id = u["discord_id"] or ""
             rider.discord_username = u["discord_username"] or ""
-            rider.zwid_verified = u["zwid_verified"]
+            rider.zwid_verified = verification_accepted(u)
             rider.user_gender = u["gender"] or ""
             rider.is_race_ready = u["is_race_ready"]
             rider.is_extra_verified = u["is_extra_verified"]
@@ -977,7 +999,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
     # Query each source independently
     users = User.objects.filter(zwid__isnull=False).values(
         "id", "zwid", "first_name", "last_name", "discord_id", "discord_nickname", "discord_username",
-        "gender", "zwid_verified",
+        "gender", "zwid_verified", "zwid_verification_method",
         # Member profile fields
         "birth_year", "city", "country", "timezone",
         # Equipment
@@ -1023,7 +1045,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
             u = user_by_zwid[zwid]
             rider.user_id = u["id"]
             rider.has_account = True
-            rider.zwid_verified = u["zwid_verified"]
+            rider.zwid_verified = verification_accepted(u)
             rider.discord_id = u["discord_id"] or ""
             rider.discord_nickname = u["discord_nickname"] or u["discord_username"] or ""
 
@@ -1106,7 +1128,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
             zwid__isnull=True, discord_id__isnull=False,
         ).exclude(discord_id="").values(
             "id", "first_name", "last_name", "discord_id", "discord_nickname", "discord_username",
-            "gender", "zwid_verified",
+            "gender", "zwid_verified", "zwid_verification_method",
             "birth_year", "city", "country", "timezone",
             "trainer", "powermeter", "dual_recording", "heartrate_monitor", "has_jersey",
             "emergency_contact_name", "emergency_contact_phone",
@@ -1149,7 +1171,7 @@ def get_membership_review_data() -> list[MembershipReviewRider]:
             rider.has_jersey = u["has_jersey"]
             rider.emergency_contact_name = u["emergency_contact_name"] or ""
             rider.emergency_contact_phone = u["emergency_contact_phone"] or ""
-            rider.zwid_verified = u["zwid_verified"]
+            rider.zwid_verified = verification_accepted(u)
 
         riders.append(rider)
 

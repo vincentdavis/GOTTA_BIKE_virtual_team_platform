@@ -808,6 +808,29 @@ class User(AbstractUser):
         return self.zwid_verification_method == self.VerificationMethod.ZAUTH
 
     @property
+    def has_accepted_zwid_verification(self) -> bool:
+        """Whether this account's Zwift verification counts under the current policy.
+
+        Identical to ``zwid_verified`` until ``ZAUTH_VERIFICATION_REQUIRED`` is turned
+        on, after which only Zwift OAuth counts and legacy/admin verifications read as
+        unverified. The record itself is never touched, so turning the flag back off
+        restores everyone.
+
+        Use this for anything that *decides* or *displays* whether someone is verified.
+        Read ``zwid_verified`` directly only where the raw stored fact is wanted — the
+        admin ZWID review queue and the verification report both do that deliberately.
+
+        Returns:
+            True if the stored verification is accepted under the active policy.
+
+        """
+        from constance import config
+
+        if not self.zwid_verified:
+            return False
+        return self.is_zauth_verified if config.ZAUTH_VERIFICATION_REQUIRED else True
+
+    @property
     def is_profile_complete(self) -> bool:
         """Check if user has completed all required profile fields.
 
@@ -851,8 +874,9 @@ class User(AbstractUser):
         if not self.birth_year:
             missing_fields.append("birth_year")
 
-        # Check Zwift account is verified
-        if not self.zwid_verified:
+        # Check Zwift account is verified under the active policy: once the zauth
+        # cutover flag is on, a legacy verification no longer completes the profile.
+        if not self.has_accepted_zwid_verification:
             missing_fields.append("zwid_verified")
 
         is_complete = len(missing_fields) == 0
@@ -884,7 +908,9 @@ class User(AbstractUser):
             "country": bool(self.country),  # CountryField returns a Country object, not a string
             "trainer": bool(self.trainer and self.trainer.strip()),
             "heartrate_monitor": bool(self.heartrate_monitor and self.heartrate_monitor.strip()),
-            "zwid_verified": self.zwid_verified,
+            # Must track is_profile_complete, or the banner would fire with no badge
+            # explaining which field is missing.
+            "zwid_verified": self.has_accepted_zwid_verification,
         }
 
 
