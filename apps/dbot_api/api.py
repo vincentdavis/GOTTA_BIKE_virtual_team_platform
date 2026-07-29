@@ -743,7 +743,11 @@ def get_my_profile(request: HttpRequest) -> dict:
     profile: dict = {
         "zwid": zwid,
         "discord_username": user.discord_username,
-        "zwid_verified": user.zwid_verified,
+        # Policy-aware so the bot agrees with the roster and the profile banner once
+        # ZAUTH_VERIFICATION_REQUIRED is on. is_race_ready below is deliberately the
+        # raw value: race readiness never consulted zwid_verified, so the cutover
+        # must not move anyone's race-ready Discord role.
+        "zwid_verified": user.has_accepted_zwid_verification,
         "verification": _get_verification_status(user),
         "is_race_ready": user.is_race_ready,
         "race_ready_role_id": str(constance_config.RACE_READY_ROLE_ID) if constance_config.RACE_READY_ROLE_ID else None,
@@ -892,7 +896,7 @@ def get_teammate_profile(request: HttpRequest, zwid: int) -> dict:
         profile["account"] = {
             "discord_username": user.discord_username,
             "discord_nickname": user.discord_nickname,
-            "zwid_verified": user.zwid_verified,
+            "zwid_verified": user.has_accepted_zwid_verification,  # same policy as /my_profile
         }
         profile["verification"] = _get_verification_status(user)
     except User.DoesNotExist:
