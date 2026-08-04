@@ -4,36 +4,73 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
-  <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-    <h2 class="text-xl font-bold">Scheduled Races</h2>
-    <span class="badge badge-ghost">{{ paginator.count }} race{{ paginator.count|pluralize }} from today</span>
-  </div>
+  <h2 class="text-xl font-bold mb-4">Scheduled Races</h2>
 
-  {% if paginator.num_pages > 1 %}
-  <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
-    {% if page_obj.has_previous %}
-    <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-xs">&larr; Previous</a>
-    {% else %}
-    <button class="btn btn-outline btn-xs" disabled>&larr; Previous</button>
-    {% endif %}
-    <span class="text-base-content/70">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
-    {% if page_obj.has_next %}
-    <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline btn-xs">Next &rarr;</a>
-    {% else %}
-    <button class="btn btn-outline btn-xs" disabled>Next &rarr;</button>
-    {% endif %}
-  </div>
+  {# ===== Section 1: Racing I'm entered in ===== #}
+  {% if my_slots %}
+  <section class="mb-6">
+    <h3 class="font-semibold mb-2 flex items-center gap-2">
+      Racing I'm Entered In
+      <span class="badge badge-success badge-sm">{{ my_slots|length }}</span>
+    </h3>
+    <div class="flex flex-col gap-2">
+      {% for slot in my_slots %}
+      {% include "events/_scheduled_race_card.html" with hide_event_invite=True %}
+      {% endfor %}
+    </div>
+  </section>
   {% endif %}
 
-  {% if slots %}
-  <div class="flex flex-col gap-2">
-    {% for slot in slots %}
-    {% include "events/_scheduled_race_card.html" with hide_event_invite=True %}
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="text-sm text-base-content/50">No upcoming races scheduled.</p>
+  {# ===== Section 2: My Squads ===== #}
+  {% if squad_slots %}
+  <section class="mb-6">
+    <h3 class="font-semibold mb-2 flex items-center gap-2">
+      My Squads
+      <span class="badge badge-neutral badge-sm">{{ squad_slots|length }}</span>
+    </h3>
+    <div class="flex flex-col gap-2">
+      {% for slot in squad_slots %}
+      {% include "events/_scheduled_race_card.html" with hide_event_invite=True %}
+      {% endfor %}
+    </div>
+  </section>
   {% endif %}
+
+  {# ===== Section 3: All other races (paginated) ===== #}
+  <section class="mb-6">
+    <h3 class="font-semibold mb-2 flex items-center gap-2">
+      {% if my_slots or squad_slots %}All Other Races{% else %}All Races{% endif %}
+      <span class="badge badge-ghost badge-sm">{{ paginator.count }}</span>
+    </h3>
+
+    {% if paginator.num_pages > 1 %}
+    <div class="flex flex-wrap items-center gap-2 mb-3 text-sm">
+      {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-xs">&larr; Previous</a>
+      {% else %}
+      <button class="btn btn-outline btn-xs" disabled>&larr; Previous</button>
+      {% endif %}
+      <span class="text-base-content/70">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline btn-xs">Next &rarr;</a>
+      {% else %}
+      <button class="btn btn-outline btn-xs" disabled>Next &rarr;</button>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% if other_slots %}
+    <div class="flex flex-col gap-2">
+      {% for slot in other_slots %}
+      {% include "events/_scheduled_race_card.html" with hide_event_invite=True %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/50">
+      {% if my_slots or squad_slots %}No other upcoming races.{% else %}No upcoming races scheduled.{% endif %}
+    </p>
+    {% endif %}
+  </section>
 </div>
 {% endblock %}
 

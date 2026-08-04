@@ -369,6 +369,57 @@ def test_all_scheduled_races_lists_races_across_events(auth_client, team_member)
 
 
 @pytest.mark.django_db
+def test_all_scheduled_races_groups_into_three_sections(auth_client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid, AvailabilitySlotSelection, Squad, SquadMember
+
+    today = date.today()
+    slot_date = today + timedelta(days=3)
+
+    def _grid(squad: Squad) -> AvailabilityGrid:
+        return AvailabilityGrid.objects.create(
+            squad=squad,
+            start_date=today,
+            end_date=today + timedelta(days=7),
+            start_time="18:00",
+            end_time="20:00",
+            slot_duration=30,
+            status=AvailabilityGrid.Status.PUBLISHED,
+        )
+
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True,
+    )
+    my_squad = Squad.objects.create(event=event, name="My Squad")
+    SquadMember.objects.create(squad=my_squad, user=team_member, status=SquadMember.Status.MEMBER)
+    other_squad = Squad.objects.create(event=event, name="Other Squad")
+
+    # Section 1: entered in (in my squad, and personally selected).
+    entered = AvailabilitySlotSelection.objects.create(
+        grid=_grid(my_squad), name="Entered Race", slot_date=slot_date, slot_time="18:30",
+        status=AvailabilitySlotSelection.Status.CONFIRMED,
+    )
+    entered.selected_users.add(team_member)
+    # Section 2: in my squad but not personally selected.
+    AvailabilitySlotSelection.objects.create(
+        grid=_grid(my_squad), name="Squad Race", slot_date=slot_date, slot_time="19:00",
+        status=AvailabilitySlotSelection.Status.CONFIRMED,
+    )
+    # Section 3: a squad I'm not a member of.
+    AvailabilitySlotSelection.objects.create(
+        grid=_grid(other_squad), name="Other Race", slot_date=slot_date, slot_time="19:30",
+        status=AvailabilitySlotSelection.Status.CONFIRMED,
+    )
+
+    body = auth_client.get(reverse("events:all_races")).content.decode()
+    # All three section headings render in order.
+    assert body.index("Racing I'm Entered In") < body.index("My Squads") < body.index("All Other Races")
+    # Each race is grouped under the right section (same top-to-bottom order).
+    assert body.index("Entered Race") < body.index("Squad Race") < body.index("Other Race")
+
+
+@pytest.mark.django_db
 def test_all_scheduled_races_hides_event_invite_but_keeps_course_and_thread(auth_client, team_member) -> None:
     from django.urls import reverse
 

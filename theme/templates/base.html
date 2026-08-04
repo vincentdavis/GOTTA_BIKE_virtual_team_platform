@@ -273,6 +273,16 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
                 {% endif %}
               </a>
             </li>
+            <li>
+              <a href="{% url 'events:all_races' %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                     stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 21v-4m0 0V5a2 2 0 012-2h6l1 2h6v8h-7l-1-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                Sch. Races
+              </a>
+            </li>
             {% if user.is_team_member %}
             <li>
               <a href="{% url 'user_api:api_keys_list' %}">

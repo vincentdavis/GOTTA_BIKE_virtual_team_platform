@@ -1471,7 +1471,7 @@ def all_scheduled_races_view(request: HttpRequest) -> HttpResponse:
     now_utc = timezone.now()
     today_local = now_utc.astimezone(ZoneInfo(user_tz) if user_tz else now_utc.tzinfo).date()
 
-    all_selections = (
+    base_qs = (
         AvailabilitySlotSelection.objects
         .filter(slot_date__gte=today_local)
         .select_related("grid", "grid__squad", "grid__squad__event")
@@ -1479,30 +1479,55 @@ def all_scheduled_races_view(request: HttpRequest) -> HttpResponse:
         .order_by("slot_date", "slot_time", "grid__squad__event__title", "grid__squad__name")
     )
 
-    paginator = Paginator(all_selections, 25)
+    # Section 1: races the viewer is personally selected in.
+    my_selections = list(base_qs.filter(selected_users=request.user))
+    my_ids = {s.pk for s in my_selections}
+
+    # Section 2: races in the viewer's squads they are not personally selected in.
+    my_squad_ids = list(
+        SquadMember.objects
+        .filter(user=request.user, status=SquadMember.Status.MEMBER)
+        .values_list("squad_id", flat=True)
+    )
+    squad_selections = (
+        [s for s in base_qs.filter(grid__squad_id__in=my_squad_ids) if s.pk not in my_ids]
+        if my_squad_ids
+        else []
+    )
+
+    # Section 3: every other race, paginated.
+    other_qs = base_qs.exclude(pk__in=my_ids)
+    if my_squad_ids:
+        other_qs = other_qs.exclude(grid__squad_id__in=my_squad_ids)
+
+    paginator = Paginator(other_qs, 25)
     page_number = request.GET.get("page") or 1
     try:
         page_obj = paginator.page(page_number)
     except Exception:
         page_obj = paginator.page(paginator.num_pages or 1)
-    selections = list(page_obj.object_list)
 
-    slots = _build_scheduled_race_slots(selections, user_tz, today_local, include_event=True)
+    my_slots = _build_scheduled_race_slots(my_selections, user_tz, today_local, include_event=True)
+    squad_slots = _build_scheduled_race_slots(squad_selections, user_tz, today_local, include_event=True)
+    other_slots = _build_scheduled_race_slots(list(page_obj.object_list), user_tz, today_local, include_event=True)
 
     logfire.debug(
         "All scheduled races viewed",
         user_id=request.user.id,
         page=page_obj.number,
         total_pages=paginator.num_pages,
-        slot_count=len(slots),
-        total_count=paginator.count,
+        my_count=len(my_slots),
+        squad_count=len(squad_slots),
+        other_count=paginator.count,
     )
 
     return render(
         request,
         "events/all_scheduled_races.html",
         {
-            "slots": slots,
+            "my_slots": my_slots,
+            "squad_slots": squad_slots,
+            "other_slots": other_slots,
             "page_obj": page_obj,
             "paginator": paginator,
             "today": today_local,
