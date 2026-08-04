@@ -25,27 +25,30 @@
           {% for item in events_data %}
           <div class="card bg-base-300">
             <div class="card-body p-4">
-              <div class="flex items-start gap-4">
-                {% if item.event.logo %}
-                <div class="shrink-0 self-center">
-                  <a href="{% url 'events:event_detail' item.event.pk %}">
-                    <img src="{{ item.event.logo.url }}" alt="{{ item.event.title }}" class="h-14 max-w-28 object-contain rounded" style="filter:drop-shadow(0 0 1px rgba(0,0,0,.4)) drop-shadow(0 0 1px rgba(255,255,255,.4))">
-                  </a>
-                </div>
-                {% endif %}
-                <div class="flex-1 min-w-0">
-                  <h3 class="font-semibold text-lg">
-                    <a href="{% url 'events:event_detail' item.event.pk %}" class="link link-primary hover:link-hover">
-                      {{ item.event.title }}
+              <div class="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+                <div class="flex items-start gap-4 min-w-0 w-full sm:flex-1">
+                  {% if item.event.logo %}
+                  <div class="shrink-0 self-center">
+                    <a href="{% url 'events:event_detail' item.event.pk %}">
+                      <img src="{{ item.event.logo.url }}" alt="{{ item.event.title }}" class="h-14 max-w-28 object-contain rounded" style="filter:drop-shadow(0 0 1px rgba(0,0,0,.4)) drop-shadow(0 0 1px rgba(255,255,255,.4))">
                     </a>
-                  </h3>
-                  <p class="text-sm text-base-content/70">
-                    {{ item.event.start_date|date:"M j, Y" }} &ndash; {{ item.event.end_date|date:"M j, Y" }}
-                  </p>
+                  </div>
+                  {% endif %}
+                  <div class="flex-1 min-w-0">
+                    <h3 class="font-semibold text-lg break-words">
+                      <a href="{% url 'events:event_detail' item.event.pk %}" class="link link-primary hover:link-hover">
+                        {{ item.event.title }}
+                      </a>
+                    </h3>
+                    <p class="text-sm text-base-content/70">
+                      {{ item.event.start_date|date:"M j, Y" }} &ndash; {{ item.event.end_date|date:"M j, Y" }}
+                    </p>
+                  </div>
                 </div>
-                <a href="{% url 'events:event_all_races' item.event.pk %}" class="btn btn-outline btn-xs shrink-0 self-start">All Races</a>
-                {% if item.has_availability_grids %}
-                <div class="dropdown dropdown-end shrink-0">
+                <div class="flex items-center justify-end gap-2 w-full sm:w-auto shrink-0">
+                  <a href="{% url 'events:event_all_races' item.event.pk %}" class="btn btn-outline btn-xs">All Races</a>
+                  {% if item.has_availability_grids %}
+                  <div class="dropdown dropdown-end shrink-0">
                   <label tabindex="0" class="btn btn-outline btn-xs gap-1">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                     Availability
@@ -53,7 +56,7 @@
                     <span class="badge badge-warning badge-xs">{{ item.pending_availability_count }}</span>
                     {% endif %}
                   </label>
-                  <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box shadow-lg z-50 p-2 w-72">
+                  <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box shadow-lg z-50 p-2 w-72 max-w-[calc(100vw-2rem)]">
                     {% for sq in item.squads %}
                     {% if sq.grids %}
                     <li class="menu-title text-xs font-bold uppercase tracking-wide text-base-content/50 mt-1{% if not sq.has_current_grids %} hidden av-ended-{{ item.event.pk }}{% endif %}">{{ sq.squad.name }}</li>
@@ -91,7 +94,8 @@
                     {% endif %}
                   </ul>
                 </div>
-                {% endif %}
+                  {% endif %}
+                </div>
               </div>
 
               {% if item.squads %}
