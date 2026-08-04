@@ -1,16 +1,18 @@
 """Context processors for events app."""
 
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 import logfire
 from django.core.cache import cache
+from django.utils import timezone
 
 from apps.events.models import AvailabilityGrid, AvailabilityResponse, SquadMember
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-PENDING_AVAILABILITY_CACHE_PREFIX = "pending_availability_count:v1"
+PENDING_AVAILABILITY_CACHE_PREFIX = "pending_availability_count:v2"
 PENDING_AVAILABILITY_CACHE_TIMEOUT = 60  # seconds
 
 
@@ -19,8 +21,10 @@ def pending_availability_count(request: HttpRequest) -> dict[str, int]:
 
     Counts published AvailabilityGrid rows that belong to a squad the user is an
     active member of, excluding any grid where the user has already submitted an
-    AvailabilityResponse. Used to drive a notification dot on the user-menu
-    avatar and a count badge next to "My Events" in the dropdown.
+    AvailabilityResponse and any grid whose availability window has already ended
+    (``end_date`` before the user's local today) — mirroring the My Events page,
+    where ended forms are hidden by default. Used to drive a notification dot on
+    the user-menu avatar and a count badge next to "My Events" in the dropdown.
 
     Returns 0 (and skips the database query) for anonymous users so the cost is
     zero on logged-out pageviews. For authenticated users with no squad
@@ -54,6 +58,12 @@ def pending_availability_count(request: HttpRequest) -> dict[str, int]:
         if not squad_ids:
             count = 0
         else:
+            user_tz = getattr(user, "timezone", "") or ""
+            now = timezone.now()
+            try:
+                today_local = now.astimezone(ZoneInfo(user_tz)).date() if user_tz else now.date()
+            except Exception:
+                today_local = now.date()
             responded_grid_ids = list(
                 AvailabilityResponse.objects
                 .filter(user=user)
@@ -61,7 +71,11 @@ def pending_availability_count(request: HttpRequest) -> dict[str, int]:
             )
             count = (
                 AvailabilityGrid.objects
-                .filter(status=AvailabilityGrid.Status.PUBLISHED, squad_id__in=squad_ids)
+                .filter(
+                    status=AvailabilityGrid.Status.PUBLISHED,
+                    squad_id__in=squad_ids,
+                    end_date__gte=today_local,
+                )
                 .exclude(pk__in=responded_grid_ids)
                 .count()
             )

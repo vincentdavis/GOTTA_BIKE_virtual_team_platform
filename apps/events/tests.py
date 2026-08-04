@@ -217,6 +217,103 @@ def test_my_events_renders_scheduled_race_with_calendar_links(auth_client, team_
 
 
 @pytest.mark.django_db
+def test_my_events_hides_ended_availability_grids(auth_client, team_member) -> None:
+    """Ended grids are hidden by default and revealed via a 'Show ended' toggle."""
+    from django.urls import reverse
+
+    from apps.events.models import AvailabilityGrid, Squad, SquadMember
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL",
+        start_date=today - timedelta(days=14),
+        end_date=today + timedelta(days=7),  # event still current
+        visible=True,
+    )
+    EventSignup.objects.create(event=event, user=team_member, status=EventSignup.Status.REGISTERED)
+    squad = Squad.objects.create(event=event, name="Squad A")
+    SquadMember.objects.create(squad=squad, user=team_member, status=SquadMember.Status.MEMBER)
+    AvailabilityGrid.objects.create(
+        squad=squad,
+        title="Current Week",
+        start_date=today,
+        end_date=today + timedelta(days=6),
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+    AvailabilityGrid.objects.create(
+        squad=squad,
+        title="Past Week",
+        start_date=today - timedelta(days=9),
+        end_date=today - timedelta(days=2),  # ended
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+
+    response = auth_client.get(reverse("events:my_events"))
+    assert response.status_code == 200
+    body = response.content.decode()
+    # The show-all toggle appears with a count of the one ended grid.
+    assert "Show ended (1)" in body
+    # Ended grids carry the per-event toggle class so JS can reveal them.
+    assert f"av-ended-{event.pk}" in body
+    assert "Ended</span>" in body
+    # The current grid is present and not marked hidden.
+    assert "Current Week" in body
+
+
+@pytest.mark.django_db
+def test_pending_availability_count_excludes_ended_grids(team_member) -> None:
+    """The avatar badge counts current unresponded grids but not ended ones."""
+    from django.core.cache import cache
+    from django.test import RequestFactory
+
+    from apps.events.context_processors import pending_availability_count
+    from apps.events.models import AvailabilityGrid, Squad, SquadMember
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL",
+        start_date=today - timedelta(days=14),
+        end_date=today + timedelta(days=7),
+        visible=True,
+    )
+    squad = Squad.objects.create(event=event, name="Squad A")
+    SquadMember.objects.create(squad=squad, user=team_member, status=SquadMember.Status.MEMBER)
+    # Current published grid, unresponded -> counts.
+    AvailabilityGrid.objects.create(
+        squad=squad,
+        title="Current",
+        start_date=today,
+        end_date=today + timedelta(days=6),
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+    # Ended published grid, unresponded -> excluded.
+    AvailabilityGrid.objects.create(
+        squad=squad,
+        title="Ended",
+        start_date=today - timedelta(days=9),
+        end_date=today - timedelta(days=2),
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+
+    cache.clear()
+    request = RequestFactory().get("/")
+    request.user = team_member
+    assert pending_availability_count(request)["pending_availability_count"] == 1
+
+
+@pytest.mark.django_db
 def test_all_scheduled_races_page_renders_empty(auth_client) -> None:
     from django.urls import reverse
 

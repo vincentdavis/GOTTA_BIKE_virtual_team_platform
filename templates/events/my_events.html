@@ -56,13 +56,13 @@
                   <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box shadow-lg z-50 p-2 w-72">
                     {% for sq in item.squads %}
                     {% if sq.grids %}
-                    <li class="menu-title text-xs font-bold uppercase tracking-wide text-base-content/50 mt-1">{{ sq.squad.name }}</li>
+                    <li class="menu-title text-xs font-bold uppercase tracking-wide text-base-content/50 mt-1{% if not sq.has_current_grids %} hidden av-ended-{{ item.event.pk }}{% endif %}">{{ sq.squad.name }}</li>
                     {% for grid in sq.grids %}
-                    <li class="menu-title text-xs pl-2">
-                      {{ grid.title }}{% if grid.is_closed %} <span class="badge badge-neutral badge-xs ml-1">Closed</span>{% endif %}
+                    <li class="menu-title text-xs pl-2{% if grid.is_ended %} hidden av-ended-{{ item.event.pk }}{% endif %}">
+                      {{ grid.title }}{% if grid.is_closed %} <span class="badge badge-neutral badge-xs ml-1">Closed</span>{% endif %}{% if grid.is_ended %} <span class="badge badge-ghost badge-xs ml-1">Ended</span>{% endif %}
                     </li>
                     {% if grid.is_published %}
-                    <li>
+                    <li class="{% if grid.is_ended %}hidden av-ended-{{ item.event.pk }}{% endif %}">
                       {% if grid.user_responded %}
                       <a href="{% url 'events:availability_respond' event_pk=item.event.pk squad_pk=sq.squad.pk grid_pk=grid.pk %}" class="pl-6 flex items-center gap-1">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-success shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
@@ -76,10 +76,19 @@
                       {% endif %}
                     </li>
                     {% endif %}
-                    <li><a href="{% url 'events:availability_results' event_pk=item.event.pk squad_pk=sq.squad.pk grid_pk=grid.pk %}" class="pl-6">Results <span class="badge badge-ghost badge-xs">{{ grid.response_count }}</span></a></li>
+                    <li class="{% if grid.is_ended %}hidden av-ended-{{ item.event.pk }}{% endif %}"><a href="{% url 'events:availability_results' event_pk=item.event.pk squad_pk=sq.squad.pk grid_pk=grid.pk %}" class="pl-6">Results <span class="badge badge-ghost badge-xs">{{ grid.response_count }}</span></a></li>
                     {% endfor %}
                     {% endif %}
                     {% endfor %}
+                    {% if item.ended_grid_count %}
+                    <li class="mt-1 border-t border-base-300 pt-1">
+                      <button type="button" class="btn btn-ghost btn-xs w-full justify-center"
+                              data-count="{{ item.ended_grid_count }}"
+                              onclick="toggleEndedAvailability(event, '{{ item.event.pk }}', this)">
+                        Show ended ({{ item.ended_grid_count }})
+                      </button>
+                    </li>
+                    {% endif %}
                   </ul>
                 </div>
                 {% endif %}
@@ -259,6 +268,19 @@ function toggleSlotRiders(key) {
     row.style.display = 'none';
     arrow.style.transform = '';
   }
+}
+function toggleEndedAvailability(ev, eventPk, btn) {
+  // Keep the DaisyUI dropdown open when the toggle is clicked.
+  ev.preventDefault();
+  ev.stopPropagation();
+  var items = document.querySelectorAll('.av-ended-' + eventPk);
+  var nowHidden = true;
+  items.forEach(function (el, i) {
+    el.classList.toggle('hidden');
+    if (i === 0) { nowHidden = el.classList.contains('hidden'); }
+  });
+  var count = btn.getAttribute('data-count');
+  btn.textContent = (nowHidden ? 'Show ended (' : 'Hide ended (') + count + ')';
 }
 </script>
 {% endblock %}
