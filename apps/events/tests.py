@@ -2096,3 +2096,133 @@ def test_role_setup_selects_have_all_roles_and_prefix_filter_js(client, superuse
     assert "filterRoleSelects" in body
     assert "id_head_captain_role_id" in body
     assert "id_event_role" in body
+
+
+@pytest.mark.django_db
+def test_squad_form_accepts_configured_coordinator_role() -> None:
+    """A coordinator role configured on the event is a valid squad selection."""
+    from apps.events.forms import SquadForm
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="100", name="$ Coordinator North", position=5)
+    form = SquadForm(
+        {"name": "Squad A", "gender": "COED", "regional_coordinator_role": "100"},
+        event_prefixes=[],
+        coordinator_role_ids=["100"],
+    )
+    assert form.is_valid(), form.errors
+    assert form.cleaned_data["regional_coordinator_role"] == 100
+
+
+@pytest.mark.django_db
+def test_squad_form_rejects_non_coordinator_role() -> None:
+    """A role id that isn't one of the event's coordinator roles is rejected server-side."""
+    from apps.events.forms import SquadForm
+
+    form = SquadForm(
+        {"name": "Squad A", "gender": "COED", "regional_coordinator_role": "999"},
+        event_prefixes=[],
+        coordinator_role_ids=["100"],
+    )
+    assert not form.is_valid()
+    assert "regional_coordinator_role" in form.errors
+
+
+@pytest.mark.django_db
+def test_squad_create_form_renders_coordinator_options(client, superuser) -> None:
+    """The squad form offers the event's coordinator roles in the Regional Coordinator picker."""
+    from django.urls import reverse
+
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="100", name="$ Coordinator North", position=5)
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=["100"],
+    )
+    client.force_login(superuser)
+    body = client.get(reverse("events:squad_create", args=[event.pk])).content.decode()
+    assert 'name="regional_coordinator_role"' in body
+    assert "@$ Coordinator North" in body
+
+
+@pytest.mark.django_db
+def test_squad_manage_card_shows_regional_coordinator(client, superuser) -> None:
+    """The squad card resolves and shows the squad's regional coordinator role name."""
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="100", name="$ Coordinator North", position=5)
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=["100"],
+    )
+    Squad.objects.create(event=event, name="Squad A", regional_coordinator_role=100)
+    client.force_login(superuser)
+    body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
+    assert ">Coordinator<" in body
+    assert "@$ Coordinator North" in body
+
+
+@pytest.mark.django_db
+def test_squad_edit_with_stale_coordinator_role_is_saveable() -> None:
+    """A coordinator role since removed from the event doesn't block editing the squad.
+
+    Regression: the stale value must be dropped from the form (not preselected),
+    otherwise clean_regional_coordinator_role would reject it and make the whole
+    squad edit un-saveable.
+    """
+    from apps.events.forms import SquadForm
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=["200"],  # role 100 was removed from the event
+    )
+    squad = Squad.objects.create(
+        event=event, name="Squad A", gender="COED", regional_coordinator_role=100,
+    )
+
+    # Building the edit form drops the stale value instead of preselecting it.
+    form = SquadForm(instance=squad, event_prefixes=[], coordinator_role_ids=event.coordinator_role_ids)
+    assert form.initial["regional_coordinator_role"] == "0"
+    assert "100" not in {c[0] for c in form.fields["regional_coordinator_role"].widget.choices}
+
+    # A normal edit (unrelated field) submitting the rendered value saves cleanly.
+    bound = SquadForm(
+        {"name": "Squad A Renamed", "gender": "COED", "regional_coordinator_role": "0"},
+        instance=squad, event_prefixes=[], coordinator_role_ids=event.coordinator_role_ids,
+    )
+    assert bound.is_valid(), bound.errors
+    saved = bound.save()
+    assert saved.regional_coordinator_role == 0
+    assert saved.name == "Squad A Renamed"
+
+
+@pytest.mark.django_db
+def test_squad_form_persists_selected_coordinator_role() -> None:
+    """A selected coordinator role round-trips through form.save() to the DB."""
+    from apps.events.forms import SquadForm
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="100", name="$ Coordinator North", position=5)
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=["100"],
+    )
+    form = SquadForm(
+        {"name": "Squad A", "gender": "COED", "regional_coordinator_role": "100"},
+        event_prefixes=[], coordinator_role_ids=event.coordinator_role_ids,
+    )
+    assert form.is_valid(), form.errors
+    squad = form.save(commit=False)
+    squad.event = event
+    squad.save()
+    squad.refresh_from_db()
+    assert squad.regional_coordinator_role == 100

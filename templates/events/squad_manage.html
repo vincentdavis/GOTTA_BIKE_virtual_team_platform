@@ -142,7 +142,7 @@
         {% endif %}
 
         {# Discord section #}
-        {% if squad.discord_channel_id or squad.audio_channel_id or squad.team_discord_role %}
+        {% if squad.discord_channel_id or squad.audio_channel_id or squad.team_discord_role or squad.regional_coordinator_role %}
         <div class="card bg-base-300 p-3 mb-2">
           <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Discord</p>
           <div class="space-y-1">
@@ -162,6 +162,12 @@
             <div class="flex items-center justify-between">
               <span class="text-base-content/70 text-sm">Role</span>
               <span class="text-sm">{% if squad.role_name %}@{{ squad.role_name }}{% else %}<span class="font-mono text-xs">{{ squad.team_discord_role }}</span>{% endif %}</span>
+            </div>
+            {% endif %}
+            {% if squad.regional_coordinator_role %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Coordinator</span>
+              <span class="text-sm">{% if squad.coordinator_role_name %}@{{ squad.coordinator_role_name }}{% else %}<span class="font-mono text-xs">{{ squad.regional_coordinator_role }}</span>{% endif %}</span>
             </div>
             {% endif %}
           </div>

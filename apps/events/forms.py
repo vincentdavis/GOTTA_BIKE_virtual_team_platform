@@ -547,6 +547,12 @@ class SquadForm(forms.ModelForm):
         label="Captain Discord Role",
     )
 
+    regional_coordinator_role = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full filter-select"}),
+        label="Regional Coordinator",
+    )
+
     gender = forms.ChoiceField(
         required=True,
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
@@ -564,6 +570,7 @@ class SquadForm(forms.ModelForm):
             "discord_channel_id",
             "audio_channel_id",
             "discord_captain_role",
+            "regional_coordinator_role",
             "team_discord_role",
             "min_zwift_category",
             "max_zwift_category",
@@ -643,6 +650,7 @@ class SquadForm(forms.ModelForm):
         self,
         *args,
         event_prefixes: list[str] | None = None,
+        coordinator_role_ids: list[str] | None = None,
         **kwargs,
     ) -> None:
         """Initialize form with Discord channel choices and captain labels.
@@ -650,11 +658,15 @@ class SquadForm(forms.ModelForm):
         Args:
             *args: Positional arguments passed to ModelForm.
             event_prefixes: The parent event's Discord prefixes. When empty, the role field is disabled.
+            coordinator_role_ids: The parent event's configured coordinator role
+                IDs (from the Role Setup page). The Regional Coordinator picker is
+                limited to these; when empty, that field is disabled.
             **kwargs: Keyword arguments passed to ModelForm.
 
         """
         super().__init__(*args, **kwargs)
         self.event_prefixes = list(event_prefixes or [])
+        self.coordinator_role_ids = [str(rid) for rid in (coordinator_role_ids or [])]
 
         # Squad gender is a fixed set (Male/Female/COED) and required when configuring a squad.
         self.fields["gender"].choices = [("", "Select gender"), *SQUAD_GENDER_CHOICES]
@@ -710,6 +722,33 @@ class SquadForm(forms.ModelForm):
         self.fields["discord_captain_role"].widget.choices = captain_role_choices
         self.initial["discord_captain_role"] = current_captain_role
 
+        # Regional coordinator: chosen from the event's configured coordinator
+        # roles (Role Setup page), not the event prefixes. When the event has no
+        # coordinator roles the field is shown but disabled with a placeholder.
+        if self.coordinator_role_ids:
+            coord_name_by_id = dict(
+                DiscordRole.objects.filter(role_id__in=self.coordinator_role_ids).values_list("role_id", "name")
+            )
+            coord_role_choices = [("0", "(none)")]
+            coord_role_choices.extend(
+                (rid, f"@{coord_name_by_id.get(rid, f'Unknown Role ({rid})')}")
+                for rid in self.coordinator_role_ids
+            )
+        else:
+            coord_role_choices = [("0", "(none — set coordinator roles in Role Setup first)")]
+            self.fields["regional_coordinator_role"].widget.attrs["disabled"] = True
+        # Drop a stale stored value — a coordinator role since removed from the
+        # event — instead of offering it back. Otherwise the whole squad edit
+        # form would be un-saveable, because clean_regional_coordinator_role
+        # rejects the preselected value. Mirrors EventRoleSetupForm's handling of
+        # coordinator_role_ids, which strips stale ids from the initial data.
+        current_coord_role = str(self.initial.get("regional_coordinator_role", 0) or 0)
+        coord_role_values = {c[0] for c in coord_role_choices}
+        if current_coord_role not in coord_role_values:
+            current_coord_role = "0"
+        self.fields["regional_coordinator_role"].widget.choices = coord_role_choices
+        self.initial["regional_coordinator_role"] = current_coord_role
+
     def clean_discord_channel_id(self) -> int:
         """Convert selected channel ID string back to int for the model.
 
@@ -762,6 +801,32 @@ class SquadForm(forms.ModelForm):
                     f'Role "@{role.name}" must start with one of: {", ".join(self.event_prefixes)}.'
                 )
 
+        return role_id
+
+    def clean_regional_coordinator_role(self) -> int:
+        """Convert the coordinator role ID to int and validate it's an event coordinator role.
+
+        The submitted role must be one of the event's configured coordinator
+        roles (``Event.coordinator_role_ids``, set on the Role Setup page). This
+        is the authoritative server-side gate — a crafted POST carrying any other
+        role id is rejected regardless of the rendered dropdown.
+
+        Returns:
+            Role ID as integer (0 for none).
+
+        Raises:
+            forms.ValidationError: If a non-coordinator role id is submitted.
+
+        """
+        value = self.cleaned_data.get("regional_coordinator_role", "0")
+        try:
+            role_id = int(value)
+        except (ValueError, TypeError):
+            return 0
+        if role_id and str(role_id) not in self.coordinator_role_ids:
+            raise forms.ValidationError(
+                "Select a coordinator role configured for this event on the Role Setup page."
+            )
         return role_id
 
     def clean_discord_captain_role(self) -> int:

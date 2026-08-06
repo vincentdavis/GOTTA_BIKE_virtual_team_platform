@@ -1141,6 +1141,8 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             channel_ids.add(str(s.audio_channel_id))
         if s.team_discord_role:
             role_ids.add(str(s.team_discord_role))
+        if s.regional_coordinator_role:
+            role_ids.add(str(s.regional_coordinator_role))
 
     if event.event_role:
         role_ids.add(str(event.event_role))
@@ -1174,6 +1176,9 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         s.channel_name = channel_names.get(str(s.discord_channel_id), "") if s.discord_channel_id else ""
         s.audio_name = channel_names.get(str(s.audio_channel_id), "") if s.audio_channel_id else ""
         s.role_name = role_names.get(str(s.team_discord_role), "") if s.team_discord_role else ""
+        s.coordinator_role_name = (
+            role_names.get(str(s.regional_coordinator_role), "") if s.regional_coordinator_role else ""
+        )
         s.active_grids = grids_by_squad.get(s.pk, [])
         # Per-squad management: full managers, or this squad's captain/VC.
         s.can_manage = can_manage_all or _can_manage_squad_availability(request.user, s)
@@ -1923,6 +1928,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         form = SquadForm(
             request.POST,
             event_prefixes=event.prefixes or [],
+            coordinator_role_ids=event.coordinator_role_ids or [],
         )
         if form.is_valid():
             squad = form.save(commit=False)
@@ -1939,7 +1945,10 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             messages.success(request, f'Squad "{squad.name}" created successfully!')
             return redirect("events:event_detail", pk=event_pk)
     else:
-        form = SquadForm(event_prefixes=event.prefixes or [])
+        form = SquadForm(
+            event_prefixes=event.prefixes or [],
+            coordinator_role_ids=event.coordinator_role_ids or [],
+        )
 
     return render(
         request,
@@ -1986,6 +1995,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             request.POST,
             instance=squad,
             event_prefixes=event.prefixes or [],
+            coordinator_role_ids=event.coordinator_role_ids or [],
         )
         if form.is_valid():
             form.save()
@@ -2002,6 +2012,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
         form = SquadForm(
             instance=squad,
             event_prefixes=event.prefixes or [],
+            coordinator_role_ids=event.coordinator_role_ids or [],
         )
 
     return render(
