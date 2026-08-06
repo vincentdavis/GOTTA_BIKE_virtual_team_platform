@@ -2062,3 +2062,37 @@ def test_eligibility_squads_tab_flags_out_of_bounds(client, superuser, user_mode
     # The within-limits rider should not be listed as a violation.
     # (Both names exist in the ZP data, but only the violator appears in the Squads section.)
     assert body.count("Okayxyz") == 0
+
+
+@pytest.mark.django_db
+def test_role_setup_selects_have_all_roles_and_prefix_filter_js(client, superuser) -> None:
+    """Head Captain / Event Role selects carry every role plus the prefix-filter JS.
+
+    Filtering is client-side, so the server renders all roles as <option>s; the
+    template JS hides the ones that don't match a checked prefix.
+    """
+    from django.urls import reverse
+
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="100", name="$ Team Alpha", position=10)
+    DiscordRole.objects.create(role_id="300", name="No Prefix Role", position=7)
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, prefixes=["$"],
+    )
+
+    client.force_login(superuser)
+    body = client.get(reverse("events:event_role_setup", args=[event.pk])).content.decode()
+
+    # Both selects render, with every role available server-side (filter is JS).
+    assert 'id="id_head_captain_role_id"' in body
+    assert 'id="id_event_role"' in body
+    assert "$ Team Alpha" in body
+    assert "No Prefix Role" in body
+    # The prefix-filter JS is wired to both selects.
+    assert "filterRoleSelects" in body
+    assert "id_head_captain_role_id" in body
+    assert "id_event_role" in body

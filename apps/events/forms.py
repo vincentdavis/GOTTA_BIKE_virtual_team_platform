@@ -328,7 +328,8 @@ class EventRoleSetupForm(forms.ModelForm):
         allowed = _allowed_event_prefixes()
         self.fields["prefixes"].choices = [(p, p) for p in allowed]
 
-        # Head captain role: all roles
+        # Head captain role: all roles server-side; the template JS filters the
+        # <select> options live by the currently-checked prefixes above.
         role_choices = _get_role_choices()
         current_role = str(self.initial.get("head_captain_role_id", 0) or 0)
         role_values = {c[0] for c in role_choices}
@@ -337,7 +338,8 @@ class EventRoleSetupForm(forms.ModelForm):
         self.fields["head_captain_role_id"].widget.choices = role_choices
         self.initial["head_captain_role_id"] = current_role
 
-        # Event role: all roles (validation checks prefix, not the dropdown filter)
+        # Event role: all roles server-side; the template JS filters the
+        # <select> options live by the currently-checked prefixes above.
         event_role_choices = _get_role_choices()
         current_event_role = str(self.initial.get("event_role", 0) or 0)
         event_role_values = {c[0] for c in event_role_choices}

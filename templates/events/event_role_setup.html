@@ -65,7 +65,7 @@
           </label>
           {% endif %}
           <label class="label">
-            <span class="label-text-alt">Discord role for the head captain of this event</span>
+            <span class="label-text-alt">Discord role for the head captain of this event. When prefixes are selected above, only matching roles are shown.</span>
           </label>
         </div>
 
@@ -81,7 +81,7 @@
           </label>
           {% endif %}
           <label class="label">
-            <span class="label-text-alt">Discord role for event participants</span>
+            <span class="label-text-alt">Discord role for event participants. When prefixes are selected above, only matching roles are shown.</span>
           </label>
         </div>
 
@@ -173,22 +173,47 @@
 {% if can_edit %}
 <script>
 (function() {
-  const search = document.getElementById('coord-search');
-  const list = document.getElementById('coord-list');
-  const countEl = document.getElementById('coord-count');
-  if (!list) return;
-
   function checkedPrefixes() {
     return Array.from(document.querySelectorAll('input[name="prefixes"]:checked')).map(cb => cb.value);
   }
 
+  // --- Head Captain Role / Event Role <select>s: hide options that don't match
+  //     a currently-checked prefix. "(none)" and the current value stay visible;
+  //     no checked prefixes means no filter. ---
+  const roleSelects = ['id_head_captain_role_id', 'id_event_role']
+    .map(id => document.getElementById(id))
+    .filter(Boolean);
+
+  function filterRoleSelects() {
+    const prefixes = checkedPrefixes();
+    roleSelects.forEach(function(sel) {
+      Array.from(sel.options).forEach(function(opt) {
+        if (opt.value === '0' || opt.selected) {
+          opt.hidden = false;
+          opt.disabled = false;
+          return;
+        }
+        const name = (opt.textContent || '').trim().replace(/^@/, '');
+        const match = !prefixes.length || prefixes.some(p => name.indexOf(p) === 0);
+        opt.hidden = !match;
+        opt.disabled = !match;
+      });
+    });
+  }
+
+  // --- Regional/Group Coordinators checkbox list: search + prefix filter. ---
+  const search = document.getElementById('coord-search');
+  const list = document.getElementById('coord-list');
+  const countEl = document.getElementById('coord-count');
+
   function updateCount() {
-    if (countEl) {
+    if (countEl && list) {
       countEl.textContent = String(list.querySelectorAll('.coord-role-cb:checked').length);
     }
   }
 
-  function applyFilter() {
+  function applyCoordFilter() {
+    if (!list) return;
     const q = (search && search.value || '').trim().toLowerCase();
     const prefixes = checkedPrefixes();
     list.querySelectorAll('.coord-item').forEach(function(item) {
@@ -200,12 +225,19 @@
     });
   }
 
-  if (search) search.addEventListener('input', applyFilter);
-  document.querySelectorAll('input[name="prefixes"]').forEach(cb => cb.addEventListener('change', applyFilter));
-  list.addEventListener('change', function(e) {
-    if (e.target && e.target.classList && e.target.classList.contains('coord-role-cb')) updateCount();
-  });
-  applyFilter();
+  function applyAll() {
+    filterRoleSelects();
+    applyCoordFilter();
+  }
+
+  if (search) search.addEventListener('input', applyCoordFilter);
+  document.querySelectorAll('input[name="prefixes"]').forEach(cb => cb.addEventListener('change', applyAll));
+  if (list) {
+    list.addEventListener('change', function(e) {
+      if (e.target && e.target.classList && e.target.classList.contains('coord-role-cb')) updateCount();
+    });
+  }
+  applyAll();
   updateCount();
 })();
 </script>
