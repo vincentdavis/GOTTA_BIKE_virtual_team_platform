@@ -360,6 +360,11 @@ class EventSignup(models.Model):
         help_text="Signup status",
     )
     notes = models.TextField(blank=True, help_text="Optional notes")
+    custom_answers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Answers to the event's custom signup questions, keyed by question id (as a string)",
+    )
     created_at = models.DateTimeField(default=timezone.now, help_text="When the signup was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the signup was last updated")
 
@@ -379,6 +384,96 @@ class EventSignup(models.Model):
 
         """
         return f"{self.user} - {self.event.title}"
+
+
+class SignupQuestion(models.Model):
+    """A custom question an admin adds to an event's signup form.
+
+    Riders answer these when they sign up (and can edit their answers afterwards).
+    Answers are stored on ``EventSignup.custom_answers`` keyed by ``str(question.id)``.
+    ``options`` applies only to the single/multi choice types and is ignored for
+    text and boolean questions.
+
+    Attributes:
+        event: The event this question belongs to.
+        label: The question text shown to riders.
+        question_type: The answer type (text/single/multi/boolean).
+        options: Choices for single/multi questions (list of label strings).
+        required: Whether riders must answer before signing up.
+        help_text: Optional helper text shown under the question.
+        order: Display order (lower first).
+
+    """
+
+    class Type(models.TextChoices):
+        """Custom signup-question answer types."""
+
+        TEXT = "text", "Short text"
+        SINGLE = "single", "Single choice"
+        MULTI = "multi", "Multiple choice"
+        BOOLEAN = "boolean", "Yes / No"
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="signup_questions",
+        help_text="The event this signup question belongs to",
+    )
+    label = models.CharField(max_length=200, help_text="The question shown to riders")
+    question_type = models.CharField(
+        max_length=20,
+        choices=Type.choices,
+        default=Type.TEXT,
+        help_text="Answer type",
+    )
+    options = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Choices for single/multiple-choice questions (ignored for text and yes/no)",
+    )
+    required = models.BooleanField(default=False, help_text="Riders must answer before signing up")
+    help_text = models.CharField(max_length=300, blank=True, help_text="Optional helper text shown under the question")
+    order = models.PositiveSmallIntegerField(default=0, help_text="Display order (lower numbers first)")
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the question was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the question was last updated")
+
+    class Meta:
+        """Meta options for SignupQuestion model."""
+
+        ordering = ["order", "id"]  # noqa: RUF012
+        verbose_name = "Signup Question"
+        verbose_name_plural = "Signup Questions"
+
+    def __str__(self) -> str:
+        """Return event and question label.
+
+        Returns:
+            String in format "Event Title: label".
+
+        """
+        return f"{self.event.title}: {self.label}"
+
+    @property
+    def is_choice(self) -> bool:
+        """Whether this question type uses the ``options`` list.
+
+        Returns:
+            True for single/multiple choice questions.
+
+        """
+        return self.question_type in {self.Type.SINGLE, self.Type.MULTI}
+
+    @property
+    def has_answers(self) -> bool:
+        """Whether any signup for this event has answered this question.
+
+        Used to freeze ``question_type`` once answers exist.
+
+        Returns:
+            True if at least one EventSignup stores an answer for this question.
+
+        """
+        return self.event.signups.filter(custom_answers__has_key=str(self.pk)).exists()
 
 
 class Squad(models.Model):

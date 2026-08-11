@@ -94,6 +94,14 @@ Read these helpers before touching event/squad views — most non-trivial behavi
 - `signup_notification_channel_id` on `Event`: `0` disables per-rider signup notifications
 - All grid/response/slot times stored in UTC, converted at render. `EventSignup.signup_timezone` and `signup_squad_gender` are only saved when the matching `*_required` flag is on
 
+#### Custom Signup Questions (`apps/events/signup_questions.py`)
+
+Admins add per-event questions (`SignupQuestion`: `question_type` = text/single/multi/boolean, `options`, `required`, `order`) at `/events/<id>/signup-questions/` (gated `is_event_admin or is_superuser`, same as event edit; linked from the event edit page). Riders answer on the signup + edit-signup modals in `event_detail.html` (fields named `custom_q_<id>`, rendered by the `_signup_question_fields.html` partial); answers are editable after signup and shown in the admin signup table's toggleable **Answers** column. There is **no** Discord-notification or Sheets export of answers.
+
+Answers live on `EventSignup.custom_answers` (JSON `{str(question_id): answer}`; text→str, single→str, multi→list, boolean→bool). Load-bearing rules enforced by `signup_questions.py`:
+- **Only real answers are stored** — a blank/unchecked answer never writes a key (and clears one on edit). So `SignupQuestion.has_answers` (a `custom_answers__has_key` test) truthfully means "answered", which is what freezes `question_type` (`SignupQuestionForm.clean_question_type`). Don't reintroduce writing empty keys.
+- `parse_custom_answers(event, post, existing=...)` **merges** onto the existing dict (orphaned answers to since-deleted questions survive, harmless, just not displayed) and enforces `required` only at submit time. A rider's prior single/multi choice is **grandfathered** (kept selectable + accepted) so an admin removing an in-use option can't make an unrelated signup edit unsaveable.
+
 ### Authentication (django-allauth)
 
 - Discord OAuth only (no username/password)

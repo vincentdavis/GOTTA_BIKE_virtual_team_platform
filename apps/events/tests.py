@@ -2226,3 +2226,245 @@ def test_squad_form_persists_selected_coordinator_role() -> None:
     squad.save()
     squad.refresh_from_db()
     assert squad.regional_coordinator_role == 100
+
+
+# ---- Custom signup questions ----
+
+def _q_event(**kwargs):
+    from datetime import date, timedelta
+
+    defaults = {
+        "title": "ZRL",
+        "start_date": date.today(),
+        "end_date": date.today() + timedelta(days=7),
+        "visible": True,
+        "signups_open": True,
+    }
+    defaults.update(kwargs)
+    return Event.objects.create(**defaults)
+
+
+@pytest.mark.django_db
+def test_signup_question_add_and_permission(client, event_admin, team_member) -> None:
+    from django.urls import reverse
+
+    event = _q_event()
+    url = reverse("events:signup_questions", args=[event.pk])
+    # A non-admin cannot add questions.
+    client.force_login(team_member)
+    assert client.post(url, {"label": "X", "question_type": "text", "order": 0}).status_code == 302
+    assert event.signup_questions.count() == 0
+    # An event admin can.
+    client.force_login(event_admin)
+    assert client.post(url, {"label": "Preferred night?", "question_type": "text", "order": 0}).status_code == 302
+    assert event.signup_questions.filter(label="Preferred night?").exists()
+
+
+@pytest.mark.django_db
+def test_signup_question_choice_requires_options(client, event_admin) -> None:
+    from django.urls import reverse
+
+    event = _q_event()
+    client.force_login(event_admin)
+    url = reverse("events:signup_questions", args=[event.pk])
+    # A choice question with no options is rejected (re-render, nothing created).
+    assert client.post(url, {"label": "Pick", "question_type": "single", "options": "", "order": 0}).status_code == 200
+    assert event.signup_questions.count() == 0
+    # With options it saves, deduped/parsed to a list.
+    assert client.post(
+        url, {"label": "Pick", "question_type": "single", "options": "A\nB\nA\n", "order": 0}
+    ).status_code == 302
+    assert event.signup_questions.get().options == ["A", "B"]
+
+
+@pytest.mark.django_db
+def test_signup_question_type_frozen_once_answered(client, event_admin, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import EventSignup, SignupQuestion
+
+    event = _q_event()
+    q = SignupQuestion.objects.create(event=event, label="Night", question_type="text", order=0)
+    EventSignup.objects.create(event=event, user=team_member, custom_answers={str(q.pk): "Tue"})
+    client.force_login(event_admin)
+    url = reverse("events:signup_question_edit", args=[event.pk, q.pk])
+    # Changing the type after an answer exists is rejected.
+    assert client.post(
+        url, {"label": "Night", "question_type": "single", "options": "A\nB", "order": 0}
+    ).status_code == 200
+    q.refresh_from_db()
+    assert q.question_type == "text"
+    # But other edits (label) are allowed.
+    assert client.post(url, {"label": "Race night", "question_type": "text", "order": 0}).status_code == 302
+    q.refresh_from_db()
+    assert q.label == "Race night"
+
+
+@pytest.mark.django_db
+def test_parse_custom_answers_validates_and_merges() -> None:
+    from django.http import QueryDict
+
+    from apps.events.models import SignupQuestion
+    from apps.events.signup_questions import parse_custom_answers
+
+    event = _q_event()
+    q_text = SignupQuestion.objects.create(event=event, label="T", question_type="text", required=True, order=0)
+    q_multi = SignupQuestion.objects.create(
+        event=event, label="M", question_type="multi", options=["A", "B", "C"], order=1
+    )
+    q_bool = SignupQuestion.objects.create(event=event, label="B", question_type="boolean", required=True, order=2)
+
+    # Required text missing -> error, nothing stored.
+    _, err = parse_custom_answers(event, QueryDict(mutable=True))
+    assert err
+
+    post = QueryDict(mutable=True)
+    post[f"custom_q_{q_text.pk}"] = "hello"
+    post.setlist(f"custom_q_{q_multi.pk}", ["A", "A", "Z", "B"])  # dup + invalid + valid
+    post[f"custom_q_{q_bool.pk}"] = "1"
+    answers, err = parse_custom_answers(event, post)
+    assert err is None
+    assert answers[str(q_text.pk)] == "hello"
+    assert answers[str(q_multi.pk)] == ["A", "B"]  # deduped, invalid "Z" dropped
+    assert answers[str(q_bool.pk)] is True
+
+    # Merge preserves answers to questions not on this form (orphans).
+    post2 = QueryDict(mutable=True)
+    post2[f"custom_q_{q_text.pk}"] = "updated"
+    post2[f"custom_q_{q_bool.pk}"] = "1"
+    merged, err = parse_custom_answers(event, post2, existing={"999": "ghost", str(q_text.pk): "old"})
+    assert err is None
+    assert merged["999"] == "ghost"
+    assert merged[str(q_text.pk)] == "updated"
+
+
+@pytest.mark.django_db
+def test_event_signup_stores_and_edits_custom_answers(client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import EventSignup, SignupQuestion
+
+    event = _q_event()
+    q = SignupQuestion.objects.create(
+        event=event, label="Night", question_type="single", options=["Tue", "Wed"], order=0
+    )
+    client.force_login(team_member)
+    assert client.post(
+        reverse("events:event_signup", args=[event.pk]), {f"custom_q_{q.pk}": "Tue"}
+    ).status_code == 302
+    su = EventSignup.objects.get(event=event, user=team_member)
+    assert su.custom_answers[str(q.pk)] == "Tue"
+    # Editing updates the answer.
+    client.post(reverse("events:event_signup_edit", args=[event.pk]), {f"custom_q_{q.pk}": "Wed"})
+    su.refresh_from_db()
+    assert su.custom_answers[str(q.pk)] == "Wed"
+
+
+@pytest.mark.django_db
+def test_event_signup_required_question_blocks_signup(client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import EventSignup, SignupQuestion
+
+    event = _q_event()
+    SignupQuestion.objects.create(event=event, label="Confirm", question_type="text", required=True, order=0)
+    client.force_login(team_member)
+    assert client.post(reverse("events:event_signup", args=[event.pk]), {}).status_code == 302
+    assert not EventSignup.objects.filter(event=event, user=team_member).exists()
+
+
+@pytest.mark.django_db
+def test_signup_answers_shown_in_admin_table(client, event_admin, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import EventSignup, SignupQuestion
+
+    event = _q_event()
+    q = SignupQuestion.objects.create(event=event, label="Night", question_type="text", order=0)
+    EventSignup.objects.create(event=event, user=team_member, custom_answers={str(q.pk): "Tuesday"})
+    client.force_login(event_admin)
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+    assert "Tuesday" in body
+    assert 'data-col="custom_answers"' in body
+
+
+@pytest.mark.django_db
+def test_deleted_question_answer_orphaned_not_shown(client, event_admin, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import EventSignup, SignupQuestion
+
+    event = _q_event()
+    q = SignupQuestion.objects.create(event=event, label="Night", question_type="text", order=0)
+    su = EventSignup.objects.create(
+        event=event, user=team_member, custom_answers={str(q.pk): "Tuesday", "999": "ghost"}
+    )
+    client.force_login(event_admin)
+    client.post(reverse("events:signup_question_delete", args=[event.pk, q.pk]))
+    # Page still renders; the deleted question's answer isn't surfaced.
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+    assert "Tuesday" not in body
+    # The orphaned answer data is preserved on the signup (not destroyed).
+    su.refresh_from_db()
+    assert su.custom_answers.get("999") == "ghost"
+
+
+@pytest.mark.django_db
+def test_blank_answer_not_persisted_and_type_not_frozen(client, event_admin, team_member) -> None:
+    """Signing up without answering an optional question doesn't freeze its type."""
+    from django.urls import reverse
+
+    from apps.events.models import EventSignup, SignupQuestion
+
+    event = _q_event()
+    q = SignupQuestion.objects.create(event=event, label="Notes?", question_type="text", order=0)
+    client.force_login(team_member)
+    client.post(reverse("events:event_signup", args=[event.pk]), {})
+    su = EventSignup.objects.get(event=event, user=team_member)
+    assert str(q.pk) not in su.custom_answers  # blank answer is not stored
+    assert q.has_answers is False
+    # The admin can still change the question type (not spuriously frozen).
+    client.force_login(event_admin)
+    resp = client.post(
+        reverse("events:signup_question_edit", args=[event.pk, q.pk]),
+        {"label": "Notes?", "question_type": "single", "options": "A\nB", "order": 0},
+    )
+    assert resp.status_code == 302
+    q.refresh_from_db()
+    assert q.question_type == "single"
+
+
+@pytest.mark.django_db
+def test_removed_option_preserved_and_does_not_block_edit(client, team_member) -> None:
+    """A required answer whose option was later removed is grandfathered, not blocking edits."""
+    from django.urls import reverse
+
+    from apps.events.models import EventSignup, SignupQuestion
+    from apps.events.signup_questions import build_question_fields
+
+    event = _q_event()
+    q = SignupQuestion.objects.create(
+        event=event, label="Night", question_type="single", options=["A", "B"], required=True, order=0
+    )
+    client.force_login(team_member)
+    client.post(reverse("events:event_signup", args=[event.pk]), {f"custom_q_{q.pk}": "A"})
+    su = EventSignup.objects.get(event=event, user=team_member)
+    assert su.custom_answers[str(q.pk)] == "A"
+
+    # Admin removes option "A" (still required).
+    q.options = ["B", "C"]
+    q.save()
+
+    # The edit form grandfathers "A" so it renders selectable.
+    fields = build_question_fields([q], su.custom_answers)
+    assert "A" in fields[0]["options"]
+
+    # Editing notes (form resubmits the grandfathered "A") saves cleanly.
+    resp = client.post(
+        reverse("events:event_signup_edit", args=[event.pk]),
+        {"notes": "hi", f"custom_q_{q.pk}": "A"},
+    )
+    assert resp.status_code == 302
+    su.refresh_from_db()
+    assert su.notes == "hi"
+    assert su.custom_answers[str(q.pk)] == "A"

@@ -35,7 +35,7 @@ from apps.accounts.discord_service import (
 from apps.accounts.models import Permissions, User
 from apps.events import ds_service
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
-from apps.events.forms import EventForm, EventRoleSetupForm, SquadForm
+from apps.events.forms import EventForm, EventRoleSetupForm, SignupQuestionForm, SquadForm
 from apps.events.models import (
     ZR_CATEGORY_ORDER,
     AvailabilityGrid,
@@ -44,9 +44,17 @@ from apps.events.models import (
     AvailabilitySlotSelection,
     Event,
     EventSignup,
+    SignupQuestion,
     SlotDS,
     Squad,
     SquadMember,
+)
+from apps.events.signup_questions import (
+    MAX_QUESTIONS_PER_EVENT,
+    active_questions,
+    build_question_fields,
+    parse_custom_answers,
+    resolve_signup_answers,
 )
 from apps.events.squads import squad_member_users as squad_roster_users
 from apps.events.tz_utils import (
@@ -447,6 +455,7 @@ def _enrich_signups(signups, event=None):
             squads_by_user.setdefault(sm.user_id, []).append(sm.squad)
 
     event_role_id = str(event.event_role) if event and event.event_role else ""
+    signup_questions = active_questions(event) if event else []
 
     # Build captain/VC lookup: user_id -> set of squad PKs where they are captain/VC
     captain_squads: dict[int, set] = {}
@@ -507,6 +516,7 @@ def _enrich_signups(signups, event=None):
             "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
             "assigned_squads": user_squads,
             "role_badges": role_badges,
+            "custom_answers": resolve_signup_answers(signup, signup_questions),
         })
     return enriched
 
@@ -859,6 +869,11 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     zp_avg_rank_all = round(sum(all_ranks) / len(all_ranks), 1) if all_ranks else None
     zr_avg_rating_all = round(sum(all_ratings) / len(all_ratings), 1) if all_ratings else None
 
+    signup_questions = active_questions(event)
+    signup_question_fields = build_question_fields(
+        signup_questions, user_signup.custom_answers if user_signup else None
+    )
+
     logfire.debug("Event detail viewed", user_id=request.user.id, event_id=pk)
     return render(
         request,
@@ -870,6 +885,9 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "signups": enriched_signups,
             "signup_count": signups.count(),
             "user_signup": user_signup,
+            "signup_questions": signup_questions,
+            "signup_question_fields": signup_question_fields,
+            "can_manage_signup_questions": _can_manage_signup_questions(request.user),
             "is_event_admin": request.user.is_event_admin,
             "can_view_signups": can_view_signups,
             "guild_id": config.GUILD_ID,
@@ -1750,12 +1768,18 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     notes = request.POST.get("notes", "").strip()
 
+    custom_answers, answer_error = parse_custom_answers(event, request.POST)
+    if answer_error:
+        messages.error(request, answer_error)
+        return redirect("events:event_detail", pk=pk)
+
     signup = EventSignup.objects.create(
         event=event,
         user=request.user,
         signup_timezone=signup_timezone,
         signup_squad_gender=signup_squad_gender,
         notes=notes,
+        custom_answers=custom_answers,
     )
     logfire.info(
         "Event signup created",
@@ -1811,10 +1835,18 @@ def event_signup_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, "Invalid squad gender preference selection.")
             return redirect("events:event_detail", pk=pk)
 
+    custom_answers, answer_error = parse_custom_answers(event, request.POST, existing=signup.custom_answers)
+    if answer_error:
+        messages.error(request, answer_error)
+        return redirect("events:event_detail", pk=pk)
+
     signup.signup_timezone = signup_timezone
     signup.signup_squad_gender = signup_squad_gender
     signup.notes = request.POST.get("notes", "").strip()
-    signup.save(update_fields=["signup_timezone", "signup_squad_gender", "notes", "updated_at"])
+    signup.custom_answers = custom_answers
+    signup.save(
+        update_fields=["signup_timezone", "signup_squad_gender", "notes", "custom_answers", "updated_at"]
+    )
     logfire.info(
         "Event signup updated",
         event_id=pk,
@@ -1854,6 +1886,159 @@ def event_signup_delete_view(request: HttpRequest, pk: int) -> HttpResponse:
     )
     messages.success(request, "Your signup has been removed.")
     return redirect("events:event_detail", pk=pk)
+
+
+def _can_manage_signup_questions(user) -> bool:
+    """Whether a user may manage an event's signup questions.
+
+    Mirrors the event-edit gate (global event admins and superusers).
+
+    Args:
+        user: The requesting user.
+
+    Returns:
+        True if allowed.
+
+    """
+    return bool(user.is_event_admin or user.is_superuser)
+
+
+@login_required
+@team_member_required()
+@require_http_methods(["GET", "POST"])
+def signup_questions_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """List and add an event's custom signup questions.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+
+    Returns:
+        Rendered management page (GET / invalid POST) or redirect on add.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    if not _can_manage_signup_questions(request.user):
+        messages.error(request, "You don't have permission to manage signup questions.")
+        return redirect("events:event_detail", pk=pk)
+
+    questions = active_questions(event)
+    at_limit = len(questions) >= MAX_QUESTIONS_PER_EVENT
+
+    if request.method == "POST":
+        if at_limit:
+            messages.error(request, f"An event can have at most {MAX_QUESTIONS_PER_EVENT} signup questions.")
+            return redirect("events:signup_questions", pk=pk)
+        form = SignupQuestionForm(request.POST)
+        if form.is_valid():
+            question = form.save(commit=False)
+            question.event = event
+            question.save()
+            logfire.info(
+                "Signup question added",
+                event_id=pk,
+                question_id=question.pk,
+                question_type=question.question_type,
+                user_id=request.user.id,
+            )
+            messages.success(request, "Question added.")
+            return redirect("events:signup_questions", pk=pk)
+    else:
+        form = SignupQuestionForm(initial={"order": len(questions)})
+
+    return render(
+        request,
+        "events/signup_questions.html",
+        {
+            "event": event,
+            "questions": questions,
+            "add_form": form,
+            "at_limit": at_limit,
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_http_methods(["GET", "POST"])
+def signup_question_edit_view(request: HttpRequest, pk: int, question_pk: int) -> HttpResponse:
+    """Edit one of an event's custom signup questions.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+        question_pk: The signup question primary key.
+
+    Returns:
+        Rendered edit page (GET / invalid POST) or redirect on save.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    if not _can_manage_signup_questions(request.user):
+        messages.error(request, "You don't have permission to manage signup questions.")
+        return redirect("events:event_detail", pk=pk)
+    question = get_object_or_404(SignupQuestion, pk=question_pk, event=event)
+    answers_exist = question.has_answers
+
+    if request.method == "POST":
+        form = SignupQuestionForm(request.POST, instance=question, answers_exist=answers_exist)
+        if form.is_valid():
+            form.save()
+            logfire.info(
+                "Signup question updated",
+                event_id=pk,
+                question_id=question.pk,
+                user_id=request.user.id,
+            )
+            messages.success(request, "Question updated.")
+            return redirect("events:signup_questions", pk=pk)
+    else:
+        form = SignupQuestionForm(instance=question, answers_exist=answers_exist)
+
+    return render(
+        request,
+        "events/signup_question_edit.html",
+        {
+            "event": event,
+            "question": question,
+            "form": form,
+            "answers_exist": answers_exist,
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_POST
+def signup_question_delete_view(request: HttpRequest, pk: int, question_pk: int) -> HttpResponse:
+    """Delete one of an event's custom signup questions.
+
+    Stored answers to the deleted question remain on each EventSignup's
+    ``custom_answers`` (orphaned, harmless) and are simply no longer displayed.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+        question_pk: The signup question primary key.
+
+    Returns:
+        Redirect to the signup-questions management page.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    if not _can_manage_signup_questions(request.user):
+        messages.error(request, "You don't have permission to manage signup questions.")
+        return redirect("events:event_detail", pk=pk)
+    question = get_object_or_404(SignupQuestion, pk=question_pk, event=event)
+    logfire.info(
+        "Signup question deleted",
+        event_id=pk,
+        question_id=question.pk,
+        user_id=request.user.id,
+    )
+    question.delete()
+    messages.success(request, "Question deleted.")
+    return redirect("events:signup_questions", pk=pk)
 
 
 @login_required

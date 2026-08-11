@@ -1,0 +1,44 @@
+{% comment %}
+Renders the custom signup-question inputs for the signup / edit-signup forms.
+Expects `fields` — the list produced by
+apps.events.signup_questions.build_question_fields (each item exposes
+`q`, `text_value`, `single_value`, `multi_values`, `bool_checked`).
+Inputs are named `custom_q_<id>` and parsed by parse_custom_answers.
+All admin/rider strings render auto-escaped (never |safe).
+{% endcomment %}
+{% for f in fields %}
+<div class="form-control w-full">
+  {% if f.q.question_type == "boolean" %}
+  <label class="label cursor-pointer justify-start gap-3">
+    <input type="checkbox" name="custom_q_{{ f.q.pk }}" value="1" class="checkbox checkbox-sm"{% if f.bool_checked %} checked{% endif %}>
+    <span class="label-text">{{ f.q.label }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}</span>
+  </label>
+  {% if f.q.help_text %}<label class="label pt-0"><span class="label-text-alt">{{ f.q.help_text }}</span></label>{% endif %}
+  {% else %}
+  <label class="label"{% if f.q.question_type != "multi" %} for="custom_q_{{ f.q.pk }}"{% endif %}>
+    <span class="label-text">{{ f.q.label }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}</span>
+  </label>
+  {% if f.q.question_type == "text" %}
+  <input type="text" id="custom_q_{{ f.q.pk }}" name="custom_q_{{ f.q.pk }}" value="{{ f.text_value }}" maxlength="2000"
+         class="input input-bordered w-full" placeholder="Your answer">
+  {% elif f.q.question_type == "single" %}
+  <select id="custom_q_{{ f.q.pk }}" name="custom_q_{{ f.q.pk }}" class="select select-bordered w-full">
+    <option value="">{% if f.q.required %}Select…{% else %}— None —{% endif %}</option>
+    {% for opt in f.options %}
+    <option value="{{ opt }}"{% if opt == f.single_value %} selected{% endif %}>{{ opt }}</option>
+    {% endfor %}
+  </select>
+  {% elif f.q.question_type == "multi" %}
+  <div class="flex flex-wrap gap-3">
+    {% for opt in f.options %}
+    <label class="label cursor-pointer gap-2">
+      <input type="checkbox" name="custom_q_{{ f.q.pk }}" value="{{ opt }}" class="checkbox checkbox-sm"{% if opt in f.multi_values %} checked{% endif %}>
+      <span class="label-text">{{ opt }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if f.q.help_text %}<label class="label pt-0"><span class="label-text-alt">{{ f.q.help_text }}</span></label>{% endif %}
+  {% endif %}
+</div>
+{% endfor %}

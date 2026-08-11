@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Signup Questions - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-ghost btn-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Back to Edit Event
+    </a>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-2xl mb-1">Signup Questions</h2>
+      <p class="text-base-content/70 text-sm mb-4">{{ event.title }}</p>
+      <p class="text-sm text-base-content/70 mb-2">
+        Extra questions riders answer when they sign up. They can update their answers while signups are open.
+      </p>
+
+      {% if questions %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr><th>Order</th><th>Question</th><th>Type</th><th>Required</th><th>Options</th><th></th></tr>
+          </thead>
+          <tbody>
+            {% for q in questions %}
+            <tr>
+              <td>{{ q.order }}</td>
+              <td>
+                <div class="font-medium">{{ q.label }}</div>
+                {% if q.help_text %}<div class="text-xs text-base-content/60">{{ q.help_text }}</div>{% endif %}
+              </td>
+              <td><span class="badge badge-ghost badge-sm">{{ q.get_question_type_display }}</span></td>
+              <td>{% if q.required %}<span class="badge badge-warning badge-sm">Required</span>{% else %}<span class="text-base-content/40">—</span>{% endif %}</td>
+              <td class="text-xs">
+                {% if q.is_choice %}{% for opt in q.options %}<span class="badge badge-outline badge-xs mr-1 mb-1">{{ opt }}</span>{% endfor %}{% else %}<span class="text-base-content/40">—</span>{% endif %}
+              </td>
+              <td class="whitespace-nowrap text-right">
+                <a href="{% url 'events:signup_question_edit' event.pk q.pk %}" class="btn btn-xs btn-primary">Edit</a>
+                <form method="post" action="{% url 'events:signup_question_delete' event.pk q.pk %}" class="inline"
+                      onsubmit="return confirm('Delete question &quot;{{ q.label|escapejs }}&quot;? Existing answers are kept but no longer shown.')">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-xs btn-error btn-outline">Delete</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/50">No signup questions yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="card-title text-lg mb-2">Add a question</h3>
+      {% if at_limit %}
+      <div class="alert alert-warning">This event has reached the maximum number of signup questions.</div>
+      {% else %}
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        {% if add_form.non_field_errors %}
+        <div class="alert alert-error">{% for e in add_form.non_field_errors %}<span>{{ e }}</span>{% endfor %}</div>
+        {% endif %}
+
+        <div class="form-control w-full">
+          <label class="label" for="{{ add_form.label.id_for_label }}"><span class="label-text">Question <span class="text-error">*</span></span></label>
+          {{ add_form.label }}
+          {% if add_form.label.errors %}<label class="label"><span class="label-text-alt text-error">{{ add_form.label.errors.0 }}</span></label>{% endif %}
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="form-control w-full">
+            <label class="label" for="{{ add_form.question_type.id_for_label }}"><span class="label-text">Answer type</span></label>
+            {{ add_form.question_type }}
+            {% if add_form.question_type.errors %}<label class="label"><span class="label-text-alt text-error">{{ add_form.question_type.errors.0 }}</span></label>{% endif %}
+          </div>
+          <div class="form-control w-full">
+            <label class="label" for="{{ add_form.order.id_for_label }}"><span class="label-text">Order</span></label>
+            {{ add_form.order }}
+            {% if add_form.order.errors %}<label class="label"><span class="label-text-alt text-error">{{ add_form.order.errors.0 }}</span></label>{% endif %}
+          </div>
+        </div>
+
+        <div class="form-control w-full" data-options-field>
+          <label class="label" for="{{ add_form.options.id_for_label }}"><span class="label-text">Options</span></label>
+          {{ add_form.options }}
+          <label class="label pt-0"><span class="label-text-alt">One option per line. Only used for single / multiple choice.</span></label>
+          {% if add_form.options.errors %}<label class="label"><span class="label-text-alt text-error">{{ add_form.options.errors.0 }}</span></label>{% endif %}
+        </div>
+
+        <div class="form-control w-full">
+          <label class="label" for="{{ add_form.help_text.id_for_label }}"><span class="label-text">Helper text</span></label>
+          {{ add_form.help_text }}
+          {% if add_form.help_text.errors %}<label class="label"><span class="label-text-alt text-error">{{ add_form.help_text.errors.0 }}</span></label>{% endif %}
+        </div>
+
+        <label class="label cursor-pointer justify-start gap-3">
+          {{ add_form.required }}
+          <span class="label-text">Required</span>
+        </label>
+
+        <div class="card-actions justify-end">
+          <button type="submit" class="btn btn-primary">Add Question</button>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+// Show the Options field only for single/multiple choice types.
+(function () {
+  var typeSel = document.getElementById('{{ add_form.question_type.id_for_label }}');
+  var optWrap = document.querySelector('[data-options-field]');
+  if (!typeSel || !optWrap) return;
+  function sync() {
+    var t = typeSel.value;
+    optWrap.style.display = (t === 'single' || t === 'multi') ? '' : 'none';
+  }
+  typeSel.addEventListener('change', sync);
+  sync();
+})();
+</script>
+{% endblock %}

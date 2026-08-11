@@ -11,7 +11,8 @@
   [data-signup-table] [data-col="zwid"],
   [data-signup-table] [data-col="ftp"],
   [data-signup-table] [data-col="wkg"],
-  [data-signup-table] [data-col="notes"]{display:none!important}
+  [data-signup-table] [data-col="notes"],
+  [data-signup-table] [data-col="custom_answers"]{display:none!important}
 }
 </style>
 <div class="max-w-6xl mx-auto">
@@ -121,6 +122,7 @@
                 </div>
               </div>
               {% endif %}
+              {% include "events/_signup_question_fields.html" with fields=signup_question_fields %}
               <div class="form-control w-full">
                 <label class="label" for="edit_signup_notes">
                   <span class="label-text">Notes</span>
@@ -179,6 +181,7 @@
                 </div>
               </div>
               {% endif %}
+              {% include "events/_signup_question_fields.html" with fields=signup_question_fields %}
               <div class="form-control w-full">
                 <label class="label" for="signup_notes">
                   <span class="label-text">Notes</span>
@@ -217,6 +220,7 @@
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="verified" checked> Verified</label></li>
                 {% if squads %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad" checked> Squad</label></li>{% endif %}
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="notes" checked> Notes</label></li>
+                {% if signup_questions %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="custom_answers" checked> Answers</label></li>{% endif %}
                 <li class="menu-title text-xs pt-2">Zwift Racing</li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_age"> Age</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_cur_rating"> Current Rating</label></li>
@@ -248,6 +252,7 @@
                 {% if event.event_role %}<th data-col="event_role" data-sort="text" class="cursor-pointer hover:text-primary select-none">Event Role</th>{% endif %}
                 {% if squads %}<th data-col="squad" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>{% endif %}
                 <th data-col="notes" data-sort="text" class="cursor-pointer hover:text-primary select-none">Notes</th>
+                {% if signup_questions %}<th data-col="custom_answers" data-sort="text" class="cursor-pointer hover:text-primary select-none">Answers</th>{% endif %}
                 <th data-col="zr_age" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Age</th>
                 <th data-col="zr_cur_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Rating</th>
                 <th data-col="zr_cur_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Cat</th>
@@ -358,6 +363,11 @@
                   <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
+                {% if signup_questions %}
+                <td data-col="custom_answers">
+                  {% for a in entry.custom_answers %}{% if a.answered %}<div class="text-xs whitespace-nowrap"><span class="text-base-content/50">{{ a.label }}:</span> {{ a.display }}</div>{% endif %}{% endfor %}
+                </td>
+                {% endif %}
                 <td data-col="zr_age" style="display:none">
                   {% if entry.zr_age %}<span class="text-sm">{{ entry.zr_age }}</span>
                   {% else %}<span class="text-base-content/30">-</span>{% endif %}

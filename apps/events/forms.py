@@ -5,7 +5,8 @@ from typing import ClassVar
 
 from django import forms
 
-from apps.events.models import SQUAD_GENDER_CHOICES, Event, Squad
+from apps.events.models import SQUAD_GENDER_CHOICES, Event, SignupQuestion, Squad
+from apps.events.signup_questions import MAX_OPTIONS_PER_QUESTION
 from apps.team.models import DiscordChannel, DiscordRole
 
 
@@ -856,3 +857,107 @@ class SquadForm(forms.ModelForm):
                 )
 
         return role_id
+
+
+class SignupQuestionForm(forms.ModelForm):
+    """Create or edit a custom signup question for an event."""
+
+    options = forms.CharField(
+        required=False,
+        widget=forms.Textarea(
+            attrs={
+                "class": "textarea textarea-bordered w-full",
+                "rows": 4,
+                "placeholder": "One option per line (choice questions only)",
+            }
+        ),
+        label="Options",
+        help_text="One option per line. Used only for single / multiple choice questions.",
+    )
+
+    class Meta:
+        """Meta options for SignupQuestionForm."""
+
+        model = SignupQuestion
+        fields: ClassVar[list[str]] = ["label", "question_type", "options", "required", "help_text", "order"]
+        widgets: ClassVar[dict] = {
+            "label": forms.TextInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "Question text"},
+            ),
+            "question_type": forms.Select(attrs={"class": "select select-bordered w-full"}),
+            "required": forms.CheckboxInput(attrs={"class": "checkbox checkbox-primary"}),
+            "help_text": forms.TextInput(
+                attrs={"class": "input input-bordered w-full", "placeholder": "Optional helper text"},
+            ),
+            "order": forms.NumberInput(attrs={"class": "input input-bordered w-24", "min": 0}),
+        }
+
+    def __init__(self, *args, answers_exist: bool = False, **kwargs) -> None:
+        """Initialize, prefilling the options textarea from the stored list.
+
+        Args:
+            *args: Positional arguments passed to ModelForm.
+            answers_exist: True when a signup already answered this question, which
+                freezes ``question_type`` (see clean_question_type).
+            **kwargs: Keyword arguments passed to ModelForm.
+
+        """
+        super().__init__(*args, **kwargs)
+        self.answers_exist = answers_exist
+        if self.instance and self.instance.pk and isinstance(self.instance.options, list):
+            self.initial["options"] = "\n".join(self.instance.options)
+
+    def clean_options(self) -> list[str]:
+        """Parse the options textarea into a deduped list of non-empty lines.
+
+        Returns:
+            List of option label strings.
+
+        Raises:
+            forms.ValidationError: If more than the allowed number of options.
+
+        """
+        raw = self.cleaned_data.get("options", "") or ""
+        seen: list[str] = []
+        for line in raw.splitlines():
+            value = line.strip()
+            if value and value not in seen:
+                seen.append(value)
+        if len(seen) > MAX_OPTIONS_PER_QUESTION:
+            raise forms.ValidationError(f"At most {MAX_OPTIONS_PER_QUESTION} options are allowed.")
+        return seen
+
+    def clean_question_type(self) -> str:
+        """Freeze the question type once any signup has answered it.
+
+        Returns:
+            The selected question type.
+
+        Raises:
+            forms.ValidationError: If the type is changed while answers exist.
+
+        """
+        value = self.cleaned_data.get("question_type")
+        if self.answers_exist and self.instance and self.instance.pk and value != self.instance.question_type:
+            raise forms.ValidationError(
+                "This question already has answers, so its type can't be changed. "
+                "Delete it and add a new question instead."
+            )
+        return value
+
+    def clean(self) -> dict:
+        """Require options for choice questions; clear options for text/yes-no.
+
+        Returns:
+            The cleaned data dict.
+
+        """
+        cleaned = super().clean()
+        qtype = cleaned.get("question_type")
+        options = cleaned.get("options") or []
+        if qtype in (SignupQuestion.Type.SINGLE, SignupQuestion.Type.MULTI):
+            if not options:
+                self.add_error("options", "Add at least one option for a choice question.")
+        else:
+            cleaned["options"] = []
+        return cleaned
