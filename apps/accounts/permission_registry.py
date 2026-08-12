@@ -140,6 +140,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "views": [
             "/events/{id}/manage-roles/ - Manage Discord roles for event signups",
             "/events/{id}/toggle-event-role/{user_id}/ - Toggle event Discord role",
+            "/events/{id}/toggle-coordinator-role/{user_id}/{role_id}/ - Toggle a coordinator Discord role",
             "/events/{id}/squads/{squad_id}/toggle-role/{user_id}/ - Toggle squad Discord role",
         ],
     },

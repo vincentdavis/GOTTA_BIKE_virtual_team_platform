@@ -2647,3 +2647,102 @@ def test_squad_form_region_role_prefix_validation() -> None:
     bad = SquadForm({**base, "region_role": "888"}, event_prefixes=["$"])
     assert not bad.is_valid()
     assert "region_role" in bad.errors
+
+
+# ---- Manage Roles: coordinator role columns ----
+
+
+@pytest.mark.django_db
+def test_manage_roles_shows_coordinator_columns(client, superuser, user_model) -> None:
+    """The manage-roles page renders a sortable, toggleable column per coordinator role."""
+    from django.urls import reverse
+
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="700", name="West Coordinator", position=1)
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=["700"],
+    )
+    rider = _ds_user(user_model, discord_id="920002", roles={})
+    EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED)
+
+    client.force_login(superuser)
+    resp = client.get(reverse("events:manage_roles", args=[event.pk]))
+    assert resp.status_code == 200
+    body = resp.content.decode()
+    assert "West Coordinator" in body  # column header
+    assert "Coordinator columns" in body  # show/hide toggle present
+    assert reverse("events:event_toggle_coordinator_role", args=[event.pk, rider.pk, 700]) in body
+
+
+@pytest.mark.django_db
+def test_toggle_coordinator_role_adds_and_removes(client, superuser, user_model) -> None:
+    """Toggling a coordinator role adds it, then removes it, updating the local role cache."""
+    from django.urls import reverse
+
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="700", name="West Coordinator", position=1)
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=["700"],
+    )
+    rider = _ds_user(user_model, discord_id="920011", roles={})
+    client.force_login(superuser)
+    url = reverse("events:event_toggle_coordinator_role", args=[event.pk, rider.pk, 700])
+
+    with patch("apps.events.views.add_discord_role", return_value=True) as add_mock:
+        client.post(url)
+    add_mock.assert_called_once_with("920011", "700")
+    rider.refresh_from_db()
+    assert "700" in rider.discord_roles
+
+    with patch("apps.events.views.remove_discord_role", return_value=True) as rm_mock:
+        client.post(url)
+    rm_mock.assert_called_once_with("920011", "700")
+    rider.refresh_from_db()
+    assert "700" not in rider.discord_roles
+
+
+@pytest.mark.django_db
+def test_toggle_coordinator_role_rejects_non_coordinator(client, superuser, user_model) -> None:
+    """A role id that is not configured as a coordinator for the event is rejected server-side."""
+    from django.urls import reverse
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=["700"],
+    )
+    rider = _ds_user(user_model, discord_id="920021", roles={})
+    client.force_login(superuser)
+    # 999 is not in coordinator_role_ids -> must not touch Discord.
+    url = reverse("events:event_toggle_coordinator_role", args=[event.pk, rider.pk, 999])
+    with patch("apps.events.views.add_discord_role", return_value=True) as add_mock:
+        resp = client.post(url)
+    assert add_mock.call_count == 0
+    rider.refresh_from_db()
+    assert "999" not in rider.discord_roles
+    assert resp.status_code == 302  # redirect back with an error message
+
+
+@pytest.mark.django_db
+def test_toggle_coordinator_role_requires_manage_permission(client, team_member, user_model) -> None:
+    """A plain team member (no assign_roles / head captain) cannot toggle coordinator roles."""
+    from django.urls import reverse
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=["700"],
+    )
+    rider = _ds_user(user_model, discord_id="920031", roles={})
+    client.force_login(team_member)
+    url = reverse("events:event_toggle_coordinator_role", args=[event.pk, rider.pk, 700])
+    with patch("apps.events.views.add_discord_role", return_value=True) as add_mock:
+        resp = client.post(url)
+    assert resp.status_code == 403
+    assert add_mock.call_count == 0

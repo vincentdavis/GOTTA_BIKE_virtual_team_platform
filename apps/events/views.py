@@ -4461,6 +4461,9 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     # Squads that have a captain Discord role configured
     captain_role_squads = list(event.squads.exclude(discord_captain_role=0).exclude(discord_captain_role__isnull=True))
 
+    # Regional/Group Coordinator roles configured for this event (Role Setup page)
+    coordinator_role_id_strs = [str(rid) for rid in (event.coordinator_role_ids or []) if str(rid) not in ("", "0")]
+
     # Resolve Discord role IDs to names
     from apps.team.models import DiscordRole
 
@@ -4471,9 +4474,15 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         role_ids.add(str(s.team_discord_role))
     for s in captain_role_squads:
         role_ids.add(str(s.discord_captain_role))
+    role_ids.update(coordinator_role_id_strs)
     role_names = (
         dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
     )
+
+    # Coordinator role column defs (one interactive toggle column each), in configured order
+    coordinator_roles = [
+        {"role_id": int(rid), "name": role_names.get(rid, "")} for rid in coordinator_role_id_strs
+    ]
 
     # Build role info list for display
     role_info = []
@@ -4497,6 +4506,9 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "name": s.captain_role_name,
             "role_id": s.discord_captain_role,
         })
+    role_info.extend(
+        {"label": "Coordinator", "name": cr["name"], "role_id": cr["role_id"]} for cr in coordinator_roles
+    )
 
     # Build squad membership lookup: {user_id: set(squad_ids)}
     squad_member_map: dict[int, set[int]] = {}
@@ -4537,6 +4549,15 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     "has_role": False,
                 })
         entry["captain_role_status"] = captain_role_status
+        # Coordinator roles are event-level (not squad-scoped): every rider gets a toggle.
+        entry["coordinator_role_status"] = [
+            {
+                "role_id": cr["role_id"],
+                "name": cr["name"],
+                "has_role": user.has_discord_role(cr["role_id"]),
+            }
+            for cr in coordinator_roles
+        ]
 
     logfire.info(
         "Manage roles page viewed",
@@ -4552,6 +4573,7 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "enriched_signups": enriched_signups,
             "role_squads": role_squads,
             "captain_role_squads": captain_role_squads,
+            "coordinator_roles": coordinator_roles,
             "role_info": role_info,
         },
     )
@@ -4650,6 +4672,127 @@ def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) ->
                 "event_pk": event_pk,
                 "member_user_pk": user_id,
                 "has_role": has_role,
+            },
+        )
+        stored = messages.get_messages(request)
+        msg_list = [{"message": str(m), "tags": m.tags} for m in stored]
+        if msg_list:
+            response["HX-Trigger"] = json.dumps({"showToast": msg_list})
+        return response
+
+    return redirect("events:manage_roles", event_pk=event_pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def event_toggle_coordinator_role_view(
+    request: HttpRequest, event_pk: int, user_id: int, role_id: int
+) -> HttpResponse:
+    """Toggle one of the event's Regional/Group Coordinator Discord roles for a signup user.
+
+    Adds the coordinator role if the user doesn't have it, removes it if they do.
+    ``role_id`` is re-validated server-side against the event's configured
+    ``coordinator_role_ids`` so a crafted POST cannot toggle an arbitrary role.
+    Accessible to users with assign_roles permission or the event's head captain role.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        user_id: The target user primary key.
+        role_id: The coordinator Discord role ID to toggle.
+
+    Returns:
+        HTMX partial or redirect to manage roles page.
+
+    Raises:
+        PermissionDenied: If user lacks permission.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    if not _can_manage_event_roles(request.user, event):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied("You need Assign Roles permission or the Head Captain role for this event.")
+
+    role_id_str = str(role_id)
+    coordinator_ids = {str(rid) for rid in (event.coordinator_role_ids or [])}
+    if role_id_str not in coordinator_ids:
+        logfire.warning(
+            "Rejected coordinator role toggle for non-coordinator role",
+            event_id=event_pk,
+            role_id=role_id_str,
+            admin_user_id=request.user.id,
+        )
+        messages.error(request, "That role is not a coordinator role for this event.")
+        return redirect("events:manage_roles", event_pk=event_pk)
+
+    target_user = get_object_or_404(User, pk=user_id)
+    if not target_user.discord_id:
+        messages.error(request, f"{target_user} has no linked Discord account.")
+        return redirect("events:manage_roles", event_pk=event_pk)
+
+    from apps.team.models import DiscordRole
+
+    role_name = DiscordRole.objects.filter(role_id=role_id_str).values_list("name", flat=True).first() or ""
+
+    if target_user.has_discord_role(role_id):
+        success = remove_discord_role(target_user.discord_id, role_id_str)
+        if success:
+            roles = dict(target_user.discord_roles or {})
+            roles.pop(role_id_str, None)
+            target_user.discord_roles = roles
+            target_user.save(update_fields=["discord_roles"])
+            logfire.info(
+                "Coordinator Discord role removed",
+                event_id=event_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+                admin_user_id=request.user.id,
+            )
+            messages.success(request, f"Removed coordinator role from {target_user}.")
+        else:
+            logfire.error(
+                "Failed to remove coordinator Discord role",
+                event_id=event_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+            )
+            messages.error(request, "Failed to remove Discord role. Check bot token configuration.")
+    else:
+        success = add_discord_role(target_user.discord_id, role_id_str)
+        if success:
+            roles = dict(target_user.discord_roles or {})
+            roles[role_id_str] = role_name or "Coordinator role"
+            target_user.discord_roles = roles
+            target_user.save(update_fields=["discord_roles"])
+            logfire.info(
+                "Coordinator Discord role added",
+                event_id=event_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+                admin_user_id=request.user.id,
+            )
+            messages.success(request, f"Added coordinator role to {target_user}.")
+        else:
+            logfire.error(
+                "Failed to add coordinator Discord role",
+                event_id=event_pk,
+                target_user_id=user_id,
+                role_id=role_id_str,
+            )
+            messages.error(request, "Failed to add Discord role. Check bot token configuration.")
+
+    if request.headers.get("HX-Request"):
+        response = render(
+            request,
+            "events/_coordinator_role_cell.html",
+            {
+                "event_pk": event_pk,
+                "member_user_pk": user_id,
+                "role_id": role_id,
+                "role_name": role_name,
+                "has_role": target_user.has_discord_role(role_id),
             },
         )
         stored = messages.get_messages(request)
