@@ -364,8 +364,10 @@
                   {% endif %}
                 </td>
                 {% if signup_questions %}
-                <td data-col="custom_answers">
-                  {% for a in entry.custom_answers %}{% if a.answered %}<div class="text-xs whitespace-nowrap"><span class="text-base-content/50">{{ a.label }}:</span> {{ a.display }}</div>{% endif %}{% endfor %}
+                <td data-col="custom_answers" class="align-top">
+                  <div class="max-w-xs space-y-0.5">
+                    {% for a in entry.custom_answers %}{% if a.answered %}<div class="text-xs"><span class="text-base-content/50">{{ a.label }}:</span> {{ a.display }}</div>{% endif %}{% endfor %}
+                  </div>
                 </td>
                 {% endif %}
                 <td data-col="zr_age" style="display:none">

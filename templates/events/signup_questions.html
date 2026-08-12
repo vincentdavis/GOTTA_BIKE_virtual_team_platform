@@ -37,8 +37,12 @@
               </td>
               <td><span class="badge badge-ghost badge-sm">{{ q.get_question_type_display }}</span></td>
               <td>{% if q.required %}<span class="badge badge-warning badge-sm">Required</span>{% else %}<span class="text-base-content/40">—</span>{% endif %}</td>
-              <td class="text-xs">
-                {% if q.is_choice %}{% for opt in q.options %}<span class="badge badge-outline badge-xs mr-1 mb-1">{{ opt }}</span>{% endfor %}{% else %}<span class="text-base-content/40">—</span>{% endif %}
+              <td class="text-xs align-top max-w-xs">
+                {% if q.is_choice %}
+                <div class="flex flex-wrap gap-1">
+                  {% for opt in q.options %}<span class="badge badge-outline badge-sm h-auto whitespace-normal text-left max-w-full py-0.5">{{ opt }}</span>{% endfor %}
+                </div>
+                {% else %}<span class="text-base-content/40">—</span>{% endif %}
               </td>
               <td class="whitespace-nowrap text-right">
                 <a href="{% url 'events:signup_question_edit' event.pk q.pk %}" class="btn btn-xs btn-primary">Edit</a>
