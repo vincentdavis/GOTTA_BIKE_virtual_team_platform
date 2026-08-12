@@ -2542,3 +2542,108 @@ def test_role_setup_save_warns_when_bot_missing_role(client, superuser, monkeypa
     assert event.head_captain_role_id == 100
     msgs = [str(m) for m in get_messages(resp.wsgi_request)]
     assert any("doesn't have the selected head captain role" in m for m in msgs)
+
+
+# ---- Squad region role auto-assignment ----
+
+
+@pytest.mark.django_db
+def test_region_role_assigned_on_squad_add(client, event_admin, user_model) -> None:
+    """Assigning a rider to a squad adds the squad's region role."""
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+
+    client.force_login(event_admin)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    squad = Squad.objects.create(event=event, name="West", region_role=555)
+    rider = _ds_user(user_model, discord_id="910001", roles={})
+    signup = EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED)
+
+    with patch("apps.events.views.add_discord_role", return_value=True) as add_mock:
+        resp = client.post(
+            reverse("events:squad_assign", args=[event.pk]),
+            {"signup_id": signup.pk, "squad_id": squad.pk},
+        )
+
+    assert resp.status_code in (200, 302)
+    assert SquadMember.objects.filter(squad=squad, user=rider).exists()
+    add_mock.assert_any_call("910001", "555")
+    rider.refresh_from_db()
+    assert "555" in rider.discord_roles
+
+
+@pytest.mark.django_db
+def test_region_role_removed_on_leave_when_not_shared(client, event_admin, user_model) -> None:
+    """Leaving the only squad with a region role removes it from the rider."""
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+
+    client.force_login(event_admin)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    squad = Squad.objects.create(event=event, name="West", region_role=555)
+    rider = _ds_user(user_model, discord_id="910002", roles={"555": "West"})
+    signup = EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED)
+    SquadMember.objects.create(squad=squad, user=rider, status=SquadMember.Status.MEMBER)
+
+    with patch("apps.events.views.remove_discord_role", return_value=True) as rm_mock:
+        client.post(
+            reverse("events:squad_assign", args=[event.pk]),
+            {"signup_id": signup.pk, "squad_id": 0, "remove_squad_id": squad.pk},
+        )
+
+    rm_mock.assert_any_call("910002", "555")
+    rider.refresh_from_db()
+    assert "555" not in rider.discord_roles
+
+
+@pytest.mark.django_db
+def test_region_role_kept_on_leave_when_shared_by_another_squad(client, event_admin, user_model) -> None:
+    """A rider keeps the region role when another of their squads grants the same one."""
+    from django.urls import reverse
+
+    from apps.events.models import Squad, SquadMember
+
+    client.force_login(event_admin)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    squad_a = Squad.objects.create(event=event, name="West A", region_role=555)
+    squad_b = Squad.objects.create(event=event, name="West B", region_role=555)
+    rider = _ds_user(user_model, discord_id="910003", roles={"555": "West"})
+    signup = EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED)
+    SquadMember.objects.create(squad=squad_a, user=rider, status=SquadMember.Status.MEMBER)
+    SquadMember.objects.create(squad=squad_b, user=rider, status=SquadMember.Status.MEMBER)
+
+    with patch("apps.events.views.remove_discord_role", return_value=True) as rm_mock:
+        client.post(
+            reverse("events:squad_assign", args=[event.pk]),
+            {"signup_id": signup.pk, "squad_id": 0, "remove_squad_id": squad_a.pk},
+        )
+
+    # Still a member of squad_b (same region role) -> role must not be removed.
+    assert ("910003", "555") not in [tuple(c.args) for c in rm_mock.call_args_list]
+    rider.refresh_from_db()
+    assert "555" in rider.discord_roles
+
+
+@pytest.mark.django_db
+def test_squad_form_region_role_prefix_validation() -> None:
+    """The region role picker enforces the event's prefixes, like the other squad roles."""
+    from apps.events.forms import SquadForm
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="777", name="$ West", position=1)
+    DiscordRole.objects.create(role_id="888", name="No Prefix Role", position=2)
+
+    base = {"name": "West", "gender": "COED"}
+
+    ok = SquadForm({**base, "region_role": "777"}, event_prefixes=["$"])
+    assert ok.is_valid(), ok.errors
+    assert ok.cleaned_data["region_role"] == 777
+
+    bad = SquadForm({**base, "region_role": "888"}, event_prefixes=["$"])
+    assert not bad.is_valid()
+    assert "region_role" in bad.errors

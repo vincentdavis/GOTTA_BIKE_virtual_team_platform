@@ -262,6 +262,70 @@ def _unassign_discord_role(user, role_id: int, *, admin_user_id: int) -> bool | 
     return success
 
 
+def _assign_region_role(user, squad, *, admin_user_id: int) -> bool | None:
+    """Add a squad's region role to a rider when they join it.
+
+    Args:
+        user: The User joining the squad.
+        squad: The Squad the user is being assigned to.
+        admin_user_id: The admin performing the action.
+
+    Returns:
+        None if the squad has no region role, else the result of the role add.
+
+    """
+    if not squad.region_role:
+        return None
+    from apps.team.models import DiscordRole
+
+    role_name = (
+        DiscordRole.objects.filter(role_id=str(squad.region_role)).values_list("name", flat=True).first()
+        or f"Region role {squad.region_role}"
+    )
+    return _assign_discord_role(user, squad.region_role, role_name, admin_user_id=admin_user_id)
+
+
+def _unassign_region_role_if_unused(user, squad, *, admin_user_id: int) -> bool | None:
+    """Remove a squad's region role from a rider who left it, unless still earned elsewhere.
+
+    Keeps the role when the rider is still a MEMBER of another squad (in any
+    event) that carries the same ``region_role``. Call this *after* the leaving
+    squad's membership row has been deleted so the check reflects the new state.
+
+    Args:
+        user: The User who left the squad.
+        squad: The Squad the user was removed from.
+        admin_user_id: The admin performing the action.
+
+    Returns:
+        None if there is no region role or it is still earned elsewhere, else
+        the result of the role removal.
+
+    """
+    role_id = squad.region_role
+    if not role_id or not user.discord_id:
+        return None
+    still_earned = (
+        SquadMember.objects.filter(
+            user=user,
+            status=SquadMember.Status.MEMBER,
+            squad__region_role=role_id,
+        )
+        .exclude(squad=squad)
+        .exists()
+    )
+    if still_earned:
+        logfire.info(
+            "Kept Discord region role — rider still in another squad with it",
+            user_id=user.id,
+            role_id=str(role_id),
+            squad_id=squad.pk,
+            admin_user_id=admin_user_id,
+        )
+        return None
+    return _unassign_discord_role(user, role_id, admin_user_id=admin_user_id)
+
+
 def _build_role_badges(user, event):
     """Build role badge dicts for a single user in the context of an event.
 
@@ -1221,6 +1285,8 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             role_ids.add(str(s.team_discord_role))
         if s.regional_coordinator_role:
             role_ids.add(str(s.regional_coordinator_role))
+        if s.region_role:
+            role_ids.add(str(s.region_role))
 
     if event.event_role:
         role_ids.add(str(event.event_role))
@@ -1257,6 +1323,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         s.coordinator_role_name = (
             role_names.get(str(s.regional_coordinator_role), "") if s.regional_coordinator_role else ""
         )
+        s.region_role_name = role_names.get(str(s.region_role), "") if s.region_role else ""
         s.active_grids = grids_by_squad.get(s.pk, [])
         # Per-squad management: full managers, or this squad's captain/VC.
         s.can_manage = can_manage_all or _can_manage_squad_availability(request.user, s)
@@ -2409,6 +2476,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     admin_user_id=request.user.id,
                 )
                 _unassign_discord_role(signup.user, remove_squad.team_discord_role, admin_user_id=request.user.id)
+                _unassign_region_role_if_unused(signup.user, remove_squad, admin_user_id=request.user.id)
                 # If user was captain/VC, drop them from those roles and remove the captain Discord role
                 was_leader = (
                     remove_squad.captains.filter(pk=signup.user_id).exists()
@@ -2440,6 +2508,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 for sm in user_squad_members:
                     sq = sm.squad
                     _unassign_discord_role(signup.user, sq.team_discord_role, admin_user_id=request.user.id)
+                    _unassign_region_role_if_unused(signup.user, sq, admin_user_id=request.user.id)
                     was_leader = (
                         sq.captains.filter(pk=signup.user_id).exists()
                         or sq.vice_captains.filter(pk=signup.user_id).exists()
@@ -2496,6 +2565,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             defaults={"status": SquadMember.Status.MEMBER},
         )
         _assign_discord_role(signup.user, squad.team_discord_role, squad.name, admin_user_id=request.user.id)
+        _assign_region_role(signup.user, squad, admin_user_id=request.user.id)
         logfire.info(
             "Squad assignment created",
             event_id=event_pk,
@@ -4748,6 +4818,14 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
             roles_to_assign.append((str(event.event_role), "Event Role"))
         if squad.team_discord_role and not request.user.has_discord_role(squad.team_discord_role):
             roles_to_assign.append((str(squad.team_discord_role), squad.name))
+        if squad.region_role and not request.user.has_discord_role(squad.region_role):
+            from apps.team.models import DiscordRole
+
+            region_role_name = (
+                DiscordRole.objects.filter(role_id=str(squad.region_role)).values_list("name", flat=True).first()
+                or f"Region role {squad.region_role}"
+            )
+            roles_to_assign.append((str(squad.region_role), region_role_name))
 
         for role_id_str, role_label in roles_to_assign:
             success = add_discord_role(request.user.discord_id, role_id_str)

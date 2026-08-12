@@ -493,6 +493,9 @@ class Squad(models.Model):
         discord_captain_role: Discord role ID for the squad captain.
         regional_coordinator_role: Discord role ID for this squad's regional
             coordinator, chosen from the event's coordinator roles.
+        region_role: Discord role auto-added to riders assigned to this squad
+            and removed on leave, unless the rider still belongs to another
+            squad carrying the same region role.
         min_zwift_category: Minimum Zwift category letter.
         max_zwift_category: Maximum Zwift category letter.
         min_womens_zwift_category: Minimum women's Zwift category letter.
@@ -558,6 +561,11 @@ class Squad(models.Model):
         default=0,
         help_text="Discord role ID for this squad's regional coordinator, "
         "chosen from the event's coordinator roles (0 = none)",
+    )
+    region_role = models.BigIntegerField(
+        default=0,
+        help_text="Discord role added to riders assigned to this squad and removed when they leave — "
+        "unless they still belong to another squad with the same region role (0 = none)",
     )
     min_zwift_category = models.CharField(
         max_length=20,

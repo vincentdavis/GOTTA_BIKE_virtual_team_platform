@@ -554,6 +554,12 @@ class SquadForm(forms.ModelForm):
         label="Regional Coordinator",
     )
 
+    region_role = forms.CharField(
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-bordered w-full filter-select"}),
+        label="Region Role",
+    )
+
     gender = forms.ChoiceField(
         required=True,
         widget=forms.Select(attrs={"class": "select select-bordered w-full"}),
@@ -572,6 +578,7 @@ class SquadForm(forms.ModelForm):
             "audio_channel_id",
             "discord_captain_role",
             "regional_coordinator_role",
+            "region_role",
             "team_discord_role",
             "min_zwift_category",
             "max_zwift_category",
@@ -723,6 +730,21 @@ class SquadForm(forms.ModelForm):
         self.fields["discord_captain_role"].widget.choices = captain_role_choices
         self.initial["discord_captain_role"] = current_captain_role
 
+        # Region role: same prefix filtering as the squad/captain roles. This
+        # role is auto-added to riders when they join the squad and removed when
+        # they leave (unless another squad still grants it — enforced in views).
+        if self.event_prefixes:
+            region_role_choices = _get_role_choices(prefixes=self.event_prefixes)
+        else:
+            region_role_choices = [("0", "(none — set event prefixes first)")]
+            self.fields["region_role"].widget.attrs["disabled"] = True
+        current_region_role = str(self.initial.get("region_role", 0) or 0)
+        region_role_values = EventForm._flat_choice_values(region_role_choices)
+        if current_region_role != "0" and current_region_role not in region_role_values:
+            region_role_choices.append((current_region_role, f"Unknown Role ({current_region_role})"))
+        self.fields["region_role"].widget.choices = region_role_choices
+        self.initial["region_role"] = current_region_role
+
         # Regional coordinator: chosen from the event's configured coordinator
         # roles (Role Setup page), not the event prefixes. When the event has no
         # coordinator roles the field is shown but disabled with a placeholder.
@@ -787,6 +809,34 @@ class SquadForm(forms.ModelForm):
 
         """
         value = self.cleaned_data.get("team_discord_role", "0")
+        try:
+            role_id = int(value)
+        except (ValueError, TypeError):
+            return 0
+
+        if role_id and role_id != 0 and not self.event_prefixes:
+            raise forms.ValidationError("Set at least one event prefix before assigning a role.")
+
+        if role_id and role_id != 0 and self.event_prefixes:
+            role = DiscordRole.objects.filter(role_id=str(role_id)).first()
+            if role and not any(role.name.startswith(p) for p in self.event_prefixes):
+                raise forms.ValidationError(
+                    f'Role "@{role.name}" must start with one of: {", ".join(self.event_prefixes)}.'
+                )
+
+        return role_id
+
+    def clean_region_role(self) -> int:
+        """Convert selected region role ID string back to int and validate prefix.
+
+        Returns:
+            Role ID as integer (0 for none).
+
+        Raises:
+            forms.ValidationError: If a role is selected without a prefix or doesn't match the prefix.
+
+        """
+        value = self.cleaned_data.get("region_role", "0")
         try:
             role_id = int(value)
         except (ValueError, TypeError):
