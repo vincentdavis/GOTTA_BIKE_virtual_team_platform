@@ -49,6 +49,12 @@
               <option value="D">D</option>
               <option value="E">E</option>
             </select>
+            {% if signup_timezones %}
+            <select id="filter-timezone" class="select select-bordered select-sm" onchange="applyFilters()">
+              <option value="">All timezones</option>
+              {% for tz in signup_timezones %}<option value="{{ tz }}">{{ tz }}</option>{% endfor %}
+            </select>
+            {% endif %}
             <label class="label cursor-pointer gap-1.5">
               <input type="checkbox" id="filter-unassigned" class="checkbox checkbox-sm" onchange="applyFilters()">
               <span class="label-text text-sm">Unassigned</span>
@@ -67,7 +73,7 @@
               </thead>
               <tbody>
                 {% for entry in enriched_signups %}
-                <tr data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}" data-gender="{{ entry.gender }}" data-zp="{{ entry.zp_category_w|default:entry.zp_category }}" data-zr="{{ entry.zr_category }}">
+                <tr data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}" data-gender="{{ entry.gender }}" data-zp="{{ entry.zp_category_w|default:entry.zp_category }}" data-zr="{{ entry.zr_category }}" data-timezone="{{ entry.signup.signup_timezone|join:',' }}">
                   <td>
                     {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                     {% include "events/_role_badges.html" with signup_id=entry.signup.pk role_badges=entry.role_badges oob=False %}
@@ -98,7 +104,21 @@
 
     {# Right column: Squad panels with member lists #}
     <div class="space-y-4">
-      <input type="text" id="squad-search" placeholder="Search squad name..." class="input input-bordered input-sm w-full" oninput="filterSquads()">
+      <div class="flex flex-wrap items-center gap-2">
+        <input type="text" id="squad-search" placeholder="Search squad name..." class="input input-bordered input-sm flex-1 min-w-40" oninput="filterSquads()">
+        {% if squad_timezones %}
+        <select id="filter-squad-timezone" class="select select-bordered select-sm" onchange="filterSquads()">
+          <option value="">All timezones</option>
+          {% for tz in squad_timezones %}<option value="{{ tz }}">{{ tz }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        {% if squad_genders %}
+        <select id="filter-squad-gender" class="select select-bordered select-sm" onchange="filterSquads()">
+          <option value="">All genders</option>
+          {% for g in squad_genders %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+        </select>
+        {% endif %}
+      </div>
       {% for squad in squads %}
       {% include "events/_squad_panel.html" with squad=squad members=squad.enriched_members event_role_name=event.event_role_name event_pk=event.pk oob=False is_event_admin=is_event_admin %}
       {% empty %}
@@ -118,6 +138,8 @@ function applyFilters() {
   var gender = document.getElementById('filter-gender').value;
   var zp = document.getElementById('filter-zp').value;
   var zr = document.getElementById('filter-zr').value;
+  var tzEl = document.getElementById('filter-timezone');
+  var tz = tzEl ? tzEl.value : '';
   var unassigned = document.getElementById('filter-unassigned').checked;
   var rows = document.querySelectorAll('#signup-table tbody tr');
   var visible = 0;
@@ -127,6 +149,7 @@ function applyFilters() {
     if (gender && row.dataset.gender !== gender) show = false;
     if (zp && row.dataset.zp !== zp) show = false;
     if (zr && row.dataset.zr !== zr) show = false;
+    if (tz && row.dataset.timezone.split(',').indexOf(tz) === -1) show = false;
     if (unassigned) {
       var cell = row.querySelector('[id^="squad-cell-"]');
       if (cell && !cell.querySelector('.no-squad-dash')) show = false;
@@ -138,10 +161,18 @@ function applyFilters() {
 }
 function filterSquads() {
   var q = document.getElementById('squad-search').value.toLowerCase();
+  var tzEl = document.getElementById('filter-squad-timezone');
+  var tz = tzEl ? tzEl.value : '';
+  var genderEl = document.getElementById('filter-squad-gender');
+  var gender = genderEl ? genderEl.value : '';
   var panels = document.querySelectorAll('[id^="squad-panel-"]');
   panels.forEach(function(panel) {
     var name = panel.querySelector('.card-title').textContent.toLowerCase();
-    panel.style.display = (!q || name.includes(q)) ? '' : 'none';
+    var show = true;
+    if (q && !name.includes(q)) show = false;
+    if (tz && panel.dataset.squadTimezone !== tz) show = false;
+    if (gender && panel.dataset.squadGender !== gender) show = false;
+    panel.style.display = show ? '' : 'none';
   });
 }
 function clearFilters() {
@@ -149,6 +180,8 @@ function clearFilters() {
   document.getElementById('filter-gender').value = '';
   document.getElementById('filter-zp').value = '';
   document.getElementById('filter-zr').value = '';
+  var tzEl = document.getElementById('filter-timezone');
+  if (tzEl) tzEl.value = '';
   document.getElementById('filter-unassigned').checked = false;
   applyFilters();
 }

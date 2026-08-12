@@ -1,5 +1,5 @@
 {% load accounts_tags %}
-<div class="card bg-base-200 shadow-md" id="squad-panel-{{ squad.pk }}" {% if oob %}hx-swap-oob="true"{% endif %}>
+<div class="card bg-base-200 shadow-md" id="squad-panel-{{ squad.pk }}" data-squad-timezone="{{ squad.squad_timezone }}" data-squad-gender="{{ squad.gender }}" {% if oob %}hx-swap-oob="true"{% endif %}>
   <div class="card-body p-4">
     <div class="flex items-center justify-between mb-2">
       <div class="flex items-center gap-2">

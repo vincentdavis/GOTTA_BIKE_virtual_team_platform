@@ -5087,6 +5087,14 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         squad.enriched_members = squad_members_data.get(squad.pk, [])
         squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
 
+    # Distinct filter option values (derived from already-loaded data, no extra queries).
+    # signup_timezone is a JSON list (riders may pick several), so flatten the union.
+    signup_timezones = sorted(
+        {tz for e in enriched_signups for tz in (e["signup"].signup_timezone or [])}
+    )
+    squad_timezones = sorted({s.squad_timezone for s in squads if s.squad_timezone})
+    squad_genders = sorted({s.gender for s in squads if s.gender})
+
     is_event_admin = request.user.is_event_admin or request.user.is_superuser
     logfire.debug("Squad assign page viewed", user_id=request.user.id, event_id=event_pk)
     return render(
@@ -5097,6 +5105,9 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "enriched_signups": enriched_signups,
             "squads": squads,
             "is_event_admin": is_event_admin,
+            "signup_timezones": signup_timezones,
+            "squad_timezones": squad_timezones,
+            "squad_genders": squad_genders,
         },
     )
 

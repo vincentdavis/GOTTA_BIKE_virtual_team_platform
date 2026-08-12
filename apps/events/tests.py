@@ -2746,3 +2746,79 @@ def test_toggle_coordinator_role_requires_manage_permission(client, team_member,
         resp = client.post(url)
     assert resp.status_code == 403
     assert add_mock.call_count == 0
+
+
+# ---- Assign-riders page filters (rider timezone, squad timezone/gender) ----
+
+
+@pytest.mark.django_db
+def test_assign_riders_filter_options(client, superuser, user_model) -> None:
+    """The assign-riders page exposes distinct rider-timezone, squad-timezone, and squad-gender options."""
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, timezone_required=True,
+    )
+    Squad.objects.create(event=event, name="Alpha", gender="Male", squad_timezone="America/New_York")
+    Squad.objects.create(event=event, name="Bravo", gender="Female", squad_timezone="Europe/London")
+    Squad.objects.create(event=event, name="Charlie", gender="COED", squad_timezone="America/New_York")
+
+    riders = [
+        ("male", ["America/New_York"]),
+        ("female", ["Europe/London", "America/New_York"]),  # multi-select
+        ("male", []),  # no timezone selection
+    ]
+    for i, (gender, tz) in enumerate(riders):
+        u = user_model.objects.create(
+            username=f"ar_{i}", first_name=f"R{i}", discord_id=f"9100{i}",
+            discord_username=f"r{i}", gender=gender,
+        )
+        EventSignup.objects.create(
+            event=event, user=u, status=EventSignup.Status.REGISTERED, signup_timezone=tz,
+        )
+
+    client.force_login(superuser)
+    resp = client.get(reverse("events:squad_assign_page", args=[event.pk]))
+    assert resp.status_code == 200
+    # Union of rider selections, flattened + deduped + sorted.
+    assert resp.context["signup_timezones"] == ["America/New_York", "Europe/London"]
+    assert resp.context["squad_timezones"] == ["America/New_York", "Europe/London"]
+    assert resp.context["squad_genders"] == ["COED", "Female", "Male"]
+    body = resp.content.decode()
+    assert 'id="filter-timezone"' in body
+    assert 'id="filter-squad-timezone"' in body
+    assert 'id="filter-squad-gender"' in body
+    assert 'data-squad-timezone="America/New_York"' in body
+
+
+@pytest.mark.django_db
+def test_assign_riders_filters_hidden_when_no_values(client, superuser, user_model) -> None:
+    """The new filter dropdowns are omitted when there are no timezones/genders to filter on."""
+    from django.urls import reverse
+
+    from apps.events.models import Squad
+
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True,
+    )
+    Squad.objects.create(event=event, name="Alpha")  # no gender, no timezone
+    u = user_model.objects.create(
+        username="ar_x", first_name="X", discord_id="91099", discord_username="x",
+    )
+    EventSignup.objects.create(event=event, user=u, status=EventSignup.Status.REGISTERED, signup_timezone=[])
+
+    client.force_login(superuser)
+    resp = client.get(reverse("events:squad_assign_page", args=[event.pk]))
+    assert resp.status_code == 200
+    assert resp.context["signup_timezones"] == []
+    assert resp.context["squad_timezones"] == []
+    assert resp.context["squad_genders"] == []
+    body = resp.content.decode()
+    assert 'id="filter-timezone"' not in body
+    assert 'id="filter-squad-timezone"' not in body
+    assert 'id="filter-squad-gender"' not in body
