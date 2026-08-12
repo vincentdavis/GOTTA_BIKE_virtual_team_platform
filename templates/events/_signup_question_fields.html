@@ -2,21 +2,23 @@
 Renders the custom signup-question inputs for the signup / edit-signup forms.
 Expects `fields` — the list produced by
 apps.events.signup_questions.build_question_fields (each item exposes
-`q`, `text_value`, `single_value`, `multi_values`, `bool_checked`).
+`q`, `options`, `text_value`, `single_value`, `multi_values`, `bool_checked`).
 Inputs are named `custom_q_<id>` and parsed by parse_custom_answers.
+Labels use plain wrapping utilities (not DaisyUI `.label`, which is
+`white-space: nowrap`) so long questions wrap instead of overflowing the modal.
 All admin/rider strings render auto-escaped (never |safe).
 {% endcomment %}
 {% for f in fields %}
 <div class="form-control w-full">
   {% if f.q.question_type == "boolean" %}
-  <label class="label cursor-pointer justify-start gap-3">
-    <input type="checkbox" name="custom_q_{{ f.q.pk }}" value="1" class="checkbox checkbox-sm"{% if f.bool_checked %} checked{% endif %}>
-    <span class="label-text">{{ f.q.label }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}</span>
+  <label class="flex items-start gap-3 cursor-pointer py-1">
+    <input type="checkbox" name="custom_q_{{ f.q.pk }}" value="1" class="checkbox checkbox-sm shrink-0 mt-0.5"{% if f.bool_checked %} checked{% endif %}>
+    <span class="min-w-0">{{ f.q.label }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}</span>
   </label>
-  {% if f.q.help_text %}<label class="label pt-0"><span class="label-text-alt">{{ f.q.help_text }}</span></label>{% endif %}
+  {% if f.q.help_text %}<p class="text-xs text-base-content/60 mt-1 ml-8">{{ f.q.help_text }}</p>{% endif %}
   {% else %}
-  <label class="label"{% if f.q.question_type != "multi" %} for="custom_q_{{ f.q.pk }}"{% endif %}>
-    <span class="label-text">{{ f.q.label }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}</span>
+  <label class="block mb-1"{% if f.q.question_type != "multi" %} for="custom_q_{{ f.q.pk }}"{% endif %}>
+    {{ f.q.label }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}
   </label>
   {% if f.q.question_type == "text" %}
   <input type="text" id="custom_q_{{ f.q.pk }}" name="custom_q_{{ f.q.pk }}" value="{{ f.text_value }}" maxlength="2000"
@@ -29,16 +31,16 @@ All admin/rider strings render auto-escaped (never |safe).
     {% endfor %}
   </select>
   {% elif f.q.question_type == "multi" %}
-  <div class="flex flex-wrap gap-3">
+  <div class="flex flex-wrap gap-x-4 gap-y-2">
     {% for opt in f.options %}
-    <label class="label cursor-pointer gap-2">
-      <input type="checkbox" name="custom_q_{{ f.q.pk }}" value="{{ opt }}" class="checkbox checkbox-sm"{% if opt in f.multi_values %} checked{% endif %}>
-      <span class="label-text">{{ opt }}</span>
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" name="custom_q_{{ f.q.pk }}" value="{{ opt }}" class="checkbox checkbox-sm shrink-0"{% if opt in f.multi_values %} checked{% endif %}>
+      <span>{{ opt }}</span>
     </label>
     {% endfor %}
   </div>
   {% endif %}
-  {% if f.q.help_text %}<label class="label pt-0"><span class="label-text-alt">{{ f.q.help_text }}</span></label>{% endif %}
+  {% if f.q.help_text %}<p class="text-xs text-base-content/60 mt-1">{{ f.q.help_text }}</p>{% endif %}
   {% endif %}
 </div>
 {% endfor %}
