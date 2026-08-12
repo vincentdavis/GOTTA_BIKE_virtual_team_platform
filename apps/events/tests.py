@@ -2468,3 +2468,77 @@ def test_removed_option_preserved_and_does_not_block_edit(client, team_member) -
     su.refresh_from_db()
     assert su.notes == "hi"
     assert su.custom_answers[str(q.pk)] == "A"
+
+
+# ---- Bot head-captain-role verification ----
+
+def test_bot_has_role_logic(monkeypatch) -> None:
+    """bot_has_role returns True/False/None based on the bot's fetched roles."""
+    from apps.accounts import discord_service
+
+    monkeypatch.setattr(discord_service, "get_bot_role_ids", lambda *, force=False: ["100", "200"])
+    assert discord_service.bot_has_role("100") is True
+    assert discord_service.bot_has_role("999") is False
+    assert discord_service.bot_has_role("0") is None  # no role selected -> unknown
+    monkeypatch.setattr(discord_service, "get_bot_role_ids", lambda *, force=False: None)
+    assert discord_service.bot_has_role("100") is None  # can't determine
+
+
+@pytest.mark.django_db
+def test_bot_role_check_endpoint(client, event_admin, team_member, monkeypatch) -> None:
+    from django.urls import reverse
+
+    from apps.events import views
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="100", name="$ Head Captain", position=5)
+    today = date.today()
+    event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
+    url = reverse("events:event_bot_role_check", args=[event.pk])
+
+    # Not authorized to view role setup -> 403.
+    client.force_login(team_member)
+    assert client.get(url, {"head_captain_role_id": "100"}).status_code == 403
+
+    client.force_login(event_admin)
+    monkeypatch.setattr(views, "bot_has_role", lambda rid, *, force=False: True)
+    assert "The bot has this role" in client.get(url, {"head_captain_role_id": "100"}).content.decode()
+
+    monkeypatch.setattr(views, "bot_has_role", lambda rid, *, force=False: False)
+    missing = client.get(url, {"head_captain_role_id": "100"}).content.decode()
+    assert "doesn't have" in missing
+    assert "Head Captain" in missing  # role name shown
+
+    monkeypatch.setattr(views, "bot_has_role", lambda rid, *, force=False: None)
+    assert "Couldn't verify" in client.get(url, {"head_captain_role_id": "100"}).content.decode()
+
+    # No role selected -> empty status.
+    none_body = client.get(url, {"head_captain_role_id": "0"}).content.decode()
+    assert "The bot has this role" not in none_body
+    assert "doesn't have" not in none_body
+
+
+@pytest.mark.django_db
+def test_role_setup_save_warns_when_bot_missing_role(client, superuser, monkeypatch) -> None:
+    from django.contrib.messages import get_messages
+    from django.urls import reverse
+
+    from apps.events import views
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="100", name="$ Head Captain", position=5)
+    today = date.today()
+    event = Event.objects.create(
+        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True, prefixes=[],
+    )
+    monkeypatch.setattr(views, "bot_has_role", lambda rid, *, force=False: False)
+    client.force_login(superuser)
+    resp = client.post(
+        reverse("events:event_role_setup", args=[event.pk]),
+        {"prefixes": ["$"], "head_captain_role_id": "100", "event_role": "0", "coordinator_role_ids": []},
+    )
+    assert resp.status_code == 302  # valid -> saved -> redirect
+    event.refresh_from_db()
+    assert event.head_captain_role_id == 100
+    msgs = [str(m) for m in get_messages(resp.wsgi_request)]
+    assert any("doesn't have the selected head captain role" in m for m in msgs)

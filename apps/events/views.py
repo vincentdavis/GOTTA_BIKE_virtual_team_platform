@@ -25,6 +25,7 @@ from apps.accounts.decorators import discord_permission_required, team_member_re
 from apps.accounts.discord_service import (
     add_discord_role,
     archive_discord_thread,
+    bot_has_role,
     create_discord_thread,
     delete_discord_thread,
     remove_discord_role,
@@ -1067,6 +1068,14 @@ def event_role_setup_view(request: HttpRequest, pk: int) -> HttpResponse:
                 user_id=request.user.id,
             )
             messages.success(request, "Role setup updated successfully!")
+            # Backstop for the live check: warn if the bot doesn't hold the head
+            # captain role (so it can't reach head-captain channels).
+            if event.head_captain_role_id and bot_has_role(event.head_captain_role_id) is False:
+                messages.warning(
+                    request,
+                    "Heads up: the bot doesn't have the selected head captain role. Add this role to "
+                    "the bot in Discord so it can access channels restricted to head captains.",
+                )
             return redirect("events:event_role_setup", pk=pk)
     else:
         form = EventRoleSetupForm(instance=event)
@@ -1111,6 +1120,57 @@ def event_role_setup_view(request: HttpRequest, pk: int) -> HttpResponse:
             "can_edit": can_edit,
             "role_display": role_display,
             "allowed_prefixes": "  ".join(allowed_prefixes),
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_GET
+def event_bot_role_check_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """HTMX endpoint: report whether the bot account holds the given role.
+
+    Powers the read-only status shown under the Head Captain Role field on the
+    role-setup page (it never assigns roles). ``?head_captain_role_id=`` is the
+    selected role (sent via hx-include); ``?refresh=1`` bypasses the cache.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+
+    Returns:
+        Rendered bot-role status partial.
+
+    Raises:
+        PermissionDenied: If the user can't view the event's role setup.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    if not _can_manage_event_roles(request.user, event) and not request.user.has_permission(Permissions.EVENT_ADMIN):
+        from django.core.exceptions import PermissionDenied
+
+        raise PermissionDenied
+
+    role_id = str(request.GET.get("head_captain_role_id", "0") or "0")
+    force = request.GET.get("refresh") == "1"
+
+    if role_id in ("", "0"):
+        status, role_name = "none", ""
+    else:
+        from apps.team.models import DiscordRole
+
+        role = DiscordRole.objects.filter(role_id=role_id).first()
+        role_name = role.name if role else role_id
+        has = bot_has_role(role_id, force=force)
+        status = "has" if has is True else "missing" if has is False else "unknown"
+
+    return render(
+        request,
+        "events/_bot_role_status.html",
+        {
+            "status": status,
+            "role_name": role_name,
+            "check_url": reverse("events:event_bot_role_check", args=[event.pk]),
         },
     )
 

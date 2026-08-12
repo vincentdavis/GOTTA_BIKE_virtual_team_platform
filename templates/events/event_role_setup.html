@@ -64,6 +64,13 @@
             <span class="label-text-alt text-error">{{ form.head_captain_role_id.errors.0 }}</span>
           </label>
           {% endif %}
+          {# Read-only: does the bot account itself hold the selected role? Lazily loaded and refreshed on change via HTMX. #}
+          <div id="bot-role-status"
+               hx-get="{% url 'events:event_bot_role_check' event.pk %}"
+               hx-trigger="load, change from:#id_head_captain_role_id"
+               hx-include="#id_head_captain_role_id"
+               hx-target="#bot-role-status"
+               hx-swap="innerHTML"></div>
           <label class="label">
             <span class="label-text-alt">Discord role for the head captain of this event. When prefixes are selected above, only matching roles are shown.</span>
           </label>

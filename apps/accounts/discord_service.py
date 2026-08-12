@@ -7,11 +7,109 @@ from typing import TYPE_CHECKING
 import httpx
 import logfire
 from constance import config
+from django.core.cache import cache
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
+
+_BOT_USER_ID_CACHE_KEY = "discord_bot_user_id"
+_BOT_ROLE_IDS_CACHE_KEY = "discord_bot_role_ids"  # per-guild suffix appended
+_BOT_USER_ID_TTL = 60 * 60 * 24  # 24h — the bot's own id is stable
+_BOT_ROLE_IDS_TTL = 300  # 5 min
+
+
+def get_bot_user_id() -> str | None:
+    """Return the bot account's own Discord user id.
+
+    Cached for a day (the id never changes). Returns None when the bot token is
+    not configured or the lookup fails.
+
+    Returns:
+        The bot's user id as a string, or None.
+
+    """
+    cached = cache.get(_BOT_USER_ID_CACHE_KEY)
+    if cached:
+        return cached
+    bot_token = config.DISCORD_BOT_TOKEN
+    if not bot_token:
+        return None
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(
+                f"{DISCORD_API_BASE}/users/@me",
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            response.raise_for_status()
+            user_id = str(response.json().get("id") or "")
+    except httpx.HTTPError as e:
+        logfire.error("Failed to fetch bot user id", error=str(e))
+        return None
+    if user_id:
+        cache.set(_BOT_USER_ID_CACHE_KEY, user_id, _BOT_USER_ID_TTL)
+    return user_id or None
+
+
+def get_bot_role_ids(*, force: bool = False) -> list[str] | None:
+    """Return the role ids the bot account holds in the configured guild.
+
+    Cached briefly. Returns None when the bot token / guild aren't configured or
+    the lookup fails (so callers can distinguish "unknown" from "no roles").
+
+    Args:
+        force: Skip the cache and re-fetch from Discord.
+
+    Returns:
+        List of role-id strings, or None if it can't be determined.
+
+    """
+    bot_token = config.DISCORD_BOT_TOKEN
+    guild_id = config.GUILD_ID
+    if not bot_token or not guild_id:
+        return None
+    cache_key = f"{_BOT_ROLE_IDS_CACHE_KEY}:{guild_id}"
+    if not force:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+    bot_user_id = get_bot_user_id()
+    if not bot_user_id:
+        return None
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(
+                f"{DISCORD_API_BASE}/guilds/{guild_id}/members/{bot_user_id}",
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            response.raise_for_status()
+            roles = [str(r) for r in response.json().get("roles", [])]
+    except httpx.HTTPError as e:
+        logfire.error("Failed to fetch bot guild-member roles", guild_id=str(guild_id), error=str(e))
+        return None
+    cache.set(cache_key, roles, _BOT_ROLE_IDS_TTL)
+    return roles
+
+
+def bot_has_role(role_id: str | int, *, force: bool = False) -> bool | None:
+    """Whether the bot account holds the given role in the guild.
+
+    Args:
+        role_id: The Discord role id to check.
+        force: Skip the cache and re-fetch the bot's roles from Discord.
+
+    Returns:
+        True/False, or None if it can't be determined (unconfigured or API error).
+
+    """
+    role_id = str(role_id or "")
+    if not role_id or role_id == "0":
+        return None
+    roles = get_bot_role_ids(force=force)
+    if roles is None:
+        return None
+    return role_id in roles
 
 
 def send_discord_dm(discord_id: str, message: str) -> bool:

@@ -1,0 +1,29 @@
+{% comment %}
+Read-only status of whether the bot account itself holds the selected head
+captain role (so it can reach channels restricted to head captains). It never
+assigns roles. Expects: status ("has"|"missing"|"unknown"|"none"), role_name,
+check_url. Loaded and refreshed into #bot-role-status via HTMX.
+{% endcomment %}
+{% if status == "has" %}
+<div class="flex items-center gap-1 text-sm text-success mt-1">
+  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+  <span>The bot has this role.</span>
+</div>
+{% elif status == "missing" %}
+<div class="text-sm text-warning mt-1">
+  <div class="flex items-start gap-1">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+    <span>The bot doesn't have <span class="font-mono">@{{ role_name }}</span>. Add this role to the bot in Discord (Server Settings &rarr; Members &rarr; your bot &rarr; add role) so it can access channels restricted to head captains.</span>
+  </div>
+  <button type="button" class="link link-primary text-xs mt-1"
+          hx-get="{{ check_url }}?refresh=1" hx-include="#id_head_captain_role_id"
+          hx-target="#bot-role-status" hx-swap="innerHTML">Re-check</button>
+</div>
+{% elif status == "unknown" %}
+<div class="text-xs text-base-content/50 mt-1">
+  Couldn't verify the bot's roles right now.
+  <button type="button" class="link link-primary"
+          hx-get="{{ check_url }}?refresh=1" hx-include="#id_head_captain_role_id"
+          hx-target="#bot-role-status" hx-swap="innerHTML">Re-check</button>
+</div>
+{% endif %}
