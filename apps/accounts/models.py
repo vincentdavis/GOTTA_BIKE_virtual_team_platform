@@ -913,6 +913,11 @@ class User(AbstractUser):
             "zwid_verified": self.has_accepted_zwid_verification,
         }
 
+    @property
+    def incomplete_profile_count(self) -> int:
+        """Number of required profile fields still incomplete (for the nudge banner)."""
+        return sum(1 for done in self.profile_completion_status.values() if not done)
+
 
 class GuildMember(models.Model):
     """Discord guild member data synced from bot.

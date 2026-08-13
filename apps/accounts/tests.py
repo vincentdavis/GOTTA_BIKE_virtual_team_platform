@@ -32,3 +32,15 @@ def test_superuser_bypasses_all_permission_checks(superuser) -> None:
 @pytest.mark.django_db
 def test_auth_client_logged_in_as_team_member(auth_client, team_member) -> None:
     assert auth_client.session.get("_auth_user_id") == str(team_member.pk)
+
+
+@pytest.mark.django_db
+def test_incomplete_profile_count_matches_status(user_model) -> None:
+    """incomplete_profile_count counts the False fields in profile_completion_status."""
+    u = user_model.objects.create(username="ip_count", first_name="", last_name="")
+    status = u.profile_completion_status
+    expected = sum(1 for done in status.values() if not done)
+    assert u.incomplete_profile_count == expected
+    # A brand-new user is missing everything -> count equals the number of tracked fields.
+    assert u.incomplete_profile_count == len(status)
+    assert u.is_profile_complete is False

@@ -59,9 +59,19 @@
   </div>
 {% endif %}
 {% if user.is_authenticated and not user.is_profile_complete %}
-  <div class="bg-error text-error-content py-3 px-4 text-sm font-medium flex-shrink-0">
-    <div class="container mx-auto">
-      <div class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
+  <div class="bg-error text-error-content text-sm font-medium flex-shrink-0">
+    <div class="container mx-auto px-4">
+      {# Mobile: one slim line so the banner doesn't eat the screen #}
+      <a href="{% url 'accounts:profile' %}" class="sm:hidden flex items-center gap-2 py-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <span class="flex-1">Profile incomplete — {{ user.incomplete_profile_count }} to finish</span>
+        <span class="underline whitespace-nowrap">Complete &rarr;</span>
+      </a>
+      {# Desktop: full field list #}
+      <div class="hidden sm:flex flex-row items-center justify-center gap-4 py-3">
         <div class="flex items-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24"
                stroke="currentColor">
