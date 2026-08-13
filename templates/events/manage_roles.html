@@ -14,9 +14,9 @@ details[open] .details-arrow { transform: rotate(90deg); }
 
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
         <h2 class="card-title text-2xl">Manage Discord Roles &mdash; {{ event.title }}</h2>
-        <form method="post" action="{% url 'events:sync_event_roles' event.pk %}">
+        <form method="post" action="{% url 'events:sync_event_roles' event.pk %}" class="shrink-0">
           {% csrf_token %}
           <button type="submit" class="btn btn-outline btn-sm" title="Fetch Discord roles for all signups">Sync Roles</button>
         </form>
@@ -48,7 +48,7 @@ details[open] .details-arrow { transform: rotate(90deg); }
         {% endif %}
       </div>
       <div class="overflow-x-auto max-h-[70vh] pb-8">
-        <table class="table table-xs" data-roles-table>
+        <table class="table table-xs table-pin-col" data-roles-table>
           <thead class="sticky top-0 bg-base-200 z-10">
             <tr>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none whitespace-nowrap">Name</th>

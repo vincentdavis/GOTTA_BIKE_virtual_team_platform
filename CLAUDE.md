@@ -307,6 +307,7 @@ Non-obvious gates / behavior not visible from the URL pattern alone:
 - Uses HTMX for interactivity (`django-htmx` middleware enabled)
 - Google Analytics (GA4) tracking when `GOOGLE_ANALYTICS_ID` is configured (in `base.html`)
 - Client-side analytics tracking JS sends page visit data to `/api/analytics/track/`
+- **Responsive tables (mobile)**: `theme/static/css/responsive-tables.css` (loaded once in `base.html`, plain CSS — no Tailwind rebuild) holds the shared mobile-table patterns. **Pattern A** — wide *matrix* tables (toggle grids like Manage Roles, availability grids): add `table-pin-col` to a `<table>` inside an `overflow-x-auto` wrapper to pin the first column while the rest scrolls horizontally (override `--pin-col-bg` if the table doesn't sit on `base-200`). First live use: `templates/events/manage_roles.html`. **Pattern B** (not yet built) — wide *data* tables (roster, event signup list): cards-on-mobile / table-on-desktop via Tailwind `hidden md:table` + a `md:hidden` card list, kept in the individual templates
 
 #### daisyUI Blueprint MCP
 
