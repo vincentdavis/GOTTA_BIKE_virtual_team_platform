@@ -258,8 +258,8 @@
           </div>
         </div>
 
-        <div>
-          <table class="table table-zebra">
+        <div class="overflow-x-auto">
+          <table class="table table-zebra table-cards">
             <thead>
             <tr>
               {% with bq=filter_qs %}
@@ -335,7 +335,7 @@
                 <td class="font-medium">
                   {% include "accounts/_user_tooltip.html" with display_name=rider.display_name user_id=rider.user_id discord_id=rider.discord_id discord_avatar_url=rider.discord_avatar_url zwid=rider.zwid zp_category=rider.zp_category zp_category_w=rider.zp_category_w zr_category=rider.zr_category zr_rating=rider.zr_rating zr_phenotype=rider.zr_phenotype is_race_ready=rider.is_race_ready is_extra_verified=rider.is_extra_verified in_zwiftpower=rider.in_zwiftpower in_zwiftracing=rider.in_zwiftracing %}
                 </td>
-                <td>
+                <td data-label="Gender">
                   {% if rider.gender == "M" %}
                     <span class="badge badge-info badge-sm">M</span>
                   {% elif rider.gender == "F" %}
@@ -344,31 +344,31 @@
                     <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-label="Member Since">
                   <span class="font-mono text-sm text-base-content/60">{{ rider.member_since }}</span>
                 </td>
-                <td>
+                <td data-label="Rank">
                   {% if rider.zp_rank %}
                     <span class="font-mono text-sm">{{ rider.zp_rank }}</span>
                   {% else %}
                     <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-label="FTP">
                   {% if rider.zp_ftp %}
                     <span class="font-mono text-sm">{{ rider.zp_ftp }}</span>
                   {% else %}
                     <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-label="WKG">
                   {% if rider.wkg %}
                     <span class="font-mono text-sm">{{ rider.wkg }}</span>
                   {% else %}
                     <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-label="Results">
                   {% if rider.result_count %}
                     <span class="badge badge-outline badge-sm">{{ rider.result_count }}</span>
                   {% else %}
@@ -378,7 +378,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="6" class="text-center text-base-content/50">
+                <td colspan="7" class="text-center text-base-content/50">
                   No riders found.
                 </td>
               </tr>

@@ -37,3 +37,64 @@
   z-index: 25; /* above the sticky header row (z-10) and the pinned body column */
   box-shadow: 2px 0 4px -2px rgb(0 0 0 / 0.15);
 }
+
+/*
+ * Pattern B — "cards on mobile, table on desktop" (.table-cards)
+ * -------------------------------------------------------------
+ * For wide DATA tables (roster, signup lists). Below the `md` breakpoint each
+ * row collapses into a card: the header row is hidden, the first cell becomes
+ * the card title, and every other cell renders as a right-aligned value with
+ * its column name (from `data-label`) on the left.
+ *
+ *   Usage:
+ *     - Add `table-cards` to the <table>.
+ *     - Add `data-label="Column name"` to every body <td> EXCEPT the first
+ *       (title) cell.
+ *     - Cells/headers that should be desktop-only can add `mobile-hide`.
+ *     - Keep `data-label` in sync when columns change.
+ */
+@media (max-width: 767px) {
+  .table-cards thead { display: none; }
+  .table-cards,
+  .table-cards tbody { display: block; width: 100%; }
+
+  .table-cards tr {
+    display: block;
+    margin-bottom: 0.6rem;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--color-base-300);
+    border-radius: 0.75rem;
+    background: var(--color-base-100);
+  }
+  /* Keep cards one flat colour even when the table also uses table-zebra. */
+  .table-cards.table-zebra tbody tr { background: var(--color-base-100); }
+
+  .table-cards td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.2rem 0;
+    border: none;
+    text-align: right;
+  }
+  .table-cards td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    opacity: 0.55;
+    text-align: left;
+  }
+
+  /* First cell = card title: full width, left aligned, no label. */
+  .table-cards td:first-child {
+    justify-content: flex-start;
+    gap: 0;
+    padding-bottom: 0.45rem;
+    margin-bottom: 0.35rem;
+    border-bottom: 1px solid var(--color-base-300);
+    text-align: left;
+  }
+  .table-cards td:first-child::before { content: none; }
+
+  .table-cards .mobile-hide { display: none; }
+}
