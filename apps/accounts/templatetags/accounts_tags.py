@@ -86,6 +86,38 @@ def render_markdown(value: str) -> str:
 
 
 @register.filter
+def render_markdown_inline(value: str) -> str:
+    """Render markdown but unwrap a single top-level paragraph.
+
+    Same extensions as :func:`render_markdown`, but a lone wrapping ``<p>`` is
+    stripped so the result sits inline inside a form label or table cell (where a
+    block ``<p>`` would break the layout). Multi-block content (lists, several
+    paragraphs) is left untouched. Intended for short, admin-authored strings
+    such as signup-question labels and helper text.
+
+    Args:
+        value: Markdown text to render.
+
+    Returns:
+        Rendered inline HTML marked as safe.
+
+    """
+    if not value:
+        return ""
+    html = markdown.markdown(
+        value,
+        extensions=[
+            "nl2br",       # Convert newlines to <br>
+            "sane_lists",  # Better list handling
+            "tables",      # Support tables
+        ],
+    ).strip()
+    if html.startswith("<p>") and html.endswith("</p>") and html.count("<p>") == 1:
+        html = html[len("<p>") : -len("</p>")]
+    return mark_safe(html)  # noqa: S308  # trusted admin-authored markdown (signup questions)
+
+
+@register.filter
 def parse_json_list(value: str) -> list:
     """Parse a JSON string to a list.
 

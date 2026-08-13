@@ -1,3 +1,4 @@
+{% load accounts_tags %}
 {% comment %}
 Renders the custom signup-question inputs for the signup / edit-signup forms.
 Expects `fields` — the list produced by
@@ -6,19 +7,21 @@ apps.events.signup_questions.build_question_fields (each item exposes
 Inputs are named `custom_q_<id>` and parsed by parse_custom_answers.
 Labels use plain wrapping utilities (not DaisyUI `.label`, which is
 `white-space: nowrap`) so long questions wrap instead of overflowing the modal.
-All admin/rider strings render auto-escaped (never |safe).
+The question label and helper text are admin-authored and render inline
+markdown (`render_markdown_inline`, same trust level as event descriptions).
+Rider-authored values (options, prefilled answers) stay auto-escaped.
 {% endcomment %}
 {% for f in fields %}
 <div class="form-control w-full">
   {% if f.q.question_type == "boolean" %}
   <label class="flex items-start gap-3 cursor-pointer py-1">
     <input type="checkbox" name="custom_q_{{ f.q.pk }}" value="1" class="checkbox checkbox-sm shrink-0 mt-0.5"{% if f.bool_checked %} checked{% endif %}>
-    <span class="min-w-0">{{ f.q.label }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}</span>
+    <span class="min-w-0 prose prose-sm max-w-none">{{ f.q.label|render_markdown_inline }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}</span>
   </label>
-  {% if f.q.help_text %}<p class="text-xs text-base-content/60 mt-1 ml-8">{{ f.q.help_text }}</p>{% endif %}
+  {% if f.q.help_text %}<div class="text-xs text-base-content/60 mt-1 ml-8 prose prose-sm max-w-none">{{ f.q.help_text|render_markdown_inline }}</div>{% endif %}
   {% else %}
-  <label class="block mb-1"{% if f.q.question_type != "multi" %} for="custom_q_{{ f.q.pk }}"{% endif %}>
-    {{ f.q.label }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}
+  <label class="block mb-1 prose prose-sm max-w-none"{% if f.q.question_type != "multi" %} for="custom_q_{{ f.q.pk }}"{% endif %}>
+    {{ f.q.label|render_markdown_inline }}{% if f.q.required %} <span class="text-error">*</span>{% endif %}
   </label>
   {% if f.q.question_type == "text" %}
   <input type="text" id="custom_q_{{ f.q.pk }}" name="custom_q_{{ f.q.pk }}" value="{{ f.text_value }}" maxlength="2000"
@@ -40,7 +43,7 @@ All admin/rider strings render auto-escaped (never |safe).
     {% endfor %}
   </div>
   {% endif %}
-  {% if f.q.help_text %}<p class="text-xs text-base-content/60 mt-1">{{ f.q.help_text }}</p>{% endif %}
+  {% if f.q.help_text %}<div class="text-xs text-base-content/60 mt-1 prose prose-sm max-w-none">{{ f.q.help_text|render_markdown_inline }}</div>{% endif %}
   {% endif %}
 </div>
 {% endfor %}

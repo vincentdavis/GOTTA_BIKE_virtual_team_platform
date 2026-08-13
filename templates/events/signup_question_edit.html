@@ -32,6 +32,7 @@
         <div class="form-control w-full">
           <label class="label" for="{{ form.label.id_for_label }}"><span class="label-text">Question <span class="text-error">*</span></span></label>
           {{ form.label }}
+          <label class="label pt-0"><span class="label-text-alt">Markdown supported (bold, links, lists).</span></label>
           {% if form.label.errors %}<label class="label"><span class="label-text-alt text-error">{{ form.label.errors.0 }}</span></label>{% endif %}
         </div>
 
@@ -58,6 +59,7 @@
         <div class="form-control w-full">
           <label class="label" for="{{ form.help_text.id_for_label }}"><span class="label-text">Helper text</span></label>
           {{ form.help_text }}
+          <label class="label pt-0"><span class="label-text-alt">Markdown supported.</span></label>
           {% if form.help_text.errors %}<label class="label"><span class="label-text-alt text-error">{{ form.help_text.errors.0 }}</span></label>{% endif %}
         </div>
 

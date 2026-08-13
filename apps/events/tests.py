@@ -2388,6 +2388,35 @@ def test_signup_answers_shown_in_admin_table(client, event_admin, team_member) -
     assert 'data-col="custom_answers"' in body
 
 
+def test_render_markdown_inline_filter() -> None:
+    from apps.accounts.templatetags.accounts_tags import render_markdown_inline
+
+    # A single line renders inline — the wrapping <p> is stripped.
+    assert render_markdown_inline("**bold** text") == "<strong>bold</strong> text"
+    # Links render.
+    assert '<a href="https://x.test">rules</a>' in render_markdown_inline("[rules](https://x.test)")
+    # Empty input stays empty.
+    assert render_markdown_inline("") == ""
+    # Multi-paragraph content keeps its block <p> wrappers (not unwrapped).
+    assert render_markdown_inline("one\n\ntwo").count("<p>") == 2
+
+
+@pytest.mark.django_db
+def test_signup_question_label_renders_markdown(client, team_member) -> None:
+    from django.urls import reverse
+
+    from apps.events.models import SignupQuestion
+
+    event = _q_event()
+    SignupQuestion.objects.create(event=event, label="Agree to the **rules**?", question_type="boolean", order=0)
+    client.force_login(team_member)
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+    # The label's markdown is rendered on the rider signup form...
+    assert "Agree to the <strong>rules</strong>?" in body
+    # ...and the raw asterisks are not shown.
+    assert "**rules**" not in body
+
+
 @pytest.mark.django_db
 def test_deleted_question_answer_orphaned_not_shown(client, event_admin, team_member) -> None:
     from django.urls import reverse
