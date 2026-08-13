@@ -62,9 +62,12 @@ def pending_verification_count(request: HttpRequest) -> dict[str, int]:
 def expiring_verifications(request: HttpRequest) -> dict:
     """Expose the current user's soon-to-expire Race Verified records.
 
-    Drives the warning banner in ``base.html``. A record counts as "expiring
-    soon" when it is verified, has a finite expiry, and its ``days_remaining``
-    falls in ``1..threshold`` where ``threshold`` is the largest value in the
+    Drives the warning banner in ``base.html``. Records are first reconciled per
+    ``verify_type`` (``covering_records_by_type``) so a type the rider has already
+    renewed — a newer same-type record with more days left — never raises a warning
+    for the old expiring record it replaced. A *type* counts as "expiring soon" when
+    its longest-lived verified record has a finite expiry whose ``days_remaining``
+    falls in ``1..threshold``, where ``threshold`` is the largest value in the
     ``EXPIRE_WARNING_DAYS`` Constance list (the same window the
     ``warn_expiring_verifications`` DM task uses, so the web banner and the DMs
     stay in lockstep). Already-expired records (``days_remaining <= 0``) are
@@ -108,9 +111,15 @@ def expiring_verifications(request: HttpRequest) -> dict:
     threshold = max(warning_days) if warning_days else 15
 
     with logfire.span("expiring_verifications", user_id=user.pk):
+        from apps.team.services import covering_records_by_type
+
         records = user.race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
+        # Reconcile per verify_type: a type is only "expiring" when its longest-lived
+        # record is inside the window. This keeps a record the rider has already renewed
+        # (a newer same-type record with more days left) from raising a false warning.
+        covering = covering_records_by_type(records)
         expiring = [
-            r for r in records if (days := r.days_remaining) is not None and 0 < days <= threshold
+            r for r in covering.values() if (days := r.days_remaining) is not None and 0 < days <= threshold
         ]
         payload: dict | bool = False
         if expiring:

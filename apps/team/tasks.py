@@ -501,17 +501,30 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
         verified_by_user: dict[int, list[tuple[RaceReadyRecord, int]]] = {}
         skipped_already_warned = 0
 
+        from collections import defaultdict
+
+        from apps.team.services import covering_records_by_type
+
+        records_by_user: dict[int, list[RaceReadyRecord]] = defaultdict(list)
         for record in verified_records:
             total_checked += 1
-            remaining = record.days_remaining
-            if remaining is None:
-                continue
-            verified_by_user.setdefault(record.user_id, []).append((record, remaining))
-            if remaining in days_set:
-                if record.last_warned_at == today:
-                    skipped_already_warned += 1
+            records_by_user[record.user_id].append(record)
+
+        # Reconcile per verify_type before warning: only each type's longest-lived
+        # record is a warning candidate, so a record the rider has already renewed
+        # (a newer same-type record with more days left) never triggers a nag while
+        # coverage still stands. Keeps this task in lockstep with the web banner.
+        for user_id, user_records in records_by_user.items():
+            for record in covering_records_by_type(user_records).values():
+                remaining = record.days_remaining
+                if remaining is None:
                     continue
-                matching_records.append((record, remaining))
+                verified_by_user.setdefault(user_id, []).append((record, remaining))
+                if remaining in days_set:
+                    if record.last_warned_at == today:
+                        skipped_already_warned += 1
+                        continue
+                    matching_records.append((record, remaining))
 
         logfire.info(
             "Expiring verification scan complete",

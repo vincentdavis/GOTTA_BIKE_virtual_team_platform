@@ -233,6 +233,56 @@ def get_user_verification_types(user: User) -> list[str]:
     return types
 
 
+def _covers_longer(candidate: RaceReadyRecord, current: RaceReadyRecord) -> bool:
+    """Whether ``candidate`` provides coverage further into the future than ``current``.
+
+    A never-expiring record (``days_remaining is None``) outranks any finite one;
+    between two finite records the greater ``days_remaining`` wins.
+
+    Args:
+        candidate: The record being considered.
+        current: The current best record for the same type.
+
+    Returns:
+        True if ``candidate`` should replace ``current`` as the covering record.
+
+    """
+    current_days = current.days_remaining
+    if current_days is None:
+        return False  # current never expires — nothing beats it
+    candidate_days = candidate.days_remaining
+    if candidate_days is None:
+        return True  # candidate never expires
+    return candidate_days > current_days
+
+
+def covering_records_by_type(records) -> dict[str, RaceReadyRecord]:
+    """Collapse verified records to the single coverage-defining record per verify_type.
+
+    ``User.calculate_race_ready`` treats a verification type as satisfied when *any*
+    non-expired verified record of that type exists, so a type's real coverage is set
+    by its longest-lived record, not by each record individually. Reducing to that one
+    record per type is what lets a freshly-renewed verification supersede the record it
+    replaces: the expiring old record must not drive "expiring soon" warnings (DM banner
+    or web banner) while a newer record of the same type still covers it.
+
+    Args:
+        records: Iterable of **verified** RaceReadyRecord instances (mixed types allowed).
+
+    Returns:
+        Mapping of ``verify_type`` -> the longest-lived record of that type. A type whose
+        covering record never expires has ``days_remaining is None``; a type whose every
+        record has already expired keeps its (negative-``days_remaining``) record.
+
+    """
+    covering: dict[str, RaceReadyRecord] = {}
+    for record in records:
+        current = covering.get(record.verify_type)
+        if current is None or _covers_longer(record, current):
+            covering[record.verify_type] = record
+    return covering
+
+
 @dataclass
 class UnifiedRider:
     """Unified rider data from all sources."""

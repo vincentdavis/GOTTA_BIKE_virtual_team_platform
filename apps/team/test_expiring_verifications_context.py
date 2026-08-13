@@ -78,3 +78,26 @@ def test_soonest_record_wins_and_count_is_total(_clear_cache, verification_facto
     assert payload["count"] == 2
     assert payload["soonest_days"] == 7
     assert payload["soonest_type"] == "Power"
+
+
+@pytest.mark.django_db
+def test_renewed_same_type_supersedes_expiring_record(_clear_cache, verification_factory, user):
+    """A renewed same-type record clears the banner for the old expiring one (reported bug)."""
+    verification_factory(user, "weight_full", days_ago=119)  # old: 1 day left
+    verification_factory(user, "weight_full", days_ago=61)  # renewed: 59 days left
+    # The type is covered for 59 more days, so the banner must not warn.
+    assert expiring_verifications(_request(user))["expiring_verifications"] is None
+
+
+@pytest.mark.django_db
+def test_expiring_type_still_warns_when_only_other_type_is_covered(
+    _clear_cache, verification_factory, user
+):
+    """Reconciliation is per type: a genuinely-expiring type still warns alongside a safe one."""
+    verification_factory(user, "weight_full", days_ago=119)  # 1 day left, no renewal
+    verification_factory(user, "power", days_ago=100)  # 265 days left, safe
+    payload = expiring_verifications(_request(user))["expiring_verifications"]
+    assert payload is not None
+    assert payload["count"] == 1
+    assert payload["soonest_type"] == "Weight Full"
+    assert payload["soonest_days"] == 1
