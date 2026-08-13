@@ -13,6 +13,18 @@
   [data-signup-table] [data-col="wkg"],
   [data-signup-table] [data-col="notes"],
   [data-signup-table] [data-col="custom_answers"]{display:none!important}
+  /* Pin the caret + Name columns of the squads summary table while the rest
+     scrolls horizontally (the expandable detail rows are left untouched). */
+  #squad-table thead th:nth-child(1),
+  #squad-table thead th:nth-child(2),
+  #squad-table tr.squad-row td:nth-child(1),
+  #squad-table tr.squad-row td:nth-child(2){
+    position:sticky; background:var(--color-base-200); z-index:5;
+  }
+  #squad-table thead th:nth-child(1),
+  #squad-table tr.squad-row td:nth-child(1){ left:0; }
+  #squad-table thead th:nth-child(2),
+  #squad-table tr.squad-row td:nth-child(2){ left:1.5rem; }
 }
 </style>
 <div class="max-w-6xl mx-auto">
@@ -235,8 +247,8 @@
             <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
           </div>
         </div>
-        <div>
-          <table class="table table-sm" data-signup-table="detail">
+        <div class="overflow-x-auto">
+          <table class="table table-sm table-pin-col" data-signup-table="detail">
             <thead>
               <tr>
                 <th data-col="name" data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
@@ -513,9 +525,9 @@
 
       {% if squads or is_event_admin %}
       <div class="divider mt-6"></div>
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 class="text-lg font-semibold">Squads</h3>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <div class="dropdown dropdown-end">
             <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>
             <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-56 max-h-72 overflow-y-auto">
