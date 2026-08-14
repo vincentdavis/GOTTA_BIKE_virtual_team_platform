@@ -159,7 +159,8 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
 <!-- Site Header (full width, always visible) -->
 <header class="navbar bg-base-200 border-b border-base-300 sticky top-0 z-50 flex-shrink-0">
   {% if user.is_authenticated %}
-  <div class="flex-none lg:hidden">
+  {# Hidden on phones (bottom-bar More opens the drawer); shown on the 640-1023px band where the bottom bar is hidden and the sidebar isn't open. #}
+  <div class="flex-none hidden sm:flex lg:hidden">
     <label for="main-drawer" class="btn btn-square btn-ghost drawer-button">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
