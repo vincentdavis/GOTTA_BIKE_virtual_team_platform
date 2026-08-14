@@ -170,7 +170,6 @@ class RaceReadyRecordForm(forms.ModelForm):
             "same_gender",
         ]
         widgets: ClassVar[dict] = {
-            "verify_type": forms.Select(attrs={"class": "select select-bordered w-full", "id": "id_verify_type"}),
             "media_type": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "weight": forms.NumberInput(
                 attrs={
