@@ -168,7 +168,7 @@ WSGI_APPLICATION = "gotta_bike_platform.wsgi.application"
 DATABASES = {
     "default": dj_database_url.config(
         default=config.database_url,
-        conn_max_age=600,
+        conn_max_age=config.db_conn_max_age,
         conn_health_checks=True,
     )
 }

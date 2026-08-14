@@ -34,5 +34,10 @@ echo "Starting scheduler..."
 uv run manage.py scheduler &
 
 # Start the server with Granian.
+# Bound workers x blocking-threads: each blocking thread can hold one persistent DB
+# connection, and Granian auto-sizes blocking-threads from the (shared, large) host
+# CPU count if left unset — which exhausted Postgres ("too many clients already").
+# Peak web DB connections = WEB_WORKERS x WEB_BLOCKING_THREADS. Tune via env if needed.
 echo "Starting server with Granian..."
-uv run granian gotta_bike_platform.wsgi:application --interface wsgi --host 0.0.0.0 --port "${PORT:-8000}" --workers 4
+uv run granian gotta_bike_platform.wsgi:application --interface wsgi --host 0.0.0.0 --port "${PORT:-8000}" \
+  --workers "${WEB_WORKERS:-2}" --blocking-threads "${WEB_BLOCKING_THREADS:-2}"

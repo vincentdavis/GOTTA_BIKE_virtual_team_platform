@@ -60,6 +60,12 @@ class Settings(BaseSettings):
         default="sqlite:///db.sqlite3",
         description="Database connection URL",
     )
+    db_conn_max_age: int = Field(
+        default=60,
+        description="Seconds Django keeps a DB connection open for reuse (0 = close after every request). "
+        "Each web thread and background process holds up to one connection for this long, so lower it "
+        "(or set 0) if Postgres runs out of connections ('too many clients already').",
+    )
 
     # S3 Storage (Railway.app or any S3-compatible service)
     aws_s3_endpoint_url: str | None = Field(
