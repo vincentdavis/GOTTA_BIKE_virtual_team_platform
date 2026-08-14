@@ -123,3 +123,15 @@
   .table-cards td.cell-actions::before { content: none; }
   .table-cards td.cell-actions .btn { flex: 1; }
 }
+
+/*
+ * Form help text — let it wrap on phones.
+ * DaisyUI 5's `.label` is `white-space: nowrap`, and templates render field help
+ * as `<label class="label"><span class="label-text-alt">…</span></label>`, so the
+ * span inherits nowrap and long help text overflows/clips on narrow screens.
+ * Allowing wrapping only below `md` keeps the label/alt flex row intact on desktop
+ * (where labels have room) while fixing the clipping on phones.
+ */
+@media (max-width: 767px) {
+  .label { white-space: normal; }
+}
