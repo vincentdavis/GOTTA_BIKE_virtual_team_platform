@@ -96,21 +96,32 @@
   }
   .table-cards td:first-child::before { content: none; }
 
+  /* Explicit title cell — when the first structural column isn't the identity
+     (e.g. a leading checkbox/avatar column that's hidden on mobile). */
+  .table-cards td.cell-title {
+    display: block;
+    text-align: left;
+    padding-bottom: 0.45rem;
+    margin-bottom: 0.35rem;
+    border-bottom: 1px solid var(--color-base-300);
+  }
+  .table-cards td.cell-title::before { content: none; }
+
   .table-cards .mobile-hide { display: none; }
 
   /* Block cell: label on its own line with the control full-width below.
      For cells holding an input/select that would be cramped in a value row. */
-  .table-cards td.card-block {
+  .table-cards td.cell-block {
     display: block;
     text-align: left;
     padding: 0.4rem 0;
   }
-  .table-cards td.card-block::before {
+  .table-cards td.cell-block::before {
     display: block;
     margin-bottom: 0.35rem;
   }
-  .table-cards td.card-block .input,
-  .table-cards td.card-block select { width: 100%; }
+  .table-cards td.cell-block .input,
+  .table-cards td.cell-block select { width: 100%; }
 
   /* Action cell: a full-width row of equal-width buttons, no label — for the
      row's action buttons (View / Verify / Reject), so they stay easy to tap. */

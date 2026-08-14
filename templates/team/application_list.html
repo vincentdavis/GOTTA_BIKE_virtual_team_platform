@@ -107,7 +107,7 @@
       <div class="overflow-x-auto">
         <form id="bulk-form" method="post" action="{% url 'team:application_bulk_delete' %}">
           {% csrf_token %}
-          <table class="table table-zebra">
+          <table class="table table-zebra table-cards">
             <thead>
               <tr>
                 <th class="w-10">
@@ -127,10 +127,10 @@
             <tbody>
               {% for app in applications %}
               <tr>
-                <td>
+                <td class="mobile-hide">
                   <input type="checkbox" name="selected" value="{{ app.pk }}" class="checkbox checkbox-sm row-select" />
                 </td>
-                <td>
+                <td class="mobile-hide">
                   {% if app.avatar_url %}
                   <div class="avatar">
                     <div class="w-10 rounded-full">
@@ -145,7 +145,7 @@
                   </div>
                   {% endif %}
                 </td>
-                <td>
+                <td class="cell-title">
                   <div class="font-medium">
                     <a href="https://discord.com/users/{{ app.discord_id }}" target="_blank" rel="noopener" class="link link-hover inline-flex items-center gap-1">
                       {{ app.discord_username }}
@@ -158,21 +158,21 @@
                   <div class="text-sm text-base-content/60">{{ app.server_nickname }}</div>
                   {% endif %}
                 </td>
-                <td>
+                <td data-label="Name">
                   {% if app.full_name %}
                   <span class="font-medium">{{ app.full_name }}</span>
                   {% else %}
                   <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-label="Guild">
                   {% if app.discord_id in active_guild_ids %}
                   <span class="badge badge-success badge-sm whitespace-nowrap">In Guild</span>
                   {% else %}
                   <span class="badge badge-error badge-sm whitespace-nowrap">Left</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-label="Status">
                   {% if app.status == "pending" %}
                   <span class="badge badge-warning badge-sm">Pending</span>
                   {% elif app.status == "in_progress" %}
@@ -183,16 +183,16 @@
                   <span class="badge badge-error badge-sm">Rejected</span>
                   {% endif %}
                 </td>
-                <td>
+                <td data-label="Complete">
                   {% if app.is_complete %}
                   <span class="badge badge-success badge-sm">Yes</span>
                   {% else %}
                   <span class="badge badge-warning badge-sm">No</span>
                   {% endif %}
                 </td>
-                <td>{{ app.date_created|date:"M d, Y" }}</td>
-                <td>{{ app.date_modified|date:"M d, Y" }}</td>
-                <td>
+                <td data-label="Created">{{ app.date_created|date:"M d, Y" }}</td>
+                <td data-label="Modified">{{ app.date_modified|date:"M d, Y" }}</td>
+                <td class="cell-actions">
                   <a href="{% url 'team:application_admin' app.pk %}" class="btn btn-ghost btn-xs">
                     View
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
