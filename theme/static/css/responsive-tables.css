@@ -97,4 +97,29 @@
   .table-cards td:first-child::before { content: none; }
 
   .table-cards .mobile-hide { display: none; }
+
+  /* Block cell: label on its own line with the control full-width below.
+     For cells holding an input/select that would be cramped in a value row. */
+  .table-cards td.card-block {
+    display: block;
+    text-align: left;
+    padding: 0.4rem 0;
+  }
+  .table-cards td.card-block::before {
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+  .table-cards td.card-block .input,
+  .table-cards td.card-block select { width: 100%; }
+
+  /* Action cell: a full-width row of equal-width buttons, no label — for the
+     row's action buttons (View / Verify / Reject), so they stay easy to tap. */
+  .table-cards td.cell-actions {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border: none;
+  }
+  .table-cards td.cell-actions::before { content: none; }
+  .table-cards td.cell-actions .btn { flex: 1; }
 }

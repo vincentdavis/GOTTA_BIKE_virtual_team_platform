@@ -95,7 +95,7 @@
 
       <!-- Records Table -->
       <div class="overflow-x-auto">
-        <table class="table table-zebra">
+        <table class="table table-zebra table-cards">
           <thead>
             <tr>
               <th>User</th>
@@ -114,19 +114,19 @@
               <td class="font-medium">
                 {% include "accounts/_user_tooltip.html" with display_name=record.user.get_full_name|default:record.user.discord_username user_id=record.user.pk discord_id=record.user.discord_id discord_avatar_url=record.user.discord_avatar_url zwid=record.user.zwid zp_category=record.tt_zp_category zp_category_w=record.tt_zp_category_w zr_category=record.tt_zr_category zr_rating=record.tt_zr_rating zr_phenotype=record.tt_zr_phenotype is_race_ready=record.user.is_race_ready is_extra_verified=record.user.is_extra_verified in_zwiftpower=record.tt_in_zwiftpower in_zwiftracing=record.tt_in_zwiftracing %}
               </td>
-              <td>
+              <td data-label="Type">
                 <span class="badge badge-sm text-xs whitespace-nowrap {% if record.verify_type == 'weight_full' %}badge-primary{% elif record.verify_type == 'weight_light' %}badge-secondary{% elif record.verify_type == 'height' %}badge-accent{% elif record.verify_type == 'power' %}badge-warning{% else %}badge-outline{% endif %}">{{ record.get_verify_type_display }}</span>
               </td>
-              <td>{{ record.get_media_type_display }}</td>
-              <td>{{ record.date_created|date:"M d, Y" }}</td>
-              <td>
+              <td data-label="Media">{{ record.get_media_type_display }}</td>
+              <td data-label="Date">{{ record.date_created|date:"M d, Y" }}</td>
+              <td data-label="Gender">
                 {% if record.user.gender %}
                   {{ record.user.get_gender_display }}
                 {% else %}
                   <span class="text-base-content/30">-</span>
                 {% endif %}
               </td>
-              <td>
+              <td data-label="Status">
                 {% if record.is_verified %}
                 <span class="badge badge-success badge-sm">Verified</span>
                 {% elif record.is_rejected %}
@@ -142,7 +142,7 @@
                 </span>
                 {% endif %}
               </td>
-              <td>
+              <td data-label="Expiry">
                 {% if record.is_verified %}
                   {% if record.days_remaining is not None %}
                     {% if record.days_remaining >= 0 %}
@@ -157,7 +157,7 @@
                   <span class="text-base-content/30">-</span>
                 {% endif %}
               </td>
-              <td>
+              <td class="cell-actions">
                 {% if can_review %}
                 <a href="{% url 'team:verification_record_detail' record.pk %}" class="btn btn-ghost btn-xs">
                   View

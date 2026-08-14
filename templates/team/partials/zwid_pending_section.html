@@ -6,7 +6,7 @@
       Users who submitted their Zwift ID via manual verification. Verify the ZWID matches the user on ZwiftPower, or reject to clear it.
     </p>
     <div class="overflow-x-auto">
-      <table class="table table-zebra">
+      <table class="table table-zebra table-cards">
         <thead>
           <tr>
             <th>User</th>
@@ -41,7 +41,7 @@
                 </div>
               </div>
             </td>
-            <td>
+            <td class="card-block" data-label="ZWID">
               <form id="zwid-form-{{ user.id }}">
                 {% csrf_token %}
                 <input type="number"
@@ -52,7 +52,7 @@
                 />
               </form>
             </td>
-            <td>
+            <td data-label="ZwiftPower">
               <a href="https://zwiftpower.com/profile.php?z={{ user.zwid }}"
                  target="_blank"
                  rel="noopener"
@@ -61,7 +61,7 @@
                 View
               </a>
             </td>
-            <td class="flex gap-2">
+            <td class="flex gap-2 cell-actions">
               <button class="btn btn-success btn-xs"
                       hx-post="{% url 'team:zwid_verification_action' user.id %}"
                       hx-include="#zwid-form-{{ user.id }}"
