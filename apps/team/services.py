@@ -233,6 +233,94 @@ def get_user_verification_types(user: User) -> list[str]:
     return types
 
 
+# Canonical display order and labels for the four verification types.
+VERIFY_TYPE_LABELS: dict[str, str] = {
+    "weight_full": "Weight (Full)",
+    "weight_light": "Weight (Light)",
+    "height": "Height",
+    "power": "Power",
+}
+
+
+def _verify_type_validity_days() -> dict[str, int]:
+    """Map each verify_type to its configured validity window in days.
+
+    Returns:
+        Dict of verify_type to validity days (0 means never expires).
+
+    """
+    return {
+        "weight_full": config.WEIGHT_FULL_DAYS,
+        "weight_light": config.WEIGHT_LIGHT_DAYS,
+        "height": config.HEIGHT_VERIFICATION_DAYS,
+        "power": config.POWER_VERIFICATION_DAYS,
+    }
+
+
+def _current_verification_status(record: RaceReadyRecord | None) -> dict[str, str]:
+    """Summarize the latest record of a type for the submission picker.
+
+    Args:
+        record: The user's most recent record of a given verify_type, or None.
+
+    Returns:
+        Dict with ``state`` (valid/expired/pending/rejected/none) and human ``text``.
+
+    """
+    if record is None:
+        return {"state": "none", "text": "None on file"}
+    if record.is_verified:
+        if record.is_expired:
+            days = record.days_remaining
+            ago = f"{abs(days)} days ago" if days is not None else ""
+            return {"state": "expired", "text": f"Expired {ago}".strip()}
+        remaining = record.days_remaining
+        if remaining is None:
+            return {"state": "valid", "text": "Verified · no expiry"}
+        return {"state": "valid", "text": f"Verified · {remaining} days left"}
+    if record.is_rejected:
+        return {"state": "rejected", "text": "Last submission rejected"}
+    return {"state": "pending", "text": "Pending review"}
+
+
+def build_verify_type_options(user: User) -> list[dict]:
+    """Build the annotated verification-type list for the submission picker.
+
+    Each option carries the label, whether it is required for this rider's category,
+    the validity window, and the state of the rider's most recent record of that type.
+    Only types the rider may currently submit are included (e.g. weight_light is
+    omitted until they have a verified full weight), and required types are listed first.
+
+    Args:
+        user: The rider submitting a verification.
+
+    Returns:
+        List of option dicts consumed by the race-ready form template.
+
+    """
+    allowed = get_user_verification_types(user)
+    required = set(get_user_required_verification_types(user))
+    validity_days = _verify_type_validity_days()
+
+    latest_by_type: dict[str, RaceReadyRecord] = {}
+    for record in user.race_ready_records.all():
+        latest_by_type.setdefault(record.verify_type, record)
+
+    def _option(vtype: str) -> dict:
+        days = validity_days.get(vtype, 0)
+        return {
+            "value": vtype,
+            "label": VERIFY_TYPE_LABELS.get(vtype, vtype),
+            "required": vtype in required,
+            "validity_label": "Never expires" if not days else f"Valid {days} days",
+            "current": _current_verification_status(latest_by_type.get(vtype)),
+        }
+
+    ordered = [t for t in VERIFY_TYPE_LABELS if t in allowed and t in required]
+    ordered += [t for t in VERIFY_TYPE_LABELS if t in allowed and t not in required]
+    return [_option(t) for t in ordered]
+
+
 def _covers_longer(candidate: RaceReadyRecord, current: RaceReadyRecord) -> bool:
     """Whether ``candidate`` provides coverage further into the future than ``current``.
 

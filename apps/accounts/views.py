@@ -19,7 +19,11 @@ from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm, ZwiftVerificationForm
 from apps.accounts.models import User
 from apps.team.forms import RaceReadyRecordForm
-from apps.team.services import get_user_required_verification_types, get_user_verification_types
+from apps.team.services import (
+    build_verify_type_options,
+    get_user_required_verification_types,
+    get_user_verification_types,
+)
 from apps.zwift.utils import fetch_zwift_id
 
 # How recently the Zwift Racing data must have been fetched before the profile
@@ -347,6 +351,7 @@ def verification_view(request: HttpRequest) -> HttpResponse:
             "race_ready_form": race_ready_form,
             "race_ready_records": race_ready_records,
             "latest_by_type": latest_by_type,
+            "verify_type_options": build_verify_type_options(request.user),
             "required_summary": required_summary,
             "verification_form_message": config.VERIFICATION_FORM_MESSAGE,
             "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
@@ -909,6 +914,7 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
                     ),
                     "race_ready_records": race_ready_records,
                     "latest_by_type": latest_by_type,
+                    "verify_type_options": build_verify_type_options(request.user),
                     "success": True,
                     "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
                     "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
@@ -930,6 +936,7 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
                 "accounts/partials/race_ready_form.html",
                 {
                     "race_ready_form": form,
+                    "verify_type_options": build_verify_type_options(request.user),
                     "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
                     "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
                     "unit_preference": request.user.unit_preference,

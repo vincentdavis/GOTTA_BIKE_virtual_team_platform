@@ -4,6 +4,7 @@ import pytest
 
 from apps.team.services import (
     DEFAULT_VERIFICATION_TYPES,
+    build_verify_type_options,
     get_user_required_verification_types,
     get_user_verification_types,
 )
@@ -107,3 +108,61 @@ def test_submittable_unverified_weight_full_does_not_unlock_light(
     verification_factory(user, "weight_full", status=RaceReadyRecord.Status.PENDING)
     types = get_user_verification_types(user)
     assert "weight_light" not in types
+
+
+@pytest.mark.django_db
+def test_options_required_first_and_flags(user, zp_team_rider_factory) -> None:
+    """Cat B: required types listed first, power optional, weight_light hidden."""
+    user.zwid = 22310
+    user.save(update_fields=["zwid"])
+    zp_team_rider_factory(zwid=user.zwid, div=20)
+    options = build_verify_type_options(user)
+    assert [o["value"] for o in options] == ["weight_full", "height", "power"]
+    by_value = {o["value"]: o for o in options}
+    assert by_value["weight_full"]["required"] is True
+    assert by_value["height"]["required"] is True
+    assert by_value["power"]["required"] is False
+
+
+@pytest.mark.django_db
+def test_options_validity_labels(user, zp_team_rider_factory) -> None:
+    user.zwid = 22311
+    user.save(update_fields=["zwid"])
+    zp_team_rider_factory(zwid=user.zwid, div=20)
+    by_value = {o["value"]: o for o in build_verify_type_options(user)}
+    assert by_value["weight_full"]["validity_label"] == "Valid 120 days"
+    assert by_value["height"]["validity_label"] == "Never expires"
+    assert by_value["power"]["validity_label"] == "Valid 365 days"
+
+
+@pytest.mark.django_db
+def test_options_current_status_none_and_valid(user, zp_team_rider_factory, verification_factory) -> None:
+    user.zwid = 22312
+    user.save(update_fields=["zwid"])
+    zp_team_rider_factory(zwid=user.zwid, div=20)
+    verification_factory(user, "weight_full", days_ago=5)
+    by_value = {o["value"]: o for o in build_verify_type_options(user)}
+    assert by_value["weight_full"]["current"]["state"] == "valid"
+    assert "115 days left" in by_value["weight_full"]["current"]["text"]
+    assert by_value["height"]["current"] == {"state": "none", "text": "None on file"}
+
+
+@pytest.mark.django_db
+def test_options_height_verified_never_expires(user, zp_team_rider_factory, verification_factory) -> None:
+    user.zwid = 22313
+    user.save(update_fields=["zwid"])
+    zp_team_rider_factory(zwid=user.zwid, div=20)
+    verification_factory(user, "height", days_ago=400, height=175)
+    height = {o["value"]: o for o in build_verify_type_options(user)}["height"]["current"]
+    assert height == {"state": "valid", "text": "Verified · no expiry"}
+
+
+@pytest.mark.django_db
+def test_options_expired_status(user, zp_team_rider_factory, verification_factory) -> None:
+    user.zwid = 22314
+    user.save(update_fields=["zwid"])
+    zp_team_rider_factory(zwid=user.zwid, div=20)
+    verification_factory(user, "power", days_ago=400, ftp=250)
+    power = {o["value"]: o for o in build_verify_type_options(user)}["power"]["current"]
+    assert power["state"] == "expired"
+    assert power["text"].startswith("Expired")

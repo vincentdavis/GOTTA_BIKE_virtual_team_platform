@@ -1,5 +1,48 @@
 <!-- Race Verified Submission Form -->
 <div id="race-ready-form-container">
+  <style>
+    .verify-picker .verify-opt {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      border: 1px solid color-mix(in oklch, var(--color-base-content) 15%, transparent);
+      border-radius: var(--radius-box, 1rem);
+      padding: 0.75rem;
+      cursor: pointer;
+      transition: background-color .15s, border-color .15s;
+    }
+    .verify-picker .verify-opt:hover { background: var(--color-base-100); }
+    .verify-picker .verify-opt:has(input:checked) {
+      border-color: var(--color-primary);
+      border-width: 2px;
+      padding: calc(0.75rem - 1px);
+      background: color-mix(in oklch, var(--color-primary) 8%, transparent);
+    }
+    .verify-picker .verify-opt__head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+    .verify-picker .verify-opt__validity {
+      margin-left: auto;
+      font-size: 0.72rem;
+      white-space: nowrap;
+      color: color-mix(in oklch, var(--color-base-content) 60%, transparent);
+    }
+    .verify-picker .verify-opt__status {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      font-size: 0.75rem;
+    }
+    .verify-picker .verify-opt__status--valid { color: var(--color-success); }
+    .verify-picker .verify-opt__status--expired,
+    .verify-picker .verify-opt__status--rejected { color: var(--color-error); }
+    .verify-picker .verify-opt__status--pending { color: var(--color-warning); }
+    .verify-picker .verify-opt__status--none { color: color-mix(in oklch, var(--color-base-content) 50%, transparent); }
+  </style>
   {% if success %}
     <div class="alert alert-success mb-4">
       <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
@@ -30,32 +73,49 @@
       </div>
     {% endif %}
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <!-- Verification Type -->
-      <div class="form-control w-full">
-        <label class="label" for="id_verify_type">
-          <span class="label-text">Verification Type</span>
-        </label>
-        {{ race_ready_form.verify_type }}
-        {% if race_ready_form.verify_type.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ race_ready_form.verify_type.errors.0 }}</span>
+    <!-- Verification Type (radio picker: required + validity + current status per type) -->
+    <div class="form-control w-full verify-picker">
+      <label class="label">
+        <span class="label-text">Verification type</span>
+      </label>
+      <div id="verify-type-list" class="flex flex-col gap-2">
+        {% for opt in verify_type_options %}
+          <label class="verify-opt">
+            <input type="radio" name="verify_type" value="{{ opt.value }}" class="radio radio-primary radio-sm mt-1"
+                   {% if race_ready_form.verify_type.value|stringformat:'s' == opt.value or not race_ready_form.verify_type.value and forloop.first %}checked{% endif %}>
+            <span class="flex-1 min-w-0">
+              <span class="verify-opt__head">
+                <span class="font-semibold text-sm">{{ opt.label }}</span>
+                {% if opt.required %}
+                  <span class="badge badge-primary badge-sm">Required</span>
+                {% else %}
+                  <span class="badge badge-ghost badge-sm">Optional</span>
+                {% endif %}
+                <span class="verify-opt__validity">{{ opt.validity_label }}</span>
+              </span>
+              <span class="verify-opt__status verify-opt__status--{{ opt.current.state }}">{{ opt.current.text }}</span>
+            </span>
           </label>
-        {% endif %}
+        {% endfor %}
       </div>
+      {% if race_ready_form.verify_type.errors %}
+        <label class="label">
+          <span class="label-text-alt text-error">{{ race_ready_form.verify_type.errors.0 }}</span>
+        </label>
+      {% endif %}
+    </div>
 
-      <!-- Media Type -->
-      <div class="form-control w-full">
-        <label class="label" for="id_media_type">
-          <span class="label-text">Media Type</span>
+    <!-- Media Type -->
+    <div class="form-control w-full">
+      <label class="label" for="id_media_type">
+        <span class="label-text">Media Type</span>
+      </label>
+      {{ race_ready_form.media_type }}
+      {% if race_ready_form.media_type.errors %}
+        <label class="label">
+          <span class="label-text-alt text-error">{{ race_ready_form.media_type.errors.0 }}</span>
         </label>
-        {{ race_ready_form.media_type }}
-        {% if race_ready_form.media_type.errors %}
-          <label class="label">
-            <span class="label-text-alt text-error">{{ race_ready_form.media_type.errors.0 }}</span>
-          </label>
-        {% endif %}
-      </div>
+      {% endif %}
     </div>
 
     <!-- Instruction Links (shown based on verification type) -->
@@ -236,7 +296,8 @@
   <script>
       (function () {
           const unitPreference = '{{ unit_preference|default:"metric" }}';
-          const verifyTypeSelect = document.getElementById('id_verify_type');
+          const verifyTypeRadios = Array.from(document.querySelectorAll('input[name="verify_type"]'));
+          const getVerifyType = () => (verifyTypeRadios.find(r => r.checked) || {}).value || '';
           const mediaTypeSelect = document.getElementById('id_media_type');
           const allMediaOptions = Array.from(mediaTypeSelect.options).map(o => ({value: o.value, text: o.text}));
           const weightField = document.getElementById('weight-field');
@@ -259,7 +320,7 @@
           const INCHES_TO_CM = 2.54;
 
           function toggleFields() {
-              const value = verifyTypeSelect.value;
+              const value = getVerifyType();
 
               // Hide all fields and instructions first
               weightField.classList.add('hidden');
@@ -331,7 +392,7 @@
 
           // Run on page load and on change
           toggleFields();
-          verifyTypeSelect.addEventListener('change', toggleFields);
+          verifyTypeRadios.forEach(r => r.addEventListener('change', toggleFields));
 
           // Add input listeners for preview
           if (weightInput) {
