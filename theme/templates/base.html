@@ -435,7 +435,7 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
          class="relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 {% if request.resolver_match.view_name == 'events:my_events' %}text-primary{% else %}text-base-content/70{% endif %}">
         {% if pending_availability_count %}<span class="absolute top-1 left-1/2 ml-2 badge badge-error badge-sm">{{ pending_availability_count }}</span>{% endif %}
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-4 8l1.5 1.5L15 11"/></svg>
-        <span class="text-xs">My Events</span>
+        <span class="text-xs">{% if request.resolver_match.view_name == 'events:my_events' %}Availability{% else %}My Events{% endif %}</span>
       </a>
       <a href="{% url 'events:event_list' %}"
          class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 {% if request.resolver_match.namespace == 'events' and request.resolver_match.url_name != 'my_events' %}text-primary{% else %}text-base-content/70{% endif %}">
