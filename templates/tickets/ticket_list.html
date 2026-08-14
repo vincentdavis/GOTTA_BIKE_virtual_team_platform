@@ -48,10 +48,10 @@
 
   {% if tickets %}
   <div class="overflow-x-auto">
-    <table class="table table-sm">
+    <table class="table table-sm table-cards">
       <thead>
         <tr>
-          <th>#</th>
+          <th class="mobile-hide">#</th>
           <th>Title</th>
           <th>Status</th>
           <th>Category</th>
@@ -64,32 +64,32 @@
       <tbody>
         {% for t in tickets %}
         <tr>
-          <td class="font-mono text-xs">
+          <td class="font-mono text-xs mobile-hide">
             <a href="{% url 'tickets:ticket_detail' t.pk %}" class="link link-primary">#{{ t.pk }}</a>
           </td>
-          <td>
+          <td class="cell-title">
             <a href="{% url 'tickets:ticket_detail' t.pk %}" class="link link-hover">{{ t.title }}</a>
           </td>
-          <td>
+          <td data-label="Status">
             {% if t.status == 'new' %}<span class="badge badge-info badge-sm">{{ t.get_status_display }}</span>
             {% elif t.status == 'in_progress' %}<span class="badge badge-warning badge-sm">{{ t.get_status_display }}</span>
             {% else %}<span class="badge badge-success badge-sm">{{ t.get_status_display }}</span>
             {% endif %}
           </td>
-          <td><span class="badge badge-outline badge-sm">{{ t.get_category_display }}</span></td>
-          <td>
+          <td data-label="Category"><span class="badge badge-outline badge-sm">{{ t.get_category_display }}</span></td>
+          <td data-label="Priority">
             {% if t.priority == 'urgent' %}<span class="badge badge-error badge-sm">Urgent</span>
             {% elif t.priority == 'high' %}<span class="badge badge-warning badge-sm">High</span>
             {% elif t.priority == 'low' %}<span class="badge badge-ghost badge-sm">Low</span>
             {% else %}<span class="badge badge-neutral badge-sm">Normal</span>
             {% endif %}
           </td>
-          <td class="text-sm">{% if t.submitted_by %}{{ t.submitted_by.get_full_name|default:t.submitted_by.discord_username }}{% else %}<span class="text-base-content/30">System</span>{% endif %}</td>
-          <td class="text-sm">
+          <td class="text-sm" data-label="Submitted by">{% if t.submitted_by %}{{ t.submitted_by.get_full_name|default:t.submitted_by.discord_username }}{% else %}<span class="text-base-content/30">System</span>{% endif %}</td>
+          <td class="text-sm" data-label="Assigned to">
             {% if t.assigned_to %}{{ t.assigned_to.get_full_name|default:t.assigned_to.discord_username }}
             {% else %}<span class="text-base-content/30">—</span>{% endif %}
           </td>
-          <td class="text-sm whitespace-nowrap">{{ t.created_at|date:"M j, Y" }}</td>
+          <td class="text-sm whitespace-nowrap" data-label="Created">{{ t.created_at|date:"M j, Y" }}</td>
         </tr>
         {% endfor %}
       </tbody>

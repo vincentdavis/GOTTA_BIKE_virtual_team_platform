@@ -51,7 +51,7 @@
 
       {% if keys %}
       <div class="overflow-x-auto">
-        <table class="table table-sm">
+        <table class="table table-sm table-cards">
           <thead>
             <tr>
               <th>Name</th>
@@ -67,11 +67,11 @@
             {% for k in keys %}
             <tr {% if new_key_id and new_key_id|stringformat:"s" == k.pk|stringformat:"s" %}class="bg-success/10"{% endif %}>
               <td class="font-medium">{{ k.name }}</td>
-              <td class="font-mono text-xs">{{ k.prefix }}…{{ k.last4 }}</td>
-              <td class="text-xs">{{ k.created_at|date:"M j, Y" }}</td>
-              <td class="text-xs">{{ k.expires_at|date:"M j, Y" }}</td>
-              <td class="text-xs">{% if k.last_used_at %}{{ k.last_used_at|date:"M j, Y H:i" }}{% else %}<span class="text-base-content/30">never</span>{% endif %}</td>
-              <td>
+              <td class="font-mono text-xs" data-label="Prefix · Last4">{{ k.prefix }}…{{ k.last4 }}</td>
+              <td class="text-xs" data-label="Created">{{ k.created_at|date:"M j, Y" }}</td>
+              <td class="text-xs" data-label="Expires">{{ k.expires_at|date:"M j, Y" }}</td>
+              <td class="text-xs" data-label="Last used">{% if k.last_used_at %}{{ k.last_used_at|date:"M j, Y H:i" }}{% else %}<span class="text-base-content/30">never</span>{% endif %}</td>
+              <td data-label="Status">
                 {% if k.is_revoked %}
                   <span class="badge badge-error badge-sm">Revoked</span>
                 {% elif k.is_expired %}
@@ -80,7 +80,7 @@
                   <span class="badge badge-success badge-sm">Active</span>
                 {% endif %}
               </td>
-              <td class="text-right">
+              <td class="cell-actions">
                 {% if k.is_active %}
                 <form method="post" action="{% url 'user_api:api_keys_revoke' k.pk %}" class="inline"
                       onsubmit="return confirm('Revoke key &quot;{{ k.name|escapejs }}&quot;? This cannot be undone.');">

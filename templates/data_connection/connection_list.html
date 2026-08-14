@@ -70,7 +70,7 @@
     <!-- Connections List -->
     {% if connections %}
     <div class="overflow-x-auto">
-        <table class="table table-zebra">
+        <table class="table table-zebra table-cards">
             <thead>
                 <tr>
                     <th>Title</th>
@@ -86,7 +86,7 @@
             <tbody>
                 {% for conn in connections %}
                 <tr class="{% if conn.is_expired %}opacity-50{% endif %}">
-                    <td>
+                    <td class="cell-title">
                         <a href="{{ conn.spreadsheet_url }}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 hover:text-primary">
                             <span class="font-bold">{{ conn.title }}</span>
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -97,28 +97,28 @@
                         <div class="text-sm text-base-content/70">{{ conn.description|truncatewords:10 }}</div>
                         {% endif %}
                     </td>
-                    <td>{{ conn.data_sheet }}</td>
-                    <td>
+                    <td data-label="Sheet">{{ conn.data_sheet }}</td>
+                    <td data-label="Created By">
                         <span class="text-sm">{{ conn.created_by.discord_nickname|default:conn.created_by.discord_username }}</span>
                     </td>
-                    <td>
+                    <td data-label="Fields">
                         <span class="badge badge-ghost">{{ conn.selected_fields|length }} fields</span>
                     </td>
-                    <td>
+                    <td data-label="Last Synced">
                         {% if conn.date_last_synced %}
                         {{ conn.date_last_synced|date:"M d, Y H:i" }}
                         {% else %}
                         <span class="text-base-content/50">Never</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-label="Auto Sync">
                         {% if conn.auto_sync %}
                         <span class="badge badge-success badge-sm">On</span>
                         {% else %}
                         <span class="badge badge-ghost badge-sm">Off</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td data-label="Expires">
                         {% if conn.is_expired %}
                         <span class="badge badge-error">Expired</span>
                         {% elif conn.days_until_expiry is not None %}
@@ -127,24 +127,22 @@
                         <span class="badge badge-ghost">No expiry</span>
                         {% endif %}
                     </td>
-                    <td>
-                        <div class="flex gap-2">
-                            {% if conn.is_broken %}
-                            <span class="badge badge-error">Broken</span>
-                            {% elif not conn.is_expired %}
-                            <a href="{% url 'data_connection:connection_sync' conn.pk %}" class="btn btn-sm btn-primary">
-                                Sync
-                            </a>
-                            {% endif %}
-                            {% if conn.created_by == request.user %}
-                            <a href="{% url 'data_connection:connection_edit' conn.pk %}" class="btn btn-sm btn-ghost">
-                                Edit
-                            </a>
-                            <a href="{% url 'data_connection:connection_delete' conn.pk %}" class="btn btn-sm btn-ghost text-error">
-                                Delete
-                            </a>
-                            {% endif %}
-                        </div>
+                    <td class="cell-actions">
+                        {% if conn.is_broken %}
+                        <span class="badge badge-error">Broken</span>
+                        {% elif not conn.is_expired %}
+                        <a href="{% url 'data_connection:connection_sync' conn.pk %}" class="btn btn-sm btn-primary">
+                            Sync
+                        </a>
+                        {% endif %}
+                        {% if conn.created_by == request.user %}
+                        <a href="{% url 'data_connection:connection_edit' conn.pk %}" class="btn btn-sm btn-ghost">
+                            Edit
+                        </a>
+                        <a href="{% url 'data_connection:connection_delete' conn.pk %}" class="btn btn-sm btn-ghost text-error">
+                            Delete
+                        </a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}

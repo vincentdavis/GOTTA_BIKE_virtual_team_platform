@@ -45,7 +45,7 @@
 
     <!-- Activities table -->
     <div class="overflow-x-auto">
-        <table class="table table-zebra">
+        <table class="table table-zebra table-cards">
             <thead>
                 <tr>
                     <th>Date</th>
@@ -67,8 +67,8 @@
                         -
                         {% endif %}
                     </td>
-                    <td>{{ activity.athlete_first_name }} {{ activity.athlete_last_name }}</td>
-                    <td>
+                    <td data-label="Athlete">{{ activity.athlete_first_name }} {{ activity.athlete_last_name }}</td>
+                    <td class="cell-block" data-label="Activity">
                         <div class="font-medium flex items-center gap-1">
                             {{ activity.name }}
                             <a href="https://www.strava.com/activities/{{ activity.strava_id }}" target="_blank" rel="noopener" class="text-base-content/50 hover:text-primary" title="View on Strava">
@@ -78,12 +78,12 @@
                             </a>
                         </div>
                     </td>
-                    <td>
+                    <td data-label="Type">
                         <span class="badge badge-ghost badge-sm">{{ activity.sport_type }}</span>
                     </td>
-                    <td class="text-right">{{ activity.distance_km|floatformat:1 }} km</td>
-                    <td class="text-right">{{ activity.moving_time_formatted }}</td>
-                    <td class="text-right">
+                    <td class="text-right" data-label="Distance">{{ activity.distance_km|floatformat:1 }} km</td>
+                    <td class="text-right" data-label="Time">{{ activity.moving_time_formatted }}</td>
+                    <td class="text-right" data-label="Elevation">
                         {% if activity.total_elevation_gain %}
                         {{ activity.total_elevation_gain|floatformat:0 }} m
                         {% else %}
