@@ -1,5 +1,23 @@
 {% load tz %}
-<footer class="footer footer-center bg-base-200 text-base-content p-10">
+<style>
+  /* Stacked + centered on phones; horizontal on sm+ (footer-center forces column
+     flow at every width in this daisyUI build, which cramps mobile). */
+  footer.site-footer {
+    grid-auto-flow: row;
+    place-items: center;
+    text-align: center;
+    gap: 1.5rem;
+    padding: 1.5rem 1rem;
+  }
+  @media (min-width: 640px) {
+    footer.site-footer {
+      grid-auto-flow: column dense;
+      gap: 2.5rem 1rem;
+      padding: 2.5rem;
+    }
+  }
+</style>
+<footer class="footer site-footer bg-base-200 text-base-content">
     <nav>
         <div class="grid grid-flow-col gap-4">
             <a href="{{ config.DISCORD_URL }}" aria-label="Discord">
