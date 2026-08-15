@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logfire
 from django.tasks import task  # ty:ignore[unresolved-import]
+from django.template.defaultfilters import date as date_filter
 from django.utils import timezone
 
-from apps.accounts.discord_service import send_discord_channel_message
+from apps.accounts.discord_service import send_discord_channel_message, send_discord_dm
 from apps.events import ds_service
 from apps.events.models import EventSignup, SlotDS
 from apps.team.services import ZP_DIV_TO_CATEGORY
@@ -126,27 +127,123 @@ def notify_signup_to_channel(signup_id: int, profile_url: str | None = None) -> 
     return post_signup_notification(signup_id=signup_id, profile_url=profile_url)
 
 
+def _format_signup_dm(signup: EventSignup, my_events_url: str | None) -> str:
+    """Build the confirmation DM sent to a rider who just signed up.
+
+    Args:
+        signup: The freshly created EventSignup.
+        my_events_url: Absolute URL to the rider's "My Events" page, if known.
+
+    Returns:
+        Multi-line Markdown string for a Discord DM.
+
+    """
+    event = signup.event
+    start = date_filter(event.start_date, "M j, Y")
+    end = date_filter(event.end_date, "M j, Y")
+
+    lines: list[str] = [
+        f"✅ **You're signed up — {event.title}**",
+        "",
+        f"📅 **Dates:** {start} – {end}",  # ruff:ignore[ambiguous-unicode-character-string] — en dash for the date range is intentional
+    ]
+    if event.discord_channel_id:
+        lines.append(f"💬 **Event channel:** <#{event.discord_channel_id}>")
+    lines.append("")
+    lines.append(
+        "Head to **My Events** to set your availability, see your squad and scheduled races, "
+        "and find all the event details:"
+    )
+    if my_events_url:
+        lines.append(my_events_url)
+    lines.append("")
+    lines.append("See you on course! 🚴")
+    return "\n".join(lines)
+
+
+def send_signup_dm(signup_id: int, my_events_url: str | None = None) -> dict:
+    """Send the rider a confirmation DM for their signup, synchronously.
+
+    Non-fatal: any failure is logged and swallowed so it never affects the signup flow.
+
+    Args:
+        signup_id: PK of the freshly created EventSignup.
+        my_events_url: Absolute URL to the rider's "My Events" page, if known.
+
+    Returns:
+        Dict describing the outcome (status: sent / skipped / error).
+
+    """
+    with logfire.span("dm_signup_confirmation", signup_id=signup_id):
+        try:
+            signup = EventSignup.objects.select_related("user", "event").get(pk=signup_id)
+        except EventSignup.DoesNotExist:
+            logfire.error("Signup not found for DM", signup_id=signup_id)
+            return {"status": "error", "reason": "signup_not_found"}
+
+        user = signup.user
+        if not user.discord_id:
+            logfire.debug("Rider has no linked Discord; skipping signup DM")
+            return {"status": "skipped", "reason": "no_discord_id"}
+
+        message = _format_signup_dm(signup, my_events_url)
+        ok = send_discord_dm(user.discord_id, message)
+        if not ok:
+            logfire.warning("Signup DM not sent", signup_id=signup_id, user_id=user.id, event_id=signup.event_id)
+            return {"status": "error", "reason": "send_failed"}
+
+        logfire.info("Signup DM sent", signup_id=signup_id, user_id=user.id, event_id=signup.event_id)
+        return {"status": "sent"}
+
+
+@task
+def dm_signup_confirmation(signup_id: int, my_events_url: str | None = None) -> dict:
+    """Background-task wrapper around :func:`send_signup_dm`.
+
+    Args:
+        signup_id: PK of the freshly created EventSignup.
+        my_events_url: Absolute URL to the rider's "My Events" page, if known.
+
+    Returns:
+        See :func:`send_signup_dm`.
+
+    """
+    return send_signup_dm(signup_id=signup_id, my_events_url=my_events_url)
+
+
 # Convenience for code that wants to enqueue with the right URL builder.
 def enqueue_signup_notification(signup: EventSignup, *, request=None) -> None:
-    """Enqueue ``notify_signup_to_channel`` for a freshly created signup.
+    """Enqueue the signup channel notification and the rider confirmation DM.
+
+    The channel notification fires only when the event has a signup notification channel
+    configured; the rider DM fires only when the rider has a linked Discord account.
 
     Args:
         signup: The newly created EventSignup.
-        request: Optional HttpRequest; used to build an absolute profile URL.
+        request: Optional HttpRequest; used to build absolute URLs.
 
     """
-    if not signup.event.signup_notification_channel_id:
-        return  # nothing to do
     profile_url: str | None = None
+    my_events_url: str | None = None
     if request is not None:
         from django.urls import reverse
 
         try:
-            path = reverse("accounts:public_profile", kwargs={"user_id": signup.user_id})
-            profile_url = request.build_absolute_uri(path)
+            profile_url = request.build_absolute_uri(
+                reverse("accounts:public_profile", kwargs={"user_id": signup.user_id})
+            )
         except Exception:
             profile_url = None
-    notify_signup_to_channel.enqueue(signup_id=signup.pk, profile_url=profile_url)
+        try:
+            my_events_url = request.build_absolute_uri(reverse("events:my_events"))
+        except Exception:
+            my_events_url = None
+
+    if signup.event.signup_notification_channel_id:
+        notify_signup_to_channel.enqueue(signup_id=signup.pk, profile_url=profile_url)
+
+    if signup.user.discord_id:
+        dm_signup_confirmation.enqueue(signup_id=signup.pk, my_events_url=my_events_url)
 
 
 @task

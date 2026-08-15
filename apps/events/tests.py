@@ -2898,3 +2898,102 @@ def test_event_signup_without_event_role_skips_role(client, team_member) -> None
 
     mock_add.assert_not_called()
     assert EventSignup.objects.filter(event=event, user=team_member).exists()
+
+
+@pytest.mark.django_db
+def test_signup_dm_message_includes_required_fields(user) -> None:
+    from django.template.defaultfilters import date as date_filter
+
+    from apps.events.tasks import _format_signup_dm
+
+    today = date.today()
+    event = Event.objects.create(
+        title="Club Ladder Season", start_date=today, end_date=today + timedelta(days=30),
+        visible=True, signups_open=True, discord_channel_id=987654321098765432,
+    )
+    signup = _make_signup(event, user)
+    msg = _format_signup_dm(signup, "https://app.example/events/my-events/")
+
+    assert "Club Ladder Season" in msg  # event name
+    assert date_filter(event.start_date, "M j, Y") in msg  # start date
+    assert date_filter(event.end_date, "M j, Y") in msg  # end date
+    assert "<#987654321098765432>" in msg  # channel mention
+    assert "https://app.example/events/my-events/" in msg  # My Events link
+    assert "My Events" in msg  # instruction
+
+
+@pytest.mark.django_db
+def test_signup_dm_omits_channel_line_when_unset(user) -> None:
+    from apps.events.tasks import _format_signup_dm
+
+    today = date.today()
+    event = Event.objects.create(  # no discord_channel_id
+        title="No Channel", start_date=today, end_date=today + timedelta(days=1),
+        visible=True, signups_open=True,
+    )
+    msg = _format_signup_dm(_make_signup(event, user), "https://app.example/events/my-events/")
+    assert "Event channel" not in msg
+    assert "<#0>" not in msg
+
+
+@pytest.mark.django_db
+def test_send_signup_dm_sends_when_discord_linked(user) -> None:
+    from apps.events.tasks import send_signup_dm
+
+    user.discord_id = "555111"
+    user.save(update_fields=["discord_id"])
+    today = date.today()
+    event = Event.objects.create(
+        title="Crit", start_date=today, end_date=today + timedelta(days=1), visible=True, signups_open=True,
+    )
+    signup = _make_signup(event, user)
+    with patch("apps.events.tasks.send_discord_dm", return_value=True) as mock_dm:
+        result = send_signup_dm(signup.pk, "https://app.example/events/my-events/")
+
+    assert result["status"] == "sent"
+    mock_dm.assert_called_once()
+    args, _ = mock_dm.call_args
+    assert args[0] == "555111"
+    assert "Crit" in args[1]
+
+
+@pytest.mark.django_db
+def test_send_signup_dm_skips_without_discord(user) -> None:
+    from apps.events.tasks import send_signup_dm
+
+    user.discord_id = ""
+    user.save(update_fields=["discord_id"])
+    today = date.today()
+    event = Event.objects.create(
+        title="Crit", start_date=today, end_date=today + timedelta(days=1), visible=True, signups_open=True,
+    )
+    signup = _make_signup(event, user)
+    with patch("apps.events.tasks.send_discord_dm") as mock_dm:
+        result = send_signup_dm(signup.pk)
+
+    assert result["status"] == "skipped"
+    mock_dm.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_enqueue_signup_notification_enqueues_rider_dm(user) -> None:
+    from django.test import RequestFactory
+
+    from apps.events.tasks import enqueue_signup_notification
+
+    user.discord_id = "555222"
+    user.save(update_fields=["discord_id"])
+    today = date.today()
+    event = Event.objects.create(  # no signup_notification_channel_id
+        title="Crit", start_date=today, end_date=today + timedelta(days=1), visible=True, signups_open=True,
+    )
+    signup = _make_signup(event, user)
+    req = RequestFactory().get("/")
+    with (
+        patch("apps.events.tasks.dm_signup_confirmation") as mock_dm_task,
+        patch("apps.events.tasks.notify_signup_to_channel") as mock_chan_task,
+    ):
+        enqueue_signup_notification(signup, request=req)
+
+    mock_dm_task.enqueue.assert_called_once()
+    mock_chan_task.enqueue.assert_not_called()  # channel not configured
