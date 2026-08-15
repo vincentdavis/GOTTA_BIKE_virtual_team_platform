@@ -1919,6 +1919,38 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
     from apps.events.tasks import enqueue_signup_notification
 
     enqueue_signup_notification(signup, request=request)
+
+    # Grant the event's Discord role on signup (if configured and the rider has Discord linked).
+    # The squad self-join flow already assigns event_role; plain event signup was missing it.
+    if event.event_role and request.user.discord_id and not request.user.has_discord_role(event.event_role):
+        role_id_str = str(event.event_role)
+        if add_discord_role(request.user.discord_id, role_id_str):
+            from apps.team.models import DiscordRole
+
+            roles_updated = dict(request.user.discord_roles or {})
+            roles_updated[role_id_str] = (
+                DiscordRole.objects.filter(role_id=role_id_str).values_list("name", flat=True).first() or "Event Role"
+            )
+            request.user.discord_roles = roles_updated
+            request.user.save(update_fields=["discord_roles"])
+            logfire.info(
+                "Event Discord role assigned on signup",
+                event_id=pk,
+                user_id=request.user.id,
+                role_id=role_id_str,
+            )
+        else:
+            logfire.error(
+                "Failed to assign event Discord role on signup",
+                event_id=pk,
+                user_id=request.user.id,
+                role_id=role_id_str,
+            )
+            messages.warning(
+                request,
+                "You're signed up, but the event Discord role couldn't be assigned. Contact an admin.",
+            )
+
     messages.success(request, "You have signed up for this event!")
     return redirect("events:event_detail", pk=pk)
 

@@ -2851,3 +2851,50 @@ def test_assign_riders_filters_hidden_when_no_values(client, superuser, user_mod
     assert 'id="filter-timezone"' not in body
     assert 'id="filter-squad-timezone"' not in body
     assert 'id="filter-squad-gender"' not in body
+
+
+@pytest.mark.django_db
+def test_event_signup_assigns_event_discord_role(client, team_member) -> None:
+    from django.urls import reverse
+
+    team_member.discord_id = "555000111"
+    team_member.discord_roles = {}
+    team_member.save(update_fields=["discord_id", "discord_roles"])
+    today = date.today()
+    event = Event.objects.create(
+        title="Role Event", start_date=today, end_date=today + timedelta(days=1),
+        visible=True, signups_open=True, event_role=987654321,
+    )
+    client.force_login(team_member)
+    with (
+        patch("apps.events.views.add_discord_role", return_value=True) as mock_add,
+        patch("apps.events.tasks.enqueue_signup_notification"),
+    ):
+        client.post(reverse("events:event_signup", args=[event.pk]))
+
+    mock_add.assert_called_once_with("555000111", "987654321")
+    team_member.refresh_from_db()
+    assert "987654321" in team_member.discord_roles
+    assert EventSignup.objects.filter(event=event, user=team_member).exists()
+
+
+@pytest.mark.django_db
+def test_event_signup_without_event_role_skips_role(client, team_member) -> None:
+    from django.urls import reverse
+
+    team_member.discord_id = "555000222"
+    team_member.save(update_fields=["discord_id"])
+    today = date.today()
+    event = Event.objects.create(  # event_role defaults to 0
+        title="No Role Event", start_date=today, end_date=today + timedelta(days=1),
+        visible=True, signups_open=True,
+    )
+    client.force_login(team_member)
+    with (
+        patch("apps.events.views.add_discord_role") as mock_add,
+        patch("apps.events.tasks.enqueue_signup_notification"),
+    ):
+        client.post(reverse("events:event_signup", args=[event.pk]))
+
+    mock_add.assert_not_called()
+    assert EventSignup.objects.filter(event=event, user=team_member).exists()
