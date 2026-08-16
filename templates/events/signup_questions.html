@@ -24,24 +24,24 @@
 
       {% if questions %}
       <div class="overflow-x-auto">
-        <table class="table table-sm">
+        <table class="table table-sm table-cards">
           <thead>
-            <tr><th>Order</th><th>Question</th><th>Type</th><th>Required</th><th>Options</th><th></th></tr>
+            <tr><th class="mobile-hide">Order</th><th>Question</th><th>Type</th><th>Required</th><th>Options</th><th></th></tr>
           </thead>
           <tbody>
             {% for q in questions %}
             <tr>
-              <td>{{ q.order }}</td>
-              <td>
+              <td class="mobile-hide">{{ q.order }}</td>
+              <td class="cell-title">
                 <div class="font-medium prose prose-sm max-w-none">{{ q.label|render_markdown_inline }}</div>
                 {% if q.help_text %}<div class="text-xs text-base-content/60 prose prose-sm max-w-none">{{ q.help_text|render_markdown_inline }}</div>{% endif %}
               </td>
-              <td><span class="badge badge-ghost badge-sm">{{ q.get_question_type_display }}</span></td>
-              <td>{% if q.required %}<span class="badge badge-warning badge-sm">Required</span>{% else %}<span class="text-base-content/40">—</span>{% endif %}</td>
-              <td class="text-xs align-top whitespace-nowrap">
+              <td data-label="Type"><span class="badge badge-ghost badge-sm">{{ q.get_question_type_display }}</span></td>
+              <td data-label="Required">{% if q.required %}<span class="badge badge-warning badge-sm">Required</span>{% else %}<span class="text-base-content/40">—</span>{% endif %}</td>
+              <td class="text-xs align-top whitespace-nowrap" data-label="Options">
                 {% if q.is_choice %}<span class="badge badge-ghost badge-sm" title="{{ q.options|join:', ' }}">{{ q.options|length }} option{{ q.options|length|pluralize }}</span>{% else %}<span class="text-base-content/40">—</span>{% endif %}
               </td>
-              <td class="whitespace-nowrap text-right">
+              <td class="cell-actions">
                 <a href="{% url 'events:signup_question_edit' event.pk q.pk %}" class="btn btn-xs btn-primary">Edit</a>
                 <form method="post" action="{% url 'events:signup_question_delete' event.pk q.pk %}" class="inline"
                       onsubmit="return confirm('Delete question &quot;{{ q.label|escapejs }}&quot;? Existing answers are kept but no longer shown.')">
