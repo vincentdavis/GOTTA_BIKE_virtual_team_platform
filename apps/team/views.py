@@ -1275,9 +1275,12 @@ def delete_expired_media_view(request: HttpRequest) -> HttpResponse:
     for record in expired_records:
         has_media = record.media_file or record.url
         if has_media:
+            # delete_media_file() removes the stored file with save=False, so media_file must
+            # be persisted here too — otherwise the column keeps the deleted file's name and
+            # the record still looks like it has evidence.
             record.delete_media_file()
             record.url = ""
-            record.save(update_fields=["url"])
+            record.save(update_fields=["url", "media_file"])
             deleted_count += 1
 
     logfire.info(
@@ -1332,9 +1335,11 @@ def delete_rejected_media_view(request: HttpRequest) -> HttpResponse:
     for record in records:
         has_media = record.media_file or record.url
         if has_media:
+            # See delete_expired_media_view: media_file must be saved too, or the column keeps
+            # the deleted file's name.
             record.delete_media_file()
             record.url = ""
-            record.save(update_fields=["url"])
+            record.save(update_fields=["url", "media_file"])
             deleted_count += 1
 
     logfire.info(
