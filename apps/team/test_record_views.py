@@ -151,6 +151,22 @@ def test_viewers_are_listed_on_the_page(client, approver, pvt_approver, user, ve
 
 
 @pytest.mark.django_db
+def test_post_that_matches_no_action_branch_is_still_logged(client, approver, user, verification_factory) -> None:
+    """A POST falling through every handler still renders the page, so it must be audited.
+
+    Regression: gating the audit write on ``request.method == "GET"`` let a reviewer POST
+    (e.g. a stale Verify click on an already-reviewed record) and read the page untracked.
+    """
+    record = verification_factory(user, "height", status=RaceReadyRecord.Status.VERIFIED, height=175)
+    client.force_login(approver)  # non-PVT: can_change_status False, record not pending
+
+    resp = client.post(reverse("team:verification_record_detail", args=[record.pk]), {"action": "verify"})
+
+    assert resp.status_code == 200  # fell through to the render, no redirect
+    assert RecordView.objects.get(record=record, user=approver).view_count == 1
+
+
+@pytest.mark.django_db
 def test_denied_viewer_is_not_logged(client, team_member, user, verification_factory) -> None:
     """Someone without approve_verification is redirected and leaves no audit row."""
     record = verification_factory(user, "height", status=RaceReadyRecord.Status.PENDING, height=175)

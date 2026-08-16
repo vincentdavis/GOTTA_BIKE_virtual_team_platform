@@ -1215,11 +1215,14 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         RaceReadyRecord.objects.filter(user=record.user).exclude(pk=pk).order_by("-record_date", "-date_created")
     )
 
-    # Audit trail: log that this reviewer opened the record, and whether the evidence was
-    # actually rendered for them. Only page loads count (POSTs redirect before reaching here).
+    # Audit trail: log that this reviewer was served the record, and whether the evidence was
+    # actually rendered for them. Log on the render path rather than on the HTTP verb: every
+    # POST that matches an action branch redirects before this point, so reaching here means
+    # the page really was shown. A POST that matches no branch (a stale Verify click, or a
+    # power record gated by POWER_REQUIRES_PER_VER) also falls through to this render with the
+    # media visible — gating on GET would let that view go unrecorded.
     media_shown = bool(can_view_media and (record.media_file or record.url))
-    if request.method == "GET":
-        log_record_view(record, request.user, media_shown=media_shown)
+    log_record_view(record, request.user, media_shown=media_shown)
 
     record_views = RecordView.objects.filter(record=record).select_related("user").order_by("-last_viewed_at")
 
