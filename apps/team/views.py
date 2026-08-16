@@ -26,12 +26,13 @@ from apps.team.forms import (
     TeamLinkEditForm,
     TeamLinkForm,
 )
-from apps.team.models import MembershipApplication, RaceReadyRecord, RosterFilter, TeamLink
+from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView, RosterFilter, TeamLink
 from apps.team.services import (
     ZP_DIV_TO_CATEGORY,
     get_membership_review_data,
     get_performance_review_data,
     get_unified_team_roster,
+    log_record_view,
 )
 from apps.team.tasks import notify_application_update, notify_captains_verification, notify_race_ready_change
 from apps.zwift import client as zwift_client
@@ -1214,6 +1215,14 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         RaceReadyRecord.objects.filter(user=record.user).exclude(pk=pk).order_by("-record_date", "-date_created")
     )
 
+    # Audit trail: log that this reviewer opened the record, and whether the evidence was
+    # actually rendered for them. Only page loads count (POSTs redirect before reaching here).
+    media_shown = bool(can_view_media and (record.media_file or record.url))
+    if request.method == "GET":
+        log_record_view(record, request.user, media_shown=media_shown)
+
+    record_views = RecordView.objects.filter(record=record).select_related("user").order_by("-last_viewed_at")
+
     return render(
         request,
         "team/verification_record_detail.html",
@@ -1228,6 +1237,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             "checklist_items": checklist_items,
             "zp_rider": zp_rider,
             "other_records": other_records,
+            "record_views": record_views,
         },
     )
 

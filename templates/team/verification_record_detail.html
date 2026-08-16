@@ -462,6 +462,53 @@
       </div>
       {% endif %}
 
+      <!-- Who viewed this record -->
+      <div class="divider"></div>
+      <h3 class="text-lg font-semibold mb-1">Viewed By</h3>
+      <p class="text-sm text-base-content/60 mb-3">
+        Everyone who opened this record, including reviewers who didn't complete a review.
+      </p>
+      {% if record_views %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm table-cards">
+          <thead>
+            <tr>
+              <th>Reviewer</th>
+              <th>Last viewed</th>
+              <th>First viewed</th>
+              <th class="text-right">Views</th>
+              <th class="text-right">Media views</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for view in record_views %}
+            <tr>
+              <td class="font-medium">
+                <a href="{% url 'accounts:public_profile' user_id=view.user.pk %}" class="link link-hover">
+                  {{ view.user.get_full_name|default:view.user.discord_username|default:view.user.username }}
+                </a>
+              </td>
+              <td class="whitespace-nowrap" data-label="Last viewed">{{ view.last_viewed_at|date:"M d, Y H:i" }}</td>
+              <td class="whitespace-nowrap text-base-content/60" data-label="First viewed">{{ view.first_viewed_at|date:"M d, Y H:i" }}</td>
+              <td class="text-right" data-label="Views">
+                <span class="badge badge-ghost badge-sm">{{ view.view_count }}</span>
+              </td>
+              <td class="text-right" data-label="Media views">
+                {% if view.media_view_count %}
+                <span class="badge badge-warning badge-sm">{{ view.media_view_count }}</span>
+                {% else %}
+                <span class="text-base-content/30">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-sm text-base-content/50">No views recorded yet.</p>
+      {% endif %}
+
     </div>
   </div>
 </div>

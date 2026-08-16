@@ -8,11 +8,11 @@ from typing import ClassVar
 
 import logfire
 from constance import config
-from django.db.models import Count, Max, Min, OuterRef, Subquery
+from django.db.models import Count, F, Max, Min, OuterRef, Subquery
 from django.utils import timezone
 
 from apps.accounts.models import GuildMember, User
-from apps.team.models import RaceReadyRecord
+from apps.team.models import RaceReadyRecord, RecordView
 from apps.zwiftpower.models import ZPRiderResults, ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
 
@@ -319,6 +319,43 @@ def build_verify_type_options(user: User) -> list[dict]:
     ordered = [t for t in VERIFY_TYPE_LABELS if t in allowed and t in required]
     ordered += [t for t in VERIFY_TYPE_LABELS if t in allowed and t not in required]
     return [_option(t) for t in ordered]
+
+
+def log_record_view(record: RaceReadyRecord, user: User, *, media_shown: bool) -> None:
+    """Record that ``user`` opened ``record``'s detail page.
+
+    Keeps one row per (record, user) pair and bumps its counters, so opening a record
+    repeatedly updates the same row instead of appending history. Counter updates run as
+    an atomic UPDATE so concurrent views can't lose increments. Failures are logged and
+    swallowed — an audit write must never break the review page.
+
+    Args:
+        record: The verification record being viewed.
+        user: The viewer.
+        media_shown: Whether the page actually displayed the record's media to this user.
+
+    """
+    try:
+        view, _created = RecordView.objects.get_or_create(record=record, user=user)
+        RecordView.objects.filter(pk=view.pk).update(
+            view_count=F("view_count") + 1,
+            media_view_count=F("media_view_count") + (1 if media_shown else 0),
+            last_viewed_at=timezone.now(),
+        )
+        logfire.info(
+            "Verification record viewed",
+            record_id=record.pk,
+            record_owner_id=record.user_id,
+            viewer_id=user.pk,
+            media_shown=media_shown,
+        )
+    except Exception as e:  # never let the audit write break the review page
+        logfire.error(
+            "Failed to log verification record view",
+            record_id=record.pk,
+            viewer_id=user.pk,
+            error=str(e),
+        )
 
 
 def _covers_longer(candidate: RaceReadyRecord, current: RaceReadyRecord) -> bool:

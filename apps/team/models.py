@@ -367,6 +367,71 @@ class RaceReadyRecord(models.Model):
         return f"Valid ({days} days)"
 
 
+class RecordView(models.Model):
+    """Audit trail of who opened a verification record, and whether they saw its media.
+
+    One row per (record, reviewer) pair rather than one per page load: the counters and
+    ``last_viewed_at`` are bumped on each visit, so the trail answers "who looked at this
+    submission, how often, and when" — including reviewers who opened a record but never
+    verified or rejected it — without growing a row per refresh.
+
+    ``media_view_count`` is incremented only when the page actually rendered the evidence
+    (the reviewer passed the media-visibility gate *and* the record still has a file/URL),
+    so it tracks exposure of the sensitive photo/video separately from page opens.
+
+    Attributes:
+        record: The verification record that was viewed.
+        user: The person who viewed it.
+        view_count: How many times they opened the record detail page.
+        media_view_count: How many of those views actually displayed the media.
+        first_viewed_at: When they first opened the record.
+        last_viewed_at: When they most recently opened it.
+
+    """
+
+    record = models.ForeignKey(
+        RaceReadyRecord,
+        on_delete=models.CASCADE,
+        related_name="record_views",
+        help_text="Verification record that was viewed",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="verification_record_views",
+        help_text="User who viewed the record",
+    )
+    view_count = models.PositiveIntegerField(default=0, help_text="Times this user opened the record detail page")
+    media_view_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Times the record's media (photo/video/link) was actually shown to this user",
+    )
+    first_viewed_at = models.DateTimeField(auto_now_add=True, help_text="When this user first viewed the record")
+    last_viewed_at = models.DateTimeField(default=timezone.now, help_text="When this user most recently viewed it")
+
+    class Meta:
+        """Meta options for RecordView."""
+
+        verbose_name = "Record View"
+        verbose_name_plural = "Record Views"
+        ordering: ClassVar[list[str]] = ["-last_viewed_at"]
+        constraints: ClassVar[list] = [
+            models.UniqueConstraint(fields=["record", "user"], name="unique_record_view_per_user"),
+        ]
+        indexes: ClassVar[list] = [
+            models.Index(fields=["record", "-last_viewed_at"]),
+        ]
+
+    def __str__(self) -> str:
+        """Return a string representation of the view.
+
+        Returns:
+            Description with viewer and record.
+
+        """
+        return f"{self.user} viewed record {self.record_id} ({self.view_count}x)"
+
+
 class TeamLink(models.Model):
     """External links to team resources, forms, and event information.
 
