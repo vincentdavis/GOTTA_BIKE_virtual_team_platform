@@ -379,6 +379,12 @@ class RecordView(models.Model):
     (the reviewer passed the media-visibility gate *and* the record still has a file/URL),
     so it tracks exposure of the sensitive photo/video separately from page opens.
 
+    Both foreign keys cascade **by design**: deleting a verification record also drops its
+    access trail, and deleting a user drops their viewing history everywhere. The trail is
+    scoped to live exactly as long as the thing it describes — don't "fix" this to SET_NULL.
+    The ``"Verification record viewed"`` Logfire events survive either deletion if a
+    longer-lived trail is ever needed.
+
     Attributes:
         record: The verification record that was viewed.
         user: The person who viewed it.
