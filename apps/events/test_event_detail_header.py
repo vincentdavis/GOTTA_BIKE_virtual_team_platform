@@ -1,11 +1,14 @@
-"""The event detail header's gear menu, which replaced the "Edit Event" button."""
+"""The event detail header: gear menu, and the icon-only Discord channel link."""
 
+import re
 from datetime import date, timedelta
 
 import pytest
 from django.urls import reverse
 
 from apps.events.models import Event, Squad
+
+DISCORD_MARK_PATH_START = "M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515"
 
 
 @pytest.fixture
@@ -94,3 +97,21 @@ def test_plain_member_gets_no_gear_at_all(client, event, team_member) -> None:
     assert "Eligibility" not in body
     assert reverse("events:event_edit", args=[event.pk]) not in body
     assert reverse("events:squad_v_report", args=[event.pk]) not in body
+
+
+@pytest.mark.django_db
+def test_event_discord_link_is_the_brand_mark_not_text(client, event, team_member) -> None:
+    """The event's Discord channel link under the description is icon-only."""
+    event.discord_channel_id = 555
+    event.url = "https://example.test/event"
+    event.save(update_fields=["discord_channel_id", "url"])
+    client.force_login(team_member)
+
+    body = _detail(client, event)
+
+    assert DISCORD_MARK_PATH_START in body
+    assert 'data-tip="Discord channel"' in body
+    assert 'aria-label="Discord channel"' in body
+    assert not re.search(r">\s*Discord Channel\s*<", body)
+    # The neighbouring Event Link keeps its text, since no icon says "event page".
+    assert re.search(r">\s*Event Link", body)
