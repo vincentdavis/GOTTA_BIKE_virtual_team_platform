@@ -39,7 +39,7 @@
         </div>
         {# Gear menu replaces the old "Edit Event" button. #}
         {# Items the user's roles don't cover are greyed out, as on the squad manage page. #}
-        {% if is_event_admin or can_view_squad_manage %}
+        {% if is_event_admin or can_view_squad_manage or can_view_v_report %}
         <div class="flex justify-end shrink-0">
           <div class="dropdown dropdown-end">
             <label tabindex="0" class="btn btn-outline btn-sm btn-square" title="Event actions" aria-label="Event actions">
@@ -63,6 +63,14 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                   </svg>
                   Manage squads
+                </a>
+              </li>
+              <li{% if not can_view_v_report %} class="menu-disabled"{% endif %}>
+                <a {% if can_view_v_report %}href="{% url 'events:squad_v_report' event.pk %}"{% else %}title="Requires event admin, head captain, or squad captain"{% endif %}>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                  </svg>
+                  Eligibility
                 </a>
               </li>
             </ul>
@@ -579,12 +587,7 @@
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zr_phenotype"> Phenotype</label></li>
             </ul>
           </div>
-          {% if can_view_v_report %}
-          <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-info btn-sm">Eligibility</a>
-          {% endif %}
-          {% if can_view_squad_manage %}
-          <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-primary btn-sm">Manage Squads</a>
-          {% endif %}
+          {# Eligibility and Manage Squads moved to the header gear menu. #}
         </div>
       </div>
       {% if squads %}
