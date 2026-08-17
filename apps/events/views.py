@@ -825,22 +825,29 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
         for squad in event_squads:
             squad_grids = grids_by_squad.get(squad.pk, [])
             pending_count = 0
+            squad_ended_count = 0
             has_current_grids = False
             for g in squad_grids:
                 g.user_responded = g.pk in responded_grid_ids
                 # A grid is "ended" once the availability window it collected for has fully passed.
                 g.is_ended = g.end_date < today_local
                 if g.is_ended:
-                    ended_grid_count += 1
+                    squad_ended_count += 1
                 else:
                     has_current_grids = True
                 if g.is_published and not g.user_responded and not g.is_ended:
                     pending_count += 1
+            ended_grid_count += squad_ended_count
             squad_data.append({
                 "squad": squad,
                 "grids": squad_grids,
                 "has_current_grids": has_current_grids,
                 "pending_availability_count": pending_count,
+                "ended_grid_count": squad_ended_count,
+                # Suffix for the `av-ended-<key>` class the "Show ended" toggle flips. Event and
+                # squad keys are prefixed because the two pk spaces overlap, and the per-squad
+                # dropdown repeats rows the event-wide one already renders.
+                "ended_key": f"s{squad.pk}",
                 "members": members_by_squad.get(squad.pk, []),
                 "user_slot_selections": slot_selections_by_squad.get(squad.pk, []),
                 "can_manage_availability": _can_manage_squad_availability(request.user, squad),
@@ -859,6 +866,10 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             "pending_availability_count": event_pending,
             "has_availability_grids": has_grids,
             "ended_grid_count": ended_grid_count,
+            "ended_key": f"e{event.pk}",
+            # Keeps the Availability menu reachable before the first grid exists, so a captain
+            # can still get to "New availability".
+            "can_create_availability": any(sq["can_manage_availability"] for sq in squad_data),
             "can_view_squad_manage": can_view_squad_manage,
         })
 

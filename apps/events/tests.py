@@ -259,8 +259,9 @@ def test_my_events_hides_ended_availability_grids(auth_client, team_member) -> N
     body = response.content.decode()
     # The show-all toggle appears with a count of the one ended grid.
     assert "Show ended (1)" in body
-    # Ended grids carry the per-event toggle class so JS can reveal them.
-    assert f"av-ended-{event.pk}" in body
+    # Ended grids carry the per-event toggle class so JS can reveal them. The "e" prefix keeps
+    # it distinct from a squad menu's "s<squad_pk>" key.
+    assert f"av-ended-e{event.pk}" in body
     assert "Ended</span>" in body
     # The current grid is present and not marked hidden.
     assert "Current Week" in body

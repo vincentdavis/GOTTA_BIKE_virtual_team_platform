@@ -76,6 +76,16 @@ def _scheduled_race(squad: Squad, user, **selection_kwargs) -> AvailabilitySlotS
     return selection
 
 
+def _grid_pk(squad: Squad):
+    """Return the pk of the squad's only availability grid.
+
+    Returns:
+        The grid's UUID primary key.
+
+    """
+    return AvailabilityGrid.objects.get(squad=squad).pk
+
+
 @pytest.mark.django_db
 def test_scheduled_race_rider_count_uses_the_same_person_icon(client, event, team_member) -> None:
     """A scheduled race shows the person icon plus a bare count, matching the squad badge."""
@@ -161,6 +171,85 @@ def test_channel_links_are_icon_only_with_tooltips(client, event, team_member) -
     assert not re.search(r">\s*Channel\s*<", body)
     assert not re.search(r">\s*Audio\s*<", body)
     assert not re.search(r">\s*Link\s*<", body)
+
+
+@pytest.mark.django_db
+def test_squad_card_carries_its_own_availability_menu(client, event, team_member) -> None:
+    """Each squad row gets a calendar dropdown showing only that squad's grids."""
+    squad = Squad.objects.create(event=event, name="Squad A")
+    _join(event, squad, team_member)
+    _scheduled_race(squad, team_member)
+    client.force_login(team_member)
+
+    resp = client.get(reverse("events:my_events"))
+    body = resp.content.decode()
+
+    assert resp.context["events_data"][0]["squads"][0]["ended_key"] == f"s{squad.pk}"
+    assert 'aria-label="Availability"' in body
+    # A multi-line {# #} comment renders as visible text; the partial must use a comment tag.
+    assert "squad_data dict" not in body
+    assert "Context:" not in body
+    # The respond link is now rendered twice: event-wide menu and the squad's own menu.
+    respond = reverse(
+        "events:availability_respond",
+        kwargs={"event_pk": event.pk, "squad_pk": squad.pk, "grid_pk": _grid_pk(squad)},
+    )
+    # Quote-terminated so the results URL, which extends this path, isn't also counted.
+    assert body.count(f'href="{respond}"') == 2
+
+
+@pytest.mark.django_db
+def test_the_two_availability_menus_get_separate_ended_keys(client, event, team_member) -> None:
+    """A shared key would make one menu's "Show ended" toggle flip rows in the other."""
+    squad = Squad.objects.create(event=event, name="Squad A")
+    _join(event, squad, team_member)
+    today = date.today()
+    AvailabilityGrid.objects.create(
+        squad=squad, title="Past week",
+        start_date=today - timedelta(days=9), end_date=today - timedelta(days=2),  # ended
+        start_time="16:00", end_time="22:00", slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED, grid_timezone="UTC",
+    )
+    client.force_login(team_member)
+
+    body = client.get(reverse("events:my_events")).content.decode()
+
+    assert f"av-ended-e{event.pk}" in body
+    assert f"av-ended-s{squad.pk}" in body
+    assert body.count("Show ended (1)") == 2  # one toggle per menu
+
+
+@pytest.mark.django_db
+def test_availability_menu_offers_new_availability_to_squad_managers(client, event, team_member) -> None:
+    """A captain gets a "+ New availability" row pointing at the squad availability builder."""
+    squad = Squad.objects.create(event=event, name="Squad A")
+    squad.captains.add(team_member)
+    _join(event, squad, team_member)
+    client.force_login(team_member)
+
+    resp = client.get(reverse("events:my_events"))
+    body = resp.content.decode()
+
+    # No grids exist yet, but the menu still opens so the captain can create the first one.
+    assert resp.context["events_data"][0]["has_availability_grids"] is False
+    assert resp.context["events_data"][0]["can_create_availability"] is True
+    assert "New availability" in body
+    assert body.count(reverse("events:squad_availability", args=[event.pk, squad.pk])) == 3
+
+
+@pytest.mark.django_db
+def test_plain_member_gets_no_new_availability_link(client, event, team_member) -> None:
+    """The builder 403s a non-captain, so the row must not be offered to them."""
+    squad = Squad.objects.create(event=event, name="Squad A")
+    _join(event, squad, team_member)
+    client.force_login(team_member)
+
+    resp = client.get(reverse("events:my_events"))
+    body = resp.content.decode()
+
+    assert resp.context["events_data"][0]["can_create_availability"] is False
+    assert "New availability" not in body
+    assert reverse("events:squad_availability", args=[event.pk, squad.pk]) not in body
 
 
 @pytest.mark.django_db

@@ -1,0 +1,50 @@
+{% comment %}
+One squad's availability grids as dropdown menu items.
+
+Keep this a comment tag rather than a hash comment: the hash form cannot span lines, so a
+multi-line one renders as visible text in the menu.
+
+Context:
+  event_pk            - parent event pk, for URL reversing
+  sq                  - a squad_data dict from my_events_view (squad, grids, has_current_grids)
+  ended_key           - suffix for the `av-ended-<key>` class the "Show ended" toggle flips.
+                        Must be unique per dropdown, or two menus fight over the same rows.
+  show_squad_heading  - True to print the squad name above its grids (event-wide menu only)
+
+The "New availability" row points at the squad availability builder, so it only renders for
+users who pass `_can_manage_squad_availability` (carried on the dict as can_manage_availability).
+{% endcomment %}
+{% if show_squad_heading %}
+<li class="menu-title text-xs font-bold uppercase tracking-wide text-base-content/50 mt-1{% if not sq.has_current_grids %} hidden av-ended-{{ ended_key }}{% endif %}">{{ sq.squad.name }}</li>
+{% endif %}
+{% for grid in sq.grids %}
+<li class="menu-title text-xs pl-2{% if grid.is_ended %} hidden av-ended-{{ ended_key }}{% endif %}">
+  {{ grid.title }}{% if grid.is_closed %} <span class="badge badge-neutral badge-xs ml-1">Closed</span>{% endif %}{% if grid.is_ended %} <span class="badge badge-ghost badge-xs ml-1">Ended</span>{% endif %}
+</li>
+{% if grid.is_published %}
+<li class="{% if grid.is_ended %}hidden av-ended-{{ ended_key }}{% endif %}">
+  {% if grid.user_responded %}
+  <a href="{% url 'events:availability_respond' event_pk=event_pk squad_pk=sq.squad.pk grid_pk=grid.pk %}" class="pl-6 flex items-center gap-1">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-success shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+    Edit Response
+  </a>
+  {% else %}
+  <a href="{% url 'events:availability_respond' event_pk=event_pk squad_pk=sq.squad.pk grid_pk=grid.pk %}" class="pl-6 flex items-center gap-1">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-warning shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+    Respond
+  </a>
+  {% endif %}
+</li>
+{% endif %}
+<li class="{% if grid.is_ended %}hidden av-ended-{{ ended_key }}{% endif %}"><a href="{% url 'events:availability_results' event_pk=event_pk squad_pk=sq.squad.pk grid_pk=grid.pk %}" class="pl-6">Results <span class="badge badge-ghost badge-xs">{{ grid.response_count }}</span></a></li>
+{% endfor %}
+{% if sq.can_manage_availability %}
+<li>
+  <a href="{% url 'events:squad_availability' event_pk sq.squad.pk %}" class="pl-2 flex items-center gap-1 text-primary">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+    </svg>
+    New availability
+  </a>
+</li>
+{% endif %}
