@@ -73,6 +73,24 @@ from apps.zwiftracing.models import ZRRider
 CATEGORY_COLUMNS = ["A+", "A", "B", "C", "D", "E"]
 
 
+def _is_event_coordinator(user: User, event: Event) -> bool:
+    """Check if a user holds one of the event's regional/group coordinator roles.
+
+    Coordinators are granted the same event-wide squad management as the head captain
+    (create, edit, delete, and per-squad availability), so this is checked alongside
+    ``head_captain_role_id`` in the squad gates.
+
+    Args:
+        user: The requesting user.
+        event: The event whose coordinator roles to check.
+
+    Returns:
+        True if the user holds any of the event's coordinator roles.
+
+    """
+    return any(user.has_discord_role(role_id) for role_id in (event.coordinator_role_ids or []))
+
+
 def _can_manage_event_squads(user: User, event: Event) -> bool:
     """Check if a user can create, edit, or delete squads for an event.
 
@@ -80,6 +98,7 @@ def _can_manage_event_squads(user: User, event: Event) -> bool:
     - Superusers
     - Users with the ``event_admin`` permission
     - Users holding the event's head captain Discord role
+    - Users holding one of the event's regional/group coordinator roles
 
     Args:
         user: The requesting user.
@@ -91,7 +110,9 @@ def _can_manage_event_squads(user: User, event: Event) -> bool:
     """
     if user.is_event_admin or user.is_superuser:
         return True
-    return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
+    if event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id):
+        return True
+    return _is_event_coordinator(user, event)
 
 
 def _can_manage_event_roles(user: User, event: Event) -> bool:
@@ -121,6 +142,7 @@ def _can_manage_squad_availability(user: User, squad: Squad) -> bool:
     - The squad's captain or vice-captain
     - Users holding the squad's Discord captain role
     - Users holding the parent event's head captain Discord role
+    - Users holding one of the parent event's regional/group coordinator roles
 
     Args:
         user: The requesting user.
@@ -137,7 +159,9 @@ def _can_manage_squad_availability(user: User, squad: Squad) -> bool:
     if squad.discord_captain_role and user.has_discord_role(squad.discord_captain_role):
         return True
     event = squad.event
-    return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
+    if event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id):
+        return True
+    return _is_event_coordinator(user, event)
 
 
 def _can_view_squad_manage(user: User, event: Event) -> bool:

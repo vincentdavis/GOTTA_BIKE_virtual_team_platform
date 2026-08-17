@@ -1,0 +1,143 @@
+"""Regional/group coordinators get the same squad management as the event head captain."""
+
+from datetime import date, timedelta
+
+import pytest
+from django.urls import reverse
+
+from apps.events.models import Event, Squad
+from apps.events.views import _can_manage_event_squads, _can_manage_squad_availability, _can_view_squad_manage
+
+COORD_ROLE = "700"
+
+
+@pytest.fixture
+def event(db) -> Event:
+    """Build an event that has a coordinator role configured.
+
+    Returns:
+        An event whose coordinator_role_ids contains COORD_ROLE.
+
+    """
+    today = date.today()
+    return Event.objects.create(
+        title="ZRL",
+        start_date=today,
+        end_date=today + timedelta(days=7),
+        visible=True,
+        coordinator_role_ids=[COORD_ROLE],
+    )
+
+
+@pytest.fixture
+def coordinator(user_model):
+    """Build a team member holding the event's coordinator Discord role.
+
+    Returns:
+        A user with team_member and the coordinator role, but no event_admin.
+
+    """
+    return user_model.objects.create_user(
+        username="coord",
+        email="coord@example.test",
+        permission_overrides={"team_member": True},
+        discord_id="900900",
+        discord_roles={COORD_ROLE: "Region Coordinator"},
+    )
+
+
+@pytest.fixture
+def outsider(user_model):
+    """Build a team member with an unrelated Discord role.
+
+    Returns:
+        A user who is neither admin, captain, nor coordinator.
+
+    """
+    return user_model.objects.create_user(
+        username="outsider",
+        email="outsider@example.test",
+        permission_overrides={"team_member": True},
+        discord_id="900901",
+        discord_roles={"999": "Some Other Role"},
+    )
+
+
+@pytest.mark.django_db
+def test_coordinator_passes_the_squad_management_gates(event, coordinator) -> None:
+    squad = Squad.objects.create(event=event, name="Squad A")
+    assert _can_manage_event_squads(coordinator, event) is True
+    assert _can_manage_squad_availability(coordinator, squad) is True
+    assert _can_view_squad_manage(coordinator, event) is True
+
+
+@pytest.mark.django_db
+def test_non_coordinator_still_blocked(event, outsider) -> None:
+    squad = Squad.objects.create(event=event, name="Squad A")
+    assert _can_manage_event_squads(outsider, event) is False
+    assert _can_manage_squad_availability(outsider, squad) is False
+    assert _can_view_squad_manage(outsider, event) is False
+
+
+@pytest.mark.django_db
+def test_coordinator_can_open_squad_manage_page(client, event, coordinator) -> None:
+    Squad.objects.create(event=event, name="Squad A")
+    client.force_login(coordinator)
+
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+
+    assert resp.status_code == 200
+    assert resp.context["can_manage_all"] is True
+
+
+@pytest.mark.django_db
+def test_coordinator_can_open_squad_edit(client, event, coordinator) -> None:
+    squad = Squad.objects.create(event=event, name="Squad A")
+    client.force_login(coordinator)
+
+    resp = client.get(reverse("events:squad_edit", args=[event.pk, squad.pk]))
+
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_coordinator_can_open_squad_create(client, event, coordinator) -> None:
+    client.force_login(coordinator)
+
+    resp = client.get(reverse("events:squad_create", args=[event.pk]))
+
+    assert resp.status_code == 200
+
+
+@pytest.mark.django_db
+def test_coordinator_can_delete_a_squad(client, event, coordinator) -> None:
+    squad = Squad.objects.create(event=event, name="Squad A")
+    client.force_login(coordinator)
+
+    client.post(reverse("events:squad_delete", args=[event.pk, squad.pk]))
+
+    assert not Squad.objects.filter(pk=squad.pk).exists()
+
+
+@pytest.mark.django_db
+def test_outsider_cannot_delete_a_squad(client, event, outsider) -> None:
+    squad = Squad.objects.create(event=event, name="Squad A")
+    client.force_login(outsider)
+
+    client.post(reverse("events:squad_delete", args=[event.pk, squad.pk]))
+
+    assert Squad.objects.filter(pk=squad.pk).exists()
+
+
+@pytest.mark.django_db
+def test_coordinator_role_only_applies_to_its_own_event(user_model, coordinator) -> None:
+    """Holding a coordinator role grants nothing on an event that doesn't list it."""
+    today = date.today()
+    other_event = Event.objects.create(
+        title="Other", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=[],
+    )
+    squad = Squad.objects.create(event=other_event, name="Squad Z")
+
+    assert _can_manage_event_squads(coordinator, other_event) is False
+    assert _can_manage_squad_availability(coordinator, squad) is False
