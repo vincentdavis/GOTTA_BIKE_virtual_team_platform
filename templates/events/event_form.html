@@ -181,7 +181,7 @@
             {% for row in timezone_role_rows %}
             <label class="flex items-center gap-2">
               <span class="text-sm w-32 shrink-0 truncate" title="{{ row.option }}">{{ row.option }}</span>
-              <select name="{{ row.field_name }}" class="select select-bordered select-sm flex-1 min-w-0">
+              <select name="{{ row.field_name }}" class="select select-bordered select-sm flex-1 min-w-0"{% if row.disabled %} disabled{% endif %}>
                 {% for value, label in row.choices %}
                 <option value="{{ value }}"{% if value == row.selected %} selected{% endif %}>{{ label }}</option>
                 {% endfor %}

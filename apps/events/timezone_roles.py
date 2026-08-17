@@ -130,26 +130,46 @@ def role_columns(event: Event, role_names: dict[str, str] | None = None) -> list
     ]
 
 
-def parse_role_map(post, options: list | None) -> dict[str, str]:
+def parse_role_map(
+    post,
+    options: list | None,
+    *,
+    allowed_role_ids: set[str] | None = None,
+    current: dict | None = None,
+) -> dict[str, str]:
     """Read the event-edit form's per-option role selects into a map.
 
     Fields are named ``tz_role_map__<label>``. Only the event's current options are read,
     so a removed option cannot be resurrected by a crafted POST, and blank selections are
     omitted rather than stored as empty strings.
 
+    Role IDs are re-validated server-side against the event's prefix-filtered roles, the
+    same defence the squad and coordinator pickers use — the rendered ``<select>`` cannot
+    be trusted. A value already saved for that option is grandfathered through, so an
+    admin narrowing the event's prefixes does not silently wipe existing mappings.
+
     Args:
         post: The request POST QueryDict.
         options: The event's timezone options.
+        allowed_role_ids: Role IDs the event's prefixes permit. None skips the check.
+        current: The event's existing map, whose values are always allowed to survive.
 
     Returns:
-        ``{option: role id}`` for the options that were given a role.
+        ``{option: role id}`` for the options that were given a permitted role.
 
     """
+    existing = current if isinstance(current, dict) else {}
     parsed: dict[str, str] = {}
     for option in options or []:
         if not isinstance(option, str):
             continue
         value = str(post.get(f"tz_role_map__{option}", "") or "").strip()
-        if value and value != "0":
-            parsed[option] = value
+        if not value or value == "0":
+            continue
+        # Reject a role the prefixes don't permit, unless the admin already had it saved
+        # for this option (narrowing prefixes must not silently wipe existing mappings).
+        rejected = allowed_role_ids is not None and value not in allowed_role_ids
+        if rejected and str(existing.get(option) or "") != value:
+            continue
+        parsed[option] = value
     return parsed

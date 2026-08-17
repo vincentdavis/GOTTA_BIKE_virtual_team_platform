@@ -362,3 +362,155 @@ def test_removing_an_option_drops_its_mapping_on_save(client, event, user_model)
 
     event.refresh_from_db()
     assert event.timezone_role_map == {"US EAST": "111"}
+
+
+# --- prefix filtering (same rules as the squad role pickers) ------------------------
+
+
+@pytest.fixture
+def prefixed_roles(db):
+    """Create roles inside and outside the "$" prefix."""
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="111", name="$US-East", position=3)
+    DiscordRole.objects.create(role_id="333", name="$EMEA-West", position=2)
+    DiscordRole.objects.create(role_id="888", name="Moderators", position=1)  # no prefix
+
+
+@pytest.fixture
+def role_admin(user_model):
+    """Build an admin who can edit events.
+
+    Returns:
+        The admin user.
+
+    """
+    return user_model.objects.create_user(
+        username="pa", email="pa@example.test",
+        permission_overrides={"team_member": True, "event_admin": True},
+    )
+
+
+def _edit_post(event, **extra) -> dict:
+    """Build a minimal valid event-edit POST.
+
+    Returns:
+        The POST dict.
+
+    """
+    return {
+        "title": event.title,
+        "start_date": event.start_date.isoformat(),
+        "end_date": event.end_date.isoformat(),
+        "timezone_options": '["US EAST", "US WEST", "EMEA West"]',
+        **extra,
+    }
+
+
+@pytest.mark.django_db
+def test_choices_are_filtered_by_the_events_prefixes(client, event, prefixed_roles, role_admin) -> None:
+    """Not the global Constance list: these are event roles, like the squad pickers."""
+    event.prefixes = ["$"]
+    event.save(update_fields=["prefixes"])
+    client.force_login(role_admin)
+
+    rows = client.get(reverse("events:event_edit", args=[event.pk])).context["timezone_role_rows"]
+    values = {v for row in rows for v, _label in row["choices"]}
+
+    assert "111" in values and "333" in values
+    assert "888" not in values  # unprefixed role is not offered
+    assert all(row["disabled"] is False for row in rows)
+
+
+@pytest.mark.django_db
+def test_no_event_prefixes_disables_the_selects(client, event, prefixed_roles, role_admin) -> None:
+    """Matches the squad form: you must set prefixes before picking roles."""
+    event.prefixes = []
+    event.timezone_role_map = {}
+    event.save(update_fields=["prefixes", "timezone_role_map"])
+    client.force_login(role_admin)
+
+    resp = client.get(reverse("events:event_edit", args=[event.pk]))
+    rows = resp.context["timezone_role_rows"]
+
+    assert all(row["disabled"] is True for row in rows)
+    assert rows[0]["choices"] == [("0", "(none — set event prefixes first)")]
+    assert "set event prefixes first" in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_a_role_outside_the_prefixes_is_rejected_on_save(client, event, prefixed_roles, role_admin) -> None:
+    """The rendered <select> cannot be trusted; re-validate server-side."""
+    event.prefixes = ["$"]
+    event.timezone_role_map = {}
+    event.save(update_fields=["prefixes", "timezone_role_map"])
+    client.force_login(role_admin)
+
+    client.post(reverse("events:event_edit", args=[event.pk]),
+                _edit_post(event, **{"tz_role_map__US EAST": "888"}))
+
+    event.refresh_from_db()
+    assert event.timezone_role_map == {}
+
+
+@pytest.mark.django_db
+def test_a_prefixed_role_saves(client, event, prefixed_roles, role_admin) -> None:
+    event.prefixes = ["$"]
+    event.timezone_role_map = {}
+    event.save(update_fields=["prefixes", "timezone_role_map"])
+    client.force_login(role_admin)
+
+    client.post(reverse("events:event_edit", args=[event.pk]),
+                _edit_post(event, **{"tz_role_map__US EAST": "111"}))
+
+    event.refresh_from_db()
+    assert event.timezone_role_map == {"US EAST": "111"}
+
+
+@pytest.mark.django_db
+def test_an_existing_mapping_survives_narrowing_the_prefixes(client, event, prefixed_roles, role_admin) -> None:
+    """Narrowing prefixes must not silently wipe mappings an admin already made."""
+    event.prefixes = ["~"]  # "$US-East" no longer matches
+    event.timezone_role_map = {"US EAST": "111"}
+    event.save(update_fields=["prefixes", "timezone_role_map"])
+    client.force_login(role_admin)
+
+    resp = client.get(reverse("events:event_edit", args=[event.pk]))
+    row = next(r for r in resp.context["timezone_role_rows"] if r["option"] == "US EAST")
+    # Kept in the list, or the browser would submit "0" and clear it on the next save.
+    assert ("111", "Unknown Role (111)") in row["choices"]
+
+    client.post(reverse("events:event_edit", args=[event.pk]),
+                _edit_post(event, **{"tz_role_map__US EAST": "111"}))
+
+    event.refresh_from_db()
+    assert event.timezone_role_map == {"US EAST": "111"}
+
+
+@pytest.mark.django_db
+def test_grouped_prefix_choices_are_flattened_into_individual_options(
+    client, event, prefixed_roles, role_admin
+) -> None:
+    """Grouped choices must become individual options.
+
+    ``_get_role_choices`` returns optgroups; a hand-written ``<select>`` must not render
+    a whole group as one option whose label is the repr of a list of tuples.
+    """
+    from apps.team.models import DiscordRole
+
+    DiscordRole.objects.create(role_id="222", name=">ZRL REGISTRANT", position=4)
+    event.prefixes = ["$", ">"]
+    event.save(update_fields=["prefixes"])
+    client.force_login(role_admin)
+
+    resp = client.get(reverse("events:event_edit", args=[event.pk]))
+    row = resp.context["timezone_role_rows"][0]
+    body = resp.content.decode()
+
+    # Every entry is a plain (value, label) pair, never a nested group.
+    assert all(isinstance(label, str) for _value, label in row["choices"])
+    assert {"111", "333", "222"} <= {v for v, _ in row["choices"]}
+    assert "888" not in {v for v, _ in row["choices"]}  # unprefixed still excluded
+    # The signature of the bug: a Python list-of-tuples repr leaking into an option label.
+    # ("', '" alone is too broad -- the page's inline JS carries real string arrays.)
+    assert "[(" not in body

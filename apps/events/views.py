@@ -1224,7 +1224,12 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
             form.save()
             # Parsed after save so it reads the options just stored, and so an option the
             # admin removed cannot keep its mapping.
-            event.timezone_role_map = parse_role_map(request.POST, event.timezone_options)
+            event.timezone_role_map = parse_role_map(
+                request.POST,
+                event.timezone_options,
+                allowed_role_ids=_timezone_allowed_role_ids(event),
+                current=Event.objects.filter(pk=pk).values_list("timezone_role_map", flat=True).first(),
+            )
             event.save(update_fields=["timezone_role_map"])
             logfire.info(
                 "Event updated",
@@ -4688,6 +4693,48 @@ def sync_event_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     return redirect("events:event_detail", pk=event_pk)
 
 
+def _flatten_role_choices(choices: list) -> list[tuple[str, str]]:
+    """Flatten ``_get_role_choices`` optgroups into plain ``(value, label)`` pairs.
+
+    With prefixes supplied that helper groups roles under "Prefix: $" headings, which a
+    Django ``Select`` widget renders natively but a hand-written ``<select>`` does not.
+    Role names already begin with their prefix, so the grouping carries no extra
+    information here.
+
+    Args:
+        choices: The possibly-grouped choice list.
+
+    Returns:
+        Flat list of (value, label) pairs, in order.
+
+    """
+    flat: list[tuple[str, str]] = []
+    for value, label in choices:
+        if isinstance(label, (list, tuple)):
+            flat.extend((str(v), str(lbl)) for v, lbl in label)
+        else:
+            flat.append((str(value), str(label)))
+    return flat
+
+
+def _timezone_allowed_role_ids(event) -> set[str]:
+    """Role IDs the event's prefixes permit for its timezone/region map.
+
+    Args:
+        event: The event being edited.
+
+    Returns:
+        Set of role ID strings; empty when the event has no prefixes set.
+
+    """
+    from apps.events.forms import _get_role_choices
+
+    prefixes = [p for p in (event.prefixes or []) if isinstance(p, str)]
+    if not prefixes:
+        return set()
+    return {v for v, _ in _flatten_role_choices(_get_role_choices(prefixes=prefixes)) if v != "0"}
+
+
 def _timezone_role_rows(event) -> list[dict]:
     """Build the event-edit rows pairing each saved timezone option with a role select.
 
@@ -4698,22 +4745,39 @@ def _timezone_role_rows(event) -> list[dict]:
         One dict per option: ``{"option", "field_name", "selected", "choices"}``.
 
     """
-    from apps.events.forms import _allowed_event_prefixes, _get_role_choices
+    from apps.events.forms import _get_role_choices
     from apps.events.timezone_roles import mapped_roles
 
-    # Same prefix restriction the squad/coordinator role pickers use.
-    choices = _get_role_choices(_allowed_event_prefixes())
+    # Filtered by the EVENT's prefixes, exactly like the squad team/captain role pickers
+    # (not the global Constance list, which is only the set an admin may choose from).
+    prefixes = [p for p in (event.prefixes or []) if isinstance(p, str)]
+    disabled = not prefixes
+    base = (
+        _flatten_role_choices(_get_role_choices(prefixes=prefixes))
+        if prefixes
+        else [("0", "(none \u2014 set event prefixes first)")]
+    )
+    known = {v for v, _ in base}
+
     saved = mapped_roles(event)
-    return [
-        {
+    rows = []
+    for option in (event.timezone_options or []):
+        if not isinstance(option, str):
+            continue
+        selected = saved.get(option, "0")
+        choices = list(base)
+        # A saved role outside the current prefixes must stay in the list, or the browser
+        # would submit the first option and silently wipe the mapping on save.
+        if selected != "0" and selected not in known:
+            choices = [*choices, (selected, f"Unknown Role ({selected})")]
+        rows.append({
             "option": option,
             "field_name": f"tz_role_map__{option}",
-            "selected": saved.get(option, "0"),
+            "selected": selected,
             "choices": choices,
-        }
-        for option in (event.timezone_options or [])
-        if isinstance(option, str)
-    ]
+            "disabled": disabled,
+        })
+    return rows
 
 
 @require_GET
