@@ -234,7 +234,10 @@ def test_availability_menu_offers_new_availability_to_squad_managers(client, eve
     assert resp.context["events_data"][0]["has_availability_grids"] is False
     assert resp.context["events_data"][0]["can_create_availability"] is True
     assert "New availability" in body
-    assert body.count(reverse("events:squad_availability", args=[event.pk, squad.pk])) == 3
+    # Once per menu (event-wide + this squad's). The old "Manage Squad" button that made a
+    # third copy of this URL was removed as a duplicate.
+    assert body.count(reverse("events:squad_availability", args=[event.pk, squad.pk])) == 2
+    assert "Manage Squad" not in body
 
 
 @pytest.mark.django_db
