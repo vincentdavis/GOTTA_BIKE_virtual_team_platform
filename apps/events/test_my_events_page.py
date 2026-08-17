@@ -54,11 +54,13 @@ def test_member_count_badge_carries_a_person_icon(client, event, team_member) ->
     assert 'title="1 member"' in body
 
 
-@pytest.mark.django_db
-def test_scheduled_race_rider_count_uses_the_same_person_icon(client, event, team_member) -> None:
-    """A scheduled race shows the person icon plus a bare count, matching the squad badge."""
-    squad = Squad.objects.create(event=event, name="Squad A")
-    _join(event, squad, team_member)
+def _scheduled_race(squad: Squad, user, **selection_kwargs) -> AvailabilitySlotSelection:
+    """Give a squad one published grid with a single upcoming race the user is selected for.
+
+    Returns:
+        The slot selection.
+
+    """
     today = date.today()
     grid = AvailabilityGrid.objects.create(
         squad=squad, title="Week 1", start_date=today, end_date=today + timedelta(days=6),
@@ -67,8 +69,18 @@ def test_scheduled_race_rider_count_uses_the_same_person_icon(client, event, tea
     )
     selection = AvailabilitySlotSelection.objects.create(
         grid=grid, name="Race 1", slot_date=today + timedelta(days=2), slot_time="18:30",
+        **selection_kwargs,
     )
-    selection.selected_users.add(team_member)
+    selection.selected_users.add(user)
+    return selection
+
+
+@pytest.mark.django_db
+def test_scheduled_race_rider_count_uses_the_same_person_icon(client, event, team_member) -> None:
+    """A scheduled race shows the person icon plus a bare count, matching the squad badge."""
+    squad = Squad.objects.create(event=event, name="Squad A")
+    _join(event, squad, team_member)
+    _scheduled_race(squad, team_member)
     client.force_login(team_member)
 
     body = client.get(reverse("events:my_events")).content.decode()
@@ -77,6 +89,41 @@ def test_scheduled_race_rider_count_uses_the_same_person_icon(client, event, tea
     assert body.count(MEMBER_ICON_PATH) == 2
     assert 'title="1 rider"' in body
     assert not re.search(r">\s*1 rider\s*<", body)
+
+
+@pytest.mark.django_db
+def test_race_status_badge_drops_below_the_title_on_phones(client, event, team_member) -> None:
+    """Stacking under sm gives a long race name the full card width instead of two thirds."""
+    squad = Squad.objects.create(event=event, name="Squad A")
+    _join(event, squad, team_member)
+    _scheduled_race(squad, team_member, status=AvailabilitySlotSelection.Status.CONFIRMED)
+    client.force_login(team_member)
+
+    body = client.get(reverse("events:my_events")).content.decode()
+
+    assert "flex flex-col items-start gap-2 sm:flex-row sm:justify-between" in body
+    # The old always-inline row is gone.
+    assert "flex items-start justify-between gap-2" not in body
+
+
+@pytest.mark.django_db
+def test_calendar_links_are_icon_buttons_with_tooltips(client, event, team_member) -> None:
+    """The two calendar actions become icons so the link row stays short on a phone."""
+    squad = Squad.objects.create(event=event, name="Squad A")
+    _join(event, squad, team_member)
+    _scheduled_race(squad, team_member, thread_link="https://example.test/thread")
+    client.force_login(team_member)
+
+    body = client.get(reverse("events:my_events")).content.decode()
+
+    for tip in ("Add to Google Calendar", "Download .ics"):
+        assert f'data-tip="{tip}"' in body
+        assert f'aria-label="{tip}"' in body
+    assert body.count("btn-xs btn-ghost btn-square") == 2
+    # The emoji-prefixed text links are gone; the named links beside them stay text.
+    assert "📅" not in body
+    assert not re.search(r">\s*Google Calendar\s*<", body)
+    assert ">Discord thread</a>" in body
 
 
 @pytest.mark.django_db
