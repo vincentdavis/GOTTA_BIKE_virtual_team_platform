@@ -12,21 +12,17 @@ latest** racing-profile snapshot. From that we can show:
 - whether the account is connected at all, and since when;
 - the current weight, with the timestamp of the snapshot it came from.
 
-Three of the things a reviewer would want are **not available yet**, and this module
-reports them as explicitly unavailable rather than blank or zero, because a blank reads
-as "the rider is 0 kg" or "nothing to see here" and a reviewer would act on it:
+Height and the 90-day ranges are **stored by the service but not exposed on its API**:
+``ZwiftRacingProfileSnapshot`` already accumulates ``weight_in_grams``,
+``height_in_millimeters`` and ``captured_at``, deduped on change. Closing those rows is
+therefore an API-exposure change in the service (add height to its profile response; add
+min/max over the snapshot window), not new data capture. Until then this module reports
+them as explicitly unavailable rather than blank or zero, because a blank reads as "the
+rider is 0 kg" and a reviewer would act on it. ``UNAVAILABLE_REASON`` is the single place
+the UI explains the gap.
 
-- **90-day min/max weight** — the service keeps one row per account and upserts it, so
-  there is no history to take a min or max over.
-- **Height** — the upstream profile carries it, but the service neither denormalizes it
-  onto its response nor is it safe for the platform to reach into the raw ``data`` blob
-  with upstream field names: keeping partner-API schema knowledge inside the private
-  service is the entire point of the split.
-- **90-day min/max height** — needs both of the above.
-
-Closing those means service-side work first (denormalize height; store a snapshot series),
-then this module reads the new fields. ``UNAVAILABLE_REASON`` is the single place the UI
-explains the gap.
+Note the snapshot series only reaches back to when snapshotting was deployed, so a
+90-day range will be short until it fills.
 """
 
 from __future__ import annotations
@@ -62,20 +58,51 @@ def _dt(value: object):
     return value
 
 
-def _weight_kg(profile: dict) -> float | None:
-    """Convert the profile's gram weight to kilograms.
+def _kg(grams: object) -> float | None:
+    """Convert a gram value to kilograms.
+
+    Args:
+        grams: A raw gram value from the service payload.
+
+    Returns:
+        Weight in kg to one decimal, or None when absent, non-numeric or non-positive.
+        ``bool`` is rejected explicitly since it is a subclass of ``int``.
+
+    """
+    if isinstance(grams, bool) or not isinstance(grams, (int, float)) or grams <= 0:
+        return None
+    return round(grams / 1000, 1)
+
+
+def _profile_weight_grams(profile: dict) -> object:
+    """Pick the rider's LIVE profile weight, never the competition-metrics one.
+
+    Zwift returns two weights and they routinely disagree:
+
+    - the profile's top-level ``weight``, which changes the moment the rider edits it;
+    - ``competitionMetrics.weightInGrams``, documented as "weight at snapshot time" —
+      frozen into Zwift's last racing-metrics computation alongside category, racing
+      score and zFTP, so it can be days stale.
+
+    A reviewer checking a submitted weight wants the live one, so this reads that and
+    deliberately does **not** fall back to the metrics weight: showing a stale value
+    under a fresh timestamp would be worse than showing nothing.
 
     Args:
         profile: The racing-profile dict from the zauth service.
 
     Returns:
-        Weight in kg to one decimal, or None when absent or non-numeric.
+        The raw gram value, or None when unavailable.
 
     """
-    grams = profile.get("weight_in_grams")
-    if not isinstance(grams, (int, float)) or grams <= 0:
-        return None
-    return round(grams / 1000, 1)
+    # Preferred: a denormalized field, if/when the service publishes one.
+    grams = profile.get("profile_weight_in_grams")
+    if grams is not None:
+        return grams
+    # Until then, read it out of the passed-through payload. `data` is the service's
+    # own republication of the profile, and `weight` is its top-level live weight.
+    data = profile.get("data")
+    return data.get("weight") if isinstance(data, dict) else None
 
 
 def build_zauth_panel(user: User) -> dict:
@@ -96,7 +123,10 @@ def build_zauth_panel(user: User) -> dict:
         - ``verified_via_zauth`` / ``verified_at``: the platform's own stamp, which is
           what actually gates race-ready, and can disagree with ``connected`` between
           reconcile runs.
-        - ``weight_kg`` / ``weight_as_of``: current weight and the snapshot timestamp.
+        - ``weight_kg`` / ``weight_as_of``: the rider's LIVE profile weight and when the
+          service last read it. Never the competition-metrics weight — see
+          :func:`_profile_weight_grams`.
+        - ``metrics_weight_kg``: the competition-metrics weight, for reference.
         - ``height_cm``, ``weight_90d_min``, ``weight_90d_max``, ``height_90d_min``,
           ``height_90d_max``: always None today — see the module docstring.
         - ``unavailable_reason``: why those are None.
@@ -114,6 +144,7 @@ def build_zauth_panel(user: User) -> dict:
         "verified_at": user.zwid_verified_at,
         "weight_kg": None,
         "weight_as_of": None,
+        "metrics_weight_kg": None,
         # Pending service-side work; see the module docstring.
         "height_cm": None,
         "weight_90d_min": None,
@@ -138,6 +169,11 @@ def build_zauth_panel(user: User) -> dict:
         # unavailable rather than implying a weight of zero.
         logfire.info("Zauth panel: connected with no racing profile", user_id=user.pk)
         return panel
-    panel["weight_kg"] = _weight_kg(profile)
+    panel["weight_kg"] = _kg(_profile_weight_grams(profile))
+    # `fetched_at` is when the service last read Zwift, which is the correct "as of" for
+    # a live value. It would be the wrong label for the metrics weight below.
     panel["weight_as_of"] = _dt(profile.get("fetched_at"))
+    # Kept for reference (not currently rendered): the weight Zwift actually raced this
+    # rider at, per its last metrics snapshot.
+    panel["metrics_weight_kg"] = _kg(profile.get("weight_in_grams"))
     return panel

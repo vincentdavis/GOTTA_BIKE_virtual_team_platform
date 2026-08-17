@@ -10,7 +10,13 @@ from django.urls import reverse
 from apps.team.zauth_panel import UNAVAILABLE_REASON, build_zauth_panel
 
 _STATUS = {"connected": True, "zwid": "555", "connected_at": "2026-05-01T09:30:00Z"}
-_PROFILE = {"weight_in_grams": 72400, "fetched_at": "2026-08-16T06:15:00Z"}
+# Both weights present and disagreeing, as Zwift really returns them: the live
+# top-level `weight` under `data`, and the frozen competitionMetrics one.
+_PROFILE = {
+    "weight_in_grams": 76260,          # competitionMetrics: "weight at snapshot time"
+    "data": {"weight": 76203},         # live profile weight
+    "fetched_at": "2026-08-16T06:15:00Z",
+}
 
 
 @pytest.fixture
@@ -28,7 +34,8 @@ def test_connected_rider_gets_weight_and_timestamp(user, connected) -> None:
     assert panel["configured"] is True
     assert panel["connected"] is True
     assert panel["zwid"] == "555"
-    assert panel["weight_kg"] == pytest.approx(72.4)
+    assert panel["weight_kg"] == pytest.approx(76.2)      # live profile weight
+    assert panel["metrics_weight_kg"] == pytest.approx(76.3)  # the metrics snapshot one
     # Parsed to datetimes so the page can format them like its other timestamps.
     assert panel["connected_at"].year == 2026
     assert panel["connected_at"].month == 5
@@ -100,9 +107,36 @@ def test_connected_without_a_snapshot_yet(user, monkeypatch) -> None:
 def test_nonsense_gram_values_read_as_no_weight(user, monkeypatch) -> None:
     monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
     monkeypatch.setattr("apps.zwift.client.get_connection_status", lambda uid: dict(_STATUS))
-    for grams in (0, -1, None, "72400", {}):
-        monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda uid, g=grams: {"weight_in_grams": g})
+    for grams in (0, -1, None, "76203", {}, True):
+        monkeypatch.setattr("apps.zwift.client.get_racing_profile",
+                            lambda uid, g=grams: {"data": {"weight": g}})
         assert build_zauth_panel(user)["weight_kg"] is None
+
+
+@pytest.mark.django_db
+def test_never_falls_back_to_the_competition_metrics_weight(user, monkeypatch) -> None:
+    """A stale snapshot weight under a fresh "as of" timestamp is worse than nothing."""
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    monkeypatch.setattr("apps.zwift.client.get_connection_status", lambda uid: dict(_STATUS))
+    monkeypatch.setattr("apps.zwift.client.get_racing_profile",
+                        lambda uid: {"weight_in_grams": 76260, "data": {}})
+
+    panel = build_zauth_panel(user)
+
+    assert panel["weight_kg"] is None
+    assert panel["metrics_weight_kg"] == pytest.approx(76.3)
+
+
+@pytest.mark.django_db
+def test_prefers_a_denormalized_field_once_the_service_publishes_one(user, monkeypatch) -> None:
+    """The durable path: read the service's own field ahead of the passed-through blob."""
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    monkeypatch.setattr("apps.zwift.client.get_connection_status", lambda uid: dict(_STATUS))
+    monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda uid: {
+        "profile_weight_in_grams": 75000, "data": {"weight": 76203}, "weight_in_grams": 76260,
+    })
+
+    assert build_zauth_panel(user)["weight_kg"] == pytest.approx(75.0)
 
 
 @pytest.mark.django_db
@@ -148,7 +182,8 @@ def test_card_renders_on_the_review_page(client, verification_factory, user_mode
     assert resp.status_code == 200
     assert "Zwift Auth" in body
     assert "Connected" in body
-    assert "72.4 kg" in body
+    assert "76.2 kg" in body      # live weight
+    assert "76.3 kg" not in body  # not the competitionMetrics weight
     assert "Weight 90d min" in body
     assert UNAVAILABLE_REASON in body
 

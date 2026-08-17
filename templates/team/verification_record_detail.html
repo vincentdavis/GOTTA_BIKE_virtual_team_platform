@@ -152,10 +152,10 @@
         {% if zauth.connected %}
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <div class="text-sm text-base-content/60 mb-1">Current weight (Zwift)</div>
+            <div class="text-sm text-base-content/60 mb-1 tooltip tooltip-bottom cursor-help" data-tip="The rider's live Zwift profile weight, not the weight frozen into Zwift's last racing-metrics snapshot (those two often differ).">Zwift profile weight <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
             {% if zauth.weight_kg %}
             <div class="font-medium font-mono text-lg">{{ zauth.weight_kg|weight_dual }}</div>
-            <div class="text-xs text-base-content/50 mt-1">As of {{ zauth.weight_as_of|date:"F d, Y H:i" }} UTC</div>
+            <div class="text-xs text-base-content/50 mt-1">Read from Zwift {{ zauth.weight_as_of|date:"F d, Y H:i" }} UTC</div>
             {% if record.weight %}
             <div class="text-sm mt-2">
               <span class="text-base-content/60">Difference:</span>
@@ -198,9 +198,8 @@
             <div class="text-base-content/40">&mdash;</div>
           </div>
         </div>
-        <p class="text-xs text-base-content/50 mt-2">{{ zauth.unavailable_reason }}: the service stores one
-          profile snapshot per rider, so there is no history to take a 90-day range over, and it does not
-          publish height.</p>
+        <p class="text-xs text-base-content/50 mt-2">{{ zauth.unavailable_reason }}. The Zwift service does
+          record height and a weight/height history, but does not yet expose them on its API.</p>
         {% elif zauth.configured %}
         <p class="text-sm text-base-content/60">This rider has not connected their Zwift account, so there are
           no official Zwift numbers to compare the submission against.</p>
