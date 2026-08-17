@@ -35,6 +35,7 @@ from apps.team.services import (
     log_record_view,
 )
 from apps.team.tasks import notify_application_update, notify_captains_verification, notify_race_ready_change
+from apps.team.zauth_panel import build_zauth_panel
 from apps.zwift import client as zwift_client
 from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
@@ -1197,6 +1198,9 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     if record.user.zwid:
         zp_rider = ZPTeamRiders.objects.filter(zwid=record.user.zwid).first()
 
+    # Official Zwift-sourced numbers to check the rider's submission against.
+    zauth = build_zauth_panel(record.user)
+
     # Load verification checklist for the record's verify type
     checklist_items = []
     if can_review and record.is_pending:
@@ -1239,6 +1243,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
             "can_edit_weight": can_edit_weight,
             "checklist_items": checklist_items,
             "zp_rider": zp_rider,
+            "zauth": zauth,
             "other_records": other_records,
             "record_views": record_views,
         },

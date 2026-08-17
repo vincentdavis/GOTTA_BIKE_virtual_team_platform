@@ -131,6 +131,85 @@
         {% endif %}
       </div>
 
+      <!-- Zwift Auth: official Zwift-sourced numbers to check the submission against.
+           Rows the service cannot supply yet say so rather than rendering blank; a blank
+           weight reads as "0 kg" to a reviewer who is about to make a decision. -->
+      <div class="bg-base-300 rounded-lg p-4 mb-6">
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <h3 class="font-semibold">Zwift Auth</h3>
+          {% if not zauth.configured %}
+          <span class="badge badge-ghost badge-sm">Service not configured</span>
+          {% elif zauth.connected %}
+          <span class="badge badge-success badge-sm">Connected</span>
+          {% else %}
+          <span class="badge badge-warning badge-sm">Not connected</span>
+          {% endif %}
+          {% if zauth.verified_via_zauth %}
+          <span class="badge badge-success badge-outline badge-sm">Verified via Zwift Auth</span>
+          {% endif %}
+        </div>
+
+        {% if zauth.connected %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <div class="text-sm text-base-content/60 mb-1">Current weight (Zwift)</div>
+            {% if zauth.weight_kg %}
+            <div class="font-medium font-mono text-lg">{{ zauth.weight_kg|weight_dual }}</div>
+            <div class="text-xs text-base-content/50 mt-1">As of {{ zauth.weight_as_of|date:"F d, Y H:i" }} UTC</div>
+            {% if record.weight %}
+            <div class="text-sm mt-2">
+              <span class="text-base-content/60">Difference:</span>
+              {% with diff=record.weight|weight_diff:zauth.weight_kg %}
+              <span class="font-medium {% if '+' in diff %}text-error{% elif '-' in diff %}text-success{% endif %}">{{ diff }}</span>
+              {% endwith %}
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="text-sm text-base-content/50">No profile snapshot stored yet</div>
+            {% endif %}
+          </div>
+
+          <div>
+            <div class="text-sm text-base-content/60 mb-1">Connection</div>
+            <div class="text-sm">Since {{ zauth.connected_at|date:"F d, Y"|default:"unknown" }}</div>
+            {% if zauth.zwid %}<div class="text-sm">Zwift ID <span class="font-mono">{{ zauth.zwid }}</span></div>{% endif %}
+            {% if zauth.verified_via_zauth and zauth.verified_at %}
+            <div class="text-xs text-base-content/50 mt-1">Platform verified {{ zauth.verified_at|date:"M j, Y" }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="divider my-3"></div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+          <div>
+            <div class="text-base-content/60 text-xs">Weight 90d min</div>
+            <div class="text-base-content/40">&mdash;</div>
+          </div>
+          <div>
+            <div class="text-base-content/60 text-xs">Weight 90d max</div>
+            <div class="text-base-content/40">&mdash;</div>
+          </div>
+          <div>
+            <div class="text-base-content/60 text-xs">Height</div>
+            <div class="text-base-content/40">&mdash;</div>
+          </div>
+          <div>
+            <div class="text-base-content/60 text-xs">Height 90d min / max</div>
+            <div class="text-base-content/40">&mdash;</div>
+          </div>
+        </div>
+        <p class="text-xs text-base-content/50 mt-2">{{ zauth.unavailable_reason }}: the service stores one
+          profile snapshot per rider, so there is no history to take a 90-day range over, and it does not
+          publish height.</p>
+        {% elif zauth.configured %}
+        <p class="text-sm text-base-content/60">This rider has not connected their Zwift account, so there are
+          no official Zwift numbers to compare the submission against.</p>
+        {% else %}
+        <p class="text-sm text-base-content/60">The Zwift Auth service is not configured for this
+          environment.</p>
+        {% endif %}
+      </div>
+
       {% if record.notes %}
       <div class="bg-base-300 rounded-lg p-4 mb-6">
         <div class="text-sm text-base-content/60 mb-1">Notes</div>
