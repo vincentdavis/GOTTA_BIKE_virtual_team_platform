@@ -13,7 +13,7 @@
     <h2 class="text-xl font-bold">Assign Riders &mdash; {{ event.title }}</h2>
     <form method="post" action="{% url 'events:sync_event_roles' event.pk %}" class="shrink-0">
       {% csrf_token %}
-      <button type="submit" class="btn btn-outline btn-sm" title="Fetch Discord roles for all signups">Sync Roles</button>
+      <button type="submit" class="btn btn-outline btn-sm" title="Read-only: refreshes the app's cached copy of each rider's Discord roles. Nothing is changed in Discord.">Sync Roles</button>
     </form>
   </div>
 

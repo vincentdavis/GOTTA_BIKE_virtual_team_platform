@@ -4537,14 +4537,24 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     )
 
 
+#: Appended to the sync result so an admin knows what just happened. The button reads
+#: like it might hand out roles; it only refreshes what the app has recorded.
+SYNC_ROLES_EXPLAINER = (
+    "This refreshes the app's cached copy of each rider's Discord roles. "
+    "It is read-only \u2014 nothing was changed in Discord."
+)
+
+
 @login_required
 @team_member_required()
 @require_POST
 def sync_event_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
-    """Sync Discord roles from server for all users signed up to an event.
+    """Sync Discord roles from Discord for all riders signed up to an event.
 
-    Fetches each signup user's actual Discord roles and updates the local cache.
-    Redirects back to the referring page.
+    Read-only with respect to Discord: it fetches each registered rider's current guild
+    roles and overwrites the app's ``User.discord_roles`` cache, which is what the role
+    grids render from. It never grants or removes a role. The result message says so,
+    because "Sync Roles" reads like it might push changes outward.
 
     Args:
         request: The HTTP request.
@@ -4582,9 +4592,9 @@ def sync_event_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         admin_user_id=request.user.id,
     )
     if failed:
-        messages.warning(request, f"Synced roles for {synced} users, {failed} failed.")
+        messages.warning(request, f"Synced roles for {synced} riders, {failed} failed. {SYNC_ROLES_EXPLAINER}")
     else:
-        messages.success(request, f"Synced Discord roles for {synced} users.")
+        messages.success(request, f"Synced Discord roles for {synced} riders. {SYNC_ROLES_EXPLAINER}")
 
     # Redirect back to referring page
     referer = request.META.get("HTTP_REFERER", "")
