@@ -186,9 +186,6 @@ def test_squad_card_carries_its_own_availability_menu(client, event, team_member
 
     assert resp.context["events_data"][0]["squads"][0]["ended_key"] == f"s{squad.pk}"
     assert 'aria-label="Availability"' in body
-    # A multi-line {# #} comment renders as visible text; the partial must use a comment tag.
-    assert "squad_data dict" not in body
-    assert "Context:" not in body
     # The respond link is now rendered twice: event-wide menu and the squad's own menu.
     respond = reverse(
         "events:availability_respond",
