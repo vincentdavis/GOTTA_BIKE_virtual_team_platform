@@ -1,3 +1,4 @@
+{% load accounts_tags %}
 {% comment %}
 Answer-facet filter panel for the admin signups table.
 
@@ -21,7 +22,7 @@ event_detail.html) — there is no pagination, so the client sees every row.
       {% for facet in answer_facets %}
       <div class="bg-base-100 rounded-box p-3">
         <div class="flex items-start gap-2 mb-1">
-          <span class="text-xs font-semibold flex-1 min-w-0 truncate">{{ facet.label }}</span>
+          <span class="text-xs font-semibold flex-1 min-w-0 truncate">{{ facet.label|render_markdown_inline }}</span>
           <span class="join shrink-0">
             <button type="button" class="btn btn-xs join-item" data-answer-sort="{{ facet.pk }}" data-answer-dir="asc"
                     title="Sort riders by this answer, A&ndash;Z" aria-label="Sort by this answer, ascending">&#9650;</button>
@@ -31,7 +32,7 @@ event_detail.html) — there is no pagination, so the client sees every row.
         </div>
         <div class="max-h-72 overflow-y-auto">
           {% for bucket in facet.buckets %}
-          <label class="label cursor-pointer justify-start gap-2 py-1">
+          <label class="label w-full cursor-pointer justify-start gap-2 py-1">
             <input type="checkbox" class="checkbox checkbox-xs answer-facet"
                    data-answer-q="{{ facet.pk }}" data-answer-type="{{ facet.type }}" value="{{ bucket.value }}">
             <span class="flex-1 min-w-0 truncate text-sm{% if bucket.value == '__none__' or bucket.retired %} text-base-content/60 italic{% endif %}">{{ bucket.label }}</span>

@@ -255,6 +255,7 @@
       <div class="mt-2">
         <div class="flex items-center gap-2 mb-2">
           <div class="ml-auto flex items-center gap-2">
+            <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
             <div class="dropdown dropdown-end">
               <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>
               <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-56 max-h-72 overflow-y-auto">
@@ -282,7 +283,6 @@
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_phenotype"> Phenotype</label></li>
               </ul>
             </div>
-            <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
           </div>
         </div>
         {% if answer_facets %}
@@ -326,7 +326,7 @@
               <tr data-signup-pk="{{ entry.signup.pk }}" data-name="{{ entry.user.get_full_name|default:entry.user.discord_username }}">
                 <td data-col="name" data-sort-value="{{ entry.user.get_full_name|default:entry.user.discord_username }}">
                   {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
-                  {% if answer_facets %}<div class="md:hidden text-xs text-base-content/60 mt-1 empty:hidden" data-answer-focus></div>{% endif %}
+                  {% if answer_facets %}<div class="md:hidden text-xs text-base-content/60 mt-1 max-w-48 empty:hidden" data-answer-focus></div>{% endif %}
                 </td>
                 <td data-col="zwid">
                   {% if entry.zwid %}
@@ -1241,6 +1241,9 @@ function switchCategorySource(source) {
         row.dataset.searchHidden = name.indexOf(query) !== -1 ? '' : '1';
         applyRowVisibility(row);
       });
+      // The answer facets own the count badge and the zero-match state, and both depend on
+      // searchHidden, so they have to be recomputed here too.
+      if (typeof window.answerFacetsRender === 'function') window.answerFacetsRender();
     });
   });
 
@@ -1259,6 +1262,7 @@ function switchCategorySource(source) {
           var ind = h.querySelector('.sort-indicator');
           if (ind) ind.remove();
         });
+        if (typeof window.answerFacetsClearSort === 'function') window.answerFacetsClearSort();
         th.setAttribute('data-dir', asc ? 'asc' : 'desc');
         var indicator = document.createElement('span');
         indicator.className = 'sort-indicator text-primary ml-1';
@@ -1470,6 +1474,15 @@ function switchCategorySource(source) {
 
   function syncUrl() {
     var params = new URLSearchParams(window.location.search);
+    // Leave a clean URL alone: with no filter set and none in the URL there is nothing to
+    // sync, and rewriting on plain page load only discards the visitor's own fragment.
+    var hadState = Array.from(params.keys()).some(function(k) {
+      return /^q\d+$/.test(k) || k === 'asort' || k === 'adir';
+    });
+    var hasState = !!sortState || Object.keys(questions).some(function(q) {
+      return questions[q].selected.size > 0;
+    });
+    if (!hadState && !hasState) return;
     Array.from(params.keys()).forEach(function(k) {
       if (/^q\d+$/.test(k) || k === 'asort' || k === 'adir') params.delete(k);
     });
@@ -1478,7 +1491,7 @@ function switchCategorySource(source) {
     });
     if (sortState) { params.set('asort', sortState.q); params.set('adir', sortState.dir); }
     var qs = params.toString();
-    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + '#signups');
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
   }
 
   function restoreFromUrl() {
@@ -1506,6 +1519,14 @@ function switchCategorySource(source) {
     }
   }
 
+  function clearHeaderSort() {
+    table.querySelectorAll('th[data-sort]').forEach(function(h) {
+      h.removeAttribute('data-dir');
+      var ind = h.querySelector('.sort-indicator');
+      if (ind) ind.remove();
+    });
+  }
+
   function markSort() {
     document.querySelectorAll('[data-answer-sort]').forEach(function(btn) {
       var on = sortState && btn.dataset.answerSort === sortState.q && btn.dataset.answerDir === sortState.dir;
@@ -1520,11 +1541,16 @@ function switchCategorySource(source) {
   document.querySelectorAll('[data-answer-sort]').forEach(function(btn) {
     btn.addEventListener('click', function() {
       sortState = { q: btn.dataset.answerSort, dir: btn.dataset.answerDir };
+      clearHeaderSort();
       markSort();
       applySort();
       render();
     });
   });
+
+  // Hooks for the shared search/sort handlers in the earlier IIFE.
+  window.answerFacetsRender = render;
+  window.answerFacetsClearSort = function() { sortState = null; markSort(); };
 
   restoreFromUrl();
   render();

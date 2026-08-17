@@ -309,3 +309,80 @@ def test_notes_header_and_cell_are_gated_together(client, event, captain) -> Non
 
     assert '<th data-col="notes"' not in body
     assert '<td data-col="notes"' not in body
+
+
+@pytest.mark.django_db
+def test_search_re_runs_the_facet_render(client, event, event_admin) -> None:
+    """Without this hook, searching to zero rows hid the table with no way to get it back."""
+    _q(event, SignupQuestion.Type.BOOLEAN, "TT bike?")
+    _signup(event, event_admin, {})
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "window.answerFacetsRender = render" in body
+    assert "if (typeof window.answerFacetsRender === 'function') window.answerFacetsRender();" in body
+
+
+@pytest.mark.django_db
+def test_the_two_sort_mechanisms_retract_each_other(client, event, event_admin) -> None:
+    """Header sort and facet sort are independent, so each must clear the other's indicator."""
+    _q(event, SignupQuestion.Type.MULTI, "Nights?", options=["Tue"])
+    _signup(event, event_admin, {})
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "window.answerFacetsClearSort = function()" in body
+    assert "if (typeof window.answerFacetsClearSort === 'function') window.answerFacetsClearSort();" in body
+    assert "function clearHeaderSort()" in body
+
+
+@pytest.mark.django_db
+def test_url_sync_writes_no_dead_fragment(client, event, event_admin) -> None:
+    """There is no id="signups" to scroll to, so writing one only clobbered the real fragment."""
+    _q(event, SignupQuestion.Type.BOOLEAN, "TT bike?")
+    _signup(event, event_admin, {})
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "+ '#signups')" not in body
+    assert 'id="signups"' not in body  # the anchor never existed
+    assert "if (!hadState && !hasState) return;" in body  # leave a clean URL alone
+
+
+@pytest.mark.django_db
+def test_mobile_answer_line_is_width_bounded(client, event, event_admin) -> None:
+    """`truncate` cannot ellipsize in an unbounded table cell, and that cell is sticky."""
+    q = _q(event, SignupQuestion.Type.TEXT, "Notes")
+    _signup(event, event_admin, {str(q.pk): "x" * 2000})
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert 'max-w-48 empty:hidden" data-answer-focus' in body
+
+
+@pytest.mark.django_db
+def test_facet_label_renders_markdown_like_the_table_does(client, event, event_admin) -> None:
+    """The same question must not appear under two different names on one page."""
+    _q(event, SignupQuestion.Type.BOOLEAN, "Bring a **TT bike**?")
+    _signup(event, event_admin, {})
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "Bring a <strong>TT bike</strong>?" in body
+    assert "Bring a **TT bike**?" not in body
+
+
+@pytest.mark.django_db
+def test_search_box_sits_left_of_the_columns_menu(client, event, event_admin) -> None:
+    _q(event, SignupQuestion.Type.BOOLEAN, "TT bike?")
+    _signup(event, event_admin, {})
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert body.index('data-signup-search="detail"') < body.index('data-col="name" checked> Name')
