@@ -130,6 +130,36 @@ def test_outsider_cannot_delete_a_squad(client, event, outsider) -> None:
 
 
 @pytest.mark.django_db
+def test_squad_manage_offers_a_timezone_filter(client, event, coordinator) -> None:
+    """The squad list exposes a timezone filter built from the squads actually present."""
+    Squad.objects.create(event=event, name="Squad A", squad_timezone="US/Mountain")
+    Squad.objects.create(event=event, name="Squad B", squad_timezone="Europe/London")
+    Squad.objects.create(event=event, name="Squad C", squad_timezone="US/Mountain")  # duplicate
+    Squad.objects.create(event=event, name="Squad D")  # no timezone set
+    client.force_login(coordinator)
+
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+
+    # Deduplicated and sorted; blank timezones are omitted.
+    assert list(resp.context["squad_timezones"]) == ["Europe/London", "US/Mountain"]
+    body = resp.content.decode()
+    assert 'id="filter-squad-timezone"' in body
+    assert 'data-timezone="US/Mountain"' in body
+
+
+@pytest.mark.django_db
+def test_squad_manage_hides_timezone_filter_when_unused(client, event, coordinator) -> None:
+    """With no squad timezones set there is nothing to filter by, so no control renders."""
+    Squad.objects.create(event=event, name="Squad A")
+    client.force_login(coordinator)
+
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+
+    assert list(resp.context["squad_timezones"]) == []
+    assert 'id="filter-squad-timezone"' not in resp.content.decode()
+
+
+@pytest.mark.django_db
 def test_coordinator_role_only_applies_to_its_own_event(user_model, coordinator) -> None:
     """Holding a coordinator role grants nothing on an event that doesn't list it."""
     today = date.today()

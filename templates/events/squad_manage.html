@@ -29,14 +29,24 @@
 
   {% if squads %}
   <div class="mb-4">
-    <input type="text" id="squad-search" placeholder="Search squads by name or captain…"
-           class="input input-bordered input-sm w-full md:w-80"
-           oninput="filterSquads(this.value)" />
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <input type="text" id="squad-search" placeholder="Search squads by name or captain…"
+             class="input input-bordered input-sm w-full sm:w-80"
+             oninput="filterSquads()" />
+      {% if squad_timezones %}
+      <select id="filter-squad-timezone" class="select select-bordered select-sm w-full sm:w-auto"
+              onchange="filterSquads()">
+        <option value="">All timezones</option>
+        {% for tz in squad_timezones %}<option value="{{ tz }}">{{ tz }}</option>{% endfor %}
+      </select>
+      {% endif %}
+    </div>
     <p id="squad-no-results" class="text-sm text-base-content/60 mt-2 hidden">No squads match your search.</p>
   </div>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="squad-grid">
     {% for squad in squads %}
     <div class="card bg-base-200 shadow-md squad-card"
+         data-timezone="{{ squad.squad_timezone|default:'' }}"
          data-search="{{ squad.name|lower }} {% for c in squad.captains.all %}{{ c.get_full_name|lower }} {% endfor %}{% for c in squad.vice_captains.all %}{{ c.get_full_name|lower }} {% endfor %}">
       <div class="card-body p-4">
         {# Header: name + action buttons #}
@@ -295,11 +305,15 @@
 
 {% block extra_js %}
 <script>
-  function filterSquads(q) {
-    q = (q || "").trim().toLowerCase();
+  function filterSquads() {
+    var searchEl = document.getElementById("squad-search");
+    var q = (searchEl ? searchEl.value : "").trim().toLowerCase();
+    var tzEl = document.getElementById("filter-squad-timezone");
+    var tz = tzEl ? tzEl.value : "";
     var shown = 0;
     document.querySelectorAll("#squad-grid .squad-card").forEach(function (card) {
       var match = !q || card.dataset.search.indexOf(q) !== -1;
+      if (match && tz && card.dataset.timezone !== tz) match = false;
       card.style.display = match ? "" : "none";
       if (match) shown++;
     });

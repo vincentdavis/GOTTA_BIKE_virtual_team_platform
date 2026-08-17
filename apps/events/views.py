@@ -1362,6 +1362,9 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             key=lambda su: (su.user.get_full_name() or su.user.discord_username or "").lower(),
         )
 
+    # Timezone filter options — only the timezones actually in use by this event's squads.
+    squad_timezones = sorted({s.squad_timezone for s in squads if s.squad_timezone})
+
     return render(
         request,
         "events/squad_manage.html",
@@ -1371,6 +1374,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "event_role_name": event_role_name,
             "can_manage_all": can_manage_all,
             "can_manage_roles": _can_manage_event_roles(request.user, event),
+            "squad_timezones": squad_timezones,
         },
     )
 
