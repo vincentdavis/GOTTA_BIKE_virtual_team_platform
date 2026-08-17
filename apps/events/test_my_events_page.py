@@ -6,7 +6,14 @@ from datetime import date, timedelta
 import pytest
 from django.urls import reverse
 
-from apps.events.models import Event, EventSignup, Squad, SquadMember
+from apps.events.models import (
+    AvailabilityGrid,
+    AvailabilitySlotSelection,
+    Event,
+    EventSignup,
+    Squad,
+    SquadMember,
+)
 
 MEMBER_ICON_PATH = "M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
 
@@ -45,6 +52,31 @@ def test_member_count_badge_carries_a_person_icon(client, event, team_member) ->
 
     assert MEMBER_ICON_PATH in body
     assert 'title="1 member"' in body
+
+
+@pytest.mark.django_db
+def test_scheduled_race_rider_count_uses_the_same_person_icon(client, event, team_member) -> None:
+    """A scheduled race shows the person icon plus a bare count, matching the squad badge."""
+    squad = Squad.objects.create(event=event, name="Squad A")
+    _join(event, squad, team_member)
+    today = date.today()
+    grid = AvailabilityGrid.objects.create(
+        squad=squad, title="Week 1", start_date=today, end_date=today + timedelta(days=6),
+        start_time="16:00", end_time="22:00", slot_duration=30,
+        status=AvailabilityGrid.Status.PUBLISHED, grid_timezone="UTC",
+    )
+    selection = AvailabilitySlotSelection.objects.create(
+        grid=grid, name="Race 1", slot_date=today + timedelta(days=2), slot_time="18:30",
+    )
+    selection.selected_users.add(team_member)
+    client.force_login(team_member)
+
+    body = client.get(reverse("events:my_events")).content.decode()
+
+    # Two person icons now: one for the squad head count, one for the race rider count.
+    assert body.count(MEMBER_ICON_PATH) == 2
+    assert 'title="1 rider"' in body
+    assert not re.search(r">\s*1 rider\s*<", body)
 
 
 @pytest.mark.django_db

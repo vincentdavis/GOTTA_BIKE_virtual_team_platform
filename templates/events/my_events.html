@@ -212,7 +212,12 @@
                               <span class="block text-xs text-base-content/50 mt-1">{{ slot.display_timezone }}{% if slot.grid_title %} &middot; {{ slot.grid_title }}{% endif %}</span>
                               <span class="flex flex-wrap items-center gap-1 mt-2">
                                 <span class="badge {{ slot.days_class }} badge-sm">{{ slot.days_label }}</span>
-                                <span class="badge badge-neutral badge-sm">{{ slot.riders|length }} rider{{ slot.riders|pluralize }}</span>
+                                <span class="badge badge-neutral badge-sm gap-1" title="{{ slot.riders|length }} rider{{ slot.riders|pluralize }}">
+                                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" />
+                                  </svg>
+                                  {{ slot.riders|length }}
+                                </span>
                               </span>
                             </span>
                           </button>
