@@ -16,6 +16,7 @@ from apps.events.models import (
 )
 
 MEMBER_ICON_PATH = "M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+DISCORD_MARK_PATH_START = "M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515"
 
 
 @pytest.fixture
@@ -123,7 +124,21 @@ def test_calendar_links_are_icon_buttons_with_tooltips(client, event, team_membe
     # The emoji-prefixed text links are gone; the named links beside them stay text.
     assert "📅" not in body
     assert not re.search(r">\s*Google Calendar\s*<", body)
-    assert ">Discord thread</a>" in body
+
+
+@pytest.mark.django_db
+def test_thread_link_is_the_discord_mark_plus_thread(client, event, team_member) -> None:
+    """"Discord thread" becomes the Discord logo followed by "Thread"."""
+    squad = Squad.objects.create(event=event, name="Squad A")
+    _join(event, squad, team_member)
+    _scheduled_race(squad, team_member, thread_link="https://example.test/thread")
+    client.force_login(team_member)
+
+    body = client.get(reverse("events:my_events")).content.decode()
+
+    assert DISCORD_MARK_PATH_START in body
+    assert re.search(r">\s*Thread\s*<", body)
+    assert not re.search(r">\s*Discord thread\s*<", body)
 
 
 @pytest.mark.django_db
