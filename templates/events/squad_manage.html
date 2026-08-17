@@ -4,29 +4,108 @@
 
 {% block content %}
 <div class="max-w-5xl mx-auto">
-  <div class="mb-4">
-    <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
-  </div>
-
-  <div class="flex justify-between items-center mb-4">
-    <h2 class="text-xl font-bold">Squads &mdash; {{ event.title }}</h2>
-    <div class="flex gap-2">
-      <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-info btn-sm">Eligibility</a>
-      <a href="{% url 'events:event_all_races' event.pk %}?tab=participation" class="btn btn-accent btn-sm">Participation</a>
-      {% if can_manage_roles %}
-      <a href="{% url 'events:manage_roles' event.pk %}" class="btn btn-primary btn-sm">Manage Roles</a>
-      {% else %}
-      <span class="tooltip" data-tip="Requires Assign Roles or Head Captain role">
-        <button class="btn btn-sm btn-disabled" disabled>Manage Roles</button>
-      </span>
-      {% endif %}
-      {# Assign Riders is event_admin-only; Add Squad follows the wider squad-manage gate. #}
-      {% if can_assign_riders %}
-      <a href="{% url 'events:squad_assign_page' event.pk %}" class="btn btn-secondary btn-sm">Assign Riders</a>
-      {% endif %}
+  {# "Back to Event" now lives in the Actions menu as "View event". #}
+  <div class="flex justify-between items-center gap-2 mb-4">
+    <h2 class="text-xl font-bold min-w-0 truncate">Squads &mdash; {{ event.title }}</h2>
+    <div class="flex gap-2 items-center shrink-0">
+      {# Primary action stays visible; everything else lives in the Actions menu. #}
       {% if can_manage_all %}
-      <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">Add Squad</a>
+      <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm gap-1"
+         title="Add squad" aria-label="Add squad">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        <span class="hidden sm:block">Add squad</span>
+      </a>
       {% endif %}
+      <div class="dropdown dropdown-end">
+        <label tabindex="0" class="btn btn-outline btn-sm gap-1" title="Actions" aria-label="Actions">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+          </svg>
+          <span class="hidden sm:block">Actions</span>
+        </label>
+        <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box shadow-lg z-50 p-2 w-60 max-w-[calc(100vw-2rem)]">
+          <li class="menu-title">View</li>
+          <li>
+            <a href="{% url 'events:event_detail' event.pk %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              View event
+            </a>
+          </li>
+
+          <li class="menu-title">Reports</li>
+          <li>
+            <a href="{% url 'events:squad_v_report' event.pk %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Eligibility
+            </a>
+          </li>
+          <li>
+            <a href="{% url 'events:event_all_races' event.pk %}?tab=participation">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Participation
+            </a>
+          </li>
+
+          <li class="menu-title">Manage</li>
+          {% if can_assign_riders %}
+          <li>
+            <a href="{% url 'events:squad_assign_page' event.pk %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-1a3 3 0 00-5.356-1.857M17 20H7m10 0v-1a5.99 5.99 0 00-.75-2.906M7 20H2v-1a3 3 0 015.356-1.857M7 20v-1c0-1.06.275-2.057.75-2.906m0 0a6 6 0 1110.5 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Assign riders
+            </a>
+          </li>
+          {% else %}
+          <li class="menu-disabled">
+            <span title="Requires the Event Admin permission">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Assign riders
+            </span>
+          </li>
+          {% endif %}
+          {% if can_manage_roles %}
+          <li>
+            <a href="{% url 'events:manage_roles' event.pk %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+              </svg>
+              Manage roles
+            </a>
+          </li>
+          {% else %}
+          <li class="menu-disabled">
+            <span title="Requires the Assign Roles permission or the event Head Captain role">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Manage roles
+            </span>
+          </li>
+          {% endif %}
+
+          <li class="menu-title">Help</li>
+          <li>
+            <button type="button" onclick="document.getElementById('squad-help-modal').showModal()">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              How this page works
+            </button>
+          </li>
+        </ul>
+      </div>
     </div>
   </div>
 
@@ -299,10 +378,113 @@
   {% else %}
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <p class="text-sm text-base-content/70">No squads yet. Click "Add Squad" to create one.</p>
+      <p class="text-sm text-base-content/70">No squads yet. Use "Add squad" to create one.</p>
     </div>
   </div>
   {% endif %}
+
+  {# Help: permissions, what each squad field does, and what assigning a rider actually changes. #}
+  <dialog id="squad-help-modal" class="modal">
+    <div class="modal-box max-w-3xl">
+      <form method="dialog">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close">&#10005;</button>
+      </form>
+      <h3 class="text-lg font-bold mb-1">How this page works</h3>
+      <p class="text-sm text-base-content/70 mb-4">Squads for <span class="font-medium">{{ event.title }}</span>.</p>
+
+      <div class="max-h-96 overflow-y-auto px-1 space-y-6">
+
+        <section>
+          <h4 class="font-semibold mb-2">Who can do what</h4>
+          <div class="overflow-x-auto">
+            <table class="table table-xs">
+              <thead>
+                <tr><th>Action</th><th>Who can do it</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="font-medium">Open this page</td>
+                  <td>Event admins, the event's Head Captain role, regional coordinators &mdash; plus any squad captain or vice-captain in this event.</td>
+                </tr>
+                <tr>
+                  <td class="font-medium">Create or delete a squad</td>
+                  <td>Event admins, Head Captain role, regional coordinators.</td>
+                </tr>
+                <tr>
+                  <td class="font-medium">Edit a squad, manage its availability, add or remove its riders</td>
+                  <td>The above, plus <span class="font-medium">that squad's</span> captain, vice-captain, or holder of the squad's Discord captain role.</td>
+                </tr>
+                <tr>
+                  <td class="font-medium">Remove a rider from every squad at once</td>
+                  <td>Event admins, Head Captain role, regional coordinators (it spans squads, so it isn't a captain action).</td>
+                </tr>
+                <tr>
+                  <td class="font-medium">Assign Riders page</td>
+                  <td>Event admins only.</td>
+                </tr>
+                <tr>
+                  <td class="font-medium">Manage Roles</td>
+                  <td>The Assign Roles permission, or the event's Head Captain role.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-sm mt-2">
+            Captains see <em>every</em> squad listed here, but the controls only act on squads they lead.
+            Superusers can do everything.
+          </p>
+        </section>
+
+        <section>
+          <h4 class="font-semibold mb-2">Adding a rider grants Discord access</h4>
+          <ul class="list-disc list-inside text-sm space-y-1">
+            <li>Adding a rider gives them the squad's <span class="font-medium">Discord role</span> &mdash; that role is what lets them into the squad's text and voice channels.</li>
+            <li>If the squad has a <span class="font-medium">Region role</span>, they get that too.</li>
+            <li>Removing a rider takes both away again &mdash; except the region role is kept if they still belong to another squad that uses the same one.</li>
+            <li>If the rider was a captain or vice-captain, removing them also clears those and the captain Discord role.</li>
+            <li>Adding is <span class="font-medium">additive</span>: a rider can be in more than one squad, and adding them here does not remove them from another squad. The "Add rider" list groups riders by the squad they're already in, with unassigned riders first.</li>
+            <li>Riders can also join themselves through the squad's invite link, which grants the same roles.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h4 class="font-semibold mb-2">Squad fields</h4>
+          <dl class="text-sm space-y-1.5">
+            <div><dt class="font-medium inline">Name</dt> &mdash; <dd class="inline">What the squad is called; also what the search box on this page matches.</dd></div>
+            <div><dt class="font-medium inline">Timezone</dt> &mdash; <dd class="inline">The squad's working timezone. Shown on the card and used by the timezone filter above.</dd></div>
+            <div><dt class="font-medium inline">Squad gender</dt> &mdash; <dd class="inline">Male, Female or COED. With <span class="font-medium">Enforce gender</span> on, a rider whose gender doesn't match is blocked (COED allows anyone).</dd></div>
+            <div><dt class="font-medium inline">Discord channel / Audio channel</dt> &mdash; <dd class="inline">Where the squad coordinates. Riders reach these via the squad's Discord role.</dd></div>
+            <div><dt class="font-medium inline">Squad Discord role</dt> &mdash; <dd class="inline">Added when a rider joins the squad and removed when they leave. This is the channel-access role.</dd></div>
+            <div><dt class="font-medium inline">Captain Discord role</dt> &mdash; <dd class="inline">Marks the squad's captains. Anyone holding it can manage this squad, the same as a named captain.</dd></div>
+            <div><dt class="font-medium inline">Region role</dt> &mdash; <dd class="inline">An extra role added on join and removed on leave, unless the rider is still in another squad with the same region role.</dd></div>
+            <div><dt class="font-medium inline">Regional coordinator role</dt> &mdash; <dd class="inline">This squad's coordinator, picked from the event's coordinator roles.</dd></div>
+            <div><dt class="font-medium inline">Zwift category min / max</dt> &mdash; <dd class="inline">The category range for the squad (A is strongest, E weakest; "min" is the weakest allowed). Each bound only blocks anyone when its <span class="font-medium">Enforce</span> box is ticked.</dd></div>
+            <div><dt class="font-medium inline">Women's Zwift category min / max</dt> &mdash; <dd class="inline">The same range applied to women's categories, with its own enforce boxes.</dd></div>
+            <div><dt class="font-medium inline">Zwift Racing category min / max</dt> &mdash; <dd class="inline">The same idea using ZwiftRacing categories, with its own enforce boxes.</dd></div>
+            <div><dt class="font-medium inline">Squad link</dt> &mdash; <dd class="inline">An optional external page for the squad.</dd></div>
+            <div><dt class="font-medium inline">Invite link</dt> &mdash; <dd class="inline">A shareable link that lets riders add themselves to this squad. Generate or regenerate it on the squad card.</dd></div>
+            <div><dt class="font-medium inline">Captain notifications</dt> &mdash; <dd class="inline">DM the captain and vice-captain when a squad member's verification record changes.</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h4 class="font-semibold mb-2">Good to know</h4>
+          <ul class="list-disc list-inside text-sm space-y-1">
+            <li>Category and gender limits are checked <span class="font-medium">when you add a rider</span>. Tightening a limit later doesn't remove riders who are already in the squad.</li>
+            <li>A squad's Discord role has to start with one of the event's role prefixes; the choices are filtered to match.</li>
+            <li>The search box and the timezone filter combine, so you can narrow to one region and then search within it.</li>
+            <li>Greyed-out items in the Actions menu are ones your roles don't cover &mdash; hover them to see what's required.</li>
+          </ul>
+        </section>
+
+      </div>
+
+      <div class="modal-action">
+        <form method="dialog"><button class="btn btn-sm">Close</button></form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
 </div>
 {% endblock %}
 

@@ -162,6 +162,39 @@ def test_event_admin_sees_both_buttons(client, event, user_model) -> None:
 
 
 @pytest.mark.django_db
+def test_actions_menu_groups_items_and_offers_help(client, event, user_model) -> None:
+    """The header collapses to one primary action plus a grouped Actions menu."""
+    Squad.objects.create(event=event, name="Squad A")
+    admin = user_model.objects.create_user(
+        username="ea2", email="ea2@example.test",
+        permission_overrides={"team_member": True, "event_admin": True},
+    )
+    client.force_login(admin)
+
+    body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
+
+    for heading in ("View", "Reports", "Manage", "Help"):
+        assert f'<li class="menu-title">{heading}</li>' in body
+    assert "View event" in body  # replaces the old "Back to Event" link
+    assert "&larr; Back to Event" not in body
+    assert 'id="squad-help-modal"' in body
+    assert "How this page works" in body
+
+
+@pytest.mark.django_db
+def test_unpermitted_menu_items_are_disabled_not_hidden(client, event, coordinator) -> None:
+    """A coordinator lacks event_admin and assign_roles, so both show greyed out."""
+    Squad.objects.create(event=event, name="Squad A")
+    client.force_login(coordinator)
+
+    body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
+
+    assert body.count('class="menu-disabled"') == 2  # Assign riders + Manage roles
+    assert "Assign riders" in body  # still listed, just not actionable
+    assert "Manage roles" in body
+
+
+@pytest.mark.django_db
 def test_squad_manage_offers_a_timezone_filter(client, event, coordinator) -> None:
     """The squad list exposes a timezone filter built from the squads actually present."""
     Squad.objects.create(event=event, name="Squad A", squad_timezone="US/Mountain")
