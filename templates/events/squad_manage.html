@@ -20,8 +20,11 @@
         <button class="btn btn-sm btn-disabled" disabled>Manage Roles</button>
       </span>
       {% endif %}
-      {% if can_manage_all %}
+      {# Assign Riders is event_admin-only; Add Squad follows the wider squad-manage gate. #}
+      {% if can_assign_riders %}
       <a href="{% url 'events:squad_assign_page' event.pk %}" class="btn btn-secondary btn-sm">Assign Riders</a>
+      {% endif %}
+      {% if can_manage_all %}
       <a href="{% url 'events:squad_create' event.pk %}" class="btn btn-primary btn-sm">Add Squad</a>
       {% endif %}
     </div>

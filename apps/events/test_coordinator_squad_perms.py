@@ -130,6 +130,38 @@ def test_outsider_cannot_delete_a_squad(client, event, outsider) -> None:
 
 
 @pytest.mark.django_db
+def test_coordinator_sees_add_squad_but_not_assign_riders(client, event, coordinator) -> None:
+    """Assign Riders is event_admin-only, so a coordinator must not be shown a 403 button."""
+    Squad.objects.create(event=event, name="Squad A")
+    client.force_login(coordinator)
+
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+    body = resp.content.decode()
+
+    assert resp.context["can_manage_all"] is True
+    assert resp.context["can_assign_riders"] is False
+    assert reverse("events:squad_create", args=[event.pk]) in body  # can create squads
+    assert reverse("events:squad_assign_page", args=[event.pk]) not in body  # but not assign
+
+
+@pytest.mark.django_db
+def test_event_admin_sees_both_buttons(client, event, user_model) -> None:
+    Squad.objects.create(event=event, name="Squad A")
+    admin = user_model.objects.create_user(
+        username="ea", email="ea@example.test",
+        permission_overrides={"team_member": True, "event_admin": True},
+    )
+    client.force_login(admin)
+
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+    body = resp.content.decode()
+
+    assert resp.context["can_assign_riders"] is True
+    assert reverse("events:squad_assign_page", args=[event.pk]) in body
+    assert reverse("events:squad_create", args=[event.pk]) in body
+
+
+@pytest.mark.django_db
 def test_squad_manage_offers_a_timezone_filter(client, event, coordinator) -> None:
     """The squad list exposes a timezone filter built from the squads actually present."""
     Squad.objects.create(event=event, name="Squad A", squad_timezone="US/Mountain")

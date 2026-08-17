@@ -1374,6 +1374,10 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "event_role_name": event_role_name,
             "can_manage_all": can_manage_all,
             "can_manage_roles": _can_manage_event_roles(request.user, event),
+            # The Assign Riders page is event_admin-only (stricter than can_manage_all, which
+            # also covers head captains and coordinators). Mirror its gate exactly so the
+            # button isn't shown to people who would just get a 403.
+            "can_assign_riders": request.user.is_event_admin,
             "squad_timezones": squad_timezones,
         },
     )
