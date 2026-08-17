@@ -46,6 +46,12 @@ details[open] .details-arrow { transform: rotate(90deg); }
           <span class="label-text">Coordinator columns</span>
         </label>
         {% endif %}
+        {% if timezone_roles %}
+        <label class="label cursor-pointer gap-2 py-0">
+          <input type="checkbox" class="checkbox checkbox-sm" data-tz-toggle checked>
+          <span class="label-text">Region columns</span>
+        </label>
+        {% endif %}
       </div>
       <div class="overflow-x-auto max-h-[70vh] pb-8">
         <table class="table table-xs table-pin-col" data-roles-table>
@@ -61,6 +67,9 @@ details[open] .details-arrow { transform: rotate(90deg); }
               {% endfor %}
               {% for squad in captain_role_squads %}
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none text-center whitespace-nowrap">{{ squad.name }} Cpt</th>
+              {% endfor %}
+              {% for tz in timezone_roles %}
+              <th data-sort="text" class="tz-col cursor-pointer hover:text-primary select-none text-center whitespace-nowrap" title="{% if tz.name %}@{{ tz.name }}{% else %}Role {{ tz.role_id }}{% endif %} &mdash; granted on signup to riders who pick {{ tz.option }}">{{ tz.option }}</th>
               {% endfor %}
               {% for cr in coordinator_roles %}
               <th data-sort="text" class="coord-col cursor-pointer hover:text-primary select-none text-center whitespace-nowrap">{% if cr.name %}@{{ cr.name }}{% else %}Coord {{ cr.role_id }}{% endif %}</th>
@@ -101,6 +110,12 @@ details[open] .details-arrow { transform: rotate(90deg); }
                 {% else %}
                   <span class="text-base-content/30">-</span>
                 {% endif %}
+              </td>
+              {% endfor %}
+              {% for tzs in entry.timezone_role_status %}
+              <td class="tz-col text-center{% if not tzs.selected %} opacity-60{% endif %}"
+                  title="{% if tzs.selected %}Rider selected {{ tzs.option }}{% else %}Rider did not select {{ tzs.option }}{% endif %}">
+                {% include "events/_coordinator_role_cell.html" with event_pk=event.pk member_user_pk=entry.user.pk role_id=tzs.role_id role_name=tzs.name has_role=tzs.has_role %}
               </td>
               {% endfor %}
               {% for cds in entry.coordinator_role_status %}
@@ -165,6 +180,18 @@ details[open] .details-arrow { transform: rotate(90deg); }
       rows.forEach(function(row) { tbody.appendChild(row); });
     });
   });
+
+  var tzToggle = document.querySelector('[data-tz-toggle]');
+  if (tzToggle) {
+    var applyTz = function() {
+      var show = tzToggle.checked;
+      table.querySelectorAll('.tz-col').forEach(function(cell) {
+        cell.style.display = show ? '' : 'none';
+      });
+    };
+    tzToggle.addEventListener('change', applyTz);
+    applyTz();
+  }
 
   var coordToggle = document.querySelector('[data-coord-toggle]');
   if (coordToggle) {

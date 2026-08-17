@@ -59,6 +59,7 @@ from apps.events.signup_questions import (
     resolve_signup_answers,
 )
 from apps.events.squads import squad_member_users as squad_roster_users
+from apps.events.timezone_roles import mapped_roles, parse_role_map, role_columns
 from apps.events.tz_utils import (
     TIMEZONE_CHOICES,
     convert_blocked_cells_to_utc,
@@ -285,6 +286,71 @@ def _unassign_discord_role(user, role_id: int, *, admin_user_id: int) -> bool | 
             "Failed to auto-unassign Discord role", user_id=user.id, role_id=role_id_str, admin_user_id=admin_user_id
         )
     return success
+
+
+def _apply_timezone_roles(user, event, *, before=None, after=None, admin_user_id: int) -> None:
+    """Grant (and on edit, retract) the event's timezone/region roles for a rider.
+
+    Adds a role for every mapped option the rider selected. On an edit, a role dropped
+    from the selection is removed **only** when the rider does not still hold it for an
+    unrelated reason: another registered signup on an event mapping the same role, or a
+    squad ``region_role``. A timezone role and a squad region role are very plausibly the
+    same Discord role, so this must not undo the squad flow.
+
+    Args:
+        user: The rider.
+        event: The event whose map applies.
+        before: The rider's previous signup_timezone (edit flow), or None on first signup.
+        after: The rider's new signup_timezone.
+        admin_user_id: The user performing the action, for logging.
+
+    """
+    from apps.events.timezone_roles import mapped_roles, roles_for_selection, roles_to_drop
+    from apps.team.models import DiscordRole
+
+    if not user.discord_id or not mapped_roles(event):
+        return
+
+    wanted = roles_for_selection(event, after)
+    dropped = roles_to_drop(event, before=before, after=after) if before is not None else []
+    role_names = dict(
+        DiscordRole.objects.filter(role_id__in=set(wanted) | set(dropped)).values_list("role_id", "name")
+    )
+    for role_id in wanted:
+        _assign_discord_role(user, int(role_id), role_names.get(role_id) or "Region Role", admin_user_id=admin_user_id)
+
+    for role_id in dropped:
+        if _timezone_role_still_earned(user, event, role_id):
+            continue
+        _unassign_discord_role(user, int(role_id), admin_user_id=admin_user_id)
+
+
+def _timezone_role_still_earned(user, event, role_id: str) -> bool:
+    """Check whether a rider keeps a timezone role for some reason other than this event.
+
+    Args:
+        user: The rider.
+        event: The event the role is being dropped for.
+        role_id: The Discord role ID under consideration.
+
+    Returns:
+        True when the role is still earned elsewhere and must not be removed.
+
+    """
+    from apps.events.timezone_roles import roles_for_selection
+
+    # A squad the rider is in carries this as its region role.
+    if SquadMember.objects.filter(
+        user=user, status=SquadMember.Status.MEMBER, squad__region_role=int(role_id)
+    ).exists():
+        return True
+    # Another event's timezone map grants it for a signup they still hold.
+    others = (
+        EventSignup.objects.filter(user=user, status=EventSignup.Status.REGISTERED)
+        .exclude(event_id=event.pk)
+        .select_related("event")
+    )
+    return any(role_id in roles_for_selection(s.event, s.signup_timezone) for s in others)
 
 
 def _assign_region_role(user, squad, *, admin_user_id: int) -> bool | None:
@@ -1156,6 +1222,10 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
         form = EventForm(request.POST, request.FILES, instance=event)
         if form.is_valid():
             form.save()
+            # Parsed after save so it reads the options just stored, and so an option the
+            # admin removed cannot keep its mapping.
+            event.timezone_role_map = parse_role_map(request.POST, event.timezone_options)
+            event.save(update_fields=["timezone_role_map"])
             logfire.info(
                 "Event updated",
                 event_id=pk,
@@ -1195,6 +1265,9 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
             "submit_label": "Save Changes",
             "can_manage_roles": _can_manage_event_roles(request.user, event),
             "role_display": role_display,
+            # Rendered server-side from the SAVED options, so the selects never drift out
+            # of sync with the client-side timezone chip editor above them.
+            "timezone_role_rows": _timezone_role_rows(event),
         },
     )
 
@@ -2042,6 +2115,9 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     enqueue_signup_notification(signup, request=request)
 
+    # Grant any timezone/region roles this event maps for the options the rider picked.
+    _apply_timezone_roles(request.user, event, after=signup_timezone, admin_user_id=request.user.id)
+
     # Grant the event's Discord role on signup (if configured and the rider has Discord linked).
     # The squad self-join flow already assigns event_role; plain event signup was missing it.
     if event.event_role and request.user.discord_id and not request.user.has_discord_role(event.event_role):
@@ -2121,6 +2197,7 @@ def event_signup_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.error(request, answer_error)
         return redirect("events:event_detail", pk=pk)
 
+    previous_timezone = list(signup.signup_timezone or [])
     signup.signup_timezone = signup_timezone
     signup.signup_squad_gender = signup_squad_gender
     signup.notes = request.POST.get("notes", "").strip()
@@ -2136,6 +2213,12 @@ def event_signup_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
         signup_timezone=signup_timezone,
         signup_squad_gender=signup_squad_gender,
     )
+    # Reconcile timezone/region roles: grant newly-picked options, and drop ones the
+    # rider deselected unless they still earn the role elsewhere.
+    _apply_timezone_roles(
+        request.user, event, before=previous_timezone, after=signup_timezone, admin_user_id=request.user.id
+    )
+
     messages.success(request, "Your signup has been updated.")
     return redirect("events:event_detail", pk=pk)
 
@@ -4605,6 +4688,34 @@ def sync_event_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     return redirect("events:event_detail", pk=event_pk)
 
 
+def _timezone_role_rows(event) -> list[dict]:
+    """Build the event-edit rows pairing each saved timezone option with a role select.
+
+    Args:
+        event: The event being edited.
+
+    Returns:
+        One dict per option: ``{"option", "field_name", "selected", "choices"}``.
+
+    """
+    from apps.events.forms import _allowed_event_prefixes, _get_role_choices
+    from apps.events.timezone_roles import mapped_roles
+
+    # Same prefix restriction the squad/coordinator role pickers use.
+    choices = _get_role_choices(_allowed_event_prefixes())
+    saved = mapped_roles(event)
+    return [
+        {
+            "option": option,
+            "field_name": f"tz_role_map__{option}",
+            "selected": saved.get(option, "0"),
+            "choices": choices,
+        }
+        for option in (event.timezone_options or [])
+        if isinstance(option, str)
+    ]
+
+
 @require_GET
 @login_required
 @team_member_required()
@@ -4653,6 +4764,8 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     for s in captain_role_squads:
         role_ids.add(str(s.discord_captain_role))
     role_ids.update(coordinator_role_id_strs)
+    tz_role_id_strs = list(dict.fromkeys(mapped_roles(event).values()))
+    role_ids.update(tz_role_id_strs)
     role_names = (
         dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
     )
@@ -4661,6 +4774,9 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     coordinator_roles = [
         {"role_id": int(rid), "name": role_names.get(rid, "")} for rid in coordinator_role_id_strs
     ]
+
+    # Timezone/region role column defs, in timezone_options order.
+    timezone_roles = role_columns(event, role_names)
 
     # Build role info list for display
     role_info = []
@@ -4686,6 +4802,10 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         })
     role_info.extend(
         {"label": "Coordinator", "name": cr["name"], "role_id": cr["role_id"]} for cr in coordinator_roles
+    )
+    role_info.extend(
+        {"label": f"Region: {tz['option']}", "name": tz["name"], "role_id": tz["role_id"]}
+        for tz in timezone_roles
     )
 
     # Build squad membership lookup: {user_id: set(squad_ids)}
@@ -4736,6 +4856,19 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             }
             for cr in coordinator_roles
         ]
+        # Timezone roles are event-level too, but the cell also shows whether the rider
+        # actually picked that region, so an admin can see role vs. stated availability.
+        picked = {tz for tz in (entry["signup"].signup_timezone or []) if isinstance(tz, str)}
+        entry["timezone_role_status"] = [
+            {
+                "option": tz["option"],
+                "role_id": int(tz["role_id"]),
+                "name": tz["name"],
+                "selected": tz["option"] in picked,
+                "has_role": user.has_discord_role(tz["role_id"]),
+            }
+            for tz in timezone_roles
+        ]
 
     logfire.info(
         "Manage roles page viewed",
@@ -4752,6 +4885,7 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "role_squads": role_squads,
             "captain_role_squads": captain_role_squads,
             "coordinator_roles": coordinator_roles,
+            "timezone_roles": timezone_roles,
             "role_info": role_info,
         },
     )
@@ -4867,11 +5001,13 @@ def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) ->
 def event_toggle_coordinator_role_view(
     request: HttpRequest, event_pk: int, user_id: int, role_id: int
 ) -> HttpResponse:
-    """Toggle one of the event's Regional/Group Coordinator Discord roles for a signup user.
+    """Toggle one of the event's own Discord roles for a signup user.
 
-    Adds the coordinator role if the user doesn't have it, removes it if they do.
-    ``role_id`` is re-validated server-side against the event's configured
-    ``coordinator_role_ids`` so a crafted POST cannot toggle an arbitrary role.
+    Covers the Regional/Group Coordinator roles and the roles an event's timezone map
+    grants — both are event-level (not squad-scoped) and share this one toggle cell.
+    Adds the role if the user doesn't have it, removes it if they do. ``role_id`` is
+    re-validated server-side against those two sets so a crafted POST cannot toggle an
+    arbitrary role.
     Accessible to users with assign_roles permission or the event's head captain role.
 
     Args:
@@ -4894,15 +5030,17 @@ def event_toggle_coordinator_role_view(
         raise PermissionDenied("You need Assign Roles permission or the Head Captain role for this event.")
 
     role_id_str = str(role_id)
-    coordinator_ids = {str(rid) for rid in (event.coordinator_role_ids or [])}
-    if role_id_str not in coordinator_ids:
+    # Event-level roles this event legitimately manages: its coordinator roles plus any
+    # role its timezone map grants. Re-validated so a crafted POST can't toggle anything else.
+    allowed_ids = {str(rid) for rid in (event.coordinator_role_ids or [])} | set(mapped_roles(event).values())
+    if role_id_str not in allowed_ids:
         logfire.warning(
-            "Rejected coordinator role toggle for non-coordinator role",
+            "Rejected event role toggle for a role this event does not manage",
             event_id=event_pk,
             role_id=role_id_str,
             admin_user_id=request.user.id,
         )
-        messages.error(request, "That role is not a coordinator role for this event.")
+        messages.error(request, "That role is not managed by this event.")
         return redirect("events:manage_roles", event_pk=event_pk)
 
     target_user = get_object_or_404(User, pk=user_id)

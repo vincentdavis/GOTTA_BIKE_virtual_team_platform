@@ -113,6 +113,14 @@ class Event(models.Model):
         help_text="Timezone options available at signup",
     )
     timezone_required = models.BooleanField(default=False, help_text="Whether timezone selection is required at signup")
+    timezone_role_map = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Optional map of timezone/region option -> Discord role ID, granted on signup. "
+            "Empty means the feature is off for this event."
+        ),
+    )
     squad_gender_options = models.JSONField(
         default=_default_squad_gender_options,
         blank=True,
