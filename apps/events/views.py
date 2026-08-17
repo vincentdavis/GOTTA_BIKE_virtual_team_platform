@@ -449,6 +449,38 @@ def _enrich_squad_members(event):
     return by_squad
 
 
+def _group_available_signups(available_signups, squad_names_by_user) -> list[tuple[str, list]]:
+    """Group assignable signups by the squad they already belong to, unassigned first.
+
+    Riders can hold membership in more than one squad, so a rider assigned to two squads is
+    listed under each of them.
+
+    Args:
+        available_signups: Signups that may be added to the squad being rendered, already
+            sorted by display name.
+        squad_names_by_user: Map of user id to the names of the squads they belong to.
+
+    Returns:
+        List of ``(group label, signups)`` pairs: "Unassigned" first, then squads A-Z.
+
+    """
+    unassigned = []
+    by_squad: dict[str, list] = {}
+    for signup in available_signups:
+        names = squad_names_by_user.get(signup.user_id) or []
+        if not names:
+            unassigned.append(signup)
+            continue
+        for name in sorted(names):
+            by_squad.setdefault(name, []).append(signup)
+
+    groups: list[tuple[str, list]] = []
+    if unassigned:
+        groups.append(("Unassigned", unassigned))
+    groups.extend((name, by_squad[name]) for name in sorted(by_squad))
+    return groups
+
+
 def _build_manage_squad_context(request, event, squad):
     """Build template context for the self-contained roster panel on the manage-squads page.
 
@@ -488,13 +520,21 @@ def _build_manage_squad_context(request, event, squad):
     )
     squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
 
+    squad_names_by_user: dict[int, list[str]] = {}
+    for user_id, squad_name in SquadMember.objects.filter(squad__event=event).values_list(
+        "user_id", "squad__name"
+    ):
+        squad_names_by_user.setdefault(user_id, []).append(squad_name)
+
     return {
         "squad": squad,
         "members": members,
         "available_signups": available_signups,
+        "available_groups": _group_available_signups(available_signups, squad_names_by_user),
         "event_role_name": role_names.get(str(event.event_role), "") if event.event_role else "",
         "event_pk": event.pk,
-        "can_manage": _can_manage_event_squads(request.user, event),
+        # Per-squad: a squad's captain/VC manages their own roster; full managers manage all.
+        "can_manage": _can_manage_squad_availability(request.user, squad),
         "oob": False,
         "htmx_count_oob": True,
     }
@@ -1340,6 +1380,12 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     all_signups = list(EventSignup.objects.filter(event=event).select_related("user"))
     signup_by_user = {s.user_id: s.pk for s in all_signups}
 
+    # user id -> names of the squads they already belong to, for grouping the add-rider picker.
+    squad_names_by_user: dict[int, list[str]] = {}
+    for sq in squads:
+        for m in squad_members_data.get(sq.pk, []):
+            squad_names_by_user.setdefault(m["user"].pk, []).append(sq.name)
+
     for s in squads:
         s.channel_name = channel_names.get(str(s.discord_channel_id), "") if s.discord_channel_id else ""
         s.audio_name = channel_names.get(str(s.audio_channel_id), "") if s.audio_channel_id else ""
@@ -1361,6 +1407,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             (su for su in all_signups if su.user_id not in member_user_ids),
             key=lambda su: (su.user.get_full_name() or su.user.discord_username or "").lower(),
         )
+        s.available_groups = _group_available_signups(s.available_signups, squad_names_by_user)
 
     # Timezone filter options — only the timezones actually in use by this event's squads.
     squad_timezones = sorted({s.squad_timezone for s in squads if s.squad_timezone})
@@ -2504,15 +2551,6 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """
     event = get_object_or_404(Event, pk=event_pk)
 
-    if not _can_manage_event_squads(request.user, event):
-        logfire.warning(
-            "Unauthorized squad assign attempt",
-            event_id=event_pk,
-            user_id=request.user.id,
-        )
-        messages.error(request, "You don't have permission to assign squads.")
-        return redirect("events:event_detail", pk=event_pk)
-
     signup_id = request.POST.get("signup_id")
     squad_id = request.POST.get("squad_id")
 
@@ -2523,12 +2561,35 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     signup = get_object_or_404(EventSignup, pk=signup_id, event=event)
     squad_id = int(squad_id)
     is_htmx = bool(request.headers.get("HX-Request"))
+    remove_squad_id = request.POST.get("remove_squad_id")
+
+    # Permission is scoped to the squad actually being changed, so a squad captain can build
+    # their own roster (add a rider, or remove one of their members) without being able to
+    # touch squads they don't lead. Clearing a rider out of *every* squad stays event-wide.
+    if squad_id:
+        target_squad = get_object_or_404(Squad, pk=squad_id, event=event)
+        allowed = _can_manage_squad_availability(request.user, target_squad)
+    elif remove_squad_id:
+        target_squad = get_object_or_404(Squad, pk=int(remove_squad_id), event=event)
+        allowed = _can_manage_squad_availability(request.user, target_squad)
+    else:
+        target_squad = None
+        allowed = _can_manage_event_squads(request.user, event)
+
+    if not allowed:
+        logfire.warning(
+            "Unauthorized squad assign attempt",
+            event_id=event_pk,
+            user_id=request.user.id,
+            target_squad_id=target_squad.pk if target_squad else None,
+        )
+        messages.error(request, "You don't have permission to assign squads.")
+        return redirect("events:event_detail", pk=event_pk)
 
     if squad_id == 0:
         # Unassign from a specific squad or all squads
-        remove_squad_id = request.POST.get("remove_squad_id")
         if remove_squad_id:
-            remove_squad = get_object_or_404(Squad, pk=int(remove_squad_id), event=event)
+            remove_squad = target_squad
             deleted, _ = SquadMember.objects.filter(squad=remove_squad, user=signup.user).delete()
             if deleted:
                 logfire.info(
@@ -2586,7 +2647,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             elif not is_htmx:
                 messages.info(request, f"{signup.user} was not assigned to any squad.")
     else:
-        squad = get_object_or_404(Squad, pk=squad_id, event=event)
+        squad = target_squad
         rider_zr = ""
         rider_zwift_cat = ""
         rider_womens_cat = ""

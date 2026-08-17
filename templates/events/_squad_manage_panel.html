@@ -97,8 +97,12 @@
     <select name="signup_id" class="select select-bordered select-sm w-full"
             onchange="if(this.value!=''){htmx.trigger(this.closest('form'),'submit')}">
       <option value="">+ Add rider…</option>
-      {% for s in available_signups %}
-      <option value="{{ s.pk }}">{{ s.user.get_full_name|default:s.user.discord_username }}</option>
+      {% for group_label, group_signups in available_groups %}
+      <optgroup label="{{ group_label }}">
+        {% for s in group_signups %}
+        <option value="{{ s.pk }}">{{ s.user.get_full_name|default:s.user.discord_username }}</option>
+        {% endfor %}
+      </optgroup>
       {% endfor %}
     </select>
   </form>
