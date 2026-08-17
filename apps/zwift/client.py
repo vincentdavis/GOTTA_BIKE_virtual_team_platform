@@ -12,6 +12,7 @@ See the service's endpoints:
 - ``POST /api/zwift/oauth/authorize-url`` -> ``{authorize_url}``
 - ``GET  /api/zwift/oauth/status?user_id=`` -> ``{connected, zwid, connected_at}``
 - ``POST /api/zwift/oauth/disconnect`` -> ``{disconnected}``
+- ``GET  /api/zwift/users/<id>/profile-stats`` -> windowed metric min/max
 """
 
 from __future__ import annotations
@@ -140,6 +141,40 @@ def get_racing_profile(user_id: str) -> dict | None:
         return response.json()
     except httpx.HTTPError as e:
         logfire.error("Zwift racing profile fetch failed", user_id=user_id, error=str(e))
+        return None
+
+
+def get_profile_stats(user_id: str) -> dict | None:
+    """Fetch windowed min/max of a connected user's racing metrics.
+
+    Summarizes the service's deduped racing-profile snapshot history. Note the
+    windowed weight is the *competition-metrics* weight (the value Zwift raced the
+    rider at), not the live profile weight, and a metric only appears once a
+    snapshot inside the window carries it.
+
+    Args:
+        user_id: The platform user identifier (stable primary key).
+
+    Returns:
+        ``{"zwid", "current": {...}, "windows": {"30d"/"60d"/"90d": {field:
+        {"min", "max", "first", "last", "count"} | None}}}``, or None if the
+        service is unconfigured, the user isn't connected (404), or the call failed.
+
+    """
+    if not is_configured():
+        return None
+    try:
+        response = httpx.get(
+            _url(f"/api/zwift/users/{user_id}/profile-stats"),
+            headers=_headers(),
+            timeout=_TIMEOUT,
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPError as e:
+        logfire.error("Zwift profile stats fetch failed", user_id=user_id, error=str(e))
         return None
 
 

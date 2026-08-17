@@ -167,6 +167,24 @@
             {% else %}
             <div class="text-sm text-base-content/50">No profile snapshot stored yet</div>
             {% endif %}
+
+            <!-- The weight Zwift actually raced this rider at. Differs from the live profile
+                 weight whenever they have changed it since Zwift last recomputed. -->
+            <div class="mt-3 pt-3 border-t border-base-300">
+              <div class="text-sm text-base-content/60 mb-1 tooltip tooltip-bottom cursor-help" data-tip="The weight frozen into Zwift's last racing-metrics computation, alongside the rider's category, racing score and zFTP. It only moves when Zwift recomputes, so it can lag the profile weight.">Racing metrics weight <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+              {% if zauth.metrics_weight_kg %}
+              <div class="font-medium font-mono">{{ zauth.metrics_weight_kg|weight_dual }}</div>
+              {% if zauth.weight_drift %}
+              <div class="text-xs text-base-content/50 mt-1">
+                Profile weight has moved
+                <span class="badge badge-ghost badge-xs font-mono">{{ zauth.weight_drift }} kg</span>
+                since this snapshot
+              </div>
+              {% endif %}
+              {% else %}
+              <div class="text-sm text-base-content/50">&mdash;</div>
+              {% endif %}
+            </div>
           </div>
 
           <div>
@@ -180,26 +198,44 @@
         </div>
 
         <div class="divider my-3"></div>
+        <!-- 90-day ranges come from the service's deduped snapshot history, so they can rest
+             on very few points; the count is shown rather than implying confidence. -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
           <div>
-            <div class="text-base-content/60 text-xs">Weight 90d min</div>
-            <div class="text-base-content/40">&mdash;</div>
-          </div>
-          <div>
-            <div class="text-base-content/60 text-xs">Weight 90d max</div>
-            <div class="text-base-content/40">&mdash;</div>
-          </div>
-          <div>
             <div class="text-base-content/60 text-xs">Height</div>
-            <div class="text-base-content/40">&mdash;</div>
+            {% if zauth.height_cm %}
+            <div class="font-mono">{{ zauth.height_cm }} cm</div>
+            {% else %}
+            <div class="text-base-content/40" title="{{ zauth.unavailable_reason }}">&mdash;</div>
+            {% endif %}
           </div>
           <div>
-            <div class="text-base-content/60 text-xs">Height 90d min / max</div>
+            <div class="text-base-content/60 text-xs tooltip tooltip-bottom cursor-help" data-tip="Range of the racing-metrics weight over the last 90 days of recorded changes.">Weight 90d range</div>
+            {% if zauth.weight_90d_min %}
+            <div class="font-mono">{{ zauth.weight_90d_min }} &ndash; {{ zauth.weight_90d_max }} kg</div>
+            <div class="text-base-content/40 text-xs">{{ zauth.weight_90d_count }} reading{{ zauth.weight_90d_count|pluralize }}</div>
+            {% else %}
+            <div class="text-base-content/40" title="No snapshot history in this window yet">&mdash;</div>
+            {% endif %}
+          </div>
+          <div>
+            <div class="text-base-content/60 text-xs">Height 90d range</div>
+            {% if zauth.height_90d_min %}
+            <div class="font-mono">{{ zauth.height_90d_min }} &ndash; {{ zauth.height_90d_max }} cm</div>
+            <div class="text-base-content/40 text-xs">{{ zauth.height_90d_count }} reading{{ zauth.height_90d_count|pluralize }}</div>
+            {% else %}
+            <div class="text-base-content/40" title="Height was added to the snapshot history later, so older snapshots lack it">&mdash;</div>
+            {% endif %}
+          </div>
+          <div>
+            <div class="text-base-content/60 text-xs">Weight swing</div>
+            {% if zauth.weight_90d_swing is not None %}
+            <div class="font-mono {% if zauth.weight_90d_swing_high %}text-warning{% endif %}">{{ zauth.weight_90d_swing|floatformat:1 }} kg</div>
+            {% else %}
             <div class="text-base-content/40">&mdash;</div>
+            {% endif %}
           </div>
         </div>
-        <p class="text-xs text-base-content/50 mt-2">{{ zauth.unavailable_reason }}. The Zwift service does
-          record height and a weight/height history, but does not yet expose them on its API.</p>
         {% elif zauth.configured %}
         <p class="text-sm text-base-content/60">This rider has not connected their Zwift account, so there are
           no official Zwift numbers to compare the submission against.</p>

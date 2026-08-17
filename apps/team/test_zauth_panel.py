@@ -19,12 +19,33 @@ _PROFILE = {
 }
 
 
+_STATS = {
+    "current": {"height_in_millimeters": 1750, "weight_in_grams": 76260},
+    "windows": {"90d": {
+        "weight_in_grams": {"min": 74800, "max": 77100, "first": 76000, "last": 76260, "count": 7},
+        "height_in_millimeters": {"min": 1750, "max": 1750, "first": 1750, "last": 1750, "count": 3},
+    }},
+}
+
+
+@pytest.fixture(autouse=True)
+def _no_stats_by_default(monkeypatch):
+    """Default every test to "no history", so each opts in to stats explicitly."""
+    monkeypatch.setattr("apps.zwift.client.get_profile_stats", lambda uid: None)
+
+
 @pytest.fixture
 def connected(monkeypatch):
     """Patch the client so the rider looks connected with a stored profile."""
     monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
     monkeypatch.setattr("apps.zwift.client.get_connection_status", lambda uid: dict(_STATUS))
     monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda uid: dict(_PROFILE))
+
+
+@pytest.fixture
+def with_history(connected, monkeypatch):
+    """Add a snapshot history on top of the connected fixture."""
+    monkeypatch.setattr("apps.zwift.client.get_profile_stats", lambda uid: dict(_STATS))
 
 
 @pytest.mark.django_db
@@ -182,10 +203,14 @@ def test_card_renders_on_the_review_page(client, verification_factory, user_mode
     assert resp.status_code == 200
     assert "Zwift Auth" in body
     assert "Connected" in body
-    assert "76.2 kg" in body      # live weight
-    assert "76.3 kg" not in body  # not the competitionMetrics weight
-    assert "Weight 90d min" in body
-    assert UNAVAILABLE_REASON in body
+    assert "76.2 kg" in body  # live weight
+    # That the profile row uses the live weight rather than the metrics one is pinned by
+    # test_never_falls_back_to_the_competition_metrics_weight; the metrics weight now has
+    # its own row, so its absence from the page is no longer the right assertion.
+    # Labels changed when the ranges became real; this test has no snapshot history, so
+    # the range cells show their em dash.
+    assert "Weight 90d range" in body
+    assert "Height 90d range" in body
 
 
 @pytest.mark.django_db
@@ -204,3 +229,158 @@ def test_card_explains_an_unconnected_rider(client, verification_factory, user_m
 
     assert "Not connected" in body
     assert "has not connected their Zwift account" in body
+
+
+@pytest.mark.django_db
+def test_drift_reports_movement_since_zwifts_snapshot(user, connected) -> None:
+    """The gap is the signal: the rider changed weight after Zwift last recomputed."""
+    panel = build_zauth_panel(user)
+
+    # live 76.2 vs metrics 76.3 -> the rider is now lighter than Zwift raced them at.
+    assert panel["weight_drift"] == "-0.1"
+
+
+@pytest.mark.django_db
+def test_no_drift_shown_when_the_two_weights_agree(user, monkeypatch) -> None:
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    monkeypatch.setattr("apps.zwift.client.get_connection_status", lambda uid: dict(_STATUS))
+    monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda uid: {
+        "weight_in_grams": 76200, "data": {"weight": 76200},
+    })
+
+    assert build_zauth_panel(user)["weight_drift"] is None
+
+
+@pytest.mark.django_db
+def test_drift_is_signed_both_ways(user, monkeypatch) -> None:
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    monkeypatch.setattr("apps.zwift.client.get_connection_status", lambda uid: dict(_STATUS))
+    monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda uid: {
+        "weight_in_grams": 75000, "data": {"weight": 76400},
+    })
+
+    assert build_zauth_panel(user)["weight_drift"] == "+1.4"
+
+
+@pytest.mark.django_db
+def test_no_drift_when_one_weight_is_missing(user, monkeypatch) -> None:
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    monkeypatch.setattr("apps.zwift.client.get_connection_status", lambda uid: dict(_STATUS))
+    monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda uid: {"data": {"weight": 76203}})
+
+    panel = build_zauth_panel(user)
+
+    assert panel["metrics_weight_kg"] is None
+    assert panel["weight_drift"] is None
+
+
+@pytest.mark.django_db
+def test_both_weights_render_as_separate_rows(client, verification_factory, user_model, connected) -> None:
+    reviewer = user_model.objects.create_user(
+        username="rev3", email="rev3@example.test",
+        permission_overrides={"team_member": True, "approve_verification": True},
+    )
+    rider = user_model.objects.create_user(username="rider3", email="rider3@example.test")
+    record = verification_factory(rider, "weight_full", weight=76.5)
+    client.force_login(reviewer)
+
+    body = client.get(reverse("team:verification_record_detail", args=[record.pk])).content.decode()
+
+    assert "Zwift profile weight" in body
+    assert "Racing metrics weight" in body
+    assert "76.2 kg" in body  # live
+    assert "76.3 kg" in body  # metrics snapshot
+    assert "-0.1 kg" in body  # drift between them
+
+
+@pytest.mark.django_db
+def test_height_and_ranges_come_from_the_snapshot_history(user, with_history) -> None:
+    panel = build_zauth_panel(user)
+
+    assert panel["height_cm"] == pytest.approx(175.0)
+    assert panel["weight_90d_min"] == pytest.approx(74.8)
+    assert panel["weight_90d_max"] == pytest.approx(77.1)
+    assert panel["weight_90d_count"] == 7
+    assert panel["height_90d_min"] == pytest.approx(175.0)
+    assert panel["height_90d_max"] == pytest.approx(175.0)
+    assert panel["height_90d_count"] == 3
+
+
+@pytest.mark.django_db
+def test_swing_is_flagged_once_it_could_move_a_category(user, with_history) -> None:
+    """74.8 -> 77.1 is 2.3 kg, over the attention threshold."""
+    panel = build_zauth_panel(user)
+
+    assert panel["weight_90d_swing"] == pytest.approx(2.3)
+    assert panel["weight_90d_swing_high"] is True
+
+
+@pytest.mark.django_db
+def test_a_small_swing_is_not_flagged(user, connected, monkeypatch) -> None:
+    monkeypatch.setattr("apps.zwift.client.get_profile_stats", lambda uid: {
+        "windows": {"90d": {"weight_in_grams": {"min": 76100, "max": 76400, "count": 2}}},
+    })
+
+    panel = build_zauth_panel(user)
+
+    assert panel["weight_90d_swing"] == pytest.approx(0.3)
+    assert panel["weight_90d_swing_high"] is False
+
+
+@pytest.mark.django_db
+def test_no_history_leaves_the_ranges_unavailable(user, connected) -> None:
+    """get_profile_stats returns None when the service is down or has nothing."""
+    panel = build_zauth_panel(user)
+
+    assert panel["height_cm"] is None
+    assert panel["weight_90d_min"] is None
+    assert panel["weight_90d_count"] == 0
+    assert panel["weight_90d_swing"] is None
+
+
+@pytest.mark.django_db
+def test_a_metric_absent_from_the_window_stays_none(user, connected, monkeypatch) -> None:
+    """Height was added to snapshots later, so older windows carry null for it."""
+    monkeypatch.setattr("apps.zwift.client.get_profile_stats", lambda uid: {
+        "current": {"height_in_millimeters": None},
+        "windows": {"90d": {
+            "weight_in_grams": {"min": 76100, "max": 76400, "count": 2},
+            "height_in_millimeters": None,
+        }},
+    })
+
+    panel = build_zauth_panel(user)
+
+    assert panel["weight_90d_min"] == pytest.approx(76.1)
+    assert panel["height_cm"] is None
+    assert panel["height_90d_min"] is None
+    assert panel["height_90d_count"] == 0
+
+
+@pytest.mark.django_db
+def test_malformed_stats_payloads_degrade_quietly(user, connected, monkeypatch) -> None:
+    for payload in (None, {}, {"windows": None}, {"windows": {"90d": None}},
+                    {"windows": {"90d": {"weight_in_grams": "nope"}}}, {"current": "nope"}):
+        monkeypatch.setattr("apps.zwift.client.get_profile_stats", lambda uid, p=payload: p)
+        panel = build_zauth_panel(user)
+        assert panel["weight_90d_min"] is None
+        assert panel["height_cm"] is None
+
+
+@pytest.mark.django_db
+def test_ranges_render_on_the_page(client, verification_factory, user_model, with_history) -> None:
+    reviewer = user_model.objects.create_user(
+        username="rev4", email="rev4@example.test",
+        permission_overrides={"team_member": True, "approve_verification": True},
+    )
+    rider = user_model.objects.create_user(username="rider4", email="rider4@example.test")
+    record = verification_factory(rider, "weight_full", weight=76.5)
+    client.force_login(reviewer)
+
+    body = client.get(reverse("team:verification_record_detail", args=[record.pk])).content.decode()
+
+    assert "175.0 cm" in body
+    assert "74.8" in body and "77.1" in body
+    assert "7 readings" in body
+    assert "2.3 kg" in body  # the swing
+    assert UNAVAILABLE_REASON not in body  # nothing unavailable now
