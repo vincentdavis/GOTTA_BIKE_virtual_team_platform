@@ -213,6 +213,34 @@ def test_squad_manage_offers_a_timezone_filter(client, event, coordinator) -> No
 
 
 @pytest.mark.django_db
+def test_squad_manage_offers_a_gender_filter(client, event, coordinator) -> None:
+    """The squad list exposes a gender filter built from the genders actually present."""
+    Squad.objects.create(event=event, name="Squad A", gender="Female")
+    Squad.objects.create(event=event, name="Squad B", gender="COED")
+    Squad.objects.create(event=event, name="Squad C", gender="Female")  # duplicate
+    Squad.objects.create(event=event, name="Squad D")  # no gender set
+    client.force_login(coordinator)
+
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+
+    assert list(resp.context["squad_genders"]) == ["COED", "Female"]  # deduped + sorted
+    body = resp.content.decode()
+    assert 'id="filter-squad-gender"' in body
+    assert 'data-gender="Female"' in body
+
+
+@pytest.mark.django_db
+def test_squad_manage_hides_gender_filter_when_unused(client, event, coordinator) -> None:
+    Squad.objects.create(event=event, name="Squad A")
+    client.force_login(coordinator)
+
+    resp = client.get(reverse("events:squad_manage", args=[event.pk]))
+
+    assert list(resp.context["squad_genders"]) == []
+    assert 'id="filter-squad-gender"' not in resp.content.decode()
+
+
+@pytest.mark.django_db
 def test_squad_manage_hides_timezone_filter_when_unused(client, event, coordinator) -> None:
     """With no squad timezones set there is nothing to filter by, so no control renders."""
     Squad.objects.create(event=event, name="Squad A")

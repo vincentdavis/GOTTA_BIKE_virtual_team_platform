@@ -122,6 +122,13 @@
         {% for tz in squad_timezones %}<option value="{{ tz }}">{{ tz }}</option>{% endfor %}
       </select>
       {% endif %}
+      {% if squad_genders %}
+      <select id="filter-squad-gender" class="select select-bordered select-sm w-full sm:w-auto"
+              onchange="filterSquads()">
+        <option value="">All genders</option>
+        {% for g in squad_genders %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+      </select>
+      {% endif %}
     </div>
     <p id="squad-no-results" class="text-sm text-base-content/60 mt-2 hidden">No squads match your search.</p>
   </div>
@@ -129,6 +136,7 @@
     {% for squad in squads %}
     <div class="card bg-base-200 shadow-md squad-card"
          data-timezone="{{ squad.squad_timezone|default:'' }}"
+         data-gender="{{ squad.gender|default:'' }}"
          data-search="{{ squad.name|lower }} {% for c in squad.captains.all %}{{ c.get_full_name|lower }} {% endfor %}{% for c in squad.vice_captains.all %}{{ c.get_full_name|lower }} {% endfor %}">
       <div class="card-body p-4">
         {# Header: name + action buttons #}
@@ -496,10 +504,13 @@
     var q = (searchEl ? searchEl.value : "").trim().toLowerCase();
     var tzEl = document.getElementById("filter-squad-timezone");
     var tz = tzEl ? tzEl.value : "";
+    var genderEl = document.getElementById("filter-squad-gender");
+    var gender = genderEl ? genderEl.value : "";
     var shown = 0;
     document.querySelectorAll("#squad-grid .squad-card").forEach(function (card) {
       var match = !q || card.dataset.search.indexOf(q) !== -1;
       if (match && tz && card.dataset.timezone !== tz) match = false;
+      if (match && gender && card.dataset.gender !== gender) match = false;
       card.style.display = match ? "" : "none";
       if (match) shown++;
     });

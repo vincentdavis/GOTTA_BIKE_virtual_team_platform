@@ -1409,8 +1409,9 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         )
         s.available_groups = _group_available_signups(s.available_signups, squad_names_by_user)
 
-    # Timezone filter options — only the timezones actually in use by this event's squads.
+    # Filter options — only the values actually in use by this event's squads.
     squad_timezones = sorted({s.squad_timezone for s in squads if s.squad_timezone})
+    squad_genders = sorted({s.gender for s in squads if s.gender})
 
     return render(
         request,
@@ -1426,6 +1427,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             # button isn't shown to people who would just get a 403.
             "can_assign_riders": request.user.is_event_admin,
             "squad_timezones": squad_timezones,
+            "squad_genders": squad_genders,
         },
     )
 
