@@ -114,7 +114,7 @@
       <div class="flex items-center gap-2 mb-4">
         <h3 class="text-lg font-semibold">Signups</h3>
         {% if can_view_signups and signup_count %}
-        <span class="badge badge-neutral">{{ signup_count }}</span>
+        <span class="badge badge-neutral tabular-nums" id="signup-count-badge">{{ signup_count }}</span>
         <button type="button" class="btn btn-ghost btn-xs" id="toggle-signups-btn" onclick="toggleSignups()" title="Show signups">
           <svg id="signups-arrow" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
@@ -251,7 +251,7 @@
 
       {% if can_view_signups and signups %}
       <div id="signups-content" style="display:none">
-      {% if is_event_admin %}
+      {% if can_view_signup_table %}
       <div class="mt-2">
         <div class="flex items-center gap-2 mb-2">
           <div class="ml-auto flex items-center gap-2">
@@ -269,7 +269,7 @@
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="wkg" checked> WKG</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="verified" checked> Verified</label></li>
                 {% if squads %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad" checked> Squad</label></li>{% endif %}
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="notes" checked> Notes</label></li>
+                {% if can_view_signup_notes %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="notes" checked> Notes</label></li>{% endif %}
                 {% if signup_questions %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="custom_answers" checked> Answers</label></li>{% endif %}
                 <li class="menu-title text-xs pt-2">Zwift Racing</li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_age"> Age</label></li>
@@ -285,6 +285,14 @@
             <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
           </div>
         </div>
+        {% if answer_facets %}
+        {% include "events/_answer_facets.html" %}
+        {{ answer_payload|json_script:"answer-payload" }}
+        <div class="text-center py-8 hidden" id="answer-empty">
+          <p class="text-base-content/60 mb-3">No signup matches these answers.</p>
+          <button type="button" class="btn btn-sm btn-outline" id="answer-empty-clear">Clear all filters</button>
+        </div>
+        {% endif %}
         <div class="overflow-x-auto">
           <table class="table table-sm table-pin-col" data-signup-table="detail">
             <thead>
@@ -301,8 +309,8 @@
                 <th data-col="verified" data-sort="text" class="cursor-pointer hover:text-primary select-none">Verified</th>
                 {% if event.event_role %}<th data-col="event_role" data-sort="text" class="cursor-pointer hover:text-primary select-none">Event Role</th>{% endif %}
                 {% if squads %}<th data-col="squad" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>{% endif %}
-                <th data-col="notes" data-sort="text" class="cursor-pointer hover:text-primary select-none">Notes</th>
-                {% if signup_questions %}<th data-col="custom_answers" data-sort="text" class="cursor-pointer hover:text-primary select-none">Answers</th>{% endif %}
+                {% if can_view_signup_notes %}<th data-col="notes" data-sort="text" class="cursor-pointer hover:text-primary select-none">Notes</th>{% endif %}
+                {% if signup_questions %}<th data-col="custom_answers">Answers{% if answer_facets %} <span class="text-xs font-normal text-base-content/50">(sort in a facet &#9650;&#9660;)</span>{% endif %}</th>{% endif %}
                 <th data-col="zr_age" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Age</th>
                 <th data-col="zr_cur_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Rating</th>
                 <th data-col="zr_cur_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Cat</th>
@@ -315,9 +323,10 @@
             </thead>
             <tbody>
               {% for entry in signups %}
-              <tr>
-                <td data-col="name">
+              <tr data-signup-pk="{{ entry.signup.pk }}" data-name="{{ entry.user.get_full_name|default:entry.user.discord_username }}">
+                <td data-col="name" data-sort-value="{{ entry.user.get_full_name|default:entry.user.discord_username }}">
                   {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                  {% if answer_facets %}<div class="md:hidden text-xs text-base-content/60 mt-1 empty:hidden" data-answer-focus></div>{% endif %}
                 </td>
                 <td data-col="zwid">
                   {% if entry.zwid %}
@@ -404,6 +413,7 @@
                   {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk %}
                 </td>
                 {% endif %}
+                {% if can_view_signup_notes %}
                 <td data-col="notes">
                   {% if entry.signup.notes %}
                   <div class="tooltip tooltip-left" data-tip="{{ entry.signup.notes }}">
@@ -413,10 +423,11 @@
                   <span class="text-base-content/30">-</span>
                   {% endif %}
                 </td>
+                {% endif %}
                 {% if signup_questions %}
                 <td data-col="custom_answers" class="align-top">
                   <div class="max-w-xs space-y-0.5">
-                    {% for a in entry.custom_answers %}{% if a.answered %}<div class="text-xs"><span class="text-base-content/50">{{ a.label|render_markdown_inline }}:</span> {{ a.display }}</div>{% endif %}{% endfor %}
+                    {% for a in entry.custom_answers %}{% if a.answered %}<div class="text-xs" data-aq="{{ a.question.pk }}"><span class="text-base-content/50">{{ a.label|render_markdown_inline }}:</span> <span data-aq-value>{{ a.display }}</span></div>{% endif %}{% endfor %}
                   </div>
                 </td>
                 {% endif %}
@@ -1206,6 +1217,18 @@ function switchCategorySource(source) {
 <script>
 (function() {
   // Search
+  // A row can be hidden by the name search and by the answer facets independently;
+  // both write a flag and this decides, so neither can un-hide the other's rows.
+  window.applyRowVisibility = function(row) {
+    row.style.display = (row.dataset.searchHidden || row.dataset.answerHidden) ? 'none' : '';
+  };
+
+  function cellSortText(row, colIdx) {
+    var cell = row.cells[colIdx];
+    if (!cell) return '';
+    return (cell.dataset.sortValue !== undefined ? cell.dataset.sortValue : cell.textContent).trim();
+  }
+
   document.querySelectorAll('[data-signup-search]').forEach(function(input) {
     var tableId = input.getAttribute('data-signup-search');
     var table = document.querySelector('[data-signup-table="' + tableId + '"]');
@@ -1213,8 +1236,10 @@ function switchCategorySource(source) {
     input.addEventListener('input', function() {
       var query = this.value.toLowerCase();
       table.querySelectorAll('tbody tr').forEach(function(row) {
-        var name = row.cells[0].textContent.toLowerCase();
-        row.style.display = name.indexOf(query) !== -1 ? '' : 'none';
+        // data-name where present: cells[0] now also carries the mobile answer line.
+        var name = (row.dataset.name || (row.cells[0] ? row.cells[0].textContent : '')).toLowerCase();
+        row.dataset.searchHidden = name.indexOf(query) !== -1 ? '' : '1';
+        applyRowVisibility(row);
       });
     });
   });
@@ -1243,8 +1268,8 @@ function switchCategorySource(source) {
         var tbody = table.querySelector('tbody');
         var rows = Array.from(tbody.querySelectorAll('tr'));
         rows.sort(function(a, b) {
-          var aText = a.cells[colIdx].textContent.trim();
-          var bText = b.cells[colIdx].textContent.trim();
+          var aText = cellSortText(a, colIdx);
+          var bText = cellSortText(b, colIdx);
           if (sortType === 'num') {
             var aNum = parseFloat(aText) || 0;
             var bNum = parseFloat(bText) || 0;
@@ -1258,6 +1283,254 @@ function switchCategorySource(source) {
   });
 })();
 </script>
+{% if answer_facets %}
+<script>
+// Answer facets for the signups table. Filtering, counting and sorting all run over the
+// rendered rows: the table has no pagination, so the client sees every signup.
+//
+// Semantics: OR within one question, AND across questions. "__none__" means the question
+// has no key in custom_answers, which is the only representation of "did not answer" --
+// and for a boolean it also covers an unchecked box, since False is never stored.
+(function() {
+  var payloadEl = document.getElementById('answer-payload');
+  var table = document.querySelector('[data-signup-table="detail"]');
+  if (!payloadEl || !table) return;
+
+  var ANSWERS = JSON.parse(payloadEl.textContent);
+  var NONE = '__none__';
+  var ANSWERED = '__answered__';
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('.answer-facet'));
+  var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
+  var chipRow = document.getElementById('answer-chips');
+  var countBadge = document.getElementById('signup-count-badge');
+  var totalRows = rows.length;
+  var sortState = null;
+
+  // question pk -> {type, label, selected:Set}
+  var questions = {};
+  boxes.forEach(function(cb) {
+    var q = cb.dataset.answerQ;
+    if (!questions[q]) {
+      var card = cb.closest('.bg-base-100');
+      questions[q] = {
+        type: cb.dataset.answerType,
+        label: card ? card.querySelector('.truncate').textContent.trim() : q,
+        selected: new Set()
+      };
+    }
+  });
+
+  function valueFor(pk, q) {
+    var row = ANSWERS[pk];
+    return row ? row[q] : undefined;
+  }
+
+  function bucketMatches(pk, q, value) {
+    var stored = valueFor(pk, q);
+    if (value === NONE) return stored === undefined;
+    if (value === ANSWERED) return stored !== undefined;      // boolean + text
+    if (Array.isArray(stored)) return stored.indexOf(value) !== -1;  // multi
+    return stored === value;                                   // single
+  }
+
+  // `skip` lets a facet count its own options against every OTHER facet's selection.
+  function rowMatches(pk, skip) {
+    return Object.keys(questions).every(function(q) {
+      if (q === skip) return true;
+      var sel = questions[q].selected;
+      if (!sel.size) return true;
+      var vals = Array.from(sel);
+      return vals.some(function(v) { return bucketMatches(pk, q, v); });
+    });
+  }
+
+  function displayText(row, q) {
+    var el = row.querySelector('[data-aq="' + q + '"] [data-aq-value]');
+    return el ? el.textContent.trim() : '';
+  }
+
+  function render() {
+    // Counts, each excluding its own question's selection.
+    Object.keys(questions).forEach(function(q) {
+      var pool = rows.filter(function(r) { return rowMatches(r.dataset.signupPk, q); });
+      document.querySelectorAll('[data-answer-count^="' + q + '|"]').forEach(function(badge) {
+        var value = badge.dataset.answerCount.slice(q.length + 1);
+        var n = pool.filter(function(r) { return bucketMatches(r.dataset.signupPk, q, value); }).length;
+        badge.textContent = n;
+        badge.parentElement.classList.toggle('opacity-40', n === 0);
+      });
+    });
+
+    // Rows.
+    var shown = 0;
+    rows.forEach(function(row) {
+      var match = rowMatches(row.dataset.signupPk, null);
+      row.dataset.answerHidden = match ? '' : '1';
+      window.applyRowVisibility(row);
+      if (match && !row.dataset.searchHidden) shown++;
+    });
+
+    // Chips, outside the collapse so an active filter is visible with the panel shut.
+    var chips = [];
+    Object.keys(questions).forEach(function(q) {
+      questions[q].selected.forEach(function(v) {
+        // Match by property, not an attribute selector: option strings are admin-authored
+        // and may contain quotes or backslashes that no escaping makes safe to interpolate.
+        var box = boxes.filter(function(b) { return b.dataset.answerQ === q && b.value === v; })[0];
+        var label = box ? box.parentElement.querySelector('span').textContent.trim() : v;
+        var chip = document.createElement('span');
+        chip.className = 'badge badge-primary badge-sm gap-1 max-w-xs';
+        var text = document.createElement('span');
+        text.className = 'truncate';
+        text.textContent = questions[q].label.replace(/\?$/, '') + ': ' + label;
+        var x = document.createElement('button');
+        x.type = 'button';
+        x.textContent = '×';
+        x.setAttribute('aria-label', 'Remove this filter');
+        x.addEventListener('click', function() { if (box) { box.checked = false; toggle(box); } });
+        chip.appendChild(text);
+        chip.appendChild(x);
+        chips.push(chip);
+      });
+    });
+    chipRow.textContent = '';
+    chips.forEach(function(c) { chipRow.appendChild(c); });
+    if (chips.length) {
+      var clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'btn btn-ghost btn-xs';
+      clear.textContent = 'Clear all';
+      clear.addEventListener('click', clearAll);
+      chipRow.appendChild(clear);
+    }
+    chipRow.classList.toggle('hidden', chips.length === 0);
+
+    if (countBadge) {
+      countBadge.textContent = chips.length ? shown + ' / ' + totalRows : totalRows;
+    }
+
+    // Zero matches: hide the bare header row and keep an escape hatch visible.
+    var empty = document.getElementById('answer-empty');
+    if (empty) {
+      var none = chips.length > 0 && shown === 0;
+      empty.classList.toggle('hidden', !none);
+      var wrap = table.parentElement;
+      if (wrap) wrap.classList.toggle('hidden', none);
+    }
+
+    // Mobile: the answers column is force-hidden below 767px, so show just the answers
+    // being filtered or sorted on, under the rider's name.
+    var focus = Object.keys(questions).filter(function(q) {
+      return questions[q].selected.size || (sortState && sortState.q === q);
+    });
+    rows.forEach(function(row) {
+      var box = row.querySelector('[data-answer-focus]');
+      if (!box) return;
+      box.textContent = '';
+      focus.forEach(function(q) {
+        var line = document.createElement('div');
+        line.className = 'truncate';
+        var lbl = document.createElement('span');
+        lbl.className = 'text-base-content/50';
+        lbl.textContent = questions[q].label.replace(/\?$/, '') + ': ';
+        line.appendChild(lbl);
+        line.appendChild(document.createTextNode(displayText(row, q) || '—'));
+        box.appendChild(line);
+      });
+    });
+
+    syncUrl();
+  }
+
+  function applySort() {
+    if (!sortState) return;
+    var tbody = table.querySelector('tbody');
+    var asc = sortState.dir === 'asc';
+    rows.slice().sort(function(a, b) {
+      var av = displayText(a, sortState.q), bv = displayText(b, sortState.q);
+      if (!av && !bv) return 0;
+      if (!av) return 1;              // unanswered always last, both directions
+      if (!bv) return -1;
+      return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    }).forEach(function(row) { tbody.appendChild(row); });
+    rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+  }
+
+  function toggle(box) {
+    var sel = questions[box.dataset.answerQ].selected;
+    if (box.checked) { sel.add(box.value); } else { sel.delete(box.value); }
+    render();
+  }
+
+  function clearAll() {
+    Object.keys(questions).forEach(function(q) { questions[q].selected.clear(); });
+    boxes.forEach(function(cb) { cb.checked = false; });
+    render();
+  }
+
+  function syncUrl() {
+    var params = new URLSearchParams(window.location.search);
+    Array.from(params.keys()).forEach(function(k) {
+      if (/^q\d+$/.test(k) || k === 'asort' || k === 'adir') params.delete(k);
+    });
+    Object.keys(questions).forEach(function(q) {
+      questions[q].selected.forEach(function(v) { params.append('q' + q, v); });
+    });
+    if (sortState) { params.set('asort', sortState.q); params.set('adir', sortState.dir); }
+    var qs = params.toString();
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + '#signups');
+  }
+
+  function restoreFromUrl() {
+    var params = new URLSearchParams(window.location.search);
+    var any = false;
+    boxes.forEach(function(cb) {
+      if (params.getAll('q' + cb.dataset.answerQ).indexOf(cb.value) !== -1) {
+        cb.checked = true;
+        questions[cb.dataset.answerQ].selected.add(cb.value);
+        any = true;
+      }
+    });
+    var sq = params.get('asort');
+    if (sq && questions[sq]) {
+      sortState = { q: sq, dir: params.get('adir') === 'desc' ? 'desc' : 'asc' };
+      markSort();
+      applySort();
+    }
+    // A shared link must not land on a collapsed panel with the filter it encodes hidden.
+    if (any) {
+      var panel = document.getElementById('answer-panel');
+      if (panel) panel.open = true;
+      var content = document.getElementById('signups-content');
+      if (content && content.style.display === 'none' && typeof toggleSignups === 'function') toggleSignups();
+    }
+  }
+
+  function markSort() {
+    document.querySelectorAll('[data-answer-sort]').forEach(function(btn) {
+      var on = sortState && btn.dataset.answerSort === sortState.q && btn.dataset.answerDir === sortState.dir;
+      btn.classList.toggle('btn-active', !!on);
+    });
+  }
+
+  var emptyClear = document.getElementById('answer-empty-clear');
+  if (emptyClear) emptyClear.addEventListener('click', clearAll);
+
+  boxes.forEach(function(cb) { cb.addEventListener('change', function() { toggle(cb); }); });
+  document.querySelectorAll('[data-answer-sort]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      sortState = { q: btn.dataset.answerSort, dir: btn.dataset.answerDir };
+      markSort();
+      applySort();
+      render();
+    });
+  });
+
+  restoreFromUrl();
+  render();
+})();
+</script>
+{% endif %}
 {% if can_add_members %}
 <script>
 (function() {

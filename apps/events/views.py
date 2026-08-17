@@ -35,6 +35,7 @@ from apps.accounts.discord_service import (
 )
 from apps.accounts.models import Permissions, User
 from apps.events import ds_service
+from apps.events.answer_facets import answers_payload, build_facets, panel_starts_open
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
 from apps.events.forms import EventForm, EventRoleSetupForm, SignupQuestionForm, SquadForm
 from apps.events.models import (
@@ -953,9 +954,14 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     )
     signups = event.signups.select_related("user").all()
     user_signup = event.signups.filter(user=request.user).first()
-    # Event admins always see the full signup table; with show_signups on, any
-    # team member can expand a names-only list (gated further in the template).
-    can_view_signups = request.user.is_event_admin or event.show_signups
+    # Event admins and anyone who passes the eligibility gate (head captain, squad
+    # captains/vice-captains) get the full signup table so they can filter by answers.
+    # With show_signups on, any other team member can expand a names-only list.
+    can_view_signup_table = request.user.is_event_admin or _can_view_v_report(request.user, event)
+    can_view_signups = can_view_signup_table or event.show_signups
+    # Riders are told the notes box is "for the event admins", so keep that promise:
+    # captains get the table, but not this column.
+    can_view_signup_notes = request.user.is_event_admin
     enriched_signups = _enrich_signups(signups, event=event) if can_view_signups else []
 
     # Attach enriched member data and tooltip to each squad
@@ -1021,6 +1027,18 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         signup_questions, user_signup.custom_answers if user_signup else None
     )
 
+    # Answer facets are built only for event admins. Non-admins can reach this page with
+    # show_signups on, and they see a names-only list; handing them the answer payload
+    # would let them read every rider's answers straight out of the HTML.
+    answer_facets: list[dict] = []
+    answer_payload: dict = {}
+    answer_panel_open = False
+    if signup_questions and can_view_signup_table:
+        signup_list = list(signups)
+        answer_facets = build_facets(signup_questions, signup_list)
+        answer_payload = answers_payload(signup_list, signup_questions)
+        answer_panel_open = panel_starts_open(signup_questions)
+
     logfire.debug("Event detail viewed", user_id=request.user.id, event_id=pk)
     return render(
         request,
@@ -1034,6 +1052,11 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "user_signup": user_signup,
             "signup_questions": signup_questions,
             "signup_question_fields": signup_question_fields,
+            "answer_facets": answer_facets,
+            "answer_payload": answer_payload,
+            "answer_panel_open": answer_panel_open,
+            "can_view_signup_table": can_view_signup_table,
+            "can_view_signup_notes": can_view_signup_notes,
             "can_manage_signup_questions": _can_manage_signup_questions(request.user),
             "is_event_admin": request.user.is_event_admin,
             "can_view_signups": can_view_signups,

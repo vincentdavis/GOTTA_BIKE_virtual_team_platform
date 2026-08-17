@@ -1,0 +1,50 @@
+{% comment %}
+Answer-facet filter panel for the admin signups table.
+
+Context: answer_facets (from apps.events.answer_facets.build_facets), answer_panel_open.
+
+Rendered only inside the event-admin branch — the payload it filters on is admin-only.
+The chip row sits OUTSIDE the collapse on purpose, so an active filter stays visible with
+the panel shut. Keep it that way; a hidden active filter is how people end up reading a
+narrowed table as if it were the whole list.
+
+Ticks within one question mean OR, across questions AND. Filtering, counting and sorting
+all happen client-side over the rendered rows (see the answer-facet IIFE in
+event_detail.html) — there is no pagination, so the client sees every row.
+{% endcomment %}
+<div class="flex flex-wrap items-center gap-1 mb-2 hidden" id="answer-chips"></div>
+
+<details class="collapse collapse-arrow bg-base-300 rounded-box mb-2" id="answer-panel"{% if answer_panel_open %} open{% endif %}>
+  <summary class="collapse-title text-sm font-medium py-2 min-h-0">Filter by answers</summary>
+  <div class="collapse-content">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      {% for facet in answer_facets %}
+      <div class="bg-base-100 rounded-box p-3">
+        <div class="flex items-start gap-2 mb-1">
+          <span class="text-xs font-semibold flex-1 min-w-0 truncate">{{ facet.label }}</span>
+          <span class="join shrink-0">
+            <button type="button" class="btn btn-xs join-item" data-answer-sort="{{ facet.pk }}" data-answer-dir="asc"
+                    title="Sort riders by this answer, A&ndash;Z" aria-label="Sort by this answer, ascending">&#9650;</button>
+            <button type="button" class="btn btn-xs join-item" data-answer-sort="{{ facet.pk }}" data-answer-dir="desc"
+                    title="Sort riders by this answer, Z&ndash;A" aria-label="Sort by this answer, descending">&#9660;</button>
+          </span>
+        </div>
+        <div class="max-h-72 overflow-y-auto">
+          {% for bucket in facet.buckets %}
+          <label class="label cursor-pointer justify-start gap-2 py-1">
+            <input type="checkbox" class="checkbox checkbox-xs answer-facet"
+                   data-answer-q="{{ facet.pk }}" data-answer-type="{{ facet.type }}" value="{{ bucket.value }}">
+            <span class="flex-1 min-w-0 truncate text-sm{% if bucket.value == '__none__' or bucket.retired %} text-base-content/60 italic{% endif %}">{{ bucket.label }}</span>
+            <span class="badge badge-ghost badge-sm tabular-nums" data-answer-count="{{ facet.pk }}|{{ bucket.value }}">0</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="text-xs text-base-content/50 mt-2">
+      Several ticks in one question mean <strong>any of them</strong>; ticks across questions must
+      <strong>all</strong> match. Counts are riders matching that option under your other filters.
+    </p>
+  </div>
+</details>
