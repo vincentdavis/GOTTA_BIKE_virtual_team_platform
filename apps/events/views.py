@@ -847,12 +847,19 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             })
         event_pending = sum(sq["pending_availability_count"] for sq in squad_data)
         has_grids = any(sq["grids"] for sq in squad_data)
+        # Managing any squad the user belongs to already implies squad-manage page access, so only
+        # fall back to the event-wide gate (which costs extra queries) when nothing short-circuits.
+        can_view_squad_manage = (
+            any(sq["can_manage_availability"] for sq in squad_data)
+            or _can_view_squad_manage(request.user, event)
+        )
         events_data.append({
             "event": event,
             "squads": squad_data,
             "pending_availability_count": event_pending,
             "has_availability_grids": has_grids,
             "ended_grid_count": ended_grid_count,
+            "can_view_squad_manage": can_view_squad_manage,
         })
 
     logfire.debug("My events viewed", user_id=request.user.id, event_count=len(events_data))
