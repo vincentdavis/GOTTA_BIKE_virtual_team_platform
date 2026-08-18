@@ -127,6 +127,14 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "**/forms.py" = ["RUF012"]
 
 [format]
+# Django writes migrations itself, in its own style, and nobody reads their
+# blame or their line wrapping. Formatting them would mean every future
+# `makemigrations` lands a file that fails `ruff format --check` until someone
+# reformats it -- perpetual churn for no readability gain. Lint still applies to
+# them (see the `**/migrations/*` entry under per-file-ignores above); only the
+# formatter is opted out.
+exclude = ["**/migrations/*"]
+
 # Like Black, use double quotes for strings.
 quote-style = "double"
 # Like Black, indent with spaces, rather than tabs.
