@@ -72,6 +72,13 @@ ignore = [
     "D107",  # Missing docstring in __init__
     "D203",  # Conflicts with D211 (no blank line before class)
     "D213",  # Conflicts with D212 (multi-line summary first line)
+    # ruff 0.15 wants its own suppression syntax (`# ruff:ignore[rule-name]`) and
+    # long rule names in this file. We keep `# noqa: D107` style on purpose: the
+    # short codes are what ruff's own docs and default error output use, and
+    # `# noqa` is understood by every other Python linter and editor. Adopting the
+    # ruff-only spelling would churn ~60 comments for no diagnostic gain.
+    "RUF105",  # noqa-comments: prefers `# ruff:ignore[...]` over `# noqa: ...`
+    "RUF201",  # rule-codes-in-selectors: prefers rule names over codes above
 ]
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
