@@ -65,7 +65,8 @@ def test_squad_captain_sees_event_setup_greyed_out(client, event, user_model) ->
     """A captain can manage squads but not edit the event, so one item is disabled."""
     squad = Squad.objects.create(event=event, name="Squad A")
     captain = user_model.objects.create_user(
-        username="cap", email="cap@example.test",
+        username="cap",
+        email="cap@example.test",
         permission_overrides={"team_member": True},
     )
     squad.captains.add(captain)

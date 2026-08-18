@@ -130,7 +130,7 @@ class ProfileForm(forms.ModelForm):
                 choices=TIMEZONE_CHOICES,
                 attrs={
                     "class": "select select-bordered w-full",
-                }
+                },
             ),
             "unit_preference": forms.Select(
                 attrs={

@@ -459,9 +459,7 @@ def our_squad_add(request: HttpRequest, matchup_id: str) -> HttpResponse:
             continue
         if user.zwid in existing:
             continue
-        data = roster.get_our_rider(user.zwid) or normalize.minimal(
-            user.zwid, user.get_full_name() or user.username
-        )
+        data = roster.get_our_rider(user.zwid) or normalize.minimal(user.zwid, user.get_full_name() or user.username)
         LadderRider.objects.create(
             matchup=matchup,
             side=Side.OURS,

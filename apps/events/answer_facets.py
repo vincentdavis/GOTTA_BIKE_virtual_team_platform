@@ -150,9 +150,7 @@ def build_facets(questions: list[SignupQuestion], signups: list[EventSignup]) ->
             none_label = "No answer"
         else:
             buckets.extend({"value": o, "label": o, "retired": False} for o in (q.options or []))
-            buckets.extend(
-                {"value": v, "label": f"{v} (removed)", "retired": True} for v in _extra_values(q, signups)
-            )
+            buckets.extend({"value": v, "label": f"{v} (removed)", "retired": True} for v in _extra_values(q, signups))
             none_label = "No answer"
         buckets.append({"value": NONE_VALUE, "label": none_label, "retired": False})
         facets.append({

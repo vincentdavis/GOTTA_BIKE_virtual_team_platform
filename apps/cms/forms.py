@@ -37,9 +37,7 @@ class PageForm(forms.ModelForm):
         ]
         widgets: ClassVar[dict] = {
             "title": forms.TextInput(attrs={"class": "input input-bordered w-full", "placeholder": "Page Title"}),
-            "slug": forms.TextInput(
-                attrs={"class": "input input-bordered w-full", "placeholder": "page-slug"}
-            ),
+            "slug": forms.TextInput(attrs={"class": "input input-bordered w-full", "placeholder": "page-slug"}),
             "status": forms.Select(attrs={"class": "select select-bordered w-full"}),
             "content": forms.Textarea(
                 attrs={

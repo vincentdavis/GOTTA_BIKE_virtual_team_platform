@@ -120,6 +120,7 @@ Example:
 ```python
 import pytest
 
+
 @pytest.mark.django_db
 def test_team_member_can_see_roster(auth_client):
     response = auth_client.get("/team/roster/")

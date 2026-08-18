@@ -636,9 +636,7 @@ def climb_advantage(matchup: LadderMatchup) -> dict[str, Any]:
     params = physics.params_from_constance(cda_coef_key="STD_CDA_COEF")
     if matchup.cda_coef is not None:
         params = replace(params, cda_coef=matchup.cda_coef)
-    grid = climb_engine.advantage_grid(
-        our_riders, opp_riders, CLIMB_LENGTHS_M, CLIMB_GRADES, params=params
-    )
+    grid = climb_engine.advantage_grid(our_riders, opp_riders, CLIMB_LENGTHS_M, CLIMB_GRADES, params=params)
     # Cell value is the median climber's time gap (opponent - ours); positive = we're faster.
     max_abs = max((abs(_median_gap(c)) for row in grid for c in row["cells"]), default=0) or 1
 

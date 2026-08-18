@@ -155,8 +155,7 @@ class DiscordRoleAdmin(admin.ModelAdmin):
         from django.utils.html import format_html
 
         return format_html(
-            '<span style="background-color: {}; color: white; padding: 2px 8px; '
-            'border-radius: 4px;">{}</span>',
+            '<span style="background-color: {}; color: white; padding: 2px 8px; border-radius: 4px;">{}</span>',
             hex_color,
             hex_color,
         )
