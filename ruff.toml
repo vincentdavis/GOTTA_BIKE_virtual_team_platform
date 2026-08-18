@@ -86,6 +86,11 @@ select = [
     "PYI",
     # flake8-return (superfluous else-after-return)
     "RET",
+    # One rule out of refurb, not the whole family: the rest of FURB leaves ~29
+    # style findings, but this one catches a real staleness -- fromisoformat has
+    # parsed a trailing "Z" natively since 3.11, so `.replace("Z", "+00:00")` is
+    # dead weight that hides how the string is really being parsed.
+    "FURB162",
 
 ]
 ignore = [

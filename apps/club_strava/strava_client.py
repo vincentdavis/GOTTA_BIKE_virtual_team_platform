@@ -242,8 +242,7 @@ def sync_club_activities(club_id: int | None = None, pages: int = 1) -> dict:
                         from datetime import datetime
 
                         try:
-                            # Handle ISO 8601 format with Z suffix
-                            activity_date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                            activity_date = datetime.fromisoformat(date_str)
                         except ValueError:
                             logfire.warning("Failed to parse activity date", date_str=date_str)
 

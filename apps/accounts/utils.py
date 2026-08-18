@@ -195,9 +195,7 @@ def fetch_youtube_videos(channel_id: str, limit: int = 5) -> list[dict]:
                 if published is not None and published.text:
                     with contextlib.suppress(ValueError):
                         # YouTube uses ISO 8601 format: 2024-01-15T12:00:00+00:00
-                        video_data["published"] = datetime.fromisoformat(
-                            published.text.replace("Z", "+00:00")
-                        )
+                        video_data["published"] = datetime.fromisoformat(published.text)
 
                 # Get description from media:group if available
                 if media_group is not None:

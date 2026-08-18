@@ -292,7 +292,7 @@ def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unk
         raw_joined = member_data.get("joined_at")
         if raw_joined:
             with contextlib.suppress(ValueError):
-                joined_at = datetime.fromisoformat(str(raw_joined).replace("Z", "+00:00"))
+                joined_at = datetime.fromisoformat(str(raw_joined))
 
         existing = GuildMember.objects.filter(discord_id=member_data["discord_id"]).first()
 
