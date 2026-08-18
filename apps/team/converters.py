@@ -9,7 +9,7 @@ CM_TO_INCHES = Decimal("0.393701")
 INCHES_TO_CM = Decimal("2.54")
 
 
-def kg_to_lbs(kg: Decimal | float | int) -> Decimal:
+def kg_to_lbs(kg: Decimal | float) -> Decimal:
     """Convert kilograms to pounds.
 
     Args:
@@ -22,7 +22,7 @@ def kg_to_lbs(kg: Decimal | float | int) -> Decimal:
     return (Decimal(str(kg)) * KG_TO_LBS).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
 
-def lbs_to_kg(lbs: Decimal | float | int) -> Decimal:
+def lbs_to_kg(lbs: Decimal | float) -> Decimal:
     """Convert pounds to kilograms.
 
     Args:
@@ -35,7 +35,7 @@ def lbs_to_kg(lbs: Decimal | float | int) -> Decimal:
     return (Decimal(str(lbs)) * LBS_TO_KG).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def cm_to_inches(cm: int | float) -> Decimal:
+def cm_to_inches(cm: float) -> Decimal:
     """Convert centimeters to inches.
 
     Args:
@@ -48,7 +48,7 @@ def cm_to_inches(cm: int | float) -> Decimal:
     return (Decimal(str(cm)) * CM_TO_INCHES).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
 
-def inches_to_cm(inches: Decimal | float | int) -> int:
+def inches_to_cm(inches: Decimal | float) -> int:
     """Convert inches to centimeters.
 
     Args:

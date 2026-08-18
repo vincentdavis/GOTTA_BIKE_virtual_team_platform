@@ -62,18 +62,37 @@ select = [
     "S",
     # flake8-print
     "T20",
-    # flake8-trio (async safety)
-    "ASYNC1",
+    # flake8-async (async safety; supersedes the old ASYNC1/flake8-trio subset)
+    "ASYNC",
     # - Warning
     "W",
+    # The rules below were all at zero violations when enabled, so they add no
+    # backlog -- they exist to keep it that way.
+    # flake8-debugger (stray breakpoint()/pdb.set_trace())
+    "T10",
+    # flake8-no-pep420 (a Django app dir that lost its __init__.py)
+    "INP",
+    # flake8-executable (shebang vs exec bit)
+    "EXE",
+    # flake8-slots (str/tuple subclasses without __slots__)
+    "SLOT",
+    # flake8-import-conventions
+    "ICN",
+    # flake8-logging + flake8-logging-format. Nothing here uses stdlib logging --
+    # logfire is the house standard -- so these only fire if that changes.
+    "LOG",
+    "G",
+    # flake8-pyi (redundant numeric unions, e.g. `int | float` -> `float`)
+    "PYI",
+    # flake8-return (superfluous else-after-return)
+    "RET",
 
 ]
 ignore = [
-    "D107",  # Missing docstring in __init__
     "D203",  # Conflicts with D211 (no blank line before class)
     "D213",  # Conflicts with D212 (multi-line summary first line)
     # ruff 0.15 wants its own suppression syntax (`# ruff:ignore[rule-name]`) and
-    # long rule names in this file. We keep `# noqa: D107` style on purpose: the
+    # long rule names in this file. We keep `# noqa: RUF012` style on purpose: the
     # short codes are what ruff's own docs and default error output use, and
     # `# noqa` is understood by every other Python linter and editor. Adopting the
     # ruff-only spelling would churn ~60 comments for no diagnostic gain.

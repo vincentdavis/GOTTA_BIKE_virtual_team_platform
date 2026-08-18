@@ -121,8 +121,7 @@ def connection_create(request: HttpRequest) -> HttpResponse:
                 connection.save()
                 # Redirect with new_sheet param to trigger the popup modal
                 return redirect(f"{request.build_absolute_uri('/data-connections/')}?new_sheet={connection.pk}")
-            else:
-                messages.success(request, f"Data connection '{connection.title}' created successfully.")
+            messages.success(request, f"Data connection '{connection.title}' created successfully.")
 
             # Fetch and store the sheet owner
             owner_email = gs_client.get_spreadsheet_owner(connection.spreadsheet_url)

@@ -734,13 +734,12 @@ def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
                 "accounts/partials/manual_zwift_verify_modal.html",
                 {"success": True, "zwid": zwid},
             )
-        else:
-            error = "Please enter a valid ZwiftPower profile URL or numeric Zwift ID."
-            logfire.warning(
-                "Invalid manual ZWID input",
-                user_id=request.user.id,
-                raw_input=raw_input,
-            )
+        error = "Please enter a valid ZwiftPower profile URL or numeric Zwift ID."
+        logfire.warning(
+            "Invalid manual ZWID input",
+            user_id=request.user.id,
+            raw_input=raw_input,
+        )
 
     return render(
         request,
@@ -781,8 +780,7 @@ def verify_zwift(request: HttpRequest) -> HttpResponse:
                     "accounts/partials/zwift_verify_modal.html",
                     {"success": True, "zwift_id": zwift_id},
                 )
-            else:
-                form.add_error(None, "Could not verify Zwift credentials. Please check your email and password.")
+            form.add_error(None, "Could not verify Zwift credentials. Please check your email and password.")
     else:
         form = ZwiftVerificationForm()
 
@@ -922,28 +920,27 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
                 },
             )
         return redirect("accounts:verification")
-    else:
-        logfire.warning(
-            "Race ready form validation failed",
-            user_id=request.user.id,
-            discord_username=request.user.discord_username,
-            verify_type=request.POST.get("verify_type"),
-            form_errors=dict(form.errors),
+    logfire.warning(
+        "Race ready form validation failed",
+        user_id=request.user.id,
+        discord_username=request.user.discord_username,
+        verify_type=request.POST.get("verify_type"),
+        form_errors=dict(form.errors),
+    )
+    if request.headers.get("HX-Request"):
+        return render(
+            request,
+            "accounts/partials/race_ready_form.html",
+            {
+                "race_ready_form": form,
+                "verify_type_options": build_verify_type_options(request.user),
+                "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
+                "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
+                "unit_preference": request.user.unit_preference,
+            },
         )
-        if request.headers.get("HX-Request"):
-            return render(
-                request,
-                "accounts/partials/race_ready_form.html",
-                {
-                    "race_ready_form": form,
-                    "verify_type_options": build_verify_type_options(request.user),
-                    "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
-                    "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
-                    "unit_preference": request.user.unit_preference,
-                },
-            )
-        messages.error(request, "Please correct the errors below.")
-        return redirect("accounts:verification")
+    messages.error(request, "Please correct the errors below.")
+    return redirect("accounts:verification")
 
 
 def _get_config_sections() -> dict:

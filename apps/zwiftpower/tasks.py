@@ -35,7 +35,7 @@ def _clean_str(value: object) -> str:
     return html.unescape(str(value)).strip()
 
 
-def _parse_decimal(value: str | int | float | None) -> Decimal | None:
+def _parse_decimal(value: str | float | None) -> Decimal | None:
     """Parse a value to Decimal, returning None if invalid.
 
     Returns:

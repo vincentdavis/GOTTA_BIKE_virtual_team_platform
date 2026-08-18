@@ -193,8 +193,7 @@ def get_club_activities(
                     per_page=per_page,
                     _retry_after_refresh=False,
                 )
-            else:
-                logfire.error("Token refresh failed, cannot retry request")
+            logfire.error("Token refresh failed, cannot retry request")
 
         return status_code, data
 

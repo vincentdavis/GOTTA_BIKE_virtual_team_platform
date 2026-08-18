@@ -15,7 +15,7 @@ from apps.zwiftracing.models import ZRRider
 from apps.zwiftracing.zr_client import get_club, get_rider
 
 
-def _parse_decimal(value: float | int | str | None) -> Decimal | None:
+def _parse_decimal(value: float | str | None) -> Decimal | None:
     """Parse a value to Decimal, returning None if invalid.
 
     Returns:

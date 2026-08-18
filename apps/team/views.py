@@ -2415,13 +2415,12 @@ def application_verify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpRespons
                     "team/partials/application_zwift_verify_modal.html",
                     {"application": application, "success": True, "zwift_id": zwift_id},
                 )
-            else:
-                logfire.warning(
-                    "Zwift verification failed for application",
-                    application_id=str(pk),
-                    applicant_discord_id=application.discord_id,
-                )
-                form.add_error(None, "Could not verify Zwift account. Please check your credentials.")
+            logfire.warning(
+                "Zwift verification failed for application",
+                application_id=str(pk),
+                applicant_discord_id=application.discord_id,
+            )
+            form.add_error(None, "Could not verify Zwift account. Please check your credentials.")
     else:
         form = ApplicationZwiftVerificationForm()
 
@@ -2482,13 +2481,12 @@ def application_manual_zwift_verify(request: HttpRequest, pk: uuid.UUID) -> Http
                 "team/partials/application_manual_zwift_verify_modal.html",
                 {"application": application, "success": True, "zwid": zwid},
             )
-        else:
-            error = "Please enter a valid ZwiftPower profile URL or numeric Zwift ID."
-            logfire.warning(
-                "Invalid manual ZWID input for application",
-                application_id=str(pk),
-                raw_input=raw_input,
-            )
+        error = "Please enter a valid ZwiftPower profile URL or numeric Zwift ID."
+        logfire.warning(
+            "Invalid manual ZWID input for application",
+            application_id=str(pk),
+            raw_input=raw_input,
+        )
 
     return render(
         request,

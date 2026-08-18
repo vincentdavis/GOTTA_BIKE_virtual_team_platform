@@ -27,7 +27,7 @@ def pretty_json(value) -> str:
 
 
 @register.filter
-def duration_hms(seconds: float | int | None) -> str:
+def duration_hms(seconds: float | None) -> str:
     """Format a number of seconds as ``H:MM:SS`` or ``M:SS``.
 
     Args:

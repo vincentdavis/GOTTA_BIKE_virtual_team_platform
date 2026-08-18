@@ -63,8 +63,7 @@ def _make_user(
     if permissions:
         defaults["permission_overrides"] = dict(permissions)
     defaults.update(extra)
-    user = user_model.objects.create_user(username=username, **defaults)
-    return user  # type: ignore[return-value]
+    return user_model.objects.create_user(username=username, **defaults)  # type: ignore[return-value]
 
 
 @pytest.fixture
