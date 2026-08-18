@@ -9,6 +9,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 import dj_database_url
@@ -18,11 +19,19 @@ from gotta_bike_platform.config import settings as config
 
 # Configure Logfire for observability
 # LOGFIRE_TOKEN is required in production; if not set, logs are local only
+#
+# Test runs are kept local. The suite deliberately exercises failure paths --
+# permission-denied assertions, bad payloads -- and exporting those spans fills the
+# Logfire dashboard with `testserver` "errors" that are really passing tests.
+# PYTEST_VERSION is set by pytest >= 8.0 for the whole session, so it is already
+# present when Django imports this module.
+_UNDER_PYTEST = "PYTEST_VERSION" in os.environ
+
 logfire.configure(
     service_name="coalition-platform",
     environment=config.logfire_environment,
     token=config.logfire_token,
-    send_to_logfire="if-token-present",
+    send_to_logfire=False if _UNDER_PYTEST else "if-token-present",
 )
 # Note: logfire.instrument_django() is called at the end of this file
 # after Django settings are fully loaded
