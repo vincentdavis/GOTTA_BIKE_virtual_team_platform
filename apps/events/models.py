@@ -637,6 +637,11 @@ class Squad(models.Model):
         help_text="Block adding a rider stronger than the maximum Zwift Racing category",
     )
 
+    require_zauth = models.BooleanField(
+        default=False,
+        help_text="Require members to have connected their Zwift account through zauth",
+    )
+
     # zFTP / zMAP bounds. Both units are offered because the ZRL division tables
     # combine them -- e.g. "zFTP < 3.74 W/kg AND >= 200W" -- so a W/kg-only bound
     # cannot express a real division. W/kg is derived from the weight Zwift used
@@ -1016,6 +1021,25 @@ class Squad(models.Model):
                     return False, f"{label} {shown} {unit_label} is above this squad's maximum ({limit})"
         return True, ""
 
+    def check_zauth_eligibility(self, is_zauth_verified: bool) -> tuple[bool, str]:
+        """Check whether a rider satisfies this squad's zauth requirement.
+
+        A legacy or admin-granted Zwift verification does not count: the point of the
+        requirement is that Zwift itself confirmed the account, which is also what makes
+        zFTP/zMAP available. Squads enforcing a power bound will usually want this on,
+        so the reason a rider is turned away names the connection rather than the metric.
+
+        Args:
+            is_zauth_verified: Whether the rider verified through Zwift OAuth.
+
+        Returns:
+            ``(ok, reason)`` where ``reason`` explains a block.
+
+        """
+        if self.require_zauth and not is_zauth_verified:
+            return False, "This squad requires a Zwift account connected through zauth"
+        return True, ""
+
     def check_zftp_eligibility(self, watts: float | None, wkg: float | None) -> tuple[bool, str]:
         """Check a rider's zFTP against this squad's enforced bounds.
 
@@ -1093,6 +1117,8 @@ class Squad(models.Model):
         )
         if zr:
             items.append(f"ZR: {zr}")
+        if self.require_zauth:
+            items.append("Zwift connected (zauth)")
         for prefix, label in (("zftp", "zFTP"), ("zmap", "zMAP")):
             for unit, unit_label, _places in self._METRIC_UNITS:
                 text = self._metric_bounds_text(prefix, unit)

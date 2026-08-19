@@ -177,6 +177,25 @@
           Riders without a women's category aren't affected.
         </p>
 
+        <!-- Zwift connection requirement -->
+        <div class="form-control w-full">
+          <label class="label cursor-pointer justify-start gap-2">
+            {{ form.require_zauth }}
+            <span class="label-text">Require a connected Zwift account (zauth)</span>
+          </label>
+          {% if form.require_zauth.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.require_zauth.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <p class="text-xs text-base-content/60">
+            Riders must have verified through Zwift&rsquo;s own OAuth. A legacy or admin-granted
+            verification does not count. This is also what supplies zFTP/zMAP, so turn it on for any
+            squad using the power limits below &mdash; riders get a clearer message about connecting
+            than about a missing number.
+          </p>
+        </div>
+
         <!-- zFTP / zMAP Limits -->
         <p class="text-sm font-semibold mt-2">zFTP</p>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -592,6 +592,7 @@ class SquadForm(forms.ModelForm):
             "max_zwift_racing_category",
             "enforce_min_zwift_racing_category",
             "enforce_max_zwift_racing_category",
+            "require_zauth",
             "min_zftp_wkg",
             "max_zftp_wkg",
             "enforce_min_zftp_wkg",
@@ -654,6 +655,9 @@ class SquadForm(forms.ModelForm):
                 attrs={"class": "checkbox checkbox-primary checkbox-sm"},
             ),
             "enforce_max_zwift_racing_category": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "require_zauth": forms.CheckboxInput(
                 attrs={"class": "checkbox checkbox-primary checkbox-sm"},
             ),
             "min_zftp_wkg": forms.NumberInput(

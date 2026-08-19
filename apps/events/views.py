@@ -1983,6 +1983,7 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 squad.check_womens_zwift_eligibility(member["zp_category_w"]),
                 squad.check_zr_eligibility(member["zr_category"]),
                 squad.check_gender_eligibility(member["gender"]),
+                squad.check_zauth_eligibility(member["user"].is_zauth_verified),
                 squad.check_zftp_eligibility(member["z_ftp"], member["z_ftp_wkg"]),
                 squad.check_zmap_eligibility(member["z_map"], member["z_map_wkg"]),
             )
@@ -2804,6 +2805,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             squad.check_zwift_eligibility(rider_zwift_cat),
             squad.check_womens_zwift_eligibility(rider_womens_cat),
             squad.check_zr_eligibility(rider_zr),
+            squad.check_zauth_eligibility(signup.user.is_zauth_verified),
             squad.check_zftp_eligibility(signup.user.z_ftp, signup.user.z_ftp_wkg),
             squad.check_zmap_eligibility(signup.user.z_map, signup.user.z_map_wkg),
         ):
@@ -5296,6 +5298,7 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
         squad.check_zwift_eligibility(rider_zwift_cat),
         squad.check_womens_zwift_eligibility(rider_womens_cat),
         squad.check_zr_eligibility(rider_zr),
+        squad.check_zauth_eligibility(request.user.is_zauth_verified),
         squad.check_zftp_eligibility(request.user.z_ftp, request.user.z_ftp_wkg),
         squad.check_zmap_eligibility(request.user.z_map, request.user.z_map_wkg),
     ):
