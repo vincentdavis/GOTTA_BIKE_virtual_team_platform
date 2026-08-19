@@ -725,12 +725,15 @@ class SquadForm(forms.ModelForm):
             "captain_notifications": forms.CheckboxInput(
                 attrs={"class": "toggle toggle-primary"},
             ),
-            "captains": forms.SelectMultiple(
-                attrs={"class": "select select-bordered w-full", "size": "6"},
-            ),
-            "vice_captains": forms.SelectMultiple(
-                attrs={"class": "select select-bordered w-full", "size": "6"},
-            ),
+            # Not SelectMultiple: DaisyUI's .select is display:inline-flex with a fixed
+            # height, which lays a multi-select's options out side by side on one line.
+            # Checkboxes also drop the ctrl/cmd-click, which is unusable over a long
+            # rider list -- one mis-click clears every other pick.
+            # No attrs: Django copies widget attrs onto the wrapping <div> as well as
+            # each input, and DaisyUI's .checkbox is a fixed 1rem box -- on the wrapper
+            # that collapses the whole list. Styled by .captain-picker in the template.
+            "captains": forms.CheckboxSelectMultiple(),
+            "vice_captains": forms.CheckboxSelectMultiple(),
         }
 
     # Non-model: whether a newly picked leader should also join the squad's roster.
