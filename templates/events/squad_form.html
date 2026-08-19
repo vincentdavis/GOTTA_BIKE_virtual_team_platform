@@ -177,6 +177,141 @@
           Riders without a women's category aren't affected.
         </p>
 
+        <!-- zFTP / zMAP Limits -->
+        <p class="text-sm font-semibold mt-2">zFTP</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <div class="label">
+              <label class="label-text" for="id_min_zftp_wkg">Min zFTP W/kg</label>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_min_zftp_wkg }}
+                <span>Enforce</span>
+              </label>
+            </div>
+            {{ form.min_zftp_wkg }}
+            {% if form.min_zftp_wkg.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.min_zftp_wkg.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+          <div class="form-control w-full">
+            <div class="label">
+              <label class="label-text" for="id_max_zftp_wkg">Max zFTP W/kg</label>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_max_zftp_wkg }}
+                <span>Enforce</span>
+              </label>
+            </div>
+            {{ form.max_zftp_wkg }}
+            {% if form.max_zftp_wkg.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.max_zftp_wkg.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+          <div class="form-control w-full">
+            <div class="label">
+              <label class="label-text" for="id_min_zftp_w">Min zFTP watts</label>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_min_zftp_w }}
+                <span>Enforce</span>
+              </label>
+            </div>
+            {{ form.min_zftp_w }}
+            {% if form.min_zftp_w.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.min_zftp_w.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+          <div class="form-control w-full">
+            <div class="label">
+              <label class="label-text" for="id_max_zftp_w">Max zFTP watts</label>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_max_zftp_w }}
+                <span>Enforce</span>
+              </label>
+            </div>
+            {{ form.max_zftp_w }}
+            {% if form.max_zftp_w.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.max_zftp_w.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+        <p class="text-sm font-semibold mt-2">zMAP</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <div class="label">
+              <label class="label-text" for="id_min_zmap_wkg">Min zMAP W/kg</label>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_min_zmap_wkg }}
+                <span>Enforce</span>
+              </label>
+            </div>
+            {{ form.min_zmap_wkg }}
+            {% if form.min_zmap_wkg.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.min_zmap_wkg.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+          <div class="form-control w-full">
+            <div class="label">
+              <label class="label-text" for="id_max_zmap_wkg">Max zMAP W/kg</label>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_max_zmap_wkg }}
+                <span>Enforce</span>
+              </label>
+            </div>
+            {{ form.max_zmap_wkg }}
+            {% if form.max_zmap_wkg.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.max_zmap_wkg.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+          <div class="form-control w-full">
+            <div class="label">
+              <label class="label-text" for="id_min_zmap_w">Min zMAP watts</label>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_min_zmap_w }}
+                <span>Enforce</span>
+              </label>
+            </div>
+            {{ form.min_zmap_w }}
+            {% if form.min_zmap_w.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.min_zmap_w.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+          <div class="form-control w-full">
+            <div class="label">
+              <label class="label-text" for="id_max_zmap_w">Max zMAP watts</label>
+              <label class="label-text-alt cursor-pointer flex items-center gap-1">
+                {{ form.enforce_max_zmap_w }}
+                <span>Enforce</span>
+              </label>
+            </div>
+            {{ form.max_zmap_w }}
+            {% if form.max_zmap_w.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.max_zmap_w.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+        <p class="text-xs text-base-content/60 -mt-2">
+          Both units are offered because ZRL divisions combine them &mdash; e.g. B DEV is
+          &ldquo;zFTP &lt; 3.74&nbsp;W/kg <strong>and</strong> &ge;&nbsp;200W&rdquo;. W/kg uses the weight Zwift held when
+          it computed the metric, so it matches the category Zwift assigned the rider.
+          Unlike the category limits, a rider with no zFTP/zMAP on file is <strong>blocked</strong> by an
+          enforced bound &mdash; these numbers only exist for riders who have connected Zwift.
+        </p>
+
         <!-- Timezone -->
         <div class="form-control w-full">
           <label class="label" for="id_squad_timezone">

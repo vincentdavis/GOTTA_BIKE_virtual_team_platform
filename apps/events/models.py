@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -635,6 +636,99 @@ class Squad(models.Model):
         default=False,
         help_text="Block adding a rider stronger than the maximum Zwift Racing category",
     )
+
+    # zFTP / zMAP bounds. Both units are offered because the ZRL division tables
+    # combine them -- e.g. "zFTP < 3.74 W/kg AND >= 200W" -- so a W/kg-only bound
+    # cannot express a real division. W/kg is derived from the weight Zwift used
+    # when it computed the metric (see User.z_ftp_wkg), never the rider's own.
+    min_zftp_wkg = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Minimum zFTP in W/kg",
+    )
+    max_zftp_wkg = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Maximum zFTP in W/kg",
+    )
+    enforce_min_zftp_wkg = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider below the minimum zFTP in W/kg",
+    )
+    enforce_max_zftp_wkg = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider above the maximum zFTP in W/kg",
+    )
+    min_zftp_w = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="Minimum zFTP in watts",
+    )
+    max_zftp_w = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="Maximum zFTP in watts",
+    )
+    enforce_min_zftp_w = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider below the minimum zFTP in watts",
+    )
+    enforce_max_zftp_w = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider above the maximum zFTP in watts",
+    )
+    min_zmap_wkg = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Minimum zMAP in W/kg",
+    )
+    max_zmap_wkg = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Maximum zMAP in W/kg",
+    )
+    enforce_min_zmap_wkg = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider below the minimum zMAP in W/kg",
+    )
+    enforce_max_zmap_wkg = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider above the maximum zMAP in W/kg",
+    )
+    min_zmap_w = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="Minimum zMAP in watts",
+    )
+    max_zmap_w = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="Maximum zMAP in watts",
+    )
+    enforce_min_zmap_w = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider below the minimum zMAP in watts",
+    )
+    enforce_max_zmap_w = models.BooleanField(
+        default=False,
+        help_text="Block adding a rider above the maximum zMAP in watts",
+    )
     url = models.URLField(max_length=500, blank=True, help_text="External URL for squad details")
     invite_url = models.URLField(max_length=500, blank=True, help_text="Invite URL for joining the squad")
     captain_notifications = models.BooleanField(
@@ -876,6 +970,78 @@ class Squad(models.Model):
             label="women's Zwift category",
         )
 
+    # Field-name contract for the metric bounds below: for prefix "zftp" and unit
+    # "wkg" the four fields are min_zftp_wkg / max_zftp_wkg and their two
+    # enforce_ twins. Sixteen explicit parameters would be worse than this getattr.
+    _METRIC_UNITS = (("wkg", "W/kg", 2), ("w", "W", 0))
+
+    def _check_metric_bounds(
+        self,
+        prefix: str,
+        label: str,
+        watts: float | None,
+        wkg: float | None,
+    ) -> tuple[bool, str]:
+        """Check one Zwift metric against this squad's enforced W/kg and watt bounds.
+
+        A rider with no value for an enforced bound is blocked rather than waved
+        through -- unlike the category rules, which ignore riders they can't classify.
+        These metrics only exist for zauth-connected riders, so "no data" here means
+        "not connected", and a squad that enforces a power floor means it.
+
+        Args:
+            prefix: Field-name stem, "zftp" or "zmap".
+            label: Human name for messages, e.g. "zFTP".
+            watts: The rider's metric in watts, or None.
+            wkg: The rider's metric in W/kg, or None.
+
+        Returns:
+            ``(ok, reason)`` where ``reason`` explains a block.
+
+        """
+        for unit, unit_label, places in self._METRIC_UNITS:
+            value = wkg if unit == "wkg" else watts
+            for bound in ("min", "max"):
+                if not getattr(self, f"enforce_{bound}_{prefix}_{unit}"):
+                    continue
+                limit = getattr(self, f"{bound}_{prefix}_{unit}")
+                if limit is None:
+                    continue
+                if value is None:
+                    return False, f"No {label} data - connect Zwift to join"
+                shown = f"{value:.{places}f}"
+                if bound == "min" and Decimal(str(value)) < limit:
+                    return False, f"{label} {shown} {unit_label} is below this squad's minimum ({limit})"
+                if bound == "max" and Decimal(str(value)) > limit:
+                    return False, f"{label} {shown} {unit_label} is above this squad's maximum ({limit})"
+        return True, ""
+
+    def check_zftp_eligibility(self, watts: float | None, wkg: float | None) -> tuple[bool, str]:
+        """Check a rider's zFTP against this squad's enforced bounds.
+
+        Args:
+            watts: The rider's zFTP in watts, or None if not connected.
+            wkg: The rider's zFTP in W/kg, or None if unknown.
+
+        Returns:
+            ``(ok, reason)`` where ``reason`` explains a block.
+
+        """
+        return self._check_metric_bounds("zftp", "zFTP", watts, wkg)
+
+    def check_zmap_eligibility(self, watts: float | None, wkg: float | None) -> tuple[bool, str]:
+        """Check a rider's zMAP against this squad's enforced bounds.
+
+        Args:
+            watts: The rider's zMAP in watts, or None if not connected.
+            wkg: The rider's zMAP in W/kg, or None if unknown.
+
+        Returns:
+            ``(ok, reason)`` where ``reason`` explains a block.
+
+        """
+        return self._check_metric_bounds("zmap", "zMAP", watts, wkg)
+
     @staticmethod
     def _bounds_text(min_cat: str, max_cat: str, enforce_min: bool, enforce_max: bool) -> str:
         """Describe an enforced category range. ``max_cat`` is strongest, ``min_cat`` weakest.
@@ -927,7 +1093,33 @@ class Squad(models.Model):
         )
         if zr:
             items.append(f"ZR: {zr}")
+        for prefix, label in (("zftp", "zFTP"), ("zmap", "zMAP")):
+            for unit, unit_label, _places in self._METRIC_UNITS:
+                text = self._metric_bounds_text(prefix, unit)
+                if text:
+                    items.append(f"{label}: {text} {unit_label}")
         return items
+
+    def _metric_bounds_text(self, prefix: str, unit: str) -> str:
+        """Describe one metric's enforced range in one unit.
+
+        Args:
+            prefix: Field-name stem, "zftp" or "zmap".
+            unit: Field-name suffix, "wkg" or "w".
+
+        Returns:
+            A short range label (e.g. "3.08-3.74", ">= 200"), or "" if nothing is enforced.
+
+        """
+        low = getattr(self, f"min_{prefix}_{unit}") if getattr(self, f"enforce_min_{prefix}_{unit}") else None
+        high = getattr(self, f"max_{prefix}_{unit}") if getattr(self, f"enforce_max_{prefix}_{unit}") else None
+        if low is not None and high is not None:
+            return f"{low}-{high}"
+        if low is not None:
+            return f">= {low}"
+        if high is not None:
+            return f"<= {high}"
+        return ""
 
 
 class SquadMember(models.Model):

@@ -497,6 +497,10 @@ def _enrich_squad_members(event):
             "zp_ftp": zp_ftp,
             "zp_rank": zp.rank if zp else None,
             "wkg": wkg,
+            "z_ftp": user.z_ftp,
+            "z_map": user.z_map,
+            "z_ftp_wkg": user.z_ftp_wkg,
+            "z_map_wkg": user.z_map_wkg,
             "in_zwiftracing": zr is not None,
             "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
             "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
@@ -1975,6 +1979,8 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 squad.check_womens_zwift_eligibility(member["zp_category_w"]),
                 squad.check_zr_eligibility(member["zr_category"]),
                 squad.check_gender_eligibility(member["gender"]),
+                squad.check_zftp_eligibility(member["z_ftp"], member["z_ftp_wkg"]),
+                squad.check_zmap_eligibility(member["z_map"], member["z_map_wkg"]),
             )
             reasons = [reason for ok, reason in checks if not ok]
             if reasons:
@@ -2794,6 +2800,8 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             squad.check_zwift_eligibility(rider_zwift_cat),
             squad.check_womens_zwift_eligibility(rider_womens_cat),
             squad.check_zr_eligibility(rider_zr),
+            squad.check_zftp_eligibility(signup.user.z_ftp, signup.user.z_ftp_wkg),
+            squad.check_zmap_eligibility(signup.user.z_map, signup.user.z_map_wkg),
         ):
             if ok:
                 continue
@@ -5284,6 +5292,8 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
         squad.check_zwift_eligibility(rider_zwift_cat),
         squad.check_womens_zwift_eligibility(rider_womens_cat),
         squad.check_zr_eligibility(rider_zr),
+        squad.check_zftp_eligibility(request.user.z_ftp, request.user.z_ftp_wkg),
+        squad.check_zmap_eligibility(request.user.z_map, request.user.z_map_wkg),
     ):
         if ok:
             continue

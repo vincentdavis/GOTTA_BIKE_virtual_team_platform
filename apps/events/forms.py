@@ -592,6 +592,22 @@ class SquadForm(forms.ModelForm):
             "max_zwift_racing_category",
             "enforce_min_zwift_racing_category",
             "enforce_max_zwift_racing_category",
+            "min_zftp_wkg",
+            "max_zftp_wkg",
+            "enforce_min_zftp_wkg",
+            "enforce_max_zftp_wkg",
+            "min_zftp_w",
+            "max_zftp_w",
+            "enforce_min_zftp_w",
+            "enforce_max_zftp_w",
+            "min_zmap_wkg",
+            "max_zmap_wkg",
+            "enforce_min_zmap_wkg",
+            "enforce_max_zmap_wkg",
+            "min_zmap_w",
+            "max_zmap_w",
+            "enforce_min_zmap_w",
+            "enforce_max_zmap_w",
             "enforce_gender",
             "url",
             "invite_url",
@@ -638,6 +654,54 @@ class SquadForm(forms.ModelForm):
                 attrs={"class": "checkbox checkbox-primary checkbox-sm"},
             ),
             "enforce_max_zwift_racing_category": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "min_zftp_wkg": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "step": "0.01", "min": "0", "placeholder": "e.g. 3.74"},
+            ),
+            "max_zftp_wkg": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "step": "0.01", "min": "0", "placeholder": "e.g. 3.74"},
+            ),
+            "enforce_min_zftp_wkg": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "enforce_max_zftp_wkg": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "min_zftp_w": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "step": "1", "min": "0", "placeholder": "e.g. 200"},
+            ),
+            "max_zftp_w": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "step": "1", "min": "0", "placeholder": "e.g. 200"},
+            ),
+            "enforce_min_zftp_w": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "enforce_max_zftp_w": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "min_zmap_wkg": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "step": "0.01", "min": "0", "placeholder": "e.g. 3.74"},
+            ),
+            "max_zmap_wkg": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "step": "0.01", "min": "0", "placeholder": "e.g. 3.74"},
+            ),
+            "enforce_min_zmap_wkg": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "enforce_max_zmap_wkg": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "min_zmap_w": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "step": "1", "min": "0", "placeholder": "e.g. 200"},
+            ),
+            "max_zmap_w": forms.NumberInput(
+                attrs={"class": "input input-bordered w-full", "step": "1", "min": "0", "placeholder": "e.g. 200"},
+            ),
+            "enforce_min_zmap_w": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "enforce_max_zmap_w": forms.CheckboxInput(
                 attrs={"class": "checkbox checkbox-primary checkbox-sm"},
             ),
             "enforce_gender": forms.CheckboxInput(
