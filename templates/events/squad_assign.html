@@ -76,6 +76,14 @@
                    class="input input-bordered input-sm w-20" oninput="applyFilters()">
             <button type="button" class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
           </div>
+          <p class="text-xs text-base-content/60 -mt-2 mb-3">
+            {% if metrics_updated_at %}
+            zFTP/zMAP mirrored from Zwift {{ metrics_updated_at|timesince }} ago.
+            {% else %}
+            No zFTP/zMAP data yet &mdash; run &ldquo;Mirror connected riders&rsquo; zFTP/zMAP&rdquo; from
+            Background Tasks, and check the task worker is running.
+            {% endif %}
+          </p>
           {% if enriched_signups %}
           <div class="overflow-x-auto">
             <table class="table table-xs" id="signup-table">

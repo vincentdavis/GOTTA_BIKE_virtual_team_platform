@@ -5492,6 +5492,13 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     squad_timezones = sorted({s.squad_timezone for s in squads if s.squad_timezone})
     squad_genders = sorted({s.gender for s in squads if s.gender})
 
+    # Freshest zFTP/zMAP mirror behind this page. Shown so a stopped db_worker reads as
+    # a stale timestamp rather than as riders quietly failing the power bounds.
+    metrics_updated_at = max(
+        (e["user"].z_metrics_updated_at for e in enriched_signups if e["user"].z_metrics_updated_at),
+        default=None,
+    )
+
     is_event_admin = request.user.is_event_admin or request.user.is_superuser
     logfire.debug("Squad assign page viewed", user_id=request.user.id, event_id=event_pk)
     return render(
@@ -5505,6 +5512,7 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "signup_timezones": signup_timezones,
             "squad_timezones": squad_timezones,
             "squad_genders": squad_genders,
+            "metrics_updated_at": metrics_updated_at,
         },
     )
 

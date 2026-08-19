@@ -779,9 +779,15 @@ def refresh_zwift_racing_metrics() -> dict:
 
     The service exposes these one user at a time, which is fine for a profile page but
     hopeless for a roster: squad eligibility, the signup table and the assign-rider
-    filters all need them for a whole list at once. So this walks the connection list
-    (one call) and refreshes each rider's metrics, and everything else reads the local
-    copy.
+    filters all need them for a whole list at once. So everything else reads this local
+    copy, and this task keeps it current.
+
+    Normally that is a single call: the connections listing carries the metrics
+    inline. A service that predates that still answers without those keys, so this
+    falls back to one ``/profile`` call per rider -- slow, but it means the two repos
+    can be deployed in either order. The fallback keys off *key presence*, not a null
+    value, because "this rider has no metrics" and "this service can't tell me" need
+    opposite handling: the first should clear the values, the second must not.
 
     Riders who are no longer connected keep their last known values rather than being
     blanked -- a service outage should not silently un-qualify a squad.
@@ -804,6 +810,8 @@ def refresh_zwift_racing_metrics() -> dict:
     updated = 0
     skipped = 0
     failed = 0
+    per_user_fetches = 0
+    now = timezone.now()
     for conn in connections:
         user_id = str(conn.get("user_id") or "")
         if not user_id:
@@ -814,15 +822,28 @@ def refresh_zwift_racing_metrics() -> dict:
             skipped += 1
             continue
 
-        profile = zwift_client.get_racing_profile(user_id)
-        if not profile:
-            failed += 1
+        if "z_ftp" in conn:
+            metrics = conn
+        else:
+            per_user_fetches += 1
+            metrics = zwift_client.get_racing_profile(user_id)
+            if not metrics:
+                failed += 1
+                continue
+
+        # An all-null row means the service holds no profile for this rider. Leave the
+        # last known values alone rather than writing the nulls through: these numbers
+        # gate squad membership, and a transient upstream gap that blanked the roster
+        # would reject every rider from every power-bounded squad at once. A rider
+        # keeping slightly stale metrics is the far cheaper failure.
+        if metrics.get("z_ftp") is None and metrics.get("z_map") is None:
+            skipped += 1
             continue
 
-        user.z_ftp = profile.get("z_ftp")
-        user.z_map = profile.get("z_map")
-        user.z_metrics_weight_grams = profile.get("weight_in_grams")
-        user.z_metrics_updated_at = timezone.now()
+        user.z_ftp = metrics.get("z_ftp")
+        user.z_map = metrics.get("z_map")
+        user.z_metrics_weight_grams = metrics.get("weight_in_grams")
+        user.z_metrics_updated_at = now
         # Narrow save: this task runs alongside profile edits and must not clobber them.
         user.save(update_fields=["z_ftp", "z_map", "z_metrics_weight_grams", "z_metrics_updated_at"])
         updated += 1
@@ -833,5 +854,13 @@ def refresh_zwift_racing_metrics() -> dict:
         skipped=skipped,
         failed=failed,
         connections=len(connections),
+        per_user_fetches=per_user_fetches,
+        bulk=per_user_fetches == 0,
     )
-    return {"status": "ok", "updated": updated, "skipped": skipped, "failed": failed}
+    return {
+        "status": "ok",
+        "updated": updated,
+        "skipped": skipped,
+        "failed": failed,
+        "per_user_fetches": per_user_fetches,
+    }

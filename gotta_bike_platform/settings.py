@@ -842,8 +842,9 @@ CONSTANCE_CONFIG = {
         int,
     ),
     "SCHEDULER_REFRESH_ZWIFT_METRICS_HOURS": (
-        12,
+        1,
         "How often to mirror connected riders' zFTP/zMAP from the zauth service (hours). "
+        "One HTTP call per run, and the service is webhook-fresh, so hourly is cheap. "
         "Requires scheduler restart to take effect.",
         int,
     ),

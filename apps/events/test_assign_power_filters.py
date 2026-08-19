@@ -99,3 +99,32 @@ def test_signup_table_shows_the_metrics(client, event, powered_rider, bare_rider
     assert 'data-col="zmap"' in body
     assert 'data-sort-value="248.0"' in body   # watts sorts, W/kg rides along underneath
     assert "3.76" in body
+
+
+@pytest.mark.django_db
+def test_assign_page_shows_how_stale_the_mirror_is(client, event, powered_rider, event_admin) -> None:
+    """The mirror's age is shown on the page.
+
+    A stopped db_worker should read as an old timestamp, not as riders silently
+    failing the power bounds.
+    """
+    from django.utils import timezone
+
+    powered_rider.z_metrics_updated_at = timezone.now() - timedelta(days=3)
+    powered_rider.save(update_fields=["z_metrics_updated_at"])
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:squad_assign_page", args=[event.pk])).content.decode()
+
+    assert "mirrored from Zwift" in body
+    assert "3\xa0days ago" in body or "3 days ago" in body
+
+
+@pytest.mark.django_db
+def test_assign_page_says_what_to_do_when_nothing_is_mirrored(client, event, bare_rider, event_admin) -> None:
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:squad_assign_page", args=[event.pk])).content.decode()
+
+    assert "No zFTP/zMAP data yet" in body
+    assert "Background Tasks" in body
