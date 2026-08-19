@@ -59,6 +59,21 @@
               <input type="checkbox" id="filter-unassigned" class="checkbox checkbox-sm" onchange="applyFilters()">
               <span class="label-text text-sm">Unassigned</span>
             </label>
+            <select id="filter-power-unit" class="select select-bordered select-sm" onchange="applyFilters()"
+                    title="Unit for the zFTP / zMAP bounds">
+              <option value="wkg">W/kg</option>
+              <option value="w">watts</option>
+            </select>
+            <span class="text-sm text-base-content/70">zFTP</span>
+            <input type="number" step="0.01" min="0" id="filter-zftp-min" placeholder="min"
+                   class="input input-bordered input-sm w-20" oninput="applyFilters()">
+            <input type="number" step="0.01" min="0" id="filter-zftp-max" placeholder="max"
+                   class="input input-bordered input-sm w-20" oninput="applyFilters()">
+            <span class="text-sm text-base-content/70">zMAP</span>
+            <input type="number" step="0.01" min="0" id="filter-zmap-min" placeholder="min"
+                   class="input input-bordered input-sm w-20" oninput="applyFilters()">
+            <input type="number" step="0.01" min="0" id="filter-zmap-max" placeholder="max"
+                   class="input input-bordered input-sm w-20" oninput="applyFilters()">
             <button type="button" class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
           </div>
           {% if enriched_signups %}
@@ -73,7 +88,7 @@
               </thead>
               <tbody>
                 {% for entry in enriched_signups %}
-                <tr data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}" data-gender="{{ entry.gender }}" data-zp="{{ entry.zp_category_w|default:entry.zp_category }}" data-zr="{{ entry.zr_category }}" data-timezone="{{ entry.signup.signup_timezone|join:',' }}">
+                <tr data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}" data-gender="{{ entry.gender }}" data-zp="{{ entry.zp_category_w|default:entry.zp_category }}" data-zr="{{ entry.zr_category }}" data-timezone="{{ entry.signup.signup_timezone|join:',' }}" data-zftp-w="{{ entry.z_ftp|default_if_none:'' }}" data-zftp-wkg="{{ entry.z_ftp_wkg|floatformat:2|default_if_none:'' }}" data-zmap-w="{{ entry.z_map|default_if_none:'' }}" data-zmap-wkg="{{ entry.z_map_wkg|floatformat:2|default_if_none:'' }}">
                   <td>
                     {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                     {% include "events/_role_badges.html" with signup_id=entry.signup.pk role_badges=entry.role_badges oob=False %}
@@ -133,6 +148,24 @@
 </div>
 
 <script>
+// A blank box is "no bound" -- distinct from 0, which is a real (if useless) floor.
+function numOrNull(id) {
+  var raw = document.getElementById(id).value.trim();
+  if (raw === '') return null;
+  var n = parseFloat(raw);
+  return isNaN(n) ? null : n;
+}
+// Riders with no value for the metric are hidden once a bound is set: these numbers
+// only exist for zauth-connected riders, and "unknown" cannot satisfy a floor.
+function powerInBounds(row, metric, min, max, unit) {
+  if (min === null && max === null) return true;
+  var raw = row.dataset[metric + (unit === 'wkg' ? 'Wkg' : 'W')];
+  if (!raw) return false;
+  var v = parseFloat(raw);
+  if (isNaN(v)) return false;
+  if (min !== null && v < min) return false;
+  return !(max !== null && v > max);
+}
 function applyFilters() {
   var q = document.getElementById('signup-search').value.toLowerCase();
   var gender = document.getElementById('filter-gender').value;
@@ -141,6 +174,9 @@ function applyFilters() {
   var tzEl = document.getElementById('filter-timezone');
   var tz = tzEl ? tzEl.value : '';
   var unassigned = document.getElementById('filter-unassigned').checked;
+  var unit = document.getElementById('filter-power-unit').value;
+  var zftpMin = numOrNull('filter-zftp-min'), zftpMax = numOrNull('filter-zftp-max');
+  var zmapMin = numOrNull('filter-zmap-min'), zmapMax = numOrNull('filter-zmap-max');
   var rows = document.querySelectorAll('#signup-table tbody tr');
   var visible = 0;
   rows.forEach(function(row) {
@@ -150,6 +186,8 @@ function applyFilters() {
     if (zp && row.dataset.zp !== zp) show = false;
     if (zr && row.dataset.zr !== zr) show = false;
     if (tz && row.dataset.timezone.split(',').indexOf(tz) === -1) show = false;
+    if (!powerInBounds(row, 'zftp', zftpMin, zftpMax, unit)) show = false;
+    if (!powerInBounds(row, 'zmap', zmapMin, zmapMax, unit)) show = false;
     if (unassigned) {
       var cell = row.querySelector('[id^="squad-cell-"]');
       if (cell && !cell.querySelector('.no-squad-dash')) show = false;
@@ -183,6 +221,10 @@ function clearFilters() {
   var tzEl = document.getElementById('filter-timezone');
   if (tzEl) tzEl.value = '';
   document.getElementById('filter-unassigned').checked = false;
+  document.getElementById('filter-power-unit').value = 'wkg';
+  ['filter-zftp-min', 'filter-zftp-max', 'filter-zmap-min', 'filter-zmap-max'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
   applyFilters();
 }
 </script>
