@@ -288,6 +288,123 @@ def _unassign_discord_role(user, role_id: int, *, admin_user_id: int) -> bool | 
     return success
 
 
+def _annotate_squad_role_names(squads, *, event=None) -> str:
+    """Resolve Discord role names onto squads for the squad card.
+
+    Sets ``role_name`` (the squad's member role) and ``captain_role_name`` on each
+    squad in one query. Four call sites render ``_squad_panel.html`` and each used to
+    resolve names itself, which is how the captain role ended up displayed nowhere --
+    adding it to one copy would have shown it on one page and not the others.
+
+    Args:
+        squads: Squad instances to annotate, mutated in place.
+        event: Optional parent event, whose own role name is resolved and returned.
+
+    Returns:
+        The event's Discord role name, or "" when there is none.
+
+    """
+    from apps.team.models import DiscordRole
+
+    squads = list(squads)
+    role_ids = set()
+    for squad in squads:
+        if squad.team_discord_role:
+            role_ids.add(str(squad.team_discord_role))
+        if squad.discord_captain_role:
+            role_ids.add(str(squad.discord_captain_role))
+    if event is not None and event.event_role:
+        role_ids.add(str(event.event_role))
+
+    names = (
+        dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
+    )
+    for squad in squads:
+        squad.role_name = names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
+        squad.captain_role_name = (
+            names.get(str(squad.discord_captain_role), "") if squad.discord_captain_role else ""
+        )
+    if event is None or not event.event_role:
+        return ""
+    return names.get(str(event.event_role), "")
+
+
+def _apply_squad_leadership(
+    squad,
+    *,
+    before: dict[str, set],
+    add_as_members: dict[str, bool],
+    admin_user_id: int,
+) -> list[str]:
+    """Grant and revoke Discord roles after the squad form changed its leaders.
+
+    Called with the captain/vice-captain sets as they were *before* the form saved, so
+    only genuine arrivals and departures cause Discord traffic.
+
+    Both roles map to the same ``discord_captain_role``, so a rider moving between
+    captain and vice-captain must not have it revoked in passing: the role is only
+    removed once they hold neither. New leaders optionally join the squad roster too,
+    which is a separate decision from leading it -- a captain need not race.
+
+    Squad limits are deliberately *not* enforced here. A strong rider captaining a
+    development squad is legitimate; the caller surfaces a warning instead.
+
+    Args:
+        squad: The saved squad, with its new leaders already written.
+        before: ``{"captains": set[int], "vice_captains": set[int]}`` of user ids.
+        add_as_members: Per-relation flag for adding arrivals to the roster.
+        admin_user_id: The acting admin, for logging.
+
+    Returns:
+        Human-readable warnings about leaders who fail the squad's own limits.
+
+    """
+    now = {
+        "captains": set(squad.captains.values_list("pk", flat=True)),
+        "vice_captains": set(squad.vice_captains.values_list("pk", flat=True)),
+    }
+    still_leading = now["captains"] | now["vice_captains"]
+    was_leading = before["captains"] | before["vice_captains"]
+
+    for relation in ("captains", "vice_captains"):
+        arrivals = now[relation] - before[relation]
+        for user in User.objects.filter(pk__in=arrivals):
+            if user.pk not in was_leading:
+                _assign_discord_role(
+                    user, squad.discord_captain_role, f"{squad.name} Captain", admin_user_id=admin_user_id
+                )
+            if add_as_members.get(relation):
+                _, created = SquadMember.objects.update_or_create(
+                    squad=squad, user=user, defaults={"status": SquadMember.Status.MEMBER}
+                )
+                if created:
+                    _assign_discord_role(user, squad.team_discord_role, squad.name, admin_user_id=admin_user_id)
+                    _assign_region_role(user, squad, admin_user_id=admin_user_id)
+
+    for user in User.objects.filter(pk__in=was_leading - still_leading):
+        _unassign_discord_role(user, squad.discord_captain_role, admin_user_id=admin_user_id)
+
+    logfire.info(
+        "Squad leadership updated from the squad form",
+        squad_id=squad.pk,
+        captains=len(now["captains"]),
+        vice_captains=len(now["vice_captains"]),
+        admin_user_id=admin_user_id,
+    )
+
+    warnings: list[str] = []
+    for user in User.objects.filter(pk__in=still_leading):
+        for ok, reason in (
+            squad.check_gender_eligibility(user.gender),
+            squad.check_zauth_eligibility(user.is_zauth_verified),
+            squad.check_zftp_eligibility(user.z_ftp, user.z_ftp_wkg),
+            squad.check_zmap_eligibility(user.z_map, user.z_map_wkg),
+        ):
+            if not ok:
+                warnings.append(f"{user.get_full_name() or user.username}: {reason}")
+    return warnings
+
+
 def _apply_timezone_roles(user, event, *, before=None, after=None, admin_user_id: int) -> None:
     """Grant (and on edit, retract) the event's timezone/region roles for a rider.
 
@@ -568,8 +685,6 @@ def _build_manage_squad_context(request, event, squad):
         Context dict for ``events/_squad_manage_panel.html``.
 
     """
-    from apps.team.models import DiscordRole
-
     squad_members_data = _enrich_squad_members(event)
     members = squad_members_data.get(squad.pk, [])
     all_signups = list(EventSignup.objects.filter(event=event).select_related("user"))
@@ -583,13 +698,7 @@ def _build_manage_squad_context(request, event, squad):
         key=lambda s: (s.user.get_full_name() or s.user.discord_username or "").lower(),
     )
 
-    role_ids = {str(squad.team_discord_role)} if squad.team_discord_role else set()
-    if event.event_role:
-        role_ids.add(str(event.event_role))
-    role_names = (
-        dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
-    )
-    squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
+    event_role_name = _annotate_squad_role_names([squad], event=event)
 
     squad_names_by_user: dict[int, list[str]] = {}
     for user_id, squad_name in SquadMember.objects.filter(squad__event=event).values_list(
@@ -602,7 +711,7 @@ def _build_manage_squad_context(request, event, squad):
         "members": members,
         "available_signups": available_signups,
         "available_groups": _group_available_signups(available_signups, squad_names_by_user),
-        "event_role_name": role_names.get(str(event.event_role), "") if event.event_role else "",
+        "event_role_name": event_role_name,
         "event_pk": event.pk,
         # Per-squad: a squad's captain/VC manages their own roster; full managers manage all.
         "can_manage": _can_manage_squad_availability(request.user, squad),
@@ -2494,12 +2603,25 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             request.POST,
             event_prefixes=event.prefixes or [],
             coordinator_role_ids=event.coordinator_role_ids or [],
+            event=event,
         )
         if form.is_valid():
             squad = form.save(commit=False)
             squad.event = event
             squad.created_by = request.user
             squad.save()
+            # commit=False skips the m2m write; captains/vice_captains live there.
+            form.save_m2m()
+            for warning in _apply_squad_leadership(
+                squad,
+                before={"captains": set(), "vice_captains": set()},
+                add_as_members={
+                    "captains": form.cleaned_data.get("captains_add_as_members", False),
+                    "vice_captains": form.cleaned_data.get("vice_captains_add_as_members", False),
+                },
+                admin_user_id=request.user.id,
+            ):
+                messages.warning(request, warning)
             logfire.info(
                 "Squad created",
                 squad_id=squad.pk,
@@ -2513,6 +2635,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         form = SquadForm(
             event_prefixes=event.prefixes or [],
             coordinator_role_ids=event.coordinator_role_ids or [],
+            event=event,
         )
 
     return render(
@@ -2561,9 +2684,25 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             instance=squad,
             event_prefixes=event.prefixes or [],
             coordinator_role_ids=event.coordinator_role_ids or [],
+            event=event,
         )
         if form.is_valid():
+            # Snapshot before the save, so only real arrivals/departures hit Discord.
+            before = {
+                "captains": set(squad.captains.values_list("pk", flat=True)),
+                "vice_captains": set(squad.vice_captains.values_list("pk", flat=True)),
+            }
             form.save()
+            for warning in _apply_squad_leadership(
+                squad,
+                before=before,
+                add_as_members={
+                    "captains": form.cleaned_data.get("captains_add_as_members", False),
+                    "vice_captains": form.cleaned_data.get("vice_captains_add_as_members", False),
+                },
+                admin_user_id=request.user.id,
+            ):
+                messages.warning(request, warning)
             logfire.info(
                 "Squad updated",
                 squad_id=squad_pk,
@@ -2578,6 +2717,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             instance=squad,
             event_prefixes=event.prefixes or [],
             coordinator_role_ids=event.coordinator_role_ids or [],
+            event=event,
         )
 
     return render(
@@ -2885,22 +3025,11 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                     member["signup_id"] = signup_by_user.get(member["user"].pk)
 
             # Resolve role names for squad panels
-            from apps.team.models import DiscordRole
-
-            role_ids = {str(sq.team_discord_role) for sq in all_squads if sq.team_discord_role}
-            if event.event_role:
-                role_ids.add(str(event.event_role))
-            role_names = (
-                dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name"))
-                if role_ids
-                else {}
-            )
-            event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
+            event_role_name = _annotate_squad_role_names(all_squads, event=event)
 
             is_event_admin = request.user.is_event_admin or request.user.is_superuser
             oob_html = ""
             for sq in all_squads:
-                sq.role_name = role_names.get(str(sq.team_discord_role), "") if sq.team_discord_role else ""
                 oob_html += render_to_string(
                     "events/_squad_panel.html",
                     {
@@ -3016,23 +3145,10 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
             for member in members:
                 member["signup_id"] = signup_by_user.get(member["user"].pk)
 
-        from apps.team.models import DiscordRole
-
-        role_ids = set()
-        for sq in event.squads.all():
-            if sq.team_discord_role:
-                role_ids.add(str(sq.team_discord_role))
-        if event.event_role:
-            role_ids.add(str(event.event_role))
-        role_names = (
-            dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
-        )
-        event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
-
         # Refresh squad from DB to get updated captain/vice_captain
         squad.refresh_from_db()
         squad = Squad.objects.prefetch_related("captains", "vice_captains").get(pk=squad_pk)
-        squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
+        event_role_name = _annotate_squad_role_names([squad], event=event)
 
         panel_html = render_to_string(
             "events/_squad_panel.html",
@@ -5470,19 +5586,9 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             member["signup_id"] = signup_by_user.get(member["user"].pk)
 
     # Resolve Discord role names for event and squads
-    from apps.team.models import DiscordRole
-
-    role_ids = {str(s.team_discord_role) for s in squads if s.team_discord_role}
-    if event.event_role:
-        role_ids.add(str(event.event_role))
-    role_names = (
-        dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
-    )
-    event.event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
-
+    event.event_role_name = _annotate_squad_role_names(squads, event=event)
     for squad in squads:
         squad.enriched_members = squad_members_data.get(squad.pk, [])
-        squad.role_name = role_names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
 
     # Distinct filter option values (derived from already-loaded data, no extra queries).
     # signup_timezone is a JSON list (riders may pick several), so flatten the union.

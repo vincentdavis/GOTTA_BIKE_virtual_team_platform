@@ -4,10 +4,13 @@ import json
 from typing import ClassVar
 
 from django import forms
+from django.contrib.auth import get_user_model
 
-from apps.events.models import SQUAD_GENDER_CHOICES, Event, SignupQuestion, Squad
+from apps.events.models import SQUAD_GENDER_CHOICES, Event, EventSignup, SignupQuestion, Squad
 from apps.events.signup_questions import MAX_OPTIONS_PER_QUESTION
 from apps.team.models import DiscordChannel, DiscordRole
+
+User = get_user_model()
 
 
 def _get_channel_choices() -> list:
@@ -593,6 +596,8 @@ class SquadForm(forms.ModelForm):
             "enforce_min_zwift_racing_category",
             "enforce_max_zwift_racing_category",
             "require_zauth",
+            "captains",
+            "vice_captains",
             "min_zftp_wkg",
             "max_zftp_wkg",
             "enforce_min_zftp_wkg",
@@ -720,19 +725,42 @@ class SquadForm(forms.ModelForm):
             "captain_notifications": forms.CheckboxInput(
                 attrs={"class": "toggle toggle-primary"},
             ),
+            "captains": forms.SelectMultiple(
+                attrs={"class": "select select-bordered w-full", "size": "6"},
+            ),
+            "vice_captains": forms.SelectMultiple(
+                attrs={"class": "select select-bordered w-full", "size": "6"},
+            ),
         }
+
+    # Non-model: whether a newly picked leader should also join the squad's roster.
+    # Leadership and membership are separate today -- a captain need not race -- so
+    # this is asked per save rather than assumed either way.
+    captains_add_as_members = forms.BooleanField(
+        required=False,
+        label="Also add new captains to the squad",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-primary checkbox-sm"}),
+    )
+    vice_captains_add_as_members = forms.BooleanField(
+        required=False,
+        label="Also add new vice-captains to the squad",
+        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-primary checkbox-sm"}),
+    )
 
     def __init__(
         self,
         *args,
         event_prefixes: list[str] | None = None,
         coordinator_role_ids: list[str] | None = None,
+        event=None,
         **kwargs,
     ) -> None:
         """Initialize form with Discord channel choices and captain labels.
 
         Args:
             *args: Positional arguments passed to ModelForm.
+            event: The parent event, used to limit the captain pickers to its signups.
+                None leaves both pickers empty.
             event_prefixes: The parent event's Discord prefixes. When empty, the role field is disabled.
             coordinator_role_ids: The parent event's configured coordinator role
                 IDs (from the Role Setup page). The Regional Coordinator picker is
@@ -747,8 +775,23 @@ class SquadForm(forms.ModelForm):
         # Squad gender is a fixed set (Male/Female/COED) and required when configuring a squad.
         self.fields["gender"].choices = [("", "Select gender"), *SQUAD_GENDER_CHOICES]
 
-        # Captains and vice-captains are managed per-member from the squad panel
-        # (Set as Captain / Vice Captain), not via this form.
+        # Captains are chosen from the event's registered signups, not from the squad's
+        # own members -- picking a leader is often the step that *brings* someone into a
+        # squad. The per-member "Set as Captain" control on the squad panel still works
+        # and writes the same two relations.
+        signups = (
+            User.objects.filter(
+                event_signups__event=event,
+                event_signups__status=EventSignup.Status.REGISTERED,
+            )
+            .distinct()
+            .order_by("first_name", "last_name", "username")
+            if event is not None
+            else User.objects.none()
+        )
+        for name in ("captains", "vice_captains"):
+            self.fields[name].queryset = signups
+            self.fields[name].label_from_instance = lambda u: u.get_full_name() or u.discord_username or u.username
 
         choices = _get_channel_choices()
 
@@ -839,6 +882,26 @@ class SquadForm(forms.ModelForm):
             current_coord_role = "0"
         self.fields["regional_coordinator_role"].widget.choices = coord_role_choices
         self.initial["regional_coordinator_role"] = current_coord_role
+
+    def clean(self) -> dict:
+        """Reject anyone listed as both captain and vice-captain.
+
+        The per-member control enforces this by construction -- promoting to one
+        removes the other -- but these two pickers are independent, so it has to be
+        checked here.
+
+        Returns:
+            The cleaned data.
+
+        """
+        cleaned = super().clean()
+        captains = set(cleaned.get("captains") or [])
+        vices = set(cleaned.get("vice_captains") or [])
+        both = captains & vices
+        if both:
+            names = ", ".join(sorted(u.get_full_name() or u.username for u in both))
+            self.add_error("vice_captains", f"Already listed as captain: {names}")
+        return cleaned
 
     def clean_discord_channel_id(self) -> int:
         """Convert selected channel ID string back to int for the model.

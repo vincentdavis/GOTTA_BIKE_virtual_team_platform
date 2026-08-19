@@ -34,7 +34,7 @@
             </label>
             {{ form.discord_captain_role }}
             <label class="label pt-0">
-              <span class="label-text-alt">Assign captains and vice-captains from the squad's member list (Set as Captain / Vice Captain). Multiple of each are allowed.</span>
+              <span class="label-text-alt">Granted automatically to the captains and vice-captains chosen below.</span>
             </label>
             {% if form.discord_captain_role.errors %}
             <label class="label">
@@ -43,6 +43,47 @@
             {% endif %}
           </div>
         </div>
+
+        <!-- Captains / Vice-captains -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-control w-full">
+            <label class="label" for="id_captains">
+              <span class="label-text">Captains</span>
+            </label>
+            {{ form.captains }}
+            <label class="label cursor-pointer justify-start gap-2 pt-1">
+              {{ form.captains_add_as_members }}
+              <span class="label-text-alt">{{ form.captains_add_as_members.label }}</span>
+            </label>
+            {% if form.captains.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.captains.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+
+          <div class="form-control w-full">
+            <label class="label" for="id_vice_captains">
+              <span class="label-text">Vice-captains</span>
+            </label>
+            {{ form.vice_captains }}
+            <label class="label cursor-pointer justify-start gap-2 pt-1">
+              {{ form.vice_captains_add_as_members }}
+              <span class="label-text-alt">{{ form.vice_captains_add_as_members.label }}</span>
+            </label>
+            {% if form.vice_captains.errors %}
+            <label class="label">
+              <span class="label-text-alt text-error">{{ form.vice_captains.errors.0 }}</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+        <p class="text-xs text-base-content/60 -mt-2">
+          Chosen from riders registered for this event. Ctrl/Cmd-click for more than one.
+          Everyone picked gets the Captain Discord Role above; tick the box to add them to the
+          squad roster as well &mdash; leading a squad and racing for it are separate.
+          Squad limits don&rsquo;t block a captain, but you&rsquo;ll be warned if one falls outside them.
+        </p>
 
         <!-- Captain Notifications -->
         <div class="form-control w-full">

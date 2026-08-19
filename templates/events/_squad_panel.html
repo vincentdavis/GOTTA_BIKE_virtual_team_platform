@@ -11,10 +11,11 @@
       </div>
       <span class="badge badge-neutral badge-sm">{{ members|length }} member{{ members|length|pluralize }}</span>
     </div>
-    {% if event_role_name or squad.role_name %}
+    {% if event_role_name or squad.role_name or squad.captain_role_name %}
     <div class="flex flex-wrap gap-2 text-xs text-base-content/60 mb-2">
       {% if event_role_name %}<span>Event: @{{ event_role_name }}</span>{% endif %}
       {% if squad.role_name %}<span>Squad: @{{ squad.role_name }}</span>{% endif %}
+      {% if squad.captain_role_name %}<span>Captain: @{{ squad.captain_role_name }}</span>{% endif %}
     </div>
     {% endif %}
     {% if members %}
