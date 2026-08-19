@@ -291,10 +291,12 @@ def _unassign_discord_role(user, role_id: int, *, admin_user_id: int) -> bool | 
 def _annotate_squad_role_names(squads, *, event=None) -> str:
     """Resolve Discord role names onto squads for the squad card.
 
-    Sets ``role_name`` (the squad's member role) and ``captain_role_name`` on each
-    squad in one query. Four call sites render ``_squad_panel.html`` and each used to
-    resolve names itself, which is how the captain role ended up displayed nowhere --
-    adding it to one copy would have shown it on one page and not the others.
+    Sets ``role_name`` (the squad's member role), ``captain_role_name``, and
+    ``discord_roles_display`` -- the full labelled list the card's Roles section
+    iterates -- on each squad, in one query. Four call sites render
+    ``_squad_panel.html`` and each used to resolve names itself, which is how the
+    captain, region and coordinator roles ended up displayed nowhere: adding one to a
+    single copy would have shown it on one page and not the others.
 
     Args:
         squads: Squad instances to annotate, mutated in place.
@@ -307,26 +309,39 @@ def _annotate_squad_role_names(squads, *, event=None) -> str:
     from apps.team.models import DiscordRole
 
     squads = list(squads)
-    role_ids = set()
-    for squad in squads:
-        if squad.team_discord_role:
-            role_ids.add(str(squad.team_discord_role))
-        if squad.discord_captain_role:
-            role_ids.add(str(squad.discord_captain_role))
+    fields = (
+        ("Squad", "team_discord_role"),
+        ("Captain", "discord_captain_role"),
+        ("Region", "region_role"),
+        ("Coordinator", "regional_coordinator_role"),
+    )
+
+    role_ids = {
+        str(getattr(squad, field)) for squad in squads for _label, field in fields if getattr(squad, field)
+    }
     if event is not None and event.event_role:
         role_ids.add(str(event.event_role))
 
     names = (
         dict(DiscordRole.objects.filter(role_id__in=role_ids).values_list("role_id", "name")) if role_ids else {}
     )
+    event_role_name = names.get(str(event.event_role), "") if event is not None and event.event_role else ""
+
     for squad in squads:
-        squad.role_name = names.get(str(squad.team_discord_role), "") if squad.team_discord_role else ""
-        squad.captain_role_name = (
-            names.get(str(squad.discord_captain_role), "") if squad.discord_captain_role else ""
-        )
-    if event is None or not event.event_role:
-        return ""
-    return names.get(str(event.event_role), "")
+        resolved = {
+            label: names.get(str(getattr(squad, field)), "") if getattr(squad, field) else ""
+            for label, field in fields
+        }
+        squad.role_name = resolved["Squad"]
+        squad.captain_role_name = resolved["Captain"]
+        # The event role leads the list: it is the one every member of every squad
+        # holds, so it reads as context for the squad-specific roles under it.
+        squad.discord_roles_display = [
+            {"label": label, "name": name}
+            for label, name in [("Event", event_role_name), *resolved.items()]
+            if name
+        ]
+    return event_role_name
 
 
 def _apply_squad_leadership(

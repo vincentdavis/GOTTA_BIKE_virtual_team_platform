@@ -11,12 +11,26 @@
       </div>
       <span class="badge badge-neutral badge-sm">{{ members|length }} member{{ members|length|pluralize }}</span>
     </div>
-    {% if event_role_name or squad.role_name or squad.captain_role_name %}
-    <div class="flex flex-wrap gap-2 text-xs text-base-content/60 mb-2">
-      {% if event_role_name %}<span>Event: @{{ event_role_name }}</span>{% endif %}
-      {% if squad.role_name %}<span>Squad: @{{ squad.role_name }}</span>{% endif %}
-      {% if squad.captain_role_name %}<span>Captain: @{{ squad.captain_role_name }}</span>{% endif %}
-    </div>
+    {% comment %}
+      Collapsed because a fully configured squad carries five roles (event, squad,
+      captain, region, coordinator) and they are reference detail, not what this card
+      is for. The count in the summary is what makes them findable while closed.
+      Note this reopens closed on every HTMX swap of the card -- acceptable, since the
+      roles are read once during setup rather than while assigning riders.
+    {% endcomment %}
+    {% if squad.discord_roles_display %}
+    <details class="collapse collapse-arrow bg-base-300 mb-2">
+      <summary class="collapse-title min-h-0 py-1.5 px-3 text-xs font-medium">
+        Roles ({{ squad.discord_roles_display|length }})
+      </summary>
+      <div class="collapse-content px-3 pb-2">
+        <div class="flex flex-col gap-0.5 text-xs text-base-content/60">
+          {% for role in squad.discord_roles_display %}
+          <span><span class="text-base-content/40">{{ role.label }}:</span> @{{ role.name }}</span>
+          {% endfor %}
+        </div>
+      </div>
+    </details>
     {% endif %}
     {% if members %}
     <ul class="space-y-1.5">

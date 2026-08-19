@@ -218,10 +218,44 @@ def test_captains_chosen_at_creation_are_saved(client, event, rider, event_admin
 
 
 @pytest.mark.django_db
-def test_squad_card_shows_the_captain_role(client, event, squad, event_admin) -> None:
+def test_squad_card_groups_every_role_into_one_section(client, event, squad, event_admin) -> None:
+    """All five, including region and coordinator, which had no display surface at all."""
+    DiscordRole.objects.create(role_id="4003", name="$EMEA West")
+    DiscordRole.objects.create(role_id="4004", name="$EMEA Coordinator")
+    DiscordRole.objects.create(role_id="4005", name="$ZRL")
+    squad.region_role = 4003
+    squad.regional_coordinator_role = 4004
+    squad.save(update_fields=["region_role", "regional_coordinator_role"])
+    event.event_role = 4005
+    event.save(update_fields=["event_role"])
     client.force_login(event_admin)
 
     body = client.get(reverse("events:squad_assign_page", args=[event.pk])).content.decode()
 
-    assert "Squad: @$Synthesis" in body
-    assert "Captain: @$Synthesis Captain" in body
+    assert "Roles (5)" in body
+    assert "Event:</span> @$ZRL" in body
+    assert "Squad:</span> @$Synthesis" in body
+    assert "Captain:</span> @$Synthesis Captain" in body
+    assert "Region:</span> @$EMEA West" in body
+    assert "Coordinator:</span> @$EMEA Coordinator" in body
+
+
+@pytest.mark.django_db
+def test_roles_section_counts_only_what_is_configured(client, event, squad, event_admin) -> None:
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:squad_assign_page", args=[event.pk])).content.decode()
+
+    assert "Roles (2)" in body      # squad + captain, from the fixture
+    assert "Region:" not in body
+
+
+@pytest.mark.django_db
+def test_no_roles_section_when_none_are_configured(client, event, event_admin) -> None:
+    """A squad with no roles should not grow a disclosure widget."""
+    Squad.objects.create(event=event, name="Bare")
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:squad_assign_page", args=[event.pk])).content.decode()
+
+    assert "Roles (0)" not in body
