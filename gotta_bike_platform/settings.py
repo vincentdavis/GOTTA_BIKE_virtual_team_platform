@@ -841,6 +841,12 @@ CONSTANCE_CONFIG = {
         "How often to sync Discord guild members (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_REFRESH_ZWIFT_METRICS_HOURS": (
+        12,
+        "How often to mirror connected riders' zFTP/zMAP from the zauth service (hours). "
+        "Requires scheduler restart to take effect.",
+        int,
+    ),
     "SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS": (
         6,
         "How often to sync New Member Discord role based on guild join date (hours). "
@@ -1060,6 +1066,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_RACE_READY_ROLES_HOURS",
         "SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS",
         "SCHEDULER_SYNC_GUILD_MEMBERS_HOURS",
+        "SCHEDULER_REFRESH_ZWIFT_METRICS_HOURS",
         "SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS",
         "SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS",
         "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",

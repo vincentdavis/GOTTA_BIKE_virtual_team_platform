@@ -10,6 +10,8 @@ from django.db import models
 from django_countries.fields import CountryField
 
 if TYPE_CHECKING:
+    from decimal import Decimal
+
     from django.db.models.manager import RelatedManager
 
     from apps.team.models import RaceReadyRecord
@@ -181,6 +183,37 @@ class User(AbstractUser):
         null=True,
         blank=True,
         help_text="When the current Zwift verification was recorded",
+    )
+
+    # Zwift racing metrics, mirrored from the zauth service.
+    #
+    # These live upstream and are fetched one HTTP call per user, so anything that
+    # needs them for a *list* of riders -- squad eligibility, the signup table, the
+    # assign-rider filters -- reads this local copy instead. `refresh_zwift_racing_metrics`
+    # keeps it current; only zauth-connected riders ever get values.
+    z_ftp = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="zFTP in watts, from the official Zwift racing profile",
+    )
+    z_map = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="zMAP in watts, from the official Zwift racing profile",
+    )
+    z_metrics_weight_grams = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Weight Zwift used when it computed zFTP/zMAP - the denominator for W/kg",
+    )
+    z_metrics_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When zFTP/zMAP were last mirrored from the zauth service",
     )
 
     # Personal info
@@ -806,6 +839,45 @@ class User(AbstractUser):
 
         """
         return self.zwid_verification_method == self.VerificationMethod.ZAUTH
+
+    def _metric_wkg(self, watts: Decimal | None) -> float | None:
+        """Divide a stored wattage by the weight Zwift used to compute it.
+
+        The denominator is deliberately ``z_metrics_weight_grams`` and not the rider's
+        self-reported weight: Zwift derives the category thresholds from the weight it
+        held at metrics time, so using anything else would produce a W/kg that disagrees
+        with the rider's own category.
+
+        Args:
+            watts: A stored metric in watts.
+
+        Returns:
+            Watts per kilogram, or None when either side is missing.
+
+        """
+        if watts is None or not self.z_metrics_weight_grams:
+            return None
+        return float(watts) / (self.z_metrics_weight_grams / 1000)
+
+    @property
+    def z_ftp_wkg(self) -> float | None:
+        """Watts per kilogram for zFTP.
+
+        Returns:
+            W/kg, or None if zFTP or the metrics weight is missing.
+
+        """
+        return self._metric_wkg(self.z_ftp)
+
+    @property
+    def z_map_wkg(self) -> float | None:
+        """Watts per kilogram for zMAP.
+
+        Returns:
+            W/kg, or None if zMAP or the metrics weight is missing.
+
+        """
+        return self._metric_wkg(self.z_map)
 
     @property
     def has_accepted_zwid_verification(self) -> bool:

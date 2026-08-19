@@ -771,3 +771,67 @@ def sync_youtube_videos() -> dict:
         logfire.info("YouTube video sync completed", **result)
 
         return result
+
+
+@task
+def refresh_zwift_racing_metrics() -> dict:
+    """Mirror every connected rider's zFTP/zMAP from the zauth service into the User row.
+
+    The service exposes these one user at a time, which is fine for a profile page but
+    hopeless for a roster: squad eligibility, the signup table and the assign-rider
+    filters all need them for a whole list at once. So this walks the connection list
+    (one call) and refreshes each rider's metrics, and everything else reads the local
+    copy.
+
+    Riders who are no longer connected keep their last known values rather than being
+    blanked -- a service outage should not silently un-qualify a squad.
+
+    Returns:
+        dict with the number of riders updated, skipped, and failed.
+
+    """
+    from apps.zwift import client as zwift_client
+
+    if not zwift_client.is_configured():
+        logfire.info("Zwift metrics refresh skipped - service not configured")
+        return {"status": "skipped", "reason": "zauth service not configured"}
+
+    connections = zwift_client.list_connections()
+    if connections is None:
+        logfire.error("Zwift metrics refresh aborted - connection list unavailable")
+        return {"status": "error", "reason": "could not list connections"}
+
+    updated = 0
+    skipped = 0
+    failed = 0
+    for conn in connections:
+        user_id = str(conn.get("user_id") or "")
+        if not user_id:
+            skipped += 1
+            continue
+        user = User.objects.filter(pk=user_id).first()
+        if user is None:
+            skipped += 1
+            continue
+
+        profile = zwift_client.get_racing_profile(user_id)
+        if not profile:
+            failed += 1
+            continue
+
+        user.z_ftp = profile.get("z_ftp")
+        user.z_map = profile.get("z_map")
+        user.z_metrics_weight_grams = profile.get("weight_in_grams")
+        user.z_metrics_updated_at = timezone.now()
+        # Narrow save: this task runs alongside profile edits and must not clobber them.
+        user.save(update_fields=["z_ftp", "z_map", "z_metrics_weight_grams", "z_metrics_updated_at"])
+        updated += 1
+
+    logfire.info(
+        "Zwift racing metrics refreshed",
+        updated=updated,
+        skipped=skipped,
+        failed=failed,
+        connections=len(connections),
+    )
+    return {"status": "ok", "updated": updated, "skipped": skipped, "failed": failed}

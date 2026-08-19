@@ -19,6 +19,7 @@ from constance import config
 from apps.accounts.tasks import (
     guild_member_sync_status,
     refresh_all_race_ready,
+    refresh_zwift_racing_metrics,
     sync_guild_members,
     sync_new_member_roles,
     sync_race_ready_roles,
@@ -55,6 +56,12 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Sync riders from Zwift Racing API",
         "scheduled": True,
         "hours_setting": "SCHEDULER_SYNC_ZR_RIDERS_HOURS",
+    },
+    "refresh_zwift_racing_metrics": {
+        "task": refresh_zwift_racing_metrics,
+        "description": "Mirror connected riders' zFTP/zMAP from the zauth service",
+        "scheduled": True,
+        "hours_setting": "SCHEDULER_REFRESH_ZWIFT_METRICS_HOURS",
     },
     "sync_guild_members": {
         "task": sync_guild_members,
