@@ -4,11 +4,7 @@
 
 {% block content %}
 <div class="max-w-3xl mx-auto">
-  {% if squad %}
-  <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-ghost btn-sm mb-4">&larr; Back to Squads</a>
-  {% else %}
-  <a href="{% url 'events:event_detail' event.pk %}" class="btn btn-ghost btn-sm mb-4">&larr; Back to Event</a>
-  {% endif %}
+  <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-ghost btn-sm mb-4">&larr; Back to Manage Squads</a>
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
       <a href="{% url 'events:event_detail' event.pk %}" class="text-sm font-semibold uppercase tracking-wide text-primary hover:underline">{{ event.title }}</a>
@@ -499,7 +495,7 @@
       {% if squad %}
       <div class="divider"></div>
       <div class="flex justify-between items-center">
-        <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary">Back to Squads</a>
+        <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary">Back to Manage Squads</a>
         <form method="post" action="{% url 'events:squad_delete' event.pk squad.pk %}"
               onsubmit="return confirm('Are you sure you want to delete this squad? This cannot be undone.');">
           {% csrf_token %}
@@ -509,7 +505,7 @@
       {% else %}
       <div class="divider"></div>
       <div class="text-center">
-        <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary">Back to Event</a>
+        <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary">Back to Manage Squads</a>
       </div>
       {% endif %}
     </div>

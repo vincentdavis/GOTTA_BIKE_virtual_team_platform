@@ -147,3 +147,26 @@ def test_back_link_goes_to_manage_squads(client, event, user_model, url_name) ->
 
     assert reverse("events:squad_manage", args=[event.pk]) in body
     assert "Back to Manage Squads" in body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("mode", ["create", "edit"])
+def test_squad_form_back_link_goes_to_manage_squads(client, event, event_admin, mode) -> None:
+    """Both branches of the form template, not just the one you happen to open.
+
+    Add and Edit are reached from Manage Squads, and the template renders a different
+    back link for each -- only the create branch pointed at the event.
+    """
+    from apps.events.models import Squad
+
+    client.force_login(event_admin)
+    if mode == "edit":
+        squad = Squad.objects.create(event=event, name="Synthesis")
+        url = reverse("events:squad_edit", args=[event.pk, squad.pk])
+    else:
+        url = reverse("events:squad_create", args=[event.pk])
+
+    body = client.get(url).content.decode()
+
+    assert "Back to Manage Squads" in body
+    assert "Back to Event" not in body
