@@ -524,4 +524,63 @@
     if (none) none.classList.toggle("hidden", shown !== 0);
   }
 </script>
+<script>
+// "Eligible only" on each squad's add-rider picker. Eligibility is decided server-side
+// (see _mark_eligibility) and shipped as data-eligible on each option; this only shows
+// or hides them.
+//
+// Options are removed and restored rather than hidden: `display:none` on <option> is
+// ignored by Safari, and a hidden-but-present option is still selectable by keyboard.
+(function () {
+  var KEY = "squadEligibleOnly";
+  var pristine = new WeakMap();
+
+  function apply(select, onlyEligible) {
+    if (!pristine.has(select)) { pristine.set(select, select.innerHTML); }
+    select.innerHTML = pristine.get(select);
+    if (!onlyEligible) { return; }
+    select.querySelectorAll('option[data-eligible="0"]').forEach(function (o) { o.remove(); });
+    select.querySelectorAll("optgroup").forEach(function (g) {
+      if (!g.querySelector("option")) { g.remove(); }
+    });
+    if (!select.querySelector("option[data-eligible]")) {
+      var empty = document.createElement("option");
+      empty.value = "";
+      empty.disabled = true;
+      empty.textContent = "No eligible riders";
+      select.appendChild(empty);
+    }
+    select.value = "";
+  }
+
+  function stored() {
+    try { return localStorage.getItem(KEY) === "1"; } catch (e) { return false; }
+  }
+
+  window.filterEligibleRiders = function (checkbox) {
+    try { localStorage.setItem(KEY, checkbox.checked ? "1" : "0"); } catch (e) { /* private mode */ }
+    var select = checkbox.closest("form").querySelector("[data-rider-picker]");
+    if (select) { apply(select, checkbox.checked); }
+  };
+
+  // The panel is re-rendered by HTMX on every add, which discards the checkbox state,
+  // so it is re-applied from storage after each swap as well as on load.
+  function restore(root) {
+    var on = stored();
+    (root || document).querySelectorAll("[data-eligible-only]").forEach(function (cb) {
+      cb.checked = on;
+      var select = cb.closest("form").querySelector("[data-rider-picker]");
+      if (select) { apply(select, on); }
+    });
+  }
+
+  function init() {
+    restore();
+    document.body.addEventListener("htmx:afterSwap", function (e) {
+      restore(e.target.querySelectorAll ? e.target : null);
+    });
+  }
+  if (document.readyState !== "loading") { init(); } else { document.addEventListener("DOMContentLoaded", init); }
+})();
+</script>
 {% endblock %}

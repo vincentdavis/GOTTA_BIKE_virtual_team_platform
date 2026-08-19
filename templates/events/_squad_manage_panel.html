@@ -94,17 +94,22 @@
         hx-post="{% url 'events:squad_assign' event_pk %}" hx-target="#squad-panel-{{ squad.pk }}" hx-swap="outerHTML">
     {% csrf_token %}
     <input type="hidden" name="squad_id" value="{{ squad.pk }}">
-    <select name="signup_id" class="select select-bordered select-sm w-full"
+    <select name="signup_id" class="select select-bordered select-sm w-full" data-rider-picker
             onchange="if(this.value!=''){htmx.trigger(this.closest('form'),'submit')}">
       <option value="">+ Add rider…</option>
       {% for group_label, group_signups in available_groups %}
       <optgroup label="{{ group_label }}">
         {% for s in group_signups %}
-        <option value="{{ s.pk }}">{{ s.user.get_full_name|default:s.user.discord_username }}</option>
+        <option value="{{ s.pk }}" data-eligible="{{ s.is_eligible|yesno:"1,0" }}">{{ s.user.get_full_name|default:s.user.discord_username }}</option>
         {% endfor %}
       </optgroup>
       {% endfor %}
     </select>
+    <label class="label cursor-pointer justify-start gap-1.5 pt-1">
+      <input type="checkbox" class="checkbox checkbox-xs" data-eligible-only
+             onchange="window.filterEligibleRiders(this)">
+      <span class="label-text-alt">Eligible only</span>
+    </label>
   </form>
   {% endif %}
 </div>

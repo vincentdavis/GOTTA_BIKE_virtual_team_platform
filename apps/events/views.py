@@ -652,6 +652,67 @@ def _enrich_squad_members(event):
     return by_squad
 
 
+def _rider_categories(signups) -> dict[int, dict]:
+    """Batch the ZwiftPower/ZwiftRacing categories for a set of signups.
+
+    One query per source for the whole list, so the caller can test eligibility for
+    every rider against every squad without an N+1.
+
+    Args:
+        signups: EventSignup instances, with ``user`` already selected.
+
+    Returns:
+        ``{user_id: {"zp", "zp_w", "zr"}}``; missing riders simply get blanks.
+
+    """
+    zwids = [s.user.zwid for s in signups if s.user.zwid]
+    if not zwids:
+        return {}
+    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)}
+    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)}
+    out: dict[int, dict] = {}
+    for signup in signups:
+        zp = zp_by_zwid.get(signup.user.zwid)
+        zr = zr_by_zwid.get(signup.user.zwid)
+        out[signup.user_id] = {
+            "zp": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
+            "zp_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
+            "zr": getattr(zr, "race_current_category", "") or "" if zr else "",
+        }
+    return out
+
+
+def _mark_eligibility(squad, signups, categories) -> None:
+    """Tag each signup with whether it satisfies this squad's membership rules.
+
+    Sets ``is_eligible`` on every signup, so the add-rider picker can offer an
+    "Eligible only" filter. Runs the same checks the assignment itself enforces, so a
+    rider the filter keeps is one the POST will actually accept -- were these to drift,
+    the filter would promise riders that then bounce.
+
+    Args:
+        squad: The squad the picker belongs to.
+        signups: EventSignup instances to tag, mutated in place.
+        categories: Output of :func:`_rider_categories`.
+
+    """
+    for signup in signups:
+        cats = categories.get(signup.user_id, {})
+        user = signup.user
+        signup.is_eligible = all(
+            ok
+            for ok, _reason in (
+                squad.check_gender_eligibility(user.gender),
+                squad.check_zwift_eligibility(cats.get("zp", "")),
+                squad.check_womens_zwift_eligibility(cats.get("zp_w", "")),
+                squad.check_zr_eligibility(cats.get("zr", "")),
+                squad.check_zauth_eligibility(user.is_zauth_verified),
+                squad.check_zftp_eligibility(user.z_ftp, user.z_ftp_wkg),
+                squad.check_zmap_eligibility(user.z_map, user.z_map_wkg),
+            )
+        )
+
+
 def _group_available_signups(available_signups, squad_names_by_user) -> list[tuple[str, list]]:
     """Group assignable signups by the squad they already belong to, unassigned first.
 
@@ -712,6 +773,7 @@ def _build_manage_squad_context(request, event, squad):
         (s for s in all_signups if s.user_id not in member_user_ids),
         key=lambda s: (s.user.get_full_name() or s.user.discord_username or "").lower(),
     )
+    _mark_eligibility(squad, available_signups, _rider_categories(available_signups))
 
     event_role_name = _annotate_squad_role_names([squad], event=event)
 
@@ -1637,6 +1699,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         for m in squad_members_data.get(sq.pk, []):
             squad_names_by_user.setdefault(m["user"].pk, []).append(sq.name)
 
+    rider_categories = _rider_categories(all_signups)
     for s in squads:
         s.channel_name = channel_names.get(str(s.discord_channel_id), "") if s.discord_channel_id else ""
         s.audio_name = channel_names.get(str(s.audio_channel_id), "") if s.audio_channel_id else ""
@@ -1658,6 +1721,9 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             (su for su in all_signups if su.user_id not in member_user_ids),
             key=lambda su: (su.user.get_full_name() or su.user.discord_username or "").lower(),
         )
+        # Categories are batched once for the whole event above; eligibility is
+        # per-squad, so only the cheap comparison repeats per squad.
+        _mark_eligibility(s, s.available_signups, rider_categories)
         s.available_groups = _group_available_signups(s.available_signups, squad_names_by_user)
 
     # Filter options — only the values actually in use by this event's squads.
