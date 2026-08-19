@@ -128,3 +128,14 @@ def test_assign_page_says_what_to_do_when_nothing_is_mirrored(client, event, bar
 
     assert "No zFTP/zMAP data yet" in body
     assert "Background Tasks" in body
+
+
+@pytest.mark.django_db
+def test_back_link_goes_to_manage_squads(client, event, event_admin) -> None:
+    """Assign is reached from Manage Squads, so Back belongs there, not on the event."""
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:squad_assign_page", args=[event.pk])).content.decode()
+
+    assert reverse("events:squad_manage", args=[event.pk]) in body
+    assert "Back to Manage Squads" in body
