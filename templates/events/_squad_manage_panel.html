@@ -105,11 +105,16 @@
       </optgroup>
       {% endfor %}
     </select>
-    <label class="label cursor-pointer justify-start gap-1.5 pt-1">
-      <input type="checkbox" class="checkbox checkbox-xs" data-eligible-only
-             onchange="window.filterEligibleRiders(this)">
-      <span class="label-text-alt">Eligible only</span>
-    </label>
+    <div class="flex items-center justify-between gap-2 pt-1">
+      <label class="label cursor-pointer justify-start gap-1.5">
+        <input type="checkbox" class="checkbox checkbox-xs" data-eligible-only
+               onchange="window.filterEligibleRiders(this)">
+        <span class="label-text-alt">Eligible only</span>
+      </label>
+      <a href="{% url 'events:squad_add_riders' event_pk squad.pk %}" class="link link-primary text-xs">
+        More filters&hellip;
+      </a>
+    </div>
   </form>
   {% endif %}
 </div>

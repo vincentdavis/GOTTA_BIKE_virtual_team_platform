@@ -19,6 +19,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import discord_permission_required, team_member_required
@@ -3136,6 +3137,14 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
         return HttpResponse(cell_html)
 
+    # The add-riders page posts where it wants to come back to. Validated against this
+    # host before use -- an unchecked `next` is an open redirect, and this form is
+    # reachable by any squad captain.
+    next_url = request.POST.get("next", "")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(next_url)
     return redirect("events:event_detail", pk=event_pk)
 
 
@@ -5631,6 +5640,88 @@ def squad_regenerate_token_view(request: HttpRequest, event_pk: int, squad_pk: i
     )
     messages.success(request, f"Invite link for {squad.name} has been generated.")
     return redirect("events:squad_manage", event_pk=event_pk)
+
+
+@require_GET
+@login_required
+@team_member_required()
+def squad_add_riders_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
+    """Full-page rider picker for one squad, with the same filters as the assign page.
+
+    The dropdown on the manage page is fine for "add the rider I already have in mind",
+    but it cannot express "answered Tuesday and sits in this power band". This page can,
+    and is scoped to a single squad so a captain can use it: the gate is
+    ``_can_manage_squad_availability``, the same one that governs the rest of managing
+    their own squad. It deliberately does not reuse the admin assign page, which is
+    ``event_admin``-only and shows every squad at once.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad being filled.
+
+    Returns:
+        The rendered page, or a redirect when the user may not manage this squad.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        logfire.warning(
+            "Unauthorized squad add-riders access",
+            event_id=event_pk,
+            squad_id=squad_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage this squad.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    member_ids = set(
+        SquadMember.objects.filter(squad=squad, status=SquadMember.Status.MEMBER).values_list(
+            "user_id", flat=True
+        )
+    )
+    signups = [
+        s
+        for s in EventSignup.objects.filter(
+            event=event, status=EventSignup.Status.REGISTERED
+        ).select_related("user")
+        if s.user_id not in member_ids
+    ]
+    _mark_eligibility(squad, signups, _rider_categories(signups))
+    enriched = _enrich_signups(signups, event=event)
+
+    # Facets are gated on managing this squad, same as the page: the payload carries
+    # every listed rider's answers, so it must not outrun the permission to see them.
+    signup_questions = list(event.signup_questions.order_by("order", "pk"))
+    answer_facets = build_facets(signup_questions, signups) if signup_questions else []
+    answer_payload = answers_payload(signups, signup_questions) if signup_questions else {}
+
+    logfire.info(
+        "Squad add-riders page viewed",
+        event_id=event_pk,
+        squad_id=squad_pk,
+        user_id=request.user.id,
+        candidates=len(enriched),
+    )
+    return render(
+        request,
+        "events/squad_add_riders.html",
+        {
+            "event": event,
+            "squad": squad,
+            "enriched_signups": enriched,
+            "signup_timezones": sorted(
+                {tz for e in enriched for tz in (e["signup"].signup_timezone or [])}
+            ),
+            "signup_questions": signup_questions,
+            "answer_facets": answer_facets,
+            "answer_payload": answer_payload,
+            "answer_panel_open": panel_starts_open(signup_questions) if signup_questions else False,
+            "answer_facets_table": "add-riders",
+        },
+    )
 
 
 @require_GET

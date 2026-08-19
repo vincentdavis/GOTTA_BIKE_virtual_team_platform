@@ -15,7 +15,8 @@ event_detail.html) — there is no pagination, so the client sees every row.
 {% endcomment %}
 <div class="flex flex-wrap items-center gap-1 mb-2 hidden" id="answer-chips"></div>
 
-<details class="collapse collapse-arrow bg-base-300 rounded-box mb-2" id="answer-panel"{% if answer_panel_open %} open{% endif %}>
+<details class="collapse collapse-arrow bg-base-300 rounded-box mb-2" id="answer-panel"
+         data-answer-facets="{{ answer_facets_table|default:'detail' }}"{% if answer_panel_open %} open{% endif %}>
   <summary class="collapse-title text-sm font-medium py-2 min-h-0">Filter by answers</summary>
   <div class="collapse-content">
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
