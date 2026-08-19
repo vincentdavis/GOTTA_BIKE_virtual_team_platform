@@ -221,7 +221,7 @@
         {% endif %}
 
         {# Category Range section #}
-        {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category or squad.min_zwift_category or squad.max_zwift_category %}
+        {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category or squad.min_zwift_category or squad.max_zwift_category or squad.min_womens_zwift_category or squad.max_womens_zwift_category %}
         <div class="card bg-base-300 p-3 mb-2">
           <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Category Range</p>
           <div class="space-y-1">
@@ -235,6 +235,12 @@
             <div class="flex items-center justify-between">
               <span class="text-base-content/70 text-sm">Zwift Category</span>
               <span class="text-sm">{{ squad.min_zwift_category|default:"" }}{% if squad.min_zwift_category and squad.max_zwift_category %} &ndash; {% endif %}{{ squad.max_zwift_category|default:"" }}</span>
+            </div>
+            {% endif %}
+            {% if squad.min_womens_zwift_category or squad.max_womens_zwift_category %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Women's Zwift Category</span>
+              <span class="text-sm">{{ squad.min_womens_zwift_category|default:"" }}{% if squad.min_womens_zwift_category and squad.max_womens_zwift_category %} &ndash; {% endif %}{{ squad.max_womens_zwift_category|default:"" }}</span>
             </div>
             {% endif %}
           </div>
