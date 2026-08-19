@@ -131,11 +131,19 @@ def test_assign_page_says_what_to_do_when_nothing_is_mirrored(client, event, bar
 
 
 @pytest.mark.django_db
-def test_back_link_goes_to_manage_squads(client, event, event_admin) -> None:
-    """Assign is reached from Manage Squads, so Back belongs there, not on the event."""
-    client.force_login(event_admin)
+@pytest.mark.parametrize("url_name", ["squad_assign_page", "manage_roles"])
+def test_back_link_goes_to_manage_squads(client, event, user_model, url_name) -> None:
+    """Both pages are reached from Manage Squads, so Back belongs there.
 
-    body = client.get(reverse("events:squad_assign_page", args=[event.pk])).content.decode()
+    manage-roles needs `assign_roles` to view, which event_admin alone does not grant.
+    """
+    admin = user_model.objects.create_user(
+        username="ra", email="ra@example.test",
+        permission_overrides={"team_member": True, "event_admin": True, "assign_roles": True},
+    )
+    client.force_login(admin)
+
+    body = client.get(reverse(f"events:{url_name}", args=[event.pk])).content.decode()
 
     assert reverse("events:squad_manage", args=[event.pk]) in body
     assert "Back to Manage Squads" in body
