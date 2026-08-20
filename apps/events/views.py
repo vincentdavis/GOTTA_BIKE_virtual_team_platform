@@ -2712,7 +2712,10 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 user_id=request.user.id,
             )
             messages.success(request, f'Squad "{squad.name}" created successfully!')
-            return redirect("events:event_detail", pk=event_pk)
+            # Back to Manage Squads, which is where the form was opened from and where
+            # the next thing you do with a new squad lives. The edit view already
+            # returns there.
+            return redirect("events:squad_manage", event_pk=event_pk)
     else:
         form = SquadForm(
             event_prefixes=event.prefixes or [],

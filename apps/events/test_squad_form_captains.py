@@ -259,3 +259,36 @@ def test_no_roles_section_when_none_are_configured(client, event, event_admin) -
     body = client.get(reverse("events:squad_assign_page", args=[event.pk])).content.decode()
 
     assert "Roles (0)" not in body
+
+
+@pytest.mark.django_db
+def test_creating_a_squad_returns_to_manage_squads(client, event, event_admin, discord_calls) -> None:
+    """Create used to land on the event page while edit returned to Manage Squads.
+
+    Both forms are opened from Manage Squads, and it is where the next thing you do
+    with a new squad lives -- assigning riders, setting availability.
+    """
+    client.force_login(event_admin)
+
+    resp = client.post(
+        reverse("events:squad_create", args=[event.pk]),
+        data={"name": "Fresh Squad", "gender": "COED"},
+    )
+
+    assert resp.status_code == 302
+    assert resp["Location"] == reverse("events:squad_manage", args=[event.pk])
+    assert Squad.objects.filter(event=event, name="Fresh Squad").exists()
+
+
+@pytest.mark.django_db
+def test_editing_a_squad_returns_to_the_same_place(client, event, squad, event_admin, discord_calls) -> None:
+    """Pinned alongside create so the two cannot drift apart again."""
+    client.force_login(event_admin)
+
+    resp = client.post(
+        reverse("events:squad_edit", args=[event.pk, squad.pk]),
+        data={"name": squad.name, "gender": "COED"},
+    )
+
+    assert resp.status_code == 302
+    assert resp["Location"] == reverse("events:squad_manage", args=[event.pk])
