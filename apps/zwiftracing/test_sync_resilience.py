@@ -91,6 +91,32 @@ def test_the_client_sets_an_explicit_timeout() -> None:
     assert zr_client._TIMEOUT.connect <= 15
 
 
+@pytest.mark.django_db  # get_club reads the API url/key from Constance
+def test_the_club_endpoint_gets_the_longer_window() -> None:
+    """60s still timed out with zero bytes received, so the bulk call waits longer.
+
+    Asserted on the call rather than the constant: the constant existing proves nothing
+    if get_club is still passing the ordinary timeout.
+    """
+    from apps.zwiftracing import zr_client
+
+    assert zr_client._BULK_TIMEOUT.read > zr_client._TIMEOUT.read
+
+    with patch("apps.zwiftracing.zr_client.httpx.get") as get:
+        get.return_value.status_code = 200
+        get.return_value.json.return_value = {"riders": []}
+        zr_client.get_club(11991)
+
+    assert get.call_args.kwargs["timeout"] is zr_client._BULK_TIMEOUT
+
+
+def test_connect_stays_short_so_a_dead_host_fails_fast() -> None:
+    """A long read window must not also mean waiting 3 minutes on an unreachable host."""
+    from apps.zwiftracing import zr_client
+
+    assert zr_client._BULK_TIMEOUT.connect <= 15
+
+
 @pytest.mark.django_db
 def test_warm_club_survives_the_same_failure() -> None:
     """The ladder planner's club warmer paginates the same way, so it broke the same way."""

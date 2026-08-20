@@ -5,15 +5,24 @@ All methods return a tuple of (status_code, response_json).
 429 errors are returned without raising an exception to allow retry handling.
 """
 
+import time
+
 import httpx
 import logfire
 from constance import config
 
 # httpx defaults to a 5s timeout on everything, which the club endpoint routinely
 # exceeds -- it returns up to 999 riders in one response. That default is what made
-# `sync_zr_riders` die with ReadTimeout. Read is generous; connect stays short so an
-# unreachable host fails fast instead of hanging the worker.
+# `sync_zr_riders` die with ReadTimeout. Connect stays short throughout so an
+# unreachable host fails fast instead of tying up a worker.
 _TIMEOUT = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+
+# The club endpoint gets its own, much larger read window. 60s was still timing out
+# with *zero* bytes received, which says the API spends minutes assembling a full page
+# rather than streaming it slowly. There is no page-size parameter to turn down, and
+# nothing waits on this task, so the only cost of waiting longer is a worker held --
+# far cheaper than a roster that never syncs.
+_BULK_TIMEOUT = httpx.Timeout(connect=10.0, read=180.0, write=10.0, pool=10.0)
 
 
 def _get_api_url() -> str:
@@ -78,10 +87,20 @@ def get_club(club_id: int, from_id: int | None = None) -> tuple[int, dict]:
     """
     endpoint = f"clubs/{club_id}"
     logfire.debug("ZR API request: get_club", club_id=club_id, from_id=from_id)
+    started = time.monotonic()
     response = httpx.get(
         url=f"{_get_api_url()}clubs/{club_id}/{from_id if from_id else ''}",
         headers=_get_headers(),
-        timeout=_TIMEOUT,
+        timeout=_BULK_TIMEOUT,
+    )
+    # Logged so the read window can be tuned from measurements rather than guesses --
+    # a timeout tells you the call exceeded the limit, never by how much.
+    logfire.info(
+        "ZR club fetch returned",
+        club_id=club_id,
+        from_id=from_id,
+        status_code=response.status_code,
+        elapsed_seconds=round(time.monotonic() - started, 1),
     )
     return _handle_response(response, endpoint)
 
