@@ -82,6 +82,14 @@
 
       <div class="flex items-center gap-3 mb-2">
         <label class="label cursor-pointer gap-1 py-0">
+          <input type="checkbox" id="cfg-single-slot" class="checkbox checkbox-xs">
+          <span class="label-text text-xs">Single Time Slot</span>
+        </label>
+        <span class="label-text-alt text-xs text-base-content/60">One date and time; riders answer available yes/no</span>
+      </div>
+
+      <div class="flex items-center gap-3 mb-2">
+        <label class="label cursor-pointer gap-1 py-0">
           <input type="checkbox" id="cfg-expanded-features" class="checkbox checkbox-xs">
           <span class="label-text text-xs">Expand Features</span>
         </label>
@@ -125,17 +133,21 @@
           <label class="label py-0"><span class="label-text text-xs">Start Date</span></label>
           <input type="date" id="cfg-start-date" class="input input-bordered input-sm w-full">
         </div>
-        <div class="form-control">
+        <div class="form-control" id="field-end-date">
           <label class="label py-0"><span class="label-text text-xs">End Date</span></label>
           <input type="date" id="cfg-end-date" class="input input-bordered input-sm w-full">
         </div>
-        <div class="form-control">
+        <div class="form-control" id="field-start-time">
           <label class="label py-0"><span class="label-text text-xs">Start Time</span></label>
           <select id="cfg-start-time" class="select select-bordered select-sm w-full"></select>
         </div>
-        <div class="form-control">
+        <div class="form-control" id="field-end-time">
           <label class="label py-0"><span class="label-text text-xs">End Time</span></label>
           <select id="cfg-end-time" class="select select-bordered select-sm w-full"></select>
+        </div>
+        <div class="form-control hidden" id="field-exact-time">
+          <label class="label py-0" for="cfg-exact-time"><span class="label-text text-xs">Start Time (exact)</span></label>
+          <input type="time" id="cfg-exact-time" class="input input-bordered input-sm w-full">
         </div>
         <div class="form-control">
           <label class="label py-0"><span class="label-text text-xs">Timezone</span></label>
@@ -236,6 +248,29 @@
   var timezoneEl = document.getElementById('cfg-timezone');
   var slotDurationEl = document.getElementById('cfg-slot-duration');
   var hideEmptyDaysEl = document.getElementById('cfg-hide-empty-days');
+  var singleSlotEl = document.getElementById('cfg-single-slot');
+  var exactTimeEl = document.getElementById('cfg-exact-time');
+
+  // Single-slot mode hides the range inputs and swaps the 30-minute Start Time select
+  // for a real time input -- the select cannot express 19:07, and minute precision is
+  // the point. End date and end time are derived server-side from start + duration.
+  function syncSingleSlot() {
+    var on = singleSlotEl.checked;
+    ['field-end-date', 'field-start-time', 'field-end-time'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) { el.classList.toggle('hidden', on); }
+    });
+    document.getElementById('field-exact-time').classList.toggle('hidden', !on);
+    // Seed the exact-time box from the select so switching modes keeps a sane value.
+    if (on && !exactTimeEl.value) { exactTimeEl.value = startTimeEl.value || '19:00'; }
+  }
+  singleSlotEl.addEventListener('change', syncSingleSlot);
+
+  function singleSlotValues() {
+    if (!singleSlotEl.checked) { return { single_slot: false }; }
+    return { single_slot: true, start_time: exactTimeEl.value, end_time: null, end_date: null };
+  }
+
   var expandedFeaturesEl = document.getElementById('cfg-expanded-features');
   var expandedPanelEl = document.getElementById('expanded-features-panel');
   // Field name on the payload -> element id. One list drives read, write and reset,
@@ -745,6 +780,7 @@
       hide_empty_days: hideEmptyDaysEl.checked,
     };
     Object.assign(payload, expandedFeatureValues());
+    Object.assign(payload, singleSlotValues());
 
     fetch(PREVIEW_URL, {
       method: 'POST',
@@ -850,6 +886,7 @@
       require_race_verified_availability: requireRaceVerifiedEl.checked
     };
     Object.assign(payload, expandedFeatureValues());
+    Object.assign(payload, singleSlotValues());
 
     btnSave.disabled = true;
     btnSave.textContent = 'Saving…';
@@ -993,6 +1030,9 @@
     setRadioValue('cfg-max-races', INITIAL_GRID.max_races_question ? 'yes' : 'no');
     setRadioValue('cfg-rest-days', INITIAL_GRID.rest_days_question ? 'yes' : 'no');
     hideEmptyDaysEl.checked = !!INITIAL_GRID.hide_empty_days;
+    singleSlotEl.checked = !!INITIAL_GRID.single_slot;
+    if (INITIAL_GRID.single_slot) { exactTimeEl.value = INITIAL_GRID.start_time || ''; }
+    syncSingleSlot();
     expandedFeaturesEl.checked = !!INITIAL_GRID.expanded_features;
     Object.keys(EXPANDED_FIELDS).forEach(function (name) {
       var el = document.getElementById(EXPANDED_FIELDS[name]);

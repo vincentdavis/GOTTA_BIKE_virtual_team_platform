@@ -3617,6 +3617,7 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         "rest_days_question": grid.rest_days_question,
         "hide_empty_days": grid.hide_empty_days,
         "require_race_verified_availability": grid.require_race_verified_availability,
+        "single_slot": grid.single_slot,
         "expanded_features": grid.expanded_features,
         "description": grid.description,
         "website_url": grid.website_url,
@@ -3672,9 +3673,12 @@ def _handle_availability_save(
     # --- Parse & validate fields ---
     title = str(data.get("title", "")).strip()
 
+    single_slot = bool(data.get("single_slot", False))
+
     try:
         start_date = date.fromisoformat(str(data.get("start_date", "")))
-        end_date = date.fromisoformat(str(data.get("end_date", "")))
+        # A single-slot grid spans one day, so the client need not send an end date.
+        end_date = start_date if single_slot else date.fromisoformat(str(data.get("end_date", "")))
     except ValueError, TypeError:
         return JsonResponse({"error": "Invalid or missing start_date / end_date."}, status=400)
 
@@ -3683,19 +3687,31 @@ def _handle_availability_save(
     if (end_date - start_date).days > 31:
         return JsonResponse({"error": "Date range cannot exceed 31 days."}, status=400)
 
-    start_time = str(data.get("start_time", ""))
-    end_time = str(data.get("end_time", ""))
-    if not hhmm_re.match(start_time) or not hhmm_re.match(end_time):
-        return JsonResponse({"error": "start_time and end_time must be HH:MM format."}, status=400)
-    if start_time >= end_time:
-        return JsonResponse({"error": "start_time must be before end_time."}, status=400)
-
     try:
         slot_duration = int(data.get("slot_duration", 0))
     except ValueError, TypeError:
         return JsonResponse({"error": "slot_duration must be an integer."}, status=400)
     if slot_duration not in (15, 30, 60):
         return JsonResponse({"error": "slot_duration must be 15, 30, or 60."}, status=400)
+
+    start_time = str(data.get("start_time", ""))
+    if not hhmm_re.match(start_time):
+        return JsonResponse({"error": "start_time must be HH:MM format."}, status=400)
+
+    if single_slot:
+        # Derived here rather than trusted from the client, so exactly one slot is
+        # guaranteed: the generator emits slots while current < end, stepping by
+        # slot_duration. A late start wraps past midnight, which build_grid_data
+        # already handles (end <= start -> +1 day), so 23:30 + 60 is still one cell.
+        end_time = (
+            datetime.combine(date.min, time.fromisoformat(start_time)) + timedelta(minutes=slot_duration)
+        ).strftime("%H:%M")
+    else:
+        end_time = str(data.get("end_time", ""))
+        if not hhmm_re.match(end_time):
+            return JsonResponse({"error": "end_time must be HH:MM format."}, status=400)
+        if start_time >= end_time:
+            return JsonResponse({"error": "start_time must be before end_time."}, status=400)
 
     blocked_cells = data.get("blocked_cells", [])
     if not isinstance(blocked_cells, list):
@@ -3742,6 +3758,7 @@ def _handle_availability_save(
         "require_race_verified_availability": (
             bool(data.get("require_race_verified_availability", False)) or event.require_race_verified_availability
         ),
+        "single_slot": single_slot,
         "expanded_features": bool(data.get("expanded_features", False)),
         "description": (data.get("description") or "").strip(),
         "website_url": (data.get("website_url") or "").strip(),
@@ -4172,6 +4189,7 @@ def availability_copy_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         # were added; a duplicated grid silently lost the setting.
         hide_empty_days=source.hide_empty_days,
         require_race_verified_availability=source.require_race_verified_availability,
+        single_slot=source.single_slot,
         expanded_features=source.expanded_features,
         description=source.description,
         website_url=source.website_url,
@@ -4526,6 +4544,18 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
             if local_key:
                 existing_local_keys.append(local_key)
 
+    # Single-slot grids collapse to one Yes/No, so the date and time have to be stated
+    # in words -- there is no grid header left to read them off. Built from the already
+    # timezone-converted display data, so it matches what the hidden grid holds.
+    single_slot_label = ""
+    if grid.single_slot and grid_data["display_dates"] and grid_data["display_time_slots"]:
+        slot_date = date.fromisoformat(grid_data["display_dates"][0])
+        slot_time = grid_data["display_time_slots"][0]
+        single_slot_label = (
+            f"{slot_date.strftime('%a %d %b %Y')} at {slot_time} "
+            f"({grid.slot_duration} min, {grid.grid_timezone})"
+        )
+
     logfire.debug(
         "Availability respond page viewed",
         grid_id=str(grid.id),
@@ -4543,6 +4573,7 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
             "grid": grid,
             "display_dates_json": json.dumps(grid_data["display_dates"]),
             "display_time_slots_json": json.dumps(grid_data["display_time_slots"]),
+            "single_slot_label": single_slot_label,
             "display_blocked_json": json.dumps(sorted(grid_data["display_blocked"])),
             "existing_local_keys_json": json.dumps(existing_local_keys),
             "cell_utc_map_json": json.dumps(grid_data["cell_map"]),

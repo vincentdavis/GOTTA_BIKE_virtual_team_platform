@@ -1289,6 +1289,16 @@ class AvailabilityGrid(models.Model):
     )
     expires = models.DateField(null=True, blank=True, help_text="Date when this grid expires and is no longer visible")
 
+    # Presentation only. A single-slot grid is an ordinary grid whose time axis has one
+    # row: end_date == start_date and end_time == start_time + slot_duration. Every
+    # consumer -- responses, the v-report, scheduled races -- sees the same shape it
+    # always did, so this flag only decides how the builder collects it and how the
+    # response form renders it.
+    single_slot = models.BooleanField(
+        default=False,
+        help_text="One date and time rather than a grid; riders answer available yes/no",
+    )
+
     # Optional context shown to riders alongside the grid. Gated by expanded_features
     # rather than by "is any of them non-empty": a captain who fills these in and then
     # decides against showing them can untick the box without losing the text, and can

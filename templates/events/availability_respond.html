@@ -138,6 +138,17 @@
     <span class="text-base-content/70 text-sm">12 h</span>
   </label>
 
+  {% if grid.single_slot %}
+  <div id="single-slot-answer" class="card bg-base-200 shadow-md mb-4 p-4">
+    <p class="text-sm text-base-content/70 mb-1">{{ single_slot_label }}</p>
+    <p class="font-semibold mb-3">I am available</p>
+    <div class="flex gap-2">
+      <button type="button" id="single-slot-yes" class="btn btn-sm">Yes</button>
+      <button type="button" id="single-slot-no" class="btn btn-sm">No</button>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Grid Container with scroll arrows on mobile -->
   <div class="relative">
     <button id="btn-scroll-left" class="md:hidden absolute left-0 top-1/2 -translate-y-1/2 z-10 btn btn-circle btn-sm btn-neutral opacity-70 active:opacity-100" style="display:none;">
@@ -150,7 +161,7 @@
   </div>
 
   <!-- Legend -->
-  <div class="flex flex-wrap items-center gap-3 mb-4 text-sm">
+  <div id="avail-legend" class="flex flex-wrap items-center gap-3 mb-4 text-sm">
     <span class="text-base-content/70">Legend:</span>
     <div class="flex items-center gap-1">
       <span class="inline-block rounded avail-cell" data-state="available" style="width: 1.5rem; height: 1rem; cursor: default;"></span>
@@ -512,6 +523,41 @@
   gridContainer.addEventListener('scroll', updateScrollArrows);
 
   buildGrid();
+
+  // Single-slot grids render as one Yes/No question. The grid is still built -- and
+  // still hidden -- so its single cell carries the UTC date/time the submit path reads,
+  // which means nothing about saving or reporting changes for these grids.
+  var singleSlotAnswer = document.getElementById('single-slot-answer');
+  if (singleSlotAnswer) {
+    var gridWrap = gridContainer.closest('.relative') || gridContainer;
+    gridWrap.classList.add('hidden');
+    var legend = document.getElementById('avail-legend');
+    if (legend) { legend.classList.add('hidden'); }
+
+    var yesBtn = document.getElementById('single-slot-yes');
+    var noBtn = document.getElementById('single-slot-no');
+
+    function singleCell() {
+      return gridContainer.querySelector('.avail-cell[data-utc-date]');
+    }
+    function paintAnswer() {
+      var cell = singleCell();
+      var available = cell && cell.dataset.state === 'available';
+      yesBtn.classList.toggle('btn-success', !!available);
+      yesBtn.classList.toggle('btn-outline', !available);
+      noBtn.classList.toggle('btn-error', available === false && !!cell);
+      noBtn.classList.toggle('btn-outline', !(available === false && !!cell));
+    }
+    function setAnswer(available) {
+      var cell = singleCell();
+      if (!cell) { return; }
+      cell.dataset.state = available ? 'available' : 'unselected';
+      paintAnswer();
+    }
+    yesBtn.addEventListener('click', function () { setAnswer(true); });
+    noBtn.addEventListener('click', function () { setAnswer(false); });
+    paintAnswer();
+  }
   updateScrollArrows();
 })();
 </script>
