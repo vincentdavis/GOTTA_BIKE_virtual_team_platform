@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import httpx
 import logfire
 from django.db.models import Q
 from django.tasks import task  # ty:ignore[unresolved-import]
@@ -23,6 +24,12 @@ from apps.zwiftracing.zr_client import get_club
 _PAGE_FULL = 999
 # Spacing after a successful paginated page (ZR limit is ~1 req / 60s).
 _PAGE_DELAY_S = 630
+
+# Same shape as sync_zr_riders: this task paginates by re-enqueueing itself, so an
+# unhandled network error ends the chain and drops `_accumulated` with it -- the club
+# ends up part-cached and marked as nothing in particular.
+_MAX_FETCH_ATTEMPTS = 3
+_FETCH_BACKOFF_SECONDS = (60, 300, 900)
 # A cached club is refreshed at most this often.
 _CLUB_STALE_DAYS = 7
 # Only clubs used by a matchup edited within this window are kept warm.
@@ -30,20 +37,48 @@ _ACTIVE_MATCHUP_DAYS = 90
 
 
 @task
-def warm_club(club_id: int, from_id: int | None = None, _accumulated: int = 0) -> dict:
+def warm_club(
+    club_id: int, from_id: int | None = None, _accumulated: int = 0, _attempt: int = 0
+) -> dict:
     """Fetch a club's roster into the cache, paginating and respecting rate limits.
 
     Args:
         club_id: Club ID to fetch.
         from_id: Pagination cursor (last rider id of the previous page).
         _accumulated: Riders cached so far across prior pages (internal).
+        _attempt: Retry counter for network failures (internal).
 
     Returns:
         A status dict describing the outcome.
 
     """
     with logfire.span("ladder warm_club", club_id=club_id, from_id=from_id):
-        status_code, data = get_club(club_id, from_id)
+        try:
+            status_code, data = get_club(club_id, from_id)
+        except httpx.HTTPError as e:
+            if _attempt + 1 >= _MAX_FETCH_ATTEMPTS:
+                logfire.error(
+                    "warm_club fetch failed, giving up",
+                    club_id=club_id,
+                    from_id=from_id,
+                    attempts=_attempt + 1,
+                    error=str(e),
+                )
+                return {"status": "failed", "club_id": club_id, "cached": _accumulated}
+            delay = _FETCH_BACKOFF_SECONDS[_attempt]
+            logfire.warning(
+                "warm_club fetch failed, retrying",
+                club_id=club_id,
+                from_id=from_id,
+                attempt=_attempt + 1,
+                retry_in_seconds=delay,
+                error=str(e),
+            )
+            # `_accumulated` rides along, or the retry would restate the running total.
+            warm_club.using(run_after=timezone.now() + timedelta(seconds=delay)).enqueue(
+                club_id, from_id, _accumulated, _attempt + 1
+            )
+            return {"status": "retrying", "club_id": club_id, "attempt": _attempt + 1}
 
         if status_code == 429:
             retry_after = int(data.get("retryAfter", 600)) if isinstance(data, dict) else 600

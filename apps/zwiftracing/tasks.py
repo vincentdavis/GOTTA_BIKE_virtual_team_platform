@@ -6,6 +6,7 @@ Uses Django 6.0 background tasks feature with django-tasks database backend.
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
+import httpx
 import logfire
 from constance import config
 from django.tasks import task  # ty:ignore[unresolved-import]
@@ -194,15 +195,25 @@ def refresh_rider_sync(zwid: int) -> tuple[int, ZRRider | None]:
         return status_code, rider
 
 
+# A network failure used to end the run outright. That matters more here than it looks:
+# the task paginates by re-enqueueing itself, so a blip on page 3 of 5 left pages 4 and 5
+# unfetched with nothing to resume them -- a silently half-synced roster until the next
+# scheduled run. Retries keep the chain alive, bounded so a sustained outage stops.
+_MAX_FETCH_ATTEMPTS = 3
+_FETCH_BACKOFF_SECONDS = (60, 300, 900)
+
+
 @task
-def sync_zr_riders(from_id: int | None = None) -> dict:
+def sync_zr_riders(from_id: int | None = None, attempt: int = 0) -> dict:
     """Sync ZRRider data from Zwift Racing API.
 
     Fetches club riders from the Zwift Racing API and updates the database.
-    Handles pagination (if >= 999 riders) and rate limiting (429 status).
+    Handles pagination (if >= 999 riders), rate limiting (429) and network failures.
 
     Args:
         from_id: Optional rider ID to paginate from.
+        attempt: Which retry this is, for the network-failure backoff. Callers leave
+            this at 0; only the retry path passes it on.
 
     Returns:
         dict with sync status and counts.
@@ -212,7 +223,33 @@ def sync_zr_riders(from_id: int | None = None) -> dict:
         club_id = config.ZWIFTPOWER_TEAM_ID
 
         # Call the API
-        status_code, data = get_club(club_id, from_id)
+        try:
+            status_code, data = get_club(club_id, from_id)
+        except httpx.HTTPError as e:
+            # Covers read/connect timeouts and dropped connections alike -- from here
+            # they are the same thing: this page did not arrive.
+            if attempt + 1 >= _MAX_FETCH_ATTEMPTS:
+                logfire.error(
+                    "ZR club fetch failed, giving up",
+                    club_id=club_id,
+                    from_id=from_id,
+                    attempts=attempt + 1,
+                    error=str(e),
+                )
+                return {"status": "failed", "from_id": from_id, "error": str(e)}
+            delay = _FETCH_BACKOFF_SECONDS[attempt]
+            logfire.warning(
+                "ZR club fetch failed, retrying",
+                club_id=club_id,
+                from_id=from_id,
+                attempt=attempt + 1,
+                retry_in_seconds=delay,
+                error=str(e),
+            )
+            sync_zr_riders.using(run_after=timezone.now() + timedelta(seconds=delay)).enqueue(
+                from_id, attempt + 1
+            )
+            return {"status": "retrying", "from_id": from_id, "attempt": attempt + 1}
 
         # Handle rate limiting (429)
         if status_code == 429:

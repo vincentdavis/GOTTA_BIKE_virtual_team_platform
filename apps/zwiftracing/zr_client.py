@@ -9,6 +9,12 @@ import httpx
 import logfire
 from constance import config
 
+# httpx defaults to a 5s timeout on everything, which the club endpoint routinely
+# exceeds -- it returns up to 999 riders in one response. That default is what made
+# `sync_zr_riders` die with ReadTimeout. Read is generous; connect stays short so an
+# unreachable host fails fast instead of hanging the worker.
+_TIMEOUT = httpx.Timeout(connect=10.0, read=60.0, write=10.0, pool=10.0)
+
 
 def _get_api_url() -> str:
     """Get the ZRAPP API URL from constance config.
@@ -72,7 +78,11 @@ def get_club(club_id: int, from_id: int | None = None) -> tuple[int, dict]:
     """
     endpoint = f"clubs/{club_id}"
     logfire.debug("ZR API request: get_club", club_id=club_id, from_id=from_id)
-    response = httpx.get(url=f"{_get_api_url()}clubs/{club_id}/{from_id if from_id else ''}", headers=_get_headers())
+    response = httpx.get(
+        url=f"{_get_api_url()}clubs/{club_id}/{from_id if from_id else ''}",
+        headers=_get_headers(),
+        timeout=_TIMEOUT,
+    )
     return _handle_response(response, endpoint)
 
 
@@ -91,7 +101,7 @@ def get_event(event_id: int) -> tuple[int, dict]:
     """
     endpoint = f"results/{event_id}"
     logfire.debug("ZR API request: get_event", event_id=event_id)
-    response = httpx.get(url=f"{_get_api_url()}results/{event_id}", headers=_get_headers())
+    response = httpx.get(url=f"{_get_api_url()}results/{event_id}", headers=_get_headers(), timeout=_TIMEOUT)
     return _handle_response(response, endpoint)
 
 
@@ -110,7 +120,7 @@ def get_zp_results(event_id: int) -> tuple[int, dict]:
     """
     endpoint = f"zp/{event_id}/results"
     logfire.debug("ZR API request: get_zp_results", event_id=event_id)
-    response = httpx.get(url=f"{_get_api_url()}zp/{event_id}/results", headers=_get_headers())
+    response = httpx.get(url=f"{_get_api_url()}zp/{event_id}/results", headers=_get_headers(), timeout=_TIMEOUT)
     return _handle_response(response, endpoint)
 
 
@@ -131,7 +141,11 @@ def get_rider(rider_id: int, epoch: int | None = None) -> tuple[int, dict]:
     """
     endpoint = f"riders/{rider_id}"
     logfire.debug("ZR API request: get_rider", rider_id=rider_id, epoch=epoch)
-    response = httpx.get(url=f"{_get_api_url()}riders/{rider_id}/{epoch if epoch else ''}", headers=_get_headers())
+    response = httpx.get(
+        url=f"{_get_api_url()}riders/{rider_id}/{epoch if epoch else ''}",
+        headers=_get_headers(),
+        timeout=_TIMEOUT,
+    )
     return _handle_response(response, endpoint)
 
 
@@ -151,7 +165,12 @@ def get_riders(ids: list[int], epoch: int | None = None) -> tuple[int, list | di
     """
     endpoint = "riders (batch)"
     logfire.debug("ZR API request: get_riders", rider_count=len(ids), epoch=epoch)
-    response = httpx.post(url=f"{_get_api_url()}riders/{epoch if epoch else ''}", headers=_get_headers(), json=ids)
+    response = httpx.post(
+        url=f"{_get_api_url()}riders/{epoch if epoch else ''}",
+        headers=_get_headers(),
+        json=ids,
+        timeout=_TIMEOUT,
+    )
     return _handle_response(response, endpoint)
 
 
