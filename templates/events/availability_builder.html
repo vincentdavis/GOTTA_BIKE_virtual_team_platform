@@ -79,6 +79,43 @@
           <span id="require-race-verified-locked" class="label-text-alt text-xs text-base-content/60 hidden">Enforced at the event level</span>
         </div>
       </div>
+
+      <div class="flex items-center gap-3 mb-2">
+        <label class="label cursor-pointer gap-1 py-0">
+          <input type="checkbox" id="cfg-expanded-features" class="checkbox checkbox-xs">
+          <span class="label-text text-xs">Expand Features</span>
+        </label>
+        <span class="label-text-alt text-xs text-base-content/60">Add a description and links riders see with this grid</span>
+      </div>
+
+      <div id="expanded-features-panel" class="hidden border border-base-300 rounded-lg p-3 mb-3">
+        <div class="form-control mb-3">
+          <label class="label py-0" for="cfg-description">
+            <span class="label-text text-xs">Description</span>
+            <span class="label-text-alt text-xs text-base-content/60">Markdown</span>
+          </label>
+          <textarea id="cfg-description" rows="4" class="textarea textarea-sm w-full"
+                    placeholder="Shown above the grid. Supports **bold**, links and lists."></textarea>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="form-control">
+            <label class="label py-0" for="cfg-website-url"><span class="label-text text-xs">Event website link</span></label>
+            <input type="url" id="cfg-website-url" class="input input-bordered input-sm w-full" placeholder="https://...">
+          </div>
+          <div class="form-control">
+            <label class="label py-0" for="cfg-course-url"><span class="label-text text-xs">Course link</span></label>
+            <input type="url" id="cfg-course-url" class="input input-bordered input-sm w-full" placeholder="https://...">
+          </div>
+          <div class="form-control">
+            <label class="label py-0" for="cfg-recon-url"><span class="label-text text-xs">Event recon link</span></label>
+            <input type="url" id="cfg-recon-url" class="input input-bordered input-sm w-full" placeholder="https://...">
+          </div>
+          <div class="form-control">
+            <label class="label py-0" for="cfg-invite-url"><span class="label-text text-xs">Event invite link</span></label>
+            <input type="url" id="cfg-invite-url" class="input input-bordered input-sm w-full" placeholder="https://...">
+          </div>
+        </div>
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <div class="form-control">
           <label class="label py-0"><span class="label-text text-xs">Grid Title (optional)</span></label>
@@ -199,6 +236,31 @@
   var timezoneEl = document.getElementById('cfg-timezone');
   var slotDurationEl = document.getElementById('cfg-slot-duration');
   var hideEmptyDaysEl = document.getElementById('cfg-hide-empty-days');
+  var expandedFeaturesEl = document.getElementById('cfg-expanded-features');
+  var expandedPanelEl = document.getElementById('expanded-features-panel');
+  // Field name on the payload -> element id. One list drives read, write and reset,
+  // so a field cannot be saved but not reloaded (or vice versa).
+  var EXPANDED_FIELDS = {
+    description: 'cfg-description',
+    website_url: 'cfg-website-url',
+    course_url: 'cfg-course-url',
+    recon_url: 'cfg-recon-url',
+    invite_url: 'cfg-invite-url',
+  };
+
+  function expandedFeatureValues() {
+    var out = { expanded_features: expandedFeaturesEl.checked };
+    Object.keys(EXPANDED_FIELDS).forEach(function (name) {
+      var el = document.getElementById(EXPANDED_FIELDS[name]);
+      out[name] = el ? el.value.trim() : '';
+    });
+    return out;
+  }
+
+  function syncExpandedPanel() {
+    expandedPanelEl.classList.toggle('hidden', !expandedFeaturesEl.checked);
+  }
+  expandedFeaturesEl.addEventListener('change', syncExpandedPanel);
   var requireRaceVerifiedEl = document.getElementById('cfg-require-race-verified');
   var requireRaceVerifiedLockedEl = document.getElementById('require-race-verified-locked');
   var btnGenerateDesktop = document.getElementById('btn-generate-desktop');
@@ -682,6 +744,7 @@
       blocked_cells: blockedCells,
       hide_empty_days: hideEmptyDaysEl.checked,
     };
+    Object.assign(payload, expandedFeatureValues());
 
     fetch(PREVIEW_URL, {
       method: 'POST',
@@ -786,6 +849,7 @@
       hide_empty_days: hideEmptyDaysEl.checked,
       require_race_verified_availability: requireRaceVerifiedEl.checked
     };
+    Object.assign(payload, expandedFeatureValues());
 
     btnSave.disabled = true;
     btnSave.textContent = 'Saving…';
@@ -929,6 +993,12 @@
     setRadioValue('cfg-max-races', INITIAL_GRID.max_races_question ? 'yes' : 'no');
     setRadioValue('cfg-rest-days', INITIAL_GRID.rest_days_question ? 'yes' : 'no');
     hideEmptyDaysEl.checked = !!INITIAL_GRID.hide_empty_days;
+    expandedFeaturesEl.checked = !!INITIAL_GRID.expanded_features;
+    Object.keys(EXPANDED_FIELDS).forEach(function (name) {
+      var el = document.getElementById(EXPANDED_FIELDS[name]);
+      if (el) { el.value = INITIAL_GRID[name] || ''; }
+    });
+    syncExpandedPanel();
     requireRaceVerifiedEl.checked = !!INITIAL_GRID.require_race_verified_availability;
     (INITIAL_GRID.blocked_cells || []).forEach(function(c) {
       cellStates[c.date + '|' + c.time] = 'blocked';

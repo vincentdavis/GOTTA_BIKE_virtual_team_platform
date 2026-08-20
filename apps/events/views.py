@@ -3614,6 +3614,12 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         "rest_days_question": grid.rest_days_question,
         "hide_empty_days": grid.hide_empty_days,
         "require_race_verified_availability": grid.require_race_verified_availability,
+        "expanded_features": grid.expanded_features,
+        "description": grid.description,
+        "website_url": grid.website_url,
+        "course_url": grid.course_url,
+        "recon_url": grid.recon_url,
+        "invite_url": grid.invite_url,
     }
     user_tz = getattr(request.user, "timezone", "") or "UTC"
     logfire.debug(
@@ -3733,6 +3739,12 @@ def _handle_availability_save(
         "require_race_verified_availability": (
             bool(data.get("require_race_verified_availability", False)) or event.require_race_verified_availability
         ),
+        "expanded_features": bool(data.get("expanded_features", False)),
+        "description": (data.get("description") or "").strip(),
+        "website_url": (data.get("website_url") or "").strip(),
+        "course_url": (data.get("course_url") or "").strip(),
+        "recon_url": (data.get("recon_url") or "").strip(),
+        "invite_url": (data.get("invite_url") or "").strip(),
         "expires": expires,
     }
 
@@ -4153,7 +4165,16 @@ def availability_copy_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         blocked_cells=shifted_blocked,
         max_races_question=source.max_races_question,
         rest_days_question=source.rest_days_question,
+        # hide_empty_days was already being dropped here before the expanded fields
+        # were added; a duplicated grid silently lost the setting.
+        hide_empty_days=source.hide_empty_days,
         require_race_verified_availability=source.require_race_verified_availability,
+        expanded_features=source.expanded_features,
+        description=source.description,
+        website_url=source.website_url,
+        course_url=source.course_url,
+        recon_url=source.recon_url,
+        invite_url=source.invite_url,
         expires=None,
         status=AvailabilityGrid.Status.DRAFT,
         created_by=request.user,

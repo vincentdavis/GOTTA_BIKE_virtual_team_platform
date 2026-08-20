@@ -1288,6 +1288,24 @@ class AvailabilityGrid(models.Model):
         ),
     )
     expires = models.DateField(null=True, blank=True, help_text="Date when this grid expires and is no longer visible")
+
+    # Optional context shown to riders alongside the grid. Gated by expanded_features
+    # rather than by "is any of them non-empty": a captain who fills these in and then
+    # decides against showing them can untick the box without losing the text, and can
+    # tick it back on next season. Blank-means-hidden would force them to delete it.
+    expanded_features = models.BooleanField(
+        default=False,
+        help_text="Show the description and links below to riders filling in this grid",
+    )
+    description = models.TextField(
+        blank=True,
+        help_text="Markdown shown above the grid. Captain-authored, so markdown is rendered.",
+    )
+    website_url = models.URLField(max_length=500, blank=True, help_text="Event website")
+    course_url = models.URLField(max_length=500, blank=True, help_text="Course or route details")
+    recon_url = models.URLField(max_length=500, blank=True, help_text="Event recon (ride-through, preview)")
+    invite_url = models.URLField(max_length=500, blank=True, help_text="Event invite / sign-up link")
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

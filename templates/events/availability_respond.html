@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load accounts_tags %}
 
 {% block title %}{{ grid.title }} - Availability{% endblock %}
 
@@ -76,6 +77,30 @@
       <span id="save-toast-msg"></span>
     </div>
   </div>
+
+  {% comment %}
+    Captain-authored context, shown only when Expand Features is on. The description
+    renders markdown -- same trust level as an event description, since only someone
+    who can manage the squad can write it. The links are URLField-validated and get
+    rel="noopener" as they point off-site.
+  {% endcomment %}
+  {% if grid.expanded_features %}
+  {% if grid.description or grid.website_url or grid.course_url or grid.recon_url or grid.invite_url %}
+  <div class="card bg-base-200 shadow-md mb-4 p-4">
+    {% if grid.description %}
+    <div class="prose prose-sm max-w-none mb-3">{{ grid.description|render_markdown }}</div>
+    {% endif %}
+    {% if grid.website_url or grid.course_url or grid.recon_url or grid.invite_url %}
+    <div class="flex flex-wrap gap-2">
+      {% if grid.website_url %}<a href="{{ grid.website_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline">Event website</a>{% endif %}
+      {% if grid.course_url %}<a href="{{ grid.course_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline">Course</a>{% endif %}
+      {% if grid.recon_url %}<a href="{{ grid.recon_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline">Recon</a>{% endif %}
+      {% if grid.invite_url %}<a href="{{ grid.invite_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">Event invite</a>{% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endif %}
 
   <!-- Optional Questions -->
   {% if grid.max_races_question or grid.rest_days_question %}
