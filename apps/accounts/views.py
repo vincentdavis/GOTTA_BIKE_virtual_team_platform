@@ -65,6 +65,7 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
                 "category": ZP_DIV_TO_CATEGORY.get(div, ""),
                 "rank": zp_rider.rank,
                 "ftp": zp_rider.ftp,
+                "updated": zp_rider.date_modified,
             }
             # Include women's category for female riders
             if user.gender == "female" and zp_rider.div:
@@ -75,6 +76,7 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
             zr_data = {
                 "category": zr_rider.race_current_category,
                 "rating": zr_rider.race_current_rating,
+                "updated": zr_rider.date_modified,
             }
             zr_last_updated = zr_rider.date_modified
             zr_can_refresh = (timezone.now() - zr_rider.date_modified) >= ZR_REFRESH_MIN_AGE
@@ -410,6 +412,7 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
                 "h_1200_wkg": zp_rider.h_1200_wkg,
                 "h_15_watts": zp_rider.h_15_watts,
                 "h_15_wkg": zp_rider.h_15_wkg,
+                "updated": zp_rider.date_modified,
             }
             # Include women's category for female riders
             if profile_user.gender == "female" and zp_rider.div:
@@ -432,6 +435,7 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
                 "handicap_rolling": zr_rider.handicap_rolling,
                 "handicap_hilly": zr_rider.handicap_hilly,
                 "handicap_mountainous": zr_rider.handicap_mountainous,
+                "updated": zr_rider.date_modified,
             }
 
         # Get last 5 race results

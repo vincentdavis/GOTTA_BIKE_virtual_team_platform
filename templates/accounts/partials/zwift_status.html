@@ -63,6 +63,9 @@
                 </div>
                 <a href="https://zwiftpower.com/profile.php?z={{ user.zwid }}" target="_blank" rel="noopener"
                    class="btn btn-xs btn-ghost mt-2 w-full">View Profile</a>
+                {% if zp_data.updated %}
+                    <p class="text-base-content/40 text-xs mt-3">Updated {{ zp_data.updated|date:"Y-m-d" }}</p>
+                {% endif %}
             {% else %}
                 <p class="text-sm text-base-content/50">Not found in ZwiftPower</p>
             {% endif %}
@@ -116,6 +119,9 @@
                 </div>
                 <a href="https://www.zwiftracing.app/riders/{{ user.zwid }}" target="_blank" rel="noopener"
                    class="btn btn-xs btn-ghost mt-2 w-full">View Profile</a>
+                {% if zr_data.updated %}
+                    <p class="text-base-content/40 text-xs mt-3">Updated {{ zr_data.updated|date:"Y-m-d" }}</p>
+                {% endif %}
             {% else %}
                 <p class="text-sm text-base-content/50">Not found in Zwift Racing</p>
             {% endif %}

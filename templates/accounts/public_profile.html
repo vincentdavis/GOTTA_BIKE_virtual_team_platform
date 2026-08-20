@@ -247,6 +247,9 @@
             {% else %}
               <p class="text-base-content/50 text-sm">Not verified</p>
             {% endif %}
+            {% if zp_data.updated %}
+              <p class="text-base-content/40 text-xs mt-3">Updated {{ zp_data.updated|date:"Y-m-d" }}</p>
+            {% endif %}
           </div>
 
           <!-- Zwift Racing Card -->
@@ -317,6 +320,9 @@
               </a>
             {% else %}
               <p class="text-base-content/50 text-sm">Not verified</p>
+            {% endif %}
+            {% if zr_data.updated %}
+              <p class="text-base-content/40 text-xs mt-3">Updated {{ zr_data.updated|date:"Y-m-d" }}</p>
             {% endif %}
           </div>
 
