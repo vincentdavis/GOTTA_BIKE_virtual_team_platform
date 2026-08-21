@@ -348,3 +348,40 @@ def test_a_bad_timezone_is_refused(client, event, event_admin) -> None:
     )
 
     assert not AvailabilityGrid.objects.filter(squad=borrower).exists()
+
+
+@pytest.mark.django_db
+def test_a_shared_template_names_the_draft_after_itself(client, event, event_admin) -> None:
+    """Several squads build from one shared template, so its name identifies the session.
+
+    The auto-generated "<event> <squad> <dates>" title says nothing about which race it
+    is, which is exactly what the borrowing squad needs to see in their grid list.
+    """
+    owner = Squad.objects.create(event=event, name="Synthesis")
+    borrower = Squad.objects.create(event=event, name="Catalyst")
+    template = _template(owner, name="Round 3 Qualifier", shared=True)
+    client.force_login(event_admin)
+
+    client.post(
+        reverse("events:availability_template_apply", args=[event.pk, borrower.pk, template.pk]),
+        data={"start_date": "2026-09-01"},
+    )
+
+    assert AvailabilityGrid.objects.get(squad=borrower).title == "Round 3 Qualifier"
+
+
+@pytest.mark.django_db
+def test_an_unshared_template_leaves_the_auto_title_alone(client, event, event_admin) -> None:
+    """A private template's name is a config label ("Tuesday Nights"), not a session."""
+    squad = Squad.objects.create(event=event, name="Synthesis")
+    template = _template(squad, name="Tuesday Nights", shared=False)
+    client.force_login(event_admin)
+
+    client.post(
+        reverse("events:availability_template_apply", args=[event.pk, squad.pk, template.pk]),
+        data={"start_date": "2026-09-01"},
+    )
+
+    title = AvailabilityGrid.objects.get(squad=squad).title
+    assert title != "Tuesday Nights"
+    assert "Synthesis" in title          # the auto-generated "<event> <squad> <dates>"

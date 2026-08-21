@@ -4431,9 +4431,12 @@ def availability_template_apply_view(
             + timedelta(minutes=template.slot_duration)
         ).strftime("%H:%M")
 
+    # A shared template names a specific session ("Round 3 Qualifier"), and several squads
+    # create grids from it -- carrying that name through beats the auto-generated
+    # "<event> <squad> <dates>" title. A squad's own templates keep the auto title.
     grid = AvailabilityGrid.objects.create(
         squad=squad,
-        title="",
+        title=template.name if template.shared else "",
         start_date=start_date_utc,
         end_date=end_date_utc,
         start_time=start_time_utc,
