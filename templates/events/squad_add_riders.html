@@ -216,7 +216,56 @@
     // With no facets on the page nothing else would apply our flag, so do it here.
     if (typeof window.answerFacetsRender === 'function') { window.answerFacetsRender(); }
     else { rows.forEach(window.applyRowVisibility); }
+    syncFilterUrl();
   };
+
+  // Adding a rider is a real POST and reload, so filter state has to survive the round
+  // trip. The URL is the store: it also makes a narrowed list shareable, and the Add
+  // form's `next` picks it up automatically. Param names avoid the answer facets'
+  // q<pk>/asort/adir, which that script deletes and rewrites on its own.
+  var FILTER_FIELDS = {
+    search: 'signup-search',
+    gender: 'filter-gender',
+    zp: 'filter-zp',
+    zr: 'filter-zr',
+    tz: 'filter-timezone',
+    unit: 'filter-power-unit',
+    zftpmin: 'filter-zftp-min',
+    zftpmax: 'filter-zftp-max',
+    zmapmin: 'filter-zmap-min',
+    zmapmax: 'filter-zmap-max'
+  };
+
+  function syncFilterUrl() {
+    var params = new URLSearchParams(window.location.search);
+    Object.keys(FILTER_FIELDS).forEach(function (key) {
+      var el = document.getElementById(FILTER_FIELDS[key]);
+      // "wkg" is the unit default; writing it would put noise in every URL.
+      if (el && el.value && !(key === 'unit' && el.value === 'wkg')) { params.set(key, el.value); }
+      else { params.delete(key); }
+    });
+    if (document.getElementById('filter-eligible').checked) { params.set('eligible', '1'); }
+    else { params.delete('eligible'); }
+    var qs = params.toString();
+    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+  }
+
+  function restoreFilterUrl() {
+    var params = new URLSearchParams(window.location.search);
+    Object.keys(FILTER_FIELDS).forEach(function (key) {
+      var el = document.getElementById(FILTER_FIELDS[key]);
+      if (el && params.has(key)) { el.value = params.get(key); }
+    });
+    document.getElementById('filter-eligible').checked = params.get('eligible') === '1';
+  }
+
+  // `next` is rendered server-side and so predates any filtering done since. Rewrite it
+  // at submit time from the live URL, or adding a rider would return to the unfiltered
+  // page even though the filters are in the address bar.
+  document.addEventListener('submit', function (e) {
+    var next = e.target.querySelector('input[name="next"]');
+    if (next) { next.value = window.location.pathname + window.location.search; }
+  });
 
   window.clearFilters = function () {
     ['signup-search', 'filter-zftp-min', 'filter-zftp-max', 'filter-zmap-min', 'filter-zmap-max']
@@ -229,6 +278,9 @@
     document.getElementById('filter-power-unit').value = 'wkg';
     window.applyFilters();
   };
+
+  restoreFilterUrl();
+  window.applyFilters();
 })();
 </script>
 {% if answer_facets %}{% include "events/_answer_facets_script.html" %}{% endif %}

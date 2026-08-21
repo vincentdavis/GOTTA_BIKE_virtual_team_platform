@@ -238,3 +238,40 @@ def test_riders_with_no_zr_record_can_be_isolated(client, event, squad, user_mod
     assert '<option value="__none__">No ZR record</option>' in body
     assert 'data-zr="Emerald"' in body
     assert 'data-zr=""' in body
+
+
+@pytest.mark.django_db
+def test_the_add_form_carries_a_next_the_client_can_rewrite(client, event, squad, user_model, event_admin) -> None:
+    """Filters live in the URL and are rewritten into `next` at submit time.
+
+    The server-rendered value predates any filtering, so the hidden input has to exist
+    for the client to overwrite -- without it, adding a rider returns to the unfiltered
+    page and the filters appear to reset.
+    """
+    _rider(user_model, event, "someone")
+    client.force_login(event_admin)
+
+    body = client.get(_url(event, squad)).content.decode()
+
+    assert 'name="next"' in body
+    assert "restoreFilterUrl" in body
+    assert "syncFilterUrl" in body
+
+
+@pytest.mark.django_db
+def test_a_filtered_next_survives_the_add(client, event, squad, user_model, event_admin) -> None:
+    """The redirect keeps the query string, which is what restores the filters."""
+    # An unbounded squad: this is about the redirect, not eligibility. The fixture
+    # squad enforces a power ceiling, which correctly refuses a rider with no zFTP.
+    squad = Squad.objects.create(event=event, name="Open")
+    rider = _rider(user_model, event, "newbie")
+    signup = EventSignup.objects.get(event=event, user=rider)
+    filtered = f"{_url(event, squad)}?zr=Emerald&eligible=1"
+    client.force_login(event_admin)
+
+    resp = client.post(
+        reverse("events:squad_assign", args=[event.pk]),
+        data={"signup_id": signup.pk, "squad_id": squad.pk, "next": filtered},
+    )
+
+    assert resp["Location"] == filtered
