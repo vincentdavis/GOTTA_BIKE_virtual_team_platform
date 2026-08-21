@@ -1782,20 +1782,23 @@ def _availability_state(grid: AvailabilityGrid, slots: int | None) -> dict:
     }
 
 
-def _open_availability_grids(event: Event, tz_obj: ZoneInfo, today_local: date) -> dict[int, list[dict]]:
-    """Group the event's still-open availability grids by squad, with display labels.
+def _availability_columns(event: Event, tz_obj: ZoneInfo, today_local: date) -> dict[int, list[dict]]:
+    """Group the event's availability grids by squad, with display labels.
 
-    "Open" means published and not past its end date -- the same definition the My
-    Events page and the pending-availability badge use, so a grid the rider can still
-    answer is a grid that shows up here.
+    Every non-draft grid counts -- published *and* closed. Restricting this to grids
+    still open for responses empties the column set for most squads: captains close a
+    sheet once they have picked the squad, and the window passes anyway, so a squad
+    that runs week by week would show nothing while one that published a month of
+    sheets up front showed everything. Drafts are excluded because riders were never
+    asked. ``is_open`` keeps the distinction visible in the header.
 
     Args:
         event: The event.
         tz_obj: Timezone used to render the column labels.
-        today_local: Today's date in that timezone.
+        today_local: Today's date in that timezone, for the open/closed split.
 
     Returns:
-        ``{squad_id: [{"grid", "label"}]}`` ordered oldest-first within each squad.
+        ``{squad_id: [{"grid", "label", "is_open"}]}`` oldest-first within each squad.
 
     """
     utc = ZoneInfo("UTC")
@@ -1814,15 +1817,20 @@ def _open_availability_grids(event: Event, tz_obj: ZoneInfo, today_local: date) 
     by_squad: dict[int, list[dict]] = defaultdict(list)
     grids = (
         AvailabilityGrid.objects
-        .filter(
-            squad__event=event,
-            status=AvailabilityGrid.Status.PUBLISHED,
-            end_date__gte=today_local,
-        )
-        .order_by("start_date", "start_time")
+        .filter(squad__event=event)
+        .exclude(status=AvailabilityGrid.Status.DRAFT)
+        # pk breaks the tie so two sheets starting at the same moment keep a stable
+        # column order between requests.
+        .order_by("start_date", "start_time", "end_date", "pk")
     )
     for grid in grids:
-        by_squad[grid.squad_id].append({"grid": grid, "label": _label(grid)})
+        by_squad[grid.squad_id].append({
+            "grid": grid,
+            "label": _label(grid),
+            "is_open": (
+                grid.status == AvailabilityGrid.Status.PUBLISHED and grid.end_date >= today_local
+            ),
+        })
     return by_squad
 
 
@@ -1836,8 +1844,8 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
     (``AvailabilitySlotSelection``).
 
     Each row also carries an ``availability`` list aligned with its squad's
-    ``grids``: the rider's yes / no / no-response state for every still-open
-    availability grid, behind the page's "View Availability" toggle.
+    ``grids``: the rider's yes / no / no-response state for every availability
+    sheet the squad ran, behind the page's "View Availability" toggle.
 
     Args:
         event: The event.
@@ -1870,16 +1878,16 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
             else:
                 raced[rider.pk].append(race)
 
-    grids_by_squad = _open_availability_grids(event, tz_obj, now_utc.astimezone(tz_obj).date())
+    grids_by_squad = _availability_columns(event, tz_obj, now_utc.astimezone(tz_obj).date())
 
     # (grid, rider) -> how many slots the rider marked available. The count is kept
     # rather than a bool because a submitted response with nothing marked is a
     # deliberate "no", which reads very differently from never having answered.
-    open_grid_ids = [col["grid"].pk for cols in grids_by_squad.values() for col in cols]
+    grid_ids = [col["grid"].pk for cols in grids_by_squad.values() for col in cols]
     marked_slots: dict[tuple, int] = {}
-    if open_grid_ids:
+    if grid_ids:
         for grid_id, user_id, cells in AvailabilityResponse.objects.filter(
-            grid_id__in=open_grid_ids
+            grid_id__in=grid_ids
         ).values_list("grid_id", "user_id", "available_cells"):
             marked_slots[grid_id, user_id] = len(cells or [])
 
@@ -2104,7 +2112,7 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "today": today_local,
             "participation": participation,
             # Drives the "View Availability" toggle: nothing to toggle when no squad
-            # has an open grid.
+            # has an availability sheet.
             "has_open_grids": any(group["grids"] for group in participation),
             "display_timezone": str(tz_obj),
             "active_tab": request.GET.get("tab") or "races",

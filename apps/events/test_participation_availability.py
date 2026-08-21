@@ -33,8 +33,11 @@ def event(db) -> Event:
     )
 
 
-def _grid(squad, *, days_from_today: int, status=AvailabilityGrid.Status.PUBLISHED, single=False):
-    """Build a grid whose window ends `days_from_today` days out.
+def _grid(
+    squad, *, days_from_today: int, starts_in: int = 0,
+    status=AvailabilityGrid.Status.PUBLISHED, single=False,
+):
+    """Build a grid opening in `starts_in` days and ending `days_from_today` days out.
 
     Returns:
         The grid.
@@ -43,7 +46,7 @@ def _grid(squad, *, days_from_today: int, status=AvailabilityGrid.Status.PUBLISH
     today = date.today()
     return AvailabilityGrid.objects.create(
         squad=squad,
-        start_date=today,
+        start_date=today + timedelta(days=starts_in),
         end_date=today + timedelta(days=days_from_today),
         start_time="18:00",
         end_time="20:00",
@@ -101,12 +104,18 @@ def test_the_three_answer_states_are_distinguished(client, event, event_admin, u
 
 
 @pytest.mark.django_db
-def test_only_open_grids_get_a_column(client, event, event_admin, user_model) -> None:
-    """Draft grids nobody can answer and windows that have closed are not open."""
+def test_drafts_get_no_column_but_finished_sheets_do(client, event, event_admin, user_model) -> None:
+    """Captains close a sheet once they have picked, so "still open" empties most squads.
+
+    Restricting the columns to sheets still open for responses left every squad that
+    runs week by week with no columns at all. A draft is different: nobody was ever
+    asked, so there is no answer to show.
+    """
     squad = Squad.objects.create(event=event, name="Synthesis")
     _rider(user_model, squad, "rider_a")
-    open_grid = _grid(squad, days_from_today=7)
+    live = _grid(squad, days_from_today=7)
     _grid(squad, days_from_today=7, status=AvailabilityGrid.Status.DRAFT)
+    closed = _grid(squad, days_from_today=7, status=AvailabilityGrid.Status.CLOSED)
     # Published but its window ended yesterday.
     ended = _grid(squad, days_from_today=7)
     ended.end_date = date.today() - timedelta(days=1)
@@ -116,8 +125,31 @@ def test_only_open_grids_get_a_column(client, event, event_admin, user_model) ->
     resp = client.get(reverse("events:event_all_races", args=[event.pk]) + "?tab=participation")
 
     group = next(g for g in resp.context["participation"] if g["squad"].pk == squad.pk)
-    assert [c["grid"].pk for c in group["grids"]] == [open_grid.pk]
+    assert {c["grid"].pk for c in group["grids"]} == {live.pk, closed.pk, ended.pk}
+    # Only the one still taking responses is flagged open; the header mutes the rest.
+    assert {c["grid"].pk: c["is_open"] for c in group["grids"]} == {
+        live.pk: True, closed.pk: False, ended.pk: False,
+    }
     assert resp.context["has_open_grids"] is True
+
+
+@pytest.mark.django_db
+def test_every_squad_gets_its_own_columns(client, event, event_admin, user_model) -> None:
+    """Squads run their own sheets, on their own dates, in their own number."""
+    one = Squad.objects.create(event=event, name="Amnesia")
+    two = Squad.objects.create(event=event, name="Annihilation")
+    _rider(user_model, one, "rider_one")
+    _rider(user_model, two, "rider_two")
+    one_a = _grid(one, days_from_today=7)
+    one_b = _grid(one, starts_in=8, days_from_today=14)
+    two_a = _grid(two, days_from_today=3, status=AvailabilityGrid.Status.CLOSED)
+
+    client.force_login(event_admin)
+    resp = client.get(reverse("events:event_all_races", args=[event.pk]) + "?tab=participation")
+
+    by_squad = {g["squad"].pk: [c["grid"].pk for c in g["grids"]] for g in resp.context["participation"]}
+    assert by_squad[one.pk] == [one_a.pk, one_b.pk]
+    assert by_squad[two.pk] == [two_a.pk]
 
 
 @pytest.mark.django_db
