@@ -1,5 +1,6 @@
 """Views for team app."""
 
+import csv
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
@@ -2708,6 +2709,49 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
     return render(request, "team/discord_review.html", context)
 
 
+def _zwift_connections_csv(rows: list[dict]) -> HttpResponse:
+    """Render assembled Zwift-connection rows as a CSV download.
+
+    Takes the rows the page already built, so the file always matches what the filters
+    are showing. Datetimes are written as ISO-8601 UTC rather than the page's localised
+    display strings -- a spreadsheet can parse the former.
+
+    Args:
+        rows: The filtered, sorted rows from :func:`zwift_connections_view`.
+
+    Returns:
+        A ``text/csv`` response with a Content-Disposition attachment.
+
+    """
+    stamp = timezone.now().strftime("%Y%m%d-%H%M")
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="zwift-connections-{stamp}.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow([
+        "Name", "Discord", "Username", "ZWID", "Status", "Verified", "Verified at",
+        "Connected", "Connected at", "Service ZWID", "Zwift name", "Category", "Women's category",
+    ])
+    for row in rows:
+        user = row["user"]
+        writer.writerow([
+            user.get_full_name() or "",
+            user.discord_username or "",
+            user.username,
+            row["zwid"] or "",
+            row["bucket"],
+            "yes" if row["verified"] else "no",
+            row["verified_at"].isoformat() if row["verified_at"] else "",
+            "yes" if row["connected"] else "no",
+            row["connected_at"] or "",
+            row["service_zwid"] or "",
+            row["zwift_name"] or "",
+            row["category"] or "",
+            row["category_women"] or "",
+        ])
+    return response
+
+
 @login_required
 @discord_permission_required("membership_admin", raise_exception=True)
 @require_GET
@@ -2812,6 +2856,18 @@ def zwift_connections_view(request: HttpRequest) -> HttpResponse:
     if sort_by in sort_keys:
         rows.sort(key=sort_keys[sort_by], reverse=sort_dir == "desc")
 
+    # The export deliberately re-uses this very code path rather than a parallel
+    # implementation: it hangs off the same query string, so what downloads is exactly
+    # the rows on screen. A separate view would be free to drift from the filters.
+    if request.GET.get("export") == "csv":
+        logfire.info(
+            "Zwift verification report exported",
+            user_id=request.user.id,
+            rows=len(rows),
+            filters={"q": search, "method": method_filter, "connected": connected_filter},
+        )
+        return _zwift_connections_csv(rows)
+
     # Anything left in by_user_id is a numeric id with no matching active member
     # (deactivated, or the user was deleted); surface those alongside the UUIDs.
     orphans = unmatched + list(by_user_id.values())
@@ -2819,6 +2875,12 @@ def zwift_connections_view(request: HttpRequest) -> HttpResponse:
     # Lets the sort links carry the active filters instead of resetting them.
     active_filters = {"q": search, "method": method_filter, "connected": connected_filter}
     filter_qs = urlencode({k: v for k, v in active_filters.items() if v})
+
+    # Built from the live query string, not just the filters, so the download honours
+    # the current sort too and cannot fall out of step with the sort links.
+    export_params = request.GET.copy()
+    export_params["export"] = "csv"
+    export_qs = export_params.urlencode()
 
     logfire.info(
         "Zwift verification report viewed",
@@ -2844,6 +2906,7 @@ def zwift_connections_view(request: HttpRequest) -> HttpResponse:
             "sort_by": sort_by,
             "sort_dir": sort_dir,
             "filter_qs": filter_qs,
+            "export_qs": export_qs,
             # Column order here drives the table header; keys must match sort_keys.
             "sortable_columns": [
                 ("name", "Member"),
