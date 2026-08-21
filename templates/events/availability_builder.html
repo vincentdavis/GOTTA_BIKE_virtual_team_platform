@@ -264,7 +264,13 @@
     // Seed the exact-time box from the select so switching modes keeps a sane value.
     if (on && !exactTimeEl.value) { exactTimeEl.value = startTimeEl.value || '19:00'; }
   }
-  singleSlotEl.addEventListener('change', syncSingleSlot);
+  singleSlotEl.addEventListener('change', function () {
+    syncSingleSlot();
+    buildGrid();
+  });
+  exactTimeEl.addEventListener('change', function () {
+    if (singleSlotEl.checked) { buildGrid(); }
+  });
 
   function singleSlotValues() {
     if (!singleSlotEl.checked) { return { single_slot: false }; }
@@ -418,23 +424,37 @@
 
   // Build grid table
   function buildGrid() {
-    var startDate = startDateEl.value;
-    var endDate = endDateEl.value;
-    var startTime = startTimeEl.value;
-    var endTime = endTimeEl.value;
     var duration = parseInt(slotDurationEl.value);
 
-    if (!startDate || !endDate || startDate > endDate) {
-      gridContainer.innerHTML = '<p class="text-error text-sm">Please set valid start and end dates.</p>';
-      return;
-    }
-    if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
-      gridContainer.innerHTML = '<p class="text-error text-sm">Start time must be before end time.</p>';
-      return;
-    }
+    if (singleSlotEl.checked) {
+      // One cell, taken directly rather than run through the range maths. The end
+      // inputs are hidden in this mode and keep whatever they last held, which is what
+      // made the preview show a full week; and an exact time plus a duration can wrap
+      // past midnight, where "start before end" would reject a perfectly good slot.
+      if (!startDateEl.value || !exactTimeEl.value) {
+        gridContainer.innerHTML = '<p class="text-error text-sm">Please set a date and start time.</p>';
+        return;
+      }
+      dates = [startDateEl.value];
+      timeSlots = [exactTimeEl.value];
+    } else {
+      var startDate = startDateEl.value;
+      var endDate = endDateEl.value;
+      var startTime = startTimeEl.value;
+      var endTime = endTimeEl.value;
 
-    dates = getDates(startDate, endDate);
-    timeSlots = getTimeSlots(startTime, endTime, duration);
+      if (!startDate || !endDate || startDate > endDate) {
+        gridContainer.innerHTML = '<p class="text-error text-sm">Please set valid start and end dates.</p>';
+        return;
+      }
+      if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+        gridContainer.innerHTML = '<p class="text-error text-sm">Start time must be before end time.</p>';
+        return;
+      }
+
+      dates = getDates(startDate, endDate);
+      timeSlots = getTimeSlots(startTime, endTime, duration);
+    }
 
     if (dates.length === 0 || timeSlots.length === 0) {
       gridContainer.innerHTML = '<p class="text-error text-sm">No slots to display.</p>';
@@ -636,10 +656,15 @@
       event_id: EVENT_ID,
       created_at: new Date().toISOString(),
       settings: {
-        start_date: startDateEl.value,
-        end_date: endDateEl.value,
-        start_time: startTimeEl.value,
-        end_time: endTimeEl.value,
+        single_slot: singleSlotEl.checked,
+        start_date: dates[0] || startDateEl.value,
+        // In single-slot mode the end inputs are hidden and stale; the grid actually
+        // built is one date and one time, so describe that.
+        end_date: singleSlotEl.checked ? (dates[0] || startDateEl.value) : endDateEl.value,
+        start_time: timeSlots[0] || startTimeEl.value,
+        end_time: singleSlotEl.checked
+          ? minutesToTime((timeToMinutes(timeSlots[0] || '00:00') + parseInt(slotDurationEl.value)) % 1440)
+          : endTimeEl.value,
         slot_duration_minutes: parseInt(slotDurationEl.value),
         timezone: timezoneEl.value || 'UTC'
       },

@@ -200,3 +200,25 @@ def test_an_ordinary_grid_gets_no_yes_no_block(client, squad, user_model) -> Non
     ).content.decode()
 
     assert 'id="single-slot-answer"' not in body
+
+
+@pytest.mark.django_db
+def test_the_builder_ships_the_single_slot_wiring(client, squad, event_admin) -> None:
+    """The preview grid has to honour the flag, not just the save.
+
+    buildGrid read the end date/time inputs directly. Those are hidden in single-slot
+    mode but keep whatever they last held, so the preview drew a full week while the
+    save stored one cell -- the page disagreed with itself.
+    """
+    client.force_login(event_admin)
+
+    body = client.get(
+        reverse("events:availability_create", args=[squad.event.pk, squad.pk])
+    ).content.decode()
+
+    assert 'id="cfg-single-slot"' in body
+    assert 'id="cfg-exact-time"' in body
+    # buildGrid branches on the flag rather than always reading the range inputs.
+    assert "if (singleSlotEl.checked) {" in body
+    assert "dates = [startDateEl.value];" in body
+    assert "timeSlots = [exactTimeEl.value];" in body
