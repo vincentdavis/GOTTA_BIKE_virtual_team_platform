@@ -128,3 +128,27 @@ def test_the_builder_seeds_a_new_grid_from_the_defaults(client, squad, event_adm
     assert '"expanded_features": true' in body.replace("&quot;", '"')
     assert 'id="grid-event-defaults"' in body
     assert 'id="grid-enforced"' in body
+
+
+@pytest.mark.django_db
+def test_save_buttons_sit_under_generate_and_stay_gated(client, squad, event_admin) -> None:
+    """Save Grid and Save as Template moved out of the bulk-actions row.
+
+    They keep the same guard they had there -- hidden until a grid exists -- so the
+    move is layout only. Both breakpoints get a copy, mirroring the Generate buttons.
+    """
+    client.force_login(event_admin)
+
+    body = client.get(
+        reverse("events:availability_create", args=[squad.event.pk, squad.pk])
+    ).content.decode()
+
+    for button_id in ("btn-save", "btn-save-template", "btn-save-mobile", "btn-save-template-mobile"):
+        assert f'id="{button_id}"' in body, button_id
+    # Rendered hidden; buildGrid reveals them.
+    assert body.count("save-action hidden") == 4
+    # The bulk row keeps only the cell-editing actions.
+    bulk = body.split('id="bulk-actions"')[1].split("</div>")[0]
+    assert "Block All" in bulk
+    assert "Save Grid" not in bulk
+    assert "Save as Template" not in bulk

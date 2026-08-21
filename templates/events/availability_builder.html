@@ -165,12 +165,17 @@
           <label class="label py-0"><span class="label-text text-xs">Expires (optional)</span></label>
           <input type="date" id="cfg-expires" class="input input-bordered input-sm w-full">
         </div>
-        <div class="form-control justify-end hidden lg:block">
+        <div class="form-control justify-end hidden lg:flex lg:flex-col gap-2">
           <button id="btn-generate-desktop" class="btn btn-primary btn-sm w-full">Generate Grid</button>
+          {# Hidden until a grid exists; there is nothing to save before Generate runs. #}
+          <button id="btn-save" class="btn btn-success btn-sm w-full save-action hidden">Save Grid</button>
+          <button id="btn-save-template" class="btn btn-info btn-sm btn-outline w-full save-action hidden">Save as Template</button>
         </div>
       </div>
-      <div class="mt-3 lg:hidden">
+      <div class="mt-3 lg:hidden flex flex-col gap-2">
         <button id="btn-generate-mobile" class="btn btn-primary btn-sm w-full">Generate Grid</button>
+        <button id="btn-save-mobile" class="btn btn-success btn-sm w-full save-action hidden">Save Grid</button>
+        <button id="btn-save-template-mobile" class="btn btn-info btn-sm btn-outline w-full save-action hidden">Save as Template</button>
       </div>
     </div>
   </div>
@@ -180,8 +185,6 @@
     <button id="btn-block-all" class="btn btn-neutral btn-xs btn-outline">Block All</button>
     <button id="btn-open-all" class="btn btn-ghost btn-xs btn-outline">Open All</button>
     <button id="btn-preview" class="btn btn-secondary btn-xs btn-outline hidden md:inline-flex" onclick="document.getElementById('preview-modal').showModal()">Preview</button>
-    <button id="btn-save-template" class="btn btn-info btn-xs btn-outline">Save as Template</button>
-    <button id="btn-save" class="btn btn-success btn-xs">Save Grid</button>
   </div>
 
   <!-- Save toast -->
@@ -538,6 +541,9 @@
     gridContainer.appendChild(table);
     gridScrollWrapper.classList.remove('hidden');
     bulkActions.classList.remove('hidden');
+    // Save and Save as Template now live under Generate Grid, but stay gated on a
+    // grid existing, exactly as they were inside bulk-actions.
+    document.querySelectorAll('.save-action').forEach(function (b) { b.classList.remove('hidden'); });
     jsonPanel.classList.remove('hidden');
     updateScrollArrows();
 
@@ -858,6 +864,11 @@
   // --- Save Grid ---
   var CSRF_TOKEN = '{{ csrf_token }}';
   var btnSave = document.getElementById('btn-save');
+  var saveButtons = [btnSave, document.getElementById('btn-save-mobile')].filter(Boolean);
+
+  function setSaveState(disabled, label) {
+    saveButtons.forEach(function (b) { b.disabled = disabled; b.textContent = label; });
+  }
   var titleEl = document.getElementById('cfg-title');
   var expiresEl = document.getElementById('cfg-expires');
   function getRadioValue(name) {
@@ -880,7 +891,7 @@
     setTimeout(function() { toast.classList.add('hidden'); }, 4000);
   }
 
-  btnSave.addEventListener('click', function() {
+  var onSaveClick = function() {
     if (dates.length === 0 || timeSlots.length === 0) {
       showToast('Generate a grid first.', true);
       return;
@@ -920,8 +931,7 @@
     Object.assign(payload, expandedFeatureValues());
     Object.assign(payload, singleSlotValues());
 
-    btnSave.disabled = true;
-    btnSave.textContent = 'Saving…';
+    setSaveState(true, 'Saving…');
 
     fetch(window.location.pathname, {
       method: 'POST',
@@ -939,22 +949,23 @@
         window.location.href = '{% url "events:squad_availability" event.pk squad.pk %}';
       } else {
         showToast(result.data.error || 'Save failed.', true);
-        btnSave.disabled = false;
-        btnSave.textContent = 'Save Grid';
+        setSaveState(false, 'Save Grid');
       }
     })
     .catch(function() {
       showToast('Network error. Please try again.', true);
-      btnSave.disabled = false;
-      btnSave.textContent = 'Save Grid';
+      setSaveState(false, 'Save Grid');
     });
-  });
+  };
+
+  saveButtons.forEach(function (b) { b.addEventListener('click', onSaveClick); });
 
   // --- Save as Template ---
   var btnSaveTemplate = document.getElementById('btn-save-template');
+  var templateButtons = [btnSaveTemplate, document.getElementById('btn-save-template-mobile')].filter(Boolean);
   var TEMPLATE_CREATE_URL = "{% url 'events:availability_template_create' event.pk squad.pk %}";
 
-  btnSaveTemplate.addEventListener('click', function() {
+  var onSaveTemplateClick = function() {
     if (!startDateEl.value || !endDateEl.value || !startTimeEl.value || !endTimeEl.value) {
       showToast('Set the dates and times first.', true);
       return;
@@ -1002,7 +1013,9 @@
       btnSaveTemplate.disabled = false;
       showToast('Network error. Please try again.', true);
     });
-  });
+  };
+
+  templateButtons.forEach(function (b) { b.addEventListener('click', onSaveTemplateClick); });
 
   // Wire up
   btnGenerateDesktop.addEventListener('click', buildGrid);
@@ -1116,17 +1129,21 @@
       nodes.forEach(function (n) { n.disabled = true; n.title = 'Enforced at the event level'; });
     }
 
+    var applied = false;
     Object.keys(CONTROLS).forEach(function (setting) {
       var enforced = GRID_ENFORCED[setting];
       var hasDefault = Object.prototype.hasOwnProperty.call(GRID_EVENT_DEFAULTS, setting);
-      if (enforced) { setValue(setting, GRID_EVENT_DEFAULTS[setting]); lock(setting); }
-      else if (hasDefault && !INITIAL_GRID) { setValue(setting, GRID_EVENT_DEFAULTS[setting]); }
+      if (enforced) { setValue(setting, GRID_EVENT_DEFAULTS[setting]); lock(setting); applied = true; }
+      else if (hasDefault && !INITIAL_GRID) { setValue(setting, GRID_EVENT_DEFAULTS[setting]); applied = true; }
     });
 
-    // These two drive layout, so redraw once the values above have settled.
+    // These two drive layout, so let them settle whatever the outcome.
     syncSingleSlot();
     syncExpandedPanel();
-    buildGrid();
+    // Only redraw when a value actually changed. Rebuilding unconditionally would
+    // render a grid on load for a brand-new sheet, which is not what this page did
+    // before -- it waits for Generate Grid, and Save should wait with it.
+    if (applied && gridContainer.innerHTML.trim() !== '') { buildGrid(); }
   })();
 })();
 </script>
