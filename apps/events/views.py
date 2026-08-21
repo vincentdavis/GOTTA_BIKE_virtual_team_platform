@@ -1759,9 +1759,10 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
     """Build the per-squad participation report for an event.
 
     Each squad member is enriched with ZP/ZR data (for the rider tooltip) and
-    annotated with how many of the event's scheduled races they have already
-    raced (past) plus the count and dates of their upcoming races. Tallies are
-    scoped to this event's scheduled races (``AvailabilitySlotSelection``).
+    annotated with the scheduled races they have already raced (past) plus their
+    upcoming ones -- each as both a count and a list of ``{"name", "date"}``.
+    Tallies are scoped to this event's scheduled races
+    (``AvailabilitySlotSelection``).
 
     Args:
         event: The event.
@@ -1772,8 +1773,10 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
         List of ``{"squad", "rows"}`` dicts, one per squad ordered by name.
 
     """
-    # Tally each rider's past ("raced") and future scheduled races, keyed by user id.
-    raced_count: dict[int, int] = defaultdict(int)
+    # Collect each rider's past ("raced") and future scheduled races, keyed by user id.
+    # Both lists stay in the query's chronological order so the two columns read
+    # left-to-right in time, in the order the season actually ran.
+    raced: dict[int, list[dict]] = defaultdict(list)
     upcoming: dict[int, list[dict]] = defaultdict(list)
     selections = (
         AvailabilitySlotSelection.objects
@@ -1786,10 +1789,11 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
         is_future = race_dt >= now_utc
         local_date = race_dt.astimezone(tz_obj).strftime("%b %d, %Y")
         for rider in sel.selected_users.all():
+            race = {"name": sel.name, "date": local_date}
             if is_future:
-                upcoming[rider.pk].append({"name": sel.name, "date": local_date})
+                upcoming[rider.pk].append(race)
             else:
-                raced_count[rider.pk] += 1
+                raced[rider.pk].append(race)
 
     # Enriched squad members (ZP/ZR data for the rider tooltip) grouped by
     # squad, with each rider's race tallies merged in.
@@ -1802,10 +1806,12 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
             enriched_by_squad.get(squad.pk, []),
             key=lambda m: (m["user"].get_full_name() or m["user"].discord_username or "").lower(),
         ):
+            rider_raced = raced.get(member["user"].pk, [])
             rider_upcoming = upcoming.get(member["user"].pk, [])
             rows.append({
                 **member,
-                "raced_count": raced_count.get(member["user"].pk, 0),
+                "raced_count": len(rider_raced),
+                "raced": rider_raced,
                 "upcoming_count": len(rider_upcoming),
                 "upcoming": rider_upcoming,
             })

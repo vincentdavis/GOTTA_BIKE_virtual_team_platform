@@ -560,10 +560,15 @@ def test_racing_report_tallies_past_and_future_races(client, event_admin, team_m
     group = next(g for g in participation if g["squad"].pk == squad.pk)
     row = next(r for r in group["rows"] if r["user"].pk == team_member.pk)
     assert row["raced_count"] == 2
+    # Past races are listed as well as counted, chronologically, so the column reads in
+    # the order the season ran -- the same left-to-right-in-time rule as "Next races".
+    assert [r["name"] for r in row["raced"]] == ["Past 1", "Past 2"]
     assert row["upcoming_count"] == 1
     assert row["upcoming"][0]["name"] == "Future 1"
     body = resp.content.decode()
     assert "Future 1" in body
+    assert "Past 1" in body
+    assert "Past 2" in body
     # Riders render via the shared user tooltip component (avatar/icon + hover).
     assert "dropdown dropdown-hover" in body
     # Both tabs are present on the page.

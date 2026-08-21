@@ -1,8 +1,8 @@
 {% comment %}
 Participation report: squad members with their event race tallies. Expects
 `participation` (list of {squad, rows}) and `display_timezone`. Each row carries
-the enriched member fields (for the rider tooltip) plus raced_count,
-upcoming_count and upcoming (list of {name, date}).
+the enriched member fields (for the rider tooltip) plus raced_count /
+upcoming_count and the matching raced / upcoming lists of {name, date}.
 {% endcomment %}
 <p class="text-sm text-base-content/60 mb-4">
   Races raced and upcoming are counted from this event's scheduled races. Times shown in {{ display_timezone }}.
@@ -16,6 +16,7 @@ upcoming_count and upcoming (list of {name, date}).
       <thead>
         <tr>
           <th class="text-left">Rider</th>
+          <th class="text-left">Past races</th>
           <th class="text-right">Raced</th>
           <th class="text-right">Upcoming</th>
           <th class="text-left">Next races</th>
@@ -26,6 +27,17 @@ upcoming_count and upcoming (list of {name, date}).
         <tr>
           <td class="font-medium whitespace-nowrap">
             {% include "accounts/_user_tooltip.html" with display_name=row.user.get_full_name|default:row.user.discord_username user_id=row.user.pk discord_id=row.user.discord_id discord_avatar_url=row.user.discord_avatar_url zwid=row.zwid zp_category=row.zp_category zp_category_w=row.zp_category_w zr_category=row.zr_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype zr_age=row.zr_age is_race_ready=row.is_race_ready is_extra_verified=row.is_extra_verified in_zwiftpower=row.in_zwiftpower in_zwiftracing=row.in_zwiftracing %}
+          </td>
+          <td class="text-left">
+            {% if row.raced %}
+            <div class="flex flex-wrap gap-1">
+              {% for race in row.raced %}
+              <span class="badge badge-ghost badge-sm whitespace-nowrap">{{ race.date }} &middot; {{ race.name }}</span>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="text-base-content/50">&mdash;</span>
+            {% endif %}
           </td>
           <td class="text-right">{{ row.raced_count }}</td>
           <td class="text-right">{{ row.upcoming_count }}</td>
@@ -42,7 +54,7 @@ upcoming_count and upcoming (list of {name, date}).
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="4" class="text-center text-base-content/60 py-4">No riders in this squad.</td></tr>
+        <tr><td colspan="5" class="text-center text-base-content/60 py-4">No riders in this squad.</td></tr>
         {% endfor %}
       </tbody>
     </table>
