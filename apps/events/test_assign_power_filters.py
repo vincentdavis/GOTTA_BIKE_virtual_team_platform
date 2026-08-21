@@ -170,3 +170,18 @@ def test_squad_form_back_link_goes_to_manage_squads(client, event, event_admin, 
 
     assert "Back to Manage Squads" in body
     assert "Back to Event" not in body
+
+
+@pytest.mark.django_db
+def test_assign_page_zr_filter_offers_velo_tiers(client, event, powered_rider, event_admin) -> None:
+    """The same A-E bug lived here first; the add-riders page inherited it by copy."""
+    from apps.events.models import ZR_CATEGORY_ORDER
+
+    client.force_login(event_admin)
+
+    body = client.get(reverse("events:squad_assign_page", args=[event.pk])).content.decode()
+    zr_select = body.split('id="filter-zr"')[1].split("</select>")[0]
+
+    for tier in ZR_CATEGORY_ORDER:
+        assert f'<option value="{tier}">{tier}</option>' in zr_select, tier
+    assert '<option value="A">A</option>' not in zr_select

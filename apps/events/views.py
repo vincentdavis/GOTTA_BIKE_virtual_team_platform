@@ -5771,6 +5771,10 @@ def squad_add_riders_view(request: HttpRequest, event_pk: int, squad_pk: int) ->
                 {tz for e in enriched for tz in (e["signup"].signup_timezone or [])}
             ),
             "signup_questions": signup_questions,
+            # Driven from the canonical order rather than hardcoded in the template:
+            # these are vELO tiers (Diamond..Copper), and both rider pickers previously
+            # offered A-E, which matches no stored value at all.
+            "zr_categories": ZR_CATEGORY_ORDER,
             "answer_facets": answer_facets,
             "answer_payload": answer_payload,
             "answer_panel_open": panel_starts_open(signup_questions) if signup_questions else False,
@@ -5845,6 +5849,7 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "signup_timezones": signup_timezones,
             "squad_timezones": squad_timezones,
             "squad_genders": squad_genders,
+            "zr_categories": ZR_CATEGORY_ORDER,
             "metrics_updated_at": metrics_updated_at,
         },
     )

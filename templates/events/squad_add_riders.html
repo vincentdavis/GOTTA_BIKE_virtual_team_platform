@@ -46,8 +46,7 @@
         </select>
         <select id="filter-zr" class="select select-bordered select-sm" onchange="applyFilters()">
           <option value="">All ZR</option>
-          <option value="A">A</option><option value="B">B</option><option value="C">C</option>
-          <option value="D">D</option><option value="E">E</option>
+          {% for cat in zr_categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}
         </select>
         {% if signup_timezones %}
         <select id="filter-timezone" class="select select-bordered select-sm" onchange="applyFilters()">

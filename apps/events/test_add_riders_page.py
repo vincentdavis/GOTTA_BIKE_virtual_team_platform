@@ -175,3 +175,43 @@ def test_the_manage_panel_links_here(client, event, squad, user_model, event_adm
     body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
 
     assert _url(event, squad) in body
+
+
+@pytest.mark.django_db
+def test_the_zr_filter_offers_velo_tiers_not_letters(client, event, squad, user_model, event_admin) -> None:
+    """The picker lists vELO tiers, not letters.
+
+    ZR stores tiers (Diamond..Copper); the picker offered A-E, so choosing any ZR
+    value matched nothing at all.
+    """
+    from apps.events.models import ZR_CATEGORY_ORDER
+
+    _rider(user_model, event, "someone")
+    client.force_login(event_admin)
+
+    body = client.get(_url(event, squad)).content.decode()
+
+    for tier in ZR_CATEGORY_ORDER:
+        assert f'<option value="{tier}">{tier}</option>' in body, tier
+    assert '<option value="A">A</option>' not in body.split('id="filter-zr"')[1].split("</select>")[0]
+
+
+@pytest.mark.django_db
+def test_a_zr_tier_actually_matches_a_rider(client, event, squad, user_model, event_admin) -> None:
+    """A tier the picker offers actually matches a row.
+
+    The row's data-zr must carry the same spelling as the option, or the filter is
+    still cosmetic.
+    """
+    from apps.zwiftracing.models import ZRRider
+
+    rider = _rider(user_model, event, "emmy")
+    rider.zwid = 4242
+    rider.save(update_fields=["zwid"])
+    ZRRider.objects.create(zwid=4242, name="Emmy", race_current_category="Emerald")
+    client.force_login(event_admin)
+
+    body = client.get(_url(event, squad)).content.decode()
+
+    assert 'data-zr="Emerald"' in body
+    assert '<option value="Emerald">Emerald</option>' in body
