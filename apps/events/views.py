@@ -578,6 +578,11 @@ def _build_role_badges(user, event):
     return badges
 
 
+# Wall-clock "HH:MM" as the grid fields store it. Module level because three views
+# validate it now -- the builder save, the template save, and applying a template.
+_HHMM_RE = re.compile(r"^\d{2}:\d{2}$")
+
+
 def _enrich_squad_members(event):
     """Build enriched member data grouped by squad for an event.
 
@@ -2865,6 +2870,9 @@ def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) 
             "availability_grids": availability_grids,
             "availability_templates": availability_templates,
             "shared_templates": shared_templates,
+            # Only the shared-template dialog offers a timezone; a squad's own template
+            # already carries its own clock.
+            "timezone_choices": TIMEZONE_CHOICES,
             "today": timezone.now().date().isoformat(),
         },
     )
@@ -3676,8 +3684,6 @@ def _handle_availability_save(
         JsonResponse with grid id on success, or error details on failure.
 
     """
-    hhmm_re = re.compile(r"^\d{2}:\d{2}$")
-
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError, ValueError:
@@ -3711,7 +3717,7 @@ def _handle_availability_save(
         return JsonResponse({"error": "slot_duration must be 15, 30, or 60."}, status=400)
 
     start_time = str(data.get("start_time", ""))
-    if not hhmm_re.match(start_time):
+    if not _HHMM_RE.match(start_time):
         return JsonResponse({"error": "start_time must be HH:MM format."}, status=400)
 
     if single_slot:
@@ -3724,7 +3730,7 @@ def _handle_availability_save(
         ).strftime("%H:%M")
     else:
         end_time = str(data.get("end_time", ""))
-        if not hhmm_re.match(end_time):
+        if not _HHMM_RE.match(end_time):
             return JsonResponse({"error": "end_time must be HH:MM format."}, status=400)
         if start_time >= end_time:
             return JsonResponse({"error": "start_time must be before end_time."}, status=400)
@@ -4275,10 +4281,9 @@ def availability_template_create_view(request: HttpRequest, event_pk: int, squad
     if not name:
         return JsonResponse({"error": "Template name is required."}, status=400)
 
-    hhmm_re = re.compile(r"^\d{2}:\d{2}$")
     start_time = str(data.get("start_time", ""))
     end_time = str(data.get("end_time", ""))
-    if not hhmm_re.match(start_time) or not hhmm_re.match(end_time):
+    if not _HHMM_RE.match(start_time) or not _HHMM_RE.match(end_time):
         return JsonResponse({"error": "start_time and end_time must be HH:MM format."}, status=400)
     if start_time >= end_time:
         return JsonResponse({"error": "start_time must be before end_time."}, status=400)
@@ -4381,12 +4386,38 @@ def availability_template_apply_view(
 
     end_date = start_date + timedelta(days=template.default_length_days - 1)
 
+    # A shared template arrives on the squad that built it clock. The dialog lets the
+    # borrowing squad set the time and timezone up front rather than create a draft and
+    # then correct it; both fall back to the template's own values.
+    local_start_time = str(request.POST.get("start_time") or template.start_time)
+    if not _HHMM_RE.match(local_start_time):
+        messages.error(request, "Start time must be in HH:MM format.")
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+    local_tz = str(request.POST.get("grid_timezone") or template.grid_timezone).strip()
+    if local_tz != "UTC" and local_tz not in available_timezones():
+        messages.error(request, f"Invalid timezone: {local_tz}")
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+    # Shift the end time by however much the start moved, so a re-timed template keeps
+    # the span it was built with instead of being silently shortened.
+    span_minutes = (
+        datetime.combine(date.min, time.fromisoformat(template.end_time))
+        - datetime.combine(date.min, time.fromisoformat(template.start_time))
+    ).total_seconds() / 60
+    if span_minutes <= 0:
+        span_minutes += 24 * 60
+    local_end_time = (
+        datetime.combine(date.min, time.fromisoformat(local_start_time))
+        + timedelta(minutes=span_minutes)
+    ).strftime("%H:%M")
+
     start_date_utc, end_date_utc, start_time_utc, end_time_utc = convert_local_to_utc(
         start_date,
         end_date,
-        template.start_time,
-        template.end_time,
-        template.grid_timezone,
+        local_start_time,
+        local_end_time,
+        local_tz,
     )
 
     if template.single_slot:
@@ -4408,7 +4439,7 @@ def availability_template_apply_view(
         start_time=start_time_utc,
         end_time=end_time_utc,
         slot_duration=template.slot_duration,
-        grid_timezone=template.grid_timezone,
+        grid_timezone=local_tz,
         blocked_cells=[],
         max_races_question=template.max_races_question,
         rest_days_question=template.rest_days_question,

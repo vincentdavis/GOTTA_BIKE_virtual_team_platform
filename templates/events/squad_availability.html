@@ -281,9 +281,9 @@
                     {# A borrowed template keeps the other squad's clock. #}
                     <div role="alert" class="alert alert-warning text-sm mb-3">
                       <span>
-                        This template is set to <strong>{{ t.start_time }}&ndash;{{ t.end_time }}
-                        {{ t.grid_timezone }}</strong>. Check the time and timezone suit
-                        {{ squad.name }} and edit the draft before publishing it.
+                        Built by {{ t.squad.name }} for <strong>{{ t.start_time }}&ndash;{{ t.end_time }}
+                        {{ t.grid_timezone }}</strong>. Set the date, time and timezone for
+                        {{ squad.name }} below before creating the draft.
                       </span>
                     </div>
                     <p class="py-1 text-sm">
@@ -293,11 +293,30 @@
                     </p>
                     <form method="post" action="{% url 'events:availability_template_apply' event.pk squad.pk t.pk %}" class="space-y-3">
                       {% csrf_token %}
-                      <div class="form-control">
-                        <label class="label py-1"><span class="label-text text-xs">Start date</span></label>
-                        <input type="date" name="start_date" required value="{{ today }}"
-                               class="input input-bordered input-sm w-full">
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="form-control">
+                          <label class="label py-1"><span class="label-text text-xs">Start date</span></label>
+                          <input type="date" name="start_date" required value="{{ today }}"
+                                 class="input input-bordered input-sm w-full">
+                        </div>
+                        <div class="form-control">
+                          <label class="label py-1"><span class="label-text text-xs">Start time</span></label>
+                          <input type="time" name="start_time" required value="{{ t.start_time }}"
+                                 class="input input-bordered input-sm w-full">
+                        </div>
                       </div>
+                      <div class="form-control">
+                        <label class="label py-1"><span class="label-text text-xs">Timezone</span></label>
+                        <select name="grid_timezone" class="select select-bordered select-sm w-full">
+                          {% for value, label in timezone_choices %}
+                          <option value="{{ value }}" {% if value == t.grid_timezone %}selected{% endif %}>{{ label }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                      <p class="text-xs text-base-content/60">
+                        Prefilled from the template. The grid keeps its
+                        {{ t.slot_duration }}-minute slots and overall length whatever you choose here.
+                      </p>
                       <div class="modal-action">
                         <button type="button" class="btn btn-sm" onclick="this.closest('dialog').close()">Cancel</button>
                         <button type="submit" class="btn btn-sm btn-primary">Create Draft</button>

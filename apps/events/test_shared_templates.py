@@ -99,7 +99,8 @@ def test_the_use_dialog_warns_about_time_and_timezone(client, event, event_admin
     ).content.decode()
 
     assert "alert-warning" in body
-    assert "Check the time and timezone" in body
+    # The copy points at the fields below rather than telling them to fix it afterwards.
+    assert "Set the date, time and timezone" in body
     assert "Europe/London" in body
 
 
@@ -274,3 +275,76 @@ def test_a_single_slot_template_makes_a_one_cell_grid(client, event, event_admin
     # end is exactly one slot after start, wrapping the hour if need be
     assert grid.end_time == "23:30"
     assert grid.start_time == "22:30"
+
+
+@pytest.mark.django_db
+def test_the_shared_dialog_asks_for_date_time_and_timezone(client, event, event_admin) -> None:
+    """All three are editable in the dialog.
+
+    A borrowed template arrives on the owner's clock, so they are set up front rather
+    than corrected after the draft exists.
+    """
+    owner = Squad.objects.create(event=event, name="Synthesis")
+    borrower = Squad.objects.create(event=event, name="Catalyst")
+    _template(owner, shared=True)
+    client.force_login(event_admin)
+
+    body = client.get(
+        reverse("events:squad_availability", args=[event.pk, borrower.pk])
+    ).content.decode()
+
+    assert 'name="start_date"' in body
+    assert 'name="start_time"' in body
+    assert 'name="grid_timezone"' in body
+    assert 'value="19:00"' in body                                   # prefilled
+    assert '<option value="Europe/London" selected>' in body
+
+
+@pytest.mark.django_db
+def test_the_chosen_time_and_timezone_are_applied(client, event, event_admin) -> None:
+    owner = Squad.objects.create(event=event, name="Synthesis")
+    borrower = Squad.objects.create(event=event, name="Catalyst")
+    template = _template(owner, shared=True)   # 19:00-21:00 Europe/London
+    client.force_login(event_admin)
+
+    client.post(
+        reverse("events:availability_template_apply", args=[event.pk, borrower.pk, template.pk]),
+        data={"start_date": "2026-09-01", "start_time": "07:00", "grid_timezone": "UTC"},
+    )
+
+    grid = AvailabilityGrid.objects.get(squad=borrower)
+    assert grid.grid_timezone == "UTC"
+    assert grid.start_time == "07:00"
+    # the two-hour span the template was built with survives being re-timed
+    assert grid.end_time == "09:00"
+
+
+@pytest.mark.django_db
+def test_omitting_them_falls_back_to_the_template(client, event, event_admin) -> None:
+    owner = Squad.objects.create(event=event, name="Synthesis")
+    borrower = Squad.objects.create(event=event, name="Catalyst")
+    template = _template(owner, shared=True)
+    client.force_login(event_admin)
+
+    client.post(
+        reverse("events:availability_template_apply", args=[event.pk, borrower.pk, template.pk]),
+        data={"start_date": "2026-09-01"},
+    )
+
+    grid = AvailabilityGrid.objects.get(squad=borrower)
+    assert grid.grid_timezone == "Europe/London"
+
+
+@pytest.mark.django_db
+def test_a_bad_timezone_is_refused(client, event, event_admin) -> None:
+    owner = Squad.objects.create(event=event, name="Synthesis")
+    borrower = Squad.objects.create(event=event, name="Catalyst")
+    template = _template(owner, shared=True)
+    client.force_login(event_admin)
+
+    client.post(
+        reverse("events:availability_template_apply", args=[event.pk, borrower.pk, template.pk]),
+        data={"start_date": "2026-09-01", "grid_timezone": "Mars/Olympus"},
+    )
+
+    assert not AvailabilityGrid.objects.filter(squad=borrower).exists()
