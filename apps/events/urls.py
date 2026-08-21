@@ -17,6 +17,7 @@ from apps.events.views import (
     availability_template_apply_view,
     availability_template_create_view,
     availability_template_delete_view,
+    availability_template_share_view,
     event_all_races_view,
     event_bot_role_check_view,
     event_create_view,
@@ -167,6 +168,11 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/templates/<int:template_pk>/delete/",
         availability_template_delete_view,
         name="availability_template_delete",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/templates/<int:template_pk>/share/",
+        availability_template_share_view,
+        name="availability_template_share",
     ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/availability/<uuid:grid_pk>/status/",

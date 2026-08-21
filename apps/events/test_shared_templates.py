@@ -138,3 +138,54 @@ def test_an_unshared_template_cannot_be_applied_by_another_squad(client, event, 
 
     assert resp.status_code == 404
     assert not AvailabilityGrid.objects.filter(squad=borrower).exists()
+
+
+@pytest.mark.django_db
+def test_the_gear_menu_toggles_sharing_both_ways(client, event, event_admin) -> None:
+    squad = Squad.objects.create(event=event, name="Synthesis")
+    template = _template(squad, shared=False)
+    url = reverse("events:availability_template_share", args=[event.pk, squad.pk, template.pk])
+    client.force_login(event_admin)
+
+    client.post(url)
+    template.refresh_from_db()
+    assert template.shared is True
+
+    client.post(url)
+    template.refresh_from_db()
+    assert template.shared is False
+
+
+@pytest.mark.django_db
+def test_the_menu_label_and_badge_follow_the_state(client, event, event_admin) -> None:
+    squad = Squad.objects.create(event=event, name="Synthesis")
+    template = _template(squad, shared=False)
+    client.force_login(event_admin)
+    page = reverse("events:squad_availability", args=[event.pk, squad.pk])
+
+    body = client.get(page).content.decode()
+    assert "Share with all squads" in body
+    assert "badge-success" not in body
+
+    template.shared = True
+    template.save(update_fields=["shared"])
+    body = client.get(page).content.decode()
+    assert "Stop sharing" in body
+    assert ">Shared<" in body
+
+
+@pytest.mark.django_db
+def test_only_the_owning_squad_can_change_sharing(client, event, event_admin) -> None:
+    """A borrower must not be able to un-share a template out from under its owner."""
+    owner = Squad.objects.create(event=event, name="Synthesis")
+    borrower = Squad.objects.create(event=event, name="Catalyst")
+    template = _template(owner, shared=True)
+    client.force_login(event_admin)
+
+    resp = client.post(
+        reverse("events:availability_template_share", args=[event.pk, borrower.pk, template.pk])
+    )
+
+    assert resp.status_code == 404
+    template.refresh_from_db()
+    assert template.shared is True

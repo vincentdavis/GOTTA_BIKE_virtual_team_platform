@@ -182,7 +182,10 @@
           <tbody>
             {% for t in availability_templates %}
             <tr>
-              <td class="font-medium">{{ t.name }}</td>
+              <td class="font-medium">
+                {{ t.name }}
+                {% if t.shared %}<span class="badge badge-success badge-sm ml-1">Shared</span>{% endif %}
+              </td>
               <td class="text-sm text-base-content/70">
                 {{ t.start_time }}&ndash;{{ t.end_time }} {{ t.grid_timezone }} &middot;
                 {{ t.slot_duration }}m slots &middot; {{ t.default_length_days }} day{{ t.default_length_days|pluralize }}
@@ -201,8 +204,13 @@
                 <ul class="dropdown dropdown-end menu menu-sm bg-base-100 rounded-box z-[60] w-44 p-1 shadow border border-base-300 text-left"
                     popover id="template-actions-{{ t.pk }}" style="position-anchor:--gear-tmpl-{{ t.pk }}">
                   <li><button type="button" onclick="document.getElementById('use-template-{{ t.pk }}').showModal()">Use</button></li>
+                  <li><button type="submit" form="share-template-{{ t.pk }}">{% if t.shared %}Stop sharing{% else %}Share with all squads{% endif %}</button></li>
                   <li><button type="submit" form="delete-template-{{ t.pk }}" class="text-error">Delete</button></li>
                 </ul>
+
+                <form id="share-template-{{ t.pk }}" method="post" action="{% url 'events:availability_template_share' event.pk squad.pk t.pk %}">
+                  {% csrf_token %}
+                </form>
 
                 <form id="delete-template-{{ t.pk }}" method="post" action="{% url 'events:availability_template_delete' event.pk squad.pk t.pk %}"
                       onsubmit="return confirm('Delete template &quot;{{ t.name|escapejs }}&quot;? This cannot be undone.');">

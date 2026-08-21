@@ -4412,6 +4412,67 @@ def availability_template_apply_view(
 @login_required
 @team_member_required()
 @require_POST
+def availability_template_share_view(
+    request: HttpRequest, event_pk: int, squad_pk: int, template_pk: int
+) -> HttpResponse:
+    """Toggle whether a template is offered to every squad.
+
+    Scoped to the owning squad: sharing is the owner's call, so another squad using a
+    shared template cannot un-share it out from under them.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        template_pk: The template primary key.
+
+    Returns:
+        Redirect to the squad availability page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    template = get_object_or_404(AvailabilityGridTemplate, pk=template_pk, squad=squad)
+
+    if not _can_manage_squad_availability(request.user, squad):
+        logfire.warning(
+            "Unauthorized availability template share attempt",
+            template_id=template.pk,
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    template.shared = not template.shared
+    template.save(update_fields=["shared", "updated_at"])
+    logfire.info(
+        "Availability template share toggled",
+        template_id=template.pk,
+        shared=template.shared,
+        squad_id=squad.pk,
+        event_id=event.pk,
+        user_id=request.user.id,
+    )
+    if template.shared:
+        messages.success(
+            request,
+            f'"{template.name}" is now shared. Other squads see its times and timezone, '
+            "so they are told to check both before publishing.",
+        )
+    else:
+        messages.success(
+            request,
+            f'"{template.name}" is no longer shared. Drafts other squads already created '
+            "from it are unaffected.",
+        )
+    return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
 def availability_template_delete_view(
     request: HttpRequest, event_pk: int, squad_pk: int, template_pk: int
 ) -> HttpResponse:
