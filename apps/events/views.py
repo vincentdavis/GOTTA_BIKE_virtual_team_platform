@@ -5750,6 +5750,15 @@ def squad_add_riders_view(request: HttpRequest, event_pk: int, squad_pk: int) ->
     # Facets are gated on managing this squad, same as the page: the payload carries
     # every listed rider's answers, so it must not outrun the permission to see them.
     signup_questions = list(event.signup_questions.order_by("order", "pk"))
+
+    # Per-rider answers for the checklist popover. Resolved server-side with the same
+    # helper the event page uses, so a question type is formatted one way in the app
+    # rather than two, and admin-authored labels keep their markdown.
+    if signup_questions:
+        by_signup = {s.pk: s for s in signups}
+        for entry in enriched:
+            signup = by_signup.get(entry["signup"].pk)
+            entry["custom_answers"] = resolve_signup_answers(signup, signup_questions) if signup else []
     answer_facets = build_facets(signup_questions, signups) if signup_questions else []
     answer_payload = answers_payload(signups, signup_questions) if signup_questions else {}
 

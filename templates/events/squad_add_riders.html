@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load accounts_tags %}
 
 {% block title %}Add riders - {{ squad.name }}{% endblock %}
 
@@ -97,6 +98,7 @@
             {% for entry in enriched_signups %}
             <tr data-signup-pk="{{ entry.signup.pk }}"
                 data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}"
+                data-name-display="{{ entry.user.get_full_name|default:entry.user.discord_username }}"
                 data-gender="{{ entry.gender }}"
                 data-zp="{{ entry.zp_category_w|default:entry.zp_category }}"
                 data-zr="{{ entry.zr_category }}"
@@ -104,7 +106,39 @@
                 data-eligible="{{ entry.signup.is_eligible|yesno:'1,0' }}"
                 data-zftp-w="{{ entry.z_ftp|default_if_none:'' }}" data-zftp-wkg="{{ entry.z_ftp_wkg|floatformat:2|default_if_none:'' }}"
                 data-zmap-w="{{ entry.z_map|default_if_none:'' }}" data-zmap-wkg="{{ entry.z_map_wkg|floatformat:2|default_if_none:'' }}">
-              <td>{{ entry.user.get_full_name|default:entry.user.discord_username }}</td>
+              <td>
+                <span class="inline-flex items-center gap-1">
+                  {{ entry.user.get_full_name|default:entry.user.discord_username }}
+                  {% if signup_questions %}
+                  <button type="button" class="btn btn-ghost btn-xs px-1 answers-open"
+                          title="Signup answers" aria-label="Signup answers">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 {% if entry.signup.custom_answers %}text-primary{% else %}text-base-content/30{% endif %}"
+                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                    </svg>
+                  </button>
+                  {% comment %}
+                    Rendered here rather than built in JS: Django escapes the rider-authored
+                    answers and renders the admin-authored label's markdown, and the modal
+                    just moves this markup.
+                  {% endcomment %}
+                  <template class="answers-content">
+                    {% for a in entry.custom_answers %}
+                    <div class="mb-2">
+                      <div class="text-xs text-base-content/60">{{ a.label|render_markdown_inline }}</div>
+                      {% if a.answered %}
+                      <div class="text-sm">{{ a.display }}</div>
+                      {% else %}
+                      <div class="text-sm text-base-content/40 italic">No answer</div>
+                      {% endif %}
+                    </div>
+                    {% empty %}
+                    <p class="text-sm text-base-content/50">This event has no signup questions.</p>
+                    {% endfor %}
+                  </template>
+                  {% endif %}
+                </span>
+              </td>
               <td class="text-xs">{{ entry.gender|default:"-" }}</td>
               <td class="text-xs">{{ entry.zp_category|default:"-" }}{% if entry.zp_category_w %} / {{ entry.zp_category_w }}{% endif %}</td>
               <td class="text-xs">{{ entry.zr_category|default:"-" }}</td>
@@ -137,6 +171,19 @@
     </div>
   </div>
 </div>
+
+{% if signup_questions %}
+<dialog id="answers-modal" class="modal">
+  <div class="modal-box">
+    <h3 id="answers-modal-name" class="font-bold text-lg mb-3"></h3>
+    <div id="answers-modal-body"></div>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-sm">Close</button></form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
 
 <script>
 // This page's own filter bar. It shares the row-visibility contract with the answer
@@ -281,6 +328,26 @@
 
   restoreFilterUrl();
   window.applyFilters();
+})();
+
+// Signup answers popover. One modal for the page; each row carries its own rendered
+// answers in a <template>, which is inert until cloned -- so the markup costs nothing
+// until opened, and nothing here has to escape or format anything.
+(function () {
+  var modal = document.getElementById('answers-modal');
+  if (!modal) { return; }
+  var nameEl = document.getElementById('answers-modal-name');
+  var bodyEl = document.getElementById('answers-modal-body');
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.answers-open');
+    if (!btn) { return; }
+    var row = btn.closest('tr');
+    var tpl = btn.parentElement.querySelector('.answers-content');
+    nameEl.textContent = row ? row.dataset.nameDisplay || '' : '';
+    bodyEl.replaceChildren(tpl.content.cloneNode(true));
+    modal.showModal();
+  });
 })();
 </script>
 {% if answer_facets %}{% include "events/_answer_facets_script.html" %}{% endif %}

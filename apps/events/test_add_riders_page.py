@@ -275,3 +275,45 @@ def test_a_filtered_next_survives_the_add(client, event, squad, user_model, even
     )
 
     assert resp["Location"] == filtered
+
+
+@pytest.mark.django_db
+def test_each_rider_carries_their_own_answers(client, event, squad, user_model, event_admin) -> None:
+    """A checklist icon opens that rider's signup answers.
+
+    Answers are rendered server-side into an inert <template> per row rather than built
+    in JS: Django escapes the rider-authored values, and the admin-authored label keeps
+    its markdown.
+    """
+    question = SignupQuestion.objects.create(
+        event=event, label="Which **nights**?", question_type=SignupQuestion.Type.MULTI,
+        options=["Tue", "Thu"], order=1,
+    )
+    answered = _rider(user_model, event, "emmy")
+    EventSignup.objects.filter(event=event, user=answered).update(
+        custom_answers={str(question.pk): ["Tue"]}
+    )
+    _rider(user_model, event, "nobody")
+    client.force_login(event_admin)
+
+    body = client.get(_url(event, squad)).content.decode()
+
+    # Counted on the markup, not the bare class name -- the string also appears in the
+    # script that binds the click handler.
+    assert body.count('<template class="answers-content">') == 2
+    assert 'id="answers-modal"' in body
+    assert "<strong>nights</strong>" in body        # label markdown rendered
+    assert ">Tue<" in body
+    assert "No answer" in body                       # the rider who did not answer
+
+
+@pytest.mark.django_db
+def test_no_checklist_when_the_event_asks_nothing(client, event, squad, user_model, event_admin) -> None:
+    """An event with no questions should not grow an icon that opens an empty box."""
+    _rider(user_model, event, "someone")
+    client.force_login(event_admin)
+
+    body = client.get(_url(event, squad)).content.decode()
+
+    assert "<template class=\"answers-content\">" not in body
+    assert 'id="answers-modal"' not in body
