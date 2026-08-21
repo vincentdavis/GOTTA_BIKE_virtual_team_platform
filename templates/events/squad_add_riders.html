@@ -35,6 +35,11 @@
           <input type="checkbox" id="filter-eligible" class="checkbox checkbox-sm" onchange="applyFilters()">
           <span class="label-text text-sm">Eligible only</span>
         </label>
+        <select id="filter-assigned" class="select select-bordered select-sm" onchange="applyFilters()">
+          <option value="">Any squad status</option>
+          <option value="0">Unassigned</option>
+          <option value="1">Assigned</option>
+        </select>
         <select id="filter-gender" class="select select-bordered select-sm" onchange="applyFilters()">
           <option value="">All genders</option>
           <option value="male">Male</option>
@@ -84,13 +89,14 @@
         <table class="table table-sm table-pin-col" data-signup-table="add-riders" id="signup-table">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Gender</th>
-              <th>ZP</th>
-              <th>ZR</th>
-              <th>zFTP</th>
-              <th>zMAP</th>
-              <th>Eligible</th>
+              <th data-sort="text" class="cursor-pointer select-none hover:text-primary">Name</th>
+              <th data-sort="text" class="cursor-pointer select-none hover:text-primary">Gender</th>
+              <th data-sort="text" class="cursor-pointer select-none hover:text-primary">ZP</th>
+              <th data-sort="text" class="cursor-pointer select-none hover:text-primary">ZR</th>
+              <th data-sort="num" class="cursor-pointer select-none hover:text-primary">zFTP</th>
+              <th data-sort="num" class="cursor-pointer select-none hover:text-primary">zMAP</th>
+              <th data-sort="num" class="cursor-pointer select-none hover:text-primary">Squads</th>
+              <th data-sort="num" class="cursor-pointer select-none hover:text-primary">Eligible</th>
               <th></th>
             </tr>
           </thead>
@@ -104,6 +110,7 @@
                 data-zr="{{ entry.zr_category }}"
                 data-timezone="{{ entry.signup.signup_timezone|join:',' }}"
                 data-eligible="{{ entry.signup.is_eligible|yesno:'1,0' }}"
+                data-assigned="{{ entry.assigned_squads|length|yesno:'1,0' }}"
                 data-zftp-w="{{ entry.z_ftp|default_if_none:'' }}" data-zftp-wkg="{{ entry.z_ftp_wkg|floatformat:2|default_if_none:'' }}"
                 data-zmap-w="{{ entry.z_map|default_if_none:'' }}" data-zmap-wkg="{{ entry.z_map_wkg|floatformat:2|default_if_none:'' }}">
               <td>
@@ -142,9 +149,18 @@
               <td class="text-xs">{{ entry.gender|default:"-" }}</td>
               <td class="text-xs">{{ entry.zp_category|default:"-" }}{% if entry.zp_category_w %} / {{ entry.zp_category_w }}{% endif %}</td>
               <td class="text-xs">{{ entry.zr_category|default:"-" }}</td>
-              <td class="text-xs font-mono">{% if entry.z_ftp %}{{ entry.z_ftp|floatformat:0 }}w{% if entry.z_ftp_wkg %} <span class="text-base-content/50">{{ entry.z_ftp_wkg|floatformat:2 }}</span>{% endif %}{% else %}-{% endif %}</td>
-              <td class="text-xs font-mono">{% if entry.z_map %}{{ entry.z_map|floatformat:0 }}w{% if entry.z_map_wkg %} <span class="text-base-content/50">{{ entry.z_map_wkg|floatformat:2 }}</span>{% endif %}{% else %}-{% endif %}</td>
-              <td>
+              <td class="text-xs font-mono" data-sort-value="{{ entry.z_ftp|default_if_none:0 }}">{% if entry.z_ftp %}{{ entry.z_ftp|floatformat:0 }}w{% if entry.z_ftp_wkg %} <span class="text-base-content/50">{{ entry.z_ftp_wkg|floatformat:2 }}</span>{% endif %}{% else %}-{% endif %}</td>
+              <td class="text-xs font-mono" data-sort-value="{{ entry.z_map|default_if_none:0 }}">{% if entry.z_map %}{{ entry.z_map|floatformat:0 }}w{% if entry.z_map_wkg %} <span class="text-base-content/50">{{ entry.z_map_wkg|floatformat:2 }}</span>{% endif %}{% else %}-{% endif %}</td>
+              <td data-sort-value="{{ entry.assigned_squads|length }}">
+                {% if entry.assigned_squads %}
+                <span class="tooltip tooltip-left" data-tip="{% for s in entry.assigned_squads %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% endfor %}">
+                  <span class="badge badge-ghost badge-sm">{{ entry.assigned_squads|length }}</span>
+                </span>
+                {% else %}
+                <span class="text-base-content/30">-</span>
+                {% endif %}
+              </td>
+              <td data-sort-value="{{ entry.signup.is_eligible|yesno:'1,0' }}">
                 {% if entry.signup.is_eligible %}
                 <span class="text-success" title="Meets this squad's requirements">&#10003;</span>
                 {% else %}
@@ -236,6 +252,7 @@
   window.applyFilters = function () {
     var q = val('signup-search').toLowerCase();
     var eligibleOnly = document.getElementById('filter-eligible').checked;
+    var assigned = val('filter-assigned');
     var gender = val('filter-gender');
     var zp = val('filter-zp');
     var zr = val('filter-zr');
@@ -248,6 +265,7 @@
       var show = true;
       if (q && row.dataset.name.indexOf(q) === -1) { show = false; }
       if (eligibleOnly && row.dataset.eligible !== '1') { show = false; }
+      if (assigned && row.dataset.assigned !== assigned) { show = false; }
       if (gender && row.dataset.gender !== gender) { show = false; }
       if (zp && row.dataset.zp !== zp) { show = false; }
       // "__none__" is the same sentinel the answer facets use for "not answered".
@@ -275,6 +293,7 @@
     gender: 'filter-gender',
     zp: 'filter-zp',
     zr: 'filter-zr',
+    assigned: 'filter-assigned',
     tz: 'filter-timezone',
     unit: 'filter-power-unit',
     zftpmin: 'filter-zftp-min',
@@ -318,13 +337,58 @@
     ['signup-search', 'filter-zftp-min', 'filter-zftp-max', 'filter-zmap-min', 'filter-zmap-max']
       .forEach(function (id) { document.getElementById(id).value = ''; });
     document.getElementById('filter-eligible').checked = false;
-    ['filter-gender', 'filter-zp', 'filter-zr', 'filter-timezone'].forEach(function (id) {
+    ['filter-gender', 'filter-zp', 'filter-zr', 'filter-timezone', 'filter-assigned'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) { el.value = ''; }
     });
     document.getElementById('filter-power-unit').value = 'wkg';
     window.applyFilters();
   };
+
+  // Column sorting. Reorders the rows only -- visibility stays owned by the filters
+  // and the answer facets, so a hidden row is moved but not revealed.
+  (function () {
+    var table = document.getElementById('signup-table');
+    if (!table) { return; }
+    var tbody = table.tBodies[0];
+    var headers = Array.from(table.querySelectorAll('th[data-sort]'));
+    var state = { index: null, dir: 'asc' };
+
+    function cellValue(row, index, type) {
+      var cell = row.cells[index];
+      if (!cell) { return type === 'num' ? 0 : ''; }
+      var raw = cell.dataset.sortValue !== undefined ? cell.dataset.sortValue : cell.textContent;
+      raw = raw.trim();
+      // parseFloat, not Number: the fallback text is "-" and Number("-") is NaN, which
+      // sorts unpredictably. || 0 puts blanks at the bottom ascending.
+      return type === 'num' ? (parseFloat(raw) || 0) : raw.toLowerCase();
+    }
+
+    function markHeaders() {
+      headers.forEach(function (th, i) {
+        var base = th.textContent.replace(/[\u25b2\u25bc]\s*$/, '').trim();
+        th.textContent = i === state.index ? base + (state.dir === 'asc' ? ' \u25b2' : ' \u25bc') : base;
+      });
+    }
+
+    headers.forEach(function (th, index) {
+      th.addEventListener('click', function () {
+        var type = th.dataset.sort;
+        state.dir = state.index === index && state.dir === 'asc' ? 'desc' : 'asc';
+        state.index = index;
+        var sign = state.dir === 'asc' ? 1 : -1;
+        Array.from(tbody.rows)
+          .sort(function (a, b) {
+            var av = cellValue(a, index, type), bv = cellValue(b, index, type);
+            if (av < bv) { return -sign; }
+            if (av > bv) { return sign; }
+            return 0;
+          })
+          .forEach(function (row) { tbody.appendChild(row); });
+        markHeaders();
+      });
+    });
+  })();
 
   restoreFilterUrl();
   window.applyFilters();

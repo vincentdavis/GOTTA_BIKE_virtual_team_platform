@@ -317,3 +317,42 @@ def test_no_checklist_when_the_event_asks_nothing(client, event, squad, user_mod
 
     assert "<template class=\"answers-content\">" not in body
     assert 'id="answers-modal"' not in body
+
+
+@pytest.mark.django_db
+def test_squads_column_counts_and_names_them(client, event, squad, user_model, event_admin) -> None:
+    """How many squads a rider is already on, and which -- "-" when none.
+
+    Uses assigned_squads, which the enrichment already scopes to this event, so the
+    count means "on this event" rather than across the whole site.
+    """
+    from apps.events.models import SquadMember
+
+    other = Squad.objects.create(event=event, name="Synthesis")
+    joined = _rider(user_model, event, "emmy")
+    SquadMember.objects.create(squad=other, user=joined, status=SquadMember.Status.MEMBER)
+    _rider(user_model, event, "nobody")
+    client.force_login(event_admin)
+
+    body = client.get(_url(event, squad)).content.decode()
+
+    assert 'data-tip="Synthesis"' in body
+    assert 'data-assigned="1"' in body
+    assert 'data-assigned="0"' in body
+
+
+@pytest.mark.django_db
+def test_columns_are_sortable_and_the_filter_offers_squad_status(
+    client, event, squad, user_model, event_admin
+) -> None:
+    _rider(user_model, event, "someone")
+    client.force_login(event_admin)
+
+    body = client.get(_url(event, squad)).content.decode()
+
+    header = body.split("<thead>")[1].split("</thead>")[0]
+    assert header.count('data-sort="text"') == 4   # name, gender, ZP, ZR
+    assert header.count('data-sort="num"') == 4    # zFTP, zMAP, Squads, Eligible
+    assert 'id="filter-assigned"' in body
+    assert ">Unassigned<" in body
+    assert ">Assigned<" in body
