@@ -231,6 +231,8 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ grid_event_defaults|json_script:"grid-event-defaults" }}
+{{ grid_enforced|json_script:"grid-enforced" }}
 <script>
 (function() {
   var EVENT_ID = {{ event.pk }};
@@ -239,6 +241,11 @@
   var USER_TIMEZONE = '{{ user_timezone }}';
   var INITIAL_GRID = {% if initial_grid_json %}{{ initial_grid_json|safe }}{% else %}null{% endif %};
   var EVENT_REQUIRES_RACE_VERIFIED = {% if event_requires_race_verified %}true{% else %}false{% endif %};
+  // Event-level defaults seed a NEW grid; an existing one keeps what it was saved with.
+  // Enforced settings lock their control -- a courtesy only, since this page posts JSON;
+  // the server re-applies enforcement regardless (see apps/events/grid_defaults.py).
+  var GRID_EVENT_DEFAULTS = JSON.parse(document.getElementById('grid-event-defaults').textContent);
+  var GRID_ENFORCED = JSON.parse(document.getElementById('grid-enforced').textContent);
 
   // DOM refs
   var startDateEl = document.getElementById('cfg-start-date');
@@ -1078,6 +1085,49 @@
     requireRaceVerifiedEl.disabled = true;
     requireRaceVerifiedLockedEl.classList.remove('hidden');
   }
+
+  // Event-level grid defaults. Setting a value and enforcing it are separate: a
+  // default only seeds a NEW grid (an existing one keeps what it was saved with),
+  // while an enforced setting is applied and locked in both modes -- otherwise
+  // reopening an old grid would quietly present a value the event forbids.
+  (function applyEventGridDefaults() {
+    // Radios and checkboxes are set differently, so each setting names how.
+    var CONTROLS = {
+      max_races_question: { radio: 'cfg-max-races' },
+      rest_days_question: { radio: 'cfg-rest-days' },
+      hide_empty_days: { el: hideEmptyDaysEl },
+      single_slot: { el: singleSlotEl },
+      expanded_features: { el: expandedFeaturesEl }
+    };
+
+    function setValue(setting, value) {
+      var c = CONTROLS[setting];
+      if (!c) { return; }
+      if (c.radio) { setRadioValue(c.radio, value ? 'yes' : 'no'); }
+      else { c.el.checked = !!value; }
+    }
+
+    function lock(setting) {
+      var c = CONTROLS[setting];
+      if (!c) { return; }
+      var nodes = c.radio
+        ? document.querySelectorAll('input[name="' + c.radio + '"]')
+        : [c.el];
+      nodes.forEach(function (n) { n.disabled = true; n.title = 'Enforced at the event level'; });
+    }
+
+    Object.keys(CONTROLS).forEach(function (setting) {
+      var enforced = GRID_ENFORCED[setting];
+      var hasDefault = Object.prototype.hasOwnProperty.call(GRID_EVENT_DEFAULTS, setting);
+      if (enforced) { setValue(setting, GRID_EVENT_DEFAULTS[setting]); lock(setting); }
+      else if (hasDefault && !INITIAL_GRID) { setValue(setting, GRID_EVENT_DEFAULTS[setting]); }
+    });
+
+    // These two drive layout, so redraw once the values above have settled.
+    syncSingleSlot();
+    syncExpandedPanel();
+    buildGrid();
+  })();
 })();
 </script>
 {% endblock %}

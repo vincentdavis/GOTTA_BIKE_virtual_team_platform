@@ -135,6 +135,69 @@ class Event(models.Model):
         default=False,
         help_text="Require Race Verified status before a member can submit availability for this event",
     )
+
+    # Event-level defaults for the availability builder's toggles. Each is a pair:
+    #
+    #   grid_default_*  null means "no event default" -- the builder keeps its own.
+    #                   True/False seeds a new grid with that value.
+    #   grid_enforce_*  locks the control to the default, in both directions, so an
+    #                   event can require a setting be off as well as on.
+    #
+    # Deliberately not retroactive: changing a default seeds new grids and is applied
+    # on save, rather than silently rewriting grids captains have already published.
+    # Enforcement is re-applied server-side because the builder posts JSON.
+    grid_default_max_races_question = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text='Default for "Ask: Max number of races" on new availability grids. Unset leaves it to the captain.',
+    )
+    grid_enforce_max_races_question = models.BooleanField(
+        default=False,
+        help_text='Lock "Ask: Max number of races" to the event default; captains cannot change it.',
+    )
+    grid_default_rest_days_question = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=(
+            'Default for "Ask: Rest days between races" on new availability grids. '
+            "Unset leaves it to the captain."
+        ),
+    )
+    grid_enforce_rest_days_question = models.BooleanField(
+        default=False,
+        help_text='Lock "Ask: Rest days between races" to the event default; captains cannot change it.',
+    )
+    grid_default_hide_empty_days = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=(
+            'Default for "Hide days with no available times" on new availability grids. '
+            "Unset leaves it to the captain."
+        ),
+    )
+    grid_enforce_hide_empty_days = models.BooleanField(
+        default=False,
+        help_text='Lock "Hide days with no available times" to the event default; captains cannot change it.',
+    )
+    grid_default_single_slot = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text='Default for "Single Time Slot" on new availability grids. Unset leaves it to the captain.',
+    )
+    grid_enforce_single_slot = models.BooleanField(
+        default=False,
+        help_text='Lock "Single Time Slot" to the event default; captains cannot change it.',
+    )
+    grid_default_expanded_features = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text='Default for "Expand Features" on new availability grids. Unset leaves it to the captain.',
+    )
+    grid_enforce_expanded_features = models.BooleanField(
+        default=False,
+        help_text='Lock "Expand Features" to the event default; captains cannot change it.',
+    )
+
     logo = models.ImageField(upload_to="event_logos/", blank=True, help_text="Optional logo image for the event")
     url = models.URLField(max_length=500, blank=True, help_text="External URL for event details or signup")
     discord_channel_id = models.BigIntegerField(

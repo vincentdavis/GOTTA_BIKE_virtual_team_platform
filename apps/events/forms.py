@@ -6,6 +6,9 @@ from typing import ClassVar
 from django import forms
 from django.contrib.auth import get_user_model
 
+# GRID_DEFAULT_SETTINGS comes from grid_defaults so the form and the enforcement
+# logic cannot drift on which toggles an event governs.
+from apps.events.grid_defaults import SETTINGS as GRID_DEFAULT_SETTINGS
 from apps.events.models import SQUAD_GENDER_CHOICES, Event, EventSignup, SignupQuestion, Squad
 from apps.events.signup_questions import MAX_OPTIONS_PER_QUESTION
 from apps.team.models import DiscordChannel, DiscordRole
@@ -115,8 +118,58 @@ def _get_role_choices(prefixes: list[str] | None = None) -> list:
     return choices
 
 
+def _tri_state(raw: object) -> bool | None:
+    """Read a "", "1", "0" choice as None / True / False.
+
+    Args:
+        raw: The submitted choice value.
+
+    Returns:
+        True, False, or None for "no event default".
+
+    """
+    if raw in ("", None):
+        return None
+    return str(raw) == "1"
+
+
 class EventForm(forms.ModelForm):
     """Form for creating and editing events."""
+
+    # Tri-state: "" leaves it to the captain, "1"/"0" set an event default. Declared
+    # explicitly rather than left to the nullable model field: Django's form
+    # BooleanField coerces the submitted string to a bool before clean_<field> runs,
+    # so "0" would arrive as False and the "no default" case become unreachable.
+    grid_default_max_races_question = forms.ChoiceField(
+        required=False,
+        choices=[("", "No default"), ("1", "Yes"), ("0", "No")],
+        label="Default: Ask: Max number of races",
+        widget=forms.Select(attrs={"class": "select select-sm w-full"}),
+    )
+    grid_default_rest_days_question = forms.ChoiceField(
+        required=False,
+        choices=[("", "No default"), ("1", "Yes"), ("0", "No")],
+        label="Default: Ask: Rest days between races",
+        widget=forms.Select(attrs={"class": "select select-sm w-full"}),
+    )
+    grid_default_hide_empty_days = forms.ChoiceField(
+        required=False,
+        choices=[("", "No default"), ("1", "Yes"), ("0", "No")],
+        label="Default: Hide days with no available times",
+        widget=forms.Select(attrs={"class": "select select-sm w-full"}),
+    )
+    grid_default_single_slot = forms.ChoiceField(
+        required=False,
+        choices=[("", "No default"), ("1", "Yes"), ("0", "No")],
+        label="Default: Single Time Slot",
+        widget=forms.Select(attrs={"class": "select select-sm w-full"}),
+    )
+    grid_default_expanded_features = forms.ChoiceField(
+        required=False,
+        choices=[("", "No default"), ("1", "Yes"), ("0", "No")],
+        label="Default: Expand Features",
+        widget=forms.Select(attrs={"class": "select select-sm w-full"}),
+    )
 
     discord_channel_id = forms.CharField(
         required=False,
@@ -149,6 +202,16 @@ class EventForm(forms.ModelForm):
             "timezone_required",
             "squad_gender_required",
             "require_race_verified_availability",
+            "grid_default_max_races_question",
+            "grid_enforce_max_races_question",
+            "grid_default_rest_days_question",
+            "grid_enforce_rest_days_question",
+            "grid_default_hide_empty_days",
+            "grid_enforce_hide_empty_days",
+            "grid_default_single_slot",
+            "grid_enforce_single_slot",
+            "grid_default_expanded_features",
+            "grid_enforce_expanded_features",
         ]
         widgets: ClassVar[dict] = {
             "title": forms.TextInput(
@@ -201,6 +264,21 @@ class EventForm(forms.ModelForm):
             "squad_gender_required": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
+            "grid_enforce_max_races_question": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "grid_enforce_rest_days_question": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "grid_enforce_hide_empty_days": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "grid_enforce_single_slot": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
+            "grid_enforce_expanded_features": forms.CheckboxInput(
+                attrs={"class": "checkbox checkbox-primary checkbox-sm"},
+            ),
             "require_race_verified_availability": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
@@ -219,6 +297,13 @@ class EventForm(forms.ModelForm):
                 field_choices.append((current_value, f"Unknown Channel ({current_value})"))
             self.fields[field_name].widget.choices = field_choices
             self.initial[field_name] = current_value
+
+        # The tri-state defaults are declared as ChoiceFields, so the instance's
+        # True/False/None has to be mapped onto the "1"/"0"/"" the select offers.
+        for setting in GRID_DEFAULT_SETTINGS:
+            name = f"grid_default_{setting}"
+            value = getattr(self.instance, name, None) if self.instance else None
+            self.initial[name] = "" if value is None else ("1" if value else "0")
 
     @staticmethod
     def _flat_choice_values(choices: list) -> set[str]:
@@ -239,6 +324,51 @@ class EventForm(forms.ModelForm):
             else:
                 values.add(str(item[0]))
         return values
+
+    def clean_grid_default_max_races_question(self) -> bool | None:
+        """Convert the tri-state choice back to True/False/None.
+
+        Returns:
+            The default, or None when the event sets none.
+
+        """
+        return _tri_state(self.cleaned_data.get("grid_default_max_races_question"))
+
+    def clean_grid_default_rest_days_question(self) -> bool | None:
+        """Convert the tri-state choice back to True/False/None.
+
+        Returns:
+            The default, or None when the event sets none.
+
+        """
+        return _tri_state(self.cleaned_data.get("grid_default_rest_days_question"))
+
+    def clean_grid_default_hide_empty_days(self) -> bool | None:
+        """Convert the tri-state choice back to True/False/None.
+
+        Returns:
+            The default, or None when the event sets none.
+
+        """
+        return _tri_state(self.cleaned_data.get("grid_default_hide_empty_days"))
+
+    def clean_grid_default_single_slot(self) -> bool | None:
+        """Convert the tri-state choice back to True/False/None.
+
+        Returns:
+            The default, or None when the event sets none.
+
+        """
+        return _tri_state(self.cleaned_data.get("grid_default_single_slot"))
+
+    def clean_grid_default_expanded_features(self) -> bool | None:
+        """Convert the tri-state choice back to True/False/None.
+
+        Returns:
+            The default, or None when the event sets none.
+
+        """
+        return _tri_state(self.cleaned_data.get("grid_default_expanded_features"))
 
     def clean_discord_channel_id(self) -> int:
         """Convert selected channel ID string back to int for the model.

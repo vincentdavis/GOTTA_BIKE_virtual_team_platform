@@ -215,6 +215,65 @@
           </label>
         </div>
 
+        <!-- Availability grid defaults -->
+        <div class="form-control">
+          <label class="label"><span class="label-text">Availability grid defaults</span></label>
+          <div class="overflow-x-auto">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Setting</th>
+                  <th class="w-40">Event default</th>
+                  <th class="w-24 text-center">Enforce</th>
+                </tr>
+              </thead>
+              <tbody>
+            <tr>
+              <td class="align-middle">Ask: Max number of races</td>
+              <td>{{ form.grid_default_max_races_question }}</td>
+              <td class="text-center align-middle">
+                <label class="cursor-pointer inline-flex items-center">{{ form.grid_enforce_max_races_question }}</label>
+              </td>
+            </tr>
+            <tr>
+              <td class="align-middle">Ask: Rest days between races</td>
+              <td>{{ form.grid_default_rest_days_question }}</td>
+              <td class="text-center align-middle">
+                <label class="cursor-pointer inline-flex items-center">{{ form.grid_enforce_rest_days_question }}</label>
+              </td>
+            </tr>
+            <tr>
+              <td class="align-middle">Hide days with no available times</td>
+              <td>{{ form.grid_default_hide_empty_days }}</td>
+              <td class="text-center align-middle">
+                <label class="cursor-pointer inline-flex items-center">{{ form.grid_enforce_hide_empty_days }}</label>
+              </td>
+            </tr>
+            <tr>
+              <td class="align-middle">Single Time Slot</td>
+              <td>{{ form.grid_default_single_slot }}</td>
+              <td class="text-center align-middle">
+                <label class="cursor-pointer inline-flex items-center">{{ form.grid_enforce_single_slot }}</label>
+              </td>
+            </tr>
+            <tr>
+              <td class="align-middle">Expand Features</td>
+              <td>{{ form.grid_default_expanded_features }}</td>
+              <td class="text-center align-middle">
+                <label class="cursor-pointer inline-flex items-center">{{ form.grid_enforce_expanded_features }}</label>
+              </td>
+            </tr>
+              </tbody>
+            </table>
+          </div>
+          <label class="label">
+            <span class="label-text-alt">
+              A default seeds new availability grids and can still be changed by a captain.
+              Enforce locks it &mdash; to Yes or to No &mdash; on every grid for this event.
+            </span>
+          </label>
+        </div>
+
         <!-- Require Race Verified for Availability -->
         <div class="form-control">
           <label class="label cursor-pointer justify-start gap-2">

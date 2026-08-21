@@ -35,7 +35,7 @@ from apps.accounts.discord_service import (
     sync_user_discord_roles,
 )
 from apps.accounts.models import Permissions, User
-from apps.events import ds_service
+from apps.events import ds_service, grid_defaults
 from apps.events.answer_facets import answers_payload, build_facets, panel_starts_open
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
 from apps.events.forms import EventForm, EventRoleSetupForm, SignupQuestionForm, SquadForm
@@ -3543,6 +3543,8 @@ def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int)
             "timezone_choices_json": json.dumps(TIMEZONE_CHOICES),
             "user_timezone": user_tz,
             "event_requires_race_verified": bool(event.require_race_verified_availability),
+            "grid_event_defaults": grid_defaults.initial_values(event),
+            "grid_enforced": grid_defaults.enforced_map(event),
         },
     )
 
@@ -3644,6 +3646,8 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
             "initial_grid_json": json.dumps(initial_grid),
             "page_heading": "Edit Availability Grid",
             "event_requires_race_verified": bool(event.require_race_verified_availability),
+            "grid_event_defaults": grid_defaults.initial_values(event),
+            "grid_enforced": grid_defaults.enforced_map(event),
         },
     )
 
@@ -3673,7 +3677,10 @@ def _handle_availability_save(
     # --- Parse & validate fields ---
     title = str(data.get("title", "")).strip()
 
-    single_slot = bool(data.get("single_slot", False))
+    # Resolved before the dates are parsed, not with the other settings further down:
+    # single_slot decides whether end_date/end_time are derived, so enforcing it
+    # afterwards would leave the grid shaped by the submitted value.
+    single_slot = grid_defaults.resolve(event, "single_slot", data.get("single_slot", False))
 
     try:
         start_date = date.fromisoformat(str(data.get("start_date", "")))
@@ -3750,16 +3757,26 @@ def _handle_availability_save(
         "slot_duration": slot_duration,
         "grid_timezone": grid_tz,
         "blocked_cells": blocked_cells,
-        "max_races_question": bool(data.get("max_races_question", False)),
-        "rest_days_question": bool(data.get("rest_days_question", False)),
-        "hide_empty_days": bool(data.get("hide_empty_days", False)),
+        # Enforced settings are re-applied here: the builder disables the control, but
+        # it posts JSON, so a disabled checkbox constrains nothing on its own.
+        "max_races_question": grid_defaults.resolve(
+            event, "max_races_question", data.get("max_races_question", False)
+        ),
+        "rest_days_question": grid_defaults.resolve(
+            event, "rest_days_question", data.get("rest_days_question", False)
+        ),
+        "hide_empty_days": grid_defaults.resolve(
+            event, "hide_empty_days", data.get("hide_empty_days", False)
+        ),
         # Event-level requirement is a floor: it forces the grid setting on and
         # cannot be turned off here, regardless of what the client sends.
         "require_race_verified_availability": (
             bool(data.get("require_race_verified_availability", False)) or event.require_race_verified_availability
         ),
         "single_slot": single_slot,
-        "expanded_features": bool(data.get("expanded_features", False)),
+        "expanded_features": grid_defaults.resolve(
+            event, "expanded_features", data.get("expanded_features", False)
+        ),
         "description": (data.get("description") or "").strip(),
         "website_url": (data.get("website_url") or "").strip(),
         "course_url": (data.get("course_url") or "").strip(),
