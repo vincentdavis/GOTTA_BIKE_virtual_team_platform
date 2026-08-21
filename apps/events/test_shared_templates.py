@@ -5,6 +5,7 @@ borrowing squad is warned to check both. Applying one only copies grid configura
 never rider data -- which is why a template from another squad is safe to offer at all.
 """
 
+import json
 from datetime import date, timedelta
 
 import pytest
@@ -189,3 +190,87 @@ def test_only_the_owning_squad_can_change_sharing(client, event, event_admin) ->
     assert resp.status_code == 404
     template.refresh_from_db()
     assert template.shared is True
+
+
+@pytest.mark.django_db
+def test_a_template_carries_every_grid_setting(client, event, event_admin) -> None:
+    """A template is a whole starting point, not just the times.
+
+    Anything the template does not store is silently dropped when it is applied, which
+    reads as the setting having been forgotten rather than never saved.
+    """
+    squad = Squad.objects.create(event=event, name="Synthesis")
+    client.force_login(event_admin)
+
+    client.post(
+        reverse("events:availability_template_create", args=[event.pk, squad.pk]),
+        data=json.dumps({
+            "name": "Full", "start_time": "19:00", "end_time": "20:00",
+            "timezone": "UTC", "slot_duration": 60, "length_days": 1,
+            "hide_empty_days": True, "single_slot": True, "expanded_features": True,
+            "description": "**Bring a spare wheel**",
+            "website_url": "https://example.test/event",
+            "course_url": "https://example.test/course",
+            "recon_url": "https://example.test/recon",
+            "invite_url": "https://example.test/invite",
+        }),
+        content_type="application/json",
+    )
+
+    template = AvailabilityGridTemplate.objects.get(squad=squad, name="Full")
+    assert template.hide_empty_days is True
+    assert template.single_slot is True
+    assert template.expanded_features is True
+    assert template.description == "**Bring a spare wheel**"
+    assert template.invite_url == "https://example.test/invite"
+
+
+@pytest.mark.django_db
+def test_applying_a_template_restores_those_settings(client, event, event_admin) -> None:
+    squad = Squad.objects.create(event=event, name="Synthesis")
+    template = AvailabilityGridTemplate.objects.create(
+        squad=squad, name="Full", start_time="19:00", end_time="20:00",
+        grid_timezone="UTC", slot_duration=60, default_length_days=1,
+        hide_empty_days=True, expanded_features=True,
+        description="Bring a spare wheel", invite_url="https://example.test/invite",
+    )
+    client.force_login(event_admin)
+
+    client.post(
+        reverse("events:availability_template_apply", args=[event.pk, squad.pk, template.pk]),
+        data={"start_date": "2026-09-01"},
+    )
+
+    grid = AvailabilityGrid.objects.get(squad=squad)
+    assert grid.hide_empty_days is True
+    assert grid.expanded_features is True
+    assert grid.description == "Bring a spare wheel"
+    assert grid.invite_url == "https://example.test/invite"
+
+
+@pytest.mark.django_db
+def test_a_single_slot_template_makes_a_one_cell_grid(client, event, event_admin) -> None:
+    """A single-slot template still yields exactly one cell.
+
+    Near midnight the UTC conversion can straddle two dates, which would give two cells
+    from a template that means one.
+    """
+    squad = Squad.objects.create(event=event, name="Synthesis")
+    template = AvailabilityGridTemplate.objects.create(
+        squad=squad, name="Late", start_time="23:30", end_time="00:30",
+        grid_timezone="Europe/London", slot_duration=60, default_length_days=1,
+        single_slot=True,
+    )
+    client.force_login(event_admin)
+
+    client.post(
+        reverse("events:availability_template_apply", args=[event.pk, squad.pk, template.pk]),
+        data={"start_date": "2026-09-01"},
+    )
+
+    grid = AvailabilityGrid.objects.get(squad=squad)
+    assert grid.single_slot is True
+    assert grid.start_date == grid.end_date
+    # end is exactly one slot after start, wrapping the hour if need be
+    assert grid.end_time == "23:30"
+    assert grid.start_time == "22:30"

@@ -999,8 +999,14 @@
       slot_duration: parseInt(slotDurationEl.value),
       length_days: lengthDays,
       max_races_question: getRadioValue('cfg-max-races') === 'yes',
-      rest_days_question: getRadioValue('cfg-rest-days') === 'yes'
+      rest_days_question: getRadioValue('cfg-rest-days') === 'yes',
+      hide_empty_days: hideEmptyDaysEl.checked,
+      single_slot: singleSlotEl.checked
     };
+    // The description and links travel with the template too. Only the values --
+    // singleSlotValues() also carries date/time overrides, which the template has its
+    // own handling for and must not inherit here.
+    Object.assign(payload, expandedFeatureValues());
 
     btnSaveTemplate.disabled = true;
     fetch(TEMPLATE_CREATE_URL, {

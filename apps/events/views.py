@@ -4312,6 +4312,14 @@ def availability_template_create_view(request: HttpRequest, event_pk: int, squad
         max_races_question=bool(data.get("max_races_question", False)),
         rest_days_question=bool(data.get("rest_days_question", False)),
         shared=bool(data.get("shared", False)),
+        hide_empty_days=bool(data.get("hide_empty_days", False)),
+        single_slot=bool(data.get("single_slot", False)),
+        expanded_features=bool(data.get("expanded_features", False)),
+        description=(data.get("description") or "").strip(),
+        website_url=(data.get("website_url") or "").strip(),
+        course_url=(data.get("course_url") or "").strip(),
+        recon_url=(data.get("recon_url") or "").strip(),
+        invite_url=(data.get("invite_url") or "").strip(),
         created_by=request.user,
     )
     logfire.info(
@@ -4381,6 +4389,17 @@ def availability_template_apply_view(
         template.grid_timezone,
     )
 
+    if template.single_slot:
+        # Re-derive rather than trusting the conversion. A local time near midnight can
+        # land start and end on different UTC dates, and the grid generator would then
+        # emit one slot per date -- two cells from a template that means one. Same
+        # derivation the builder's save uses, so both routes agree.
+        end_date_utc = start_date_utc
+        end_time_utc = (
+            datetime.combine(date.min, time.fromisoformat(start_time_utc))
+            + timedelta(minutes=template.slot_duration)
+        ).strftime("%H:%M")
+
     grid = AvailabilityGrid.objects.create(
         squad=squad,
         title="",
@@ -4393,6 +4412,14 @@ def availability_template_apply_view(
         blocked_cells=[],
         max_races_question=template.max_races_question,
         rest_days_question=template.rest_days_question,
+        hide_empty_days=template.hide_empty_days,
+        single_slot=template.single_slot,
+        expanded_features=template.expanded_features,
+        description=template.description,
+        website_url=template.website_url,
+        course_url=template.course_url,
+        recon_url=template.recon_url,
+        invite_url=template.invite_url,
         expires=None,
         status=AvailabilityGrid.Status.DRAFT,
         created_by=request.user,

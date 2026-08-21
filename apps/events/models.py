@@ -1846,6 +1846,28 @@ class AvailabilityGridTemplate(models.Model):
         default=False,
         help_text="Carry the max-races question onto grids created from this template",
     )
+    # A template is meant to be a whole starting point, so it carries every grid
+    # setting the builder can produce -- not just the times. Anything omitted here is
+    # silently dropped when the template is applied, which reads as the setting having
+    # been forgotten rather than never saved.
+    hide_empty_days = models.BooleanField(
+        default=False,
+        help_text="Hide days with no available times on grids made from this template",
+    )
+    single_slot = models.BooleanField(
+        default=False,
+        help_text="Grids from this template are a single date and time",
+    )
+    expanded_features = models.BooleanField(
+        default=False,
+        help_text="Show the description and links below on grids made from this template",
+    )
+    description = models.TextField(blank=True, help_text="Markdown shown above the grid")
+    website_url = models.URLField(max_length=500, blank=True, help_text="Event website")
+    course_url = models.URLField(max_length=500, blank=True, help_text="Course or route details")
+    recon_url = models.URLField(max_length=500, blank=True, help_text="Event recon")
+    invite_url = models.URLField(max_length=500, blank=True, help_text="Event invite / sign-up link")
+
     shared = models.BooleanField(
         default=False,
         help_text=(
