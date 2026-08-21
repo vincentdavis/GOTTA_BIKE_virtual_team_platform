@@ -215,3 +215,26 @@ def test_a_zr_tier_actually_matches_a_rider(client, event, squad, user_model, ev
 
     assert 'data-zr="Emerald"' in body
     assert '<option value="Emerald">Emerald</option>' in body
+
+
+@pytest.mark.django_db
+def test_riders_with_no_zr_record_can_be_isolated(client, event, squad, user_model, event_admin) -> None:
+    """Without this option there is no way to see exactly who cannot be judged.
+
+    A rider with no ZRRider row renders data-zr="", which every tier excludes and
+    "All ZR" buries among everyone else.
+    """
+    from apps.zwiftracing.models import ZRRider
+
+    rated = _rider(user_model, event, "emmy")
+    rated.zwid = 4242
+    rated.save(update_fields=["zwid"])
+    ZRRider.objects.create(zwid=4242, name="Emmy", race_current_category="Emerald")
+    _rider(user_model, event, "nobody")
+    client.force_login(event_admin)
+
+    body = client.get(_url(event, squad)).content.decode()
+
+    assert '<option value="__none__">No ZR record</option>' in body
+    assert 'data-zr="Emerald"' in body
+    assert 'data-zr=""' in body

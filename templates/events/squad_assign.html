@@ -44,6 +44,7 @@
             <select id="filter-zr" class="select select-bordered select-sm" onchange="applyFilters()">
               <option value="">All ZR</option>
               {% for cat in zr_categories %}<option value="{{ cat }}">{{ cat }}</option>{% endfor %}
+              <option value="__none__">No ZR record</option>
             </select>
             {% if signup_timezones %}
             <select id="filter-timezone" class="select select-bordered select-sm" onchange="applyFilters()">
@@ -188,7 +189,9 @@ function applyFilters() {
     if (q && !row.dataset.name.includes(q)) show = false;
     if (gender && row.dataset.gender !== gender) show = false;
     if (zp && row.dataset.zp !== zp) show = false;
-    if (zr && row.dataset.zr !== zr) show = false;
+    // "__none__" is the same sentinel the answer facets use for "not answered".
+    if (zr === '__none__') { if (row.dataset.zr) show = false; }
+    else if (zr && row.dataset.zr !== zr) show = false;
     if (tz && row.dataset.timezone.split(',').indexOf(tz) === -1) show = false;
     if (!powerInBounds(row, 'zftp', zftpMin, zftpMax, unit)) show = false;
     if (!powerInBounds(row, 'zmap', zmapMin, zmapMax, unit)) show = false;
