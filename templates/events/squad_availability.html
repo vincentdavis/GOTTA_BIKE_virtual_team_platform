@@ -242,6 +242,70 @@
       <p class="text-sm text-base-content/50">No templates yet.</p>
       {% endif %}
 
+      {% if shared_templates %}
+      <h3 class="font-semibold text-sm mt-4 mb-1">Shared templates</h3>
+      <p class="text-xs text-base-content/60 mb-2">
+        Templates other squads have shared. They carry the times and timezone they were
+        built with &mdash; check both against your own squad before publishing.
+      </p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <tbody>
+            {% for t in shared_templates %}
+            <tr>
+              <td class="font-medium">
+                {{ t.name }}
+                <span class="badge badge-ghost badge-sm ml-1">{{ t.squad.name }}</span>
+              </td>
+              <td class="text-sm text-base-content/70">
+                {{ t.start_time }}&ndash;{{ t.end_time }} {{ t.grid_timezone }} &middot;
+                {{ t.slot_duration }}m slots &middot; {{ t.default_length_days }} day{{ t.default_length_days|pluralize }}
+                {% if t.max_races_question %} &middot; max-races{% endif %}{% if t.rest_days_question %} &middot; rest-days{% endif %}
+              </td>
+              <td class="text-right">
+                <button type="button" class="btn btn-ghost btn-xs"
+                        onclick="document.getElementById('use-shared-{{ t.pk }}').showModal()">Use</button>
+
+                <dialog id="use-shared-{{ t.pk }}" class="modal">
+                  <div class="modal-box">
+                    <h3 class="font-bold text-lg">Use "{{ t.name }}"</h3>
+                    <p class="text-sm text-base-content/60 mb-2">Shared by {{ t.squad.name }}</p>
+                    {# A borrowed template keeps the other squad's clock. #}
+                    <div role="alert" class="alert alert-warning text-sm mb-3">
+                      <span>
+                        This template is set to <strong>{{ t.start_time }}&ndash;{{ t.end_time }}
+                        {{ t.grid_timezone }}</strong>. Check the time and timezone suit
+                        {{ squad.name }} and edit the draft before publishing it.
+                      </span>
+                    </div>
+                    <p class="py-1 text-sm">
+                      Creates a new <strong>draft</strong> grid spanning
+                      {{ t.default_length_days }} day{{ t.default_length_days|pluralize }} from the start date below,
+                      with {{ t.slot_duration }}-minute slots.
+                    </p>
+                    <form method="post" action="{% url 'events:availability_template_apply' event.pk squad.pk t.pk %}" class="space-y-3">
+                      {% csrf_token %}
+                      <div class="form-control">
+                        <label class="label py-1"><span class="label-text text-xs">Start date</span></label>
+                        <input type="date" name="start_date" required value="{{ today }}"
+                               class="input input-bordered input-sm w-full">
+                      </div>
+                      <div class="modal-action">
+                        <button type="button" class="btn btn-sm" onclick="this.closest('dialog').close()">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary">Create Draft</button>
+                      </div>
+                    </form>
+                  </div>
+                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                </dialog>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
       <div class="divider"></div>
       <div class="flex justify-between items-center">
         <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary">Back to Squads</a>

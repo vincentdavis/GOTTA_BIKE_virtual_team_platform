@@ -239,6 +239,7 @@
 <script>
 (function() {
   var EVENT_ID = {{ event.pk }};
+  var SQUAD_NAME = "{{ squad.name|escapejs }}";
   var SQUAD_ID = {{ squad.pk }};
   var TIMEZONE_CHOICES = {{ timezone_choices_json|safe }};
   var USER_TIMEZONE = '{{ user_timezone }}';
@@ -981,8 +982,17 @@
     var name = (window.prompt('Template name:') || '').trim();
     if (!name) return;
 
+    // Matches the prompt above rather than introducing a modal into a flow that is
+    // already two browser dialogs deep.
+    var shared = window.confirm(
+      'Share this template with every squad?\n\n' +
+      'OK  - any squad can use it\n' +
+      'Cancel - keep it for ' + SQUAD_NAME + ' only'
+    );
+
     var payload = {
       name: name,
+      shared: shared,
       start_time: startTimeEl.value,
       end_time: endTimeEl.value,
       timezone: timezoneEl.value || 'UTC',

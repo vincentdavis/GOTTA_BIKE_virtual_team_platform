@@ -2847,6 +2847,14 @@ def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) 
 
     availability_grids = squad.availability_grids.all()
     availability_templates = squad.availability_templates.all()
+    # Templates other squads have shared. Excludes this squad's own, which are already
+    # listed above -- a squad's shared template should not appear twice to its owner.
+    shared_templates = (
+        AvailabilityGridTemplate.objects.filter(shared=True)
+        .exclude(squad=squad)
+        .select_related("squad", "squad__event")
+        .order_by("squad__name", "name")
+    )
 
     return render(
         request,
@@ -2856,6 +2864,7 @@ def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) 
             "squad": squad,
             "availability_grids": availability_grids,
             "availability_templates": availability_templates,
+            "shared_templates": shared_templates,
             "today": timezone.now().date().isoformat(),
         },
     )
@@ -4302,6 +4311,7 @@ def availability_template_create_view(request: HttpRequest, event_pk: int, squad
         default_length_days=length_days,
         max_races_question=bool(data.get("max_races_question", False)),
         rest_days_question=bool(data.get("rest_days_question", False)),
+        shared=bool(data.get("shared", False)),
         created_by=request.user,
     )
     logfire.info(
@@ -4337,7 +4347,12 @@ def availability_template_apply_view(
     """
     event = get_object_or_404(Event, pk=event_pk)
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
-    template = get_object_or_404(AvailabilityGridTemplate, pk=template_pk, squad=squad)
+    # Either this squad's own template, or one another squad has shared. Permission is
+    # still checked against the *target* squad below -- a template carries only grid
+    # configuration, never rider data, so borrowing one exposes nothing.
+    template = get_object_or_404(
+        AvailabilityGridTemplate.objects.filter(Q(squad=squad) | Q(shared=True)), pk=template_pk
+    )
 
     if not _can_manage_squad_availability(request.user, squad):
         logfire.warning(

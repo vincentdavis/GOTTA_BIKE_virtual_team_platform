@@ -1846,6 +1846,14 @@ class AvailabilityGridTemplate(models.Model):
         default=False,
         help_text="Carry the max-races question onto grids created from this template",
     )
+    shared = models.BooleanField(
+        default=False,
+        help_text=(
+            "Offer this template to every squad, not just this one. Shared templates "
+            "carry the times and timezone they were built with, so the squad using one "
+            "is told to check both."
+        ),
+    )
     rest_days_question = models.BooleanField(
         default=False,
         help_text="Carry the rest-days question onto grids created from this template",
