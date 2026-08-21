@@ -70,5 +70,30 @@ function toggleAllRacesRiders(key) {
     arrow.style.transform = '';
   }
 }
+
+// "View Availability" columns on the participation report. Off by default -- the
+// report's main job is the race tallies, and the availability columns are only
+// meaningful while grids are still open.
+(function () {
+  var KEY = 'participation_view_availability';
+  var cb = document.getElementById('toggle-availability');
+  if (!cb) { return; }
+
+  function apply(show) {
+    document.querySelectorAll('[data-col="availability"]').forEach(function (el) {
+      el.style.display = show ? '' : 'none';
+    });
+  }
+
+  var saved = '0';
+  try { saved = localStorage.getItem(KEY) || '0'; } catch (e) {}
+  cb.checked = saved === '1';
+  apply(cb.checked);
+
+  cb.addEventListener('change', function () {
+    try { localStorage.setItem(KEY, this.checked ? '1' : '0'); } catch (e) {}
+    apply(this.checked);
+  });
+})();
 </script>
 {% endblock %}

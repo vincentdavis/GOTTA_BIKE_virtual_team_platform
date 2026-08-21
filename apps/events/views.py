@@ -1755,6 +1755,77 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     )
 
 
+def _availability_state(grid: AvailabilityGrid, slots: int | None) -> dict:
+    """Describe one rider's answer to one availability grid.
+
+    Args:
+        grid: The availability grid.
+        slots: How many slots the rider marked available, or None if they never
+            submitted a response.
+
+    Returns:
+        ``{"state", "label", "detail"}`` where state is "yes", "no" or "none".
+
+    """
+    if slots is None:
+        return {"state": "none", "label": "\u2013", "detail": "No response yet"}
+    if slots == 0:
+        # A response with nothing marked. On a single-slot grid that is literally the
+        # "No" button; on a full grid it is a rider saying no date works.
+        return {"state": "no", "label": "No", "detail": "Responded: not available"}
+    if grid.single_slot:
+        return {"state": "yes", "label": "Yes", "detail": "Available"}
+    return {
+        "state": "yes",
+        "label": "Yes",
+        "detail": f"{slots} slot{'s' if slots != 1 else ''} marked available",
+    }
+
+
+def _open_availability_grids(event: Event, tz_obj: ZoneInfo, today_local: date) -> dict[int, list[dict]]:
+    """Group the event's still-open availability grids by squad, with display labels.
+
+    "Open" means published and not past its end date -- the same definition the My
+    Events page and the pending-availability badge use, so a grid the rider can still
+    answer is a grid that shows up here.
+
+    Args:
+        event: The event.
+        tz_obj: Timezone used to render the column labels.
+        today_local: Today's date in that timezone.
+
+    Returns:
+        ``{squad_id: [{"grid", "label"}]}`` ordered oldest-first within each squad.
+
+    """
+    utc = ZoneInfo("UTC")
+
+    def _label(grid: AvailabilityGrid) -> str:
+        start = datetime.combine(
+            grid.start_date, time.fromisoformat(grid.start_time), tzinfo=utc
+        ).astimezone(tz_obj)
+        if grid.single_slot:
+            return start.strftime("%b %d %H:%M")
+        end = datetime.combine(
+            grid.end_date, time.fromisoformat(grid.end_time), tzinfo=utc
+        ).astimezone(tz_obj)
+        return f"{start:%b %d}\u2013{end:%b %d}"
+
+    by_squad: dict[int, list[dict]] = defaultdict(list)
+    grids = (
+        AvailabilityGrid.objects
+        .filter(
+            squad__event=event,
+            status=AvailabilityGrid.Status.PUBLISHED,
+            end_date__gte=today_local,
+        )
+        .order_by("start_date", "start_time")
+    )
+    for grid in grids:
+        by_squad[grid.squad_id].append({"grid": grid, "label": _label(grid)})
+    return by_squad
+
+
 def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetime) -> list[dict]:
     """Build the per-squad participation report for an event.
 
@@ -1763,6 +1834,10 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
     upcoming ones -- each as both a count and a list of ``{"name", "date"}``.
     Tallies are scoped to this event's scheduled races
     (``AvailabilitySlotSelection``).
+
+    Each row also carries an ``availability`` list aligned with its squad's
+    ``grids``: the rider's yes / no / no-response state for every still-open
+    availability grid, behind the page's "View Availability" toggle.
 
     Args:
         event: The event.
@@ -1795,12 +1870,26 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
             else:
                 raced[rider.pk].append(race)
 
+    grids_by_squad = _open_availability_grids(event, tz_obj, now_utc.astimezone(tz_obj).date())
+
+    # (grid, rider) -> how many slots the rider marked available. The count is kept
+    # rather than a bool because a submitted response with nothing marked is a
+    # deliberate "no", which reads very differently from never having answered.
+    open_grid_ids = [col["grid"].pk for cols in grids_by_squad.values() for col in cols]
+    marked_slots: dict[tuple, int] = {}
+    if open_grid_ids:
+        for grid_id, user_id, cells in AvailabilityResponse.objects.filter(
+            grid_id__in=open_grid_ids
+        ).values_list("grid_id", "user_id", "available_cells"):
+            marked_slots[grid_id, user_id] = len(cells or [])
+
     # Enriched squad members (ZP/ZR data for the rider tooltip) grouped by
     # squad, with each rider's race tallies merged in.
     enriched_by_squad = _enrich_squad_members(event)
 
     report = []
     for squad in event.squads.order_by("name"):
+        squad_grids = grids_by_squad.get(squad.pk, [])
         rows = []
         for member in sorted(
             enriched_by_squad.get(squad.pk, []),
@@ -1814,8 +1903,19 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
                 "raced": rider_raced,
                 "upcoming_count": len(rider_upcoming),
                 "upcoming": rider_upcoming,
+                "availability": [
+                    _availability_state(col["grid"], marked_slots.get((col["grid"].pk, member["user"].pk)))
+                    for col in squad_grids
+                ],
             })
-        report.append({"squad": squad, "rows": rows})
+        report.append({
+            "squad": squad,
+            "rows": rows,
+            "grids": squad_grids,
+            # The fixed columns (rider, past races, raced, upcoming, next races) plus one
+            # per open grid, for the "no riders" row's colspan.
+            "colspan": 5 + len(squad_grids),
+        })
     return report
 
 
@@ -2003,6 +2103,9 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "paginator": paginator,
             "today": today_local,
             "participation": participation,
+            # Drives the "View Availability" toggle: nothing to toggle when no squad
+            # has an open grid.
+            "has_open_grids": any(group["grids"] for group in participation),
             "display_timezone": str(tz_obj),
             "active_tab": request.GET.get("tab") or "races",
             "guild_id": config.GUILD_ID,
