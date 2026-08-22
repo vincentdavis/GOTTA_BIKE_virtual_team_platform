@@ -85,7 +85,6 @@ INSTALLED_APPS = [
     "django_htmx",
     "tailwind",
     "theme",
-    "reset_migrations",
     "simple_history",
     "django_countries",
     # Project apps

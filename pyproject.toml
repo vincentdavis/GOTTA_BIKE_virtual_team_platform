@@ -43,7 +43,6 @@ dev = [
     "django-tailwind[cookiecutter,honcho,reload]",
     "django-browser-reload>=1.21.0",
     "django-debug-toolbar>=7.1.1",
-    "django-reset-migrations>=0.4.0",
     "django-stubs>=6.1.0",
     "pytest>=9.1.1",
     "pytest-django>=4.14.0",

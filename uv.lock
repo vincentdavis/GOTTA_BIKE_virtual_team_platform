@@ -533,17 +533,6 @@ wheels = [
 ]
 
 [[package]]
-name = "django-reset-migrations"
-version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/23/11/97257821445ec2d8553f1bc3ba696c00f570d717b7cda77fd70d0e4188f8/django_reset_migrations-0.4.0-py3-none-any.whl", hash = "sha256:902921c626a7d2c3348330b8afd8336ab46e4137165027817d5c2aeac884274d", size = 7972, upload-time = "2020-01-09T13:01:53.87Z" },
-]
-
-[[package]]
 name = "django-simple-history"
 version = "3.13.0"
 source = { registry = "https://pypi.org/simple" }
@@ -795,7 +784,6 @@ dependencies = [
 dev = [
     { name = "django-browser-reload" },
     { name = "django-debug-toolbar" },
-    { name = "django-reset-migrations" },
     { name = "django-stubs" },
     { name = "django-tailwind", extra = ["cookiecutter", "honcho", "reload"] },
     { name = "logfire-mcp" },
@@ -845,7 +833,6 @@ requires-dist = [
 dev = [
     { name = "django-browser-reload", specifier = ">=1.21.0" },
     { name = "django-debug-toolbar", specifier = ">=7.1.1" },
-    { name = "django-reset-migrations", specifier = ">=0.4.0" },
     { name = "django-stubs", specifier = ">=6.1.0" },
     { name = "django-tailwind", extras = ["cookiecutter", "honcho", "reload"] },
     { name = "logfire-mcp", specifier = ">=0.9.0" },
