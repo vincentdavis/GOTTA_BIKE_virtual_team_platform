@@ -105,3 +105,21 @@ def test_a_multi_squad_riders_cell_reads_in_a_stable_order(client, event, superu
 
     entry = resp.context["enriched_signups"][0]
     assert [s.name for s in entry["assigned_squads"]] == ["Alpha", "Zulu"]
+
+
+@pytest.mark.django_db
+def test_the_name_and_squad_columns_are_pinned(client, event, superuser, user_model) -> None:
+    """Both classes are load-bearing: table-pin-col-2 alone pins nothing in place.
+
+    It offsets column 2 by --pin-col-2-left, which the page's script only sets, and
+    column 1 only stays put because of table-pin-col. Dropping either silently loses
+    the freeze on a table too wide to read without it.
+    """
+    alpha = Squad.objects.create(event=event, name="Alpha", team_discord_role=222)
+    _rider(user_model, event, "r1", "Ann", alpha)
+    client.force_login(superuser)
+
+    body = client.get(reverse("events:discord_roles", args=[event.pk])).content.decode()
+
+    assert "table-pin-col table-pin-col-2" in body
+    assert "--pin-col-2-left" in body          # the script that supplies the offset

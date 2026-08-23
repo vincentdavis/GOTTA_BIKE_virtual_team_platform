@@ -54,7 +54,7 @@ details[open] .details-arrow { transform: rotate(90deg); }
         {% endif %}
       </div>
       <div class="overflow-x-auto max-h-[70vh] pb-8">
-        <table class="table table-xs table-pin-col" data-roles-table>
+        <table class="table table-xs table-pin-col table-pin-col-2" data-roles-table>
           <thead class="sticky top-0 bg-base-200 z-10">
             <tr>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none whitespace-nowrap">Name</th>
@@ -136,6 +136,28 @@ details[open] .details-arrow { transform: rotate(90deg); }
 </div>
 
 <script>
+// The Squads column is pinned beside Name. Its left offset is the Name column's
+// width, which is content-sized (avatar + full name + badges), so only the browser
+// knows it -- measure and hand it to the CSS. Recomputed on resize and whenever the
+// table reflows, since toggling the Region/Coordinator columns changes its width.
+(function() {
+  var table = document.querySelector('[data-roles-table]');
+  var anchor = table && table.querySelector('thead th:first-child');
+  if (!anchor) return;
+
+  var applied = null;
+  function setPinOffset() {
+    var width = anchor.getBoundingClientRect().width;
+    if (width === applied) return;   // guard: never write back into our own reflow
+    applied = width;
+    table.style.setProperty('--pin-col-2-left', width + 'px');
+  }
+
+  setPinOffset();
+  window.addEventListener('resize', setPinOffset);
+  if (window.ResizeObserver) new ResizeObserver(setPinOffset).observe(anchor);
+})();
+
 (function() {
   var searchInput = document.querySelector('[data-roles-search]');
   var table = document.querySelector('[data-roles-table]');
