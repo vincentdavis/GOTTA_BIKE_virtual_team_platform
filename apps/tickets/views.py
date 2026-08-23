@@ -10,11 +10,35 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from apps.accounts.decorators import team_member_required
+from apps.accounts.models import Permissions
 from apps.tickets.forms import TicketCreateForm, TicketEditForm
 from apps.tickets.models import Ticket
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
+
+    from apps.accounts.models import User
+
+
+def visible_tickets(user: User):
+    """Return the tickets a user may see.
+
+    Holders of ``ticket_admin`` (set in Constance under Permission Mappings) see the
+    whole queue. Everyone else sees the tickets they submitted, plus any assigned to
+    them -- the assignee picker offers every user, so leaving those out would hide a
+    ticket from the person expected to work it.
+
+    Args:
+        user: The requesting user.
+
+    Returns:
+        A ``Ticket`` queryset filtered to what this user may see.
+
+    """
+    qs = Ticket.objects.select_related("submitted_by", "assigned_to")
+    if user.has_permission(Permissions.TICKET_ADMIN):
+        return qs
+    return qs.filter(Q(submitted_by=user) | Q(assigned_to=user))
 
 
 @login_required
@@ -29,7 +53,7 @@ def ticket_list_view(request: HttpRequest) -> HttpResponse:
         Rendered ticket list page.
 
     """
-    qs = Ticket.objects.select_related("submitted_by", "assigned_to").all()
+    qs = visible_tickets(request.user)
 
     status = request.GET.get("status", "")
     category = request.GET.get("category", "")
@@ -115,8 +139,10 @@ def ticket_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         Rendered detail page.
 
     """
+    # 404 rather than 403: a 403 would confirm that ticket #N exists, which leaks the
+    # size and shape of a queue the user is not allowed to read.
     ticket = get_object_or_404(
-        Ticket.objects.select_related("submitted_by", "assigned_to", "closed_by"),
+        visible_tickets(request.user).select_related("closed_by"),
         pk=pk,
     )
     return render(request, "tickets/ticket_detail.html", {"ticket": ticket})
@@ -136,7 +162,7 @@ def ticket_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
         Rendered edit form, or redirect to the detail page on success.
 
     """
-    ticket = get_object_or_404(Ticket, pk=pk)
+    ticket = get_object_or_404(visible_tickets(request.user), pk=pk)
 
     if request.method == "POST":
         previous_status = ticket.status

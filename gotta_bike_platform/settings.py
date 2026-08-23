@@ -504,6 +504,12 @@ CONSTANCE_CONFIG = {
         "Discord role IDs that grant permission to assign Discord roles",
         "json_list_field",
     ),
+    "PERM_TICKET_ADMIN_ROLES": (
+        "[]",
+        "Discord role IDs that grant access to every ticket at /tickets/. Without it a "
+        "member sees only the tickets they submitted or are assigned.",
+        "json_list_field",
+    ),
     # Verification validity periods (in days)
     "WEIGHT_FULL_DAYS": (120, "Days a full weight verification is valid", int),
     "WEIGHT_LIGHT_DAYS": (30, "Days a light weight verification is valid", int),
@@ -1005,6 +1011,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES",
         "PERM_EVENT_ADMIN_ROLES",
         "PERM_ASSIGN_ROLES",
+        "PERM_TICKET_ADMIN_ROLES",
     ),
     "Verification Settings": (
         "CATEGORY_REQUIREMENTS",
