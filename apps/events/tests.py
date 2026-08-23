@@ -2688,8 +2688,8 @@ def test_squad_form_region_role_prefix_validation() -> None:
 
 
 @pytest.mark.django_db
-def test_manage_roles_shows_coordinator_columns(client, superuser, user_model) -> None:
-    """The manage-roles page renders a sortable, toggleable column per coordinator role."""
+def test_discord_roles_shows_coordinator_columns(client, superuser, user_model) -> None:
+    """The Discord Roles page renders a sortable, toggleable column per coordinator role."""
     from django.urls import reverse
 
     from apps.team.models import DiscordRole
@@ -2704,7 +2704,7 @@ def test_manage_roles_shows_coordinator_columns(client, superuser, user_model) -
     EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED)
 
     client.force_login(superuser)
-    resp = client.get(reverse("events:manage_roles", args=[event.pk]))
+    resp = client.get(reverse("events:discord_roles", args=[event.pk]))
     assert resp.status_code == 200
     body = resp.content.decode()
     assert "West Coordinator" in body  # column header

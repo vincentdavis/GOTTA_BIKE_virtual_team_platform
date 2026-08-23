@@ -219,7 +219,7 @@ def test_withdrawing_does_not_strip_the_role(client, event, rider, discord) -> N
 
 
 @pytest.mark.django_db
-def test_manage_roles_shows_a_region_column_set(client, event, rider, user_model) -> None:
+def test_discord_roles_shows_a_region_column_set(client, event, rider, user_model) -> None:
     EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED,
                                signup_timezone=["US EAST"])
     admin = user_model.objects.create_user(
@@ -228,7 +228,7 @@ def test_manage_roles_shows_a_region_column_set(client, event, rider, user_model
     )
     client.force_login(admin)
 
-    resp = client.get(reverse("events:manage_roles", args=[event.pk]))
+    resp = client.get(reverse("events:discord_roles", args=[event.pk]))
     body = resp.content.decode()
 
     assert [c["option"] for c in resp.context["timezone_roles"]] == ["US EAST", "EMEA West"]
@@ -238,7 +238,7 @@ def test_manage_roles_shows_a_region_column_set(client, event, rider, user_model
 
 
 @pytest.mark.django_db
-def test_manage_roles_marks_regions_the_rider_did_not_pick(client, event, rider, user_model) -> None:
+def test_discord_roles_marks_regions_the_rider_did_not_pick(client, event, rider, user_model) -> None:
     """Lets an admin see role granted vs. stated availability at a glance."""
     EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED,
                                signup_timezone=["US EAST"])
@@ -248,7 +248,7 @@ def test_manage_roles_marks_regions_the_rider_did_not_pick(client, event, rider,
     )
     client.force_login(admin)
 
-    resp = client.get(reverse("events:manage_roles", args=[event.pk]))
+    resp = client.get(reverse("events:discord_roles", args=[event.pk]))
     statuses = {s["option"]: s for s in resp.context["enriched_signups"][0]["timezone_role_status"]}
 
     assert statuses["US EAST"]["selected"] is True
@@ -266,7 +266,7 @@ def test_no_region_columns_when_the_event_has_no_map(client, event, rider, user_
     )
     client.force_login(admin)
 
-    body = client.get(reverse("events:manage_roles", args=[event.pk])).content.decode()
+    body = client.get(reverse("events:discord_roles", args=[event.pk])).content.decode()
 
     assert "Region columns" not in body
 

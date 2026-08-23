@@ -189,9 +189,9 @@ def test_unpermitted_menu_items_are_disabled_not_hidden(client, event, coordinat
 
     body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
 
-    assert body.count('class="menu-disabled"') == 2  # Assign riders + Manage roles
+    assert body.count('class="menu-disabled"') == 2  # Assign riders + Discord Roles
     assert "Assign riders" in body  # still listed, just not actionable
-    assert "Manage roles" in body
+    assert "Discord Roles" in body
 
 
 @pytest.mark.django_db

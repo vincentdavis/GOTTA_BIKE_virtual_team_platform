@@ -113,7 +113,7 @@ def roles_to_drop(event: Event, *, before: list | None, after: list | None) -> l
 
 
 def role_columns(event: Event, role_names: dict[str, str] | None = None) -> list[dict]:
-    """Describe the timezone-role columns for the manage-roles table.
+    """Describe the timezone-role columns for the Discord Roles table.
 
     Args:
         event: The event holding the map.

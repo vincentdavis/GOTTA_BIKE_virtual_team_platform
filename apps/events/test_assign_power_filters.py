@@ -131,11 +131,11 @@ def test_assign_page_says_what_to_do_when_nothing_is_mirrored(client, event, bar
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("url_name", ["squad_assign_page", "manage_roles"])
+@pytest.mark.parametrize("url_name", ["squad_assign_page", "discord_roles"])
 def test_back_link_goes_to_manage_squads(client, event, user_model, url_name) -> None:
     """Both pages are reached from Manage Squads, so Back belongs there.
 
-    manage-roles needs `assign_roles` to view, which event_admin alone does not grant.
+    Discord Roles needs `assign_roles` to view, which event_admin alone does not grant.
     """
     admin = user_model.objects.create_user(
         username="ra", email="ra@example.test",

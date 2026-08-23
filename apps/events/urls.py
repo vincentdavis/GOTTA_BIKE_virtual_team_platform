@@ -1,6 +1,7 @@
 """URL configuration for events app."""
 
 from django.urls import path
+from django.views.generic import RedirectView
 
 from apps.events.views import (
     add_members_search_view,
@@ -18,6 +19,7 @@ from apps.events.views import (
     availability_template_create_view,
     availability_template_delete_view,
     availability_template_share_view,
+    discord_roles_view,
     event_all_races_view,
     event_bot_role_check_view,
     event_create_view,
@@ -32,7 +34,6 @@ from apps.events.views import (
     event_signup_withdraw_view,
     event_toggle_coordinator_role_view,
     event_toggle_role_view,
-    manage_roles_view,
     my_events_view,
     race_calendar_ics_view,
     signup_question_delete_view,
@@ -97,7 +98,13 @@ urlpatterns = [
     path("<int:pk>/signup/edit/", event_signup_edit_view, name="event_signup_edit"),
     path("<int:pk>/signup/delete/", event_signup_delete_view, name="event_signup_delete"),
     path("<int:event_pk>/signups/<int:signup_pk>/withdraw/", event_signup_withdraw_view, name="event_signup_withdraw"),
-    path("<int:event_pk>/manage-roles/", manage_roles_view, name="manage_roles"),
+    path("<int:event_pk>/discord-roles/", discord_roles_view, name="discord_roles"),
+    # Renamed from "manage-roles"; kept so captains' existing bookmarks still land.
+    path(
+        "<int:event_pk>/manage-roles/",
+        RedirectView.as_view(pattern_name="events:discord_roles", permanent=True),
+        name="manage_roles_legacy",
+    ),
     path("<int:event_pk>/sync-roles/", sync_event_roles_view, name="sync_event_roles"),
     path("<int:event_pk>/toggle-event-role/<int:user_id>/", event_toggle_role_view, name="event_toggle_role"),
     path(

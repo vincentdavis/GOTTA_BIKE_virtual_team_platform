@@ -71,9 +71,9 @@ def test_partial_failure_still_explains_the_action(client, event, rider, event_a
 
 @pytest.mark.django_db
 def test_both_buttons_say_read_only_before_it_is_clicked(client, event, user_model) -> None:
-    """"Sync Roles" reads like it might push roles outward, so both entry points say so.
+    """The button reads like it might push roles outward, so both entry points say so.
 
-    Viewing manage-roles needs `assign_roles`; event_admin alone can POST the sync but
+    Viewing Discord Roles needs `assign_roles`; event_admin alone can POST the sync but
     cannot open that page.
     """
     admin = user_model.objects.create_user(
@@ -82,9 +82,12 @@ def test_both_buttons_say_read_only_before_it_is_clicked(client, event, user_mod
     )
     client.force_login(admin)
 
-    for url in (reverse("events:manage_roles", args=[event.pk]),
-                reverse("events:squad_assign_page", args=[event.pk])):
+    # The two entry points label the button differently -- "Get Roles" on the Discord
+    # Roles page, still "Sync Roles" on Assign Riders -- but both must carry the
+    # read-only wording, which is the point of this test.
+    for url, label in ((reverse("events:discord_roles", args=[event.pk]), "Get Roles"),
+                       (reverse("events:squad_assign_page", args=[event.pk]), "Sync Roles")):
         body = client.get(url).content.decode()
-        assert "Sync Roles" in body
+        assert label in body
         assert "Read-only" in body
         assert "Nothing is changed in Discord" in body

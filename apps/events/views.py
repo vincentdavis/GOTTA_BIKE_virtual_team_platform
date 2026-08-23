@@ -3550,12 +3550,12 @@ def squad_toggle_captain_role_view(request: HttpRequest, event_pk: int, squad_pk
     role_id = squad.discord_captain_role
     if not role_id:
         messages.error(request, "This squad has no captain Discord role configured.")
-        return redirect("events:manage_roles", event_pk=event_pk)
+        return redirect("events:discord_roles", event_pk=event_pk)
 
     target_user = get_object_or_404(User, pk=user_id)
     if not target_user.discord_id:
         messages.error(request, f"{target_user} has no linked Discord account.")
-        return redirect("events:manage_roles", event_pk=event_pk)
+        return redirect("events:discord_roles", event_pk=event_pk)
 
     role_id_str = str(role_id)
     if target_user.has_discord_role(role_id):
@@ -3627,7 +3627,7 @@ def squad_toggle_captain_role_view(request: HttpRequest, event_pk: int, squad_pk
             response["HX-Trigger"] = json.dumps({"showToast": msg_list})
         return response
 
-    return redirect("events:manage_roles", event_pk=event_pk)
+    return redirect("events:discord_roles", event_pk=event_pk)
 
 
 @require_http_methods(["GET", "POST"])
@@ -5234,8 +5234,8 @@ def sync_event_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     referer = request.META.get("HTTP_REFERER", "")
     if "assign-riders" in referer:
         return redirect("events:squad_assign_page", event_pk=event_pk)
-    if "manage-roles" in referer:
-        return redirect("events:manage_roles", event_pk=event_pk)
+    if "discord-roles" in referer:
+        return redirect("events:discord_roles", event_pk=event_pk)
     return redirect("events:event_detail", pk=event_pk)
 
 
@@ -5329,7 +5329,7 @@ def _timezone_role_rows(event) -> list[dict]:
 @require_GET
 @login_required
 @team_member_required()
-def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+def discord_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """Display consolidated Discord role management for all event signups.
 
     Shows a table of all signups with event role and per-squad role toggle buttons.
@@ -5481,14 +5481,14 @@ def manage_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         ]
 
     logfire.info(
-        "Manage roles page viewed",
+        "Discord Roles page viewed",
         event_id=event_pk,
         user_id=request.user.id,
         signup_count=len(enriched_signups),
     )
     return render(
         request,
-        "events/manage_roles.html",
+        "events/discord_roles.html",
         {
             "event": event,
             "enriched_signups": enriched_signups,
@@ -5530,12 +5530,12 @@ def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) ->
     role_id = event.event_role
     if not role_id:
         messages.error(request, "This event has no Discord role configured.")
-        return redirect("events:manage_roles", event_pk=event_pk)
+        return redirect("events:discord_roles", event_pk=event_pk)
 
     target_user = get_object_or_404(User, pk=user_id)
     if not target_user.discord_id:
         messages.error(request, f"{target_user} has no linked Discord account.")
-        return redirect("events:manage_roles", event_pk=event_pk)
+        return redirect("events:discord_roles", event_pk=event_pk)
 
     role_id_str = str(role_id)
     if target_user.has_discord_role(role_id):
@@ -5602,7 +5602,7 @@ def event_toggle_role_view(request: HttpRequest, event_pk: int, user_id: int) ->
             response["HX-Trigger"] = json.dumps({"showToast": msg_list})
         return response
 
-    return redirect("events:manage_roles", event_pk=event_pk)
+    return redirect("events:discord_roles", event_pk=event_pk)
 
 
 @login_required
@@ -5651,12 +5651,12 @@ def event_toggle_coordinator_role_view(
             admin_user_id=request.user.id,
         )
         messages.error(request, "That role is not managed by this event.")
-        return redirect("events:manage_roles", event_pk=event_pk)
+        return redirect("events:discord_roles", event_pk=event_pk)
 
     target_user = get_object_or_404(User, pk=user_id)
     if not target_user.discord_id:
         messages.error(request, f"{target_user} has no linked Discord account.")
-        return redirect("events:manage_roles", event_pk=event_pk)
+        return redirect("events:discord_roles", event_pk=event_pk)
 
     from apps.team.models import DiscordRole
 
@@ -5727,7 +5727,7 @@ def event_toggle_coordinator_role_view(
             response["HX-Trigger"] = json.dumps({"showToast": msg_list})
         return response
 
-    return redirect("events:manage_roles", event_pk=event_pk)
+    return redirect("events:discord_roles", event_pk=event_pk)
 
 
 @team_member_required(raise_exception=True)

@@ -90,7 +90,7 @@ Read these helpers before touching event/squad views — most non-trivial behavi
 - Squad Discord roles **must** start with one of the event's `prefixes` (server-side re-validated against `DiscordRole` even if the client tampers with the choices list). The squad-role dropdown is disabled when the event has no prefixes set
 - `coordinator_role_ids` ("Regional/Group Coordinators") — multi-select restricted to roles starting with `EVENT_ROLE_PREFIXES`; same server-side re-validation
 - `Squad.region_role` — optional prefix-filtered Discord role auto-**added** when a rider is assigned to the squad and auto-**removed** when they leave, wired into the same `squad_assign_view` add/remove branches and self-join invite flow that manage `team_discord_role` (helpers `_assign_region_role` / `_unassign_region_role_if_unused`). The remove is guarded: `_unassign_region_role_if_unused` keeps the role while the rider is still a `MEMBER` of any **other** squad (across **all** events) whose `region_role` is the same ID — so a region role shared by several squads survives leaving one of them. Like `team_discord_role`, withdraw/signup-delete do **not** strip it (parity, not a bug)
-- Role Setup (`/events/<id>/role-setup/`): editable by `assign_roles` or event head captain. Manage Roles (`/events/<id>/manage-roles/`): same gate
+- Role Setup (`/events/<id>/role-setup/`): editable by `assign_roles` or event head captain. Discord Roles (`/events/<id>/discord-roles/`): same gate
 - Discord thread actions ("Save & Create Thread" / "Save & Post Update") require `status=confirmed`, riders selected, and `squad.discord_channel_id`. Both go through `apps/accounts/discord_service.py`; the resulting URL lands on `slot.thread_link`. Captain, vice-captain, and substitute are added to `allowed_user_ids` so they get pinged even when not racing
 - `signup_notification_channel_id` on `Event`: `0` disables per-rider signup notifications
 - All grid/response/slot times stored in UTC, converted at render. `EventSignup.signup_timezone` and `signup_squad_gender` are only saved when the matching `*_required` flag is on
@@ -290,7 +290,7 @@ Non-obvious gates / behavior not visible from the URL pattern alone:
 - `/events/<id>/squads/manage|add|edit|delete/` — `_can_manage_event_squads` (event admin / superuser / event head captain role holder)
 - `/events/<id>/squads/<sid>/availability/...` — `_can_manage_squad_availability` (above + squad captain/vice-captain + `discord_captain_role` holders)
 - `/events/<id>/role-setup/` — event admins read-only; `assign_roles` or head captain can edit
-- `/events/<id>/manage-roles/` — `assign_roles` or event head captain only
+- `/events/<id>/discord-roles/` — `assign_roles` or event head captain only
 - `/analytics/` — `app_admin` only
 - `/robots.txt` — dynamic (rendered by `gotta_bike_platform/views.py`)
 
@@ -309,7 +309,7 @@ Non-obvious gates / behavior not visible from the URL pattern alone:
 - Uses HTMX for interactivity (`django-htmx` middleware enabled)
 - Google Analytics (GA4) tracking when `GOOGLE_ANALYTICS_ID` is configured (in `base.html`)
 - Client-side analytics tracking JS sends page visit data to `/api/analytics/track/`
-- **Responsive tables (mobile)**: `theme/static/css/responsive-tables.css` (loaded once in `base.html`, plain CSS — no Tailwind rebuild) holds the shared mobile-table patterns. **Pattern A** — wide *matrix* tables (toggle grids like Manage Roles, availability grids): add `table-pin-col` to a `<table>` inside an `overflow-x-auto` wrapper to pin the first column while the rest scrolls horizontally (override `--pin-col-bg` if the table doesn't sit on `base-200`). First live use: `templates/events/manage_roles.html`. **Pattern B** (not yet built) — wide *data* tables (roster, event signup list): cards-on-mobile / table-on-desktop via Tailwind `hidden md:table` + a `md:hidden` card list, kept in the individual templates
+- **Responsive tables (mobile)**: `theme/static/css/responsive-tables.css` (loaded once in `base.html`, plain CSS — no Tailwind rebuild) holds the shared mobile-table patterns. **Pattern A** — wide *matrix* tables (toggle grids like Discord Roles, availability grids): add `table-pin-col` to a `<table>` inside an `overflow-x-auto` wrapper to pin the first column while the rest scrolls horizontally (override `--pin-col-bg` if the table doesn't sit on `base-200`). First live use: `templates/events/discord_roles.html`. **Pattern B** (not yet built) — wide *data* tables (roster, event signup list): cards-on-mobile / table-on-desktop via Tailwind `hidden md:table` + a `md:hidden` card list, kept in the individual templates
 
 #### daisyUI Blueprint MCP
 

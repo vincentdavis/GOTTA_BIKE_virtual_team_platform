@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load accounts_tags %}
 
-{% block title %}Manage Discord Roles - {{ event.title }}{% endblock %}
+{% block title %}Discord Roles - {{ event.title }}{% endblock %}
 
 {% block content %}
 <style>
@@ -15,10 +15,10 @@ details[open] .details-arrow { transform: rotate(90deg); }
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-        <h2 class="card-title text-2xl">Manage Discord Roles &mdash; {{ event.title }}</h2>
+        <h2 class="card-title text-2xl">Discord Roles &mdash; {{ event.title }}</h2>
         <form method="post" action="{% url 'events:sync_event_roles' event.pk %}" class="shrink-0">
           {% csrf_token %}
-          <button type="submit" class="btn btn-outline btn-sm" title="Read-only: refreshes the app's cached copy of each rider's Discord roles. Nothing is changed in Discord.">Sync Roles</button>
+          <button type="submit" class="btn btn-outline btn-sm" title="Read-only: refreshes the app's cached copy of each rider's Discord roles. Nothing is changed in Discord.">Get Roles</button>
         </form>
       </div>
 
