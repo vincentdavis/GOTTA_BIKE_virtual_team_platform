@@ -843,7 +843,11 @@ def _enrich_signups(signups, event=None):
 
     squads_by_user: dict[int, list] = {}
     if event:
-        for sm in SquadMember.objects.filter(squad__event=event).select_related("squad"):
+        for sm in (
+            SquadMember.objects.filter(squad__event=event)
+            .select_related("squad")
+            .order_by("squad__name")          # so the Squads column reads the same every load
+        ):
             squads_by_user.setdefault(sm.user_id, []).append(sm.squad)
 
     event_role_id = str(event.event_role) if event and event.event_role else ""
@@ -5357,6 +5361,18 @@ def discord_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         raise PermissionDenied("You need Assign Roles permission or the Head Captain role for this event.")
     signups = event.signups.select_related("user").filter(status=EventSignup.Status.REGISTERED)
     enriched_signups = _enrich_signups(signups, event=event)
+
+    # Default order: by squad, which is how the role columns are grouped -- reading down
+    # the page then follows the squad you are granting roles for. Riders in no squad
+    # sort last rather than leading with a block of blanks. Matches what clicking the
+    # "Squads" header gives, since the client-side sorter keys on the same cell text.
+    def _squad_sort_key(entry: dict) -> tuple:
+        squads = entry.get("assigned_squads") or []
+        user = entry["user"]
+        name = (user.get_full_name() or user.discord_username or "").lower()
+        return (0 if squads else 1, ", ".join(s.name for s in squads).lower(), name)
+
+    enriched_signups.sort(key=_squad_sort_key)
 
     # Squads that have a Discord role configured
     role_squads = list(event.squads.exclude(team_discord_role=0).exclude(team_discord_role__isnull=True))
