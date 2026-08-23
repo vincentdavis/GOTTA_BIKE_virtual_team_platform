@@ -53,6 +53,37 @@ details[open] .details-arrow { transform: rotate(90deg); }
         </label>
         {% endif %}
       </div>
+      {% comment %}
+      Cell states. Every symbol except the dash is a button that toggles the role, so
+      the legend says what a click does as well as what the symbol means.
+      {% endcomment %}
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-1 mb-2 text-xs">
+        <span class="font-semibold uppercase tracking-wide text-base-content/50">Legend</span>
+        <span class="flex items-center gap-1">
+          <span class="text-success text-base leading-none">&#10003;</span>
+          Has the role &mdash; click to remove
+        </span>
+        <span class="flex items-center gap-1">
+          <span class="text-error text-base leading-none">&#10007;</span>
+          Missing the role &mdash; click to add
+        </span>
+        {% if timezone_roles %}
+        <span class="flex items-center gap-1">
+          <span class="opacity-60"><span class="text-error text-base leading-none">&#10007;</span><span class="text-success text-base leading-none ml-0.5">&#10003;</span></span>
+          Faded region cell &mdash; rider did not pick that region
+        </span>
+        {% endif %}
+        <span class="flex items-center gap-1">
+          <span class="text-base-content/30 text-base leading-none">-</span>
+          Not in that squad &mdash; no role to grant
+        </span>
+      </div>
+      <p class="text-xs text-base-content/60 mb-2">
+        A red &#10007; in a <strong>squad</strong> or <strong>Event</strong> column is drift worth fixing &mdash;
+        the rider is in the squad, or registered, but does not hold the matching role. Elsewhere it is
+        usually just someone who is not a captain or coordinator. Press <strong>Get Roles</strong> first,
+        since this table shows the app's cached copy of Discord.
+      </p>
       <div class="overflow-x-auto max-h-[70vh] pb-8">
         <table class="table table-xs table-pin-col table-pin-col-2" data-roles-table>
           <thead class="sticky top-0 bg-base-200 z-10">

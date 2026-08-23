@@ -123,3 +123,37 @@ def test_the_name_and_squad_columns_are_pinned(client, event, superuser, user_mo
 
     assert "table-pin-col table-pin-col-2" in body
     assert "--pin-col-2-left" in body          # the script that supplies the offset
+
+
+@pytest.mark.django_db
+def test_the_legend_covers_every_cell_state(client, event, superuser, user_model) -> None:
+    """Four states render in the grid, and a legend that omits one is worse than none."""
+    alpha = Squad.objects.create(event=event, name="Alpha", team_discord_role=222)
+    _rider(user_model, event, "r1", "Ann", alpha)
+    event.timezone_options = ["EMEA"]
+    event.timezone_role_map = {"EMEA": "777"}
+    event.save(update_fields=["timezone_options", "timezone_role_map"])
+    client.force_login(superuser)
+
+    body = client.get(reverse("events:discord_roles", args=[event.pk])).content.decode()
+
+    legend = body[body.index(">Legend<"):body.index('overflow-x-auto')]
+    assert "Has the role" in legend
+    assert "Missing the role" in legend
+    assert "did not pick that region" in legend      # the faded cells
+    assert "Not in that squad" in legend             # the dash
+    # The symbols themselves, so the legend cannot drift from what the cells render.
+    assert "&#10003;" in legend and "&#10007;" in legend
+
+
+@pytest.mark.django_db
+def test_the_faded_entry_is_dropped_without_region_columns(client, event, superuser, user_model) -> None:
+    """Explaining a cell state this event cannot produce is just noise."""
+    alpha = Squad.objects.create(event=event, name="Alpha", team_discord_role=222)
+    _rider(user_model, event, "r1", "Ann", alpha)
+    client.force_login(superuser)
+
+    body = client.get(reverse("events:discord_roles", args=[event.pk])).content.decode()
+
+    assert ">Legend<" in body
+    assert "did not pick that region" not in body
