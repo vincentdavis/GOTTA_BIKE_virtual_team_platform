@@ -71,6 +71,25 @@ function toggleAllRacesRiders(key) {
   }
 }
 
+// Participation filters: timezone + gender, matching the Manage Squads page. They hide
+// whole squad blocks, since both are properties of the squad rather than the rider.
+function filterParticipation() {
+  var tzEl = document.getElementById("filter-participation-timezone");
+  var tz = tzEl ? tzEl.value : "";
+  var genderEl = document.getElementById("filter-participation-gender");
+  var gender = genderEl ? genderEl.value : "";
+  var shown = 0;
+  document.querySelectorAll(".participation-squad").forEach(function (block) {
+    var match = true;
+    if (tz && block.dataset.timezone !== tz) match = false;
+    if (match && gender && block.dataset.gender !== gender) match = false;
+    block.style.display = match ? "" : "none";
+    if (match) shown++;
+  });
+  var none = document.getElementById("participation-no-results");
+  if (none) none.classList.toggle("hidden", shown !== 0);
+}
+
 // "View Availability" columns on the participation report. Off by default -- the
 // report's main job is the race tallies, and the availability columns are only
 // meaningful while grids are still open.

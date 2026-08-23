@@ -18,9 +18,45 @@ upcoming_count and the matching raced / upcoming lists of {name, date}, and an
 <div class="mb-4"></div>
 {% endif %}
 
+{% if participation_timezones or participation_genders %}
+<div class="mb-4">
+  <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+    {% if participation_timezones %}
+    <select id="filter-participation-timezone" class="select select-bordered select-sm w-full sm:w-auto"
+            onchange="filterParticipation()">
+      <option value="">All timezones</option>
+      {% for tz in participation_timezones %}<option value="{{ tz }}">{{ tz }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    {% if participation_genders %}
+    <select id="filter-participation-gender" class="select select-bordered select-sm w-full sm:w-auto"
+            onchange="filterParticipation()">
+      <option value="">All genders</option>
+      {% for g in participation_genders %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+    </select>
+    {% endif %}
+  </div>
+  <p id="participation-no-results" class="text-sm text-base-content/60 mt-2 hidden">No squads match your filters.</p>
+</div>
+{% endif %}
+
 {% for group in participation %}
-<div class="mb-6">
-  <h3 class="font-semibold mb-2">{{ group.squad.name }}</h3>
+{% comment %}
+The filters hide whole squad blocks, so the timezone/gender live on the block rather
+than on each row -- they are properties of the squad, not the rider.
+{% endcomment %}
+<div class="mb-6 participation-squad"
+     data-timezone="{{ group.squad.squad_timezone|default:'' }}"
+     data-gender="{{ group.squad.gender|default:'' }}">
+  <h3 class="font-semibold mb-2 flex flex-wrap items-center gap-2">
+    <span>{{ group.squad.name }}</span>
+    {% if group.squad.squad_timezone %}
+    <span class="badge badge-ghost badge-sm font-normal">{{ group.squad.squad_timezone }}</span>
+    {% endif %}
+    {% if group.squad.gender %}
+    <span class="badge badge-outline badge-sm font-normal">{{ group.squad.gender }}</span>
+    {% endif %}
+  </h3>
   <div class="overflow-x-auto">
     <table class="table table-sm">
       <thead>

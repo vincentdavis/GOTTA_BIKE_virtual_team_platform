@@ -2275,6 +2275,10 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
     slots = _build_scheduled_race_slots(selections, user_tz, today_local)
     participation = _build_participation_report(event, tz_obj, now_utc)
+    # Option lists for the participation filters, built from the squads actually
+    # present so a value that would match nothing is never offered.
+    participation_timezones = sorted({g["squad"].squad_timezone for g in participation if g["squad"].squad_timezone})
+    participation_genders = sorted({g["squad"].gender for g in participation if g["squad"].gender})
 
     logfire.debug(
         "Event all races viewed",
@@ -2296,6 +2300,8 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "paginator": paginator,
             "today": today_local,
             "participation": participation,
+            "participation_timezones": participation_timezones,
+            "participation_genders": participation_genders,
             # Drives the "View Availability" toggle: nothing to toggle when no squad
             # has an availability sheet.
             "has_open_grids": any(group["grids"] for group in participation),
