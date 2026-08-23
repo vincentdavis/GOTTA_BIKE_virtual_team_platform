@@ -291,6 +291,7 @@ Non-obvious gates / behavior not visible from the URL pattern alone:
 - `/events/<id>/squads/<sid>/availability/...` — `_can_manage_squad_availability` (above + squad captain/vice-captain + `discord_captain_role` holders)
 - `/events/<id>/role-setup/` — event admins read-only; `assign_roles` or head captain can edit
 - `/events/<id>/discord-roles/` — `assign_roles`, event head captain, or an event coordinator role
+- `/events/<id>/signups/export/` — signup CSV; **narrower than the signup table**: event head captain or coordinator role only (plus superusers). Not `event_admin`
 - `/analytics/` — `app_admin` only
 - `/robots.txt` — dynamic (rendered by `gotta_bike_platform/views.py`)
 

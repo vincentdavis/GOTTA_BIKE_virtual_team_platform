@@ -139,6 +139,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "description": "Manage Discord role assignments for event and squad members",
         "views": [
             "/events/{id}/discord-roles/ - Discord Roles page for event signups (also head captain / coordinators)",
+            "/events/{id}/signups/export/ - Download event signups as CSV (head captain / coordinators only)",
             "/events/{id}/toggle-event-role/{user_id}/ - Toggle event Discord role",
             "/events/{id}/toggle-coordinator-role/{user_id}/{role_id}/ - Toggle a coordinator Discord role",
             "/events/{id}/squads/{squad_id}/toggle-role/{user_id}/ - Toggle squad Discord role",

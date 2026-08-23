@@ -36,6 +36,7 @@ from apps.events.views import (
     event_toggle_role_view,
     my_events_view,
     race_calendar_ics_view,
+    signup_export_view,
     signup_question_delete_view,
     signup_question_edit_view,
     signup_questions_view,
@@ -98,6 +99,7 @@ urlpatterns = [
     path("<int:pk>/signup/edit/", event_signup_edit_view, name="event_signup_edit"),
     path("<int:pk>/signup/delete/", event_signup_delete_view, name="event_signup_delete"),
     path("<int:event_pk>/signups/<int:signup_pk>/withdraw/", event_signup_withdraw_view, name="event_signup_withdraw"),
+    path("<int:event_pk>/signups/export/", signup_export_view, name="signup_export"),
     path("<int:event_pk>/discord-roles/", discord_roles_view, name="discord_roles"),
     # Renamed from "manage-roles"; kept so captains' existing bookmarks still land.
     path(

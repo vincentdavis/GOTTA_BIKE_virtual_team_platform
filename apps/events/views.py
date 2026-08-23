@@ -1,5 +1,6 @@
 """Views for events app."""
 
+import csv
 import json
 import re
 from collections import defaultdict
@@ -1332,6 +1333,9 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "answer_panel_open": answer_panel_open,
             "can_view_signup_table": can_view_signup_table,
             "can_view_signup_notes": can_view_signup_notes,
+            # Narrower than viewing the table: the export is a bulk extract of every
+            # rider's details, so only the people running the event get the button.
+            "can_export_signups": _can_export_event_signups(request.user, event),
             "can_manage_signup_questions": _can_manage_signup_questions(request.user),
             "is_event_admin": request.user.is_event_admin,
             "can_view_signups": can_view_signups,
@@ -1841,6 +1845,178 @@ def _availability_columns(event: Event, tz_obj: ZoneInfo, today_local: date) -> 
             ),
         })
     return by_squad
+
+
+@login_required
+@team_member_required()
+@require_GET
+def signup_export_view(request: HttpRequest, event_pk: int) -> HttpResponse:
+    """Download the event's registered signups as CSV.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+
+    Returns:
+        A CSV attachment.
+
+    Raises:
+        PermissionDenied: If the user may not export this event's signups.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    if not _can_export_event_signups(request.user, event):
+        from django.core.exceptions import PermissionDenied
+
+        logfire.warning(
+            "Unauthorized signup export attempt",
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        raise PermissionDenied("Only the event's head captain or a coordinator can export signups.")
+
+    signups = event.signups.select_related("user").filter(status=EventSignup.Status.REGISTERED)
+    enriched = _enrich_signups(signups, event=event)
+    enriched.sort(key=lambda e: (e["user"].get_full_name() or e["user"].discord_username or "").lower())
+    questions = active_questions(event)
+    header, rows = _signup_export_rows(event, enriched, questions)
+
+    slug = re.sub(r"[^A-Za-z0-9]+", "-", event.title).strip("-").lower() or "event"
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{slug}-signups.csv"'
+    writer = csv.writer(response)
+    writer.writerow(header)
+    writer.writerows(rows)
+
+    logfire.info(
+        "Event signups exported",
+        event_id=event_pk,
+        user_id=request.user.id,
+        row_count=len(rows),
+    )
+    return response
+
+
+def _can_export_event_signups(user: User, event: Event) -> bool:
+    """Check if a user may download the event's signup list.
+
+    Deliberately narrower than viewing the table: an export is a bulk extract of
+    every rider's details in one file, so it is limited to the people running the
+    event -- its head captain and its regional/group coordinators. Superusers pass
+    as they do everywhere.
+
+    Args:
+        user: The requesting user.
+        event: The event whose signups would be exported.
+
+    Returns:
+        True if the user may export this event's signups.
+
+    """
+    if user.is_superuser:
+        return True
+    if event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id):
+        return True
+    return _is_event_coordinator(user, event)
+
+
+# Cells beginning with these are executed as formulas by Excel / Sheets when the file
+# is opened. Rider-authored text (notes, free-text answers, Discord display names) goes
+# straight into this export, so it is prefixed with an apostrophe and rendered inert.
+_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(value: object) -> object:
+    """Neutralise a spreadsheet formula in a text cell.
+
+    Only strings are touched, so a negative rating stays a number rather than
+    becoming text a spreadsheet cannot sum.
+
+    Args:
+        value: The cell value.
+
+    Returns:
+        The value, prefixed with an apostrophe if it would otherwise be evaluated.
+
+    """
+    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
+def _signup_export_rows(event: Event, enriched: list[dict], questions: list) -> tuple[list[str], list[list]]:
+    """Build the header and data rows for the signup CSV.
+
+    Columns mirror the signup table on the event page, including the ones hidden
+    behind the column picker -- the export is the whole list, not the current view.
+
+    Args:
+        event: The event being exported.
+        enriched: Enriched signup dicts from ``_enrich_signups``.
+        questions: The event's active signup questions, one column each.
+
+    Returns:
+        ``(header, rows)`` ready to hand to ``csv.writer``.
+
+    """
+    header = ["Name", "Discord", "ZWID", "Timezone"]
+    if event.squad_gender_required:
+        header.append("Squad Gender")
+    header += [
+        "Gender", "ZP Category", "ZP Category (W)", "ZR Category", "FTP", "WKG",
+        "zFTP", "zFTP W/kg", "zMAP", "zMAP W/kg", "Zauth", "Race Verified",
+    ]
+    if event.event_role:
+        header.append("Event Role")
+    header += [
+        "Squads", "Notes", "Signed Up", "Age", "Current Rating", "Current Cat",
+        "Max30 Rating", "Max30 Cat", "Max90 Rating", "Max90 Cat", "Phenotype",
+    ]
+    header += [q.label for q in questions]
+
+    def _zauth(user: User) -> str:
+        if user.is_zauth_verified:
+            return "Zauth"
+        if user.zwid_verified:
+            return user.get_zwid_verification_method_display() or "Other"
+        return ""
+
+    rows = []
+    for e in enriched:
+        user = e["user"]
+        signup = e["signup"]
+        row = [
+            user.get_full_name() or user.discord_username or "",
+            user.discord_username or "",
+            e["zwid"] or "",
+            ", ".join(signup.signup_timezone or []),
+        ]
+        if event.squad_gender_required:
+            row.append(", ".join(signup.signup_squad_gender or []))
+        row += [
+            e["gender"],
+            e["zp_category"], e["zp_category_w"], e["zr_category"],
+            e["zp_ftp"] or "", e["wkg"] or "",
+            e["z_ftp"] or "", e["z_ftp_wkg"] or "",
+            e["z_map"] or "", e["z_map_wkg"] or "",
+            _zauth(user),
+            "Extra Verified" if e["is_extra_verified"] else ("Yes" if e["is_race_ready"] else "No"),
+        ]
+        if event.event_role:
+            row.append("Yes" if e["has_event_role"] else "No")
+        row += [
+            ", ".join(sq.name for sq in e["assigned_squads"]),
+            signup.notes or "",
+            signup.created_at.isoformat() if signup.created_at else "",
+            e["zr_age"], e["zr_current_rating"] or "", e["zr_current_category"],
+            e["zr_max30_rating"] or "", e["zr_max30_category"],
+            e["zr_max90_rating"] or "", e["zr_max90_category"],
+            e["zr_phenotype"],
+        ]
+        answers = {a["question"].pk: a["display"] for a in e["custom_answers"]}
+        row += [answers.get(q.pk, "") for q in questions]
+        rows.append([_csv_safe(cell) for cell in row])
+    return header, rows
 
 
 def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetime) -> list[dict]:
