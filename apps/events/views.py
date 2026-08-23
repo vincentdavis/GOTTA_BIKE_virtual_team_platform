@@ -5187,8 +5187,12 @@ def sync_event_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
     Read-only with respect to Discord: it fetches each registered rider's current guild
     roles and overwrites the app's ``User.discord_roles`` cache, which is what the role
-    grids render from. It never grants or removes a role. The result message says so,
-    because a "sync" button reads like it might push changes outward.
+    grids render from. It never grants or removes a role.
+
+    "Sync" reads as two-directional, so both buttons that reach this view are labelled
+    "Get Roles" and the result message appends ``SYNC_ROLES_EXPLAINER`` to say outright
+    that nothing changed in Discord. The view, its URL name and that constant kept the
+    older wording -- only the user-facing labels moved.
 
     Args:
         request: The HTTP request.
