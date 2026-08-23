@@ -5188,7 +5188,7 @@ def sync_event_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     Read-only with respect to Discord: it fetches each registered rider's current guild
     roles and overwrites the app's ``User.discord_roles`` cache, which is what the role
     grids render from. It never grants or removes a role. The result message says so,
-    because "Sync Roles" reads like it might push changes outward.
+    because a "sync" button reads like it might push changes outward.
 
     Args:
         request: The HTTP request.

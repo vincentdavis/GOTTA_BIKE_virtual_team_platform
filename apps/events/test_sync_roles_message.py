@@ -1,4 +1,4 @@
-"""The Sync Roles button explains itself: it is a read-only cache refresh.
+"""The Get Roles button explains itself: it is a read-only cache refresh.
 
 The Discord call is patched at the ``apps.events.views`` boundary, so no test here
 makes a real HTTP request.
@@ -82,12 +82,10 @@ def test_both_buttons_say_read_only_before_it_is_clicked(client, event, user_mod
     )
     client.force_login(admin)
 
-    # The two entry points label the button differently -- "Get Roles" on the Discord
-    # Roles page, still "Sync Roles" on Assign Riders -- but both must carry the
-    # read-only wording, which is the point of this test.
-    for url, label in ((reverse("events:discord_roles", args=[event.pk]), "Get Roles"),
-                       (reverse("events:squad_assign_page", args=[event.pk]), "Sync Roles")):
+    for url in (reverse("events:discord_roles", args=[event.pk]),
+                reverse("events:squad_assign_page", args=[event.pk])):
         body = client.get(url).content.decode()
-        assert label in body
+        assert "Get Roles" in body
+        assert "Sync Roles" not in body      # the label it used to have, and the one that misled
         assert "Read-only" in body
         assert "Nothing is changed in Discord" in body
