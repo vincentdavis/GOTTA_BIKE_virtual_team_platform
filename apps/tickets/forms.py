@@ -75,9 +75,24 @@ class TicketEditForm(forms.ModelForm):
         """
         super().__init__(*args, **kwargs)
         # Late import avoids a circular dependency at module load time.
-        from apps.accounts.models import User
+        from apps.accounts.models import Permissions, User
 
-        qs = User.objects.order_by("first_name", "last_name", "discord_username")
+        # Membership cannot be a DB filter: has_permission walks superuser ->
+        # permission_overrides -> Discord roles -> legacy roles, and reimplementing that
+        # precedence here would drift from the real check. The ticket edit form is
+        # admin-facing and rare, so one pass over active users is the cheaper mistake.
+        active = User.objects.filter(is_active=True)
+        member_ids = [u.pk for u in active if u.has_permission(Permissions.TEAM_MEMBER)]
+
+        # Keep whoever is already assigned selectable even if they have since left the
+        # team, so a stale assignee cannot block an unrelated edit to the same ticket.
+        current = self.instance.assigned_to_id if self.instance and self.instance.pk else None
+        if current and current not in member_ids:
+            member_ids.append(current)
+
+        qs = User.objects.filter(pk__in=member_ids).order_by(
+            "first_name", "last_name", "discord_username"
+        )
         self.fields["assigned_to"].queryset = qs
         self.fields["assigned_to"].label_from_instance = lambda u: (
             f"{u.first_name} {u.last_name}".strip()

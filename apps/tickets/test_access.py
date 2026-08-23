@@ -153,3 +153,93 @@ def test_system_generated_tickets_reach_admins_only(client, team_member, ticket_
 
     client.force_login(ticket_admin)
     assert system.title in client.get(reverse("tickets:ticket_list")).content.decode()
+
+
+@pytest.mark.django_db
+def test_the_assignee_dropdown_lists_only_team_members(client, ticket_admin, user_model) -> None:
+    """The picker used to offer every row in the user table, team member or not."""
+    member = user_model.objects.create_user(
+        username="amember", email="am@example.test", first_name="Ateam", last_name="Member",
+        permission_overrides={"team_member": True},
+    )
+    outsider = user_model.objects.create_user(
+        username="anoutsider", email="ao@example.test", first_name="Nota", last_name="Member",
+    )
+    inactive = user_model.objects.create_user(
+        username="aninactive", email="ai@example.test", first_name="Gone", last_name="Away",
+        permission_overrides={"team_member": True}, is_active=False,
+    )
+    ticket = _ticket(ticket_admin)
+    client.force_login(ticket_admin)
+
+    resp = client.get(reverse("tickets:ticket_edit", args=[ticket.pk]))
+    choices = {u.pk for u in resp.context["form"].fields["assigned_to"].queryset}
+
+    assert member.pk in choices
+    assert outsider.pk not in choices
+    assert inactive.pk not in choices
+
+
+@pytest.mark.django_db
+def test_assigning_to_a_non_member_is_rejected_on_post(client, ticket_admin, user_model) -> None:
+    """Trimming the dropdown is presentation; the queryset is what actually validates."""
+    outsider = user_model.objects.create_user(username="out2", email="o2@example.test")
+    ticket = _ticket(ticket_admin)
+    client.force_login(ticket_admin)
+
+    resp = client.post(
+        reverse("tickets:ticket_edit", args=[ticket.pk]),
+        data={"title": ticket.title, "details": "d", "category": ticket.category,
+              "priority": ticket.priority, "status": ticket.status,
+              "assigned_to": outsider.pk, "resolution": ""},
+    )
+
+    assert resp.status_code == 200                      # redisplayed with errors
+    assert "assigned_to" in resp.context["form"].errors
+    ticket.refresh_from_db()
+    assert ticket.assigned_to_id is None
+
+
+@pytest.mark.django_db
+def test_an_assignee_who_left_the_team_does_not_block_editing(client, ticket_admin, user_model) -> None:
+    """Dropping them from the queryset would fail validation on an unrelated edit."""
+    former = user_model.objects.create_user(
+        username="former", email="f@example.test", first_name="Former", last_name="Member",
+    )
+    ticket = _ticket(ticket_admin, assigned_to=former)
+    client.force_login(ticket_admin)
+
+    resp = client.post(
+        reverse("tickets:ticket_edit", args=[ticket.pk]),
+        data={"title": "Retitled", "details": "d", "category": ticket.category,
+              "priority": ticket.priority, "status": ticket.status,
+              "assigned_to": former.pk, "resolution": ""},
+    )
+
+    assert resp.status_code == 302
+    ticket.refresh_from_db()
+    assert ticket.title == "Retitled"
+
+
+@pytest.mark.django_db
+def test_anonymous_visitors_are_sent_to_log_in(client) -> None:
+    for name, args in (
+        ("tickets:ticket_list", []), ("tickets:ticket_create", []),
+        ("tickets:ticket_detail", [1]), ("tickets:ticket_edit", [1]),
+    ):
+        resp = client.get(reverse(name, args=args))
+        assert resp.status_code == 302, name
+        assert "/accounts/login/" in resp["Location"], name
+
+
+@pytest.mark.django_db
+def test_a_logged_in_non_team_member_gets_nowhere(client, user) -> None:
+    """`user` has no permissions at all -- a Discord login without the team role."""
+    for name, args in (
+        ("tickets:ticket_list", []), ("tickets:ticket_create", []),
+        ("tickets:ticket_detail", [1]), ("tickets:ticket_edit", [1]),
+    ):
+        client.force_login(user)
+        resp = client.get(reverse(name, args=args))
+        assert resp.status_code in (302, 403), name
+        assert resp.status_code != 200, name
