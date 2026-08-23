@@ -1415,7 +1415,13 @@ class AvailabilityGrid(models.Model):
 
         """
         if not self.title:
-            self.title = f"{self.squad.event.title} {self.squad.name} {self.start_date} - {self.end_date}"
+            # A single-day grid would otherwise read "... 2026-10-27 - 2026-10-27".
+            span = (
+                str(self.start_date)
+                if self.start_date == self.end_date
+                else f"{self.start_date} - {self.end_date}"
+            )
+            self.title = f"{self.squad.event.title} {self.squad.name} {span}"
         super().save(*args, **kwargs)
 
     @property

@@ -132,7 +132,7 @@
   {% endif %}
 
   <p class="text-sm text-base-content/50 mb-4">
-    Click cells to mark when you are available. Blocked cells (dark) cannot be selected.
+    Click cells to mark when you are available. Striped cells cannot be selected.
   </p>
 
   <label class="label cursor-pointer gap-2 mb-3 py-0 justify-start">
@@ -174,11 +174,17 @@
       <span class="inline-block rounded avail-cell" data-state="unselected" style="width: 1.5rem; height: 1rem; cursor: default;"></span>
       <span>Unselected</span>
     </div>
-    <div class="flex items-center gap-1">
+    {% comment %}
+    Both states are conditional on the built grid actually containing one. Blocked
+    cells come from the grid config, but "not in your timezone" only appears once the
+    client converts, and changes as the viewer's timezone does -- so buildGrid decides,
+    not the server. Hidden until it says otherwise.
+    {% endcomment %}
+    <div class="flex items-center gap-1 hidden" data-legend-for="cell-blocked">
       <span class="inline-block rounded avail-cell cell-blocked" style="width: 1.5rem; height: 1rem; cursor: default;"></span>
       <span>Blocked</span>
     </div>
-    <div class="flex items-center gap-1">
+    <div class="flex items-center gap-1 hidden" data-legend-for="cell-inactive">
       <span class="inline-block rounded avail-cell cell-inactive" style="width: 1.5rem; height: 1rem; cursor: default;"></span>
       <span>Not in your timezone</span>
     </div>
@@ -372,6 +378,16 @@
     gridContainer.innerHTML = '';
     gridContainer.appendChild(table);
     attachGridEvents(table);
+    syncLegend(table);
+  }
+
+  // Show a legend entry only when the grid has a cell in that state. Re-run on every
+  // build, since switching timezone can add or remove the inactive edge cells.
+  function syncLegend(table) {
+    document.querySelectorAll('[data-legend-for]').forEach(function(item) {
+      var present = !!table.querySelector('.' + item.dataset.legendFor);
+      item.classList.toggle('hidden', !present);
+    });
   }
 
   function attachGridEvents(table) {
