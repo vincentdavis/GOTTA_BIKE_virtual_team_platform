@@ -13,6 +13,7 @@
   [data-signup-table] [data-col="wkg"],
   [data-signup-table] [data-col="zftp"],
   [data-signup-table] [data-col="zmap"],
+  [data-signup-table] [data-col="zauth"],
   [data-signup-table] [data-col="notes"],
   [data-signup-table] [data-col="custom_answers"]{display:none!important}
   /* Pin the caret + Name columns of the squads summary table while the rest
@@ -272,6 +273,7 @@
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="wkg" checked> WKG</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zftp" checked> zFTP</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zmap" checked> zMAP</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zauth" checked> Zauth</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="verified" checked> Verified</label></li>
                 {% if squads %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad" checked> Squad</label></li>{% endif %}
                 {% if can_view_signup_notes %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="notes" checked> Notes</label></li>{% endif %}
@@ -312,6 +314,7 @@
                 <th data-col="wkg" data-sort="num" class="cursor-pointer hover:text-primary select-none">WKG</th>
                 <th data-col="zftp" data-sort="num" class="cursor-pointer hover:text-primary select-none">zFTP</th>
                 <th data-col="zmap" data-sort="num" class="cursor-pointer hover:text-primary select-none">zMAP</th>
+                <th data-col="zauth" data-sort="text" class="cursor-pointer hover:text-primary select-none" title="How the rider's Zwift account was verified. Squads with &quot;require zauth&quot; accept only Zwift OAuth.">Zauth</th>
                 <th data-col="verified" data-sort="text" class="cursor-pointer hover:text-primary select-none">Verified</th>
                 {% if event.event_role %}<th data-col="event_role" data-sort="text" class="cursor-pointer hover:text-primary select-none">Event Role</th>{% endif %}
                 {% if squads %}<th data-col="squad" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>{% endif %}
@@ -398,6 +401,15 @@
                   {% if entry.z_map_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ entry.z_map_wkg|floatformat:2 }}</span>{% endif %}
                   {% else %}
                   <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="zauth" data-sort-value="{% if entry.user.is_zauth_verified %}1{% elif entry.user.zwid_verified %}2{% else %}3{% endif %}">
+                  {% if entry.user.is_zauth_verified %}
+                  <span class="badge badge-success badge-sm" title="Connected through Zwift OAuth">Zauth</span>
+                  {% elif entry.user.zwid_verified %}
+                  <span class="badge badge-warning badge-sm badge-outline" title="Verified, but not through Zwift OAuth -- fails a squad that requires zauth">{{ entry.user.get_zwid_verification_method_display|default:"Other" }}</span>
+                  {% else %}
+                  <span class="text-base-content/30" title="Zwift account not verified">-</span>
                   {% endif %}
                 </td>
                 <td data-col="verified">
