@@ -3,10 +3,21 @@
       hx-swap="outerHTML"
       class="inline">
   {% csrf_token %}
+  {# `not_member` is inverted deliberately: callers that only ever render actual  #}
+  {# members (the squad list on event_detail) omit it, and an absent variable is  #}
+  {# falsy -- so they keep the plain has/hasn't behaviour with no changes.        #}
   {% if has_role %}
+  {% if not_member %}
+  <button type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Has this role but is not in the squad &mdash; click to remove">
+    <span class="text-warning text-xl">&#10003;</span>
+  </button>
+  {% else %}
   <button type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to remove role">
     <span class="text-success text-xl">&#10003;</span>
   </button>
+  {% endif %}
+  {% elif not_member %}
+  <span class="text-base-content/30">-</span>
   {% else %}
   <button type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to add role">
     <span class="text-error text-xl">&#10007;</span>

@@ -57,8 +57,10 @@ details[open] .details-arrow { transform: rotate(90deg); }
       Cell states. Every symbol except the dash is a button that toggles the role, so
       the legend says what a click does as well as what the symbol means.
       {% endcomment %}
+      <details class="collapse bg-base-300 rounded-lg mb-2">
+        <summary class="collapse-title text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2 min-h-0 cursor-pointer"><span class="inline-block transition-transform duration-200 details-arrow mr-1">&#9654;</span>Legend</summary>
+        <div class="collapse-content">
       <div class="flex flex-wrap items-center gap-x-5 gap-y-1 mb-2 text-xs">
-        <span class="font-semibold uppercase tracking-wide text-base-content/50">Legend</span>
         <span class="flex items-center gap-1">
           <span class="text-success text-base leading-none">&#10003;</span>
           Has the role &mdash; click to remove
@@ -74,16 +76,22 @@ details[open] .details-arrow { transform: rotate(90deg); }
         </span>
         {% endif %}
         <span class="flex items-center gap-1">
+          <span class="text-warning text-base leading-none">&#10003;</span>
+          Has a role they should not &mdash; not in that squad; click to remove
+        </span>
+        <span class="flex items-center gap-1">
           <span class="text-base-content/30 text-base leading-none">-</span>
-          Not in that squad &mdash; no role to grant
+          Not in that squad, no role &mdash; nothing to do
         </span>
       </div>
-      <p class="text-xs text-base-content/60 mb-2">
+      <p class="text-xs text-base-content/60">
         A red &#10007; in a <strong>squad</strong> or <strong>Event</strong> column is drift worth fixing &mdash;
         the rider is in the squad, or registered, but does not hold the matching role. Elsewhere it is
         usually just someone who is not a captain or coordinator. Press <strong>Get Roles</strong> first,
         since this table shows the app's cached copy of Discord.
       </p>
+        </div>
+      </details>
       <div class="overflow-x-auto max-h-[70vh] pb-8">
         <table class="table table-xs table-pin-col table-pin-col-2" data-roles-table>
           <thead class="sticky top-0 bg-base-200 z-10">
@@ -125,22 +133,18 @@ details[open] .details-arrow { transform: rotate(90deg); }
                 {% include "events/_event_role_cell.html" with event_pk=event.pk member_user_pk=entry.user.pk has_role=entry.has_event_role %}
               </td>
               {% endif %}
+              {% comment %}
+              The partial owns all four states now, including the dash, so a cell that
+              HTMX swaps after a click renders the same way as one drawn on page load.
+              {% endcomment %}
               {% for srs in entry.squad_role_status %}
               <td class="text-center">
-                {% if srs.is_member %}
-                  {% include "events/_squad_role_cell.html" with event_pk=event.pk squad_pk=srs.squad.pk member_user_pk=entry.user.pk has_role=srs.has_role %}
-                {% else %}
-                  <span class="text-base-content/30">-</span>
-                {% endif %}
+                {% include "events/_squad_role_cell.html" with event_pk=event.pk squad_pk=srs.squad.pk member_user_pk=entry.user.pk has_role=srs.has_role not_member=srs.is_member|yesno:",1" %}
               </td>
               {% endfor %}
               {% for crs in entry.captain_role_status %}
               <td class="text-center">
-                {% if crs.is_member %}
-                  {% include "events/_squad_captain_role_cell.html" with event_pk=event.pk squad_pk=crs.squad.pk member_user_pk=entry.user.pk has_role=crs.has_role %}
-                {% else %}
-                  <span class="text-base-content/30">-</span>
-                {% endif %}
+                {% include "events/_squad_captain_role_cell.html" with event_pk=event.pk squad_pk=crs.squad.pk member_user_pk=entry.user.pk has_role=crs.has_role not_member=crs.is_member|yesno:",1" %}
               </td>
               {% endfor %}
               {% for tzs in entry.timezone_role_status %}
@@ -161,6 +165,55 @@ details[open] .details-arrow { transform: rotate(90deg); }
       </div>
       {% else %}
       <p class="text-sm text-base-content/70">No registered signups for this event.</p>
+      {% endif %}
+
+      {% if stragglers %}
+      {% comment %}
+      Not in the table above, which lists registered signups only. Withdrawing does not
+      strip roles the way leaving a squad does, so these would otherwise be invisible.
+      {% endcomment %}
+      <div class="mt-6">
+        <h3 class="font-semibold text-warning text-sm mb-1">Not registered, still holding roles</h3>
+        <p class="text-xs text-base-content/60 mb-2">
+          These riders withdrew or were never registered, but still hold roles this event granted.
+          Click a role to remove it. Coordinator roles are not listed &mdash; those are a job, not a
+          consequence of racing.
+        </p>
+        <div class="overflow-x-auto">
+          <table class="table table-xs">
+            <thead>
+              <tr><th class="text-left">Rider</th><th class="text-left">Roles still held</th></tr>
+            </thead>
+            <tbody>
+              {% for row in stragglers %}
+              <tr>
+                <td class="font-medium whitespace-nowrap">
+                  {{ row.user.get_full_name|default:row.user.discord_username }}
+                </td>
+                <td>
+                  <div class="flex flex-wrap items-center gap-3">
+                    {% for h in row.held %}
+                    <span class="flex items-center gap-1 whitespace-nowrap">
+                      {% if h.kind == "event" %}
+                        {% include "events/_event_role_cell.html" with event_pk=event.pk member_user_pk=row.user.pk has_role=1 %}
+                      {% elif h.kind == "squad" %}
+                        {% include "events/_squad_role_cell.html" with event_pk=event.pk squad_pk=h.squad.pk member_user_pk=row.user.pk has_role=1 not_member=1 %}
+                      {% elif h.kind == "captain" %}
+                        {% include "events/_squad_captain_role_cell.html" with event_pk=event.pk squad_pk=h.squad.pk member_user_pk=row.user.pk has_role=1 not_member=1 %}
+                      {% else %}
+                        {% include "events/_coordinator_role_cell.html" with event_pk=event.pk member_user_pk=row.user.pk role_id=h.role_id role_name=h.role_name has_role=1 %}
+                      {% endif %}
+                      <span class="text-xs">{{ h.label }}</span>
+                    </span>
+                    {% endfor %}
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
       {% endif %}
     </div>
   </div>

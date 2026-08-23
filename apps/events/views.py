@@ -121,7 +121,10 @@ def _can_manage_event_squads(user: User, event: Event) -> bool:
 def _can_manage_event_roles(user: User, event: Event) -> bool:
     """Check if a user can manage Discord roles for an event.
 
-    Allowed if the user has the assign_roles permission OR holds the event's head captain Discord role.
+    Allowed for the ``assign_roles`` permission, the event's head captain Discord role,
+    or one of its regional/group coordinator roles. Coordinators already get the head
+    captain's event-wide squad management (see ``_is_event_coordinator``), and granting
+    the squad role is the other half of putting a rider in a squad.
 
     Args:
         user: The requesting user.
@@ -133,7 +136,9 @@ def _can_manage_event_roles(user: User, event: Event) -> bool:
     """
     if user.has_permission(Permissions.ASSIGN_ROLES):
         return True
-    return bool(event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id))
+    if event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id):
+        return True
+    return _is_event_coordinator(user, event)
 
 
 def _can_manage_squad_availability(user: User, squad: Squad) -> bool:
@@ -3511,6 +3516,12 @@ def squad_toggle_role_view(request: HttpRequest, event_pk: int, squad_pk: int, u
                 "squad_pk": squad_pk,
                 "member_user_pk": user_id,
                 "has_role": has_role,
+                # Without this the swapped-in cell forgets the rider is not in the
+                # squad, so removing an unexpected role would redraw as a red "click
+                # to add" instead of the dash it should be.
+                "not_member": not SquadMember.objects.filter(
+                    squad_id=squad_pk, user_id=user_id, status=SquadMember.Status.MEMBER
+                ).exists(),
             },
         )
         stored = messages.get_messages(request)
@@ -3623,6 +3634,12 @@ def squad_toggle_captain_role_view(request: HttpRequest, event_pk: int, squad_pk
                 "squad_pk": squad_pk,
                 "member_user_pk": user_id,
                 "has_role": has_role,
+                # Without this the swapped-in cell forgets the rider is not in the
+                # squad, so removing an unexpected role would redraw as a red "click
+                # to add" instead of the dash it should be.
+                "not_member": not SquadMember.objects.filter(
+                    squad_id=squad_pk, user_id=user_id, status=SquadMember.Status.MEMBER
+                ).exists(),
             },
         )
         stored = messages.get_messages(request)
@@ -5447,36 +5464,26 @@ def discord_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     for entry in enriched_signups:
         user = entry["user"]
         user_squads = squad_member_map.get(user.pk, set())
-        squad_role_status = []
-        for squad in role_squads:
-            if squad.pk in user_squads:
-                squad_role_status.append({
-                    "squad": squad,
-                    "is_member": True,
-                    "has_role": user.has_discord_role(squad.team_discord_role),
-                })
-            else:
-                squad_role_status.append({
-                    "squad": squad,
-                    "is_member": False,
-                    "has_role": False,
-                })
-        entry["squad_role_status"] = squad_role_status
-        captain_role_status = []
-        for squad in captain_role_squads:
-            if squad.pk in user_squads:
-                captain_role_status.append({
-                    "squad": squad,
-                    "is_member": True,
-                    "has_role": user.has_discord_role(squad.discord_captain_role),
-                })
-            else:
-                captain_role_status.append({
-                    "squad": squad,
-                    "is_member": False,
-                    "has_role": False,
-                })
-        entry["captain_role_status"] = captain_role_status
+        # has_role is looked up for non-members too. Hardcoding it False for them made
+        # the page structurally unable to show the opposite kind of drift -- a rider
+        # holding a squad's role while not in the squad rendered the same inert dash as
+        # someone with nothing.
+        entry["squad_role_status"] = [
+            {
+                "squad": squad,
+                "is_member": squad.pk in user_squads,
+                "has_role": user.has_discord_role(squad.team_discord_role),
+            }
+            for squad in role_squads
+        ]
+        entry["captain_role_status"] = [
+            {
+                "squad": squad,
+                "is_member": squad.pk in user_squads,
+                "has_role": user.has_discord_role(squad.discord_captain_role),
+            }
+            for squad in captain_role_squads
+        ]
         # Coordinator roles are event-level (not squad-scoped): every rider gets a toggle.
         entry["coordinator_role_status"] = [
             {
@@ -5500,6 +5507,52 @@ def discord_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             for tz in timezone_roles
         ]
 
+    # Riders who are no longer registered but still hold the event's roles. They are
+    # absent from the table above (it filters to REGISTERED), and withdrawing does not
+    # strip roles the way leaving a squad does -- so without this they are invisible.
+    # Coordinator roles are deliberately excluded: that is a job, not a consequence of
+    # racing, so a coordinator who did not sign up is not drift.
+    registered_ids = {e["user"].pk for e in enriched_signups}
+    candidates: dict[int, User] = {
+        sg.user.pk: sg.user
+        for sg in event.signups.exclude(status=EventSignup.Status.REGISTERED).select_related("user")
+    }
+    for sm in (
+        SquadMember.objects.filter(squad__event=event, status=SquadMember.Status.MEMBER)
+        .exclude(user_id__in=registered_ids)
+        .select_related("user")
+    ):
+        candidates.setdefault(sm.user_id, sm.user)
+
+    stragglers = []
+    for candidate in candidates.values():
+        if candidate.pk in registered_ids:
+            continue
+        held = []
+        if event.event_role and candidate.has_discord_role(event.event_role):
+            held.append({"kind": "event", "label": "Event"})
+        held.extend(
+            {"kind": "squad", "label": squad.name, "squad": squad}
+            for squad in role_squads
+            if candidate.has_discord_role(squad.team_discord_role)
+        )
+        held.extend(
+            {"kind": "captain", "label": f"{squad.name} Cpt", "squad": squad}
+            for squad in captain_role_squads
+            if candidate.has_discord_role(squad.discord_captain_role)
+        )
+        held.extend(
+            {
+                "kind": "role_id", "label": tz["option"],
+                "role_id": tz["role_id"], "role_name": tz["name"],
+            }
+            for tz in timezone_roles
+            if candidate.has_discord_role(tz["role_id"])
+        )
+        if held:
+            stragglers.append({"user": candidate, "held": held})
+    stragglers.sort(key=lambda r: (r["user"].get_full_name() or r["user"].discord_username or "").lower())
+
     logfire.info(
         "Discord Roles page viewed",
         event_id=event_pk,
@@ -5512,6 +5565,7 @@ def discord_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         {
             "event": event,
             "enriched_signups": enriched_signups,
+            "stragglers": stragglers,
             "role_squads": role_squads,
             "captain_role_squads": captain_role_squads,
             "coordinator_roles": coordinator_roles,

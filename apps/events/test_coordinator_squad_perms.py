@@ -183,15 +183,19 @@ def test_actions_menu_groups_items_and_offers_help(client, event, user_model) ->
 
 @pytest.mark.django_db
 def test_unpermitted_menu_items_are_disabled_not_hidden(client, event, coordinator) -> None:
-    """A coordinator lacks event_admin and assign_roles, so both show greyed out."""
+    """A coordinator lacks event_admin, so Assign riders shows greyed out rather than gone.
+
+    Discord Roles is NOT among them: coordinators hold that gate now, since they already
+    run squads event-wide and granting the squad role is the other half of the job.
+    """
     Squad.objects.create(event=event, name="Squad A")
     client.force_login(coordinator)
 
     body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
 
-    assert body.count('class="menu-disabled"') == 2  # Assign riders + Discord Roles
+    assert body.count('class="menu-disabled"') == 1  # Assign riders only
     assert "Assign riders" in body  # still listed, just not actionable
-    assert "Discord Roles" in body
+    assert f'href="/events/{event.pk}/discord-roles/"' in body  # a live link now
 
 
 @pytest.mark.django_db

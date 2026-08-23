@@ -157,3 +157,81 @@ def test_the_faded_entry_is_dropped_without_region_columns(client, event, superu
 
     assert ">Legend<" in body
     assert "did not pick that region" not in body
+
+
+@pytest.mark.django_db
+def test_a_role_held_without_membership_is_flagged_not_hidden(client, event, superuser, user_model) -> None:
+    """The cell used to hardcode has_role False for non-members, so this was invisible."""
+    alpha = Squad.objects.create(event=event, name="Alpha", team_discord_role=222)
+    rider = _rider(user_model, event, "r1", "Ann")          # registered, NOT in Alpha
+    rider.discord_roles = {"222": "Alpha"}                   # but holds Alpha's role
+    rider.save(update_fields=["discord_roles"])
+    client.force_login(superuser)
+
+    resp = client.get(reverse("events:discord_roles", args=[event.pk]))
+
+    srs = resp.context["enriched_signups"][0]["squad_role_status"][0]
+    assert srs["squad"].pk == alpha.pk
+    assert srs["is_member"] is False
+    assert srs["has_role"] is True                            # looked up, not assumed
+    assert "text-warning" in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_a_withdrawn_rider_keeping_roles_is_listed(client, event, superuser, user_model) -> None:
+    """Withdrawing does not strip roles, and drops the rider out of the main table."""
+    alpha = Squad.objects.create(event=event, name="Alpha", team_discord_role=222)
+    gone = _rider(user_model, event, "r1", "Gone", alpha)
+    EventSignup.objects.filter(user=gone).update(status=EventSignup.Status.WITHDRAWN)
+    gone.discord_roles = {"222": "Alpha"}
+    gone.save(update_fields=["discord_roles"])
+    client.force_login(superuser)
+
+    resp = client.get(reverse("events:discord_roles", args=[event.pk]))
+
+    assert [r["user"].pk for r in resp.context["stragglers"]] == [gone.pk]
+    assert [h["label"] for h in resp.context["stragglers"][0]["held"]] == ["Alpha"]
+    assert not resp.context["enriched_signups"]              # gone from the main table
+    assert "Not registered, still holding roles" in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_a_withdrawn_rider_holding_nothing_is_not_listed(client, event, superuser, user_model) -> None:
+    """Otherwise the section fills with every rider who ever withdrew."""
+    Squad.objects.create(event=event, name="Alpha", team_discord_role=222)
+    gone = _rider(user_model, event, "r1", "Gone")
+    EventSignup.objects.filter(user=gone).update(status=EventSignup.Status.WITHDRAWN)
+    client.force_login(superuser)
+
+    resp = client.get(reverse("events:discord_roles", args=[event.pk]))
+
+    assert resp.context["stragglers"] == []
+    assert "Not registered, still holding roles" not in resp.content.decode()
+
+
+@pytest.mark.django_db
+def test_a_coordinator_can_open_the_page(client, event, user_model) -> None:
+    """Coordinators already run squads event-wide; granting the role is the other half."""
+    event.coordinator_role_ids = [555]
+    event.save(update_fields=["coordinator_role_ids"])
+    coord = user_model.objects.create_user(
+        username="coord", email="coord@example.test",
+        permission_overrides={"team_member": True},        # no assign_roles
+        discord_roles={"555": "EMEA Coordinator"},
+    )
+    client.force_login(coord)
+
+    assert client.get(reverse("events:discord_roles", args=[event.pk])).status_code == 200
+
+
+@pytest.mark.django_db
+def test_a_plain_team_member_still_cannot(client, event, user_model) -> None:
+    event.coordinator_role_ids = [555]
+    event.save(update_fields=["coordinator_role_ids"])
+    plain = user_model.objects.create_user(
+        username="plain2", email="plain2@example.test",
+        permission_overrides={"team_member": True},
+    )
+    client.force_login(plain)
+
+    assert client.get(reverse("events:discord_roles", args=[event.pk])).status_code == 403
