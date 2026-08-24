@@ -262,7 +262,7 @@ REST API using Django Ninja for Discord bot integration:
     - `GET /api/dbot/zwiftpower_profile/{zwid}` - ZwiftPower rider data
     - `GET /api/dbot/my_profile` - Combined profile for requesting Discord user
     - `GET /api/dbot/teammate_profile/{zwid}` - Combined profile for any teammate
-    - `GET /api/dbot/search_teammates?q=` - Search teammates by name (for autocomplete)
+    - `GET /api/dbot/search_teammates?q=` - Search active team riders by **any** name they are known by (ZwiftPower name, Zwift Racing name, Discord username/nickname, real name); returns `alias` naming the match when it was not the ZwiftPower name
     - `GET /api/dbot/team_links` - Get magic link to team links page
     - `POST /api/dbot/sync_guild_roles` - Sync all Discord roles
     - `POST /api/dbot/sync_guild_channels` - Sync all Discord channels

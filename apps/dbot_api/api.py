@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import logfire
 from constance import config as constance_config
+from django.db.models import Q
 from django.http import HttpRequest  # noqa: TC002  # Django Ninja resolves endpoint annotations at runtime
 from django.urls import reverse
 from django.utils import timezone
@@ -842,11 +843,19 @@ def get_my_profile(request: HttpRequest) -> dict:
 
 @api.get("/search_teammates")
 def search_teammates(request: HttpRequest, q: str = "") -> dict:
-    """Search for teammates by name for autocomplete.
+    """Search for teammates by any name they are known by, for autocomplete.
+
+    Matches the ZwiftPower profile name, the Zwift Racing name, and the rider's Discord
+    and real names -- people look each other up by whichever name they know, and only
+    the first of those used to be searchable. Results are still limited to active team
+    riders, and always carry a ``zwid`` because that is what the profile lookup takes.
+
+    When a rider is found by a name other than their ZwiftPower one, ``alias`` carries
+    the name that actually matched, so the suggestion explains why it appeared.
 
     Args:
         request: The HTTP request.
-        q: Search query string (partial name match).
+        q: Search query string (partial, case-insensitive, matched against each name).
 
     Returns:
         JSON object with list of matching teammates (max 25 for Discord autocomplete limit).
@@ -855,16 +864,59 @@ def search_teammates(request: HttpRequest, q: str = "") -> dict:
     if not q or len(q) < 2:
         return {"results": []}
 
-    # Search ZPTeamRiders by name (case-insensitive contains)
-    # Only include active team members (date_left is null)
-    matches = (
+    zp_zwids = set(
         ZPTeamRiders.objects
         .filter(name__icontains=q, date_left__isnull=True)
+        .values_list("zwid", flat=True)
+    )
+
+    # Names from elsewhere are resolved to a zwid here; the final query below is what
+    # restricts them to active team riders, so nothing off-roster can leak in.
+    alias_by_zwid: dict[int, str] = {}
+    for zwid, name in (
+        ZRRider.objects.filter(name__icontains=q).values_list("zwid", "name")[:100]
+    ):
+        if zwid and name:
+            alias_by_zwid.setdefault(zwid, name)
+
+    discord_matches = (
+        User.objects
+        .filter(zwid__isnull=False)
+        .filter(
+            Q(discord_username__icontains=q)
+            | Q(discord_nickname__icontains=q)
+            | Q(first_name__icontains=q)
+            | Q(last_name__icontains=q)
+        )
+        .values_list("zwid", "discord_nickname", "discord_username", "first_name", "last_name")[:100]
+    )
+    for zwid, nickname, username, first, last in discord_matches:
+        label = nickname or username or f"{first} {last}".strip()
+        if zwid and label:
+            alias_by_zwid.setdefault(zwid, label)
+
+    matched = zp_zwids | set(alias_by_zwid)
+    if not matched:
+        return {"results": []}
+
+    rows = (
+        ZPTeamRiders.objects
+        .filter(zwid__in=matched, date_left__isnull=True)
         .values("zwid", "name", "flag")
         .order_by("name")[:25]
     )
 
-    results = [{"zwid": m["zwid"], "name": m["name"], "flag": m["flag"]} for m in matches]
+    results = [
+        {
+            "zwid": m["zwid"],
+            "name": m["name"],
+            "flag": m["flag"],
+            # Only when the ZwiftPower name is not itself the match -- otherwise the
+            # suggestion would repeat what the rider already typed.
+            "alias": None if m["zwid"] in zp_zwids else alias_by_zwid.get(m["zwid"]),
+        }
+        for m in rows
+    ]
 
     return {"results": results}
 
