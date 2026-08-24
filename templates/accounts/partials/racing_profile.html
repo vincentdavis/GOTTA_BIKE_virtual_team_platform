@@ -10,6 +10,16 @@ Expects `racing_profile` in context (see accounts.views._fetch_racing_profile).
     <span class="text-xs font-normal text-base-content/50">· official Zwift</span>
   </h3>
   <div class="space-y-2">
+    {% comment %}
+    Resolved to a string in _fetch_racing_profile -- Zwift sends a boolean `male`, and
+    testing that directly here would hide every rider it reports as female.
+    {% endcomment %}
+    {% if racing_profile.gender %}
+      <div class="flex items-center justify-between">
+        <span class="text-base-content/70">Gender</span>
+        <span class="font-semibold">{{ racing_profile.gender }}</span>
+      </div>
+    {% endif %}
     {% if racing_profile.category or racing_profile.category_women %}
       <div class="flex items-center justify-between">
         <span class="text-base-content/70">Category</span>

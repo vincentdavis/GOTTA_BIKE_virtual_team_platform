@@ -127,6 +127,12 @@ def _fetch_racing_profile(user: User) -> dict | None:
         return None
     grams = profile.get("weight_in_grams")
     profile["weight_kg"] = round(grams / 1000, 1) if grams else None
+
+    # Zwift reports gender as a boolean `male` on the raw DTO, so it is resolved to a
+    # display string here rather than in the template: `{% if %}` on the bool itself
+    # cannot tell False (female) from absent, and would silently hide every woman.
+    male = (profile.get("data") or {}).get("male")
+    profile["gender"] = None if male is None else ("Male" if male else "Female")
     return profile
 
 
