@@ -62,8 +62,14 @@
                 </button>
                 <ul class="dropdown dropdown-end menu menu-sm bg-base-100 rounded-box z-[60] w-44 p-1 shadow border border-base-300 text-left"
                     popover id="grid-actions-{{ grid.pk }}" style="position-anchor:--gear-grid-{{ grid.pk }}">
-                  {% if grid.is_draft %}
+                  {% comment %}
+                  Published sheets are editable too; the builder freezes the shape once
+                  anyone has answered. Only a closed sheet is locked outright.
+                  {% endcomment %}
+                  {% if not grid.is_closed %}
                   <li><a href="{% url 'events:availability_edit' event.pk squad.pk grid.pk %}">Edit</a></li>
+                  {% endif %}
+                  {% if grid.is_draft %}
                   <li><button type="button" onclick="document.getElementById('publish-modal-{{ grid.pk }}').showModal()">Publish</button></li>
                   {% elif grid.is_published %}
                   <li><button type="submit" form="close-grid-{{ grid.pk }}">Close</button></li>

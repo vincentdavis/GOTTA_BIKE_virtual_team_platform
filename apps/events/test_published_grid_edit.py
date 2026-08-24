@@ -249,3 +249,26 @@ def test_the_lockout_count_is_skipped_when_the_rule_is_already_on(
     resp = client.get(reverse("events:availability_edit", args=[event.pk, squad.pk, grid.id]))
 
     assert resp.context["unverified_responders"] == 0
+
+
+@pytest.mark.django_db
+def test_the_edit_link_is_offered_on_published_but_not_closed(client, event, squad, event_admin) -> None:
+    """The server gate was opened before the menu item was; without this it is unreachable."""
+    published = AvailabilityGrid.objects.create(
+        squad=squad, start_date=date(2026, 7, 1), end_date=date(2026, 7, 7),
+        start_time="19:00", end_time="21:00", slot_duration=60,
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+    closed = AvailabilityGrid.objects.create(
+        squad=squad, start_date=date(2026, 8, 1), end_date=date(2026, 8, 7),
+        start_time="19:00", end_time="21:00", slot_duration=60,
+        status=AvailabilityGrid.Status.CLOSED,
+    )
+    client.force_login(event_admin)
+
+    body = client.get(
+        reverse("events:squad_availability", args=[event.pk, squad.pk])
+    ).content.decode()
+
+    assert reverse("events:availability_edit", args=[event.pk, squad.pk, published.id]) in body
+    assert reverse("events:availability_edit", args=[event.pk, squad.pk, closed.id]) not in body
