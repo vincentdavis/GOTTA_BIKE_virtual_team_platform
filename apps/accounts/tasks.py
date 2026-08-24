@@ -802,6 +802,9 @@ def refresh_zwift_racing_metrics() -> dict:
         logfire.info("Zwift metrics refresh skipped - service not configured")
         return {"status": "skipped", "reason": "zauth service not configured"}
 
+    interval = config.SCHEDULER_REFRESH_ZWIFT_METRICS_MINUTES
+    fallback_allowed = interval >= config.ZWIFT_METRICS_FALLBACK_MIN_MINUTES
+
     connections = zwift_client.list_connections()
     if connections is None:
         logfire.error("Zwift metrics refresh aborted - connection list unavailable")
@@ -824,12 +827,19 @@ def refresh_zwift_racing_metrics() -> dict:
 
         if "z_ftp" in conn:
             metrics = conn
-        else:
+        elif fallback_allowed:
             per_user_fetches += 1
             metrics = zwift_client.get_racing_profile(user_id)
             if not metrics:
                 failed += 1
                 continue
+        else:
+            # One call per rider, and /profile reaches Zwift when the service holds no
+            # snapshot. At a short cadence that multiplies into a rate-limit problem, so
+            # the fallback is refused rather than throttled. Stale metrics for a cycle
+            # beat a ban; the loud log says which is happening.
+            skipped += 1
+            continue
 
         # An all-null row means the service holds no profile for this rider. Leave the
         # last known values alone rather than writing the nulls through: these numbers
@@ -856,7 +866,16 @@ def refresh_zwift_racing_metrics() -> dict:
         connections=len(connections),
         per_user_fetches=per_user_fetches,
         bulk=per_user_fetches == 0,
+        fallback_allowed=fallback_allowed,
+        interval_minutes=interval,
     )
+    if not fallback_allowed and skipped:
+        logfire.warning(
+            "Per-rider metric fallback suppressed by the refresh interval",
+            interval_minutes=interval,
+            floor_minutes=config.ZWIFT_METRICS_FALLBACK_MIN_MINUTES,
+            skipped=skipped,
+        )
     return {
         "status": "ok",
         "updated": updated,

@@ -5,8 +5,10 @@ Tasks are enqueued via django-tasks (db_worker still executes them).
 
 The list of scheduled tasks lives in ``gotta_bike_platform.task_registry.TASK_REGISTRY``.
 To schedule a new task: add an entry there with ``scheduled=True`` and a matching
-``SCHEDULER_*_HOURS`` Constance setting (also list it in the ``Scheduler`` fieldset
-in ``settings.py``). Interval changes require a scheduler restart to take effect.
+``SCHEDULER_*_HOURS`` Constance setting -- or ``SCHEDULER_*_MINUTES`` via
+``minutes_setting`` when the task needs finer granularity than an hour (also list it
+in the ``Scheduler`` fieldset in ``settings.py``). Interval changes require a
+scheduler restart to take effect.
 """
 
 import signal
@@ -53,17 +55,32 @@ class Command(BaseCommand):
 
         active_count = 0
         for job in scheduled_jobs:
+            minutes = job["minutes"]
+            # APScheduler treats a non-positive interval as "run continuously", which
+            # would hammer the queue and the upstream API. Refuse rather than obey.
+            if minutes <= 0:
+                logfire.error(
+                    "Scheduler skipping job with a non-positive interval",
+                    job_id=job["id"],
+                    minutes=minutes,
+                )
+                self.stdout.write(self.style.ERROR(
+                    f"  SKIPPED: {job['id']} (interval is {minutes} minutes - must be > 0)"
+                ))
+                continue
+
             scheduler.add_job(
                 _enqueue_task,
-                trigger=IntervalTrigger(hours=job["hours"]),
+                trigger=IntervalTrigger(minutes=minutes),
                 args=[job["task"], job["id"], job.get("kwargs")],
                 id=job["id"],
                 name=job["description"],
                 replace_existing=True,
             )
             active_count += 1
+            cadence = f"{minutes / 60:g}h" if minutes >= 60 else f"{minutes:g}m"
             self.stdout.write(
-                f"  Registered: {job['id']} (every {job['hours']}h)"
+                f"  Registered: {job['id']} (every {cadence})"
             )
 
         if active_count == 0:

@@ -234,7 +234,7 @@ Uses Django 6.0's built-in `django-tasks` with database backend. Define with `@t
 
 - **Task registry** — `gotta_bike_platform/task_registry.py:TASK_REGISTRY` is the single source of truth for scheduled and manually-triggerable tasks. The scheduler calls `get_scheduled_tasks()` (filters `scheduled=True`, resolves each `hours_setting` Constance value). The admin "Run Now" UI at `/site/config/background_tasks/` reads the same dict via `_get_task_registry()` in `apps/accounts/views.py`.
 - **UI** — `/site/config/scheduler/` (driven by the `Scheduler` group in `CONSTANCE_CONFIG_FIELDSETS`) lets admins adjust the cadences. Interval changes require a scheduler restart.
-- **When adding a new scheduled task**: import the task in `task_registry.py`, add an entry with `scheduled=True` and a `hours_setting` pointing at a new `SCHEDULER_*_HOURS` Constance setting, then add that key to the `Scheduler` fieldset. For a manual-trigger-only task (no schedule), omit `scheduled` (or set to `False`); no Constance setting needed.
+- **When adding a new scheduled task**: import the task in `task_registry.py`, add an entry with `scheduled=True` and a `hours_setting` pointing at a new `SCHEDULER_*_HOURS` Constance setting, then add that key to the `Scheduler` fieldset. For a task needing finer granularity, declare `minutes_setting` with a `SCHEDULER_*_MINUTES` setting instead — an entry uses exactly one of the two, and `resolve_interval_minutes()` converts hours entries so the scheduler always consumes minutes. For a manual-trigger-only task (no schedule), omit `scheduled` (or set to `False`); no Constance setting needed.
 
 ### External API Clients
 

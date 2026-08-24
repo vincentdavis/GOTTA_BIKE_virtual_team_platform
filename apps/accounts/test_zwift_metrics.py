@@ -36,8 +36,22 @@ def test_wkg_is_none_when_either_side_is_missing(user) -> None:
     assert user.z_ftp_wkg is None
 
 
+@pytest.fixture
+def long_interval():
+    """Permit the per-rider fallback, which a short refresh interval suppresses.
+
+    The fallback reaches Zwift itself, so it is gated on the refresh cadence
+    (ZWIFT_METRICS_FALLBACK_MIN_MINUTES). These tests are about the fallback's
+    behaviour, not about that gate, so they opt into an interval that allows it.
+    """
+    from constance import config
+
+    config.SCHEDULER_REFRESH_ZWIFT_METRICS_MINUTES = 60
+    config.ZWIFT_METRICS_FALLBACK_MIN_MINUTES = 30
+
+
 @pytest.mark.django_db
-def test_refresh_falls_back_to_per_user_fetch_on_an_old_service(user, monkeypatch) -> None:
+def test_refresh_falls_back_to_per_user_fetch_on_an_old_service(user, monkeypatch, long_interval) -> None:
     monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
     monkeypatch.setattr("apps.zwift.client.list_connections", lambda: [{"user_id": str(user.pk)}])
     monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda uid: dict(_PROFILE))
@@ -54,7 +68,7 @@ def test_refresh_falls_back_to_per_user_fetch_on_an_old_service(user, monkeypatc
 
 
 @pytest.mark.django_db
-def test_refresh_keeps_last_known_values_when_a_fetch_fails(user, monkeypatch) -> None:
+def test_refresh_keeps_last_known_values_when_a_fetch_fails(user, monkeypatch, long_interval) -> None:
     """A service blip must not silently un-qualify a rider from their squad."""
     user.z_ftp = Decimal("300.0")
     user.z_metrics_weight_grams = 70000

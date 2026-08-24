@@ -846,11 +846,22 @@ CONSTANCE_CONFIG = {
         "How often to sync Discord guild members (hours). Requires scheduler restart to take effect.",
         int,
     ),
-    "SCHEDULER_REFRESH_ZWIFT_METRICS_HOURS": (
-        1,
-        "How often to mirror connected riders' zFTP/zMAP from the zauth service (hours). "
-        "One HTTP call per run, and the service is webhook-fresh, so hourly is cheap. "
-        "Requires scheduler restart to take effect.",
+    "ZWIFT_METRICS_FALLBACK_MIN_MINUTES": (
+        30,
+        "Below this interval (minutes), the zFTP/zMAP refresh skips its per-rider "
+        "fallback. That fallback makes one call per rider and can reach Zwift itself, "
+        "so at a short cadence it would multiply into a rate-limit problem. The bulk "
+        "path is unaffected and still runs.",
+        int,
+    ),
+    "SCHEDULER_REFRESH_ZWIFT_METRICS_MINUTES": (
+        5,
+        "How often to mirror connected riders' zFTP/zMAP from the zauth service (MINUTES). "
+        "One HTTP call per run against the service's own database, and the service is "
+        "webhook-fresh -- Zwift pushes it a notification when a rider's metrics change -- "
+        "so a short interval genuinely delivers fresher numbers. Below "
+        "ZWIFT_METRICS_FALLBACK_MIN_MINUTES the per-rider fallback is skipped, since that "
+        "path can reach Zwift itself. Requires scheduler restart to take effect.",
         int,
     ),
     "SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS": (
@@ -1073,7 +1084,8 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_RACE_READY_ROLES_HOURS",
         "SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS",
         "SCHEDULER_SYNC_GUILD_MEMBERS_HOURS",
-        "SCHEDULER_REFRESH_ZWIFT_METRICS_HOURS",
+        "SCHEDULER_REFRESH_ZWIFT_METRICS_MINUTES",
+        "ZWIFT_METRICS_FALLBACK_MIN_MINUTES",
         "SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS",
         "SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS",
         "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",

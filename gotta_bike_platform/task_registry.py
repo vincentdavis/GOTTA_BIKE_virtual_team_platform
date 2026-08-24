@@ -61,7 +61,7 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "task": refresh_zwift_racing_metrics,
         "description": "Mirror connected riders' zFTP/zMAP from the zauth service",
         "scheduled": True,
-        "hours_setting": "SCHEDULER_REFRESH_ZWIFT_METRICS_HOURS",
+        "minutes_setting": "SCHEDULER_REFRESH_ZWIFT_METRICS_MINUTES",
     },
     "sync_guild_members": {
         "task": sync_guild_members,
@@ -178,14 +178,35 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
 }
 
 
-def get_scheduled_tasks() -> list[dict[str, Any]]:
-    """Return scheduled entries with their resolved interval (hours).
+def resolve_interval_minutes(info: dict[str, Any]) -> float:
+    """Resolve one registry entry's interval to minutes.
 
-    Reads the Constance ``hours_setting`` for each scheduled task at call time, so
-    a scheduler restart picks up edits made in the admin UI.
+    Most tasks are configured in whole hours, which is the right granularity for a
+    ZwiftPower scrape or a nightly sweep. A task that mirrors webhook-driven data
+    wants finer control than that, so an entry may declare ``minutes_setting``
+    instead -- exactly one of the two.
+
+    Args:
+        info: A ``TASK_REGISTRY`` entry.
 
     Returns:
-        List of dicts with ``id``, ``task``, ``description``, ``hours``, and
+        The interval in minutes.
+
+    """
+    if "minutes_setting" in info:
+        return float(getattr(config, info["minutes_setting"]))
+    return float(getattr(config, info["hours_setting"])) * 60
+
+
+def get_scheduled_tasks() -> list[dict[str, Any]]:
+    """Return scheduled entries with their resolved interval in minutes.
+
+    Reads the Constance setting for each scheduled task at call time, so a scheduler
+    restart picks up edits made in the admin UI. Minutes is the canonical unit here
+    because it is the finer of the two an entry may be configured in.
+
+    Returns:
+        List of dicts with ``id``, ``task``, ``description``, ``minutes``, and
         ``kwargs`` keys, one per task with ``scheduled=True``.
 
     """
@@ -197,7 +218,7 @@ def get_scheduled_tasks() -> list[dict[str, Any]]:
             "id": task_id,
             "task": info["task"],
             "description": info["description"],
-            "hours": getattr(config, info["hours_setting"]),
+            "minutes": resolve_interval_minutes(info),
             "kwargs": info.get("kwargs", {}),
         })
     return jobs
