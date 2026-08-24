@@ -80,6 +80,19 @@
         </div>
       </div>
 
+      {% comment %}
+      Both settings stay editable after publish, but each changes what an answer already
+      given means. Shown when ticked rather than after saving.
+      {% endcomment %}
+      <div role="alert" class="alert alert-warning text-sm mb-3 hidden" id="answered-before-note">
+        <span>Riders who already answered were never asked this, so they will show &ldquo;&ndash;&rdquo;
+        until they respond again &mdash; and nothing re-prompts them.</span>
+      </div>
+      <div role="alert" class="alert alert-warning text-sm mb-3 hidden" id="race-verified-lockout-note">
+        <span><strong data-count></strong> already answered and are not Race Verified. Their answers
+        still count, but they will no longer be able to change or withdraw them.</span>
+      </div>
+
       <div class="flex items-center gap-3 mb-2">
         <label class="label cursor-pointer gap-1 py-0">
           <input type="checkbox" id="cfg-single-slot" class="checkbox checkbox-xs">
@@ -123,6 +136,13 @@
             <input type="url" id="cfg-invite-url" class="input input-bordered input-sm w-full" placeholder="https://...">
           </div>
         </div>
+      </div>
+      <div role="alert" class="alert alert-info text-sm mb-3 hidden" id="shape-locked-note">
+        <span>
+          <strong id="shape-locked-count"></strong> already answered this sheet, so its dates, times,
+          slot length, timezone and blocked cells are locked &mdash; changing them would discard
+          answers riders have given. Everything else here is still editable.
+        </span>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
         <div class="form-control">
@@ -245,6 +265,11 @@
   var USER_TIMEZONE = '{{ user_timezone }}';
   var INITIAL_GRID = {% if initial_grid_json %}{{ initial_grid_json|safe }}{% else %}null{% endif %};
   var EVENT_REQUIRES_RACE_VERIFIED = {% if event_requires_race_verified %}true{% else %}false{% endif %};
+  // Riders have answered, so the fields deciding which cells exist are frozen.
+  // The server refuses them regardless; this is so the captain can see why.
+  var RESPONSE_COUNT = {{ response_count|default:0 }};
+  var UNVERIFIED_RESPONDERS = {{ unverified_responders|default:0 }};
+  var SHAPE_LOCKED = RESPONSE_COUNT > 0;
   // Event-level defaults seed a NEW grid; an existing one keeps what it was saved with.
   // Enforced settings lock their control -- a courtesy only, since this page posts JSON;
   // the server re-applies enforcement regardless (see apps/events/grid_defaults.py).
@@ -1105,6 +1130,48 @@
       cellStates[c.date + '|' + c.time] = 'blocked';
     });
     buildGrid();
+  }
+
+  // Freeze the shape controls once riders have answered. The server rejects these
+  // changes either way (see _changed_shape_fields); disabling them is so the captain
+  // sees the rule instead of hitting an error after filling the form in.
+  if (SHAPE_LOCKED) {
+    ['cfg-start-date', 'cfg-end-date', 'cfg-start-time', 'cfg-end-time', 'cfg-exact-time',
+     'cfg-timezone', 'cfg-slot-duration', 'cfg-single-slot'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) { el.disabled = true; }
+    });
+    var note = document.getElementById('shape-locked-note');
+    if (note) {
+      document.getElementById('shape-locked-count').textContent =
+        RESPONSE_COUNT + (RESPONSE_COUNT === 1 ? ' rider has' : ' riders have');
+      note.classList.remove('hidden');
+    }
+  }
+
+  // Two still-editable settings change what an *existing* answer means, so say so at
+  // the moment the box is ticked rather than after saving.
+  function warnOnQuestionToggle(name) {
+    document.querySelectorAll('input[name="' + name + '"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        var el = document.getElementById('answered-before-note');
+        if (!el) { return; }
+        var on = getRadioValue(name) === 'yes';
+        el.classList.toggle('hidden', !(on && SHAPE_LOCKED));
+      });
+    });
+  }
+  warnOnQuestionToggle('cfg-max-races');
+  warnOnQuestionToggle('cfg-rest-days');
+
+  if (UNVERIFIED_RESPONDERS > 0) {
+    requireRaceVerifiedEl.addEventListener('change', function () {
+      var el = document.getElementById('race-verified-lockout-note');
+      if (!el) { return; }
+      el.querySelector('[data-count]').textContent =
+        UNVERIFIED_RESPONDERS + (UNVERIFIED_RESPONDERS === 1 ? ' rider who has' : ' riders who have');
+      el.classList.toggle('hidden', !this.checked);
+    });
   }
 
   // Event-level requirement is a floor: force the box on and lock it so it

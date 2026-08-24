@@ -1453,17 +1453,26 @@ def test_availability_edit_get_prefills_draft(client, event_admin) -> None:
 
 
 @pytest.mark.django_db
-def test_availability_edit_blocked_for_published(client, event_admin) -> None:
+def test_availability_edit_allowed_for_published_blocked_for_closed(client, event_admin) -> None:
+    """A published sheet is editable; its shape is what gets frozen, not the whole sheet.
+
+    A closed sheet is a finished record, so it stays locked.
+    """
     from django.urls import reverse
 
     from apps.events.models import AvailabilityGrid
 
     client.force_login(event_admin)
     event, squad = _avail_event_squad()
-    grid = _draft_grid(squad, status=AvailabilityGrid.Status.PUBLISHED)
+    published = _draft_grid(squad, status=AvailabilityGrid.Status.PUBLISHED)
+    closed = _draft_grid(squad, status=AvailabilityGrid.Status.CLOSED)
 
-    response = client.get(reverse("events:availability_edit", args=[event.pk, squad.pk, grid.id]))
-    assert response.status_code == 302  # redirected, not editable
+    assert client.get(
+        reverse("events:availability_edit", args=[event.pk, squad.pk, published.id])
+    ).status_code == 200
+    assert client.get(
+        reverse("events:availability_edit", args=[event.pk, squad.pk, closed.id])
+    ).status_code == 302
 
 
 @pytest.mark.django_db

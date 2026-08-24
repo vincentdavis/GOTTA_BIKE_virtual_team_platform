@@ -3893,8 +3893,10 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
     """Edit a draft availability grid in the builder.
 
     GET pre-fills the builder from the stored grid (converted back to its own timezone).
-    POST re-validates and updates the grid in place. Only draft grids are editable, so no
-    member responses can be affected.
+    POST re-validates and updates the grid in place. Draft and published sheets are both
+    editable; on a published sheet that already has responses the fields deciding which
+    cells exist are frozen, so stored answers cannot be orphaned. Closed sheets are not
+    editable at all.
 
     Args:
         request: The HTTP request.
@@ -3923,10 +3925,12 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         messages.error(request, "You don't have permission to manage availability.")
         return redirect("events:event_detail", pk=event_pk)
 
-    if grid.status != AvailabilityGrid.Status.DRAFT:
+    # A closed sheet is a finished record; draft and published stay editable, with the
+    # shape frozen on anything already answered (see _changed_shape_fields).
+    if grid.status == AvailabilityGrid.Status.CLOSED:
         if request.method == "POST":
-            return JsonResponse({"error": "Only draft grids can be edited."}, status=400)
-        messages.error(request, "Only draft grids can be edited.")
+            return JsonResponse({"error": "A closed sheet cannot be edited."}, status=400)
+        messages.error(request, "A closed sheet cannot be edited.")
         return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
     if request.method == "POST":
@@ -3965,6 +3969,16 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         "invite_url": grid.invite_url,
     }
     user_tz = getattr(request.user, "timezone", "") or "UTC"
+
+    # Once riders have answered, the shape is frozen and two of the still-editable
+    # settings have consequences worth naming before the captain ticks the box.
+    response_count = grid.responses.count()
+    unverified_responders = 0
+    if response_count and not grid.require_race_verified_availability:
+        unverified_responders = sum(
+            1 for r in grid.responses.select_related("user") if not r.user.is_race_ready
+        )
+
     logfire.debug(
         "Availability builder opened for edit",
         grid_id=str(grid.id),
@@ -3985,8 +3999,65 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
             "event_requires_race_verified": bool(event.require_race_verified_availability),
             "grid_event_defaults": grid_defaults.initial_values(event),
             "grid_enforced": grid_defaults.enforced_map(event),
+            # Drives the frozen shape controls and the warnings below them. Counted here
+            # rather than in the template so the numbers are one query each.
+            "response_count": response_count,
+            "unverified_responders": unverified_responders,
         },
     )
+
+
+# Fields that decide which cells exist. A response stores UTC "date|time" strings with
+# no foreign key to a cell, so changing any of these silently orphans stored answers --
+# and the rider's next save is a wholesale replace, which turns "hidden" into "deleted".
+# Frozen once anyone has answered. Everything else about a grid stays editable.
+SHAPE_FIELDS = (
+    "start_date",
+    "end_date",
+    "start_time",
+    "end_time",
+    "slot_duration",
+    "grid_timezone",
+    "single_slot",
+    "blocked_cells",
+)
+
+SHAPE_FIELD_LABELS = {
+    "start_date": "start date",
+    "end_date": "end date",
+    "start_time": "start time",
+    "end_time": "end time",
+    "slot_duration": "slot length",
+    "grid_timezone": "timezone",
+    "single_slot": "single time slot",
+    "blocked_cells": "blocked cells",
+}
+
+
+def _changed_shape_fields(grid: AvailabilityGrid, field_values: dict) -> list[str]:
+    """Return the shape fields whose submitted value differs from the stored grid.
+
+    ``blocked_cells`` is compared as a set of "date|time" keys: it is a JSON list whose
+    order carries no meaning, so a reordered but identical list is not a change.
+
+    Args:
+        grid: The stored grid.
+        field_values: The values the save is about to apply.
+
+    Returns:
+        Names of the shape fields that would actually change, in declaration order.
+
+    """
+    changed = []
+    for name in SHAPE_FIELDS:
+        submitted = field_values[name]
+        stored = getattr(grid, name)
+        if name == "blocked_cells":
+            submitted = {f"{c.get('date')}|{c.get('time')}" for c in (submitted or [])}
+            stored = {f"{c.get('date')}|{c.get('time')}" for c in (stored or [])}
+        if submitted != stored:
+            changed.append(name)
+    return changed
 
 
 def _handle_availability_save(
@@ -4135,6 +4206,30 @@ def _handle_availability_save(
             user_id=request.user.id,
         )
     else:
+        # Refuse shape changes once riders have answered. The builder disables these
+        # controls, but it posts JSON, so the check has to live here to mean anything.
+        if grid.responses.exists():
+            changed = _changed_shape_fields(grid, field_values)
+            if changed:
+                logfire.warning(
+                    "Blocked shape edit on a grid with responses",
+                    grid_id=str(grid.id),
+                    squad_id=squad.pk,
+                    event_id=event.pk,
+                    user_id=request.user.id,
+                    changed_fields=changed,
+                )
+                names = ", ".join(SHAPE_FIELD_LABELS[c] for c in changed)
+                return JsonResponse(
+                    {
+                        "error": (
+                            f"This sheet already has responses, so its {names} cannot be changed "
+                            "-- doing so would discard answers riders have already given. "
+                            "Everything else on the sheet is still editable."
+                        )
+                    },
+                    status=400,
+                )
         for attr, value in field_values.items():
             setattr(grid, attr, value)
         grid.save()

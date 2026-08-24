@@ -93,6 +93,7 @@ Read these helpers before touching event/squad views — most non-trivial behavi
 - Role Setup (`/events/<id>/role-setup/`): editable by `assign_roles` or event head captain. Discord Roles (`/events/<id>/discord-roles/`): `assign_roles`, head captain, **or a coordinator role**
 - Discord thread actions ("Save & Create Thread" / "Save & Post Update") require `status=confirmed`, riders selected, and `squad.discord_channel_id`. Both go through `apps/accounts/discord_service.py`; the resulting URL lands on `slot.thread_link`. Captain, vice-captain, and substitute are added to `allowed_user_ids` so they get pinged even when not racing
 - `signup_notification_channel_id` on `Event`: `0` disables per-rider signup notifications
+- **Published sheets are editable; their *shape* is not, once anyone has answered.** `SHAPE_FIELDS` in `apps/events/views.py` (dates, times, `slot_duration`, `grid_timezone`, `single_slot`, `blocked_cells`) is refused by `_changed_shape_fields` when `grid.responses.exists()`. A response stores UTC `"date|time"` strings with **no FK to a cell**, and the rider's next submit is a wholesale replace — so a shape change orphans answers and the next submit deletes them. Closed sheets are not editable at all. The builder disables the controls, but it posts JSON, so the server check is the real one.
 - All grid/response/slot times stored in UTC, converted at render. `EventSignup.signup_timezone` and `signup_squad_gender` are only saved when the matching `*_required` flag is on
 
 #### Custom Signup Questions (`apps/events/signup_questions.py`)
