@@ -18,7 +18,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from apps.zwift import client, verification
+from apps.zwift import client, profile_fields, verification
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
@@ -56,6 +56,21 @@ def zauth_view(request: HttpRequest) -> HttpResponse:
     outcome = verification.apply_status(request.user, status)
     if outcome in ("granted", "revoked"):
         logfire.info("zauth verification synced on view", user_id=request.user.pk, outcome=outcome)
+
+    # Same fast path for country/gender: Zwift knows both, and a rider arrives here
+    # straight from consent, so there is no reason to make them wait for a sweep.
+    # Only blank fields are filled -- a rider's own answer is never overwritten, and a
+    # disagreement is flagged on the profile card instead.
+    if status and status.get("connected"):
+        filled = profile_fields.fill_missing(
+            request.user, client.get_racing_profile(str(request.user.pk))
+        )
+        if filled:
+            messages.info(
+                request,
+                f"We filled in your {' and '.join(filled)} from Zwift. "
+                "You can change it on your profile.",
+            )
 
     context = {
         "configured": configured,

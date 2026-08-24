@@ -14,10 +14,27 @@ Expects `racing_profile` in context (see accounts.views._fetch_racing_profile).
     Resolved to a string in _fetch_racing_profile -- Zwift sends a boolean `male`, and
     testing that directly here would hide every rider it reports as female.
     {% endcomment %}
+    {% comment %}
+    Red means Zwift disagrees with what the rider set on their own profile -- their
+    answer is kept, this only surfaces the divergence. Which one to trust differs:
+    a Zwift country is often stale, but a Zwift gender is what they race under.
+    {% endcomment %}
     {% if racing_profile.gender %}
       <div class="flex items-center justify-between">
         <span class="text-base-content/70">Gender</span>
-        <span class="font-semibold">{{ racing_profile.gender }}</span>
+        <span class="font-semibold{% if racing_profile.gender_mismatch %} text-error{% endif %}"
+              {% if racing_profile.gender_mismatch %}title="Does not match the gender on this profile. Zwift's is what they race under."{% endif %}>
+          {{ racing_profile.gender }}
+        </span>
+      </div>
+    {% endif %}
+    {% if racing_profile.country %}
+      <div class="flex items-center justify-between">
+        <span class="text-base-content/70">Country</span>
+        <span class="font-semibold{% if racing_profile.country_mismatch %} text-error{% endif %}"
+              {% if racing_profile.country_mismatch %}title="Does not match the country on this profile. A Zwift country is often out of date."{% endif %}>
+          {{ racing_profile.country }}
+        </span>
       </div>
     {% endif %}
     {% if racing_profile.category or racing_profile.category_women %}

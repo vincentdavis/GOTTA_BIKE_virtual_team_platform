@@ -14,6 +14,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from django_countries.fields import Country
 
 from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm, ZwiftVerificationForm
@@ -24,6 +25,7 @@ from apps.team.services import (
     get_user_required_verification_types,
     get_user_verification_types,
 )
+from apps.zwift import profile_fields
 from apps.zwift.utils import fetch_zwift_id
 
 # How recently the Zwift Racing data must have been fetched before the profile
@@ -131,8 +133,20 @@ def _fetch_racing_profile(user: User) -> dict | None:
     # Zwift reports gender as a boolean `male` on the raw DTO, so it is resolved to a
     # display string here rather than in the template: `{% if %}` on the bool itself
     # cannot tell False (female) from absent, and would silently hide every woman.
-    male = (profile.get("data") or {}).get("male")
-    profile["gender"] = None if male is None else ("Male" if male else "Female")
+    zwift_gender = profile_fields.zwift_gender(profile)
+    profile["gender"] = dict(User.Gender.choices).get(zwift_gender) if zwift_gender else None
+
+    zwift_country = profile_fields.zwift_country(profile)
+    profile["country"] = Country(zwift_country).name if zwift_country else None
+
+    # A mismatch is only meaningful when the rider has answered for themselves; a blank
+    # profile field is not a disagreement, and would have been filled on connect anyway.
+    # "Other" gender does count as a mismatch -- Zwift cannot express it, but the team
+    # wants to see every divergence from what the rider races under.
+    profile["country_mismatch"] = bool(
+        zwift_country and user.country and user.country.code != zwift_country
+    )
+    profile["gender_mismatch"] = bool(zwift_gender and user.gender and user.gender != zwift_gender)
     return profile
 
 
