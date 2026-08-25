@@ -626,15 +626,14 @@
           <div class="dropdown dropdown-end">
             <label tabindex="0" class="btn btn-outline btn-sm">Squad columns</label>
             <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-64 max-h-72 overflow-y-auto">
-              <li class="menu-title text-xs">Squad details</li>
+              <li class="menu-title text-xs">Columns on the squads table</li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_members"> Members</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_tz"> Time zone</label></li>
-              {% if event.squad_gender_required %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_gender"> Squad Gender</label></li>{% endif %}
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_gender"> Squad Gender</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_enforced"> Enforced Requirements</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_zwift_cat"> Zwift Category</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_womens_cat"> Women's Zwift Category</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_zr_cat"> ZR Category</label></li>
-              <li class="menu-title text-xs pt-2">Roster</li>
-              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_members"> Members</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_captain"> Captain</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_vice"> Vice Captain</label></li>
             </ul>
@@ -672,13 +671,13 @@
             <tr>
               <th class="!px-0 !w-6"></th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+              <th data-scol="sqf_members" data-sort="num" class="cursor-pointer hover:text-primary select-none">Members</th>
               <th data-scol="sqf_tz" data-sort="text" class="cursor-pointer hover:text-primary select-none">Time zone</th>
-              {% if event.squad_gender_required %}<th data-scol="sqf_gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>{% endif %}
+              <th data-scol="sqf_gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>
               <th data-scol="sqf_enforced" class="select-none">Enforced Requirements</th>
               <th data-scol="sqf_zwift_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none">Zwift Category</th>
               <th data-scol="sqf_womens_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none">Women's Zwift Category</th>
               <th data-scol="sqf_zr_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZR Category</th>
-              <th data-scol="sqf_members" data-sort="num" class="cursor-pointer hover:text-primary select-none">Members</th>
               <th data-scol="sqf_captain" data-sort="text" class="cursor-pointer hover:text-primary select-none">Captain</th>
               <th data-scol="sqf_vice" data-sort="text" class="cursor-pointer hover:text-primary select-none">Vice Captain</th>
             </tr>
@@ -694,8 +693,17 @@
                 </button>
               </td>
               <td class="font-semibold">{{ squad.name }}</td>
+              <td data-scol="sqf_members">
+                {% if squad.enriched_members %}
+                <div class="tooltip tooltip-right" data-tip="{{ squad.member_names_tooltip }}">
+                  <span class="cursor-default underline decoration-dotted">{{ squad.member_count }}</span>
+                </div>
+                {% else %}
+                {{ squad.member_count }}
+                {% endif %}
+              </td>
               <td data-scol="sqf_tz">{{ squad.squad_timezone|default:"-" }}</td>
-              {% if event.squad_gender_required %}<td data-scol="sqf_gender">{% if squad.gender %}<span class="badge badge-outline badge-sm">{{ squad.gender }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
+              <td data-scol="sqf_gender">{% if squad.gender %}<span class="badge badge-outline badge-sm">{{ squad.gender }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
               {# enforcement_summary is a property, so bind it once rather than recomputing per use. #}
               {% with enforced=squad.enforcement_summary %}
               <td data-scol="sqf_enforced">
@@ -726,20 +734,11 @@
               <td data-scol="sqf_zr_cat">
                 {% include "events/_squad_category_range.html" with low=squad.min_zwift_racing_category high=squad.max_zwift_racing_category %}
               </td>
-              <td data-scol="sqf_members">
-                {% if squad.enriched_members %}
-                <div class="tooltip tooltip-right" data-tip="{{ squad.member_names_tooltip }}">
-                  <span class="cursor-default underline decoration-dotted">{{ squad.member_count }}</span>
-                </div>
-                {% else %}
-                {{ squad.member_count }}
-                {% endif %}
-              </td>
               <td data-scol="sqf_captain">{% for c in squad.captains.all %}{{ c.get_full_name|default:c.discord_username }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
               <td data-scol="sqf_vice">{% for vc in squad.vice_captains.all %}{{ vc.get_full_name|default:vc.discord_username }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
             </tr>
             <tr id="squad-members-{{ squad.pk }}" style="display:none">
-              <td colspan="{% if event.squad_gender_required %}8{% else %}7{% endif %}" class="p-0">
+              <td colspan="11" class="p-0">
                 <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2">
                   <div class="flex flex-wrap items-center gap-2 mb-2 relative">
                     {% if squad.discord_channel_id %}
@@ -1182,9 +1181,9 @@ function switchCategorySource(source) {
 (function() {
   var STORAGE_KEY = 'event_squad_field_cols';
   var DEFAULTS = {
-    sqf_tz: true, sqf_gender: true, sqf_enforced: true,
+    sqf_members: true, sqf_tz: true, sqf_gender: true, sqf_enforced: true,
     sqf_zwift_cat: true, sqf_womens_cat: true,
-    sqf_zr_cat: false, sqf_members: false, sqf_captain: false, sqf_vice: false
+    sqf_zr_cat: false, sqf_captain: false, sqf_vice: false
   };
   var saved = {};
   try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e) {}

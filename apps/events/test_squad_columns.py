@@ -167,3 +167,42 @@ def test_expand_all_is_offered_only_when_there_are_squads(client, event, squad, 
 
     squad.delete()
     assert 'id="squad-expand-all"' not in _page(client, event)
+
+
+@pytest.mark.django_db
+def test_members_sits_immediately_after_the_squad_name(client, event, squad, event_admin) -> None:
+    """Member count is the first thing you want off a squad row, so it leads the data."""
+    client.force_login(event_admin)
+    body = _page(client, event)
+
+    head = body[body.index('id="squad-table"'):]
+    assert head.index('data-scol="sqf_members"') < head.index('data-scol="sqf_tz"')
+
+
+@pytest.mark.django_db
+def test_members_is_visible_without_touching_the_selector(client, event, squad, event_admin) -> None:
+    """Members is a default column, not one you have to go and switch on."""
+    client.force_login(event_admin)
+    body = _page(client, event)
+
+    defaults = body[body.index("event_squad_field_cols"):]
+    assert "sqf_members: true" in defaults[:400]
+
+
+@pytest.mark.django_db
+def test_squad_gender_shows_even_when_signups_do_not_ask_for_it(client, event, event_admin) -> None:
+    """Event.squad_gender_required governs the rider's signup preference, not Squad.gender.
+
+    The squads table used to hide its Squad Gender column behind that flag, so an event
+    that never asks riders for a preference showed no gender for its squads either --
+    even though each squad has one set on the squad form.
+    """
+    event.squad_gender_required = False
+    event.save(update_fields=["squad_gender_required"])
+    Squad.objects.create(event=event, name="Women's Div", gender="Female")
+    client.force_login(event_admin)
+
+    body = _page(client, event)
+
+    assert 'data-scol="sqf_gender"' in body
+    assert "Female" in body
