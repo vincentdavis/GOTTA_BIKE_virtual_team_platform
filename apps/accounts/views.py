@@ -615,12 +615,41 @@ def profile_delete(request: HttpRequest) -> HttpResponse:
     """
     confirmation = request.POST.get("confirmation", "").strip()
     if confirmation.lower() != "delete":
+        logfire.info(
+            "Account deletion not confirmed",
+            user_id=request.user.pk,
+            discord_id=request.user.discord_id,
+        )
         messages.error(request, "Please type 'Delete' to confirm account deletion.")
         return redirect("accounts:profile_delete_confirm")
 
     user = request.user
+
+    # Everything worth recording has to be gathered before the row goes away -- this is
+    # the only moment it is knowable. Deliberately excluded: name and email. The person
+    # is asking us to forget them, and Logfire retention is not ours to control.
+    # discord_id and zwid are kept because the records that outlive the account
+    # (GuildMember, MembershipApplication, and the zwid-keyed ZP/ZR tables) are keyed by
+    # them, so a later erasure request is unanswerable without them.
+    # media_file is null=True as well as blank, so both have to be excluded.
+    with_media = user.race_ready_records.exclude(media_file="").exclude(media_file__isnull=True)
+    orphaned_media = list(with_media.values_list("media_file", flat=True))
+    audit = {
+        "user_id": user.pk,
+        "discord_id": user.discord_id,
+        "zwid": user.zwid,
+        "verification_records": user.race_ready_records.count(),
+        "event_signups": user.event_signups.count(),
+        # RaceReadyRecord rows cascade, but Django never deletes FileField storage, so
+        # these blobs survive with nothing referencing them. Logging the paths is the one
+        # chance to keep them findable -- see the orphaned-media sweep in TODO.md.
+        "orphaned_media_files": orphaned_media,
+        "orphaned_media_count": len(orphaned_media),
+    }
+
     logout(request)
     user.delete()
+    logfire.info("User account deleted", **audit)
     messages.success(request, "Your account has been deleted.")
     return redirect("/")
 

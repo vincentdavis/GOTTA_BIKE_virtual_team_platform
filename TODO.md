@@ -25,9 +25,12 @@
   *(Done — `templates/accounts/profile_delete.html` now lists both what is deleted and what is kept,
   guarded by `apps/accounts/test_delete_account_copy.py`. The underlying behaviour is unchanged; the
   deletion-parity items under Privacy & Data Protection are what actually close the gaps.)*
-- [ ] **Log account deletion.** `apps/accounts/views.py:profile_delete` is `logout(); user.delete()` with
+- [x] **Log account deletion.** `apps/accounts/views.py:profile_delete` is `logout(); user.delete()` with
   zero logfire calls — the most destructive action in the app leaves no trace, while deleting a single
   verification record is fully logged (`apps/team/views.py:1022`). Contradicts the logging rule in CLAUDE.md.
+  *(Done — logs user_id / discord_id / zwid, counts of what cascaded, and the paths of the media blobs that
+  are now orphaned in storage; name and email are deliberately excluded. A rejected confirmation is logged
+  too. Guarded by `apps/accounts/test_delete_account_audit.py`.)*
 
 ### Testing (no test coverage exists)
 
