@@ -3,8 +3,11 @@
 The page used to promise "All your data will be permanently deleted", which was false:
 several models outlive ``User.delete()`` because their link is ``SET_NULL`` (GuildMember,
 Ticket, PageVisit) or because they have no User FK at all (MembershipApplication, and the
-zwid-keyed ZwiftPower / Zwift Racing tables). Verification media is orphaned in storage
-rather than removed. These tests exist so that claim cannot come back unnoticed.
+zwid-keyed ZwiftPower / Zwift Racing tables). These tests exist so that claim cannot come
+back unnoticed.
+
+Verification media used to be on that list -- the rows cascaded but the files stayed in
+storage. It is now purged before the cascade, so the page lists it as deleted.
 """
 
 import pytest
@@ -34,7 +37,6 @@ def test_page_does_not_claim_everything_is_deleted(delete_page) -> None:
     [
         "Discord server membership record",  # GuildMember, SET_NULL
         "membership registration",  # MembershipApplication, no User FK
-        "Verification photos and videos",  # media blobs orphaned in storage
         "ZwiftPower and Zwift Racing",  # keyed by zwid, no User FK
         "Support tickets",  # Ticket.submitted_by, SET_NULL
         "Page visit logs",  # PageVisit.user, SET_NULL
@@ -44,6 +46,11 @@ def test_page_does_not_claim_everything_is_deleted(delete_page) -> None:
 def test_page_names_what_survives_deletion(delete_page, survivor) -> None:
     """Every category that outlives the account must be disclosed on the page."""
     assert survivor in delete_page
+
+
+def test_page_does_not_still_claim_media_is_kept(delete_page) -> None:
+    """Verification media is purged before the cascade now, so the old caveat must be gone."""
+    assert "files themselves stay in storage" not in delete_page
 
 
 def test_page_still_asks_for_typed_confirmation(delete_page) -> None:

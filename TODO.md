@@ -182,11 +182,14 @@ setting at it — that is separate from this per-rider page, and costs no code.
 `apps/accounts/services.py:delete_user_data(user, *, reason)` in a transaction, called by both the
 self-serve view and an admin action — deletion spread across a view body is how the current gaps happened):
 
-- [ ] Delete verification media files **before** the cascade. Note: `user.delete()` cascades through
+- [x] Delete verification media files **before** the cascade. Note: `user.delete()` cascades through
   Django's Collector, which never calls `Model.delete()` per instance — so overriding
   `RaceReadyRecord.delete()` will *not* work; the delete path must iterate explicitly. Same bug at
   `apps/team/views.py:1031` (single-record delete orphans the file) while the bulk sweep at `:1287` gets it
   right. Once the row is gone the blob is unfindable except by enumerating the bucket prefix.
+  *(Done for **account deletion** — `apps/team/services.py:purge_user_verification_media` runs before
+  `user.delete()`. **`apps/team/views.py:1037` still orphans the file** when an admin deletes a single
+  record; same one-line fix, same helper.)*
 - [ ] Call zauth `disconnect()` on account deletion — `apps/zwift/client.py:236` exists and is already used
   at `apps/zwift/views.py:122`, just not wired into the delete path, so the upstream Zwift link survives.
 - [ ] Decide and implement: delete the `MembershipApplication` by `discord_id`, or scrub its personal fields

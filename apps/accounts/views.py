@@ -24,6 +24,7 @@ from apps.team.services import (
     build_verify_type_options,
     get_user_required_verification_types,
     get_user_verification_types,
+    purge_user_verification_media,
 )
 from apps.zwift import profile_fields
 from apps.zwift.utils import fetch_zwift_id
@@ -631,20 +632,24 @@ def profile_delete(request: HttpRequest) -> HttpResponse:
     # discord_id and zwid are kept because the records that outlive the account
     # (GuildMember, MembershipApplication, and the zwid-keyed ZP/ZR tables) are keyed by
     # them, so a later erasure request is unanswerable without them.
-    # media_file is null=True as well as blank, so both have to be excluded.
-    with_media = user.race_ready_records.exclude(media_file="").exclude(media_file__isnull=True)
-    orphaned_media = list(with_media.values_list("media_file", flat=True))
+    # The verification photos have to go before the cascade. RaceReadyRecord rows are
+    # removed by Django's Collector, which bulk-deletes and never calls Model.delete(), so
+    # nothing on the model can hook this -- and once the rows are gone the files are
+    # unreachable except by enumerating the storage prefix. A storage failure here is
+    # logged and counted rather than raised: the account still goes, because refusing to
+    # delete someone because one blob is unreadable is the worse outcome.
+    media = purge_user_verification_media(user)
     audit = {
         "user_id": user.pk,
         "discord_id": user.discord_id,
         "zwid": user.zwid,
         "verification_records": user.race_ready_records.count(),
         "event_signups": user.event_signups.count(),
-        # RaceReadyRecord rows cascade, but Django never deletes FileField storage, so
-        # these blobs survive with nothing referencing them. Logging the paths is the one
-        # chance to keep them findable -- see the orphaned-media sweep in TODO.md.
-        "orphaned_media_files": orphaned_media,
-        "orphaned_media_count": len(orphaned_media),
+        "media_purged": media["purged"],
+        # Anything that failed is now genuinely orphaned, so the path is the only trace
+        # left of it -- see the orphaned-media sweep in TODO.md.
+        "media_purge_failed": media["failed"],
+        "orphaned_media_files": media["failed_files"],
     }
 
     logout(request)

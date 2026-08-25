@@ -346,13 +346,15 @@ def _strip_media(records: list[RaceReadyRecord], *, reason: str) -> dict[str, in
         reason: Why these records are being stripped, for the log line.
 
     Returns:
-        Counts of records ``considered``, ``purged`` and ``failed``.
+        Counts of records ``considered``, ``purged`` and ``failed``, plus ``failed_files``
+        naming the storage paths that could not be deleted.
 
     """
     purged = 0
-    failed = 0
+    failed_files = []
     for record in records:
         try:
+            file_name = record.media_file.name if record.media_file else ""
             record.delete_media_file()
             record.url = ""
             # delete_media_file() drops the stored file with save=False, so media_file has
@@ -362,7 +364,8 @@ def _strip_media(records: list[RaceReadyRecord], *, reason: str) -> dict[str, in
             record.save(update_fields=["url", "media_file"])
             purged += 1
         except Exception as e:
-            failed += 1
+            if file_name:
+                failed_files.append(file_name)
             logfire.error(
                 "Could not strip verification media",
                 record_id=record.id,
@@ -371,7 +374,40 @@ def _strip_media(records: list[RaceReadyRecord], *, reason: str) -> dict[str, in
                 error=str(e),
             )
 
-    return {"considered": len(records), "purged": purged, "failed": failed}
+    return {
+        "considered": len(records),
+        "purged": purged,
+        "failed": len(failed_files),
+        # The paths of anything that could not be deleted. When the caller is about to
+        # drop the rows too (account deletion), this is the only trace of a file that is
+        # now unreachable except by enumerating the storage prefix.
+        "failed_files": failed_files,
+    }
+
+
+def purge_user_verification_media(user: User) -> dict:
+    """Strip evidence from every verification record belonging to ``user``.
+
+    Called just before ``User.delete()``. The cascade cannot do this itself: Django's
+    Collector issues bulk deletes and never calls ``Model.delete()`` per instance, so a
+    model-level override would not fire -- and once the rows are gone the files are
+    unreachable except by enumerating the storage prefix.
+
+    Records are saved as well as stripped even though they are about to be deleted. That
+    is not wasted work: if the delete that follows fails, the rows are left consistent
+    with storage rather than pointing at files that no longer exist.
+
+    Args:
+        user: The user whose account is being deleted.
+
+    Returns:
+        Counts of records ``considered``, ``purged`` and ``failed``, plus ``failed_files``.
+
+    """
+    records = list(user.race_ready_records.filter(_has_media()))
+    result = _strip_media(records, reason="account deleted")
+    logfire.info("Purged verification media for deleted account", user_id=user.pk, **result)
+    return result
 
 
 def purge_expired_verification_media() -> dict[str, int]:
