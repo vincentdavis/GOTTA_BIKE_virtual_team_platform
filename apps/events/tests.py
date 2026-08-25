@@ -882,7 +882,7 @@ def test_squad_enforcement_summary() -> None:
     summary = squad.enforcement_summary
     assert "Gender: Female" in summary
     assert "Zwift: B-D" in summary
-    assert "ZR: Gold or stronger" in summary
+    assert "ZR: Gold or higher" in summary
     # A bound set without its enforce flag is excluded.
     assert not any("Women's" in s for s in summary)
     # Nothing enforced -> empty.
@@ -909,7 +909,7 @@ def test_squad_manage_shows_enforcement_badges(client, event_admin) -> None:
     body = response.content.decode()
     assert "Enforced Requirements" in body
     assert "Gender: Female" in body
-    assert "Zwift: B or weaker" in body
+    assert "Zwift: B or lower" in body
 
 
 # ---- ZR category enforcement on squad join ----
@@ -918,13 +918,13 @@ def test_squad_manage_shows_enforcement_badges(client, event_admin) -> None:
 @pytest.mark.parametrize(
     ("rider_cat", "expected_ok"),
     [
-        ("Diamond", False),  # stronger than max (Sapphire)
-        ("Emerald", False),  # stronger than max
+        ("Diamond", False),  # higher than max (Sapphire)
+        ("Emerald", False),  # higher than max
         ("Sapphire", True),  # at max
         ("Platinum", True),  # inside band
         ("Gold", True),  # at min
-        ("Silver", False),  # weaker than min (Gold)
-        ("Copper", False),  # weaker than min
+        ("Silver", False),  # lower than min (Gold)
+        ("Copper", False),  # lower than min
         ("", False),  # no ZR category on record
     ],
 )
@@ -950,7 +950,7 @@ def test_squad_check_zr_eligibility_respects_enforce_flags() -> None:
     squad = Squad(min_zwift_racing_category="Gold", max_zwift_racing_category="Sapphire")
     assert squad.check_zr_eligibility("Copper") == (True, "")
 
-    # Only the max bound enforced -> too-strong blocked, anything weaker allowed.
+    # Only the max bound enforced -> too-high blocked, anything lower allowed.
     squad_max = Squad(max_zwift_racing_category="Sapphire", enforce_max_zwift_racing_category=True)
     assert squad_max.check_zr_eligibility("Diamond")[0] is False
     assert squad_max.check_zr_eligibility("Copper")[0] is True
@@ -1104,12 +1104,12 @@ def test_squad_form_saves_womens_zwift_category(event_admin) -> None:
 @pytest.mark.parametrize(
     ("rider_cat", "expected_ok"),
     [
-        ("A+", False),  # stronger than max (B)
+        ("A+", False),  # higher than max (B)
         ("A", False),
         ("B", True),
         ("C", True),
         ("D", True),
-        ("E", False),  # weaker than min (D)
+        ("E", False),  # lower than min (D)
         ("", True),  # no women's category -> not affected
     ],
 )
@@ -1133,7 +1133,7 @@ def test_squad_womens_zwift_eligibility_respects_flags() -> None:
 
     # Bound set but enforce off -> never blocks.
     assert Squad(min_womens_zwift_category="D").check_womens_zwift_eligibility("E") == (True, "")
-    # Only max enforced -> too-strong blocked, weaker allowed.
+    # Only max enforced -> too-high blocked, lower allowed.
     s = Squad(max_womens_zwift_category="B", enforce_max_womens_zwift_category=True)
     assert s.check_womens_zwift_eligibility("A")[0] is False
     assert s.check_womens_zwift_eligibility("C")[0] is True
@@ -1181,12 +1181,12 @@ def test_squad_assign_blocked_by_womens_zwift_enforcement(
 @pytest.mark.parametrize(
     ("rider_cat", "expected_ok"),
     [
-        ("A+", False),  # stronger than max (B)
+        ("A+", False),  # higher than max (B)
         ("A", False),
         ("B", True),
         ("C", True),
         ("D", True),
-        ("E", False),  # weaker than min (D)
+        ("E", False),  # lower than min (D)
         ("", True),  # no Zwift category -> not affected
     ],
 )
@@ -1210,7 +1210,7 @@ def test_squad_zwift_eligibility_respects_flags() -> None:
 
     # Bound set but enforce off -> never blocks.
     assert Squad(min_zwift_category="D").check_zwift_eligibility("E") == (True, "")
-    # Only max enforced -> too-strong blocked, weaker allowed.
+    # Only max enforced -> too-high blocked, lower allowed.
     s = Squad(max_zwift_category="B", enforce_max_zwift_category=True)
     assert s.check_zwift_eligibility("A")[0] is False
     assert s.check_zwift_eligibility("C")[0] is True
@@ -1235,7 +1235,7 @@ def test_squad_assign_blocked_by_zwift_enforcement(
     )
     squad = Squad.objects.create(
         event=event,
-        name="B-and-weaker",
+        name="B-and-lower",
         gender="COED",
         max_zwift_category="B",
         enforce_max_zwift_category=True,
@@ -2059,7 +2059,7 @@ def test_eligibility_squads_tab_flags_out_of_bounds(client, superuser, user_mode
     client.force_login(superuser)
     today = date.today()
     event = Event.objects.create(title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True)
-    # Squad caps Zwift category at B (strongest allowed).
+    # Squad caps Zwift category at B (highest allowed).
     squad = Squad.objects.create(
         event=event, name="B Squad", max_zwift_category="B", enforce_max_zwift_category=True
     )

@@ -1,6 +1,6 @@
 {% comment %}
 Render a squad's configured category range as "B", "B – D", "B", or "-".
 Shared by the Zwift / Women's Zwift / ZR category columns on the squads table so the
-three read identically. Expects `low` (weakest allowed) and `high` (strongest allowed).
+three read identically. Expects `low` (lowest allowed) and `high` (highest allowed).
 {% endcomment %}
 {% if low or high %}{% if low == high %}{{ high }}{% else %}{{ low|default:"" }}{% if low and high %} &ndash; {% endif %}{{ high|default:"" }}{% endif %}{% else %}<span class="text-base-content/30">-</span>{% endif %}

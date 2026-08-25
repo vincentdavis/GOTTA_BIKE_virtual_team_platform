@@ -22,7 +22,7 @@ ZR_CATEGORY_ORDER = [
 ]
 ZR_CATEGORY_CHOICES = [(cat, cat) for cat in ZR_CATEGORY_ORDER]
 
-# Zwift category ranking, strongest -> weakest. "A+" is a real ZwiftPower category
+# Zwift category ranking, highest -> lowest. "A+" is a real ZwiftPower category
 # (division 5); squads only set bounds from A..E, but riders may be A+, so the rank
 # used for comparison includes it.
 ZWIFT_CATEGORY_ORDER = ["A+", "A", "B", "C", "D", "E"]
@@ -643,41 +643,41 @@ class Squad(models.Model):
         max_length=20,
         blank=True,
         choices=ZWIFT_CATEGORY_BOUND_CHOICES,
-        help_text="Minimum Zwift category (weakest allowed; A high, E low)",
+        help_text="Minimum Zwift category (lowest allowed; A high, E low)",
     )
     max_zwift_category = models.CharField(
         max_length=20,
         blank=True,
         choices=ZWIFT_CATEGORY_BOUND_CHOICES,
-        help_text="Maximum Zwift category (strongest allowed; A high, E low)",
+        help_text="Maximum Zwift category (highest allowed; A high, E low)",
     )
     enforce_min_zwift_category = models.BooleanField(
         default=False,
-        help_text="Block adding a rider weaker than the minimum Zwift category",
+        help_text="Block adding a rider lower than the minimum Zwift category",
     )
     enforce_max_zwift_category = models.BooleanField(
         default=False,
-        help_text="Block adding a rider stronger than the maximum Zwift category",
+        help_text="Block adding a rider higher than the maximum Zwift category",
     )
     min_womens_zwift_category = models.CharField(
         max_length=20,
         blank=True,
         choices=ZWIFT_CATEGORY_BOUND_CHOICES,
-        help_text="Minimum women's Zwift category (weakest allowed; A high, E low)",
+        help_text="Minimum women's Zwift category (lowest allowed; A high, E low)",
     )
     max_womens_zwift_category = models.CharField(
         max_length=20,
         blank=True,
         choices=ZWIFT_CATEGORY_BOUND_CHOICES,
-        help_text="Maximum women's Zwift category (strongest allowed; A high, E low)",
+        help_text="Maximum women's Zwift category (highest allowed; A high, E low)",
     )
     enforce_min_womens_zwift_category = models.BooleanField(
         default=False,
-        help_text="Block adding a woman weaker than the minimum women's Zwift category",
+        help_text="Block adding a woman lower than the minimum women's Zwift category",
     )
     enforce_max_womens_zwift_category = models.BooleanField(
         default=False,
-        help_text="Block adding a woman stronger than the maximum women's Zwift category",
+        help_text="Block adding a woman higher than the maximum women's Zwift category",
     )
     min_zwift_racing_category = models.CharField(
         max_length=20,
@@ -693,11 +693,11 @@ class Squad(models.Model):
     )
     enforce_min_zwift_racing_category = models.BooleanField(
         default=False,
-        help_text="Block adding a rider weaker than the minimum Zwift Racing category",
+        help_text="Block adding a rider lower than the minimum Zwift Racing category",
     )
     enforce_max_zwift_racing_category = models.BooleanField(
         default=False,
-        help_text="Block adding a rider stronger than the maximum Zwift Racing category",
+        help_text="Block adding a rider higher than the maximum Zwift Racing category",
     )
 
     require_zauth = models.BooleanField(
@@ -876,24 +876,24 @@ class Squad(models.Model):
     def zr_requirement_text(self) -> str:
         """A human description of the enforced ZR category bounds (empty if none enforced).
 
-        ZR tiers rank Diamond (strongest) to Copper (weakest). ``min_zwift_racing_category`` is the
-        weakest tier allowed and ``max_zwift_racing_category`` is the strongest tier allowed.
+        ZR tiers rank Diamond (highest) to Copper (lowest). ``min_zwift_racing_category`` is the
+        lowest tier allowed and ``max_zwift_racing_category`` is the highest tier allowed.
         """
         enforce_min = self.enforce_min_zwift_racing_category and self.min_zwift_racing_category
         enforce_max = self.enforce_max_zwift_racing_category and self.max_zwift_racing_category
         if enforce_min and enforce_max:
             return f"{self.max_zwift_racing_category} to {self.min_zwift_racing_category}"
         if enforce_max:
-            return f"{self.max_zwift_racing_category} or weaker"
+            return f"{self.max_zwift_racing_category} or lower"
         if enforce_min:
-            return f"{self.min_zwift_racing_category} or stronger"
+            return f"{self.min_zwift_racing_category} or higher"
         return ""
 
     def check_zr_eligibility(self, zr_category: str) -> tuple[bool, str]:
         """Check a rider's ZR category against this squad's enforced bounds.
 
-        ZR tiers rank Diamond (strongest) to Copper (weakest). A rider must be no stronger than
-        ``max_zwift_racing_category`` and no weaker than ``min_zwift_racing_category`` for the bounds
+        ZR tiers rank Diamond (highest) to Copper (lowest). A rider must be no higher than
+        ``max_zwift_racing_category`` and no lower than ``min_zwift_racing_category`` for the bounds
         that are enforced.
 
         Args:
@@ -908,7 +908,7 @@ class Squad(models.Model):
         if not enforce_min and not enforce_max:
             return True, ""
 
-        order = ZR_CATEGORY_ORDER  # index 0 = Diamond (strongest) ... index 9 = Copper (weakest)
+        order = ZR_CATEGORY_ORDER  # index 0 = Diamond (highest) ... index 9 = Copper (lowest)
         cat = (zr_category or "").strip()
         if cat not in order:
             return False, f"no ZR category on record; this squad requires {self.zr_requirement_text}"
@@ -964,14 +964,14 @@ class Squad(models.Model):
     ) -> tuple[bool, str]:
         """Shared A+/A-E category-bounds check for the men's and women's Zwift categories.
 
-        Categories rank A (strongest) to E (weakest), with A+ stronger than A. A rider must be no
-        stronger than ``max_cat`` and no weaker than ``min_cat`` for the bounds that are enforced.
+        Categories rank A (highest) to E (lowest), with A+ higher than A. A rider must be no
+        higher than ``max_cat`` and no lower than ``min_cat`` for the bounds that are enforced.
         Riders without a category of this kind are not blocked (the bounds simply don't apply).
 
         Args:
             category: The rider's category letter (e.g. "B"); blank/unknown if not categorized.
-            min_cat: The squad's minimum (weakest allowed) category.
-            max_cat: The squad's maximum (strongest allowed) category.
+            min_cat: The squad's minimum (lowest allowed) category.
+            max_cat: The squad's maximum (highest allowed) category.
             enforce_min: Whether the minimum bound is enforced.
             enforce_max: Whether the maximum bound is enforced.
             label: Human label for the category kind, used in the block message.
@@ -985,7 +985,7 @@ class Squad(models.Model):
         if not enforce_min and not enforce_max:
             return True, ""
 
-        order = ZWIFT_CATEGORY_ORDER  # index 0 = A+ (strongest) ... index 5 = E (weakest)
+        order = ZWIFT_CATEGORY_ORDER  # index 0 = A+ (highest) ... index 5 = E (lowest)
         cat = (category or "").strip().upper()
         if cat not in order:
             return True, ""  # no category of this kind on record; bounds don't apply
@@ -1131,10 +1131,10 @@ class Squad(models.Model):
 
     @staticmethod
     def _bounds_text(min_cat: str, max_cat: str, enforce_min: bool, enforce_max: bool) -> str:
-        """Describe an enforced category range. ``max_cat`` is strongest, ``min_cat`` weakest.
+        """Describe an enforced category range. ``max_cat`` is highest, ``min_cat`` lowest.
 
         Returns:
-            A short range label (e.g. "B-D", "B or weaker"), or "" if nothing is enforced.
+            A short range label (e.g. "B-D", "B or lower"), or "" if nothing is enforced.
 
         """
         emin = enforce_min and min_cat
@@ -1142,9 +1142,9 @@ class Squad(models.Model):
         if emin and emax:
             return f"{max_cat}-{min_cat}"
         if emax:
-            return f"{max_cat} or weaker"
+            return f"{max_cat} or lower"
         if emin:
-            return f"{min_cat} or stronger"
+            return f"{min_cat} or higher"
         return ""
 
     @property
