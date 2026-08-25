@@ -1,0 +1,61 @@
+{% comment %}
+  Live read of a squad's Discord channel: who can actually see it, and how that differs
+  from the squad roster. Swapped in by HTMX from the Manage Squads panel. Read-only.
+{% endcomment %}
+<div class="mt-2">
+  {% if error %}
+  <div class="alert alert-warning py-2"><span class="text-sm">{{ error }}</span></div>
+  {% else %}
+  <div class="card bg-base-300 p-3">
+    <div class="flex flex-wrap items-center gap-2 mb-2">
+      <span class="text-xs font-semibold uppercase tracking-wide text-base-content/50">
+        Channel access{% if channel_name %} &mdash; #{{ channel_name }}{% endif %}
+      </span>
+      <span class="badge badge-ghost badge-sm">{{ viewer_count }} can view</span>
+      <span class="badge badge-ghost badge-sm">{{ member_count }} on squad</span>
+      {% if outsiders %}<span class="badge badge-error badge-sm">{{ outsiders|length }} not on squad</span>{% endif %}
+      {% if shut_out %}<span class="badge badge-warning badge-sm">{{ shut_out|length }} shut out</span>{% endif %}
+    </div>
+
+    {% if outsiders %}
+    <p class="text-xs text-error font-semibold mb-1">Can see the channel but are not on this squad</p>
+    <ul class="text-sm space-y-0.5 mb-3">
+      {% for row in outsiders %}
+      <li class="flex items-center gap-2">
+        <span>{{ row.name }}</span>
+        {% if row.member.user %}<a href="{% url 'accounts:public_profile' row.member.user.pk %}" class="link link-primary text-xs">profile</a>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="text-sm text-success mb-3">Everyone who can see this channel is on the squad.</p>
+    {% endif %}
+
+    {% if shut_out %}
+    <p class="text-xs text-warning font-semibold mb-1">On the squad but cannot see the channel</p>
+    <ul class="text-sm space-y-0.5 mb-3">
+      {% for row in shut_out %}<li>{{ row.name }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if overwrites %}
+    <details class="text-xs">
+      <summary class="cursor-pointer text-base-content/60">Channel permission overwrites ({{ overwrites|length }})</summary>
+      <ul class="mt-1 space-y-0.5">
+        {% for ow in overwrites %}
+        <li>
+          <span class="badge badge-xs {% if ow.effect == 'allow' %}badge-success{% else %}badge-error{% endif %}">{{ ow.effect }}</span>
+          {% if ow.kind == 'role' %}@{{ ow.name|default:ow.id }}{% else %}member <span class="font-mono">{{ ow.id }}</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+
+    <p class="text-xs text-base-content/50 mt-2">
+      Channel permissions and roles are read live from Discord. Who holds which role comes
+      from the app's last guild-member sync, so a very recent Discord change may not show yet.
+    </p>
+  </div>
+  {% endif %}
+</div>

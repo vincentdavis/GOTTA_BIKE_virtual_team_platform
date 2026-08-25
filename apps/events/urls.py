@@ -55,6 +55,7 @@ from apps.events.views import (
     squad_assign_page_view,
     squad_assign_view,
     squad_availability_view,
+    squad_channel_access_view,
     squad_create_view,
     squad_delete_view,
     squad_edit_view,
@@ -128,6 +129,11 @@ urlpatterns = [
     path("<int:event_pk>/squads/<int:squad_pk>/edit/", squad_edit_view, name="squad_edit"),
     path("<int:event_pk>/squads/<int:squad_pk>/availability/", squad_availability_view, name="squad_availability"),
     path("<int:event_pk>/squads/<int:squad_pk>/delete/", squad_delete_view, name="squad_delete"),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/channel-access/",
+        squad_channel_access_view,
+        name="squad_channel_access",
+    ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/toggle-role/<int:user_id>/",
         squad_toggle_role_view,

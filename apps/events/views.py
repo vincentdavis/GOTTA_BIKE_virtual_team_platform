@@ -3630,6 +3630,126 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
 
 @login_required
 @team_member_required()
+@require_GET
+def squad_channel_access_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpResponse:
+    """Show who can actually see a squad's Discord channel, read live from Discord.
+
+    The Discord Roles page compares the app's cached role data against squad membership.
+    This goes to the source instead: it reads the channel's permission overwrites and the
+    guild's roles from Discord, computes VIEW_CHANNEL for every current guild member, and
+    diffs the result against the squad roster. Channel access is what actually leaks, and
+    it is not the same question as "who holds the squad role" -- any other role or a
+    member-specific overwrite can grant it.
+
+    Read-only. Nothing here changes Discord or the app.
+
+    Args:
+        request: The HTTP request.
+        event_pk: The event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        The rendered channel-access panel, for HTMX to swap in.
+
+    Raises:
+        PermissionDenied: If the user cannot manage this event's squads.
+
+    """
+    from django.core.exceptions import PermissionDenied
+
+    from apps.accounts.discord_service import get_channel, get_guild_roles
+    from apps.accounts.models import GuildMember
+    from apps.events.channel_access import can_view, describe_overwrites
+
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    if not _can_manage_event_squads(request.user, event):
+        raise PermissionDenied("You cannot manage this event's squads.")
+
+    context: dict = {"event": event, "squad": squad}
+    if not squad.discord_channel_id:
+        context["error"] = "This squad has no Discord channel configured."
+        return render(request, "events/_squad_channel_access.html", context)
+
+    channel = get_channel(squad.discord_channel_id)
+    roles = get_guild_roles()
+    if channel is None or roles is None:
+        context["error"] = "Could not read the channel from Discord. Check the bot's access and try again."
+        return render(request, "events/_squad_channel_access.html", context)
+
+    guild_id = str(config.GUILD_ID)
+    roles_by_id = {r["id"]: r for r in roles}
+    role_names = {r["id"]: r["name"] for r in roles}
+    overwrites = channel.get("permission_overwrites") or []
+
+    # Members still in the guild. GuildMember.roles is the app's synced copy, so this half
+    # is only as fresh as the last guild-member sync -- the channel config above is live.
+    members = GuildMember.objects.filter(date_left__isnull=True).exclude(is_bot=True).select_related("user")
+    viewers = [
+        member
+        for member in members
+        if can_view(
+            member_role_ids={str(r) for r in (member.roles or [])},
+            member_id=str(member.discord_id),
+            guild_id=guild_id,
+            roles_by_id=roles_by_id,
+            overwrites=overwrites,
+        )
+    ]
+
+    roster_discord_ids = {
+        str(did)
+        for did in SquadMember.objects.filter(squad=squad, status=SquadMember.Status.MEMBER)
+        .exclude(user__discord_id="")
+        .values_list("user__discord_id", flat=True)
+        if did
+    }
+    viewer_ids = {str(m.discord_id) for m in viewers}
+
+    def _label(member) -> str:
+        """Best available display name for a guild member.
+
+        Returns:
+            The name to show in the list.
+
+        """
+        return member.nickname or member.display_name or member.username or str(member.discord_id)
+
+    context.update({
+        "channel_name": channel.get("name", ""),
+        "viewer_count": len(viewers),
+        "member_count": len(roster_discord_ids),
+        "overwrites": describe_overwrites(overwrites, role_names),
+        # The point of the page: people who can read the channel without being on the squad.
+        "outsiders": sorted(
+            ({"name": _label(m), "member": m} for m in viewers if str(m.discord_id) not in roster_discord_ids),
+            key=lambda row: row["name"].lower(),
+        ),
+        # The mirror: on the squad but shut out of its own channel.
+        "shut_out": sorted(
+            (
+                {"name": _label(m), "member": m}
+                for m in members
+                if str(m.discord_id) in roster_discord_ids and str(m.discord_id) not in viewer_ids
+            ),
+            key=lambda row: row["name"].lower(),
+        ),
+    })
+
+    logfire.info(
+        "Squad channel access audited",
+        event_id=event_pk,
+        squad_id=squad_pk,
+        user_id=request.user.id,
+        viewer_count=len(viewers),
+        outsider_count=len(context["outsiders"]),
+        shut_out_count=len(context["shut_out"]),
+    )
+    return render(request, "events/_squad_channel_access.html", context)
+
+
+@login_required
+@team_member_required()
 @require_POST
 def squad_toggle_role_view(request: HttpRequest, event_pk: int, squad_pk: int, user_id: int) -> HttpResponse:
     """Toggle a squad's Discord role for a member.

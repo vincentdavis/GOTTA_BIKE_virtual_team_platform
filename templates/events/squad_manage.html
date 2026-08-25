@@ -257,6 +257,18 @@
               <span class="text-base-content/70 text-sm">Channel</span>
               <span class="text-sm">{% if squad.channel_name %}#{{ squad.channel_name }}{% else %}<span class="font-mono text-xs">{{ squad.discord_channel_id }}</span>{% endif %}</span>
             </div>
+            <div class="flex justify-end">
+              <button type="button" class="btn btn-outline btn-xs"
+                      hx-get="{% url 'events:squad_channel_access' event.pk squad.pk %}"
+                      hx-target="#channel-access-{{ squad.pk }}"
+                      hx-swap="innerHTML"
+                      hx-indicator="#channel-access-spinner-{{ squad.pk }}"
+                      title="Read this channel's permissions from Discord and compare them with the squad roster">
+                Who can see this channel?
+              </button>
+              <span id="channel-access-spinner-{{ squad.pk }}" class="htmx-indicator loading loading-spinner loading-xs ml-2"></span>
+            </div>
+            <div id="channel-access-{{ squad.pk }}"></div>
             {% endif %}
             {% if squad.audio_channel_id %}
             <div class="flex items-center justify-between">

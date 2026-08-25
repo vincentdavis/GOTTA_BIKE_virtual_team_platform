@@ -519,6 +519,75 @@ def send_verification_notification(
     return send_discord_dm(discord_id, message)
 
 
+def get_channel(channel_id: str | int) -> dict | None:
+    """Fetch one channel, including its permission overwrites.
+
+    Args:
+        channel_id: The Discord channel ID.
+
+    Returns:
+        The channel object, or None if it could not be fetched.
+
+    """
+    bot_token = config.DISCORD_BOT_TOKEN
+    if not bot_token:
+        logfire.warning("DISCORD_BOT_TOKEN not configured, skipping channel fetch")
+        return None
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(
+                f"{DISCORD_API_BASE}/channels/{channel_id}",
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        logfire.error(
+            "Failed to fetch Discord channel",
+            channel_id=str(channel_id),
+            status_code=e.response.status_code,
+            error=str(e),
+        )
+        return None
+    except httpx.RequestError as e:
+        logfire.error("Discord API request failed for channel fetch", channel_id=str(channel_id), error=str(e))
+        return None
+
+
+def get_guild_roles() -> list[dict] | None:
+    """Fetch the guild's roles, including their permission bitfields.
+
+    ``DiscordRole`` mirrors names and positions but not ``permissions``, and the
+    permission bits are what decide whether a role can see a channel before any
+    channel-level overwrite applies -- so this reads them live.
+
+    Returns:
+        The guild's role objects, or None if they could not be fetched.
+
+    """
+    bot_token = config.DISCORD_BOT_TOKEN
+    guild_id = config.GUILD_ID
+    if not bot_token or not guild_id:
+        logfire.warning("Discord bot token or guild id not configured, skipping roles fetch")
+        return None
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(
+                f"{DISCORD_API_BASE}/guilds/{guild_id}/roles",
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        logfire.error("Failed to fetch Discord roles", status_code=e.response.status_code, error=str(e))
+        return None
+    except httpx.RequestError as e:
+        logfire.error("Discord API request failed for roles fetch", error=str(e))
+        return None
+
+
 def add_discord_role(discord_id: str, role_id: str) -> bool:
     """Add a role to a Discord guild member.
 
