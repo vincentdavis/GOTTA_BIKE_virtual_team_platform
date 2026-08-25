@@ -6,7 +6,12 @@ import pytest
 from django.urls import reverse
 
 from apps.events.models import Event, Squad
-from apps.events.views import _can_manage_event_squads, _can_manage_squad_availability, _can_view_squad_manage
+from apps.events.views import (
+    _can_manage_event_squads,
+    _can_manage_squad_availability,
+    _can_view_squad_manage,
+    _can_view_v_report,
+)
 
 COORD_ROLE = "700"
 
@@ -268,3 +273,71 @@ def test_coordinator_role_only_applies_to_its_own_event(user_model, coordinator)
 
     assert _can_manage_event_squads(coordinator, other_event) is False
     assert _can_manage_squad_availability(coordinator, squad) is False
+
+
+@pytest.mark.django_db
+def test_a_coordinator_can_open_the_eligibility_page(client, event, coordinator) -> None:
+    """They run the event's squads, so they need to see who cannot race."""
+    client.force_login(coordinator)
+
+    response = client.get(reverse("events:squad_v_report", args=[event.pk]))
+
+    assert response.status_code == 200
+    assert _can_view_v_report(coordinator, event)
+
+
+@pytest.mark.django_db
+def test_a_coordinator_role_on_another_event_grants_nothing_here(client, coordinator, db) -> None:
+    """The gate is per-event, like every other coordinator check."""
+    today = date.today()
+    other = Event.objects.create(
+        title="Other", start_date=today, end_date=today + timedelta(days=7),
+        visible=True, coordinator_role_ids=[],
+    )
+
+    assert not _can_view_v_report(coordinator, other)
+
+    client.force_login(coordinator)
+    response = client.get(reverse("events:squad_v_report", args=[other.pk]))
+
+    assert response.status_code == 302  # bounced to the event page
+
+
+@pytest.mark.django_db
+def test_a_plain_team_member_is_still_bounced(client, event, team_member) -> None:
+    """Widening for coordinators must not open the page to everyone."""
+    client.force_login(team_member)
+
+    assert not _can_view_v_report(team_member, event)
+    assert client.get(reverse("events:squad_v_report", args=[event.pk])).status_code == 302
+
+
+@pytest.mark.django_db
+def test_the_eligibility_link_now_shows_for_a_coordinator(client, event, coordinator) -> None:
+    """Access without a link is access nobody finds."""
+    client.force_login(coordinator)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert reverse("events:squad_v_report", args=[event.pk]) in body
+
+
+@pytest.mark.django_db
+def test_a_coordinator_also_gains_the_signup_table(client, event, coordinator, user_model) -> None:
+    """Deliberate side effect of sharing the gate.
+
+    can_view_signup_table is built on _can_view_v_report, so admitting coordinators there
+    shows them the signup table too. That is not a new disclosure: they can already
+    download the same riders, plus more columns, via the signup CSV export.
+    """
+    from apps.events.models import EventSignup
+
+    rider = user_model.objects.create_user(
+        username="rider", email="rider@example.test", first_name="Vera", last_name="Rider",
+    )
+    EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED)
+    client.force_login(coordinator)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "Vera" in body

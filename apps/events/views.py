@@ -204,8 +204,14 @@ def _can_view_squad_manage(user: User, event: Event) -> bool:
 def _can_view_v_report(user: User, event: Event) -> bool:
     """Check if a user can view the V Report for an event.
 
-    Allowed for event admins, superusers, squad captains/vice-captains for any squad
-    in the event, and holders of the event's head captain Discord role.
+    Allowed for event admins, superusers, squad captains/vice-captains for any squad in
+    the event, holders of the event's head captain Discord role, and its regional/group
+    coordinators.
+
+    Coordinators can already export the full signup CSV for the event
+    (``_can_export_event_signups``), which carries strictly more than either this report or
+    the signup table, so admitting them here closes an asymmetry rather than widening what
+    they can reach.
 
     Args:
         user: The requesting user.
@@ -218,6 +224,8 @@ def _can_view_v_report(user: User, event: Event) -> bool:
     if user.is_event_admin or user.is_superuser:
         return True
     if event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id):
+        return True
+    if _is_event_coordinator(user, event):
         return True
     return event.squads.filter(Q(captains=user) | Q(vice_captains=user)).exists()
 

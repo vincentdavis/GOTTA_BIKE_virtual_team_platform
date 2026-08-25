@@ -80,16 +80,16 @@ def test_the_head_captain_sees_the_notes_column(client, event, rider_with_notes,
 
 
 @pytest.mark.django_db
-def test_a_coordinator_has_no_signup_table_to_put_notes_in(client, event, rider_with_notes, user_model) -> None:
-    """Coordinators fail _can_view_v_report, so the whole table is absent -- notes included.
+def test_a_coordinator_sees_the_notes_column(client, event, rider_with_notes, user_model) -> None:
+    """Coordinators were admitted to _can_view_v_report, so they now have a table too.
 
-    Their route to this data is the CSV export, and only that. Widening the notes gate
-    does not change what they see here; it is recorded so the asymmetry is deliberate
-    rather than a gap someone closes by accident.
+    Before that they failed the table gate while still being able to download every note
+    via the CSV export -- they could read the data, just not on the page. Both halves now
+    agree: they see the table, and the notes column within it.
     """
     client.force_login(_actor(user_model, "coord", discord_roles={"555": "EMEA Coordinator"}))
 
-    assert rider_with_notes not in _page(client, event)
+    assert rider_with_notes in _page(client, event)
 
 
 @pytest.mark.django_db
