@@ -19,8 +19,14 @@
         <p class="text-sm text-base-content/70">
           Days remaining until each verification record expires for registered riders.
           Race Ready shows the soonest expiration across the rider's required verifications.
+          Riders with no verification record, or an expired one, are listed first.
         </p>
-        <span class="badge badge-ghost shrink-0">{{ signups|length }} rider{{ signups|length|pluralize }}</span>
+        <div class="flex items-center gap-2 shrink-0">
+          {% if not_eligible_count %}
+          <span class="badge badge-warning" title="No verification record, or an expired one">{{ not_eligible_count }} not eligible</span>
+          {% endif %}
+          <span class="badge badge-ghost">{{ signups|length }} rider{{ signups|length|pluralize }}</span>
+        </div>
       </div>
 
       {# ---- Controls: group + expiring filter (GET) ---- #}
@@ -33,19 +39,27 @@
           </select>
         </label>
         <label class="form-control">
+          <span class="label-text mb-1">Eligibility</span>
+          <select name="eligible" class="select select-bordered select-sm" onchange="this.form.submit()">
+            <option value="" {% if not eligible %}selected{% endif %}>All riders</option>
+            <option value="no" {% if eligible == 'no' %}selected{% endif %}>Not eligible</option>
+            <option value="yes" {% if eligible == 'yes' %}selected{% endif %}>Eligible</option>
+          </select>
+        </label>
+        <label class="form-control">
           <span class="label-text mb-1">Expiring within (days)</span>
           <input type="number" name="expiring" min="0" value="{{ expiring }}" placeholder="any"
                  class="input input-bordered input-sm w-28" />
         </label>
         <button type="submit" class="btn btn-primary btn-sm">Apply</button>
-        {% if group_by or expiring %}
+        {% if group_by or expiring or eligible %}
         <a href="{% url 'events:squad_v_report' event.pk %}" class="btn btn-ghost btn-sm">Clear</a>
         {% endif %}
       </form>
 
       {% if not signups %}
       <div class="alert">
-        <span>{% if expiring %}No riders match this filter.{% else %}No registered riders for this event.{% endif %}</span>
+        <span>{% if expiring or eligible %}No riders match this filter.{% else %}No registered riders for this event.{% endif %}</span>
       </div>
       {% elif groups is not None %}
         {% for group in groups %}

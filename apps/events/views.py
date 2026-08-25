@@ -2435,13 +2435,31 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     for entry in enriched:
         entry["verification"] = verification_by_user[entry["user"].id]
 
+    # Riders who cannot race are the ones this page exists to surface, so they lead:
+    # first anyone not race verified (no record, or an expired one), then whoever expires
+    # soonest. Note race_ready_days is None both for "nothing to expire" and for a rider
+    # whose records never expire, so is_race_ready -- the authoritative cached field -- is
+    # what decides eligibility here, not the day count.
     enriched.sort(
         key=lambda e: (
-            e["verification"]["race_ready_days"] is None,
+            e["user"].is_race_ready,
             e["verification"]["race_ready_days"] if e["verification"]["race_ready_days"] is not None else 0,
             (e["user"].get_full_name() or e["user"].discord_username or "").lower(),
         ),
     )
+
+    # Counted before any filter, so the badge is a stable "this many need attention"
+    # rather than a number that changes with whatever view you are currently in.
+    not_eligible_count = sum(1 for e in enriched if not e["user"].is_race_ready)
+
+    # Filter: eligible (currently race verified) or not.
+    eligible_raw = request.GET.get("eligible", "").strip()
+    if eligible_raw == "yes":
+        enriched = [e for e in enriched if e["user"].is_race_ready]
+    elif eligible_raw == "no":
+        enriched = [e for e in enriched if not e["user"].is_race_ready]
+    else:
+        eligible_raw = ""
 
     # Filter: riders whose eligibility (race-ready) expiration falls within N days.
     expiring_raw = request.GET.get("expiring", "").strip()
@@ -2507,6 +2525,7 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         rider_count=len(enriched),
         group_by=group_by,
         expiring_days=expiring_days,
+        eligible=eligible_raw or None,
         squad_violation_count=sum(len(s["rows"]) for s in squad_violations),
     )
 
@@ -2519,6 +2538,8 @@ def squad_v_report_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "groups": groups,
             "group_by": group_by,
             "expiring": expiring_raw if expiring_days is not None else "",
+            "eligible": eligible_raw,
+            "not_eligible_count": not_eligible_count,
             "height_never_expires": config.HEIGHT_VERIFICATION_DAYS == 0,
             "squad_violations": squad_violations,
         },

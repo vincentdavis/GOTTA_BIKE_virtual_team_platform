@@ -1,0 +1,7 @@
+{% comment %}
+Squad gender pill, coloured so a list of squads reads at a glance rather than
+forcing you to read each label. Expects `gender`; renders nothing when blank, so
+callers decide what an unset gender looks like in their own layout.
+Values come from DEFAULT_SQUAD_GENDER_OPTIONS in apps/events/models.py.
+{% endcomment %}
+{% if gender == "Male" %}<span class="badge badge-info badge-sm whitespace-nowrap {{ extra_class }}">{{ gender }}</span>{% elif gender == "Female" %}<span class="badge badge-secondary badge-sm whitespace-nowrap {{ extra_class }}">{{ gender }}</span>{% elif gender == "COED" %}<span class="badge badge-accent badge-sm whitespace-nowrap {{ extra_class }}">{{ gender }}</span>{% elif gender %}<span class="badge badge-outline badge-sm whitespace-nowrap {{ extra_class }}">{{ gender }}</span>{% endif %}

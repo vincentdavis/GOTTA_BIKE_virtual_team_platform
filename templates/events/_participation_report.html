@@ -54,7 +54,7 @@ than on each row -- they are properties of the squad, not the rider.
     <span class="badge badge-ghost badge-sm font-normal">{{ group.squad.squad_timezone }}</span>
     {% endif %}
     {% if group.squad.gender %}
-    <span class="badge badge-outline badge-sm font-normal">{{ group.squad.gender }}</span>
+    {% include "events/_squad_gender_badge.html" with gender=group.squad.gender extra_class="font-normal" %}
     {% endif %}
   </h3>
   <div class="overflow-x-auto">

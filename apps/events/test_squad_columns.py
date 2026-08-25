@@ -206,3 +206,18 @@ def test_squad_gender_shows_even_when_signups_do_not_ask_for_it(client, event, e
 
     assert 'data-scol="sqf_gender"' in body
     assert "Female" in body
+
+
+@pytest.mark.django_db
+def test_gender_pills_are_coloured_per_gender(client, event, event_admin) -> None:
+    """A wall of identical outline pills makes a roster of squads unreadable at a glance."""
+    Squad.objects.create(event=event, name="Men's", gender="Male")
+    Squad.objects.create(event=event, name="Women's", gender="Female")
+    Squad.objects.create(event=event, name="Mixed", gender="COED")
+    client.force_login(event_admin)
+
+    body = _page(client, event)
+
+    assert "badge-info" in body       # Male
+    assert "badge-secondary" in body  # Female
+    assert "badge-accent" in body     # COED

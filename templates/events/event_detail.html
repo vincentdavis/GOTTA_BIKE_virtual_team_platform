@@ -703,7 +703,7 @@
                 {% endif %}
               </td>
               <td data-scol="sqf_tz">{{ squad.squad_timezone|default:"-" }}</td>
-              <td data-scol="sqf_gender">{% if squad.gender %}<span class="badge badge-outline badge-sm">{{ squad.gender }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
+              <td data-scol="sqf_gender">{% if squad.gender %}{% include "events/_squad_gender_badge.html" with gender=squad.gender %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
               {# enforcement_summary is a property, so bind it once rather than recomputing per use. #}
               {% with enforced=squad.enforcement_summary %}
               <td data-scol="sqf_enforced">
