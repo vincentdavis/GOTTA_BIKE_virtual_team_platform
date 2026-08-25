@@ -56,12 +56,16 @@
 
 ### Events & Squads
 
-- [ ] **Signup notes leak through the CSV export.** `apps/events/views.py:1240` gates the Notes *column* on
+- [x] **Signup notes leak through the CSV export.** `apps/events/views.py:1240` gates the Notes *column* on
   `is_event_admin`, with a comment stating the promise: "Riders are told the notes box is 'for the event
   admins', so keep that promise." But the CSV export writes `signup.notes` unconditionally (`:2010`), and its
   gate `_can_export_event_signups` admits head-captain and coordinator role holders — a different,
   non-overlapping set. A head captain blocked from the column in the UI can read every rider's notes by
   clicking Export. ~15 min fix: gate the column, or widen the UI gate to match, but make them agree.
+  *(Done — widened: `can_view_signup_notes` is now `is_event_admin or _can_export_event_signups(...)`, and
+  the rider-facing placeholder no longer promises "the event admins". In practice this lands on head
+  captains; coordinators fail `_can_view_v_report` so they have no signup table at all and their access
+  stays export-only. Guarded by `apps/events/test_signup_notes_visibility.py`.)*
 - [ ] **Confirm the availability-results read gate is intended.** `availability_results_view`
   (`apps/events/views.py:5160`) is gated only by `@team_member_required()`;
   `_can_manage_squad_availability` is computed but gates editing only. Any team member who loads the URL gets

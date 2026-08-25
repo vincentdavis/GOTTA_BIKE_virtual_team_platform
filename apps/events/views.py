@@ -1235,9 +1235,11 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     # With show_signups on, any other team member can expand a names-only list.
     can_view_signup_table = request.user.is_event_admin or _can_view_v_report(request.user, event)
     can_view_signups = can_view_signup_table or event.show_signups
-    # Riders are told the notes box is "for the event admins", so keep that promise:
-    # captains get the table, but not this column.
-    can_view_signup_notes = request.user.is_event_admin
+    # Anyone who can export the signup CSV already gets the notes column inside it, so
+    # hiding the column from them in the UI protected nothing -- it only meant a head
+    # captain had to download a file to read what the page would not show. The two sets
+    # are otherwise disjoint (the export excludes event admins), hence the union.
+    can_view_signup_notes = request.user.is_event_admin or _can_export_event_signups(request.user, event)
     enriched_signups = _enrich_signups(signups, event=event) if can_view_signups else []
 
     # Attach enriched member data and tooltip to each squad
