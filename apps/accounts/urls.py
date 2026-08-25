@@ -20,4 +20,5 @@ urlpatterns = [
     path("profile/refresh-zr/", views.refresh_zr, name="refresh_zr"),
     path("profile/race-ready/", views.submit_race_ready, name="submit_race_ready"),
     path("verification/", views.verification_view, name="verification"),
+    path("verification/delete/", views.verification_delete, name="verification_delete"),
 ]

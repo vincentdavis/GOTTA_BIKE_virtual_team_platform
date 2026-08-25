@@ -1,6 +1,7 @@
 """Views for accounts app."""
 
 import json
+from collections import Counter
 from datetime import timedelta
 
 import logfire
@@ -22,6 +23,7 @@ from apps.accounts.models import User
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import (
     build_verify_type_options,
+    delete_verification_records,
     get_user_required_verification_types,
     get_user_verification_types,
     purge_user_verification_media,
@@ -348,6 +350,34 @@ def verification_view(request: HttpRequest) -> HttpResponse:
             latest_verified[record.verify_type] = record
 
     required_types = get_user_required_verification_types(request.user)
+
+    # Which records are genuinely holding up a status right now, so the page only warns
+    # about deletions that would actually cost the rider something. A record is
+    # load-bearing when it is the *last* non-expired verified record of its type and that
+    # type is one the rider's status depends on -- a duplicate of the same type, or a type
+    # nothing needs, costs nothing to delete.
+    live_types = Counter(r.verify_type for r in verified_records if not r.is_expired)
+    weight_types = {"weight_light", "weight_full"}
+    weight_required = weight_types & set(required_types)
+    extra_types = {"weight_full", "height", "power"}
+
+    def _load_bearing(verify_type: str) -> bool:
+        if live_types[verify_type] > 1:
+            return False
+        # Categories 40/50 list both weight types and either one satisfies the
+        # requirement, so a weight record only matters when it is the last of *any* kind.
+        if len(weight_required) > 1 and verify_type in weight_required:
+            races = sum(live_types[t] for t in weight_required) == 1
+        else:
+            races = verify_type in required_types
+        # Extra Verified is a separate tier that always wants weight_full + height + power.
+        extra = request.user.is_extra_verified and verify_type in extra_types
+        return (races and request.user.is_race_ready) or extra
+
+    supporting_ids = {
+        record.pk for record in verified_records if not record.is_expired and _load_bearing(record.verify_type)
+    }
+
     type_labels = {
         "weight_full": "Weight (Full)",
         "weight_light": "Weight (Light)",
@@ -376,12 +406,77 @@ def verification_view(request: HttpRequest) -> HttpResponse:
             "latest_by_type": latest_by_type,
             "verify_type_options": build_verify_type_options(request.user),
             "required_summary": required_summary,
+            "supporting_record_ids": supporting_ids,
             "verification_form_message": config.VERIFICATION_FORM_MESSAGE,
             "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
             "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
             "unit_preference": request.user.unit_preference,
         },
     )
+
+
+@login_required
+@require_POST
+def verification_delete(request: HttpRequest) -> HttpResponse:
+    """Delete verification records the rider selected on their own verification page.
+
+    Only the requesting user's records can be reached: the ids are filtered through their
+    own related manager, so an id belonging to someone else matches nothing rather than
+    raising -- there is no probing signal either way.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Redirect back to the verification page with a result message.
+
+    """
+    # isdigit() is not a safe guard here: "\u00b2" passes it but int() raises, and "\u0663"
+    # (Arabic-Indic three) passes it and int() silently yields 3 -- which would delete a
+    # record the rider never selected. Require plain ASCII decimals, and bound the value so
+    # an oversized id cannot overflow the primary key column either.
+    record_ids = []
+    for raw in request.POST.getlist("record_ids"):
+        if not (raw.isascii() and raw.isdecimal()):
+            continue
+        value = int(raw)
+        if 0 < value <= 9223372036854775807:
+            record_ids.append(value)
+
+    if not record_ids:
+        messages.info(request, "No records were selected.")
+        return redirect("accounts:verification")
+
+    result = delete_verification_records(request.user, record_ids)
+    if not result["deleted"]:
+        messages.info(request, "No records were selected.")
+        return redirect("accounts:verification")
+
+    deleted = result["deleted"]
+    noun = "record" if deleted == 1 else "records"
+    if result["was_race_ready"] and not result["is_race_ready"]:
+        messages.warning(
+            request,
+            f"Deleted {deleted} verification {noun}. You are no longer Race Verified — "
+            "submit a new verification to regain it.",
+        )
+    else:
+        messages.success(request, f"Deleted {deleted} verification {noun}.")
+
+    # Extra Verified is a separate tier, and losing it used to happen silently.
+    if result["was_extra_verified"] and not result["is_extra_verified"]:
+        messages.warning(
+            request,
+            "You are no longer Extra Verified — that needs valid weight, height and power records.",
+        )
+
+    if result["failed_media"]:
+        messages.warning(
+            request,
+            "Some evidence files could not be removed from storage. They have been logged for cleanup.",
+        )
+
+    return redirect("accounts:verification")
 
 
 @login_required

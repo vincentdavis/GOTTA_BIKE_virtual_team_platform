@@ -278,10 +278,16 @@
               View All Records ({{ race_ready_records|length }})
             </div>
             <div class="collapse-content">
+              <form method="post" action="{% url 'accounts:verification_delete' %}" id="delete-records-form">
+                {% csrf_token %}
               <div class="overflow-x-auto">
                 <table class="table table-sm">
                   <thead>
                   <tr>
+                    <th class="w-8">
+                      <input type="checkbox" class="checkbox checkbox-xs" id="select-all-records"
+                             aria-label="Select all records"/>
+                    </th>
                     <th>Type</th>
                     <th>Media</th>
                     <th>Date</th>
@@ -293,6 +299,12 @@
                   <tbody>
                   {% for record in race_ready_records %}
                     <tr>
+                      <td>
+                        <input type="checkbox" name="record_ids" value="{{ record.pk }}"
+                               class="checkbox checkbox-xs record-checkbox"
+                               data-supporting="{% if record.pk in supporting_record_ids %}1{% endif %}"
+                               aria-label="Select {{ record.get_verify_type_display }} record from {{ record.date_created|date:"M d, Y" }}{% if record.pk in supporting_record_ids %}, currently counts towards your verified status{% endif %}"/>
+                      </td>
                       <td>
                         <span class="badge badge-sm text-xs whitespace-nowrap {% if record.verify_type == 'weight_full' %}badge-primary{% elif record.verify_type == 'weight_light' %}badge-secondary{% elif record.verify_type == 'height' %}badge-accent{% elif record.verify_type == 'power' %}badge-warning{% else %}badge-outline{% endif %}">{{ record.get_verify_type_display }}</span>
                       </td>
@@ -322,12 +334,51 @@
                           <span class="text-base-content/30">-</span>
                         {% endif %}
                       </td>
-                      <td class="max-w-xs truncate">{{ record.notes|default:"-"|truncatechars:50 }}</td>
+                      <td class="max-w-xs truncate">
+                        {% if record.pk in supporting_record_ids %}
+                          <span class="badge badge-outline badge-sm badge-success mr-1"
+                                title="This record is what makes you Race Verified right now">Counts now</span>
+                        {% endif %}
+                        {{ record.notes|default:"-"|truncatechars:50 }}
+                      </td>
                     </tr>
                   {% endfor %}
                   </tbody>
                 </table>
               </div>
+
+              <div class="flex items-center gap-3 mt-3">
+                <button type="button" class="btn btn-error btn-sm" id="delete-records-btn" disabled
+                        onclick="document.getElementById('confirm_delete_records').showModal()">
+                  Delete selected
+                </button>
+                <span class="text-sm text-base-content/60" id="delete-records-count"></span>
+              </div>
+              </form>
+
+              <dialog id="confirm_delete_records" class="modal">
+                <div class="modal-box">
+                  <h3 class="font-bold text-lg text-error">Delete these records?</h3>
+                  <p class="py-2 text-sm">
+                    This removes the records and the photos, videos and links you uploaded as
+                    evidence. It cannot be undone.
+                  </p>
+                  <div class="alert alert-warning text-sm hidden" id="delete-records-warning">
+                    <span>
+                      One or more of these is what currently makes you Race Verified. Deleting it
+                      will remove that status until you submit a new verification.
+                    </span>
+                  </div>
+                  <div class="modal-action">
+                    <button type="button" class="btn btn-ghost"
+                            onclick="document.getElementById('confirm_delete_records').close()">Cancel</button>
+                    <button type="submit" form="delete-records-form" class="btn btn-error">
+                      Yes, delete them
+                    </button>
+                  </div>
+                </div>
+                <form method="dialog" class="modal-backdrop"><button>close</button></form>
+              </dialog>
             </div>
           </div>
         {% else %}
@@ -336,4 +387,40 @@
       </div>
     </div>
   </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Enables the delete button only once something is selected, and surfaces the
+  // Race-Verified warning ahead of the confirm click rather than after the fact.
+  (function () {
+    const form = document.getElementById('delete-records-form');
+    if (!form) return;
+    const boxes = Array.from(form.querySelectorAll('.record-checkbox'));
+    const selectAll = document.getElementById('select-all-records');
+    const button = document.getElementById('delete-records-btn');
+    const count = document.getElementById('delete-records-count');
+    const warning = document.getElementById('delete-records-warning');
+
+    function sync() {
+      const chosen = boxes.filter((b) => b.checked);
+      button.disabled = chosen.length === 0;
+      count.textContent = chosen.length ? `${chosen.length} selected` : '';
+      warning.classList.toggle('hidden', !chosen.some((b) => b.dataset.supporting === '1'));
+      if (selectAll) {
+        selectAll.checked = chosen.length === boxes.length && boxes.length > 0;
+        selectAll.indeterminate = chosen.length > 0 && chosen.length < boxes.length;
+      }
+    }
+
+    boxes.forEach((b) => b.addEventListener('change', sync));
+    if (selectAll) {
+      selectAll.addEventListener('change', function () {
+        boxes.forEach((b) => { b.checked = selectAll.checked; });
+        sync();
+      });
+    }
+    sync();
+  })();
+</script>
 {% endblock %}

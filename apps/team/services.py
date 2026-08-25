@@ -410,6 +410,83 @@ def purge_user_verification_media(user: User) -> dict:
     return result
 
 
+def delete_verification_records(user: User, record_ids) -> dict:
+    """Delete verification records a rider has chosen to remove from their own history.
+
+    Scoped to ``user``'s own records, so an id belonging to someone else simply does not
+    match. Evidence is stripped from storage before the rows go, for the same reason it is
+    on account deletion: Django never removes FileField storage on delete, and once the row
+    is gone the file is unreachable except by enumerating the storage prefix.
+
+    A file that cannot be deleted does not stop the row being removed -- the rider asked
+    for it gone, and refusing on a storage error would leave them stuck. The path is logged
+    so it can be swept later.
+
+    Race-ready status is recalculated afterwards. Deleting the record that was covering a
+    required verification type does revoke it; that is the honest consequence of removing
+    the evidence, and the caller is expected to have warned the rider.
+
+    Args:
+        user: The rider deleting their own records.
+        record_ids: Candidate primary keys, unfiltered and untrusted.
+
+    Returns:
+        ``deleted`` and ``failed_media`` counts, plus ``was_race_ready`` / ``is_race_ready``
+        so the caller can tell the rider if this cost them their status.
+
+    """
+    # Read the live values, not the cached columns: a verification that expired since the
+    # last refresh_all_race_ready sweep would otherwise make the deletion look like the
+    # cause of a status loss it had nothing to do with.
+    was_race_ready = user.calculate_race_ready()
+    was_extra_verified = user.calculate_extra_verified()
+    records = list(user.race_ready_records.filter(pk__in=record_ids))
+    if not records:
+        return {
+            "deleted": 0,
+            "failed_media": 0,
+            "was_race_ready": was_race_ready,
+            "is_race_ready": was_race_ready,
+            "was_extra_verified": was_extra_verified,
+            "is_extra_verified": was_extra_verified,
+        }
+
+    media = _strip_media([r for r in records if r.media_file or r.url], reason="deleted by rider")
+    RaceReadyRecord.objects.filter(pk__in=[r.pk for r in records]).delete()
+    is_race_ready, is_extra_verified = user.refresh_race_ready()
+
+    if was_race_ready and not is_race_ready:
+        # Drop the Discord race-ready role now rather than leaving the rider wearing it
+        # until the nightly sync_race_ready_roles sweep notices. Deleting records can only
+        # ever cost the status, never grant it, so this is the one direction to handle.
+        from apps.team.tasks import notify_race_ready_change
+
+        notify_race_ready_change.enqueue(
+            user_id=user.pk,
+            is_now_race_ready=False,
+            changed_by_user_id=user.pk,
+        )
+
+    logfire.info(
+        "Rider deleted their own verification records",
+        user_id=user.pk,
+        deleted=len(records),
+        verify_types=sorted({r.verify_type for r in records}),
+        failed_media=media["failed"],
+        orphaned_media_files=media["failed_files"],
+        was_race_ready=was_race_ready,
+        is_race_ready=is_race_ready,
+    )
+    return {
+        "deleted": len(records),
+        "failed_media": media["failed"],
+        "was_race_ready": was_race_ready,
+        "is_race_ready": is_race_ready,
+        "was_extra_verified": was_extra_verified,
+        "is_extra_verified": is_extra_verified,
+    }
+
+
 def purge_expired_verification_media() -> dict[str, int]:
     """Strip evidence from verified records whose verification has expired.
 

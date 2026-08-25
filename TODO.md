@@ -4,6 +4,20 @@
 
 ### Privacy & Security
 
+- [ ] **`refresh_race_ready()` returns a tuple and three callers treat it as a bool**, so the Race Verified
+  Discord role is never removed — and is re-added to riders who just lost the status.
+  `apps/team/views.py:1106`, `:1153` and `:1191` all do
+  `is_now_race_ready = record.user.refresh_race_ready()`, but the method returns
+  `(is_race_ready, is_extra_verified)`. Two consequences, both live:
+  (a) `was_race_ready != is_now_race_ready` compares a bool to a tuple, so it is **always** true and
+  `notify_race_ready_change` is enqueued on every verify / reject / status change, even when nothing changed;
+  (b) the task receives the tuple as `is_now_race_ready`, and a non-empty tuple is **always truthy**, so
+  `apps/team/tasks.py:205` always takes the `add_discord_role` branch and `remove_discord_role` is
+  unreachable from this path. A rider whose verification is rejected keeps the role — and gets it re-added —
+  until the nightly `sync_race_ready_roles` sweep corrects it. Fix is `is_now_race_ready, _ = ...` at all
+  three sites; check the same pattern has not spread elsewhere (`grep -n "= .*refresh_race_ready()"`).
+  Found while adding rider self-delete, which unpacks correctly.
+
 - [ ] **Retire the legacy Zwift credential flow — escalated to P0.** `apps/zwift/utils.py:fetch_zwift_id`
   sends the rider's Zwift email and password as **URL query parameters** to a third-party endpoint, and logs
   the email. Two things make this P0 rather than part of the P1 zauth cleanup below: (a) one of the two
@@ -201,9 +215,16 @@ self-serve view and an admin action — deletion spread across a view body is ho
   (`apps/tickets/services.py:74-98`) interpolates the member's real name, Discord ID, profile URL and squad
   history directly into `details`, so no FK rule can neutralise it — needs an explicit sweep.
 - [ ] Delete `PageVisit` rows on account deletion, or at minimum drop the IP address.
-- [ ] Self-service verification-record removal: let a member delete their own record and its media.
-  **Open decision:** should deleting a *verified* record revoke race-ready status? `refresh_race_ready()`
-  must be called either way.
+- [x] Self-service verification-record removal: let a member delete their own record and its media.
+  *(Done — checkbox selection + confirm dialog on `/user/verification/`. Deleting a verified record does
+  revoke the status, warned twice before the click and reported after; the Discord role is dropped
+  immediately rather than at the nightly sweep.)*
+- [ ] **Decide whether riders should be able to delete *pending* and *rejected* records.** They currently
+  can, which erases the reviewer's decision, the review note, the reviewer identity and the `RecordView`
+  audit rows — a rider can delete a rejection and resubmit to a reviewer who sees a clean history. The
+  privacy argument for letting them is real (these records hold body photos), so this is a policy call,
+  not a bug. Options: leave as is; restrict deletion to verified/expired records; or keep the row and
+  strip only the evidence.
 
 **Retention in code** (each is a small task + a `SCHEDULER_*_HOURS` setting, following the
 `purge_expired_api_keys` pattern):
