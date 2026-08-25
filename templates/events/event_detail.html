@@ -617,8 +617,12 @@
       {% if squads or is_event_admin %}
       <div class="divider mt-6"></div>
       <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <h3 class="text-lg font-semibold">Squads</h3>
+        <h3 class="text-lg font-semibold">Squads{% if squads %} ({{ squads|length }}){% endif %}</h3>
         <div class="flex flex-wrap items-center gap-2">
+          {% if squads %}
+          <button type="button" class="btn btn-outline btn-sm" id="squad-expand-all"
+                  onclick="toggleAllSquadMembers()">Expand all</button>
+          {% endif %}
           <div class="dropdown dropdown-end">
             <label tabindex="0" class="btn btn-outline btn-sm">Squad columns</label>
             <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-64 max-h-72 overflow-y-auto">
@@ -692,15 +696,27 @@
               <td class="font-semibold">{{ squad.name }}</td>
               <td data-scol="sqf_tz">{{ squad.squad_timezone|default:"-" }}</td>
               {% if event.squad_gender_required %}<td data-scol="sqf_gender">{% if squad.gender %}<span class="badge badge-outline badge-sm">{{ squad.gender }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
+              {# enforcement_summary is a property, so bind it once rather than recomputing per use. #}
+              {% with enforced=squad.enforcement_summary %}
               <td data-scol="sqf_enforced">
-                {% if squad.enforcement_summary %}
-                <div class="flex flex-wrap gap-1 max-w-xs">
-                  {% for item in squad.enforcement_summary %}<span class="badge badge-warning badge-sm whitespace-nowrap">{{ item }}</span>{% endfor %}
+                {% if enforced %}
+                {% comment %}
+                  A squad enforcing everything yields eight badges, which makes the row
+                  tower over its neighbours. Show two, keep the rest one hover away.
+                {% endcomment %}
+                <div class="flex items-center gap-1">
+                  {% for item in enforced|slice:":2" %}<span class="badge badge-warning badge-sm whitespace-nowrap">{{ item }}</span>{% endfor %}
+                  {% if enforced|length > 2 %}
+                  <div class="tooltip tooltip-left" data-tip="{{ enforced|join:" · " }}">
+                    <span class="badge badge-warning badge-outline badge-sm cursor-default">+{{ enforced|length|add:"-2" }}</span>
+                  </div>
+                  {% endif %}
                 </div>
                 {% else %}
                 <span class="text-base-content/30" title="Nothing blocks a rider from joining this squad">None</span>
                 {% endif %}
               </td>
+              {% endwith %}
               <td data-scol="sqf_zwift_cat">
                 {% include "events/_squad_category_range.html" with low=squad.min_zwift_category high=squad.max_zwift_category %}
               </td>
@@ -1063,7 +1079,31 @@ function toggleSquadMembers(squadPk) {
     row.style.display = 'none';
     arrow.style.transform = '';
   }
+  syncSquadExpandAllLabel();
 }
+function toggleAllSquadMembers() {
+  var rows = Array.from(document.querySelectorAll('tr[id^="squad-members-"]'));
+  if (!rows.length) return;
+  // Collapse only when everything is already open, so a half-expanded table opens the
+  // rest rather than throwing away what the user already opened.
+  var expand = rows.some(function(row) { return row.style.display === 'none'; });
+  rows.forEach(function(row) {
+    var pk = row.id.replace('squad-members-', '');
+    var isOpen = row.style.display !== 'none';
+    if (isOpen !== expand) return;
+    toggleSquadMembers(pk);
+  });
+  syncSquadExpandAllLabel();
+}
+
+function syncSquadExpandAllLabel() {
+  var button = document.getElementById('squad-expand-all');
+  if (!button) return;
+  var rows = Array.from(document.querySelectorAll('tr[id^="squad-members-"]'));
+  var allOpen = rows.length > 0 && rows.every(function(row) { return row.style.display !== 'none'; });
+  button.textContent = allOpen ? 'Collapse all' : 'Expand all';
+}
+
 function toggleByCategory() {
   var content = document.getElementById('category-content');
   var arrow = document.getElementById('category-arrow');

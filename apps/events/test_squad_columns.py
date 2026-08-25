@@ -9,6 +9,7 @@ from datetime import date, timedelta
 
 import pytest
 from django.urls import reverse
+from django.utils.html import escape
 
 from apps.events.models import Event, Squad
 
@@ -99,7 +100,7 @@ def test_enforced_requirements_render_from_the_shared_summary(client, event, squ
 
     assert "Enforced Requirements" in body
     for label in squad.enforcement_summary:
-        assert label in body
+        assert escape(label) in body
 
 
 @pytest.mark.django_db
@@ -121,3 +122,48 @@ def test_category_ranges_render_for_all_three_scales(client, event, squad, event
 
     assert "Women&#x27;s Zwift Category" in body or "Women's Zwift Category" in body
     assert "Gold" in body and "Ruby" in body  # ZR bounds
+
+
+@pytest.mark.django_db
+def test_a_heavily_enforced_squad_is_capped_with_the_rest_on_hover(client, event, event_admin) -> None:
+    """Eight badges in one cell towers over the neighbouring rows."""
+    Squad.objects.create(
+        event=event, name="Strict", gender="Female", enforce_gender=True,
+        min_zwift_category="D", max_zwift_category="B",
+        enforce_min_zwift_category=True, enforce_max_zwift_category=True,
+        min_womens_zwift_category="C", max_womens_zwift_category="A",
+        enforce_min_womens_zwift_category=True, enforce_max_womens_zwift_category=True,
+        min_zwift_racing_category="Gold", max_zwift_racing_category="Ruby",
+        enforce_min_zwift_racing_category=True, enforce_max_zwift_racing_category=True,
+        require_zauth=True,
+    )
+    squad = Squad.objects.get(name="Strict")
+    assert len(squad.enforcement_summary) > 2
+    client.force_login(event_admin)
+
+    body = _page(client, event)
+
+    overflow = len(squad.enforcement_summary) - 2
+    assert f"+{overflow}" in body
+    # Nothing is lost -- the hidden labels still ship in the tooltip, HTML-escaped.
+    for label in squad.enforcement_summary:
+        assert escape(label) in body
+
+
+@pytest.mark.django_db
+def test_the_heading_carries_the_squad_count(client, event, squad, event_admin) -> None:
+    """Saves counting rows to know how many squads an event has."""
+    Squad.objects.create(event=event, name="Div 2")
+    client.force_login(event_admin)
+
+    assert "Squads (2)" in _page(client, event)
+
+
+@pytest.mark.django_db
+def test_expand_all_is_offered_only_when_there_are_squads(client, event, squad, event_admin) -> None:
+    """A control that toggles nothing is noise."""
+    client.force_login(event_admin)
+    assert 'id="squad-expand-all"' in _page(client, event)
+
+    squad.delete()
+    assert 'id="squad-expand-all"' not in _page(client, event)
