@@ -40,7 +40,6 @@ urlpatterns = [
     path("applications/<uuid:pk>/delete/", views.membership_application_delete_view, name="application_delete"),
     path("applications/bulk-delete/", views.membership_application_bulk_delete_view, name="application_bulk_delete"),
     path("apply/<uuid:pk>/", views.membership_application_public_view, name="application_public"),
-    path("apply/<uuid:pk>/verify-zwift/", views.application_verify_zwift, name="application_verify_zwift"),
     path(
         "apply/<uuid:pk>/manual-zwift-verify/",
         views.application_manual_zwift_verify,

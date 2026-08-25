@@ -367,30 +367,3 @@ class ProfileForm(forms.ModelForm):
         if value == "False":
             return False
         return None
-
-
-class ZwiftVerificationForm(forms.Form):
-    """Form for verifying Zwift account credentials."""
-
-    zwift_username = forms.EmailField(
-        label="Zwift Email",
-        widget=forms.EmailInput(
-            attrs={
-                "class": "input input-bordered w-full",
-                "placeholder": "your.email@example.com",
-                "autocomplete": "email",
-            }
-        ),
-        help_text="The email you use to log into Zwift",
-    )
-    zwift_password = forms.CharField(
-        label="Zwift Password",
-        widget=forms.PasswordInput(
-            attrs={
-                "class": "input input-bordered w-full",
-                "placeholder": "••••••••",
-                "autocomplete": "current-password",
-            }
-        ),
-        help_text="Your Zwift account password (not stored)",
-    )

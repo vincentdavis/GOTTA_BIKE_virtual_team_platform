@@ -20,7 +20,6 @@ from apps.accounts.decorators import discord_permission_required, team_member_re
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
 from apps.team.forms import (
-    ApplicationZwiftVerificationForm,
     JerseyCSVUploadForm,
     MembershipApplicationAdminForm,
     MembershipApplicationApplicantForm,
@@ -40,7 +39,6 @@ from apps.team.services import (
 from apps.team.tasks import notify_application_update, notify_captains_verification, notify_race_ready_change
 from apps.team.zauth_panel import build_zauth_panel
 from apps.zwift import client as zwift_client
-from apps.zwift.utils import fetch_zwift_id
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
 
@@ -2348,73 +2346,6 @@ def application_zauth_connect(request: HttpRequest, pk: uuid.UUID) -> HttpRespon
         messages.error(request, "Could not start the Zwift connection right now. Please try again later.")
         return redirect("team:application_public", pk=pk)
     return redirect(authorize_url)
-
-
-@require_http_methods(["GET", "POST"])
-def application_verify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
-    """Verify Zwift account for a membership application.
-
-    This view handles Zwift account verification without requiring login.
-    Auth is based on knowing the application UUID.
-
-    Args:
-        request: The HTTP request.
-        pk: UUID of the MembershipApplication.
-
-    Returns:
-        Rendered verification modal partial for HTMX requests.
-
-    """
-    application = get_object_or_404(MembershipApplication, pk=pk)
-
-    # Only allow verification if application is editable
-    if not application.is_editable:
-        return render(
-            request,
-            "team/partials/application_zwift_verify_modal.html",
-            {"application": application, "error": "Application is no longer editable."},
-        )
-
-    if request.method == "POST":
-        form = ApplicationZwiftVerificationForm(request.POST)
-        if form.is_valid():
-            zwift_username = form.cleaned_data["zwift_username"]
-            zwift_password = form.cleaned_data["zwift_password"]
-
-            # Fetch Zwift ID using the credentials
-            zwift_id = fetch_zwift_id(zwift_username, zwift_password)
-
-            if zwift_id:
-                # Update application's Zwift ID and mark as verified
-                application.zwift_id = zwift_id
-                application.zwift_verified = True
-                application.save(update_fields=["zwift_id", "zwift_verified"])
-                logfire.info(
-                    "Zwift account verified for application",
-                    application_id=str(pk),
-                    applicant_discord_id=application.discord_id,
-                    zwift_id=zwift_id,
-                )
-
-                return render(
-                    request,
-                    "team/partials/application_zwift_verify_modal.html",
-                    {"application": application, "success": True, "zwift_id": zwift_id},
-                )
-            logfire.warning(
-                "Zwift verification failed for application",
-                application_id=str(pk),
-                applicant_discord_id=application.discord_id,
-            )
-            form.add_error(None, "Could not verify Zwift account. Please check your credentials.")
-    else:
-        form = ApplicationZwiftVerificationForm()
-
-    return render(
-        request,
-        "team/partials/application_zwift_verify_modal.html",
-        {"application": application, "form": form},
-    )
 
 
 @require_http_methods(["GET", "POST"])

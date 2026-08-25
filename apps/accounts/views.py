@@ -18,7 +18,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from django_countries.fields import Country
 
 from apps.accounts.decorators import team_member_required
-from apps.accounts.forms import ProfileForm, ZwiftVerificationForm
+from apps.accounts.forms import ProfileForm
 from apps.accounts.models import User
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import (
@@ -29,7 +29,6 @@ from apps.team.services import (
     purge_user_verification_media,
 )
 from apps.zwift import profile_fields
-from apps.zwift.utils import fetch_zwift_id
 
 # How recently the Zwift Racing data must have been fetched before the profile
 # refresh button is offered / honored. Mirrors the once-per-hour client guard.
@@ -898,49 +897,6 @@ def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
         request,
         "accounts/partials/manual_zwift_verify_modal.html",
         {"error": error},
-    )
-
-
-@login_required
-@require_http_methods(["GET", "POST"])
-def verify_zwift(request: HttpRequest) -> HttpResponse:
-    """Verify user's Zwift account and fetch their Zwift ID.
-
-    Args:
-        request: The HTTP request.
-
-    Returns:
-        Rendered verification modal partial for HTMX requests.
-
-    """
-    if request.method == "POST":
-        form = ZwiftVerificationForm(request.POST)
-        if form.is_valid():
-            zwift_username = form.cleaned_data["zwift_username"]
-            zwift_password = form.cleaned_data["zwift_password"]
-
-            # Fetch Zwift ID using the credentials
-            zwift_id = fetch_zwift_id(zwift_username, zwift_password)
-
-            if zwift_id:
-                # Update user's Zwift ID and mark as verified
-                request.user.zwid = int(zwift_id)
-                request.user.zwid_verified = True
-                request.user.save(update_fields=["zwid", "zwid_verified"])
-
-                return render(
-                    request,
-                    "accounts/partials/zwift_verify_modal.html",
-                    {"success": True, "zwift_id": zwift_id},
-                )
-            form.add_error(None, "Could not verify Zwift credentials. Please check your email and password.")
-    else:
-        form = ZwiftVerificationForm()
-
-    return render(
-        request,
-        "accounts/partials/zwift_verify_modal.html",
-        {"form": form},
     )
 
 

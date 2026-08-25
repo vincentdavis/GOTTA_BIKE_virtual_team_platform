@@ -18,7 +18,7 @@
   three sites; check the same pattern has not spread elsewhere (`grep -n "= .*refresh_race_ready()"`).
   Found while adding rider self-delete, which unpacks correctly.
 
-- [ ] **Retire the legacy Zwift credential flow — escalated to P0.** `apps/zwift/utils.py:fetch_zwift_id`
+- [x] **Retire the legacy Zwift credential flow — escalated to P0.** `apps/zwift/utils.py:fetch_zwift_id`
   sends the rider's Zwift email and password as **URL query parameters** to a third-party endpoint, and logs
   the email. Two things make this P0 rather than part of the P1 zauth cleanup below: (a) one of the two
   callers, `apps/team/views.py:application_verify_zwift`, is reachable from the **public, unauthenticated**
@@ -26,6 +26,10 @@
   `logfire.instrument_httpx()` with no `scrubbing=` config and `pw` is not a default-scrubbed key, so full
   URLs reach traces. The zauth OAuth replacement already works. Remove both call sites and the helper, then
   do the rest of the cleanup as part of the P1 zauth item. Consider rotating anything exposed in old traces.
+  *(Done — `fetch_zwift_id`, both verify views, their URLs, both forms, both modals and the orphaned
+  dialog hosts are all deleted. `unverify_zwift` / `application_unverify_zwift` were **kept**: they take
+  no credentials and their "Remove" buttons are live UI. **Still outstanding: rotating anything the old
+  flow leaked into Logfire traces, since `pw` was never a scrubbed key.**)*
 - [x] **The delete-account page makes a false promise.** `templates/accounts/profile_delete.html` says "All
   your data will be permanently deleted." It is wrong in both directions. It *omits* things that genuinely
   are destroyed (event signups + custom answers, squad memberships and captaincies, availability responses,
@@ -140,19 +144,16 @@
   still manual-only** — folding it into the daily run is a one-line registry addition if wanted.)*
 
 - [ ] Group `warn_expiring_verifications` DMs by user (currently one DM per matching record per day; consolidate)
-- [ ] **zauth migration cleanup** — the legacy Sauce-mod password verification is now *hidden, not removed*.
-  The UI triggers are wrapped in `{% comment %}` blocks marked `TODO(zauth-cleanup)` in
-  `templates/accounts/partials/zwift_status.html`, `templates/accounts/partials/profile_form.html`, and
-  `templates/team/partials/application_zwift_status.html`. Once zauth has proven out, delete:
-  - views `accounts:verify_zwift` / `accounts:unverify_zwift` and `team:application_verify_zwift` /
-    `team:application_unverify_zwift`, plus their URL entries
-  - templates `accounts/partials/zwift_verify_modal.html`, `team/partials/application_zwift_verify_modal.html`,
-    and the `<dialog id="zwift-verify-modal">` blocks that host them
-  - forms `ZwiftVerificationForm` / `ApplicationZwiftVerificationForm`
-  - `apps/zwift/utils.py:fetch_zwift_id` (sends Zwift credentials as URL query params to a third-party
-    endpoint — the reason for the migration) once no caller remains
-  Keep `manual_zwift_verify` / `application_manual_zwift_verify`: those are the admin-reviewed fallback for
-  members who can't use Zwift OAuth, and are unrelated to the password flow.
+- [x] **zauth migration cleanup** — done. The legacy Sauce-mod password verification is fully removed:
+  `apps/zwift/utils.py` (`fetch_zwift_id`), `accounts:verify_zwift`, `team:application_verify_zwift`, their
+  URL entries, `ZwiftVerificationForm` / `ApplicationZwiftVerificationForm`, both verify modals, the three
+  `{% comment %}`-wrapped UI triggers and the three orphaned `<dialog id="zwift-verify-modal">` hosts.
+  Two deliberate departures from the original plan:
+  - **`unverify_zwift` / `application_unverify_zwift` were kept.** They take no credentials, and their
+    "Remove" buttons in `zwift_status.html` / `application_zwift_status.html` are live UI — deleting them
+    would have removed a working capability with nothing to replace it. They are not part of the flow that
+    made this urgent.
+  - `manual_zwift_verify` / `application_manual_zwift_verify` kept as planned — the admin-reviewed fallback.
 - [ ] A membership application's zauth connection is keyed by the application UUID, so it does **not** carry
   over to the User account created at first login (the reconcile ignores non-numeric ids by design). New
   members currently have to connect again from their profile — decide whether to re-key on approval or leave as is.
