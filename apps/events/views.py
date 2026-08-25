@@ -5659,9 +5659,126 @@ def _timezone_role_rows(event) -> list[dict]:
     return rows
 
 
-@require_GET
+def _role_holders(role_ids: set[str]) -> dict[str, list]:
+    """Map each Discord role id to the users the app believes hold it.
+
+    Deliberately not limited to the event's signups: the drift this feeds is precisely
+    people who hold a squad's role without belonging to the squad, and some of them never
+    signed up at all. Reads ``User.discord_roles``, which is the app's cached copy of
+    Discord -- so it is only as fresh as the last "Get Roles" sync.
+
+    Args:
+        role_ids: Discord role ids to bucket by, as strings.
+
+    Returns:
+        ``{role_id: [users]}``, containing only ids that somebody holds.
+
+    """
+    holders: dict[str, list] = {}
+    if not role_ids:
+        return holders
+    # One pass over everyone carrying any Discord role, bucketed in memory, rather than a
+    # query per role -- an event can configure three roles per squad across ~30 squads.
+    for user in User.objects.exclude(discord_roles__isnull=True).exclude(discord_roles={}):
+        for role_id in (user.discord_roles or {}):
+            if role_id in role_ids:
+                holders.setdefault(role_id, []).append(user)
+    return holders
+
+
+def _sorted_users(users) -> list:
+    """Order users by the name the rest of the page shows them under.
+
+    Returns:
+        The same users, sorted by display name.
+
+    """
+    return sorted(users, key=lambda u: (u.get_full_name() or u.discord_username or "").lower())
+
+
+def _build_squad_role_audit(event: Event, role_names: dict[str, str]) -> list[dict]:
+    """Compare each squad's Discord roles against who is actually in the squad.
+
+    Two kinds of drift, and they are not the same problem. ``extra`` is someone holding
+    the role without being in the squad -- that is view access to a channel they should
+    not see, which is the reason this exists. ``missing`` is a member without the role,
+    who simply cannot see their own squad's channel.
+
+    ``regional_coordinator_role`` is left out on purpose: coordinating is a job rather
+    than a consequence of squad membership, so measuring it against the roster would
+    report every coordinator as drift. Same reasoning the stragglers block uses.
+
+    Args:
+        event: The event whose squads to audit.
+        role_names: Discord role id -> name, for ids already resolved by the caller.
+
+    Returns:
+        One row per squad, ordered by squad name.
+
+    """
+    from apps.team.models import DiscordRole
+
+    squads = list(event.squads.order_by("name").prefetch_related("captains", "vice_captains"))
+
+    members_by_squad: dict[int, set[int]] = {}
+    for squad_id, user_id in SquadMember.objects.filter(
+        squad__event=event, status=SquadMember.Status.MEMBER
+    ).values_list("squad_id", "user_id"):
+        members_by_squad.setdefault(squad_id, set()).add(user_id)
+
+    wanted: set[str] = set()
+    for squad in squads:
+        for role_id in (squad.team_discord_role, squad.discord_captain_role, squad.region_role):
+            if role_id:
+                wanted.add(str(role_id))
+    holders = _role_holders(wanted)
+    extra_names = dict(
+        DiscordRole.objects.filter(role_id__in=wanted - set(role_names)).values_list("role_id", "name")
+    ) if wanted - set(role_names) else {}
+
+    def _cell(role_id: int, expected_ids: set[int], *, label: str) -> dict:
+        """Build one role column for a squad.
+
+        Returns:
+            The cell's role name, holder count and both drift lists.
+
+        """
+        if not role_id:
+            return {"configured": False, "label": label}
+        key = str(role_id)
+        held_by = holders.get(key, [])
+        return {
+            "configured": True,
+            "label": label,
+            "role_id": role_id,
+            "name": role_names.get(key) or extra_names.get(key, ""),
+            "holder_count": len(held_by),
+            "extra": _sorted_users([u for u in held_by if u.pk not in expected_ids]),
+            "missing_count": len(expected_ids - {u.pk for u in held_by}),
+        }
+
+    rows = []
+    for squad in squads:
+        member_ids = members_by_squad.get(squad.pk, set())
+        leader_ids = {u.pk for u in squad.captains.all()} | {u.pk for u in squad.vice_captains.all()}
+        cells = [
+            _cell(squad.team_discord_role, member_ids, label="Squad role"),
+            _cell(squad.discord_captain_role, leader_ids, label="Captain role"),
+            _cell(squad.region_role, member_ids, label="Region role"),
+        ]
+        rows.append({
+            "squad": squad,
+            "member_count": len(member_ids),
+            "leader_count": len(leader_ids),
+            "cells": cells,
+            "problem_count": sum(len(c.get("extra", [])) + c.get("missing_count", 0) for c in cells),
+        })
+    return rows
+
+
 @login_required
 @team_member_required()
+@require_GET
 def discord_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """Display consolidated Discord role management for all event signups.
 
@@ -5861,11 +5978,19 @@ def discord_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             stragglers.append({"user": candidate, "held": held})
     stragglers.sort(key=lambda r: (r["user"].get_full_name() or r["user"].discord_username or "").lower())
 
+    # ---- "By Squad" audit -------------------------------------------------------
+    # The rider table above can show a rider holding a squad's role while not being in
+    # that squad, but only if you scan a wide matrix cell by cell. This flips the axes so
+    # each squad is one row, and states the drift directly. Read-only by design: it is a
+    # place to find channel-access mistakes, not to fix them.
+    squad_audit = _build_squad_role_audit(event, role_names)
+
     logfire.info(
         "Discord Roles page viewed",
         event_id=event_pk,
         user_id=request.user.id,
         signup_count=len(enriched_signups),
+        squad_role_problems=sum(s["problem_count"] for s in squad_audit),
     )
     return render(
         request,
@@ -5879,6 +6004,9 @@ def discord_roles_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "coordinator_roles": coordinator_roles,
             "timezone_roles": timezone_roles,
             "role_info": role_info,
+            "squad_audit": squad_audit,
+            "squad_problem_total": sum(s["problem_count"] for s in squad_audit),
+            "active_tab": "squads" if request.GET.get("tab") == "squads" else "riders",
         },
     )
 

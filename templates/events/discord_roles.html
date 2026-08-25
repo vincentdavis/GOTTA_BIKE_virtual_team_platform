@@ -22,6 +22,80 @@ details[open] .details-arrow { transform: rotate(90deg); }
         </form>
       </div>
 
+      {% comment %}
+        Two views over the same cached role data. "Riders" is the interactive matrix;
+        "By Squad" flips the axes and is read-only -- a place to spot channel access
+        nobody should have, not a place to change it.
+      {% endcomment %}
+      <div role="tablist" class="tabs tabs-bordered mb-4">
+        <a role="tab" href="?tab=riders"
+           class="tab {% if active_tab == 'riders' %}tab-active font-semibold{% endif %}">Riders</a>
+        <a role="tab" href="?tab=squads"
+           class="tab {% if active_tab == 'squads' %}tab-active font-semibold{% endif %}">
+          By Squad
+          {% if squad_problem_total %}<span class="badge badge-error badge-sm ml-2">{{ squad_problem_total }}</span>{% endif %}
+        </a>
+      </div>
+
+      {% if active_tab == 'squads' %}
+      <p class="text-xs text-base-content/60 mb-3">
+        Each squad's Discord roles measured against who is actually in the squad.
+        <strong class="text-error">Not in squad</strong> is the one that matters: those people hold the
+        role, so they can see the squad's channel without being on the squad.
+        <strong>Missing</strong> is the mirror &mdash; a member who cannot see their own channel.
+        Read-only; fix these on the Riders tab or in Manage Squads. Press <strong>Get Roles</strong>
+        first, since this reads the app's cached copy of Discord.
+      </p>
+
+      {% if squad_audit %}
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Squad</th>
+              <th class="text-center">Members</th>
+              <th>Squad role</th>
+              <th>Captain role</th>
+              <th>Region role</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in squad_audit %}
+            <tr class="{% if row.problem_count %}bg-error/5{% endif %}">
+              <td class="font-semibold whitespace-nowrap align-top">
+                {{ row.squad.name }}
+                {% if row.problem_count %}<span class="badge badge-error badge-xs ml-1">{{ row.problem_count }}</span>{% endif %}
+              </td>
+              <td class="text-center align-top">{{ row.member_count }}</td>
+              {% for cell in row.cells %}
+              <td class="align-top">
+                {% if not cell.configured %}
+                <span class="text-base-content/30" title="Not configured for this squad">&mdash;</span>
+                {% else %}
+                <div class="text-xs text-base-content/60 whitespace-nowrap">{% if cell.name %}@{{ cell.name }}{% else %}Role {{ cell.role_id }}{% endif %}</div>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <span class="badge badge-ghost badge-sm" title="People the app believes hold this role">{{ cell.holder_count }} held</span>
+                  {% if cell.extra %}<span class="badge badge-error badge-sm">{{ cell.extra|length }} not in squad</span>{% endif %}
+                  {% if cell.missing_count %}<span class="badge badge-warning badge-sm" title="In the squad but without this role">{{ cell.missing_count }} missing</span>{% endif %}
+                </div>
+                {% if cell.extra %}
+                <ul class="mt-1 text-xs text-error space-y-0.5">
+                  {% for u in cell.extra %}<li>{{ u.get_full_name|default:u.discord_username|default:u.username }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+                {% endif %}
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="alert"><span>This event has no squads yet.</span></div>
+      {% endif %}
+
+      {% else %}
       {% if role_info %}
       <details class="collapse bg-base-300 rounded-lg mb-4">
         <summary class="collapse-title text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2 min-h-0 cursor-pointer"><span class="inline-block transition-transform duration-200 details-arrow mr-1">&#9654;</span>Configured Roles</summary>
@@ -215,6 +289,7 @@ details[open] .details-arrow { transform: rotate(90deg); }
         </div>
       </div>
       {% endif %}
+      {% endif %}{# active_tab #}
     </div>
   </div>
 </div>
