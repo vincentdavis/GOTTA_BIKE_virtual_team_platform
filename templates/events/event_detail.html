@@ -620,8 +620,25 @@
         <h3 class="text-lg font-semibold">Squads</h3>
         <div class="flex flex-wrap items-center gap-2">
           <div class="dropdown dropdown-end">
-            <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>
+            <label tabindex="0" class="btn btn-outline btn-sm">Squad columns</label>
+            <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-64 max-h-72 overflow-y-auto">
+              <li class="menu-title text-xs">Squad details</li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_tz"> Time zone</label></li>
+              {% if event.squad_gender_required %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_gender"> Squad Gender</label></li>{% endif %}
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_enforced"> Enforced Requirements</label></li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_zwift_cat"> Zwift Category</label></li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_womens_cat"> Women's Zwift Category</label></li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_zr_cat"> ZR Category</label></li>
+              <li class="menu-title text-xs pt-2">Roster</li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_members"> Members</label></li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_captain"> Captain</label></li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_vice"> Vice Captain</label></li>
+            </ul>
+          </div>
+          <div class="dropdown dropdown-end">
+            <label tabindex="0" class="btn btn-outline btn-sm">Rider columns</label>
             <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-56 max-h-72 overflow-y-auto">
+              <li class="menu-title text-xs">Shown when a squad is expanded</li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_name" checked> Name</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_gender" checked> Gender</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_category" checked> ZP Category</label></li>
@@ -651,12 +668,15 @@
             <tr>
               <th class="!px-0 !w-6"></th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
-              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
-              {% if event.squad_gender_required %}<th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>{% endif %}
-              <th data-sort="num" class="cursor-pointer hover:text-primary select-none">Members</th>
-              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Captain</th>
-              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Vice Captain</th>
-              <th data-sort="text" class="cursor-pointer hover:text-primary select-none">ZR Category</th>
+              <th data-scol="sqf_tz" data-sort="text" class="cursor-pointer hover:text-primary select-none">Time zone</th>
+              {% if event.squad_gender_required %}<th data-scol="sqf_gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>{% endif %}
+              <th data-scol="sqf_enforced" class="select-none">Enforced Requirements</th>
+              <th data-scol="sqf_zwift_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none">Zwift Category</th>
+              <th data-scol="sqf_womens_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none">Women's Zwift Category</th>
+              <th data-scol="sqf_zr_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZR Category</th>
+              <th data-scol="sqf_members" data-sort="num" class="cursor-pointer hover:text-primary select-none">Members</th>
+              <th data-scol="sqf_captain" data-sort="text" class="cursor-pointer hover:text-primary select-none">Captain</th>
+              <th data-scol="sqf_vice" data-sort="text" class="cursor-pointer hover:text-primary select-none">Vice Captain</th>
             </tr>
           </thead>
           <tbody>
@@ -670,9 +690,27 @@
                 </button>
               </td>
               <td class="font-semibold">{{ squad.name }}</td>
-              <td>{{ squad.squad_timezone|default:"-" }}</td>
-              {% if event.squad_gender_required %}<td>{% if squad.gender %}<span class="badge badge-outline badge-sm">{{ squad.gender }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
-              <td>
+              <td data-scol="sqf_tz">{{ squad.squad_timezone|default:"-" }}</td>
+              {% if event.squad_gender_required %}<td data-scol="sqf_gender">{% if squad.gender %}<span class="badge badge-outline badge-sm">{{ squad.gender }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
+              <td data-scol="sqf_enforced">
+                {% if squad.enforcement_summary %}
+                <div class="flex flex-wrap gap-1 max-w-xs">
+                  {% for item in squad.enforcement_summary %}<span class="badge badge-warning badge-sm whitespace-nowrap">{{ item }}</span>{% endfor %}
+                </div>
+                {% else %}
+                <span class="text-base-content/30" title="Nothing blocks a rider from joining this squad">None</span>
+                {% endif %}
+              </td>
+              <td data-scol="sqf_zwift_cat">
+                {% include "events/_squad_category_range.html" with low=squad.min_zwift_category high=squad.max_zwift_category %}
+              </td>
+              <td data-scol="sqf_womens_cat">
+                {% include "events/_squad_category_range.html" with low=squad.min_womens_zwift_category high=squad.max_womens_zwift_category %}
+              </td>
+              <td data-scol="sqf_zr_cat">
+                {% include "events/_squad_category_range.html" with low=squad.min_zwift_racing_category high=squad.max_zwift_racing_category %}
+              </td>
+              <td data-scol="sqf_members">
                 {% if squad.enriched_members %}
                 <div class="tooltip tooltip-right" data-tip="{{ squad.member_names_tooltip }}">
                   <span class="cursor-default underline decoration-dotted">{{ squad.member_count }}</span>
@@ -681,15 +719,8 @@
                 {{ squad.member_count }}
                 {% endif %}
               </td>
-              <td>{% for c in squad.captains.all %}{{ c.get_full_name|default:c.discord_username }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
-              <td>{% for vc in squad.vice_captains.all %}{{ vc.get_full_name|default:vc.discord_username }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
-              <td>
-                {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category %}
-                {% if squad.min_zwift_racing_category == squad.max_zwift_racing_category %}{{ squad.max_zwift_racing_category }}{% else %}{{ squad.min_zwift_racing_category|default:"" }}{% if squad.min_zwift_racing_category and squad.max_zwift_racing_category %} &ndash; {% endif %}{{ squad.max_zwift_racing_category|default:"" }}{% endif %}
-                {% else %}
-                -
-                {% endif %}
-              </td>
+              <td data-scol="sqf_captain">{% for c in squad.captains.all %}{{ c.get_full_name|default:c.discord_username }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
+              <td data-scol="sqf_vice">{% for vc in squad.vice_captains.all %}{{ vc.get_full_name|default:vc.discord_username }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
             </tr>
             <tr id="squad-members-{{ squad.pk }}" style="display:none">
               <td colspan="{% if event.squad_gender_required %}8{% else %}7{% endif %}" class="p-0">
@@ -1102,6 +1133,58 @@ function switchCategorySource(source) {
   });
 
   applyCols();
+})();
+
+// Column toggler for the squads summary table (squad-level fields).
+// Kept separate from the member-table toggler below: that one controls rider columns
+// inside an expanded squad, which is why a single "Columns" button read as nonsense.
+// Distinct attribute (data-scol), class and storage key so the two cannot collide.
+(function() {
+  var STORAGE_KEY = 'event_squad_field_cols';
+  var DEFAULTS = {
+    sqf_tz: true, sqf_gender: true, sqf_enforced: true,
+    sqf_zwift_cat: true, sqf_womens_cat: true,
+    sqf_zr_cat: false, sqf_members: false, sqf_captain: false, sqf_vice: false
+  };
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e) {}
+
+  function getVisible(col) {
+    return col in saved ? saved[col] : (col in DEFAULTS ? DEFAULTS[col] : true);
+  }
+
+  // The expanded-members row spans the whole table, so its colspan has to follow the
+  // visible column count rather than the hardcoded total.
+  function syncColspan() {
+    var table = document.getElementById('squad-table');
+    if (!table) return;
+    var visible = Array.from(table.querySelectorAll('thead th')).filter(function(th) {
+      return th.style.display !== 'none';
+    }).length;
+    table.querySelectorAll('tr[id^="squad-members-"] > td').forEach(function(td) {
+      td.setAttribute('colspan', visible);
+    });
+  }
+
+  function setCol(col, show) {
+    document.querySelectorAll('[data-scol="' + col + '"]').forEach(function(el) {
+      el.style.display = show ? '' : 'none';
+    });
+  }
+
+  document.querySelectorAll('.squad-field-toggle').forEach(function(cb) {
+    var col = cb.getAttribute('data-scol');
+    cb.checked = getVisible(col);
+    setCol(col, cb.checked);
+    cb.addEventListener('change', function() {
+      saved[col] = this.checked;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+      setCol(col, this.checked);
+      syncColspan();
+    });
+  });
+
+  syncColspan();
 })();
 
 // Column toggler for squad member tables

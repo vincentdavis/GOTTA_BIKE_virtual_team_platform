@@ -1,0 +1,123 @@
+"""The squads table's column selector.
+
+The Squads section used to carry a single "Columns" button that actually controlled the
+*rider* columns inside an expanded squad, so nothing it offered matched the table it sat
+above. There are now two selectors, and the squad one drives squad-level fields.
+"""
+
+from datetime import date, timedelta
+
+import pytest
+from django.urls import reverse
+
+from apps.events.models import Event, Squad
+
+
+@pytest.fixture
+def event(db) -> Event:
+    """Build a visible event that requires a squad gender.
+
+    Returns:
+        The event.
+
+    """
+    today = date.today()
+    return Event.objects.create(
+        title="ZRL Season 5", start_date=today, end_date=today + timedelta(days=30),
+        visible=True, squad_gender_required=True,
+    )
+
+
+@pytest.fixture
+def squad(event) -> Squad:
+    """Build a squad with enforced requirements and category bounds.
+
+    Returns:
+        The squad.
+
+    """
+    return Squad.objects.create(
+        event=event, name="Div 1", squad_timezone="Europe/London", gender="Female",
+        enforce_gender=True,
+        min_zwift_category="D", max_zwift_category="B",
+        enforce_min_zwift_category=True, enforce_max_zwift_category=True,
+        min_womens_zwift_category="C", max_womens_zwift_category="A",
+        min_zwift_racing_category="Gold", max_zwift_racing_category="Ruby",
+    )
+
+
+def _page(client, event):
+    """Load the event detail page.
+
+    Returns:
+        The decoded response body.
+
+    """
+    response = client.get(reverse("events:event_detail", args=[event.pk]))
+    assert response.status_code == 200
+    return response.content.decode()
+
+
+@pytest.mark.django_db
+def test_the_squad_selector_offers_squad_fields(client, event, squad, event_admin) -> None:
+    """Every squad-level column must be reachable from the squad selector."""
+    client.force_login(event_admin)
+    body = _page(client, event)
+
+    for col in ("sqf_tz", "sqf_gender", "sqf_enforced", "sqf_zwift_cat", "sqf_womens_cat",
+                "sqf_zr_cat", "sqf_members", "sqf_captain", "sqf_vice"):
+        assert f'data-scol="{col}"' in body, col
+
+
+@pytest.mark.django_db
+def test_the_two_selectors_are_distinguishable(client, event, squad, event_admin) -> None:
+    """A single "Columns" button was the whole problem -- they must be named apart."""
+    client.force_login(event_admin)
+    body = _page(client, event)
+
+    assert "Squad columns" in body
+    assert "Rider columns" in body
+
+
+@pytest.mark.django_db
+def test_rider_columns_keep_their_own_attribute_namespace(client, event, squad, event_admin) -> None:
+    """The togglers select globally by attribute, so a shared key would cross-wire them."""
+    client.force_login(event_admin)
+    body = _page(client, event)
+
+    # Rider columns stay on data-col; squad columns are data-scol. No squad key may leak
+    # into the rider namespace, or toggling one would hide the other.
+    assert 'data-col="sqf_' not in body
+    assert 'data-scol="sq_name"' not in body
+
+
+@pytest.mark.django_db
+def test_enforced_requirements_render_from_the_shared_summary(client, event, squad, event_admin) -> None:
+    """Reuses Squad.enforcement_summary, so it cannot drift from the squad manage page."""
+    client.force_login(event_admin)
+    body = _page(client, event)
+
+    assert "Enforced Requirements" in body
+    for label in squad.enforcement_summary:
+        assert label in body
+
+
+@pytest.mark.django_db
+def test_a_squad_with_nothing_enforced_says_so(client, event, event_admin) -> None:
+    """An empty cell would read as missing data rather than a deliberate "anyone may join"."""
+    Squad.objects.create(event=event, name="Open", squad_timezone="UTC")
+    client.force_login(event_admin)
+
+    body = _page(client, event)
+
+    assert "None" in body
+
+
+@pytest.mark.django_db
+def test_category_ranges_render_for_all_three_scales(client, event, squad, event_admin) -> None:
+    """Zwift, Women's Zwift and ZR all use the shared range partial."""
+    client.force_login(event_admin)
+    body = _page(client, event)
+
+    assert "Women&#x27;s Zwift Category" in body or "Women's Zwift Category" in body
+    assert "Gold" in body and "Ruby" in body  # ZR bounds
