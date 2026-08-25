@@ -104,7 +104,7 @@
 
 ### Verifications
 
-- [ ] **Auto-purge expired verification media (daily).** Today nothing removes uploaded photos/videos on a
+- [x] **Auto-purge expired verification media (daily).** Today nothing removes uploaded photos/videos on a
   schedule: purging is two manual admin buttons, `apps/team/views.py:delete_expired_media_view` (expired
   *verified* records) and `delete_rejected_media_view` (rejected records older than 30 days). So a member's
   evidence sits in storage indefinitely until someone remembers to click. Extract the loop from
@@ -116,6 +116,10 @@
   helper). Consider folding the rejected-media purge into the same daily run. Also fix the stale claim in
   `apps/team/models.py:32` — the docstring says media "is deleted on verification", which is not true and is
   quoted to members on the delete-account page.
+  *(Done — `purge_expired_media` task on `SCHEDULER_PURGE_EXPIRED_MEDIA_HOURS` (24). Both purge loops moved
+  into `apps/team/services.py` so the manual buttons and the task share one implementation; the sweep now
+  survives a single unreadable blob instead of aborting. Docstring corrected. **Rejected-media purge is
+  still manual-only** — folding it into the daily run is a one-line registry addition if wanted.)*
 
 - [ ] Group `warn_expiring_verifications` DMs by user (currently one DM per matching record per day; consolidate)
 - [ ] **zauth migration cleanup** — the legacy Sauce-mod password verification is now *hidden, not removed*.

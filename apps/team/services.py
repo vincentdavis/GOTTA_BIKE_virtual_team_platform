@@ -8,7 +8,7 @@ from typing import ClassVar
 
 import logfire
 from constance import config
-from django.db.models import Count, F, Max, Min, OuterRef, Subquery
+from django.db.models import Count, F, Max, Min, OuterRef, Q, Subquery
 from django.utils import timezone
 
 from apps.accounts.models import GuildMember, User
@@ -319,6 +319,103 @@ def build_verify_type_options(user: User) -> list[dict]:
     ordered = [t for t in VERIFY_TYPE_LABELS if t in allowed and t in required]
     ordered += [t for t in VERIFY_TYPE_LABELS if t in allowed and t not in required]
     return [_option(t) for t in ordered]
+
+
+def _has_media() -> Q:
+    """Match records that still carry evidence.
+
+    ``media_file`` is both ``null=True`` and ``blank=True``, so an empty upload can be
+    stored either way and both have to be ruled out.
+
+    Returns:
+        A ``Q`` matching records with an uploaded file, an evidence URL, or both.
+
+    """
+    return Q(url__gt="") | (Q(media_file__isnull=False) & ~Q(media_file=""))
+
+
+def _strip_media(records: list[RaceReadyRecord], *, reason: str) -> dict[str, int]:
+    """Delete the stored file and clear the evidence URL on each record.
+
+    One unreadable file must not abort the rest of a sweep, so storage failures are
+    counted and skipped rather than raised. ``delete_media_file`` has already logged the
+    error by the time it reaches here.
+
+    Args:
+        records: Records to strip. Callers are expected to have selected them already.
+        reason: Why these records are being stripped, for the log line.
+
+    Returns:
+        Counts of records ``considered``, ``purged`` and ``failed``.
+
+    """
+    purged = 0
+    failed = 0
+    for record in records:
+        try:
+            record.delete_media_file()
+            record.url = ""
+            # delete_media_file() drops the stored file with save=False, so media_file has
+            # to be persisted here as well -- otherwise the column keeps the deleted file's
+            # name and the record still looks like it has evidence. Regression covered by
+            # apps/team/test_media_purge.py.
+            record.save(update_fields=["url", "media_file"])
+            purged += 1
+        except Exception as e:
+            failed += 1
+            logfire.error(
+                "Could not strip verification media",
+                record_id=record.id,
+                user_id=record.user_id,
+                reason=reason,
+                error=str(e),
+            )
+
+    return {"considered": len(records), "purged": purged, "failed": failed}
+
+
+def purge_expired_verification_media() -> dict[str, int]:
+    """Strip evidence from verified records whose verification has expired.
+
+    Note that ``is_expired`` is a property, not a column, so the expiry test happens in
+    Python -- the queryset only narrows to verified records that still hold evidence.
+
+    A verify_type whose ``*_DAYS`` setting is ``0`` never expires (height, by default), so
+    those records are never reached by this sweep. That is the setting working as intended,
+    not an omission.
+
+    Returns:
+        Counts of records ``considered``, ``purged`` and ``failed``.
+
+    """
+    candidates = RaceReadyRecord.objects.filter(status=RaceReadyRecord.Status.VERIFIED).filter(_has_media())
+    expired = [record for record in candidates if record.is_expired]
+    result = _strip_media(expired, reason="expired")
+    logfire.info("Purged expired verification media", **result)
+    return result
+
+
+def purge_rejected_verification_media(older_than_days: int = 30) -> dict[str, int]:
+    """Strip evidence from records rejected longer ago than ``older_than_days``.
+
+    Args:
+        older_than_days: How long a rejected record keeps its evidence, so a rider has a
+            window to query the decision before it is thrown away.
+
+    Returns:
+        Counts of records ``considered``, ``purged`` and ``failed``.
+
+    """
+    cutoff = timezone.now() - timedelta(days=older_than_days)
+    stale = list(
+        RaceReadyRecord.objects.filter(
+            status=RaceReadyRecord.Status.REJECTED,
+            reviewed_date__lt=cutoff,
+        ).filter(_has_media())
+    )
+    result = _strip_media(stale, reason="rejected")
+    logfire.info("Purged rejected verification media", older_than_days=older_than_days, **result)
+    return result
 
 
 def log_record_view(record: RaceReadyRecord, user: User, *, media_shown: bool) -> None:

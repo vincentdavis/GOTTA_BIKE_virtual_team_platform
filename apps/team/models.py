@@ -29,14 +29,18 @@ class RaceReadyRecord(models.Model):
         1. User submits record with verify_type, measurement value, and evidence
         2. Record is created with status=PENDING
         3. Team captain reviews and verifies or rejects
-        4. On verification, media_file is deleted for privacy
-        5. Verification expires after validity period (configurable in constance)
+        4. Verification expires after validity period (configurable in constance)
+        5. Media is stripped once the verification expires, by the daily
+           purge_expired_media task or the manual button on the records page.
+           Rejected records keep their evidence for a grace period, then the same
+           sweep strips those too. Media on a pending or currently-valid record is
+           kept -- it is the evidence for a live claim.
 
     Attributes:
         user: The team member this record belongs to.
         verify_type: Type of verification (weight_full, weight_light, height, power).
         media_type: Type of evidence media (video, photo, link, other).
-        media_file: Uploaded photo/video file (deleted on verification).
+        media_file: Uploaded photo/video file (stripped once the verification expires).
         url: External URL to evidence (YouTube, Vimeo, image link).
         weight: Weight in kg (required for weight verifications).
         height: Height in cm (required for height verification).

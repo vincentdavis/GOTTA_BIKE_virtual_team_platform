@@ -34,6 +34,8 @@ from apps.team.services import (
     get_performance_review_data,
     get_unified_team_roster,
     log_record_view,
+    purge_expired_verification_media,
+    purge_rejected_verification_media,
 )
 from apps.team.tasks import notify_application_update, notify_captains_verification, notify_race_ready_change
 from apps.team.zauth_panel import build_zauth_panel
@@ -44,6 +46,10 @@ from apps.zwiftracing.models import ZRRider
 
 if TYPE_CHECKING:
     import uuid
+
+# How long a rejected record keeps its evidence, so a rider has a window to query the
+# decision before the photo is thrown away.
+REJECTED_MEDIA_GRACE_DAYS = 30
 
 
 def _format_field_value_for_notification(field_name: str, value) -> str:
@@ -1273,34 +1279,25 @@ def delete_expired_media_view(request: HttpRequest) -> HttpResponse:
         messages.error(request, "You don't have permission to perform this action.")
         return redirect("team:verification_records")
 
-    # Get all verified records and filter to expired ones
-    records = RaceReadyRecord.objects.filter(status=RaceReadyRecord.Status.VERIFIED)
-    expired_records = [r for r in records if r.is_expired]
-
-    deleted_count = 0
-    for record in expired_records:
-        has_media = record.media_file or record.url
-        if has_media:
-            # delete_media_file() removes the stored file with save=False, so media_file must
-            # be persisted here too — otherwise the column keeps the deleted file's name and
-            # the record still looks like it has evidence.
-            record.delete_media_file()
-            record.url = ""
-            record.save(update_fields=["url", "media_file"])
-            deleted_count += 1
+    # Same sweep the daily purge_expired_media task runs; this is the on-demand path.
+    result = purge_expired_verification_media()
+    deleted_count = result["purged"]
 
     logfire.info(
         "Bulk delete expired verification media",
         user_id=request.user.id,
         username=request.user.username,
-        expired_records_found=len(expired_records),
+        expired_records_found=result["considered"],
         media_deleted_count=deleted_count,
+        failed_count=result["failed"],
     )
 
     if deleted_count:
         messages.success(request, f"Deleted media from {deleted_count} expired record(s).")
     else:
         messages.info(request, "No expired records with media found.")
+    if result["failed"]:
+        messages.warning(request, f"Could not delete media from {result['failed']} record(s). See the logs.")
 
     return redirect("team:verification_records")
 
@@ -1318,8 +1315,6 @@ def delete_rejected_media_view(request: HttpRequest) -> HttpResponse:
         Redirect to verification records list.
 
     """
-    from datetime import timedelta
-
     if not request.user.can_approve_verification and not request.user.is_superuser:
         logfire.warning(
             "Unauthorized bulk delete rejected media attempt",
@@ -1329,38 +1324,28 @@ def delete_rejected_media_view(request: HttpRequest) -> HttpResponse:
         messages.error(request, "You don't have permission to perform this action.")
         return redirect("team:verification_records")
 
-    # Get rejected records older than 30 days
-    cutoff_date = timezone.now() - timedelta(days=30)
-    records = RaceReadyRecord.objects.filter(
-        status=RaceReadyRecord.Status.REJECTED,
-        reviewed_date__lt=cutoff_date,
-    )
-
-    deleted_count = 0
-    total_records = records.count()
-    for record in records:
-        has_media = record.media_file or record.url
-        if has_media:
-            # See delete_expired_media_view: media_file must be saved too, or the column keeps
-            # the deleted file's name.
-            record.delete_media_file()
-            record.url = ""
-            record.save(update_fields=["url", "media_file"])
-            deleted_count += 1
+    result = purge_rejected_verification_media(older_than_days=REJECTED_MEDIA_GRACE_DAYS)
+    deleted_count = result["purged"]
 
     logfire.info(
         "Bulk delete rejected verification media",
         user_id=request.user.id,
         username=request.user.username,
-        rejected_records_found=total_records,
+        rejected_records_found=result["considered"],
         media_deleted_count=deleted_count,
-        cutoff_days=30,
+        failed_count=result["failed"],
+        cutoff_days=REJECTED_MEDIA_GRACE_DAYS,
     )
 
     if deleted_count:
         messages.success(request, f"Deleted media from {deleted_count} rejected record(s).")
     else:
-        messages.info(request, "No rejected records older than 30 days with media found.")
+        messages.info(
+            request,
+            f"No rejected records older than {REJECTED_MEDIA_GRACE_DAYS} days with media found.",
+        )
+    if result["failed"]:
+        messages.warning(request, f"Could not delete media from {result['failed']} record(s). See the logs.")
 
     return redirect("team:verification_records")
 

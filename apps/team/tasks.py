@@ -622,6 +622,23 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
 
 
 @task
+def purge_expired_media() -> dict:
+    """Strip evidence from verification records whose verification has expired.
+
+    Scheduled daily. Uploaded photos and videos of riders on scales otherwise sit in
+    storage until an admin remembers to click the manual purge button, which is what this
+    replaces as the routine path -- the button stays for purging on demand.
+
+    Returns:
+        Counts of records ``considered``, ``purged`` and ``failed``.
+
+    """
+    from apps.team.services import purge_expired_verification_media
+
+    return purge_expired_verification_media()
+
+
+@task
 def notify_captains_verification(
     user_id: int,
     record_id: int,
