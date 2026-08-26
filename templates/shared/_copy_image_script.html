@@ -1,0 +1,103 @@
+{% comment %}
+  Shared "copy this element as a PNG" mechanics, used by the ladder planner's per-tab
+  capture buttons and the TTT planner's pull-schedule Copy button.
+
+  The fiddly parts live here so there is one copy of them: expanding scroll wrappers so
+  clipping is not baked into the image, pinning the element to its full scroll extent,
+  and falling back to a download when the Clipboard API is unavailable (an insecure
+  context, or a browser that has no ClipboardItem).
+
+  Exposes window.copyAsImage(el, btn, {filename, excludeClass}) -> Promise.
+  Callers own their own button placement and re-injection after HTMX swaps.
+{% endcomment %}
+<style>
+  /* Scroll wrappers clip the capture, so open them for the duration of one. */
+  .copy-capturing .overflow-x-auto,
+  .copy-capturing .overflow-y-auto,
+  .copy-capturing .overflow-auto { overflow: visible !important; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.13/dist/html-to-image.js"></script>
+<script>
+  (function () {
+    var COPY_ICON = '<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+    var DONE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>';
+
+    window.COPY_IMAGE_ICONS = { copy: COPY_ICON, done: DONE_ICON };
+
+    function flash(btn, ok) {
+      if (!btn) return;
+      var prev = btn.dataset.copyPrevHtml || btn.innerHTML;
+      btn.dataset.copyPrevHtml = prev;
+      btn.innerHTML = DONE_ICON;
+      btn.classList.add(ok ? 'text-success' : 'text-error');
+      setTimeout(function () {
+        btn.innerHTML = prev;
+        btn.classList.remove('text-success', 'text-error');
+        delete btn.dataset.copyPrevHtml;
+      }, 1500);
+    }
+
+    function download(blob, filename) {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (filename || 'capture') + '.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    }
+
+    window.copyAsImage = function (el, btn, opts) {
+      opts = opts || {};
+      if (typeof htmlToImage === 'undefined' || !el) return Promise.resolve(false);
+      if (btn) btn.disabled = true;
+
+      // Pin the element to its full scroll extent so html-to-image captures everything
+      // below and to the right of the visible viewport, not just what is on screen.
+      var prevWidth = el.style.width;
+      var prevMaxWidth = el.style.maxWidth;
+      el.classList.add('copy-capturing');
+      el.style.maxWidth = 'none';
+      var fullW = Math.ceil(el.scrollWidth);
+      el.style.width = fullW + 'px';
+      var fullH = Math.ceil(el.scrollHeight);
+
+      function cleanup() {
+        el.classList.remove('copy-capturing');
+        el.style.width = prevWidth;
+        el.style.maxWidth = prevMaxWidth;
+        if (btn) btn.disabled = false;
+      }
+
+      var exclude = opts.excludeClass;
+      return htmlToImage
+        .toBlob(el, {
+          pixelRatio: 2,
+          width: fullW,
+          height: fullH,
+          backgroundColor: getComputedStyle(el).backgroundColor || '#ffffff',
+          filter: function (node) {
+            return !(exclude && node.classList && node.classList.contains(exclude));
+          },
+        })
+        .then(function (blob) {
+          if (!blob) throw new Error('empty blob');
+          if (navigator.clipboard && window.ClipboardItem) {
+            return navigator.clipboard
+              .write([new ClipboardItem({ 'image/png': blob })])
+              .then(function () { flash(btn, true); return true; })
+              .catch(function () { download(blob, opts.filename); flash(btn, true); return true; });
+          }
+          download(blob, opts.filename);
+          flash(btn, true);
+          return true;
+        })
+        .catch(function (err) {
+          console.error('[copyAsImage] failed', err);
+          flash(btn, false);
+          return false;
+        })
+        .finally(cleanup);
+    };
+  })();
+</script>

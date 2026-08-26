@@ -3,12 +3,19 @@
 <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
 
   {# ---- Roster / pull schedule ---- #}
-  <div class="xl:col-span-3 card bg-base-200 shadow-xl">
+  <div class="xl:col-span-3 card bg-base-200 shadow-xl" data-ttt-capture>
     <div class="card-body">
       <div class="flex items-center justify-between gap-2">
         <h3 class="card-title">Pull schedule</h3>
-        {% if can_edit and result.riders %}
         <div class="flex gap-1">
+        {% if result.riders %}
+        {# Outside the can_edit gate: someone sharing a read-only link still wants the image. #}
+        <button type="button" class="btn btn-ghost btn-xs ttt-capture-btn" data-ttt-capture-btn
+                title="Copy the pull schedule as an image" aria-label="Copy the pull schedule as an image">
+          Copy
+        </button>
+        {% endif %}
+        {% if can_edit and result.riders %}
           <button type="button" class="btn btn-ghost btn-xs"
                   hx-post="{% url 'ttt_planner:auto_balance' plan.pk %}"
                   hx-target="#ttt-plan-body" hx-swap="innerHTML"
@@ -18,8 +25,8 @@
                   hx-include="[name='rider_ids']"
                   hx-target="#ttt-plan-body" hx-swap="innerHTML"
                   hx-confirm="Remove the selected riders?">Remove selected</button>
-        </div>
         {% endif %}
+        </div>
       </div>
       {% if result.riders %}
       <div class="overflow-x-auto">

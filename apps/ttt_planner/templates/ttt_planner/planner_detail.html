@@ -217,5 +217,26 @@
     if (typeEl && opt.dataset.terrain) typeEl.value = opt.dataset.terrain;
   };
 </script>
+{% include "shared/_copy_image_script.html" %}
+<script>
+  // "Copy" on the Pull schedule card. Delegated from the body so it survives the HTMX
+  // swaps that every mutating endpoint performs on #ttt-plan-body; the capture itself
+  // lives in shared/_copy_image_script.html.
+  (function () {
+    function slugify(s) {
+      return (s || "plan").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "plan";
+    }
+    document.body.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("[data-ttt-capture-btn]");
+      if (!btn) return;
+      var card = btn.closest("[data-ttt-capture]");
+      if (!card) return;
+      window.copyAsImage(card, btn, {
+        filename: "ttt-" + slugify("{{ plan.name|escapejs }}"),
+        excludeClass: "ttt-capture-btn",
+      });
+    });
+  })();
+</script>
 {% include "events/_filter_select_script.html" %}
 {% endblock %}
