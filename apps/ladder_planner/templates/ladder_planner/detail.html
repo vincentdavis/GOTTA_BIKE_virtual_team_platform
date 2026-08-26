@@ -49,7 +49,7 @@
         </label>
         <label class="form-control">
           <span class="label-text mb-1">Route <span class="text-base-content/40">(prefills name + profile)</span></span>
-          <select name="route" class="select select-bordered select-sm" onchange="ladderApplyRoute(this)">
+          <select name="route" class="select select-bordered select-sm filter-select" onchange="ladderApplyRoute(this)">
             <option value="">— No route —</option>
             {% for r in route_options %}
               <option value="{{ r.pk }}" data-name="{{ r.name }}" data-profile="{{ r.profile }}"
@@ -716,4 +716,5 @@
     });
   })();
 </script>
+{% include "events/_filter_select_script.html" %}
 {% endblock %}

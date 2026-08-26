@@ -17,7 +17,12 @@
     var input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'Type to filter…';
-    input.className = 'input input-bordered w-full';
+    // Carry the select's size modifier across, or the replacement input sits taller than
+    // the controls beside it on forms built with select-sm / select-xs.
+    var size = ['xs', 'sm', 'md', 'lg'].find(function (s) {
+      return select.classList.contains('select-' + s);
+    });
+    input.className = 'input input-bordered w-full' + (size ? ' input-' + size : '');
     wrap.appendChild(input);
 
     var list = document.createElement('div');
