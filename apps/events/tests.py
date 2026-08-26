@@ -2674,23 +2674,34 @@ def test_region_role_kept_on_leave_when_shared_by_another_squad(client, event_ad
 
 
 @pytest.mark.django_db
-def test_squad_form_region_role_prefix_validation() -> None:
-    """The region role picker enforces the event's prefixes, like the other squad roles."""
+def test_squad_form_region_role_is_limited_to_the_events_region_roles() -> None:
+    """Matching a prefix is no longer enough on its own.
+
+    The Region Role is now chosen from Event.region_role_ids (Role Setup page), the same
+    way the Regional Coordinator role is, so a squad cannot grant access through an
+    arbitrary role that merely happens to carry the event prefix.
+    """
     from apps.events.forms import SquadForm
     from apps.team.models import DiscordRole
 
     DiscordRole.objects.create(role_id="777", name="$ West", position=1)
-    DiscordRole.objects.create(role_id="888", name="No Prefix Role", position=2)
+    DiscordRole.objects.create(role_id="888", name="$ Not A Region", position=2)
 
     base = {"name": "West", "gender": "COED"}
 
-    ok = SquadForm({**base, "region_role": "777"}, event_prefixes=["$"])
+    ok = SquadForm({**base, "region_role": "777"}, event_prefixes=["$"], region_role_ids=["777"])
     assert ok.is_valid(), ok.errors
     assert ok.cleaned_data["region_role"] == 777
 
-    bad = SquadForm({**base, "region_role": "888"}, event_prefixes=["$"])
-    assert not bad.is_valid()
-    assert "region_role" in bad.errors
+    # Prefixed, but not one of the event's region roles.
+    off_list = SquadForm({**base, "region_role": "888"}, event_prefixes=["$"], region_role_ids=["777"])
+    assert not off_list.is_valid()
+    assert "region_role" in off_list.errors
+
+    # No region roles configured at all -> nothing may be selected.
+    unset = SquadForm({**base, "region_role": "777"}, event_prefixes=["$"])
+    assert not unset.is_valid()
+    assert "region_role" in unset.errors
 
 
 # ---- Manage Roles: coordinator role columns ----

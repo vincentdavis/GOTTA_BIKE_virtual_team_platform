@@ -120,6 +120,34 @@
           </label>
         </div>
 
+        <!-- Region Roles (searchable, prefix-filtered checkbox list) -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Region Roles</span>
+            <span class="label-text-alt"><span id="region-count">0</span> selected</span>
+          </label>
+          <input type="text" id="region-search" class="input input-bordered input-sm mb-2" placeholder="Search role names…">
+          <div id="region-list" class="max-h-64 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
+            {% for choice in form.region_role_ids %}
+            <label class="region-item label cursor-pointer gap-2 py-0.5 justify-start">
+              {{ choice.tag }}
+              <span class="region-name label-text font-mono text-sm">@{{ choice.choice_label }}</span>
+            </label>
+            {% endfor %}
+            {% if not form.region_role_ids.field.choices %}
+            <p class="text-base-content/50 text-sm px-1 py-2">No Discord roles match the allowed prefixes yet.</p>
+            {% endif %}
+          </div>
+          {% if form.region_role_ids.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.region_role_ids.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">A squad's <strong>Region Role</strong> can only be one of these. Leave empty to disable the Region Role picker on squads entirely.</span>
+          </label>
+        </div>
+
         <div class="card-actions justify-end mt-6">
           <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-ghost">Cancel</a>
           <button type="submit" class="btn btn-primary">Save Role Setup</button>
@@ -208,44 +236,49 @@
     });
   }
 
-  // --- Regional/Group Coordinators checkbox list: search + prefix filter. ---
-  const search = document.getElementById('coord-search');
-  const list = document.getElementById('coord-list');
-  const countEl = document.getElementById('coord-count');
+  // --- Role checkbox lists (coordinators, region roles): search + prefix filter. ---
+  // Both lists behave identically, so they share one implementation keyed on a slug.
+  function roleList(slug) {
+    const search = document.getElementById(slug + '-search');
+    const list = document.getElementById(slug + '-list');
+    const countEl = document.getElementById(slug + '-count');
+    if (!list) return null;
 
-  function updateCount() {
-    if (countEl && list) {
-      countEl.textContent = String(list.querySelectorAll('.coord-role-cb:checked').length);
+    function updateCount() {
+      if (countEl) {
+        countEl.textContent = String(list.querySelectorAll('.' + slug + '-role-cb:checked').length);
+      }
     }
+
+    function applyFilter() {
+      const q = (search && search.value || '').trim().toLowerCase();
+      const prefixes = checkedPrefixes();
+      list.querySelectorAll('.' + slug + '-item').forEach(function(item) {
+        const nameEl = item.querySelector('.' + slug + '-name');
+        const raw = (nameEl.textContent || '').trim().replace(/^@/, '');
+        const matchesSearch = !q || raw.toLowerCase().indexOf(q) !== -1;
+        const matchesPrefix = !prefixes.length || prefixes.some(p => raw.indexOf(p) === 0);
+        item.style.display = (matchesSearch && matchesPrefix) ? '' : 'none';
+      });
+    }
+
+    if (search) search.addEventListener('input', applyFilter);
+    list.addEventListener('change', function(e) {
+      if (e.target && e.target.classList && e.target.classList.contains(slug + '-role-cb')) updateCount();
+    });
+    return { applyFilter: applyFilter, updateCount: updateCount };
   }
 
-  function applyCoordFilter() {
-    if (!list) return;
-    const q = (search && search.value || '').trim().toLowerCase();
-    const prefixes = checkedPrefixes();
-    list.querySelectorAll('.coord-item').forEach(function(item) {
-      const nameEl = item.querySelector('.coord-name');
-      const raw = (nameEl.textContent || '').trim().replace(/^@/, '');
-      const matchesSearch = !q || raw.toLowerCase().indexOf(q) !== -1;
-      const matchesPrefix = !prefixes.length || prefixes.some(p => raw.indexOf(p) === 0);
-      item.style.display = (matchesSearch && matchesPrefix) ? '' : 'none';
-    });
-  }
+  const lists = ['coord', 'region'].map(roleList).filter(Boolean);
 
   function applyAll() {
     filterRoleSelects();
-    applyCoordFilter();
+    lists.forEach(l => l.applyFilter());
   }
 
-  if (search) search.addEventListener('input', applyCoordFilter);
   document.querySelectorAll('input[name="prefixes"]').forEach(cb => cb.addEventListener('change', applyAll));
-  if (list) {
-    list.addEventListener('change', function(e) {
-      if (e.target && e.target.classList && e.target.classList.contains('coord-role-cb')) updateCount();
-    });
-  }
   applyAll();
-  updateCount();
+  lists.forEach(l => l.updateCount());
 })();
 </script>
 {% endif %}
