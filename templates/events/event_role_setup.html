@@ -256,30 +256,15 @@
       list.querySelectorAll('.' + slug + '-item').forEach(function(item) {
         const nameEl = item.querySelector('.' + slug + '-name');
         const raw = (nameEl.textContent || '').trim().replace(/^@/, '');
-        const box = item.querySelector('input[type="checkbox"]');
-        const checked = !!(box && box.checked);
         const matchesSearch = !q || raw.toLowerCase().indexOf(q) !== -1;
         const matchesPrefix = !prefixes.length || prefixes.some(p => raw.indexOf(p) === 0);
-        // A checked role that no longer matches the event's prefixes still has to be
-        // reachable. Hiding it leaves the form permanently un-saveable: the server
-        // rejects it on submit, but there is no checkbox on screen to untick.
-        item.style.display = (matchesSearch && (matchesPrefix || checked)) ? '' : 'none';
-        item.classList.toggle('opacity-60', checked && !matchesPrefix);
-        if (nameEl) {
-          nameEl.classList.toggle('text-error', checked && !matchesPrefix);
-          nameEl.title = (checked && !matchesPrefix)
-            ? 'Does not match any prefix selected above — untick it, or add its prefix.'
-            : '';
-        }
+        item.style.display = (matchesSearch && matchesPrefix) ? '' : 'none';
       });
     }
 
     if (search) search.addEventListener('input', applyFilter);
     list.addEventListener('change', function(e) {
-      if (e.target && e.target.classList && e.target.classList.contains(slug + '-role-cb')) {
-        updateCount();
-        applyFilter();
-      }
+      if (e.target && e.target.classList && e.target.classList.contains(slug + '-role-cb')) updateCount();
     });
     return { applyFilter: applyFilter, updateCount: updateCount };
   }
