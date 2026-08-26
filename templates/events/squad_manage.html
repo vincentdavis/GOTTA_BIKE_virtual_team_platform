@@ -134,7 +134,7 @@
   </div>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="squad-grid">
     {% for squad in squads %}
-    <div class="card bg-base-200 shadow-md squad-card"
+    <div class="card bg-base-200 shadow-md squad-card{% if squad.role_violations %} border-2 border-error{% endif %}"
          data-timezone="{{ squad.squad_timezone|default:'' }}"
          data-gender="{{ squad.gender|default:'' }}"
          data-search="{{ squad.name|lower }} {% for c in squad.captains.all %}{{ c.get_full_name|lower }} {% endfor %}{% for c in squad.vice_captains.all %}{{ c.get_full_name|lower }} {% endfor %}">
@@ -243,6 +243,26 @@
               <span class="text-sm">{{ squad.min_womens_zwift_category|default:"" }}{% if squad.min_womens_zwift_category and squad.max_womens_zwift_category %} &ndash; {% endif %}{{ squad.max_womens_zwift_category|default:"" }}</span>
             </div>
             {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if squad.role_violations %}
+        {% comment %}
+          A squad keeps whatever role was stored before Role Setup's lists were narrowed,
+          and the squad form drops such a value from initial on the next edit rather than
+          offering it back -- so without this the role would just disappear one day.
+        {% endcomment %}
+        <div class="alert alert-error py-2 mb-2">
+          <div>
+            <p class="font-semibold text-sm">Roles not allowed by Role Setup</p>
+            <ul class="list-disc list-inside text-xs">
+              {% for problem in squad.role_violations %}<li>{{ problem }}</li>{% endfor %}
+            </ul>
+            <p class="text-xs mt-1">
+              Fix on <a href="{% url 'events:event_role_setup' event.pk %}" class="link">Role Setup</a>
+              or by editing this squad. Editing the squad will clear the disallowed role.
+            </p>
           </div>
         </div>
         {% endif %}

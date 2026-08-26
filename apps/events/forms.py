@@ -516,10 +516,27 @@ class EventRoleSetupForm(forms.ModelForm):
         # Initial is only the saved IDs that intersect the live choices — any
         # stale IDs are dropped on re-render rather than re-checked by default.
         valid_ids = {c[0] for c in coord_choices}
+        # Also drop ids that no longer match *this event's* prefixes, not just the global
+        # ones the choices are drawn from. Leaving them checked was silently fatal: the JS
+        # filter hides an off-prefix role, the browser resubmits it because it is still
+        # checked, and clean() then rejects the whole form -- so an unrelated edit
+        # elsewhere on the page appeared to save and did not. Rendering them unchecked
+        # lets the list heal itself on the next save.
+        event_prefixes = [str(p) for p in (getattr(self.instance, "prefixes", None) or []) if str(p)]
+        by_id = {r.role_id: r.name for r in coord_roles}
+
+        def _on_prefix(rid: str) -> bool:
+            if not event_prefixes:
+                return True
+            name = by_id.get(rid, "")
+            return any(name.startswith(prefix) for prefix in event_prefixes)
+
         for field_name in ("coordinator_role_ids", "region_role_ids", "captain_role_ids"):
             self.fields[field_name].choices = coord_choices
             self.initial[field_name] = [
-                str(rid) for rid in (self.initial.get(field_name) or []) if str(rid) in valid_ids
+                str(rid)
+                for rid in (self.initial.get(field_name) or [])
+                if str(rid) in valid_ids and _on_prefix(str(rid))
             ]
 
     def clean_head_captain_role_id(self) -> int:

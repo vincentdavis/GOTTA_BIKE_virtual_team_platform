@@ -1547,6 +1547,16 @@ def event_role_setup_view(request: HttpRequest, pk: int) -> HttpResponse:
                     "the bot in Discord so it can access channels restricted to head captains.",
                 )
             return redirect("events:event_role_setup", pk=pk)
+        # A field error can sit far down a page of three long checkbox lists, so say
+        # plainly at the top that nothing was saved -- otherwise the reload reads as
+        # success and the edit is silently lost.
+        messages.error(request, "Role setup was not saved. See the highlighted field(s) below.")
+        logfire.info(
+            "Event role setup rejected",
+            event_id=pk,
+            user_id=request.user.id,
+            errors=list(form.errors),
+        )
     else:
         form = EventRoleSetupForm(instance=event)
 
@@ -1643,6 +1653,61 @@ def event_bot_role_check_view(request: HttpRequest, pk: int) -> HttpResponse:
             "check_url": reverse("events:event_bot_role_check", args=[event.pk]),
         },
     )
+
+
+def _squad_role_violations(squad: Squad, event: Event, role_names: dict[str, str]) -> list[str]:
+    """Describe squad roles that the event's Role Setup would no longer permit.
+
+    Squads keep whatever role was stored before an event's allowed lists were narrowed,
+    and ``SquadForm`` drops an out-of-list value from ``initial`` rather than offering it
+    back -- which keeps the form saveable but means the value disappears the next time
+    anyone edits that squad. Naming the mismatch here is what makes that visible first.
+
+    The event's head captain role is checked separately: it is refused on every squad role
+    field, so holding it anywhere is a privilege problem rather than a stale-list one.
+
+    Args:
+        squad: The squad to check.
+        event: Its event, carrying the allowed lists and prefixes.
+        role_names: Discord role id -> name, for readable messages.
+
+    Returns:
+        One human-readable line per violation, empty when the squad is clean.
+
+    """
+    def _label(role_id: int) -> str:
+        name = role_names.get(str(role_id), "")
+        return f"@{name}" if name else f"role {role_id}"
+
+    head_captain = str(event.head_captain_role_id or 0)
+    checks = (
+        ("Captain role", squad.discord_captain_role, [str(r) for r in (event.captain_role_ids or [])]),
+        ("Region role", squad.region_role, [str(r) for r in (event.region_role_ids or [])]),
+        (
+            "Coordinator role",
+            squad.regional_coordinator_role,
+            [str(r) for r in (event.coordinator_role_ids or [])],
+        ),
+    )
+
+    violations = []
+    for label, role_id, allowed in checks:
+        if not role_id:
+            continue
+        if head_captain != "0" and str(role_id) == head_captain:
+            violations.append(f"{label} {_label(role_id)} is the event's Head Captain role")
+            continue
+        if not allowed:
+            violations.append(f"{label} {_label(role_id)} is set, but Role Setup allows none")
+        elif str(role_id) not in allowed:
+            violations.append(f"{label} {_label(role_id)} is not allowed by Role Setup")
+
+    prefixes = [str(p) for p in (event.prefixes or []) if str(p)]
+    if prefixes and squad.team_discord_role:
+        name = role_names.get(str(squad.team_discord_role), "")
+        if name and not any(name.startswith(p) for p in prefixes):
+            violations.append(f"Squad role @{name} does not match the event's prefixes")
+    return violations
 
 
 @login_required
@@ -1743,6 +1808,11 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         )
         s.region_role_name = role_names.get(str(s.region_role), "") if s.region_role else ""
         s.active_grids = grids_by_squad.get(s.pk, [])
+        # Roles this squad uses that Role Setup no longer allows. A squad keeps whatever
+        # was stored before the event's lists were narrowed, and the squad form drops such
+        # a value silently on the next edit -- so surface it here rather than let it
+        # vanish unnoticed.
+        s.role_violations = _squad_role_violations(s, event, role_names)
         # Per-squad management: full managers, or this squad's captain/VC.
         s.can_manage = can_manage_all or _can_manage_squad_availability(request.user, s)
 
