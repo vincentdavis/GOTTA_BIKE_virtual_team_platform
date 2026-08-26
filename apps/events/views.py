@@ -3030,6 +3030,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             event_prefixes=event.prefixes or [],
             coordinator_role_ids=event.coordinator_role_ids or [],
             region_role_ids=event.region_role_ids or [],
+            captain_role_ids=event.captain_role_ids or [],
             event=event,
         )
         if form.is_valid():
@@ -3066,6 +3067,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             event_prefixes=event.prefixes or [],
             coordinator_role_ids=event.coordinator_role_ids or [],
             region_role_ids=event.region_role_ids or [],
+            captain_role_ids=event.captain_role_ids or [],
             event=event,
         )
 
@@ -3116,6 +3118,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             event_prefixes=event.prefixes or [],
             coordinator_role_ids=event.coordinator_role_ids or [],
             region_role_ids=event.region_role_ids or [],
+            captain_role_ids=event.captain_role_ids or [],
             event=event,
         )
         if form.is_valid():
@@ -3150,6 +3153,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             event_prefixes=event.prefixes or [],
             coordinator_role_ids=event.coordinator_role_ids or [],
             region_role_ids=event.region_role_ids or [],
+            captain_role_ids=event.captain_role_ids or [],
             event=event,
         )
 

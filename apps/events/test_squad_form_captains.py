@@ -32,6 +32,9 @@ def event(db) -> Event:
     return Event.objects.create(
         title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True,
         prefixes=["$"],
+        # A squad's captain role is now chosen from the event's nominated list, so the
+        # role these tests assign has to be on it.
+        captain_role_ids=[str(CAPTAIN_ROLE)],
     )
 
 

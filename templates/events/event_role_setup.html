@@ -148,6 +148,34 @@
           </label>
         </div>
 
+        <!-- Captain Roles (searchable, prefix-filtered checkbox list) -->
+        <div class="form-control w-full">
+          <label class="label">
+            <span class="label-text">Captain Roles</span>
+            <span class="label-text-alt"><span id="captain-count">0</span> selected</span>
+          </label>
+          <input type="text" id="captain-search" class="input input-bordered input-sm mb-2" placeholder="Search role names…">
+          <div id="captain-list" class="max-h-64 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
+            {% for choice in form.captain_role_ids %}
+            <label class="captain-item label cursor-pointer gap-2 py-0.5 justify-start">
+              {{ choice.tag }}
+              <span class="captain-name label-text font-mono text-sm">@{{ choice.choice_label }}</span>
+            </label>
+            {% endfor %}
+            {% if not form.captain_role_ids.field.choices %}
+            <p class="text-base-content/50 text-sm px-1 py-2">No Discord roles match the allowed prefixes yet.</p>
+            {% endif %}
+          </div>
+          {% if form.captain_role_ids.errors %}
+          <label class="label">
+            <span class="label-text-alt text-error">{{ form.captain_role_ids.errors.0 }}</span>
+          </label>
+          {% endif %}
+          <label class="label">
+            <span class="label-text-alt">A squad's <strong>Captain Discord Role</strong> can only be one of these. Leave empty to disable that picker on squads entirely.</span>
+          </label>
+        </div>
+
         <div class="card-actions justify-end mt-6">
           <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-ghost">Cancel</a>
           <button type="submit" class="btn btn-primary">Save Role Setup</button>
@@ -269,7 +297,7 @@
     return { applyFilter: applyFilter, updateCount: updateCount };
   }
 
-  const lists = ['coord', 'region'].map(roleList).filter(Boolean);
+  const lists = ['coord', 'region', 'captain'].map(roleList).filter(Boolean);
 
   function applyAll() {
     filterRoleSelects();

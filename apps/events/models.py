@@ -226,6 +226,11 @@ class Event(models.Model):
         blank=True,
         help_text="List of Discord role IDs (strings) a squad's Region Role may be chosen from",
     )
+    captain_role_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="List of Discord role IDs (strings) a squad's Captain Discord Role may be chosen from",
+    )
     created_at = models.DateTimeField(default=timezone.now, help_text="When the event was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the event was last updated")
     created_by = models.ForeignKey(

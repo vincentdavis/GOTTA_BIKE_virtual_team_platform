@@ -450,6 +450,13 @@ class EventRoleSetupForm(forms.ModelForm):
         help_text="Squads can only pick their Region Role from these.",
     )
 
+    captain_role_ids = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-sm captain-role-cb"}),
+        label="Captain Roles",
+        help_text="Squads can only pick their Captain Discord Role from these.",
+    )
+
     class Meta:
         """Meta options for EventRoleSetupForm."""
 
@@ -460,6 +467,7 @@ class EventRoleSetupForm(forms.ModelForm):
             "event_role",
             "coordinator_role_ids",
             "region_role_ids",
+            "captain_role_ids",
         ]
 
     def __init__(self, *args, **kwargs) -> None:
@@ -508,7 +516,7 @@ class EventRoleSetupForm(forms.ModelForm):
         # Initial is only the saved IDs that intersect the live choices — any
         # stale IDs are dropped on re-render rather than re-checked by default.
         valid_ids = {c[0] for c in coord_choices}
-        for field_name in ("coordinator_role_ids", "region_role_ids"):
+        for field_name in ("coordinator_role_ids", "region_role_ids", "captain_role_ids"):
             self.fields[field_name].choices = coord_choices
             self.initial[field_name] = [
                 str(rid) for rid in (self.initial.get(field_name) or []) if str(rid) in valid_ids
@@ -568,6 +576,19 @@ class EventRoleSetupForm(forms.ModelForm):
 
         """
         return self._clean_prefixed_role_ids("region_role_ids")
+
+    def clean_captain_role_ids(self) -> list[str]:
+        """Validate each submitted captain role ID server-side.
+
+        Same gate as the other two lists: every submitted id is re-resolved against
+        ``DiscordRole`` and rejected if unknown or off-prefix, so a crafted POST cannot
+        widen what a squad's Captain Discord Role may later be set to.
+
+        Returns:
+            Deduplicated list of validated role-ID strings.
+
+        """
+        return self._clean_prefixed_role_ids("captain_role_ids")
 
     def _clean_prefixed_role_ids(self, field_name: str) -> list[str]:
         """Validate a list of Discord role ids against the allowed prefixes.
@@ -669,7 +690,7 @@ class EventRoleSetupForm(forms.ModelForm):
                     f'Role name "@{role.name}" must start with one of: {", ".join(prefixes)}.',
                 )
 
-        for field_name in ("coordinator_role_ids", "region_role_ids"):
+        for field_name in ("coordinator_role_ids", "region_role_ids", "captain_role_ids"):
             selected = cleaned.get(field_name) or []
             if not selected:
                 continue
@@ -921,6 +942,7 @@ class SquadForm(forms.ModelForm):
         event_prefixes: list[str] | None = None,
         coordinator_role_ids: list[str] | None = None,
         region_role_ids: list[str] | None = None,
+        captain_role_ids: list[str] | None = None,
         event=None,
         **kwargs,
     ) -> None:
@@ -937,6 +959,9 @@ class SquadForm(forms.ModelForm):
             region_role_ids: The parent event's configured region role IDs (Role Setup
                 page). The Region Role picker is limited to these; when empty, that
                 field is disabled.
+            captain_role_ids: The parent event's configured captain role IDs (Role Setup
+                page). The Captain Discord Role picker is limited to these; when empty,
+                that field is disabled.
             **kwargs: Keyword arguments passed to ModelForm.
 
         """
@@ -944,6 +969,7 @@ class SquadForm(forms.ModelForm):
         self.event_prefixes = list(event_prefixes or [])
         self.coordinator_role_ids = [str(rid) for rid in (coordinator_role_ids or [])]
         self.region_role_ids = [str(rid) for rid in (region_role_ids or [])]
+        self.captain_role_ids = [str(rid) for rid in (captain_role_ids or [])]
         # The event's head captain role must never end up on a squad. Squad roles are
         # auto-assigned to riders as they join, so pointing one at the head captain role
         # would hand every member of that squad event-wide control of squads, Discord
@@ -1006,16 +1032,27 @@ class SquadForm(forms.ModelForm):
         self.fields["team_discord_role"].widget.choices = role_choices
         self.initial["team_discord_role"] = current_role
 
-        # Captain role: same filtering rules as team role.
-        if self.event_prefixes:
-            captain_role_choices = self._without_head_captain(_get_role_choices(prefixes=self.event_prefixes))
+        # Captain role: chosen from the event's configured captain roles (Role Setup
+        # page), like the region and coordinator pickers below.
+        if self.captain_role_ids:
+            captain_name_by_id = dict(
+                DiscordRole.objects.filter(role_id__in=self.captain_role_ids).values_list("role_id", "name")
+            )
+            captain_role_choices = [("0", "(none)")]
+            captain_role_choices.extend(
+                (rid, f"@{captain_name_by_id.get(rid, f'Unknown Role ({rid})')}")
+                for rid in self.captain_role_ids
+                if rid != self.head_captain_role_id
+            )
         else:
-            captain_role_choices = [("0", "(none — set event prefixes first)")]
+            captain_role_choices = [("0", "(none — set captain roles in Role Setup first)")]
             self.fields["discord_captain_role"].widget.attrs["disabled"] = True
+        # Drop a stored value that is no longer an allowed captain role rather than
+        # offering it back, or clean_discord_captain_role would make the squad
+        # un-saveable. Mirrors the region and coordinator handling.
         current_captain_role = str(self.initial.get("discord_captain_role", 0) or 0)
-        captain_role_values = EventForm._flat_choice_values(captain_role_choices)
-        if current_captain_role != "0" and current_captain_role not in captain_role_values:
-            captain_role_choices.append((current_captain_role, f"Unknown Role ({current_captain_role})"))
+        if current_captain_role not in {c[0] for c in captain_role_choices}:
+            current_captain_role = "0"
         self.fields["discord_captain_role"].widget.choices = captain_role_choices
         self.initial["discord_captain_role"] = current_captain_role
 
@@ -1280,6 +1317,13 @@ class SquadForm(forms.ModelForm):
             return 0
 
         self._refuse_head_captain(role_id, what="squad captain role")
+
+        # The authoritative gate. The picker only offers the event's configured captain
+        # roles, but a crafted POST carrying any other role id is rejected here.
+        if role_id and str(role_id) not in self.captain_role_ids:
+            raise forms.ValidationError(
+                "Select a captain role configured for this event on the Role Setup page."
+            )
 
         if role_id and role_id != 0 and not self.event_prefixes:
             raise forms.ValidationError("Set at least one event prefix before assigning a role.")
