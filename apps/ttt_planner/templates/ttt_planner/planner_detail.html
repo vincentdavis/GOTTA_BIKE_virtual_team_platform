@@ -229,11 +229,13 @@
     document.body.addEventListener("click", function (e) {
       var btn = e.target.closest && e.target.closest("[data-ttt-capture-btn]");
       if (!btn) return;
-      var card = btn.closest("[data-ttt-capture]");
-      if (!card) return;
-      window.copyAsImage(card, btn, {
+      // Capture the off-screen ride sheet, not the planning table on screen. Each button
+      // names its own sheet so this one handler serves the pull schedule and the
+      // zwiftgopher panel, both of which arrive via separate HTMX swaps.
+      var sheet = document.querySelector(btn.dataset.captureTarget || "[data-ttt-capture-sheet]");
+      if (!sheet) return;
+      window.copyAsImage(sheet, btn, {
         filename: "ttt-" + slugify("{{ plan.name|escapejs }}"),
-        excludeClass: "ttt-capture-btn",
       });
     });
   })();

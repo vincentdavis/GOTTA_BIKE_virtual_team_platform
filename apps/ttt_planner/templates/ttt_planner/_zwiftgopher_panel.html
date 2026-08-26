@@ -84,7 +84,46 @@
       </div>
 
       {% if gopher.riders %}
-      <h4 class="font-semibold text-sm mt-4">Suggested pull order (zwiftgopher)</h4>
+      <div class="flex items-center justify-between gap-2 mt-4">
+        <h4 class="font-semibold text-sm">Suggested pull order (zwiftgopher)</h4>
+        <button type="button" class="btn btn-ghost btn-xs" data-ttt-capture-btn
+                data-capture-target="[data-gopher-capture-sheet]"
+                title="Copy the suggested pull order as an image"
+                aria-label="Copy the suggested pull order as an image">Copy</button>
+      </div>
+      {% comment %}
+        Ride-time view of the same rows, captured by the Copy button above. Only what a
+        rider needs on the bike: order, name, pull power and pull length. Off-screen
+        rather than display:none, since html-to-image cannot render a zero-size element.
+      {% endcomment %}
+      <div data-gopher-capture-sheet
+           style="position:absolute; left:-10000px; top:0; width:460px;"
+           class="bg-base-100 text-base-content p-4 rounded-box">
+        <div class="font-bold text-lg leading-tight">{{ plan.name|default:"TTT Plan" }}</div>
+        <div class="text-sm text-base-content/70 mb-2">Suggested pull order (zwiftgopher)</div>
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Rider</th>
+              <th class="text-right">Pull W</th>
+              <th class="text-right">W/kg</th>
+              <th class="text-right">Pull (s)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for gr in gopher.riders %}
+            <tr>
+              <td class="text-base-content/50">{{ gr.order|default:forloop.counter }}</td>
+              <td class="font-medium">{{ gr.name|default:gr.zwift_id }}</td>
+              <td class="text-right font-semibold">{{ gr.pull_power|default:"—" }}</td>
+              <td class="text-right">{{ gr.pull_power_wkg|default:"—" }}</td>
+              <td class="text-right">{{ gr.pull_duration|default:"—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
       <div class="overflow-x-auto mt-1">
         <table class="table table-sm w-auto">
           <thead>
