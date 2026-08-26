@@ -1689,6 +1689,8 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             channel_ids.add(str(s.audio_channel_id))
         if s.team_discord_role:
             role_ids.add(str(s.team_discord_role))
+        if s.discord_captain_role:
+            role_ids.add(str(s.discord_captain_role))
         if s.regional_coordinator_role:
             role_ids.add(str(s.regional_coordinator_role))
         if s.region_role:
@@ -1733,6 +1735,9 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         s.channel_name = channel_names.get(str(s.discord_channel_id), "") if s.discord_channel_id else ""
         s.audio_name = channel_names.get(str(s.audio_channel_id), "") if s.audio_channel_id else ""
         s.role_name = role_names.get(str(s.team_discord_role), "") if s.team_discord_role else ""
+        s.captain_role_name = (
+            role_names.get(str(s.discord_captain_role), "") if s.discord_captain_role else ""
+        )
         s.coordinator_role_name = (
             role_names.get(str(s.regional_coordinator_role), "") if s.regional_coordinator_role else ""
         )

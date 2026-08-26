@@ -247,11 +247,16 @@
         </div>
         {% endif %}
 
-        {# Discord section #}
-        {% if squad.discord_channel_id or squad.audio_channel_id or squad.team_discord_role or squad.regional_coordinator_role or squad.region_role %}
-        <div class="card bg-base-300 p-3 mb-2">
-          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Discord</p>
-          <div class="space-y-1">
+        {% comment %}
+          Discord section. Collapsed by default: a fully configured squad lists a channel,
+          an audio channel and four roles, which is reference detail rather than what this
+          page is for. The channel-access audit lives in here too, and it makes a live
+          Discord call -- keeping it behind a click means opening the page does not.
+        {% endcomment %}
+        {% if squad.discord_channel_id or squad.audio_channel_id or squad.team_discord_role or squad.discord_captain_role or squad.regional_coordinator_role or squad.region_role %}
+        <details class="collapse collapse-arrow bg-base-300 mb-2">
+          <summary class="collapse-title text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2 min-h-0 cursor-pointer">Discord</summary>
+          <div class="collapse-content space-y-1">
             {% if squad.discord_channel_id %}
             <div class="flex items-center justify-between">
               <span class="text-base-content/70 text-sm">Channel</span>
@@ -282,6 +287,12 @@
               <span class="text-sm">{% if squad.role_name %}@{{ squad.role_name }}{% else %}<span class="font-mono text-xs">{{ squad.team_discord_role }}</span>{% endif %}</span>
             </div>
             {% endif %}
+            {% if squad.discord_captain_role %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Captain</span>
+              <span class="text-sm">{% if squad.captain_role_name %}@{{ squad.captain_role_name }}{% else %}<span class="font-mono text-xs">{{ squad.discord_captain_role }}</span>{% endif %}</span>
+            </div>
+            {% endif %}
             {% if squad.regional_coordinator_role %}
             <div class="flex items-center justify-between">
               <span class="text-base-content/70 text-sm">Coordinator</span>
@@ -295,7 +306,7 @@
             </div>
             {% endif %}
           </div>
-        </div>
+        </details>
         {% endif %}
 
         {# Links section #}
