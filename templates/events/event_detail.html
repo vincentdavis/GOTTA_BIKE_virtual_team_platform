@@ -125,13 +125,31 @@
         </button>
         {% endif %}
         {% if event.signups_open %}
+          {% comment %}
+            Shareable link that lands on this page with the signup form already open, so a
+            rider following it does not have to find the button. ?signup=1 rather than a
+            #fragment: the page is login-gated, and allauth's ?next= carries a query string
+            through the login round-trip where a fragment would be dropped.
+          {% endcomment %}
+          <button type="button" class="btn btn-ghost btn-sm btn-square ml-auto"
+                  data-signup-share="{{ request.scheme }}://{{ request.get_host }}{% url 'events:event_detail' event.pk %}?signup=1"
+                  title="Copy a link that opens the signup form"
+                  aria-label="Copy a link that opens the signup form">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5"/>
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5"/>
+            </svg>
+          </button>
           {% if user_signup and user_signup.status == "registered" %}
-          <button class="btn btn-success btn-outline btn-sm ml-auto" onclick="document.getElementById('edit_signup_modal').showModal()">
+          <button class="btn btn-success btn-outline btn-sm" onclick="document.getElementById('edit_signup_modal').showModal()">
             Signed Up
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
           </button>
           {% else %}
-          <button class="btn btn-primary btn-sm ml-auto" onclick="document.getElementById('signup_modal').showModal()">Sign Up</button>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('signup_modal').showModal()">Sign Up</button>
           {% endif %}
         {% else %}
         <span class="text-sm text-base-content/50 ml-auto">Signups are closed</span>
@@ -1537,4 +1555,37 @@ function switchCategorySource(source) {
 })();
 </script>
 {% endif %}
+
+<script>
+  // Share-a-signup-link button, plus the ?signup=1 landing it produces.
+  (function () {
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("[data-signup-share]");
+      if (!btn) return;
+      var url = btn.dataset.signupShare;
+      var done = function () {
+        var prev = btn.getAttribute("title");
+        btn.classList.add("text-success");
+        btn.setAttribute("title", "Link copied");
+        setTimeout(function () {
+          btn.classList.remove("text-success");
+          btn.setAttribute("title", prev);
+        }, 1500);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done).catch(function () { window.prompt("Copy this link:", url); });
+      } else {
+        window.prompt("Copy this link:", url);
+      }
+    });
+
+    // Opening the right modal is not simply "the signup one": someone already registered
+    // who follows a shared link should land on their existing answers, not a blank form.
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("signup") === "1") {
+      var modal = document.getElementById("edit_signup_modal") || document.getElementById("signup_modal");
+      if (modal && typeof modal.showModal === "function") { modal.showModal(); }
+    }
+  })();
+</script>
 {% endblock %}
