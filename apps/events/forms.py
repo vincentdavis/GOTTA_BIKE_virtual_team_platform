@@ -904,6 +904,11 @@ class SquadForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.event_prefixes = list(event_prefixes or [])
         self.coordinator_role_ids = [str(rid) for rid in (coordinator_role_ids or [])]
+        # The event's head captain role must never end up on a squad. Squad roles are
+        # auto-assigned to riders as they join, so pointing one at the head captain role
+        # would hand every member of that squad event-wide control of squads, Discord
+        # roles and eligibility. Stripped from the pickers below and refused in clean().
+        self.head_captain_role_id = str(getattr(event, "head_captain_role_id", 0) or 0)
 
         # Squad gender is a fixed set (Male/Female/COED) and required when configuring a squad.
         self.fields["gender"].choices = [("", "Select gender"), *SQUAD_GENDER_CHOICES]
@@ -950,7 +955,7 @@ class SquadForm(forms.ModelForm):
         # When prefixes is empty, the field is shown but disabled and presents a
         # placeholder, matching the pre-multi-prefix behavior.
         if self.event_prefixes:
-            role_choices = _get_role_choices(prefixes=self.event_prefixes)
+            role_choices = self._without_head_captain(_get_role_choices(prefixes=self.event_prefixes))
         else:
             role_choices = [("0", "(none — set event prefixes first)")]
             self.fields["team_discord_role"].widget.attrs["disabled"] = True
@@ -963,7 +968,7 @@ class SquadForm(forms.ModelForm):
 
         # Captain role: same filtering rules as team role.
         if self.event_prefixes:
-            captain_role_choices = _get_role_choices(prefixes=self.event_prefixes)
+            captain_role_choices = self._without_head_captain(_get_role_choices(prefixes=self.event_prefixes))
         else:
             captain_role_choices = [("0", "(none — set event prefixes first)")]
             self.fields["discord_captain_role"].widget.attrs["disabled"] = True
@@ -978,7 +983,7 @@ class SquadForm(forms.ModelForm):
         # role is auto-added to riders when they join the squad and removed when
         # they leave (unless another squad still grants it — enforced in views).
         if self.event_prefixes:
-            region_role_choices = _get_role_choices(prefixes=self.event_prefixes)
+            region_role_choices = self._without_head_captain(_get_role_choices(prefixes=self.event_prefixes))
         else:
             region_role_choices = [("0", "(none — set event prefixes first)")]
             self.fields["region_role"].widget.attrs["disabled"] = True
@@ -1000,6 +1005,7 @@ class SquadForm(forms.ModelForm):
             coord_role_choices.extend(
                 (rid, f"@{coord_name_by_id.get(rid, f'Unknown Role ({rid})')}")
                 for rid in self.coordinator_role_ids
+                if rid != self.head_captain_role_id
             )
         else:
             coord_role_choices = [("0", "(none — set coordinator roles in Role Setup first)")]
@@ -1015,6 +1021,54 @@ class SquadForm(forms.ModelForm):
             current_coord_role = "0"
         self.fields["regional_coordinator_role"].widget.choices = coord_role_choices
         self.initial["regional_coordinator_role"] = current_coord_role
+
+    def _without_head_captain(self, choices: list) -> list:
+        """Drop the event's head captain role from a role picker.
+
+        Handles the optgroup shape ``_get_role_choices`` returns when the event has more
+        than one prefix, where the pairs live one level down.
+
+        Args:
+            choices: A Django choices list, flat or grouped.
+
+        Returns:
+            The same list without the head captain role.
+
+        """
+        blocked = self.head_captain_role_id
+        if blocked == "0":
+            return choices
+        pruned = []
+        for value, label in choices:
+            if isinstance(label, (list, tuple)):
+                group = [pair for pair in label if str(pair[0]) != blocked]
+                if group:
+                    pruned.append((value, group))
+            elif str(value) != blocked:
+                pruned.append((value, label))
+        return pruned
+
+    def _refuse_head_captain(self, role_id: int, *, what: str) -> None:
+        """Reject the head captain role wherever a squad tries to use it.
+
+        The picker no longer offers it, but the picker is not the gate -- a crafted POST
+        would otherwise sail through, and this is a privilege escalation rather than a
+        cosmetic mistake.
+
+        Args:
+            role_id: The submitted role id.
+            what: How to name the field in the error, e.g. "squad role".
+
+        Raises:
+            forms.ValidationError: If the role is the event's head captain role.
+
+        """
+        if role_id and str(role_id) == self.head_captain_role_id:
+            raise forms.ValidationError(
+                f"The event's Head Captain role cannot be used as a {what}. Riders are given a "
+                "squad's roles when they join it, so this would grant every member of this squad "
+                "event-wide control of squads, Discord roles and eligibility."
+            )
 
     def clean(self) -> dict:
         """Reject anyone listed as both captain and vice-captain.
@@ -1078,6 +1132,8 @@ class SquadForm(forms.ModelForm):
         except (ValueError, TypeError):
             return 0
 
+        self._refuse_head_captain(role_id, what="squad role")
+
         if role_id and role_id != 0 and not self.event_prefixes:
             raise forms.ValidationError("Set at least one event prefix before assigning a role.")
 
@@ -1105,6 +1161,8 @@ class SquadForm(forms.ModelForm):
             role_id = int(value)
         except (ValueError, TypeError):
             return 0
+
+        self._refuse_head_captain(role_id, what="region role")
 
         if role_id and role_id != 0 and not self.event_prefixes:
             raise forms.ValidationError("Set at least one event prefix before assigning a role.")
@@ -1138,6 +1196,7 @@ class SquadForm(forms.ModelForm):
             role_id = int(value)
         except (ValueError, TypeError):
             return 0
+        self._refuse_head_captain(role_id, what="coordinator role")
         if role_id and str(role_id) not in self.coordinator_role_ids:
             raise forms.ValidationError(
                 "Select a coordinator role configured for this event on the Role Setup page."
@@ -1159,6 +1218,8 @@ class SquadForm(forms.ModelForm):
             role_id = int(value)
         except (ValueError, TypeError):
             return 0
+
+        self._refuse_head_captain(role_id, what="squad captain role")
 
         if role_id and role_id != 0 and not self.event_prefixes:
             raise forms.ValidationError("Set at least one event prefix before assigning a role.")
