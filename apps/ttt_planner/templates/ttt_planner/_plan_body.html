@@ -33,13 +33,17 @@
         What Copy actually captures: only what a rider needs on the bike -- order, name,
         pull power and pull length. The table above is a planning view (kg, CdA, FTP, IF,
         NP, TSS) and its Pull (s) cell is a number input, which photographs badly.
-
-        Positioned off-screen rather than display:none, because html-to-image cannot
-        render a zero-size element. Re-rendered with the rest of the body on every HTMX
-        swap, so it never lags the table.
+        Re-rendered with the rest of the body on every HTMX swap, so it never lags.
       {% endcomment %}
-      <div data-ttt-capture-sheet
-           style="position:absolute; left:-10000px; top:0; width:460px;"
+      {% comment %}
+        The capture stage. html-to-image clones the target with its own computed styles,
+        so an off-screen offset on the sheet itself travels into the clone and the PNG
+        comes out blank -- verified. The offset therefore lives on this wrapper, which is
+        not part of the capture, leaving the sheet normally positioned. opacity is used
+        rather than visibility because visibility inherits and would blank the clone too.
+      {% endcomment %}
+      <div style="position:fixed; left:0; top:0; opacity:0; pointer-events:none; z-index:-1;" aria-hidden="true">
+      <div data-ttt-capture-sheet style="width:460px;"
            class="bg-base-100 text-base-content p-4 rounded-box">
         <div class="font-bold text-lg leading-tight">{{ plan.name|default:"TTT Plan" }}</div>
         {% if plan.course_name or plan.route %}
@@ -72,6 +76,7 @@
             {% endfor %}
           </tbody>
         </table>
+      </div>
       </div>
       <div class="overflow-x-auto">
         <table class="table table-sm">

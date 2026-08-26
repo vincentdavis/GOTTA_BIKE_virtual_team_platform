@@ -88,8 +88,15 @@ def test_the_capture_targets_a_ride_sheet_not_the_planning_table(auth_client, te
         assert wanted in sheet, wanted
     for planning_only in ("CdA", "FTP", "TSS", "NP"):
         assert planning_only not in sheet, planning_only
-    # Off-screen rather than hidden: html-to-image cannot render a zero-size element.
-    assert "left:-10000px" in body
+    # The offset must sit on the wrapper, never on the captured sheet itself:
+    # html-to-image clones the target with its own computed styles, so an offset there
+    # travels into the clone and the PNG comes out blank.
+    stage = body[: body.index("data-ttt-capture-sheet")]
+    assert "opacity:0" in stage.rsplit("<div", 1)[-1] or "opacity:0" in stage[-400:]
+    sheet_tag = body[body.index("data-ttt-capture-sheet"):]
+    sheet_tag = sheet_tag[: sheet_tag.index(">")]
+    assert "position:" not in sheet_tag
+    assert "-10000" not in sheet_tag
 
 
 @pytest.mark.django_db
