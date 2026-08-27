@@ -272,6 +272,45 @@ class ZRRider(models.Model):
         if hasattr(self, "skip_history_when_saving"):
             del self.skip_history_when_saving
 
+    def best_rating_seen(self) -> dict | None:
+        """Return the highest race rating this rider has ever shown us.
+
+        The API reports only current / 30-day / 90-day figures, and all three go null once
+        somebody stops racing -- so a rider who was strong a year ago looks like they never
+        had a rating at all. The history table is the only record that they did.
+
+        Both the current and 90-day figures are considered: a rider can be synced less
+        often than they race, so their 90-day max may have been higher than any current
+        rating we happened to observe.
+
+        Returns:
+            ``{"rating", "category", "date", "source"}`` for the best row ever recorded,
+            or None if this rider has never had a rating.
+
+        """
+        best: dict | None = None
+        for source, rating_field, category_field, date_field in (
+            ("current", "race_current_rating", "race_current_category", "race_current_date"),
+            ("max90", "race_max90_rating", "race_max90_category", "race_max90_date"),
+        ):
+            row = (
+                self.history.exclude(**{f"{rating_field}__isnull": True})
+                .order_by(f"-{rating_field}")
+                .values(rating_field, category_field, date_field)
+                .first()
+            )
+            if not row:
+                continue
+            candidate = {
+                "rating": row[rating_field],
+                "category": row[category_field],
+                "date": row[date_field],
+                "source": source,
+            }
+            if best is None or candidate["rating"] > best["rating"]:
+                best = candidate
+        return best
+
     @classmethod
     def get_field_history(cls, zwid: int, field: str) -> list[tuple]:
         """Get history of a specific field for a rider.

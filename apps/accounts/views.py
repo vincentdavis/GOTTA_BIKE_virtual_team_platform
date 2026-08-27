@@ -35,6 +35,34 @@ from apps.zwift import profile_fields
 ZR_REFRESH_MIN_AGE = timedelta(hours=1)
 
 
+def zr_rating_tiers(zr_rider) -> list[dict]:
+    """Build the current / 30-day / 90-day rating rows for a profile.
+
+    The API reports all three, and they answer different questions: current is form today,
+    the two maxima are what a rider is seeded against. Showing only "current" made a rider
+    who has not raced recently look unrated.
+
+    Args:
+        zr_rider: The ZRRider row, or None.
+
+    Returns:
+        One row per tier, each with ``label``, ``rating``, ``category`` and ``date``.
+        Rows whose rating is null are kept, so the gap is visible rather than silent.
+
+    """
+    if zr_rider is None:
+        return []
+    return [
+        {
+            "label": label,
+            "rating": getattr(zr_rider, f"race_{key}_rating"),
+            "category": getattr(zr_rider, f"race_{key}_category"),
+            "date": getattr(zr_rider, f"race_{key}_date"),
+        }
+        for label, key in (("Current", "current"), ("30-day max", "max30"), ("90-day max", "max90"))
+    ]
+
+
 def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -> dict:
     """Build the context for the ``accounts/partials/zwift_status.html`` partial.
 
@@ -81,6 +109,10 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
                 "category": zr_rider.race_current_category,
                 "rating": zr_rider.race_current_rating,
                 "updated": zr_rider.date_modified,
+                "tiers": zr_rating_tiers(zr_rider),
+                # All three tiers go null once someone stops racing, so history is the
+                # only record that they ever had a rating.
+                "best_seen": zr_rider.best_rating_seen(),
             }
             zr_last_updated = zr_rider.date_modified
             zr_can_refresh = (timezone.now() - zr_rider.date_modified) >= ZR_REFRESH_MIN_AGE
@@ -539,6 +571,8 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
             zr_data = {
                 "category": zr_rider.race_current_category,
                 "rating": zr_rider.race_current_rating,
+                "tiers": zr_rating_tiers(zr_rider),
+                "best_seen": zr_rider.best_rating_seen(),
                 "phenotype": zr_rider.phenotype_value,
                 "phenotype_bias": zr_rider.phenotype_bias,
                 "age": zr_rider.age,

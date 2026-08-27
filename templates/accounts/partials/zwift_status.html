@@ -103,20 +103,7 @@
             <p class="text-xs text-error mb-2">Update failed. Please try again later.</p>
             {% endif %}
             {% if zr_data %}
-                <div class="space-y-1 text-sm">
-                    {% if zr_data.category %}
-                        <div class="flex justify-between">
-                            <span class="text-base-content/70">Category</span>
-                            <span class="font-semibold">{{ zr_data.category }}</span>
-                        </div>
-                    {% endif %}
-                    {% if zr_data.rating %}
-                        <div class="flex justify-between">
-                            <span class="text-base-content/70">Rating</span>
-                            <span class="font-mono">{{ zr_data.rating }}</span>
-                        </div>
-                    {% endif %}
-                </div>
+                {% include "accounts/partials/_zr_ratings.html" with tiers=zr_data.tiers best_seen=zr_data.best_seen %}
                 <a href="https://www.zwiftracing.app/riders/{{ user.zwid }}" target="_blank" rel="noopener"
                    class="btn btn-xs btn-ghost mt-2 w-full">View Profile</a>
                 {% if zr_data.updated %}

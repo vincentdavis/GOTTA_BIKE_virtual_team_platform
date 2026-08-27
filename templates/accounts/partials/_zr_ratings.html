@@ -1,0 +1,32 @@
+{% comment %}
+  ZwiftRacing ratings: current, 30-day max, 90-day max, and the best we have ever seen.
+
+  Rows with no rating are rendered as a dash rather than skipped. All three tiers go null
+  once a rider stops racing, so hiding them made a lapsed rider indistinguishable from one
+  the API has never heard of. Expects `tiers` and `best_seen`.
+{% endcomment %}
+<div class="space-y-1 text-sm">
+  {% for tier in tiers %}
+  <div class="flex justify-between items-baseline gap-2">
+    <span class="text-base-content/70">{{ tier.label }}</span>
+    <span class="text-right">
+      {% if tier.rating %}
+        <span class="font-mono">{{ tier.rating|floatformat:0 }}</span>
+        {% if tier.category %}<span class="badge badge-outline badge-sm ml-1">{{ tier.category }}</span>{% endif %}
+      {% else %}
+        <span class="text-base-content/30">&mdash;</span>
+      {% endif %}
+    </span>
+  </div>
+  {% endfor %}
+
+  {% if best_seen %}
+  <div class="flex justify-between items-baseline gap-2 pt-1 mt-1 border-t border-base-content/10">
+    <span class="text-base-content/70" title="The highest rating we have ever recorded for this rider">Best seen</span>
+    <span class="text-right">
+      <span class="font-mono">{{ best_seen.rating|floatformat:0 }}</span>
+      {% if best_seen.category %}<span class="badge badge-outline badge-sm ml-1">{{ best_seen.category }}</span>{% endif %}
+    </span>
+  </div>
+  {% endif %}
+</div>
