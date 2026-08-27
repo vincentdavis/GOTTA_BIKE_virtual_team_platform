@@ -253,6 +253,45 @@ def fetch_guild_members_from_discord(guild_id: str | int, bot_token: str) -> lis
     return members
 
 
+def _release_user_link(user, *, keep_pk: int | None = None) -> int:
+    """Detach a user from any other GuildMember row before linking them to this one.
+
+    ``GuildMember.user`` is a OneToOneField, so a user can hold exactly one row. When
+    somebody loses a Discord account and makes a new one, their ``User.discord_id`` moves
+    to the new account while the old ``GuildMember`` keeps the link -- and the next sync
+    tries to create a second row for the same user and dies on
+    ``accounts_guildmember_user_id_key``, taking the whole sweep with it.
+
+    The old row is kept, not deleted: it is the record that that Discord account was in
+    the guild and when it left. Only the user link is released.
+
+    Args:
+        user: The user about to be linked, or None.
+        keep_pk: A GuildMember pk to leave alone (the row doing the claiming).
+
+    Returns:
+        The number of rows unlinked.
+
+    """
+    from apps.accounts.models import GuildMember
+
+    if user is None:
+        return 0
+    stale = GuildMember.objects.filter(user=user)
+    if keep_pk is not None:
+        stale = stale.exclude(pk=keep_pk)
+    rows = list(stale.values_list("pk", "discord_id"))
+    if not rows:
+        return 0
+    stale.update(user=None)
+    logfire.info(
+        "Released a stale GuildMember user link",
+        user_id=user.pk,
+        released=[{"guild_member_id": pk, "discord_id": did} for pk, did in rows],
+    )
+    return len(rows)
+
+
 def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unknown") -> dict[str, int]:
     """Reconcile the GuildMember table against an authoritative member list.
 
@@ -286,53 +325,70 @@ def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unk
     updated = 0
     rejoined = 0
     linked = 0
+    relinked = 0
+    failed = 0
 
     for member_data in members:
-        joined_at: datetime | None = None
-        raw_joined = member_data.get("joined_at")
-        if raw_joined:
-            with contextlib.suppress(ValueError):
-                joined_at = datetime.fromisoformat(str(raw_joined))
+        try:
+            joined_at: datetime | None = None
+            raw_joined = member_data.get("joined_at")
+            if raw_joined:
+                with contextlib.suppress(ValueError):
+                    joined_at = datetime.fromisoformat(str(raw_joined))
 
-        existing = GuildMember.objects.filter(discord_id=member_data["discord_id"]).first()
+            existing = GuildMember.objects.filter(discord_id=member_data["discord_id"]).first()
 
-        if existing:
-            was_left = existing.date_left is not None
-            existing.username = member_data.get("username", "")
-            existing.display_name = member_data.get("display_name") or ""
-            existing.nickname = member_data.get("nickname") or ""
-            existing.avatar_hash = member_data.get("avatar_hash") or ""
-            existing.roles = member_data.get("roles") or []
-            existing.joined_at = joined_at
-            existing.is_bot = bool(member_data.get("is_bot", False))
-            existing.date_left = None  # Clear when they're back
+            if existing:
+                was_left = existing.date_left is not None
+                existing.username = member_data.get("username", "")
+                existing.display_name = member_data.get("display_name") or ""
+                existing.nickname = member_data.get("nickname") or ""
+                existing.avatar_hash = member_data.get("avatar_hash") or ""
+                existing.roles = member_data.get("roles") or []
+                existing.joined_at = joined_at
+                existing.is_bot = bool(member_data.get("is_bot", False))
+                existing.date_left = None  # Clear when they're back
 
-            if not existing.user and member_data["discord_id"] in users_by_discord_id:
-                existing.user = users_by_discord_id[member_data["discord_id"]]
-                linked += 1
+                if not existing.user and member_data["discord_id"] in users_by_discord_id:
+                    candidate = users_by_discord_id[member_data["discord_id"]]
+                    relinked += _release_user_link(candidate, keep_pk=existing.pk)
+                    existing.user = candidate
+                    linked += 1
 
-            existing.save()
+                existing.save()
 
-            if was_left:
-                rejoined += 1
+                if was_left:
+                    rejoined += 1
+                else:
+                    updated += 1
             else:
-                updated += 1
-        else:
-            user = users_by_discord_id.get(member_data["discord_id"])
-            GuildMember.objects.create(
-                discord_id=member_data["discord_id"],
-                username=member_data.get("username", ""),
-                display_name=member_data.get("display_name") or "",
-                nickname=member_data.get("nickname") or "",
-                avatar_hash=member_data.get("avatar_hash") or "",
-                roles=member_data.get("roles") or [],
-                joined_at=joined_at,
-                is_bot=bool(member_data.get("is_bot", False)),
-                user=user,
+                user = users_by_discord_id.get(member_data["discord_id"])
+                relinked += _release_user_link(user)
+                GuildMember.objects.create(
+                    discord_id=member_data["discord_id"],
+                    username=member_data.get("username", ""),
+                    display_name=member_data.get("display_name") or "",
+                    nickname=member_data.get("nickname") or "",
+                    avatar_hash=member_data.get("avatar_hash") or "",
+                    roles=member_data.get("roles") or [],
+                    joined_at=joined_at,
+                    is_bot=bool(member_data.get("is_bot", False)),
+                    user=user,
+                )
+                created += 1
+                if user:
+                    linked += 1
+        except Exception as exc:
+            # One unusable member must not abort the sweep: before this, a single
+            # bad row meant zero members updated, no departures stamped, and the
+            # GuildMember cache silently frozen until someone noticed.
+            failed += 1
+            logfire.error(
+                "Failed to sync one guild member",
+                source=source,
+                discord_id=member_data.get("discord_id"),
+                error=str(exc),
             )
-            created += 1
-            if user:
-                linked += 1
 
     # Mark members not in payload as left. Iterate so we can generate a ticket
     # for each freshly-departed member; a bulk UPDATE would skip the audit trail
@@ -371,6 +427,8 @@ def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unk
         rejoined=rejoined,
         left=left,
         linked=linked,
+        relinked=relinked,
+        failed=failed,
         total_received=len(members),
         total_active=total_active,
     )
@@ -381,6 +439,8 @@ def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unk
         "rejoined": rejoined,
         "left": left,
         "linked": linked,
+        "relinked": relinked,
+        "failed": failed,
         "total_received": len(members),
         "total_active": total_active,
     }
