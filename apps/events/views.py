@@ -2140,9 +2140,14 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
     for sel in selections:
         race_dt = sel.race_datetime_utc
         is_future = race_dt >= now_utc
-        local_date = race_dt.astimezone(tz_obj).strftime("%b %d, %Y")
+        local_dt = race_dt.astimezone(tz_obj)
+        # "SEP 22", not "Sep 22, 2026": these badges sit two-to-a-cell in a narrow column,
+        # and the year is redundant inside a single event. %-d is not portable, so the day
+        # is formatted separately to avoid the zero padding of %d ("SEP 02").
+        local_date = f"{local_dt:%b} {local_dt.day}".upper()
+        local_date_full = local_dt.strftime("%A %d %B %Y")
         for rider in sel.selected_users.all():
-            race = {"name": sel.name, "date": local_date}
+            race = {"name": sel.name, "date": local_date, "date_full": local_date_full}
             if is_future:
                 upcoming[rider.pk].append(race)
             else:

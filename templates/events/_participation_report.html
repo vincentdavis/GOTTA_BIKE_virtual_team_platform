@@ -97,7 +97,7 @@ than on each row -- they are properties of the squad, not the rider.
             {% if row.raced %}
             <div class="flex flex-wrap gap-1">
               {% for race in row.raced %}
-              <span class="badge badge-ghost badge-sm whitespace-nowrap">{{ race.date }} &middot; {{ race.name }}</span>
+              <span class="badge badge-ghost badge-sm whitespace-nowrap" title="{{ race.date_full }} &middot; {{ race.name }}">{{ race.date }} &middot; {{ race.name }}</span>
               {% endfor %}
             </div>
             {% else %}
@@ -110,7 +110,7 @@ than on each row -- they are properties of the squad, not the rider.
             {% if row.upcoming %}
             <div class="flex flex-wrap gap-1">
               {% for race in row.upcoming %}
-              <span class="badge badge-ghost badge-sm whitespace-nowrap">{{ race.date }} &middot; {{ race.name }}</span>
+              <span class="badge badge-ghost badge-sm whitespace-nowrap" title="{{ race.date_full }} &middot; {{ race.name }}">{{ race.date }} &middot; {{ race.name }}</span>
               {% endfor %}
             </div>
             {% else %}
