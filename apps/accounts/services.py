@@ -321,6 +321,10 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
         tables) are keyed by them, so a later erasure request is unanswerable without them.
 
     """
+    from django.db.models import Q
+
+    from apps.accounts.models import GuildMember
+    from apps.team.models import MembershipApplication
     from apps.team.services import purge_user_verification_media
     from apps.zwift import client as zwift_client
 
@@ -336,12 +340,31 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
             zauth_disconnected = False
             logfire.error("Could not disconnect Zwift on account deletion", user_id=user.pk, error=str(exc))
 
+    # Neither of these is reached by the cascade. MembershipApplication has no FK to User
+    # at all -- it is keyed by discord_id, and holds a complete second copy of the profile
+    # (name, email, birth year, gender, country, zwid, plus the raw Discord payload).
+    # GuildMember.user is SET_NULL, so the row would survive carrying the whole Discord
+    # identity. Both are matched on discord_id as well as the FK, so an account that moved
+    # to a new Discord login takes its older record with it.
+    applications_deleted = 0
+    guild_members_deleted = 0
+    if user.discord_id:
+        applications_deleted = MembershipApplication.objects.filter(discord_id=user.discord_id).count()
+        MembershipApplication.objects.filter(discord_id=user.discord_id).delete()
+        stale_members = GuildMember.objects.filter(Q(user=user) | Q(discord_id=user.discord_id))
+    else:
+        stale_members = GuildMember.objects.filter(user=user)
+    guild_members_deleted = stale_members.count()
+    stale_members.delete()
+
     audit = {
         "user_id": user.pk,
         "discord_id": user.discord_id,
         "zwid": user.zwid,
         "verification_records": user.race_ready_records.count(),
         "event_signups": user.event_signups.count(),
+        "membership_applications_deleted": applications_deleted,
+        "guild_members_deleted": guild_members_deleted,
         "media_purged": media["purged"],
         # Anything that failed is now genuinely orphaned, so the path is the only trace
         # left of it -- see the orphaned-media sweep in TODO.md.

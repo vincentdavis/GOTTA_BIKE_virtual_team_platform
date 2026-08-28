@@ -126,3 +126,70 @@ def test_the_audit_records_who_did_it(victim, app_admin) -> None:
     # Name and email stay out: the person is being forgotten.
     assert "email" not in audit
     assert audit["discord_id"] == "123"
+
+
+@pytest.mark.django_db
+def test_the_membership_application_is_purged(victim) -> None:
+    """It has no FK to User -- keyed by discord_id -- so the cascade never touched it.
+
+    It holds a complete second copy of the profile, which made "delete my account" untrue.
+    """
+    from apps.accounts.services import delete_user_account
+    from apps.team.models import MembershipApplication
+
+    MembershipApplication.objects.create(
+        discord_id=victim.discord_id, discord_username="lapsed",
+        first_name="Lapsed", last_name="Rider", email="lapsed@example.test",
+    )
+
+    audit = delete_user_account(victim)
+
+    assert not MembershipApplication.objects.filter(discord_id="123").exists()
+    assert audit["membership_applications_deleted"] == 1
+
+
+@pytest.mark.django_db
+def test_the_guild_member_row_is_removed(victim) -> None:
+    """GuildMember.user is SET_NULL, so the row survived with the full Discord identity."""
+    from apps.accounts.models import GuildMember
+    from apps.accounts.services import delete_user_account
+
+    GuildMember.objects.create(discord_id=victim.discord_id, username="lapsed", user=victim)
+
+    audit = delete_user_account(victim)
+
+    assert not GuildMember.objects.filter(discord_id="123").exists()
+    assert audit["guild_members_deleted"] == 1
+
+
+@pytest.mark.django_db
+def test_an_older_discord_identity_goes_too(victim) -> None:
+    """Someone who replaced their Discord account has a second, differently-keyed row."""
+    from apps.accounts.models import GuildMember
+    from apps.accounts.services import delete_user_account
+
+    GuildMember.objects.create(discord_id="999", username="old-account", user=victim)
+    GuildMember.objects.create(discord_id=victim.discord_id, username="lapsed")
+
+    delete_user_account(victim)
+
+    assert GuildMember.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_another_members_records_are_untouched(victim, user_model) -> None:
+    """Matching on discord_id must not reach past the account being deleted."""
+    from apps.accounts.models import GuildMember
+    from apps.accounts.services import delete_user_account
+    from apps.team.models import MembershipApplication
+
+    bystander = user_model.objects.create_user(
+        username="bystander", email="b@example.test", discord_id="456",
+    )
+    GuildMember.objects.create(discord_id="456", username="bystander", user=bystander)
+    MembershipApplication.objects.create(discord_id="456", discord_username="bystander")
+
+    delete_user_account(victim)
+
+    assert GuildMember.objects.filter(discord_id="456").exists()
+    assert MembershipApplication.objects.filter(discord_id="456").exists()

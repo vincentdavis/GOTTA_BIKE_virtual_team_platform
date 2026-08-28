@@ -17,6 +17,10 @@
           <li>{% if subject %}Their {% else %}Your {% endif %}API keys and any login links issued to you</li>
           <li>TTT plans, ladder matchups and Google Sheets data connections you created</li>
           <li>YouTube videos of yours shown on the Team Feed</li>
+          <li>{% if subject %}Their {% else %}Your {% endif %}membership registration &mdash; the form filled in when {% if subject %}they joined{% else %}you joined{% endif %},
+            holding {% if subject %}their {% else %}your {% endif %}name, email, birth year, gender, country and Zwift ID</li>
+          <li>{% if subject %}Their {% else %}Your {% endif %}Discord server membership record here &mdash; Discord ID, username, nickname,
+            roles and join date</li>
         </ul>
 
         <h3 class="font-semibold mb-2">What we keep</h3>
@@ -24,10 +28,6 @@
           Deleting {% if subject %}their {% else %}your {% endif %}account here does not reach everything. These are kept:
         </p>
         <ul class="list-disc list-inside mb-2 text-sm text-base-content/80 space-y-1">
-          <li><strong>{% if subject %}Their {% else %}Your {% endif %}Discord server membership record</strong> — Discord ID, username, nickname, roles
-            and join date. This tracks the Discord server itself, not {% if subject %}their {% else %}your {% endif %}account here.</li>
-          <li><strong>{% if subject %}Their {% else %}Your {% endif %}membership registration</strong> — the form you filled in when {% if subject %}they joined{% else %}you joined{% endif %}, which
-            holds {% if subject %}their {% else %}your {% endif %}name, email, birth year, gender, country and Zwift ID.</li>
           <li><strong>{% if subject %}Their {% else %}Your {% endif %}ZwiftPower and Zwift Racing data</strong> — race results, weight, height, power and
             heart rate. This comes from those services and is tied to {% if subject %}their {% else %}your {% endif %}Zwift ID, not to this account.
             The same is true of Strava club activities.</li>
@@ -35,6 +35,9 @@
             squads, availability sheets, verification reviews you carried out. These stay, with {% if subject %}their {% else %}your {% endif %}name
             removed from them.</li>
           <li><strong>Page visit logs</strong>, including IP address, with {% if subject %}their {% else %}your {% endif %}name removed.</li>
+          <li><strong>The Discord server itself.</strong> Deleting the account does not remove
+            {% if subject %}their {% else %}your {% endif %}from the Discord server, so the membership record above reappears on the next
+            sync &mdash; unlinked, but present. Remove them in Discord as well if that matters.</li>
           <li><strong>{% if subject %}Their {% else %}Your {% endif %}Zwift connection</strong> is not disconnected automatically. Disconnect it from
             {% if subject %}their {% else %}your {% endif %}profile first if {% if subject %}you want{% else %}you want{% endif %} that undone.</li>
         </ul>
