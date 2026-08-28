@@ -17,6 +17,7 @@ from typing import Any
 from constance import config
 
 from apps.accounts.tasks import (
+    clear_expired_sessions,
     guild_member_sync_status,
     refresh_all_race_ready,
     refresh_zwift_racing_metrics,
@@ -149,6 +150,12 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Sync all data connections with auto_sync enabled to Google Sheets",
         "scheduled": True,
         "hours_setting": "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
+    },
+    "clear_expired_sessions": {
+        "task": clear_expired_sessions,
+        "description": "Delete expired session rows (they carry the user id)",
+        "scheduled": True,
+        "hours_setting": "SCHEDULER_CLEAR_SESSIONS_HOURS",
     },
     "purge_expired_media": {
         "task": purge_expired_media,

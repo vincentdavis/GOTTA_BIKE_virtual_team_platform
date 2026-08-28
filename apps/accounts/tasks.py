@@ -60,6 +60,35 @@ def notify_rider_left_team(zwid: int, rider_name: str, source: str) -> dict:
 
 
 @task
+def clear_expired_sessions() -> dict:
+    """Delete expired rows from the session table.
+
+    Sessions are database-backed, and an expired row keeps ``_auth_user_id`` in its
+    payload -- so it is personal data retained past its purpose. There is no security
+    urgency: Django checks expiry when it reads a session, so a stale row was never usable
+    for authentication. This is about not keeping it.
+
+    Wraps Django's own ``clearsessions``, which knows how to ask the configured session
+    backend to prune itself, rather than deleting from the table directly.
+
+    Returns:
+        Summary dict with status and the number of rows removed.
+
+    """
+    from django.contrib.sessions.models import Session
+    from django.core.management import call_command
+    from django.utils import timezone as dj_timezone
+
+    with logfire.span("clear_expired_sessions"):
+        # Counted rather than inferred: clearsessions reports nothing back, and the
+        # number is the only way to see the first run drain a backlog.
+        expired = Session.objects.filter(expire_date__lt=dj_timezone.now()).count()
+        call_command("clearsessions")
+        logfire.info("Expired sessions cleared", deleted=expired)
+        return {"status": "complete", "deleted": expired}
+
+
+@task
 def sync_guild_members() -> dict:
     """Fetch the full guild roster from Discord and reconcile GuildMember.
 

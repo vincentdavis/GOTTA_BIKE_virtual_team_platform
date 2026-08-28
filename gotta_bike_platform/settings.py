@@ -880,6 +880,13 @@ CONSTANCE_CONFIG = {
         "How often to sync data connections with auto_sync enabled (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_CLEAR_SESSIONS_HOURS": (
+        48,
+        "How often to delete expired session rows (hours). Expired sessions are already "
+        "unusable for login; this is about not retaining the user id they carry. "
+        "Requires scheduler restart to take effect.",
+        int,
+    ),
     "SCHEDULER_PURGE_EXPIRED_MEDIA_HOURS": (
         24,
         "How often to delete uploaded media from expired verification records (hours). "
@@ -1095,6 +1102,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS",
         "SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS",
         "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
+        "SCHEDULER_CLEAR_SESSIONS_HOURS",
         "SCHEDULER_PURGE_EXPIRED_MEDIA_HOURS",
         "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS",
         "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS",
