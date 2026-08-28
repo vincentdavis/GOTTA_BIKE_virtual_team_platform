@@ -880,6 +880,23 @@ CONSTANCE_CONFIG = {
         "How often to sync data connections with auto_sync enabled (hours). Requires scheduler restart to take effect.",
         int,
     ),
+    "ANALYTICS_ANONYMISE_DAYS": (
+        90,
+        "Age at which page-visit rows lose their IP address, account link and user-agent "
+        "string (days). The rest of the row is kept so the dashboard's page, browser, "
+        "device and timezone history still works. 0 disables.",
+        int,
+    ),
+    "ANALYTICS_DELETE_DAYS": (
+        730,
+        "Age at which page-visit rows are deleted outright (days). 0 disables.",
+        int,
+    ),
+    "SCHEDULER_PURGE_PAGE_VISITS_HOURS": (
+        24,
+        "How often to age out page-visit rows (hours). Requires scheduler restart.",
+        int,
+    ),
     "SCHEDULER_CLEAR_SESSIONS_HOURS": (
         48,
         "How often to delete expired session rows (hours). Expired sessions are already "
@@ -961,6 +978,8 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "ABOUT_URL",
         "CONTACT_URL",
         "PRIVACY_POLICY_URL",
+        "ANALYTICS_ANONYMISE_DAYS",
+        "ANALYTICS_DELETE_DAYS",
         "TERMS_OF_SERVICE_URL",
     ),
     "Social Links": (
@@ -1102,6 +1121,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_NEW_MEMBER_ROLES_HOURS",
         "SCHEDULER_SYNC_ZR_CATEGORY_ROLES_HOURS",
         "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
+        "SCHEDULER_PURGE_PAGE_VISITS_HOURS",
         "SCHEDULER_CLEAR_SESSIONS_HOURS",
         "SCHEDULER_PURGE_EXPIRED_MEDIA_HOURS",
         "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS",

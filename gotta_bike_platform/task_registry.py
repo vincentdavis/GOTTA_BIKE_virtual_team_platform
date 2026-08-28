@@ -28,6 +28,7 @@ from apps.accounts.tasks import (
     sync_youtube_videos,
     sync_zr_category_roles,
 )
+from apps.analytics.tasks import purge_page_visits
 from apps.club_strava.tasks import sync_strava_activities
 from apps.data_connection.tasks import sync_all_data_connections
 from apps.events.tasks import remove_expired_ds_roles
@@ -150,6 +151,12 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Sync all data connections with auto_sync enabled to Google Sheets",
         "scheduled": True,
         "hours_setting": "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
+    },
+    "purge_page_visits": {
+        "task": purge_page_visits,
+        "description": "Anonymise then delete old page-visit rows",
+        "scheduled": True,
+        "hours_setting": "SCHEDULER_PURGE_PAGE_VISITS_HOURS",
     },
     "clear_expired_sessions": {
         "task": clear_expired_sessions,
