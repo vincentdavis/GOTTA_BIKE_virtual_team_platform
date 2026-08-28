@@ -20,7 +20,7 @@ from django_countries.fields import Country
 
 from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm
-from apps.accounts.models import User
+from apps.accounts.models import BlockedDiscordId, User
 from apps.accounts.services import delete_user_account
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import (
@@ -1120,6 +1120,90 @@ def _get_config_sections() -> dict:
 
 
 @login_required
+@require_POST
+def compliance_block_add(request: HttpRequest) -> HttpResponse:
+    """Bar a Discord account from signing in.
+
+    Args:
+        request: The HTTP request, carrying ``discord_id`` and an optional ``note``.
+
+    Returns:
+        Redirect back to the Compliance section.
+
+    Raises:
+        PermissionDenied: If the user lacks app_admin and is not a superuser.
+
+    """
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    discord_id = request.POST.get("discord_id", "").strip()
+    if not (discord_id.isascii() and discord_id.isdecimal()):
+        messages.error(request, "Enter a Discord ID: digits only, no username.")
+        return redirect("config_section_page", section_key="compliance")
+
+    if request.user.discord_id == discord_id:
+        # Cheap guard against the most annoying possible mistake.
+        messages.error(request, "That is your own Discord account.")
+        return redirect("config_section_page", section_key="compliance")
+
+    _, created = BlockedDiscordId.objects.get_or_create(
+        discord_id=discord_id,
+        defaults={"note": request.POST.get("note", "").strip(), "blocked_by": request.user},
+    )
+
+    # The block only bites at the next login, and sessions last two weeks by default — so
+    # end any session they already hold. Rotating the (unusable) password changes the
+    # session auth hash, which is what AuthenticationMiddleware checks on every request.
+    signed_out = False
+    if created:
+        blocked_user = User.objects.filter(discord_id=discord_id).first()
+        if blocked_user:
+            blocked_user.set_unusable_password()
+            blocked_user.save(update_fields=["password"])
+            signed_out = True
+
+    logfire.info(
+        "Discord login block added" if created else "Discord login block already existed",
+        discord_id=discord_id,
+        admin_user_id=request.user.pk,
+        sessions_invalidated=signed_out,
+    )
+    if created:
+        tail = " They have been signed out of any active session." if signed_out else ""
+        messages.success(request, f"{discord_id} can no longer sign in.{tail}")
+    else:
+        messages.info(request, f"{discord_id} was already blocked.")
+    return redirect("config_section_page", section_key="compliance")
+
+
+@login_required
+@require_POST
+def compliance_block_remove(request: HttpRequest) -> HttpResponse:
+    """Lift a login block.
+
+    Args:
+        request: The HTTP request, carrying ``block_id``.
+
+    Returns:
+        Redirect back to the Compliance section.
+
+    Raises:
+        PermissionDenied: If the user lacks app_admin and is not a superuser.
+
+    """
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    block = get_object_or_404(BlockedDiscordId, pk=request.POST.get("block_id") or 0)
+    discord_id = block.discord_id
+    block.delete()
+    logfire.info("Discord login block removed", discord_id=discord_id, admin_user_id=request.user.pk)
+    messages.success(request, f"{discord_id} can sign in again.")
+    return redirect("config_section_page", section_key="compliance")
+
+
+@login_required
 @require_GET
 def compliance_delete_confirm(request: HttpRequest) -> HttpResponse:
     """Show what deleting a chosen member's account would do, before it is done.
@@ -1277,6 +1361,7 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 # Everyone with an account, so an erasure request can be honoured for
                 # someone who has already lost their team role.
                 "deletable_users": User.objects.order_by("first_name", "last_name", "username"),
+                "blocked_logins": BlockedDiscordId.objects.select_related("blocked_by"),
                 "available_roles": [],
             },
         )

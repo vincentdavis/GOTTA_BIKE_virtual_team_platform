@@ -1179,3 +1179,66 @@ class YouTubeVideo(models.Model):
 
         """
         return f"https://www.youtube.com/watch?v={self.video_id}"
+
+
+class BlockedDiscordId(models.Model):
+    """A Discord account barred from signing in.
+
+    Checked in ``DiscordSocialAccountAdapter.pre_social_login``, before any account is
+    created or reconnected, so a blocked person is turned away whether or not they have
+    ever had an account here.
+
+    Keyed by Discord id rather than by ``User``: the point is to keep somebody out after
+    their account has been deleted, when there is no User row left to flag. It also means
+    a block survives them deleting and re-creating their account here.
+
+    Attributes:
+        discord_id: The Discord account id to refuse.
+        note: Why, for whoever reads this list months later.
+        blocked_by: Who added it.
+        created_at: When it was added.
+
+    """
+
+    discord_id = models.CharField(max_length=20, unique=True, help_text="Discord user ID to block")
+    note = models.CharField(max_length=200, blank=True, help_text="Why this account is blocked")
+    blocked_by = models.ForeignKey(
+        "User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="blocked_discord_ids",
+        help_text="Admin who added this block",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, help_text="When the block was added")
+
+    class Meta:
+        """Meta options for BlockedDiscordId."""
+
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        verbose_name = "Blocked Discord ID"
+        verbose_name_plural = "Blocked Discord IDs"
+
+    def __str__(self) -> str:
+        """Return the blocked id.
+
+        Returns:
+            The Discord id.
+
+        """
+        return self.discord_id
+
+    @classmethod
+    def is_blocked(cls, discord_id: str | int | None) -> bool:
+        """Whether this Discord account is barred from signing in.
+
+        Args:
+            discord_id: The Discord account id from the OAuth payload.
+
+        Returns:
+            True if a block exists for it.
+
+        """
+        if not discord_id:
+            return False
+        return cls.objects.filter(discord_id=str(discord_id)).exists()

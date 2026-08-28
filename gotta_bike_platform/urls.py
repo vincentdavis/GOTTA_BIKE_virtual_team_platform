@@ -21,6 +21,8 @@ from django.contrib import admin
 from django.urls import include, path
 
 from apps.accounts.views import (
+    compliance_block_add,
+    compliance_block_remove,
     compliance_delete_confirm,
     compliance_delete_user,
     config_section_page,
@@ -67,6 +69,8 @@ urlpatterns = [
     path("site/config/images/", config_site_images_update, name="config_site_images_update"),
     path("site/config/tasks/trigger/", config_trigger_task, name="config_trigger_task"),
     path("site/config/compliance/delete/", compliance_delete_user, name="compliance_delete_user"),
+    path("site/config/compliance/block/", compliance_block_add, name="compliance_block_add"),
+    path("site/config/compliance/unblock/", compliance_block_remove, name="compliance_block_remove"),
     path(
         "site/config/compliance/confirm/",
         compliance_delete_confirm,

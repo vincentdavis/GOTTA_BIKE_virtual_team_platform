@@ -227,10 +227,27 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             ImmediateHttpResponse: If guild membership or email verification fails.
 
         """
-        from apps.accounts.models import User
+        from apps.accounts.models import BlockedDiscordId, User
 
         extra_data = sociallogin.account.extra_data
         discord_id = extra_data.get('id')
+
+        # Refuse a blocked account before anything else. Deliberately ahead of the
+        # guild-membership check and of the discord_id reconnect below: neither should run
+        # for someone barred, and the block has to hold whether or not they still have an
+        # account here.
+        if BlockedDiscordId.is_blocked(discord_id):
+            logfire.warning(
+                "Blocked Discord account attempted to sign in",
+                discord_id=discord_id,
+                discord_username=extra_data.get("username"),
+            )
+            messages.error(
+                request,
+                "This Discord account cannot sign in. Contact a team admin if you think "
+                "this is a mistake.",
+            )
+            raise ImmediateHttpResponse(redirect("account_login"))
 
         # Log pre_social_login call
         logfire.info(

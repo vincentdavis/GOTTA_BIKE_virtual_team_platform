@@ -11,7 +11,7 @@ from django.shortcuts import redirect, render
 from django.urls import path
 from django.utils.html import format_html
 
-from apps.accounts.models import GuildMember, Permissions, User, YouTubeVideo
+from apps.accounts.models import BlockedDiscordId, GuildMember, Permissions, User, YouTubeVideo
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -485,3 +485,17 @@ class YouTubeVideoAdmin(admin.ModelAdmin):
         return obj.title
 
     title_truncated.short_description = "Title"  # type: ignore[attr-defined]
+
+
+@admin.register(BlockedDiscordId)
+class BlockedDiscordIdAdmin(admin.ModelAdmin):
+    """Read/write view of the login blocklist.
+
+    The Compliance section at /site/config/compliance/ is the normal way in; this exists so
+    a superuser can fix an entry without it.
+    """
+
+    list_display = ("discord_id", "note", "blocked_by", "created_at")
+    search_fields = ("discord_id", "note")
+    readonly_fields = ("created_at",)
+    autocomplete_fields = ("blocked_by",)

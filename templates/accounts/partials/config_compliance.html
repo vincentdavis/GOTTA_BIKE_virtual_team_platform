@@ -33,5 +33,70 @@
       way to restore the account afterwards.
     </span>
   </div>
+
+  <div class="divider"></div>
+
+  <div>
+    <h3 class="text-lg font-semibold">Blocked logins</h3>
+    <p class="text-sm text-base-content/70 mt-1">
+      Discord accounts listed here are refused at sign-in, whether or not they have an
+      account on this site. Blocking someone who is currently signed in also ends their
+      session. It does <strong>not</strong> remove them from the Discord server.
+    </p>
+  </div>
+
+  <form method="post" action="{% url 'compliance_block_add' %}" class="flex flex-wrap items-end gap-3">
+    {% csrf_token %}
+    <label class="form-control">
+      <span class="label-text mb-1">Discord ID</span>
+      <input type="text" name="discord_id" inputmode="numeric" pattern="[0-9]+" required
+             placeholder="123456789012345678"
+             class="input input-bordered input-sm w-64 font-mono" />
+    </label>
+    <label class="form-control grow">
+      <span class="label-text mb-1">Note <span class="text-base-content/50">(optional)</span></span>
+      <input type="text" name="note" maxlength="200" placeholder="Why this account is blocked"
+             class="input input-bordered input-sm w-full" />
+    </label>
+    <button type="submit" class="btn btn-error btn-outline btn-sm">Block</button>
+  </form>
+
+  {% if blocked_logins %}
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Discord ID</th>
+          <th>Note</th>
+          <th>Blocked by</th>
+          <th>Added</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for block in blocked_logins %}
+        <tr>
+          <td class="font-mono">{{ block.discord_id }}</td>
+          <td class="text-sm">{{ block.note|default:"&mdash;" }}</td>
+          <td class="text-sm">
+            {% if block.blocked_by %}{{ block.blocked_by.get_full_name|default:block.blocked_by.username }}
+            {% else %}&mdash;{% endif %}
+          </td>
+          <td class="text-sm whitespace-nowrap">{{ block.created_at|date:"M j, Y" }}</td>
+          <td class="text-right">
+            <form method="post" action="{% url 'compliance_block_remove' %}">
+              {% csrf_token %}
+              <input type="hidden" name="block_id" value="{{ block.pk }}" />
+              <button type="submit" class="btn btn-ghost btn-xs">Unblock</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-sm text-base-content/60">No blocked accounts.</p>
+  {% endif %}
 </div>
 {% include "events/_filter_select_script.html" %}
