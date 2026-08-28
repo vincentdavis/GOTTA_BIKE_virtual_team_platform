@@ -292,6 +292,71 @@ def _release_user_link(user, *, keep_pk: int | None = None) -> int:
     return len(rows)
 
 
+def delete_user_account(user, *, deleted_by=None) -> dict:
+    """Delete a user account and everything that goes with it.
+
+    Shared by the rider's own "Delete Account" page and the admin Compliance tool, so the
+    two cannot drift: an erasure carried out on somebody's behalf has to do exactly what
+    they would have got themselves.
+
+    Order matters. Verification photos are purged first, because RaceReadyRecord rows are
+    removed by Django's Collector -- which bulk-deletes and never calls ``Model.delete()``
+    -- and once the rows are gone the files are unreachable except by enumerating the
+    storage prefix. The upstream Zwift link is dropped next, since it lives in another
+    service and nothing here can reach it afterwards.
+
+    Neither of those is allowed to block the deletion. Refusing to erase somebody because
+    one blob is unreadable, or because an unrelated service is down, is the worse outcome;
+    the failures are recorded instead.
+
+    Args:
+        user: The account to delete.
+        deleted_by: The user carrying this out, when it is not the account holder.
+
+    Returns:
+        The audit record, already logged. Name and email are deliberately absent: the
+        person is being forgotten, and Logfire retention is not ours to control.
+        ``discord_id`` and ``zwid`` are kept because the records that outlive the account
+        (GuildMember, MembershipApplication, and the zwid-keyed ZwiftPower / Zwift Racing
+        tables) are keyed by them, so a later erasure request is unanswerable without them.
+
+    """
+    from apps.team.services import purge_user_verification_media
+    from apps.zwift import client as zwift_client
+
+    media = purge_user_verification_media(user)
+
+    # The zauth service holds its own record of the zwid-to-user link. Nothing in this
+    # database can reach it once the row is gone.
+    zauth_disconnected = None
+    if zwift_client.is_configured():
+        try:
+            zauth_disconnected = bool(zwift_client.disconnect(str(user.pk)))
+        except Exception as exc:
+            zauth_disconnected = False
+            logfire.error("Could not disconnect Zwift on account deletion", user_id=user.pk, error=str(exc))
+
+    audit = {
+        "user_id": user.pk,
+        "discord_id": user.discord_id,
+        "zwid": user.zwid,
+        "verification_records": user.race_ready_records.count(),
+        "event_signups": user.event_signups.count(),
+        "media_purged": media["purged"],
+        # Anything that failed is now genuinely orphaned, so the path is the only trace
+        # left of it -- see the orphaned-media sweep in TODO.md.
+        "media_purge_failed": media["failed"],
+        "orphaned_media_files": media["failed_files"],
+        "zauth_disconnected": zauth_disconnected,
+        "deleted_by_id": getattr(deleted_by, "pk", None),
+        "self_serve": deleted_by is None or deleted_by.pk == user.pk,
+    }
+
+    user.delete()
+    logfire.info("User account deleted", **audit)
+    return audit
+
+
 def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unknown") -> dict[str, int]:
     """Reconcile the GuildMember table against an authoritative member list.
 

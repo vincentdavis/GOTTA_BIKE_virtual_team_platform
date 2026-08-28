@@ -1,0 +1,37 @@
+{% comment %}
+  Compliance tools. First one: carry out an erasure request on a member's behalf, running
+  the same deletion their own profile page would.
+{% endcomment %}
+<div class="space-y-6">
+  <div>
+    <h3 class="text-lg font-semibold">Delete a member's account</h3>
+    <p class="text-sm text-base-content/70 mt-1">
+      For handling an erasure request from someone who cannot do it themselves. This runs
+      exactly what their own <strong>Delete Account</strong> button runs &mdash; the next
+      screen shows what it reaches and what it does not.
+    </p>
+  </div>
+
+  <form method="get" action="{% url 'compliance_delete_confirm' %}" class="flex flex-wrap items-end gap-3">
+    <label class="form-control w-full sm:w-96">
+      <span class="label-text mb-1">Member</span>
+      <select name="user_id" class="select select-bordered select-sm filter-select" required>
+        <option value="">Select a member…</option>
+        {% for u in deletable_users %}
+        <option value="{{ u.pk }}">
+          {{ u.get_full_name|default:u.username }}{% if u.discord_username %} — {{ u.discord_username }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn btn-error btn-outline btn-sm">Continue&hellip;</button>
+  </form>
+
+  <div class="alert alert-warning">
+    <span class="text-sm">
+      Account deletion is immediate and cannot be undone. There is no grace period and no
+      way to restore the account afterwards.
+    </span>
+  </div>
+</div>
+{% include "events/_filter_select_script.html" %}

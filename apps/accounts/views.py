@@ -12,7 +12,8 @@ from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django_countries.fields import Country
@@ -20,13 +21,13 @@ from django_countries.fields import Country
 from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm
 from apps.accounts.models import User
+from apps.accounts.services import delete_user_account
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import (
     build_verify_type_options,
     delete_verification_records,
     get_user_required_verification_types,
     get_user_verification_types,
-    purge_user_verification_media,
 )
 from apps.zwift import profile_fields
 
@@ -753,36 +754,10 @@ def profile_delete(request: HttpRequest) -> HttpResponse:
         return redirect("accounts:profile_delete_confirm")
 
     user = request.user
-
-    # Everything worth recording has to be gathered before the row goes away -- this is
-    # the only moment it is knowable. Deliberately excluded: name and email. The person
-    # is asking us to forget them, and Logfire retention is not ours to control.
-    # discord_id and zwid are kept because the records that outlive the account
-    # (GuildMember, MembershipApplication, and the zwid-keyed ZP/ZR tables) are keyed by
-    # them, so a later erasure request is unanswerable without them.
-    # The verification photos have to go before the cascade. RaceReadyRecord rows are
-    # removed by Django's Collector, which bulk-deletes and never calls Model.delete(), so
-    # nothing on the model can hook this -- and once the rows are gone the files are
-    # unreachable except by enumerating the storage prefix. A storage failure here is
-    # logged and counted rather than raised: the account still goes, because refusing to
-    # delete someone because one blob is unreadable is the worse outcome.
-    media = purge_user_verification_media(user)
-    audit = {
-        "user_id": user.pk,
-        "discord_id": user.discord_id,
-        "zwid": user.zwid,
-        "verification_records": user.race_ready_records.count(),
-        "event_signups": user.event_signups.count(),
-        "media_purged": media["purged"],
-        # Anything that failed is now genuinely orphaned, so the path is the only trace
-        # left of it -- see the orphaned-media sweep in TODO.md.
-        "media_purge_failed": media["failed"],
-        "orphaned_media_files": media["failed_files"],
-    }
-
+    # logout() before the delete: the session row is keyed to the user, and the request
+    # still needs a valid session to carry the success message to the next page.
     logout(request)
-    user.delete()
-    logfire.info("User account deleted", **audit)
+    delete_user_account(user)
     messages.success(request, "Your account has been deleted.")
     return redirect("/")
 
@@ -1146,6 +1121,84 @@ def _get_config_sections() -> dict:
 
 @login_required
 @require_GET
+def compliance_delete_confirm(request: HttpRequest) -> HttpResponse:
+    """Show what deleting a chosen member's account would do, before it is done.
+
+    Deliberately a separate page rather than a modal on the picker: choosing the wrong
+    person from a long list is the likeliest way this goes wrong, so the account is named
+    on its own screen alongside the same effects the rider would see themselves.
+
+    Args:
+        request: The HTTP request, carrying ``user_id``.
+
+    Returns:
+        The confirmation page.
+
+    Raises:
+        PermissionDenied: If the user lacks app_admin and is not a superuser.
+
+    """
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    target = get_object_or_404(User, pk=request.GET.get("user_id") or 0)
+    return render(
+        request,
+        "accounts/config_compliance_confirm.html",
+        {"target": target, "sections": _get_config_sections(), "current_section_key": "compliance"},
+    )
+
+
+@login_required
+@require_POST
+def compliance_delete_user(request: HttpRequest) -> HttpResponse:
+    """Delete another member's account, as if they had done it themselves.
+
+    Runs the same ``delete_user_account`` service the rider's own page uses, so an erasure
+    carried out on someone's behalf reaches exactly what theirs would.
+
+    Confirmation is the target's username rather than the word "Delete" used on the
+    self-serve page. The risk here is different: the rider deleting their own account
+    cannot pick the wrong person, and an admin working from a list of hundreds can.
+
+    Args:
+        request: The HTTP request, carrying ``user_id`` and ``confirmation``.
+
+    Returns:
+        Redirect back to the Compliance section.
+
+    Raises:
+        PermissionDenied: If the user lacks app_admin and is not a superuser.
+
+    """
+    if not request.user.is_superuser and not request.user.is_app_admin:
+        raise PermissionDenied("You don't have permission to access this page.")
+
+    target = get_object_or_404(User, pk=request.POST.get("user_id") or 0)
+
+    if request.POST.get("confirmation", "").strip() != target.username:
+        logfire.info(
+            "Admin account deletion not confirmed",
+            target_user_id=target.pk,
+            admin_user_id=request.user.pk,
+        )
+        messages.error(request, f"Type the username {target.username} exactly to confirm.")
+        return redirect(f"{reverse('compliance_delete_confirm')}?user_id={target.pk}")
+
+    if target.pk == request.user.pk:
+        # Not forbidden as such, but the self-serve page logs the actor out afterwards and
+        # this one does not -- so send them there rather than leave a dead session behind.
+        messages.error(request, "Use your own profile page to delete your own account.")
+        return redirect("accounts:profile_delete_confirm")
+
+    label = target.get_full_name() or target.username
+    delete_user_account(target, deleted_by=request.user)
+    messages.success(request, f"Deleted the account for {label}.")
+    return redirect("config_section_page", section_key="compliance")
+
+
+@login_required
+@require_GET
 def config_settings(request: HttpRequest) -> HttpResponse:
     """Redirect to first configuration section.
 
@@ -1207,6 +1260,23 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "zp_emoji_items": _build_zp_emoji_items(site_settings_obj),
                 "zr_emoji_items": _build_zr_emoji_items(site_settings_obj),
                 "phenotype_emoji_items": _build_phenotype_emoji_items(site_settings_obj),
+                "available_roles": [],
+            },
+        )
+
+    # Handle special "compliance" section
+    if section_key == "compliance":
+        return render(
+            request,
+            "accounts/config_section_page.html",
+            {
+                "sections": sections,
+                "current_section_key": section_key,
+                "current_section": {"name": "Compliance", "key": "compliance"},
+                "is_compliance": True,
+                # Everyone with an account, so an erasure request can be honoured for
+                # someone who has already lost their team role.
+                "deletable_users": User.objects.order_by("first_name", "last_name", "username"),
                 "available_roles": [],
             },
         )

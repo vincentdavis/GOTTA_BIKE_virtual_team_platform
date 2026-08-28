@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Delete account - Compliance{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'config_section_page' 'compliance' %}" class="link link-primary text-sm">&larr; Back to Compliance</a>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h2 class="card-title text-2xl text-error mb-2">Delete this account?</h2>
+
+      <div class="alert alert-error mb-4">
+        <div>
+          <p class="font-bold">{{ target.get_full_name|default:target.username }}</p>
+          <p class="text-sm">
+            Username <span class="font-mono">{{ target.username }}</span>
+            {% if target.discord_username %} &middot; Discord {{ target.discord_username }}{% endif %}
+            {% if target.zwid %} &middot; Zwift ID {{ target.zwid }}{% endif %}
+          </p>
+        </div>
+      </div>
+
+      <p class="text-sm text-base-content/70 mb-4">
+        This runs exactly what this member's own <strong>Delete Account</strong> button runs.
+        It happens immediately and cannot be undone.
+      </p>
+
+      {% include "accounts/partials/_deletion_effects.html" with subject=target %}
+
+      <form method="post" action="{% url 'compliance_delete_user' %}" class="mt-4">
+        {% csrf_token %}
+        <input type="hidden" name="user_id" value="{{ target.pk }}">
+        <div class="form-control mb-4">
+          <label class="label" for="confirmation">
+            {% comment %}
+              The username rather than the word "Delete": the risk here is picking the
+              wrong person out of a long list, which typing a fixed word does nothing to
+              catch.
+            {% endcomment %}
+            <span class="label-text">
+              Type <strong class="font-mono">{{ target.username }}</strong> to confirm:
+            </span>
+          </label>
+          <input type="text" id="confirmation" name="confirmation" required autocomplete="off"
+                 class="input input-bordered input-error" placeholder="{{ target.username }}">
+        </div>
+        <div class="flex gap-3">
+          <button type="submit" class="btn btn-error">Delete this account</button>
+          <a href="{% url 'config_section_page' 'compliance' %}" class="btn btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

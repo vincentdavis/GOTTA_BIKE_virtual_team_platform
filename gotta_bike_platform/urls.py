@@ -21,6 +21,8 @@ from django.contrib import admin
 from django.urls import include, path
 
 from apps.accounts.views import (
+    compliance_delete_confirm,
+    compliance_delete_user,
     config_section_page,
     config_section_update,
     config_settings,
@@ -64,6 +66,12 @@ urlpatterns = [
     # Note: specific routes must come before the generic <str:section_key> pattern
     path("site/config/images/", config_site_images_update, name="config_site_images_update"),
     path("site/config/tasks/trigger/", config_trigger_task, name="config_trigger_task"),
+    path("site/config/compliance/delete/", compliance_delete_user, name="compliance_delete_user"),
+    path(
+        "site/config/compliance/confirm/",
+        compliance_delete_confirm,
+        name="compliance_delete_confirm",
+    ),
     path("site/config/markdown-preview/", markdown_preview, name="markdown_preview"),
     path("site/config/section/<str:section_key>/update/", config_section_update, name="config_section_update"),
     path("site/config/<str:section_key>/", config_section_page, name="config_section_page"),

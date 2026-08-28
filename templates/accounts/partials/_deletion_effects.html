@@ -1,0 +1,49 @@
+{% comment %}
+  What account deletion does and does not reach. Shared by the rider's own delete page and
+  the admin Compliance tool so the two cannot drift -- an erasure carried out on someone's
+  behalf must describe exactly what they would have got themselves.
+
+  Optional `subject` names the person when an admin is reading it ("their profile" rather
+  than "your profile"); omit it for the self-serve page.
+{% endcomment %}
+        <h3 class="font-semibold mb-2">What is deleted</h3>
+        <ul class="list-disc list-inside mb-6 text-sm text-base-content/80 space-y-1">
+          <li>{% if subject %}Their {% else %}Your {% endif %}profile — name, birth year, gender, country, timezone, email, equipment and social links</li>
+          <li>{% if subject %}Their {% else %}Your {% endif %}Discord sign-in link, and two-factor authentication if you set it up</li>
+          <li>{% if subject %}Their {% else %}Your {% endif %}Race Verified records, including the weight, height and FTP measurements on them,
+            and the verification photos and videos {% if subject %}they uploaded{% else %}you uploaded{% endif %} as evidence</li>
+          <li>{% if subject %}Their {% else %}Your {% endif %}event signups and answers to signup questions, availability responses, squad memberships,
+            race registrations and DS assignments</li>
+          <li>{% if subject %}Their {% else %}Your {% endif %}API keys and any login links issued to you</li>
+          <li>TTT plans, ladder matchups and Google Sheets data connections you created</li>
+          <li>YouTube videos of yours shown on the Team Feed</li>
+        </ul>
+
+        <h3 class="font-semibold mb-2">What we keep</h3>
+        <p class="text-sm text-base-content/70 mb-2">
+          Deleting {% if subject %}their {% else %}your {% endif %}account here does not reach everything. These are kept:
+        </p>
+        <ul class="list-disc list-inside mb-2 text-sm text-base-content/80 space-y-1">
+          <li><strong>{% if subject %}Their {% else %}Your {% endif %}Discord server membership record</strong> — Discord ID, username, nickname, roles
+            and join date. This tracks the Discord server itself, not {% if subject %}their {% else %}your {% endif %}account here.</li>
+          <li><strong>{% if subject %}Their {% else %}Your {% endif %}membership registration</strong> — the form you filled in when {% if subject %}they joined{% else %}you joined{% endif %}, which
+            holds {% if subject %}their {% else %}your {% endif %}name, email, birth year, gender, country and Zwift ID.</li>
+          <li><strong>{% if subject %}Their {% else %}Your {% endif %}ZwiftPower and Zwift Racing data</strong> — race results, weight, height, power and
+            heart rate. This comes from those services and is tied to {% if subject %}their {% else %}your {% endif %}Zwift ID, not to this account.
+            The same is true of Strava club activities.</li>
+          <li><strong>Support tickets you opened</strong>, and anything you created for the team — events,
+            squads, availability sheets, verification reviews you carried out. These stay, with {% if subject %}their {% else %}your {% endif %}name
+            removed from them.</li>
+          <li><strong>Page visit logs</strong>, including IP address, with {% if subject %}their {% else %}your {% endif %}name removed.</li>
+          <li><strong>{% if subject %}Their {% else %}Your {% endif %}Zwift connection</strong> is not disconnected automatically. Disconnect it from
+            {% if subject %}their {% else %}your {% endif %}profile first if {% if subject %}you want{% else %}you want{% endif %} that undone.</li>
+        </ul>
+        <p class="text-sm text-base-content/70 mb-6">
+          If {% if subject %}you want{% else %}you want{% endif %} any of the above removed as well, ask a team admin
+          {% if config.DISCORD_URL and config.DISCORD_URL != "#" %}
+            on <a href="{{ config.DISCORD_URL }}" target="_blank" rel="noopener"
+                  class="link link-primary">Discord</a>
+          {% endif %}
+          before deleting {% if subject %}their {% else %}your {% endif %}account — it is much harder for us to find {% if subject %}their {% else %}your {% endif %}data afterwards.
+        </p>
+

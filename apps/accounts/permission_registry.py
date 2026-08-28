@@ -12,6 +12,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "description": "Full application administration access",
         "views": [
             "/site/config/ - Site configuration settings",
+            "/site/config/compliance/ - Compliance tools, incl. deleting a member's account on request",
         ],
     },
     Permissions.TEAM_CAPTAIN: {
