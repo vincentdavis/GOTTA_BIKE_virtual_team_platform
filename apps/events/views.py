@@ -76,6 +76,13 @@ from apps.zwiftracing.models import ZRRider
 
 CATEGORY_COLUMNS = ["A+", "A", "B", "C", "D", "E"]
 
+# Upper bound for the numeric availability answers. Both are counts bounded by a year --
+# more races than days, or more rest than a year between them, is a typo. It also keeps
+# the value inside the column: max_races and rest_days are PositiveSmallIntegerField,
+# i.e. Postgres smallint, so anything over 32767 used to arrive as "smallint out of
+# range" and 500 the rider's submit.
+MAX_AVAILABILITY_ANSWER = 365
+
 
 def _is_event_coordinator(user: User, event: Event) -> bool:
     """Check if a user holds one of the event's regional/group coordinator roles.
@@ -5290,29 +5297,29 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
 
         defaults = {"available_cells": available_cells}
 
-        if grid.max_races_question:
-            raw_max = data.get("max_races")
-            if raw_max is None or raw_max == "":
-                return JsonResponse({"error": "Please answer: max number of races."}, status=400)
+        for field, asked, prompt, noun in (
+            ("max_races", grid.max_races_question, "max number of races", "Max races"),
+            ("rest_days", grid.rest_days_question, "rest days between races", "Rest days"),
+        ):
+            if not asked:
+                continue
+            raw = data.get(field)
+            if raw is None or raw == "":
+                return JsonResponse({"error": f"Please answer: {prompt}."}, status=400)
             try:
-                max_races_val = int(raw_max)
+                value = int(raw)
             except ValueError, TypeError:
-                return JsonResponse({"error": "Max races must be a non-negative integer."}, status=400)
-            if max_races_val < 0:
-                return JsonResponse({"error": "Max races must be a non-negative integer."}, status=400)
-            defaults["max_races"] = max_races_val
-
-        if grid.rest_days_question:
-            raw_rest = data.get("rest_days")
-            if raw_rest is None or raw_rest == "":
-                return JsonResponse({"error": "Please answer: rest days between races."}, status=400)
-            try:
-                rest_days_val = int(raw_rest)
-            except ValueError, TypeError:
-                return JsonResponse({"error": "Rest days must be a non-negative integer."}, status=400)
-            if rest_days_val < 0:
-                return JsonResponse({"error": "Rest days must be a non-negative integer."}, status=400)
-            defaults["rest_days"] = rest_days_val
+                return JsonResponse({"error": f"{noun} must be a whole number."}, status=400)
+            # The upper bound is the point: these columns are PositiveSmallIntegerField,
+            # so anything over 32767 reached Postgres as "smallint out of range" and 500'd
+            # the submit. A mistyped number on a phone was enough. The limit below is far
+            # beyond any real answer, so it reads as a typo check rather than a rule.
+            if not 0 <= value <= MAX_AVAILABILITY_ANSWER:
+                return JsonResponse(
+                    {"error": f"{noun} must be between 0 and {MAX_AVAILABILITY_ANSWER}."},
+                    status=400,
+                )
+            defaults[field] = value
 
         AvailabilityResponse.objects.update_or_create(
             grid=grid,

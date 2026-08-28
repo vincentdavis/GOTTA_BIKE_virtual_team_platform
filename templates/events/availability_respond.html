@@ -114,7 +114,7 @@
         <label class="label" for="q-max-races">
           <span class="label-text">What is the max number of races you would like to do? <span class="text-error">*</span></span>
         </label>
-        <input type="number" id="q-max-races" min="0" step="1" class="input input-bordered input-sm w-32"
+        <input type="number" id="q-max-races" min="0" max="365" step="1" class="input input-bordered input-sm w-32"
                {% if existing_max_races is not None %}value="{{ existing_max_races }}"{% endif %}>
       </div>
       {% endif %}
@@ -123,7 +123,7 @@
         <label class="label" for="q-rest-days">
           <span class="label-text">How many days rest between races do you require? <span class="text-error">*</span></span>
         </label>
-        <input type="number" id="q-rest-days" min="0" step="1" class="input input-bordered input-sm w-32"
+        <input type="number" id="q-rest-days" min="0" max="365" step="1" class="input input-bordered input-sm w-32"
                {% if existing_rest_days is not None %}value="{{ existing_rest_days }}"{% endif %}>
       </div>
       {% endif %}
