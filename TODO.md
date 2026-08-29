@@ -326,7 +326,16 @@ self-serve view and an admin action — deletion spread across a view body is ho
 Full plan, audit results and per-page checklist: **[docs/accessibility.md](docs/accessibility.md)**.
 Target is WCAG 2.2 AA. 123 audited findings; 9 blockers.
 
-- [ ] **Phase 0 - shell and shared components** (8 files, clears 4 of the 9 blockers)
+- [ ] **Phase 0 - shell and shared components**, in four independently-shippable commits
+      (safe wins / focus indicator / sidebar / skip link + drawer)
+- [ ] **Colour-token sweep** - promoted out of Phase 0: 387 edits across 94 templates plus 3
+      Python files that emit the class from `mark_safe`
+- [ ] **Finish the daisyUI 4 -> 5 form migration** - promoted out of Phase 0. `form-control`,
+      `label-text` and `label-text-alt` have zero rules in the v5 build but ~1,400 uses in
+      templates; v5's `fieldset`/`legend`/`label` is natively the accessible pattern, so this
+      migration and the form-accessibility fix are the same job
+- [ ] Give help-text elements `id="{{ field.auto_id }}_helptext"` - Django 6.1 already emits 177
+      `aria-describedby` attributes and every one points at an element no template creates
 - [ ] **Phase 1 - pytest a11y guards with a shrink-only baseline** (no CI exists; pytest is the
       only enforcement point that runs)
 - [ ] **Phase 2 - page by page**, public registration form first

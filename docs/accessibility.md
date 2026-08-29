@@ -111,114 +111,130 @@ so Phase 0's real reach is considerably wider than that number suggests.
 
 ## Phase 0 — the shell and shared components
 
-Eight files. Do them in this order; each is independently shippable.
+> **Revised after an adversarial risk review.** The first draft of this section was wrong in
+> several places; the corrections are inline below and marked. Read `docs/accessibility.md` at
+> commit `19ee62b` for the original if you want the diff.
 
-### 0.1 `theme/templates/base.html`
+Phase 0 is **not one unit of work**. It is four kinds of work, and two of the items are large
+enough to be their own phases. Ship in this order — each numbered group is one commit that can be
+deployed, eyeballed and reverted on its own.
 
-- [ ] **Skip link.** First child of `<body>`, before the announcement banner:
-      `<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 btn btn-primary btn-sm">Skip to content</a>`.
-      Give `<main>` `id="main-content" tabindex="-1"`. Tailwind ships `sr-only`/`not-sr-only`
-      natively — this is the first use anywhere in the repo, which is why the utility is
-      currently absent from the build.
-- [ ] **Drawer triggers.** The hamburger (line ~164) and the mobile "More" button (~450) are
-      `<label for="main-drawer">` elements; the only focusable control is a 0×0, `opacity:0`
-      checkbox with no name, role or state. Replace both with real
-      `<button type="button" aria-controls="main-drawer-side" aria-expanded="false" aria-label="Open navigation menu">`,
-      driven by a small script that toggles the checkbox, mirrors `aria-expanded`, moves focus
-      into the drawer on open, returns it to the trigger on close, and closes on Escape. Keep
-      the checkbox for daisyUI's CSS but give it `tabindex="-1" aria-hidden="true"`.
-      **Below 1024px this is the only route to the entire sidebar**, so today a keyboard user on
-      a phone can reach nothing beyond the four bottom-bar links.
-- [ ] **Race Verified badge** — give the six empty-badge fallbacks real text (visually hidden is
-      fine) and the emoji `<img>` variants a meaningful `alt`.
-- [ ] **Icon-only controls** — 25 of them across 14 files have no accessible name; the header's
-      are here.
-- [ ] **Toast region.** It is created and filled in the same tick, so HTMX-triggered messages are
-      not reliably announced. Ship an empty `aria-live="polite"` container in the base document
-      and inject text into it. Separately, the 5-second auto-dismiss has no pause/extend
-      (2.2.1) — either lengthen it substantially or pause on hover/focus.
-- [ ] **Mobile bottom nav** marks the current tab with `text-primary` alone (colour-only, and
-      3.40:1 in dark). Add `aria-current="page"` and a non-colour indicator.
+### Two facts that shape everything below
 
-### 0.2 `theme/templates/sidebar.html`
+**1. The daisyUI 4 form classes are dead.** `form-control`, `label-text` and `label-text-alt` have
+**zero rules** in the compiled daisyUI 5 CSS, yet they appear 379, 713 and 304 times in the
+templates. The form markup is stranded daisyUI 4 that survived the v5 upgrade; it looks correct
+today only because of the Tailwind utilities sitting beside it. daisyUI 5's replacement is
+`<fieldset class="fieldset">` + `<legend class="fieldset-legend">` + `<label class="label">` —
+which is *natively* the accessible pattern. **The form accessibility fix and the finish-the-v5-
+migration job are the same job.**
 
-- [ ] Wrap in `<nav id="main-drawer-side" aria-label="Main">` — it is a bare `<aside>` today, so
-      40 nav links are announced as a *complementary* region. Rename the mobile bar's label from
-      "Primary" so the two navigation landmarks are distinguishable.
-- [ ] Replace the 40 dead `active` classes with `menu-active` **and** `aria-current="page"`.
+**2. Django is already emitting `aria-describedby`, and every reference dangles.** Django 6.1's
+`BoundField.build_widget_attrs()` adds `aria-describedby="id_<field>_helptext"` automatically:
+**16 forms emit 177 of them**, and the templates create **zero** of the target ids. So the fix is
+not "add `aria-describedby`" — it is "give the help-text element the id Django already points at".
+That is a far smaller change than a partial migration, and it can be done at the help-text render
+site.
 
-### 0.3 A shared form-field partial — the biggest single win
+Corollary: **a `{% include %}` partial cannot do the job the first draft assigned it.**
+`aria-describedby` and `aria-invalid` are built in Python; a template cannot inject attributes into
+`{{ field }}`'s rendered output, and there is no `django-widget-tweaks` in this project.
 
-Create one partial (`templates/shared/_field.html`) that renders label + control + help + error
-with the wiring done once, and migrate forms to it. It fixes, in one place:
+### Group A — safe, reversible, no JS (one commit)
 
-- 749 labels with no `for=` (the sibling-`<span>` idiom)
-- 178 error blocks across 16 files that are orphan `<label>` elements, unconnected to their input
-  → needs `aria-describedby` + `aria-invalid`
-- 95 help texts across 14 files, likewise floating free
-- required state signalled only by a red asterisk
-- `text-error` at 2.87:1 in the light theme (177 uses across 18 files)
+- [ ] Race Verified: replace the 6 empty coloured badges in `base.html` with real text; give the
+      emoji `<img>` variants a meaningful `alt`.
+- [ ] Accessible names on the 25 icon-only controls across 14 files.
+- [ ] `aria-current="page"` on the mobile bottom nav (3 anchors, `base.html:435`).
+- [ ] Footer nav landmark label.
+- [ ] Global `prefers-reduced-motion` rule (item 0.8).
 
-Then, separately: **no `<fieldset>`/`<legend>` exists anywhere in the codebase** (0 files), so
-every radio and checkbox group — gender, equipment, the agreement checkboxes, the Role Setup
-lists — is ungrouped. And `autocomplete` appears 5 times total; name, email and country fields
-need it (1.3.5).
+### Group B — the focus indicator (one commit, do before any keyboard work)
 
-### 0.4 `templates/events/_filter_select_script.html`
+**Correction:** the first draft said there is no focus indicator. That was a miscount — a `grep -c`
+on a minified file counts *lines*, not matches. daisyUI ships **44** `focus-visible` rules,
+including `.btn:focus-visible{outline-width:2px;outline-style:solid}`. The real defect is narrower:
+`.btn` sets `outline-color: var(--btn-color, var(--color-base-content))`, so the ring takes the
+button's own colour and is low-contrast on several variants.
 
-Blocker. Options, cheapest first:
+- [ ] Raise the outline contrast where it fails, rather than adding a ring that does not exist.
+- [ ] **A low-specificity global rule will lose the cascade to daisyUI**, which explicitly sets
+      `outline-style:none` on menu items and substitutes a background tint. Any global rule needs
+      to be specific enough to win on `.menu` items, or those stay unringed — precisely the surface
+      Groups C and D are making keyboard-reachable.
 
-1. **Delete it.** The native `<select>` it replaces is fully accessible and already searchable by
-   typing in every browser. The enhancement buys filtering on long lists and costs keyboard users
-   the control entirely.
-2. Keep the native `<select>` visible and focusable and add filtering *around* it rather than
-   replacing it.
-3. Build a real combobox: `role="combobox"`, `aria-expanded`, `aria-controls`, `aria-activedescendant`,
-   `role="listbox"`/`role="option"` rows, arrow-key navigation, Enter to select, Escape to close,
-   a label on the input, and a live region for the result count. This is the APG combobox pattern
-   and it is a genuine piece of work.
+### Group C — the sidebar (one commit)
 
-Recommendation: **option 1 or 2.** Option 3 is only worth it if the long-list filtering is
-load-bearing on the planner pages.
+**Correction: this is not the trivial item the first draft claimed.** Three traps:
 
-### 0.5 Colour tokens — `theme/static_src/src/styles.css`
+- [ ] **Do not wrap the `<aside>` in a `<nav>`.** daisyUI slides `.drawer-side > :not(.drawer-overlay)`
+      and `:where(.drawer-side){overflow:hidden}`. A new wrapper becomes the sliding element, the
+      `<aside>`'s `h-full` then resolves against an auto-height parent, its `overflow-y-auto` stops
+      working, and the long admin sidebar is clipped. **Retag the `<aside>` itself as `<nav>`**, or
+      put the `<nav>` *inside* it around the `<ul>`.
+- [ ] **`menu-active` is a visible product change, not a subtle one.** It paints a solid
+      `--menu-active-bg` pill — near-black on the light sidebar. Decide whether you want that look
+      before shipping 40 of them. It is already present in the committed CSS (28 rules), so this
+      needs no Tailwind rebuild.
+- [ ] **`aria-current="page"` cannot simply reuse the existing conditions.** 11 of them are
+      unguarded substring tests on `request.path`, and they overlap: on `/site/config/strava/`
+      **two** items match (the top-level Strava link and the config-section link). Two
+      `aria-current="page"` on one page is a new defect. Tighten the conditions first — they have
+      never been tested, because `.active` has been dead CSS since the v5 upgrade.
 
-- [ ] `text-base-content/50` — 217 uses across 78 files — is 3.38:1 in light. Fails.
-- [ ] `/30` (132 uses, 29 files) and `/40` (38 uses, 23 files) fail in **both** themes. These are
-      the site's standard empty-cell placeholder.
-      Fix at the token level: pick the lowest opacity step that clears 4.5:1 in both themes and
-      sweep the codebase onto it. Do not fix these per page.
-- [ ] **Focus indicator.** daisyUI's default outline is `currentColor`, which is invisible on
-      about half the button variants in each theme, and nothing in the repo overrides it. There
-      are zero uses of `focus-visible` site-wide. Add one global `:focus-visible` rule with a
-      3:1 outline against both themes — this is a single rule that fixes focus visibility
-      everywhere, and it is a prerequisite for every keyboard fix below being testable.
+### Group D — skip link and drawer (one commit, most care)
 
-### 0.6 The shared table pattern
+- [ ] **Skip link.** `sr-only` and `not-sr-only` have **zero** occurrences in the committed
+      compiled CSS, because nothing uses them. Until `manage.py tailwind build` runs, the skip link
+      renders as a **permanently visible button on every page**. Production is safe — the
+      `Dockerfile` runs `tailwind build` — but the committed artifact is 59 commits stale, so the
+      local eyeball check (this repo's only QA) will show the wrong thing. Rebuild before judging.
+- [ ] **The drawer keyboard path already works today.** daisyUI renders the toggle as
+      `appearance:none;opacity:0;width:0;height:0;position:fixed` — *not* `display:none` — so the
+      checkbox is in the tab order and Space opens the drawer with zero JavaScript. It is unnamed
+      and unringed, not absent. **Never ship `tabindex="-1"` on it as a template attribute**: that
+      deletes the working path in the same commit that adds a JS-only replacement. Render today's
+      `<label>` in HTML, and let the script set `checkbox.tabIndex = -1` itself *after* it has
+      successfully bound its handlers.
+- [ ] **There are three triggers, not two.** The third is the click-outside overlay
+      (`base.html:462`), which toggles the checkbox with no JS event at all. Drive all state from a
+      single `change` listener on `#main-drawer`, never from `click` on the button — that one
+      choice covers the overlay, Escape, and focus return for free.
+- [ ] **Focusing into the drawer on open is a silent no-op.** `.drawer-side` is
+      `visibility:hidden` with a 0.1s transition delay, and hidden elements cannot take focus — not
+      even after `requestAnimationFrame`. Wait for `transitionend`. **This bug is masked by
+      reduced motion**, so it will appear to work for anyone testing with it on, and fail for
+      everyone else.
+- [ ] Toast region. Note there are **three** independent toast systems, not one: the shell's, and
+      one on each availability grid page. Fixing the shell does not fix those, and they are the
+      last thing scheduled in Phase 2.
 
-Applies to `roster.html`, `event_detail.html`, `discord_roles.html`, the availability grids, and
-three more — 7 templates with 97 click-sortable `<th>` elements:
+### Promoted out of Phase 0
 
-- [ ] Sortable headers are bare `<th onclick>` — not focusable, no role, no key handler. Put a
-      real `<button>` inside the `<th>`.
-- [ ] `aria-sort` appears **0 times** in the repo; direction is conveyed by a ▲/▼ glyph alone.
-- [ ] `scope="col"`/`scope="row"` is absent; several matrices use a `<td>` for the row name, so
-      cells have no row header at all.
-- [ ] Live-filtered tables (signup search, answer facets) change row counts silently — needs a
-      live region reporting "N of M shown".
+**The colour sweep** (was 0.5) is 387 edits across 94 templates **plus three Python files** that
+emit the class from `mark_safe` strings — a template-only sweep leaves those live, and a
+template-only Phase 1 guard would pass while the banned class still ships. Also: the plan never
+named the replacement step, and the obvious pick is wrong — `/60` clears 4.5:1 on `base-100` and
+`base-200` but lands at **4.42:1 on `base-300`**, and 123 templates put content on
+`card bg-base-200/300`. Pick the step against the *worst* background, not the common one.
+→ **Its own phase.**
 
-### 0.7 `apps/zwift_data/static/zwift_data/chart.css` and the SVG charts
+**The form work** (was 0.3) is the daisyUI 4→5 migration described above, and it is large:
+213 of 280 `label-text` bodies are hand-written strings that do **not** match the field's label,
+so a partial rendering `{{ field.label }}` would silently rewrite them; 16 bound fields across 6
+forms are group widgets whose `id_for_label` is `""`, so `for="{{ field.id_for_label }}"` would emit
+`for=""` — an invalid reference axe flags, i.e. the migration would *introduce* a defect; and 307
+hand-written `<input>` tags across 70 files have no Django form behind them at all, so a partial
+cannot reach them and the work would look done while most inputs stayed broken.
+→ **Its own phase, sequenced after the colour sweep.**
 
-- [ ] Fix the light-theme contrast (blocker) and correct the CLAUDE.md claim.
-- [ ] The generated elevation profile and route map are inline SVG with no name and no text
-      alternative. Minimum: `role="img"` + an `aria-label` summarising the route. Better: an
-      adjacent, visually-hidden data table of the key figures.
-
-### 0.8 `prefers-reduced-motion`
-
-Zero uses site-wide. One global media query that disables transitions and animations.
-
----
+**`filter-select`** (was 0.4): **deleting it is ruled out.** It is `{% include %}`d from 5
+templates, and a missing include raises `TemplateDoesNotExist` at *render* time — so deletion 500s
+five pages and fails 5 tests. It also exists for a documented reason: there are **341** cycling
+routes, and a flat `<select>` of 341 options is genuinely unusable.
+→ **Keep the enhancement; make it accessible.** The minimal fix is to stop hiding the native
+`<select>` (`select.style.display = 'none'`, line 17) so it keeps its label, its focus and its
+keyboard behaviour, and layer filtering around it rather than over it.
 
 ## Phase 1 — the ratchet
 
