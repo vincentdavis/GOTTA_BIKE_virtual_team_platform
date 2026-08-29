@@ -1,38 +1,60 @@
 {% comment %}
-  Keeps the rider hover-card out of its scroll container.
+  Gets the rider hover-card out of the table it is trapped in.
 
-  daisyUI positions .dropdown-content with `position: absolute`, so any ancestor with an
-  overflow other than `visible` clips it. Nearly every table on the site is wrapped in
-  `overflow-x-auto` -- and CSS forces the other axis to `auto` too, so those wrappers clip
-  vertically as well. The card is then cut off for the last rows of every long table.
-  z-index cannot help: the card is being clipped, not painted underneath.
+  Two separate things bury it, and they need different fixes:
 
-  So on hover/focus we re-point the card at the viewport instead. No CSS is involved: daisyUI
-  still owns showing and hiding it, and with JS off the behaviour is exactly what it was.
+  1. Clipping. daisyUI positions .dropdown-content with `position: absolute`, and nearly
+     every table sits in an `overflow-x-auto` wrapper. CSS will not let one axis scroll
+     while the other overflows, so those wrappers clip vertically too and the card is cut
+     off for the last rows of a long table.
 
-  Listeners are delegated from the document, so cards inside an HTMX swap work with no re-init.
-  Included once from base.html -- not from the partial, which renders many times per page.
+  2. Stacking. Tables using `table-pin-col` make every first cell `position: sticky` with
+     `z-index: 5` (responsive-tables.css). That cell is a stacking context, and the card
+     lives inside one. Its own `z-index: 999` only competes *within* that cell, so the next
+     row's cell -- same z-index, later in the DOM -- paints straight over it. No z-index on
+     the card can fix this, and neither can `position: fixed`: fixed elements escape
+     overflow, not stacking contexts.
+
+  Only the top layer escapes both, so the card is promoted to a popover on hover and
+  positioned against the viewport. The `popover` attribute is added by script rather than
+  sitting in the markup: with JS off the card keeps daisyUI's CSS-only hover instead of
+  becoming permanently invisible.
+
+  Listeners are delegated from the document, so cards arriving in an HTMX swap need no
+  re-init. Included once from base.html -- not from the partial, which renders per rider.
 {% endcomment %}
 <script>
 (function () {
-  var GAP = 8;          // matches daisyUI's .dropdown-content margin-top: .5rem
-  var EDGE = 8;         // keep this far from the viewport edge
-  var open = null;      // the .dropdown-content currently re-pointed
+  var GAP = 8;    // matches daisyUI's .dropdown-content margin-top: .5rem
+  var EDGE = 8;   // keep this far from the viewport edge
+  var TOP_LAYER = typeof HTMLElement !== 'undefined' && !!HTMLElement.prototype.showPopover;
+  var open = null;
 
   function panelOf(wrap) { return wrap.querySelector(':scope > .dropdown-content'); }
 
-  function place(wrap) {
+  function show(wrap) {
     var panel = panelOf(wrap);
     if (!panel) return;
     var trigger = wrap.firstElementChild;
     if (!trigger || trigger === panel) return;
 
-    // Reading offsetHeight flushes style, so the panel is measurable as soon as :hover applies.
+    if (TOP_LAYER) {
+      if (!panel.hasAttribute('popover')) panel.setAttribute('popover', 'manual');
+      if (!panel.matches(':popover-open')) {
+        try { panel.showPopover(); } catch (e) { return; }
+      }
+      // The UA centres popovers with inset:0 + margin:auto; we place them ourselves.
+      panel.style.inset = 'auto';
+      panel.style.opacity = '1';
+      panel.style.scale = '1';
+    }
     panel.style.position = 'fixed';
     panel.style.margin = '0';
+
+    // Reading offsetHeight flushes style, so the card is measurable straight away.
     var h = panel.offsetHeight;
     var w = panel.offsetWidth;
-    if (!h) { reset(); return; }   // still hidden -- let the next event try again
+    if (!h) { hide(); return; }
 
     var t = trigger.getBoundingClientRect();
     var below = window.innerHeight - t.bottom;
@@ -43,27 +65,36 @@
     open = panel;
   }
 
-  function reset() {
+  function hide() {
     if (!open) return;
-    open.style.position = '';
-    open.style.margin = '';
-    open.style.top = '';
-    open.style.left = '';
+    var panel = open;
     open = null;
+    if (TOP_LAYER && panel.matches(':popover-open')) {
+      try { panel.hidePopover(); } catch (e) { /* already closed */ }
+    }
+    panel.style.position = '';
+    panel.style.margin = '';
+    panel.style.inset = '';
+    panel.style.top = '';
+    panel.style.left = '';
+    panel.style.opacity = '';
+    panel.style.scale = '';
   }
 
   function enter(e) {
     var wrap = e.target.closest && e.target.closest('[data-user-tooltip]');
-    if (!wrap) { if (open && !open.contains(e.target)) reset(); return; }
-    if (open && wrap.contains(open)) return;   // already placed, still inside it
-    reset();
-    place(wrap);
+    if (!wrap) { if (open && !open.contains(e.target)) hide(); return; }
+    if (open && wrap.contains(open)) return;   // already showing this one
+    hide();
+    show(wrap);
   }
 
   document.addEventListener('pointerover', enter);
   document.addEventListener('focusin', enter);
-  // A fixed card does not travel with its row, so drop it rather than let it drift.
-  window.addEventListener('scroll', reset, true);
-  window.addEventListener('resize', reset);
+  // A manual popover has no light dismiss, so give it the escape hatch by hand.
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
+  // The card does not travel with its row, so drop it rather than let it drift.
+  window.addEventListener('scroll', hide, true);
+  window.addEventListener('resize', hide);
 })();
 </script>

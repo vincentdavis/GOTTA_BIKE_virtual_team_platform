@@ -1,11 +1,13 @@
-"""Guards for the rider hover-card's escape from its scroll container.
+"""Guards for the rider hover-card's escape from the table it is trapped in.
 
-daisyUI positions ``.dropdown-content`` absolutely, so the ``overflow-x-auto`` wrapper
-around nearly every table on the site clips it -- CSS forces the other axis to ``auto``
-too, so those wrappers clip vertically as well, and the card is cut off for the last rows
-of any long table. ``shared/_user_tooltip_script.html`` re-points the card at the viewport
-on hover. Both halves have to stay wired up, and the script must load exactly once however
-many riders are on the page.
+Two things bury it. The ``overflow-x-auto`` wrapper around nearly every table clips it
+(CSS forces the other axis to ``auto`` too, so those wrappers clip vertically as well).
+And ``table-pin-col`` makes every first cell ``position: sticky; z-index: 5`` -- a stacking
+context the card lives inside, so the next row's cell paints straight over it.
+
+Only the top layer escapes both, which is why the card is promoted to a popover on hover.
+``position: fixed`` is not enough: it escapes overflow but not stacking contexts, and that
+distinction is the whole reason for the popover, so it is pinned here.
 """
 
 import re
@@ -29,6 +31,29 @@ def test_partial_carries_the_hook():
 def test_script_is_included_from_base():
     base = (_ROOT / "theme/templates/base.html").read_text()
     assert 'include "shared/_user_tooltip_script.html"' in base
+
+
+def test_card_is_promoted_to_the_top_layer():
+    """`position: fixed` escapes overflow but not a stacking context.
+
+    `table-pin-col` puts the card inside a `z-index: 5` sticky cell, and the next row's
+    cell then paints over it. Only the top layer gets out of that, so if the popover call
+    goes away the card silently goes back to hiding under the rows below it.
+    """
+    script = (_ROOT / "templates/shared/_user_tooltip_script.html").read_text()
+    assert "showPopover()" in script
+    assert "hidePopover()" in script
+    assert 'setAttribute("popover"' in script or "setAttribute('popover'" in script
+
+
+def test_popover_attribute_is_not_in_the_markup():
+    """The attribute has to be added by script, not shipped in the markup.
+
+    The UA hides `[popover]` until it is shown, so a static attribute would mean the card
+    never appears at all without JS.
+    """
+    partial = (_ROOT / "templates/accounts/_user_tooltip.html").read_text()
+    assert "popover" not in partial
 
 
 @pytest.mark.django_db
