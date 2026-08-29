@@ -209,6 +209,25 @@ button's own colour and is low-contrast on several variants.
       one on each availability grid page. Fixing the shell does not fix those, and they are the
       last thing scheduled in Phase 2.
 
+### Accepted deviation: the sidebar highlight in dark mode
+
+Phase 0 restored the current-page pill (daisyUI 5's `menu-active`). Measured on the running
+app, its background is the same near-black `rgb(9,9,11)` in **both** themes, so against the
+sidebar it lands at:
+
+| Theme | Pill vs sidebar |
+|---|---|
+| Light | 18.73:1 |
+| Dark | **1.19:1** |
+
+In dark mode the current page is therefore not visually distinguishable, which is a 1.4.11
+failure. **This was reviewed and accepted as-is** -- do not "fix" it in a later pass without
+asking. `aria-current="page"` is present either way, so the programmatic indication is
+unaffected; only the visual one is.
+
+If it is ever revisited, the cheap fix is an inset left bar in `a11y.css`, which does not
+depend on the fill colour and would work in both themes.
+
 ### Promoted out of Phase 0
 
 **The colour sweep** (was 0.5) is 387 edits across 94 templates **plus three Python files** that
