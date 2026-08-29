@@ -147,7 +147,7 @@
                        hx-trigger="change" hx-target="#ttt-plan-body" hx-swap="innerHTML" />
               </td>
               <td class="whitespace-nowrap">
-                <button class="btn btn-ghost btn-xs"
+                <button aria-label="Move {{ rr.rider.name }} down in the pull order" class="btn btn-ghost btn-xs"
                         hx-post="{% url 'ttt_planner:rider_reorder' plan.pk rr.rider.pk 'up' %}"
                         hx-target="#ttt-plan-body" hx-swap="innerHTML"
                         {% if forloop.first %}disabled{% endif %}>↑</button>
@@ -155,7 +155,7 @@
                         hx-post="{% url 'ttt_planner:rider_reorder' plan.pk rr.rider.pk 'down' %}"
                         hx-target="#ttt-plan-body" hx-swap="innerHTML"
                         {% if forloop.last %}disabled{% endif %}>↓</button>
-                <button class="btn btn-ghost btn-xs text-error"
+                <button aria-label="Remove {{ rr.rider.name }} from the plan" class="btn btn-ghost btn-xs text-error"
                         hx-post="{% url 'ttt_planner:rider_remove' plan.pk rr.rider.pk %}"
                         hx-target="#ttt-plan-body" hx-swap="innerHTML"
                         hx-confirm="Remove {{ rr.rider.name }}?">✕</button>

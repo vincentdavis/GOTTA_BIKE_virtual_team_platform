@@ -4,11 +4,11 @@
       class="inline">
   {% csrf_token %}
   {% if has_role %}
-  <button type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to remove{% if role_name %} @{{ role_name }}{% endif %}">
+  <button aria-label="Remove the coordinator role{% if role_name %} {{ role_name }}{% endif %}" type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to remove{% if role_name %} @{{ role_name }}{% endif %}">
     <span class="text-success text-xl">&#10003;</span>
   </button>
   {% else %}
-  <button type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to add{% if role_name %} @{{ role_name }}{% endif %}">
+  <button aria-label="Add the coordinator role{% if role_name %} {{ role_name }}{% endif %}" type="submit" class="tooltip cursor-pointer bg-transparent border-0 p-0" data-tip="Click to add{% if role_name %} @{{ role_name }}{% endif %}">
     <span class="text-error text-xl">&#10007;</span>
   </button>
   {% endif %}

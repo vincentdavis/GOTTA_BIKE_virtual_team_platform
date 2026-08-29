@@ -39,7 +39,7 @@
             {% if site_settings_obj.site_logo %}
             <div class="relative">
                 <img src="{{ site_settings_obj.site_logo.url }}" alt="Current logo" class="max-h-16 max-w-48 object-contain bg-base-300 rounded p-2">
-                <button type="submit" name="delete_logo" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                <button aria-label="Delete the site logo" type="submit" name="delete_logo" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -67,7 +67,7 @@
             {% if site_settings_obj.favicon %}
             <div class="relative">
                 <img src="{{ site_settings_obj.favicon.url }}" alt="Current favicon" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
-                <button type="submit" name="delete_favicon" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                <button aria-label="Delete the favicon" type="submit" name="delete_favicon" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -95,7 +95,7 @@
             {% if site_settings_obj.hero_image %}
             <div class="relative inline-block">
                 <img src="{{ site_settings_obj.hero_image.url }}" alt="Current hero image" class="max-h-32 max-w-full object-contain bg-base-300 rounded">
-                <button type="submit" name="delete_hero" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                <button aria-label="Delete the hero image" type="submit" name="delete_hero" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -124,7 +124,7 @@
             {% if site_settings_obj.not_verified_emoji %}
             <div class="relative">
                 <img src="{{ site_settings_obj.not_verified_emoji.url }}" alt="Not verified emoji" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
-                <button type="submit" name="delete_not_verified_emoji" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                <button aria-label="Delete the not-verified emoji" type="submit" name="delete_not_verified_emoji" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -152,7 +152,7 @@
             {% if site_settings_obj.verified_emoji %}
             <div class="relative">
                 <img src="{{ site_settings_obj.verified_emoji.url }}" alt="Verified emoji" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
-                <button type="submit" name="delete_verified_emoji" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                <button aria-label="Delete the verified emoji" type="submit" name="delete_verified_emoji" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -180,7 +180,7 @@
             {% if site_settings_obj.extra_verified_emoji %}
             <div class="relative">
                 <img src="{{ site_settings_obj.extra_verified_emoji.url }}" alt="Extra verified emoji" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
-                <button type="submit" name="delete_extra_verified_emoji" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                <button aria-label="Delete the extra-verified emoji" type="submit" name="delete_extra_verified_emoji" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -212,7 +212,7 @@
             {% if item.file %}
             <div class="relative">
                 <img src="{{ item.file.url }}" alt="{{ item.label }}" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
-                <button type="submit" name="delete_{{ item.field_name }}" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                <button aria-label="Delete the {{ item.label }} emoji" type="submit" name="delete_{{ item.field_name }}" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -245,7 +245,7 @@
             {% if item.file %}
             <div class="relative">
                 <img src="{{ item.file.url }}" alt="{{ item.label }}" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
-                <button type="submit" name="delete_{{ item.field_name }}" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                <button aria-label="Delete the {{ item.label }} emoji" type="submit" name="delete_{{ item.field_name }}" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
@@ -278,7 +278,7 @@
             {% if item.file %}
             <div class="relative">
                 <img src="{{ item.file.url }}" alt="{{ item.label }}" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
-                <button type="submit" name="delete_{{ item.field_name }}" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                <button aria-label="Delete the {{ item.label }} emoji" type="submit" name="delete_{{ item.field_name }}" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>

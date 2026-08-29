@@ -93,7 +93,7 @@
                   {% for sq in item.squads %}
                   <div class="bg-base-200 rounded-lg p-3">
                     <div class="flex flex-wrap items-center gap-2">
-                      <button type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleMySquadMembers('{{ item.event.pk }}-{{ sq.squad.pk }}')" title="Show members">
+                      <button aria-label="Show members of {{ sq.squad.name }}" type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleMySquadMembers('{{ item.event.pk }}-{{ sq.squad.pk }}')" title="Show members">
                         <svg id="my-squad-arrow-{{ item.event.pk }}-{{ sq.squad.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                         </svg>

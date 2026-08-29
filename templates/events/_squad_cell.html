@@ -7,7 +7,7 @@
     <input type="hidden" name="signup_id" value="{{ signup_id }}">
     <input type="hidden" name="squad_id" value="0">
     <input type="hidden" name="remove_squad_id" value="{{ sq.pk }}">
-    <button type="submit" class="ml-0.5 text-error hover:text-error/70 font-bold leading-none" title="Remove from {{ sq.name }}">&times;</button>
+    <button aria-label="Remove this rider from {{ sq.name }}" type="submit" class="ml-0.5 text-error hover:text-error/70 font-bold leading-none" title="Remove from {{ sq.name }}">&times;</button>
   </form>
 </span>
 {% empty %}

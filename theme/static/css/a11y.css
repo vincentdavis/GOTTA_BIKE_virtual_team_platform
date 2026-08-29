@@ -1,0 +1,38 @@
+/*
+ * Site-wide accessibility rules.
+ *
+ * Plain CSS served as a static file, loaded AFTER {% tailwind_css %} in base.html, for two
+ * reasons: it needs no Tailwind rebuild to take effect (the compiled bundle is a tracked
+ * artifact that is only regenerated on deploy), and coming later in the cascade lets it win
+ * ties against daisyUI without an !important arms race.
+ */
+
+/*
+ * Respect prefers-reduced-motion.
+ * ------------------------------
+ * Nothing in the codebase honoured this setting. daisyUI animates dropdowns, toasts, radios,
+ * ratings and progress bars, and Tailwind transitions are used throughout.
+ *
+ * Durations go to ~0 rather than `animation: none`, so animations still fire their start and
+ * end events -- code that waits on transitionend keeps working instead of hanging.
+ *
+ * Spinners are deliberately exempt: a frozen spinner reads as a hung page rather than as
+ * calm. They are slowed instead, which removes the spin-flicker without losing the signal.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .loading,
+  .htmx-indicator,
+  .htmx-indicator * {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+}

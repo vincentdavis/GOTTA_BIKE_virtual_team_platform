@@ -96,12 +96,12 @@
             <span class="min-w-0">{% include "accounts/_user_tooltip.html" with display_name=rider.name zwid=rider.zwid zp_category=rider.zr_data.zp_category zr_category=rider.zr_data.rank zr_rating=rider.zr_data.rating_current zr_phenotype=rider.zr_data.phenotype in_zwiftpower=rider.zr_data.zp_category in_zwiftracing=True hide_verification=True %}</span>
             {% if can_edit %}
             <span class="flex gap-1 shrink-0">
-              <button class="btn btn-ghost btn-xs" title="Toggle racing"
+              <button aria-label="Toggle racing status for {{ rider.name }}" class="btn btn-ghost btn-xs" title="Toggle racing"
                       hx-post="{% url 'ladder_planner:rider_toggle' matchup.pk rider.pk %}"
                       hx-target="#ladder-body" hx-swap="innerHTML">
                 {% if rider.is_racing %}✓{% else %}—{% endif %}
               </button>
-              <button class="btn btn-ghost btn-xs text-error" title="Remove"
+              <button aria-label="Remove {{ rider.name }} from our roster" class="btn btn-ghost btn-xs text-error" title="Remove"
                       hx-post="{% url 'ladder_planner:rider_remove' matchup.pk rider.pk %}"
                       hx-target="#ladder-body" hx-swap="innerHTML">✕</button>
             </span>
@@ -126,12 +126,12 @@
             </span>
             {% if can_edit %}
             <span class="flex gap-1 shrink-0">
-              <button class="btn btn-ghost btn-xs" title="Toggle racing"
+              <button aria-label="Toggle racing status for {{ rider.name }}" class="btn btn-ghost btn-xs" title="Toggle racing"
                       hx-post="{% url 'ladder_planner:rider_toggle' matchup.pk rider.pk %}"
                       hx-target="#ladder-body" hx-swap="innerHTML">
                 {% if rider.is_racing %}✓{% else %}—{% endif %}
               </button>
-              <button class="btn btn-ghost btn-xs text-error" title="Remove"
+              <button aria-label="Remove {{ rider.name }} from the opponent roster" class="btn btn-ghost btn-xs text-error" title="Remove"
                       hx-post="{% url 'ladder_planner:rider_remove' matchup.pk rider.pk %}"
                       hx-target="#ladder-body" hx-swap="innerHTML">✕</button>
             </span>

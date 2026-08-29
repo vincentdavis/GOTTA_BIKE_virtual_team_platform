@@ -391,8 +391,8 @@
         <div class="flex justify-center mt-6">
           <div class="join">
             {% if page_obj.has_previous %}
-            <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page=1" class="join-item btn btn-sm">&#171;</a>
-            <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page_obj.previous_page_number }}" class="join-item btn btn-sm">&#8249;</a>
+            <a aria-label="First page" href="?{{ base_qs }}{% if base_qs %}&{% endif %}page=1" class="join-item btn btn-sm">&#171;</a>
+            <a aria-label="Previous page" href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page_obj.previous_page_number }}" class="join-item btn btn-sm">&#8249;</a>
             {% else %}
             <span class="join-item btn btn-sm btn-disabled">&#171;</span>
             <span class="join-item btn btn-sm btn-disabled">&#8249;</span>
@@ -409,8 +409,8 @@
             {% endfor %}
 
             {% if page_obj.has_next %}
-            <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page_obj.next_page_number }}" class="join-item btn btn-sm">&#8250;</a>
-            <a href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page_obj.paginator.num_pages }}" class="join-item btn btn-sm">&#187;</a>
+            <a aria-label="Next page" href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page_obj.next_page_number }}" class="join-item btn btn-sm">&#8250;</a>
+            <a aria-label="Last page" href="?{{ base_qs }}{% if base_qs %}&{% endif %}page={{ page_obj.paginator.num_pages }}" class="join-item btn btn-sm">&#187;</a>
             {% else %}
             <span class="join-item btn btn-sm btn-disabled">&#8250;</span>
             <span class="join-item btn btn-sm btn-disabled">&#187;</span>

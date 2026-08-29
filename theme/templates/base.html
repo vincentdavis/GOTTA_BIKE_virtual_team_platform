@@ -35,6 +35,7 @@
   {% endif %}
   {% tailwind_css %}
   <link rel="stylesheet" href="{% static 'css/responsive-tables.css' %}">
+  <link rel="stylesheet" href="{% static 'css/a11y.css' %}">
   <script src="https://unpkg.com/htmx.org@2.0.4"
           integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+"
           crossorigin="anonymous"></script>
@@ -161,7 +162,7 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
   {% if user.is_authenticated %}
   {# Hidden on phones (bottom-bar More opens the drawer); shown on the 640-1023px band where the bottom bar is hidden and the sidebar isn't open. #}
   <div class="flex-none hidden sm:flex lg:hidden">
-    <label for="main-drawer" class="btn btn-square btn-ghost drawer-button">
+    <label aria-label="Open navigation menu" for="main-drawer" class="btn btn-square btn-ghost drawer-button">
       <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
       </svg>
@@ -195,19 +196,19 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
               {% if site_settings.extra_verified_emoji %}
                 <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-4 w-4">
               {% else %}
-                <span class="badge badge-warning badge-xs"></span>
+                <span class="badge badge-warning badge-xs" role="img" aria-label="Extra verified"></span>
               {% endif %}
             {% elif user.is_race_ready %}
               {% if site_settings.verified_emoji %}
                 <img src="{{ site_settings.verified_emoji.url }}" alt="Verified" class="h-4 w-4">
               {% else %}
-                <span class="badge badge-success badge-xs"></span>
+                <span class="badge badge-success badge-xs" role="img" aria-label="Verified"></span>
               {% endif %}
             {% else %}
               {% if site_settings.not_verified_emoji %}
                 <img src="{{ site_settings.not_verified_emoji.url }}" alt="Not Verified" class="h-4 w-4">
               {% else %}
-                <span class="badge badge-error badge-xs"></span>
+                <span class="badge badge-error badge-xs" role="img" aria-label="Not verified"></span>
               {% endif %}
             {% endif %}
           </p>
@@ -255,19 +256,19 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
                   {% if site_settings.extra_verified_emoji %}
                     <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-4 w-4">
                   {% else %}
-                    <span class="badge badge-warning badge-xs"></span>
+                    <span class="badge badge-warning badge-xs" role="img" aria-label="Extra verified"></span>
                   {% endif %}
                 {% elif user.is_race_ready %}
                   {% if site_settings.verified_emoji %}
                     <img src="{{ site_settings.verified_emoji.url }}" alt="Verified" class="h-4 w-4">
                   {% else %}
-                    <span class="badge badge-success badge-xs"></span>
+                    <span class="badge badge-success badge-xs" role="img" aria-label="Verified"></span>
                   {% endif %}
                 {% else %}
                   {% if site_settings.not_verified_emoji %}
                     <img src="{{ site_settings.not_verified_emoji.url }}" alt="Not Verified" class="h-4 w-4">
                   {% else %}
-                    <span class="badge badge-error badge-xs"></span>
+                    <span class="badge badge-error badge-xs" role="img" aria-label="Not verified"></span>
                   {% endif %}
                 {% endif %}
               </a>
@@ -336,21 +337,21 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
               <div class="flex items-center justify-between">
                 <span class="text-xs text-base-content/60">Theme</span>
                 <div class="flex gap-1">
-                  <button onclick="setTheme('light')" id="theme-light" title="Light"
+                  <button aria-label="Use the light theme" onclick="setTheme('light')" id="theme-light" title="Light"
                           class="btn btn-ghost btn-xs btn-square">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
                     </svg>
                   </button>
-                  <button onclick="setTheme('dark')" id="theme-dark" title="Dark"
+                  <button aria-label="Use the dark theme" onclick="setTheme('dark')" id="theme-dark" title="Dark"
                           class="btn btn-ghost btn-xs btn-square">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
                     </svg>
                   </button>
-                  <button onclick="setTheme('auto')" id="theme-auto" title="System"
+                  <button aria-label="Match the system theme" onclick="setTheme('auto')" id="theme-auto" title="System"
                           class="btn btn-ghost btn-xs btn-square">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -430,20 +431,23 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
     {% if user.is_authenticated %}
     <!-- Mobile bottom-tab bar: fast path to the top areas. The full nav stays in
          the drawer, reachable via More (and the top hamburger). -->
-    <nav class="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-base-200 border-t border-base-300 flex" aria-label="Primary">
+    <nav class="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-base-200 border-t border-base-300 flex" aria-label="Quick links">
       <a href="{% url 'events:my_events' %}"
-         class="relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 {% if request.resolver_match.view_name == 'events:my_events' %}text-primary{% else %}text-base-content/70{% endif %}">
+         class="relative flex-1 flex flex-col items-center justify-center gap-0.5 py-2 {% if request.resolver_match.view_name == 'events:my_events' %}text-primary{% else %}text-base-content/70{% endif %}"
+         {% if request.resolver_match.view_name == 'events:my_events' %}aria-current="page"{% endif %}>
         {% if pending_availability_count %}<span class="absolute top-1 left-1/2 ml-2 badge badge-error badge-sm">{{ pending_availability_count }}</span>{% endif %}
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-4 8l1.5 1.5L15 11"/></svg>
         <span class="text-xs">{% if request.resolver_match.view_name == 'events:my_events' %}Availability{% else %}My Events{% endif %}</span>
       </a>
       <a href="{% url 'events:event_list' %}"
-         class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 {% if request.resolver_match.namespace == 'events' and request.resolver_match.url_name != 'my_events' %}text-primary{% else %}text-base-content/70{% endif %}">
+         class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 {% if request.resolver_match.namespace == 'events' and request.resolver_match.url_name != 'my_events' %}text-primary{% else %}text-base-content/70{% endif %}"
+         {% if request.resolver_match.namespace == 'events' and request.resolver_match.url_name != 'my_events' %}aria-current="page"{% endif %}>
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         <span class="text-xs">Calendar</span>
       </a>
       <a href="{% url 'accounts:profile' %}"
-         class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 {% if request.resolver_match.view_name == 'accounts:profile' %}text-primary{% else %}text-base-content/70{% endif %}">
+         class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 {% if request.resolver_match.view_name == 'accounts:profile' %}text-primary{% else %}text-base-content/70{% endif %}"
+         {% if request.resolver_match.view_name == 'accounts:profile' %}aria-current="page"{% endif %}>
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         <span class="text-xs">Profile</span>
       </a>

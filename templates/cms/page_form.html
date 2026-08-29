@@ -442,7 +442,7 @@ const cardEditor = {
     wrapper.className = 'card bg-base-100 border border-base-300';
 
     const moveUpBtn = index > 0
-      ? `<button type="button" class="btn btn-ghost btn-xs" title="Move up"
+      ? `<button aria-label="Move card ${index + 1} up" type="button" class="btn btn-ghost btn-xs" title="Move up"
                 data-action="move-up">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
@@ -451,7 +451,7 @@ const cardEditor = {
       : '';
 
     const moveDownBtn = index < total - 1
-      ? `<button type="button" class="btn btn-ghost btn-xs" title="Move down"
+      ? `<button aria-label="Move card ${index + 1} down" type="button" class="btn btn-ghost btn-xs" title="Move down"
                 data-action="move-down">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -466,7 +466,7 @@ const cardEditor = {
           <div class="flex gap-1">
             ${moveUpBtn}
             ${moveDownBtn}
-            <button type="button" class="btn btn-ghost btn-xs text-error" title="Remove card"
+            <button aria-label="Remove card ${index + 1}" type="button" class="btn btn-ghost btn-xs text-error" title="Remove card"
                     data-action="remove">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -663,7 +663,7 @@ const accordionEditor = {
     wrapper.className = 'card bg-base-100 border border-base-300';
 
     const moveUpBtn = index > 0
-      ? `<button type="button" class="btn btn-ghost btn-xs" title="Move up"
+      ? `<button aria-label="Move item ${index + 1} up" type="button" class="btn btn-ghost btn-xs" title="Move up"
                 data-action="move-up">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
@@ -672,7 +672,7 @@ const accordionEditor = {
       : '';
 
     const moveDownBtn = index < total - 1
-      ? `<button type="button" class="btn btn-ghost btn-xs" title="Move down"
+      ? `<button aria-label="Move item ${index + 1} down" type="button" class="btn btn-ghost btn-xs" title="Move down"
                 data-action="move-down">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -687,7 +687,7 @@ const accordionEditor = {
           <div class="flex gap-1">
             ${moveUpBtn}
             ${moveDownBtn}
-            <button type="button" class="btn btn-ghost btn-xs text-error" title="Remove item"
+            <button aria-label="Remove item ${index + 1}" type="button" class="btn btn-ghost btn-xs text-error" title="Remove item"
                     data-action="remove">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

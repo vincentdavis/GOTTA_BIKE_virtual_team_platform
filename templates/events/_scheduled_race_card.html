@@ -8,7 +8,7 @@ by the host page.
 {% endcomment %}
 <div class="bg-base-200 rounded-md p-2 border border-base-300">
   <div class="flex flex-wrap items-center gap-2 text-sm">
-    <button type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleAllRacesRiders('{{ slot.selection.pk }}')" title="Show riders">
+    <button aria-label="Show riders for {{ slot.selection.name }}" type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleAllRacesRiders('{{ slot.selection.pk }}')" title="Show riders">
       <svg id="all-races-arrow-{{ slot.selection.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg>

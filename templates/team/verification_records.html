@@ -191,7 +191,7 @@
         {% if page_obj.paginator.num_pages > 1 %}
         <div class="join">
           {% if page_obj.has_previous %}
-            <a href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ page_obj.previous_page_number }}" class="join-item btn btn-sm">«</a>
+            <a aria-label="Go to previous page of verification records" href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ page_obj.previous_page_number }}" class="join-item btn btn-sm">«</a>
           {% else %}
             <span class="join-item btn btn-sm btn-disabled">«</span>
           {% endif %}
@@ -205,7 +205,7 @@
             {% endif %}
           {% endfor %}
           {% if page_obj.has_next %}
-            <a href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ page_obj.next_page_number }}" class="join-item btn btn-sm">»</a>
+            <a aria-label="Go to next page of verification records" href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ page_obj.next_page_number }}" class="join-item btn btn-sm">»</a>
           {% else %}
             <span class="join-item btn btn-sm btn-disabled">»</span>
           {% endif %}

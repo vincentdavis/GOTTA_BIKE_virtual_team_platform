@@ -118,7 +118,7 @@
         <h3 class="text-lg font-semibold">Signups</h3>
         {% if can_view_signups and signup_count %}
         <span class="badge badge-neutral tabular-nums" id="signup-count-badge">{{ signup_count }}</span>
-        <button type="button" class="btn btn-ghost btn-xs" id="toggle-signups-btn" onclick="toggleSignups()" title="Show signups">
+        <button aria-label="Show signups" type="button" class="btn btn-ghost btn-xs" id="toggle-signups-btn" onclick="toggleSignups()" title="Show signups">
           <svg id="signups-arrow" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
@@ -704,7 +704,7 @@
             {% for squad in squads %}
             <tr class="squad-row">
               <td class="!px-0 !w-6">
-                <button type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleSquadMembers({{ squad.pk }})" title="Show details">
+                <button aria-label="Show details for {{ squad.name }}" type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleSquadMembers({{ squad.pk }})" title="Show details">
                   <svg id="squad-arrow-{{ squad.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                   </svg>
@@ -926,7 +926,7 @@
       <div class="flex items-center gap-2 mb-4">
         <h3 class="text-lg font-semibold">By Category</h3>
         <span class="badge badge-neutral" id="category-total-badge">{{ zp_total_all }}</span>
-        <button type="button" class="btn btn-ghost btn-xs" onclick="toggleByCategory()" title="Show category breakdown">
+        <button aria-label="Show category breakdown" type="button" class="btn btn-ghost btn-xs" onclick="toggleByCategory()" title="Show category breakdown">
           <svg id="category-arrow" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
