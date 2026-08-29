@@ -52,6 +52,15 @@
 </head>
 
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="flex flex-col h-screen">
+{% comment %}
+  Skip link. First focusable thing on the page, so a keyboard user can jump the banners,
+  header, avatar menu and the ~40-link sidebar instead of tabbing through them on every
+  page. Off-screen until focused, which is what sr-only / focus:not-sr-only do.
+{% endcomment %}
+<a href="#main-content"
+   class="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 btn btn-primary btn-sm">
+  Skip to content
+</a>
 <!-- Site-wide Banners (full width, above everything) -->
 {% if config.SITE_ANNOUNCEMENT %}
   <div
@@ -387,7 +396,7 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
   <!-- Main Content Area -->
   <div class="drawer-content flex flex-col bg-base-100 overflow-y-auto h-full pb-16 sm:pb-0">
     <!-- Main Content -->
-    <main class="flex-1 container mx-auto px-4 py-8">
+    <main id="main-content" tabindex="-1" class="flex-1 container mx-auto px-4 py-8">
       {% if messages %}
         <div class="toast toast-top toast-end z-50" id="messages-toast">
           {% for message in messages %}
