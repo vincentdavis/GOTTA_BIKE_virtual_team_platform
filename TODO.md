@@ -323,11 +323,29 @@ self-serve view and an admin action — deletion spread across a view body is ho
 
 ### Accessibility
 
-- [ ] Add ARIA labels to dropdown menus, badges, and status indicators
-- [ ] Add skip-to-main-content link
-- [ ] Add alt text to all images (avatars, hero, icons)
-- [ ] Add focus ring styling for keyboard navigation
-- [ ] Form error accessibility (aria-invalid, aria-describedby)
+Full plan, audit results and per-page checklist: **[docs/accessibility.md](docs/accessibility.md)**.
+Target is WCAG 2.2 AA. 123 audited findings; 9 blockers.
+
+- [ ] **Phase 0 - shell and shared components** (8 files, clears 4 of the 9 blockers)
+- [ ] **Phase 1 - pytest a11y guards with a shrink-only baseline** (no CI exists; pytest is the
+      only enforcement point that runs)
+- [ ] **Phase 2 - page by page**, public registration form first
+
+Blockers, for visibility:
+
+- [ ] Availability grids are keyboard-dead - a rider cannot answer an availability sheet at all
+      (`availability_respond.html`, `availability_builder.html`, `availability_results.html`)
+- [ ] `templates/events/_filter_select_script.html` hides the native `<select>` and replaces it
+      with a mousedown-only list - used on squad form, event form, both planners, and Compliance
+- [ ] `.zsl-chart`'s "fixed dark palette" is not fixed; chart chrome is near-white on a white card
+      in the light theme (and the CLAUDE.md claim about it is wrong)
+- [ ] Availability selection is fill-colour only at 1.35:1
+
+Two of these are ordinary bugs the audit happened to catch:
+
+- [ ] Sidebar current-page highlight has been dead since the daisyUI 5 upgrade - `active` is used
+      40x in `sidebar.html`, but v5 renamed the modifier to `menu-active` and no CSS re-adds it
+- [ ] Public registration form has 56 `<label>` tags and zero `for=` attributes
 
 ### Security & Infrastructure
 
