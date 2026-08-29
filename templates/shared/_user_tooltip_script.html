@@ -1,0 +1,69 @@
+{% comment %}
+  Keeps the rider hover-card out of its scroll container.
+
+  daisyUI positions .dropdown-content with `position: absolute`, so any ancestor with an
+  overflow other than `visible` clips it. Nearly every table on the site is wrapped in
+  `overflow-x-auto` -- and CSS forces the other axis to `auto` too, so those wrappers clip
+  vertically as well. The card is then cut off for the last rows of every long table.
+  z-index cannot help: the card is being clipped, not painted underneath.
+
+  So on hover/focus we re-point the card at the viewport instead. No CSS is involved: daisyUI
+  still owns showing and hiding it, and with JS off the behaviour is exactly what it was.
+
+  Listeners are delegated from the document, so cards inside an HTMX swap work with no re-init.
+  Included once from base.html -- not from the partial, which renders many times per page.
+{% endcomment %}
+<script>
+(function () {
+  var GAP = 8;          // matches daisyUI's .dropdown-content margin-top: .5rem
+  var EDGE = 8;         // keep this far from the viewport edge
+  var open = null;      // the .dropdown-content currently re-pointed
+
+  function panelOf(wrap) { return wrap.querySelector(':scope > .dropdown-content'); }
+
+  function place(wrap) {
+    var panel = panelOf(wrap);
+    if (!panel) return;
+    var trigger = wrap.firstElementChild;
+    if (!trigger || trigger === panel) return;
+
+    // Reading offsetHeight flushes style, so the panel is measurable as soon as :hover applies.
+    panel.style.position = 'fixed';
+    panel.style.margin = '0';
+    var h = panel.offsetHeight;
+    var w = panel.offsetWidth;
+    if (!h) { reset(); return; }   // still hidden -- let the next event try again
+
+    var t = trigger.getBoundingClientRect();
+    var below = window.innerHeight - t.bottom;
+    var flip = below < h + GAP && t.top > below;
+
+    panel.style.top = Math.max(EDGE, flip ? t.top - h - GAP : t.bottom + GAP) + 'px';
+    panel.style.left = Math.max(EDGE, Math.min(t.left, window.innerWidth - w - EDGE)) + 'px';
+    open = panel;
+  }
+
+  function reset() {
+    if (!open) return;
+    open.style.position = '';
+    open.style.margin = '';
+    open.style.top = '';
+    open.style.left = '';
+    open = null;
+  }
+
+  function enter(e) {
+    var wrap = e.target.closest && e.target.closest('[data-user-tooltip]');
+    if (!wrap) { if (open && !open.contains(e.target)) reset(); return; }
+    if (open && wrap.contains(open)) return;   // already placed, still inside it
+    reset();
+    place(wrap);
+  }
+
+  document.addEventListener('pointerover', enter);
+  document.addEventListener('focusin', enter);
+  // A fixed card does not travel with its row, so drop it rather than let it drift.
+  window.addEventListener('scroll', reset, true);
+  window.addEventListener('resize', reset);
+})();
+</script>
