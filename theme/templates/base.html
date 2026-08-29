@@ -47,6 +47,12 @@
       if (t === "light" || t === "dark") {
         document.documentElement.setAttribute("data-theme", t);
       }
+      // Same trick for text size: set it before first paint or the page renders at the
+      // default size and visibly jumps once the deferred script runs.
+      var s = localStorage.getItem("textSize");
+      if (s === "large" || s === "larger" || s === "largest") {
+        document.documentElement.setAttribute("data-text-size", s);
+      }
     })();
   </script>
 </head>
@@ -370,6 +376,27 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
                 </div>
               </div>
             </li>
+            {% comment %}
+              Text size. Mirrors the Theme row above, including its localStorage key and the
+              anti-flash script in <head>. Deliberately not a User field: this way it applies
+              instantly with no round trip, works on the login page and for signed-out
+              visitors, and needs no migration.
+            {% endcomment %}
+            <li class="px-3 py-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs text-base-content/60 whitespace-nowrap">Text size</span>
+                <div class="flex gap-1" role="group" aria-label="Text size">
+                  <button aria-label="Default text size" onclick="setTextSize('default')" id="textsize-default"
+                          title="Default" class="btn btn-ghost btn-xs btn-square" style="font-size: 0.75rem;">A</button>
+                  <button aria-label="Large text" onclick="setTextSize('large')" id="textsize-large"
+                          title="Large" class="btn btn-ghost btn-xs btn-square" style="font-size: 0.9rem;">A</button>
+                  <button aria-label="Larger text" onclick="setTextSize('larger')" id="textsize-larger"
+                          title="Larger" class="btn btn-ghost btn-xs btn-square" style="font-size: 1.05rem;">A</button>
+                  <button aria-label="Largest text" onclick="setTextSize('largest')" id="textsize-largest"
+                          title="Largest" class="btn btn-ghost btn-xs btn-square" style="font-size: 1.2rem;">A</button>
+                </div>
+              </div>
+            </li>
             <li class="my-1">
               <hr class="border-base-300">
             </li>
@@ -543,6 +570,36 @@ function updateThemeButtons(mode) {
 (function() {
   var t = localStorage.getItem("theme") || "auto";
   updateThemeButtons(t);
+})();
+
+function setTextSize(size) {
+  if (size === "large" || size === "larger" || size === "largest") {
+    document.documentElement.setAttribute("data-text-size", size);
+    localStorage.setItem("textSize", size);
+  } else {
+    document.documentElement.removeAttribute("data-text-size");
+    localStorage.setItem("textSize", "default");
+  }
+  updateTextSizeButtons(size);
+}
+function updateTextSizeButtons(size) {
+  var ids = ["textsize-default", "textsize-large", "textsize-larger", "textsize-largest"];
+  for (var i = 0; i < ids.length; i++) {
+    var btn = document.getElementById(ids[i]);
+    if (btn) {
+      if (ids[i] === "textsize-" + size) {
+        btn.classList.add("btn-active");
+        btn.setAttribute("aria-pressed", "true");
+      } else {
+        btn.classList.remove("btn-active");
+        btn.setAttribute("aria-pressed", "false");
+      }
+    }
+  }
+}
+(function() {
+  var s = localStorage.getItem("textSize") || "default";
+  updateTextSizeButtons(s);
 })();
 </script>
 

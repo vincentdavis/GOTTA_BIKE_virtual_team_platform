@@ -70,3 +70,29 @@
 .overflow-hidden :focus-visible {
   outline-offset: 0 !important;
 }
+
+/*
+ * Text size preference.
+ * --------------------
+ * Scales the whole UI from one declaration, because every size in the stack is rem:
+ * Tailwind's utilities, and -- crucially -- daisyUI's component sizes, which are written as
+ * literal rem values (.table, .menu, .badge, .select, .alert, .tab are all .875rem).
+ *
+ * That literal-rem detail is why this is the only mechanism that works. Overriding
+ * --text-xs / --text-sm reaches exactly one rule each: `var(--text-xs)` appears once in the
+ * entire compiled bundle, on the .text-xs utility itself. Measured on the roster at 150%:
+ * root scaling takes table cells 14->21px, menu links 14->21, badges 12->18 and even the
+ * inline `font-size: 0.6rem` chart labels 9.6->24; the variable override moved only .text-xs,
+ * 12->14, and left every component untouched.
+ *
+ * Percentages, not px, so a member who has already raised their browser's default font size
+ * keeps that as the baseline and this multiplies it rather than overriding it.
+ *
+ * Capped at 150%. Above that the fixed shell (body is `flex flex-col h-screen`) starts losing
+ * real estate to chrome: the announcement banner and the profile-incomplete warning grow with
+ * the text, and at 200% they take about half the viewport. At 150% chrome is ~29%, which is
+ * the same order as today's 17%.
+ */
+:root[data-text-size="large"] { font-size: 112.5%; }   /* 18px */
+:root[data-text-size="larger"] { font-size: 125%; }    /* 20px */
+:root[data-text-size="largest"] { font-size: 150%; }   /* 24px */
