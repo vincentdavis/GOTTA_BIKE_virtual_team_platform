@@ -36,3 +36,37 @@
     animation-iteration-count: infinite !important;
   }
 }
+
+/*
+ * Make keyboard focus visible.
+ * ---------------------------
+ * daisyUI's own focus ring is `outline-color: currentColor`, so on a coloured button it is
+ * the button's own text colour against the button -- effectively invisible on several
+ * variants. It also sets `outline-style: none` outright on thirteen selectors: .tab:focus,
+ * .link:focus, .card:focus, .toggle>:focus, .dropdown>*:focus, the .input/.select/.textarea
+ * inner controls, the breadcrumb items, and every .menu item -- which is the entire sidebar.
+ *
+ * Those rules use `:where()` in places but still reach specificity 0,2,1, and they are
+ * scattered across the bundle. Matching each one would be brittle, so the outline properties
+ * are forced. That is safe here in a way it usually is not: the project defines no focus
+ * styles of its own (0 occurrences in source CSS) and no template uses outline-none, so
+ * there is nothing of ours to override -- only daisyUI's suppression.
+ *
+ * The ring is base-content with a 2px offset, so it sits outside the control on the page
+ * background. base-content is guaranteed to contrast with base-100 in both themes by the
+ * theme's own construction, which is what makes one rule work in light and dark alike.
+ *
+ * :focus-visible, not :focus -- mouse users should not see rings on every click.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-base-content) !important;
+  outline-offset: 2px !important;
+}
+
+/* Inside a scroll container an offset ring is clipped, so tuck it against the control. */
+.overflow-x-auto :focus-visible,
+.overflow-y-auto :focus-visible,
+.overflow-auto :focus-visible,
+.overflow-hidden :focus-visible {
+  outline-offset: 0 !important;
+}
