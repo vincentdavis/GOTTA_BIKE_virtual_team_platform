@@ -10,10 +10,12 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
 import logfire
+from django.core.exceptions import ImproperlyConfigured
 
 from gotta_bike_platform.config import settings as config
 
@@ -46,6 +48,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config.secret_key
 
 DEBUG = config.debug
+
+# Refuse to serve with the published default key.
+#
+# The default lives in config.py in a public repository, so a deployment that forgets to set
+# SECRET_KEY signs its sessions and password-reset tokens with a value anyone can read --
+# session forgery becomes trivial rather than theoretical. That matters more here than for a
+# closed codebase, because other teams run their own copies of this project.
+#
+# Tests are exempt: they never serve a real session, and a contributor cloning the repo
+# should be able to run the suite without first inventing a key.
+if not DEBUG and SECRET_KEY.startswith("django-insecure") and "pytest" not in sys.modules:
+    raise ImproperlyConfigured(
+        "SECRET_KEY is still the development default. Set the SECRET_KEY environment "
+        "variable to a unique random value before running with DEBUG=False. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(50))\""
+    )
 
 ALLOWED_HOSTS = config.allowed_hosts
 

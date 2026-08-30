@@ -62,11 +62,10 @@ def refresh_access_token() -> bool:
             timeout=30.0,
         )
 
-        logfire.debug(
-            "Strava token refresh response",
-            status_code=response.status_code,
-            response_text=response.text[:500] if response.text else "(empty)",
-        )
+        # Status only. On success this body contains the new access_token and refresh_token,
+        # so logging it put live Strava credentials into Logfire. The failure path below
+        # logs the parsed error separately, and an error body carries no tokens.
+        logfire.debug("Strava token refresh response", status_code=response.status_code)
 
         if response.status_code != 200:
             # Try to parse error details from response
