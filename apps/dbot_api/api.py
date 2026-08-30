@@ -335,7 +335,6 @@ def get_zwiftpower_profile(request: HttpRequest, zwid: int) -> dict:
             "h_15_wkg": float(rider.h_15_wkg) if rider.h_15_wkg else None,
             "status": rider.status,
             "reg": rider.reg,
-            "email": rider.email,
             "zada": rider.zada,
             "date_created": rider.date_created.isoformat() if rider.date_created else None,
             "date_modified": rider.date_modified.isoformat() if rider.date_modified else None,

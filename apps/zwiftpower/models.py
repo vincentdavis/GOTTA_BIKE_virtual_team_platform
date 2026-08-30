@@ -59,7 +59,6 @@ class ZPTeamRiders(models.Model):
     # Status fields
     status = models.CharField(max_length=50, blank=True, help_text="Member status")
     reg = models.BooleanField(default=False, help_text="Registered flag")
-    email = models.EmailField(blank=True, help_text="Email address (if available)")
     zada = models.SmallIntegerField(default=0, help_text="ZADA status flag (-1=not checked, 0=clean)")
 
     # Timestamps

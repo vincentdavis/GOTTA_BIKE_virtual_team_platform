@@ -42,7 +42,7 @@ class ZPTeamRidersAdmin(SimpleHistoryAdmin):
         ("Skills", {"fields": ["skill", "skill_race", "skill_seg", "skill_power"]}),
         ("Stats", {"fields": ["distance", "climbed", "energy", "time"]}),
         ("Power Records", {"fields": ["h_1200_watts", "h_1200_wkg", "h_15_watts", "h_15_wkg"]}),
-        ("Status", {"fields": ["status", "reg", "email", "zada"]}),
+        ("Status", {"fields": ["status", "reg", "zada"]}),
         ("Timestamps", {"fields": ["date_created", "date_modified", "date_left"]}),
     ]
 

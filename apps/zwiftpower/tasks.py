@@ -140,7 +140,6 @@ def update_team_riders() -> dict:
                 "h_15_wkg": _parse_decimal(rider.get("h_15_wkg")),
                 "status": rider.get("status", ""),
                 "reg": bool(rider.get("reg", 0)),
-                "email": rider.get("email", ""),
                 "zada": rider.get("zada", 0) or 0,
                 "date_left": None,  # Clear date_left if rider is back on team
             }
