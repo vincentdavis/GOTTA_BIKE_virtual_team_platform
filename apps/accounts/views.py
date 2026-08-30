@@ -1474,6 +1474,26 @@ def config_section_update(request: HttpRequest, section_key: str) -> HttpRespons
             # Text and password fields
             value = request.POST.get(key, "")
 
+        # Record what actually changed before writing it.
+        #
+        # These settings decide who holds every permission in the app, including who may
+        # view verification photographs -- so an admin can widen their own access here. That
+        # was previously untraceable: no actor, no before, no after. Secrets are noted as
+        # changed without their values.
+        previous = getattr(config, key, None)
+        if previous != value:
+            secret = setting.get("input_type") == "password"
+            logfire.info(
+                "Site setting changed",
+                section=section_key,
+                setting=key,
+                changed_by_id=request.user.pk,
+                changed_by=request.user.get_username(),
+                old_value="(hidden)" if secret else previous,
+                new_value="(hidden)" if secret else value,
+                is_permission_mapping=key.startswith("PERM_"),
+            )
+
         # Save to constance
         setattr(config, key, value)
 
