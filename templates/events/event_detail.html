@@ -100,13 +100,12 @@
       {% endif %}
 
       {% comment %}
-        Summary counts. The signup figures follow the same gate as the count badge and the
-        signup table -- aggregate rather than personal, but there is no reason to show them
-        to someone who cannot see the list they summarise. The squad count is ungated
-        because the squads themselves are listed further down this page for everyone.
+        Summary counts, shown to every team member. They are aggregate rather than personal,
+        and the squads they sit beside are already listed in full further down the page for
+        everyone -- so gating the signup figures behind show_signups only made the row's
+        length vary by viewer without protecting anything.
       {% endcomment %}
       <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1 mt-4">
-        {% if can_view_signups %}
         <div class="flex items-baseline gap-1.5">
           <dd class="text-lg font-semibold tabular-nums">{{ signup_count }}</dd>
           <dt class="text-sm text-base-content/70">{{ signup_count|pluralize:"signup,signups" }}</dt>
@@ -119,7 +118,6 @@
           <dd class="text-lg font-semibold tabular-nums">{{ signup_female_count }}</dd>
           <dt class="text-sm text-base-content/70">female</dt>
         </div>
-        {% endif %}
         <div class="flex items-baseline gap-1.5">
           <dd class="text-lg font-semibold tabular-nums">{{ squads|length }}</dd>
           <dt class="text-sm text-base-content/70">{{ squads|length|pluralize:"squad,squads" }}</dt>

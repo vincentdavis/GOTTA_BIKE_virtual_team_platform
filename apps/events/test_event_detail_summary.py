@@ -88,8 +88,12 @@ def test_singular_labels(client, event, team_member, user_model):
 
 
 @pytest.mark.django_db
-def test_squad_count_shows_without_signup_visibility(client, event, team_member, user_model):
-    """A member who cannot see the signup list still gets the squad count."""
+def test_counts_show_even_when_the_signup_list_is_hidden(client, event, team_member, user_model):
+    """The figures are aggregate, so they do not follow show_signups.
+
+    A member on an event with the list hidden still sees the totals; what they cannot do is
+    expand the list to see who those signups are.
+    """
     event.show_signups = False
     event.save(update_fields=["show_signups"])
     Squad.objects.create(event=event, name="A")
@@ -98,7 +102,7 @@ def test_squad_count_shows_without_signup_visibility(client, event, team_member,
 
     counts = _counts(client.get(reverse("events:event_detail", args=[event.pk])).content.decode())
 
-    assert counts == {"squad": 1}
+    assert counts == {"signup": 1, "male": 1, "female": 0, "squad": 1}
 
 
 @pytest.mark.django_db
