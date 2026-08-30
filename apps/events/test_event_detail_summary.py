@@ -222,3 +222,47 @@ def test_facet_script_excludes_withdrawn_rows_from_the_badge():
     ).read_text()
     assert "data-signup-withdrawn" in script
     assert "var totalRows = activeRows.length;" in script
+
+
+@pytest.mark.django_db
+def test_signup_action_is_a_full_width_button_below_the_links(client, event, team_member):
+    """It is the main thing most people come here to do, so it gets the card's full width.
+
+    Placement is asserted by position: it must fall after the links row and before the
+    Signups heading, not back beside it.
+    """
+    event.signups_open = True
+    event.save(update_fields=["signups_open"])
+    client.force_login(team_member)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "btn-block" in body
+    assert "Sign up for this event" in body
+    assert body.index("Sign up for this event") < body.index(">Signups</h3>")
+
+
+@pytest.mark.django_db
+def test_button_states_the_rider_is_already_signed_up(client, event, team_member):
+    event.signups_open = True
+    event.save(update_fields=["signups_open"])
+    EventSignup.objects.create(event=event, user=team_member)
+    client.force_login(team_member)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "signed up" in body
+    assert "edit_signup_modal" in body
+    assert "Sign up for this event" not in body
+
+
+@pytest.mark.django_db
+def test_closed_signups_say_so_without_a_button(client, event, team_member):
+    event.signups_open = False
+    event.save(update_fields=["signups_open"])
+    client.force_login(team_member)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "Signups are closed for this event." in body
+    assert "Sign up for this event" not in body

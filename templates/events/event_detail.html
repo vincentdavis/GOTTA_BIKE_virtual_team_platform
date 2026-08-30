@@ -146,6 +146,33 @@
       </div>
       {% endif %}
 
+      {% comment %}
+        The one thing most people come here to do, so it gets the full width of the card and
+        sits directly under the event links rather than tucked beside the Signups heading.
+        It states the current position as well as the action: a rider who is already signed
+        up should be able to tell at a glance without opening anything.
+      {% endcomment %}
+      <div class="mt-6">
+        {% if event.signups_open %}
+          {% if user_signup and user_signup.status == "registered" %}
+          <button class="btn btn-success btn-outline btn-block"
+                  onclick="document.getElementById('edit_signup_modal').showModal()">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            You&rsquo;re signed up &mdash; edit
+          </button>
+          {% else %}
+          <button class="btn btn-primary btn-block"
+                  onclick="document.getElementById('signup_modal').showModal()">
+            Sign up for this event
+          </button>
+          {% endif %}
+        {% else %}
+        <p class="text-sm text-base-content/70">Signups are closed for this event.</p>
+        {% endif %}
+      </div>
+
       {# Event Signup Section #}
       <div class="divider mt-6"></div>
       <div class="flex items-center gap-2 mb-4">
@@ -181,16 +208,6 @@
                     d="M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5"/>
             </svg>
           </button>
-          {% if user_signup and user_signup.status == "registered" %}
-          <button class="btn btn-success btn-outline btn-sm" onclick="document.getElementById('edit_signup_modal').showModal()">
-            Signed Up
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-          </button>
-          {% else %}
-          <button class="btn btn-primary btn-sm" onclick="document.getElementById('signup_modal').showModal()">Sign Up</button>
-          {% endif %}
-        {% else %}
-        <span class="text-sm text-base-content/50 ml-auto">Signups are closed</span>
         {% endif %}
       </div>
 
