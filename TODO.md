@@ -290,6 +290,21 @@ self-serve view and an admin action — deletion spread across a view body is ho
 - [ ] Cache get_unified_team_roster() (changes infrequently, expensive query)
 - [ ] Cache ZP/ZR API responses (invalidate on manual sync)
 - [ ] Cache analytics dashboard queries
+- [ ] **Improve the Discord channel-permission cache.** The Manage Squads page reads channel
+      visibility live from Discord to flag squads on an `@everyone`-readable channel
+      (`_public_channel_ids` in `apps/events/views.py`). It is cached 60s in `LocMemCache`,
+      which is per-process, so every Granian worker fetches separately. Options, roughly in
+      order of value:
+    - Store `permission_overwrites` on `DiscordChannel` at sync time and read from the DB
+      instead of the API. Needs the bot's `sync_guild_channels` payload extended
+      (`DiscordChannelSchema` currently carries only id/name/type/position/category), so it
+      is a change in the bot repo too. Freshness then follows the sync cadence rather than
+      the TTL, which is the tradeoff to weigh.
+    - Move to a shared cache so workers share one fetch. Also helps the other entries above.
+    - Invalidate on channel sync rather than waiting out the TTL.
+- [ ] Extend the same channel-visibility warning to the squad form, so the feedback arrives
+      when the channel is picked rather than after saving. Needs the same lookup on a page
+      that currently makes no Discord calls, so do it after the caching above.
 
 ## P2 - Medium Priority
 
