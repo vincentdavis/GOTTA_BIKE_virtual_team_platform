@@ -16,6 +16,11 @@ urlpatterns = [
     path("verification/", views.verification_records_view, name="verification_records"),
     path("verification/<int:pk>/", views.verification_record_detail_view, name="verification_record_detail"),
     path(
+        "verification/<int:pk>/media/",
+        views.verification_record_media_view,
+        name="verification_record_media",
+    ),
+    path(
         "verification/zwid-action/<int:user_id>/",
         views.zwid_verification_action_view,
         name="zwid_verification_action",

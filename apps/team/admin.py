@@ -18,7 +18,28 @@ class RaceReadyRecordAdmin(admin.ModelAdmin):
     list_filter = ("status", "verify_type", "media_type", "date_created")
     search_fields = ("user__username", "user__email", "user__discord_username", "notes")
     raw_id_fields = ("user",)
-    readonly_fields = ("date_created",)
+
+    # The evidence file is deliberately kept out of this form. Django would render it with a
+    # ClearableFileInput -- "Currently: <link>" -- and that link is a presigned storage URL,
+    # which answers to no permission check at all. It would sidestep the rider's same-gender
+    # condition and the rule that decided records stay visible only to the verification team,
+    # both of which the review page enforces via can_view_verification_media. Body photography
+    # is reviewed there, not here. Admins can still see whether a file exists.
+    exclude = ("media_file",)
+    readonly_fields = ("date_created", "media_present")
+
+    @admin.display(boolean=True, description="Media uploaded")
+    def media_present(self, obj: RaceReadyRecord | None) -> bool:
+        """Report whether evidence is attached, without exposing a link to it.
+
+        Args:
+            obj: The record being displayed, or None on the add form.
+
+        Returns:
+            True if the record has an uploaded file.
+
+        """
+        return bool(obj and obj.media_file)
 
     def get_urls(self) -> list:
         """Add custom URLs for unified roster view.

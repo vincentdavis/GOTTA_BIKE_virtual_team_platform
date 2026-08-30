@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -29,12 +29,14 @@ from apps.team.forms import (
 from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView, RosterFilter, TeamLink
 from apps.team.services import (
     ZP_DIV_TO_CATEGORY,
+    can_view_verification_media,
     get_membership_review_data,
     get_performance_review_data,
     get_unified_team_roster,
     log_record_view,
     purge_expired_verification_media,
     purge_rejected_verification_media,
+    verification_media_url,
 )
 from apps.team.tasks import notify_application_update, notify_captains_verification, notify_race_ready_change
 from apps.team.zauth_panel import build_zauth_panel
@@ -918,6 +920,66 @@ def zwid_verification_action_view(request: HttpRequest, user_id: int) -> HttpRes
 
 @login_required
 @team_member_required()
+@require_GET
+def verification_record_media_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Serve a verification record's media behind a per-request permission check.
+
+    Object storage hands out presigned URLs: the signature travels in the query string, so
+    the URL *is* the credential. It is bound to no session, works from any browser, and
+    cannot be revoked before it expires. Embedding one in the review page meant the page
+    carried a forwardable key to body photography for as long as the signature lasted.
+
+    This view keeps that key out of the page. Templates point here instead; every request
+    re-runs :func:`can_view_verification_media` -- the same rule the review page renders by
+    -- and only then mints a short-lived URL to redirect to. Two things follow: revoking a
+    reviewer's role revokes their access immediately rather than at the next expiry, and a
+    forwarded link is worthless to anyone who cannot pass the check themselves.
+
+    Denials are 404, not 403, so the endpoint cannot be used to confirm that a record id
+    exists or that a rider has uploaded anything.
+
+    Args:
+        request: The HTTP request.
+        pk: The primary key of the RaceReadyRecord.
+
+    Returns:
+        A redirect to a freshly signed, short-lived URL for the record's media file.
+
+    Raises:
+        Http404: If the record does not exist, holds no file, or this user may not see it.
+
+    """
+    record = get_object_or_404(RaceReadyRecord.objects.select_related("user"), pk=pk)
+
+    if not can_view_verification_media(request.user, record):
+        logfire.warning(
+            "Blocked verification media request",
+            record_id=pk,
+            user_id=request.user.id,
+            record_status=record.status,
+        )
+        raise Http404
+
+    if not record.media_file:
+        raise Http404
+
+    logfire.info(
+        "Verification media served",
+        record_id=pk,
+        user_id=request.user.id,
+        verify_type=record.verify_type,
+        record_status=record.status,
+    )
+
+    response = redirect(verification_media_url(record))
+    # The Location header resolves to a credential. Keep it out of shared caches, and stop
+    # the browser reusing a stale one instead of coming back through this permission check.
+    response["Cache-Control"] = "no-store, private"
+    return response
+
+
+@login_required
+@team_member_required()
 @require_http_methods(["GET", "POST"])
 def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Display and verify or reject a verification record.
@@ -982,7 +1044,7 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     can_delete = is_pvt or is_app_admin or request.user.is_superuser
     can_change_status = is_pvt or is_app_admin or request.user.is_superuser
     can_edit_weight = is_pvt or request.user.is_superuser
-    can_view_media = record.is_pending or is_pvt
+    can_view_media = can_view_verification_media(request.user, record)
     # Submitted values/ZP data: hide on reviewed records unless own record or PVT member
     can_view_values = record.is_pending or is_own_record or is_pvt
 

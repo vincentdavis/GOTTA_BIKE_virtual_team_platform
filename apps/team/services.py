@@ -1,5 +1,6 @@
 """Service layer for unified team roster operations."""
 
+import inspect
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -571,6 +572,85 @@ def purge_rejected_verification_media(older_than_days: int = 30) -> dict[str, in
     result = _strip_media(stale, reason="rejected")
     logfire.info("Purged rejected verification media", older_than_days=older_than_days, **result)
     return result
+
+
+# How long a minted verification-media URL stays valid. Deliberately short: the URL is a
+# bearer token, so this is the window in which a leaked one is still worth something. It is
+# not measured from page render but from the moment the reviewer asks for the file, so it
+# only has to outlive a single fetch -- plus enough slack for a browser to seek within a
+# video, which re-requests the resolved URL rather than coming back through the view.
+VERIFICATION_MEDIA_URL_TTL_SECONDS = 300
+
+# Video needs a longer window than a photo, and not for convenience. A browser resolves a
+# <source> once and then issues range requests against the *resolved* URL for the rest of
+# playback -- it does not come back through the view. So the link has to outlive the viewing
+# session, not just the first fetch. At 300s a reviewer who paused to read the notes and then
+# scrubbed backwards would hit a silent stall with no error to explain it.
+VERIFICATION_VIDEO_URL_TTL_SECONDS = 1800
+
+
+def can_view_verification_media(user: User, record: RaceReadyRecord) -> bool:
+    """Report whether ``user`` may see ``record``'s uploaded evidence.
+
+    This is the single definition of that rule. The review page uses it to decide whether to
+    render the media block, and the media view uses it to decide whether to hand out a URL --
+    they must not be able to disagree, or the second becomes a way around the first.
+
+    Three conditions, all required:
+
+    1. The viewer reviews verifications at all (or is a superuser).
+    2. The same-gender restriction, when the rider asked for one, is satisfied. Superusers
+       bypass this, matching the review page.
+    3. The record is still pending, or the viewer is on the performance verification team.
+       Once a record is decided, the evidence stops being visible to ordinary reviewers --
+       it was uploaded to support a decision that has now been made.
+
+    Args:
+        user: The person asking to see the media.
+        record: The verification record holding it.
+
+    Returns:
+        True if the media may be shown to this user.
+
+    """
+    from apps.accounts.models import Permissions
+
+    if not (user.can_approve_verification or user.is_superuser):
+        return False
+
+    if record.same_gender and not user.is_superuser and record.user.gender != user.gender:
+        return False
+
+    return record.is_pending or user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+
+
+def verification_media_url(record: RaceReadyRecord) -> str:
+    """Mint a short-lived URL for ``record``'s media file.
+
+    Callers must have already cleared :func:`can_view_verification_media`.
+
+    Args:
+        record: The record whose ``media_file`` should be addressed.
+
+    Returns:
+        A URL valid for :data:`VERIFICATION_MEDIA_URL_TTL_SECONDS`, or
+        :data:`VERIFICATION_VIDEO_URL_TTL_SECONDS` for video, on backends that sign URLs.
+        Local filesystem storage takes no expiry and returns its plain path.
+
+    """
+    media = record.media_file
+    url = media.storage.url
+    ttl = VERIFICATION_VIDEO_URL_TTL_SECONDS if record.media_type == "video" else VERIFICATION_MEDIA_URL_TTL_SECONDS
+
+    # Ask the backend whether it takes an expiry rather than calling and catching TypeError.
+    # A blanket except would also swallow a TypeError raised *inside* a signing backend, and
+    # the fallback below returns a URL on the much longer storage-wide clock -- turning a bug
+    # into a silent downgrade of this control. Better to let such an error surface.
+    if "expire" in inspect.signature(url).parameters:
+        return url(media.name, expire=ttl)
+
+    # FileSystemStorage.url() takes no expiry; local dev serves straight off disk.
+    return media.url
 
 
 def log_record_view(record: RaceReadyRecord, user: User, *, media_shown: bool) -> None:

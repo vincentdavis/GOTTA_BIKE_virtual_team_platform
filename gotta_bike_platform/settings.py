@@ -252,6 +252,20 @@ if config.use_s3_storage:
             "secret_key": config.aws_secret_access_key,
             "location": "media",
             "file_overwrite": False,
+            # 15 minutes rather than the 1-hour default. Every URL this storage hands out
+            # is a bearer token -- the signature lives in the query string, so it is not
+            # tied to a session and cannot be revoked. This is the floor for ordinary media
+            # (site logos, hero images); pages are never HTML-cached, so a fresh URL is
+            # minted on each render and a short window costs nothing.
+            #
+            # Verification media does NOT rely on this. It is body photography, and it is
+            # served through team:verification_record_media, which re-checks permission on
+            # every request and mints a much shorter URL per click. See that view.
+            #
+            # default_acl is deliberately left unset (django-storages sends no ACL header).
+            # The bucket is private, so objects are private by inheritance, and several
+            # S3-compatible providers reject PutObject calls that carry an ACL header.
+            "querystring_expire": 900,
         },
     }
     MEDIA_URL = f"{config.aws_s3_endpoint_url}/{config.aws_storage_bucket_name}/media/"
