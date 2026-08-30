@@ -402,6 +402,41 @@
                     {% endif %}
                 </div>
 
+                {% comment %}
+                  Kept in step with the same block in partials/profile_form.html -- this page
+                  and the HTMX partial each carry their own copy of the form.
+                {% endcomment %}
+                <div class="divider">Notifications</div>
+
+                <div class="form-control">
+                    <label class="cursor-pointer flex items-start gap-3">
+                        {{ form.discord_dm_opt_out }}
+                        <span>
+                            <span class="font-medium">Opt out of Discord DMs</span>
+                            <span class="block text-sm text-base-content/70 mt-1">
+                                The bot will send you no direct messages at all.
+                            </span>
+                        </span>
+                    </label>
+                </div>
+
+                <div class="alert alert-warning mt-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                        <h3 class="font-bold">DMs are how the team reaches you</h3>
+                        <div class="text-sm">
+                            Turning them off means you will not be told when your race verification
+                            is about to expire, when it is approved or rejected, or when you are
+                            signed up for an event. Those messages are not repeated anywhere else,
+                            and missing them can leave you unable to race. Leave DMs on unless you
+                            have a good reason not to.
+                        </div>
+                    </div>
+                </div>
+
                 <div class="flex gap-4 mt-6">
                     <button type="submit" class="btn btn-primary">Save Changes</button>
                     {% if user.is_profile_complete %}

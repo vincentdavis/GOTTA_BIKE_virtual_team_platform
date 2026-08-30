@@ -82,6 +82,8 @@ class ProfileForm(forms.ModelForm):
             "emergency_contact_relation",
             "emergency_contact_email",
             "emergency_contact_phone",
+            # Notifications
+            "discord_dm_opt_out",
         ]
         widgets: ClassVar[dict] = {
             "first_name": forms.TextInput(
@@ -242,6 +244,7 @@ class ProfileForm(forms.ModelForm):
                     "placeholder": "+1 555-123-4567",
                 }
             ),
+            "discord_dm_opt_out": forms.CheckboxInput(attrs={"class": "checkbox checkbox-warning"}),
         }
         labels: ClassVar[dict[str, str]] = {
             "first_name": "First Name",

@@ -115,14 +115,28 @@ def bot_has_role(role_id: str | int, *, force: bool = False) -> bool | None:
 def send_discord_dm(discord_id: str, message: str) -> bool:
     """Send a direct message to a Discord user.
 
+    A member who has opted out of DMs is skipped here, so every caller gets the behaviour
+    without having to know about it.
+
     Args:
         discord_id: The Discord user ID to send the message to.
         message: The message content to send.
 
     Returns:
-        True if the message was sent successfully, False otherwise.
+        True if there is nothing left to do -- the message was sent, or the member has opted
+        out. False only on an actual failure. A deliberate skip has to read as success:
+        callers use the return value to decide whether to retry and whether to stamp
+        "already warned", so returning False for an opt-out would re-send on every run.
 
     """
+    # One gate for every DM the app sends. Enforced here rather than at the five call sites
+    # so a new caller cannot forget it.
+    from apps.accounts.models import User
+
+    if User.objects.filter(discord_id=discord_id, discord_dm_opt_out=True).exists():
+        logfire.info("DM skipped: member has opted out of Discord DMs", discord_id=discord_id)
+        return True
+
     bot_token = config.DISCORD_BOT_TOKEN
     if not bot_token:
         logfire.warning("DISCORD_BOT_TOKEN not configured, skipping DM")

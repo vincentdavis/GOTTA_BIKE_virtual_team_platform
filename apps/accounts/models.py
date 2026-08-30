@@ -240,6 +240,10 @@ class User(AbstractUser):
         blank=True,
         help_text="Gender",
     )
+    discord_dm_opt_out = models.BooleanField(
+        default=False,
+        help_text="If set, the bot sends this member no direct messages",
+    )
     timezone = models.CharField(
         max_length=50,
         blank=True,
