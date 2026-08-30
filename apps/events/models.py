@@ -467,6 +467,19 @@ class EventSignup(models.Model):
         """
         return f"{self.user} - {self.event.title}"
 
+    @property
+    def is_withdrawn(self) -> bool:
+        """Whether the rider has pulled out of the event.
+
+        Withdrawing flips the status rather than deleting the row, so a signup queryset that
+        does not filter counts riders who are no longer taking part.
+
+        Returns:
+            True if this signup has been withdrawn.
+
+        """
+        return self.status == self.Status.WITHDRAWN
+
 
 class SignupQuestion(models.Model):
     """A custom question an admin adds to an event's signup form.

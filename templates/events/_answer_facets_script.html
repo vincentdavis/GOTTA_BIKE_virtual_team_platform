@@ -31,7 +31,11 @@ the panel from _answer_facets.html, and a table whose rows carry data-signup-pk.
   var rows = Array.prototype.slice.call(table.querySelectorAll('tbody tr'));
   var chipRow = document.getElementById('answer-chips');
   var countBadge = document.getElementById('signup-count-badge');
-  var totalRows = rows.length;
+  // Withdrawn riders stay in the table, marked, but are not signups any more -- the
+  // server-rendered badge counts registered only. Counting every rendered row here would
+  // make the badge visibly change value on load for any event with custom questions.
+  var activeRows = rows.filter(function (row) { return !row.hasAttribute('data-signup-withdrawn'); });
+  var totalRows = activeRows.length;
   var sortState = null;
 
   // question pk -> {type, label, selected:Set}
@@ -95,7 +99,7 @@ the panel from _answer_facets.html, and a table whose rows carry data-signup-pk.
       var match = rowMatches(row.dataset.signupPk, null);
       row.dataset.answerHidden = match ? '' : '1';
       window.applyRowVisibility(row);
-      if (match && !row.dataset.searchHidden) shown++;
+      if (match && !row.dataset.searchHidden && !row.hasAttribute('data-signup-withdrawn')) shown++;
     });
 
     // Chips, outside the collapse so an active filter is visible with the panel shut.

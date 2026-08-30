@@ -8,6 +8,7 @@ squads themselves are listed further down the page for everyone.
 
 import re
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 from django.urls import reverse
@@ -34,9 +35,24 @@ def event(db) -> Event:
 
 
 def _rider(user_model, name: str, gender: str):
+    """Build a signed-up rider.
+
+    discord_username is set because the signup table renders
+    ``get_full_name|default:discord_username`` -- without it the row shows a blank name.
+
+    Args:
+        user_model: The active User class.
+        name: Used for the username, e-mail and Discord name.
+        gender: One of the User.Gender values.
+
+    Returns:
+        The created user.
+
+    """
     return user_model.objects.create_user(
         username=name,
         email=f"{name}@example.test",
+        discord_username=name,
         gender=gender,
         permission_overrides={"team_member": True},
     )
@@ -117,3 +133,92 @@ def test_add_members_is_only_in_the_gear_menu(client, event, superuser):
     assert 'id="add_members_modal"' in body
     # One trigger, in the menu.
     assert body.count("add_members_modal').showModal()") == 1
+
+
+@pytest.mark.django_db
+def test_withdrawn_riders_are_left_out_of_the_counts(client, event, superuser, user_model):
+    """Withdrawing flips the status rather than deleting the row.
+
+    Before this, an event where people had pulled out still counted them as signed up.
+    """
+    EventSignup.objects.create(event=event, user=_rider(user_model, "in1", "male"))
+    EventSignup.objects.create(event=event, user=_rider(user_model, "in2", "female"))
+    EventSignup.objects.create(
+        event=event,
+        user=_rider(user_model, "out1", "male"),
+        status=EventSignup.Status.WITHDRAWN,
+    )
+    client.force_login(superuser)
+
+    counts = _counts(client.get(reverse("events:event_detail", args=[event.pk])).content.decode())
+
+    assert counts["signups"] == 2
+    assert counts["male"] == 1  # the withdrawn rider is male and must not be counted
+    assert counts["female"] == 1
+
+
+@pytest.mark.django_db
+def test_withdrawn_riders_are_still_listed_and_marked(client, event, superuser, user_model):
+    """They stay in the table -- who pulled out is worth seeing -- but are labelled.
+
+    Labelled in words rather than by the dimmed row alone, so the state does not depend on
+    seeing colour.
+    """
+    EventSignup.objects.create(
+        event=event,
+        user=_rider(user_model, "out1", "male"),
+        status=EventSignup.Status.WITHDRAWN,
+    )
+    client.force_login(superuser)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "out1" in body, "the withdrawn rider should still appear in the table"
+    assert "data-signup-withdrawn" in body
+    assert ">Withdrawn</span>" in body
+
+
+@pytest.mark.django_db
+def test_active_rows_carry_no_marker(client, event, superuser, user_model):
+    EventSignup.objects.create(event=event, user=_rider(user_model, "in1", "male"))
+    client.force_login(superuser)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert "data-signup-withdrawn" not in body
+    assert ">Withdrawn</span>" not in body
+
+
+@pytest.mark.django_db
+def test_table_stays_reachable_when_everyone_withdrew(client, event, superuser, user_model):
+    """The count is registered-only; the table is not.
+
+    Gating the expand toggle on the count would leave the marked rows rendered but with no
+    way to open them.
+    """
+    EventSignup.objects.create(
+        event=event,
+        user=_rider(user_model, "out1", "male"),
+        status=EventSignup.Status.WITHDRAWN,
+    )
+    client.force_login(superuser)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert _counts(body)["signups"] == 0
+    assert 'id="signups-toggle"' in body or "signups-content" in body
+    assert ">Withdrawn</span>" in body
+
+
+def test_facet_script_excludes_withdrawn_rows_from_the_badge():
+    """The script rewrites #signup-count-badge from the rendered rows.
+
+    Counting every row there would make the badge change value on load, disagreeing with the
+    server-rendered registered-only count on the very same screen.
+    """
+    script = (
+        Path(__file__).resolve().parent.parent.parent
+        / "templates/events/_answer_facets_script.html"
+    ).read_text()
+    assert "data-signup-withdrawn" in script
+    assert "var totalRows = activeRows.length;" in script

@@ -1246,10 +1246,16 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     signups = event.signups.select_related("user").all()
     # One aggregate rather than three .count() round trips, and it replaces the separate
     # signups.count() the template's badge used to trigger.
+    # Registered only. Withdrawing flips the status instead of deleting the row, so an
+    # unfiltered count reports riders who have pulled out as though they were still in. The
+    # four other views that count signups already filter this way; this one did not. The
+    # table below still lists withdrawn riders, marked, because who pulled out is worth
+    # seeing -- it is the number that should not include them.
+    registered = Q(status=EventSignup.Status.REGISTERED)
     signup_totals = signups.aggregate(
-        total=Count("pk"),
-        male=Count("pk", filter=Q(user__gender=User.Gender.MALE)),
-        female=Count("pk", filter=Q(user__gender=User.Gender.FEMALE)),
+        total=Count("pk", filter=registered),
+        male=Count("pk", filter=registered & Q(user__gender=User.Gender.MALE)),
+        female=Count("pk", filter=registered & Q(user__gender=User.Gender.FEMALE)),
     )
     user_signup = event.signups.filter(user=request.user).first()
     # Event admins and anyone who passes the eligibility gate (head captain, squad
