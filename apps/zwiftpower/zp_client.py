@@ -177,7 +177,10 @@ class ZPClient:
                 "password": self._password,
                 "rememberMe": "on",
             }
-            logfire.info(f"Attempting login for user: {self._username}")
+            # No username in the log line. The scrape itself is unavoidable -- ZwiftPower has
+            # no official API -- but that does not oblige us to copy the team's Zwift login
+            # into a third-party log store on every run.
+            logfire.info("Attempting ZwiftPower login")
 
             r3 = client.post(post_url, data=login_data, follow_redirects=True)
             logfire.info(f"Post LOGIN status: {r3.status_code}")
