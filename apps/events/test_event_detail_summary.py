@@ -59,7 +59,7 @@ def _rider(user_model, name: str, gender: str):
 
 
 def _counts(body: str) -> dict[str, int]:
-    """Pull the number/label pairs out of the summary list.
+    """Pull the number/label pairs out of the summary lists.
 
     Args:
         body: The rendered page.
@@ -68,11 +68,13 @@ def _counts(body: str) -> dict[str, int]:
         Mapping of label to count.
 
     """
-    block = re.search(r"<dl[^>]*>(.*?)</dl>", body, re.S)
-    if not block:
-        return {}
-    pairs = re.findall(r'<dd[^>]*>\s*(\d+)\s*</dd>\s*<dt[^>]*>\s*([a-z]+)\s*</dt>', block.group(1))
-    return {label: int(n) for n, label in pairs}
+    # Two lists now: the squad count sits with the event's structure in the header, the
+    # signup figures with the signup button. Read both.
+    counts = {}
+    for block in re.findall(r"<dl[^>]*>(.*?)</dl>", body, re.S):
+        for n, label in re.findall(r'<dd[^>]*>\s*(\d+)\s*</dd>\s*<dt[^>]*>\s*([a-z]+)\s*</dt>', block):
+            counts[label] = int(n)
+    return counts
 
 
 @pytest.mark.django_db
@@ -266,3 +268,24 @@ def test_closed_signups_say_so_without_a_button(client, event, team_member):
 
     assert "Signups are closed for this event." in body
     assert "Sign up for this event" not in body
+
+
+@pytest.mark.django_db
+def test_signup_figures_sit_with_the_signup_button(client, event, team_member, user_model):
+    """They describe a state the button is the way to change, so they travel with it.
+
+    The squad count stays in the header: it describes how the event is built, not who is in
+    it, and it does not change when you press the button.
+    """
+    event.signups_open = True
+    event.save(update_fields=["signups_open"])
+    Squad.objects.create(event=event, name="A")
+    EventSignup.objects.create(event=event, user=_rider(user_model, "m1", "male"))
+    client.force_login(team_member)
+
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    button = body.index("Sign up for this event")
+    assert body.index(">squad</dt>") < button, "squad count belongs above, with the event links"
+    assert button < body.index(">male</dt>"), "signup figures belong below the button"
+    assert body.index(">male</dt>") < body.index(">Signups</h3>")

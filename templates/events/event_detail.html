@@ -100,24 +100,11 @@
       {% endif %}
 
       {% comment %}
-        Summary counts, shown to every team member. They are aggregate rather than personal,
-        and the squads they sit beside are already listed in full further down the page for
-        everyone -- so gating the signup figures behind show_signups only made the row's
-        length vary by viewer without protecting anything.
+        How the event is structured, which is fixed for the whole event. The signup figures
+        move with the signup button below, because they describe a state that changes and
+        that the button is the way to change.
       {% endcomment %}
       <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1 mt-4">
-        <div class="flex items-baseline gap-1.5">
-          <dd class="text-lg font-semibold tabular-nums">{{ signup_count }}</dd>
-          <dt class="text-sm text-base-content/70">{{ signup_count|pluralize:"signup,signups" }}</dt>
-        </div>
-        <div class="flex items-baseline gap-1.5">
-          <dd class="text-lg font-semibold tabular-nums">{{ signup_male_count }}</dd>
-          <dt class="text-sm text-base-content/70">male</dt>
-        </div>
-        <div class="flex items-baseline gap-1.5">
-          <dd class="text-lg font-semibold tabular-nums">{{ signup_female_count }}</dd>
-          <dt class="text-sm text-base-content/70">female</dt>
-        </div>
         <div class="flex items-baseline gap-1.5">
           <dd class="text-lg font-semibold tabular-nums">{{ squads|length }}</dd>
           <dt class="text-sm text-base-content/70">{{ squads|length|pluralize:"squad,squads" }}</dt>
@@ -171,6 +158,26 @@
         {% else %}
         <p class="text-sm text-base-content/70">Signups are closed for this event.</p>
         {% endif %}
+
+        {% comment %}
+          Shown to every team member: aggregate rather than personal, and the squads they
+          describe are listed in full further down the page for everyone. Registered only --
+          withdrawn riders are still in the table below, marked.
+        {% endcomment %}
+        <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1 mt-3">
+          <div class="flex items-baseline gap-1.5">
+            <dd class="text-lg font-semibold tabular-nums">{{ signup_count }}</dd>
+            <dt class="text-sm text-base-content/70">{{ signup_count|pluralize:"signup,signups" }}</dt>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <dd class="text-lg font-semibold tabular-nums">{{ signup_male_count }}</dd>
+            <dt class="text-sm text-base-content/70">male</dt>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <dd class="text-lg font-semibold tabular-nums">{{ signup_female_count }}</dd>
+            <dt class="text-sm text-base-content/70">female</dt>
+          </div>
+        </dl>
       </div>
 
       {# Event Signup Section #}
