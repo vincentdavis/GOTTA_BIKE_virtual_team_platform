@@ -22,6 +22,16 @@ GUILD_ID = "111111"
 CHANNEL_ID = "555555"
 
 
+@pytest.fixture(autouse=True)
+def _clear_cache():
+    """Clear the channel-lookup cache, which the view holds for a minute."""
+    from django.core.cache import cache
+
+    cache.clear()
+    yield
+    cache.clear()
+
+
 @pytest.fixture
 def event(db) -> Event:
     """Build a visible event.
@@ -120,3 +130,49 @@ def test_a_private_channel_leaves_the_squad_unmarked(client, event, event_admin)
         body = client.get(reverse("events:squad_manage", args=[event.pk])).content.decode()
 
     assert "Discord channel is visible to the whole server" not in body
+
+
+@pytest.mark.django_db
+def test_discord_is_not_called_twice_in_a_minute(client, event, event_admin):
+    """Two blocking calls per render, each with a 10s timeout, on a page captains live on.
+
+    Without a cache a slow Discord turns this into a twenty-second page.
+    """
+    Squad.objects.create(event=event, name="A", discord_channel_id=CHANNEL_ID)
+    client.force_login(event_admin)
+    url = reverse("events:squad_manage", args=[event.pk])
+
+    with (
+        patch(
+            "apps.accounts.discord_service.get_guild_channels",
+            return_value=[_channel(deny_everyone=False)],
+        ) as fetch,
+        patch("apps.accounts.discord_service.get_guild_roles", return_value=_roles(everyone_can_view=True)),
+        patch("apps.events.views.config") as cfg,
+    ):
+        cfg.GUILD_ID = GUILD_ID
+        cfg.EVENT_ROLE_PREFIXES = []
+        client.get(url)
+        client.get(url)
+
+    assert fetch.call_count == 1, "the second render should have used the cache"
+
+
+@pytest.mark.django_db
+def test_an_outage_is_not_cached(client, event, event_admin):
+    """Caching a failure would hold on to the outage after Discord came back."""
+    Squad.objects.create(event=event, name="A", discord_channel_id=CHANNEL_ID)
+    client.force_login(event_admin)
+    url = reverse("events:squad_manage", args=[event.pk])
+
+    with (
+        patch("apps.accounts.discord_service.get_guild_channels", return_value=None) as fetch,
+        patch("apps.accounts.discord_service.get_guild_roles", return_value=None),
+        patch("apps.events.views.config") as cfg,
+    ):
+        cfg.GUILD_ID = GUILD_ID
+        cfg.EVENT_ROLE_PREFIXES = []
+        client.get(url)
+        client.get(url)
+
+    assert fetch.call_count == 2, "a failed read must be retried, not cached"

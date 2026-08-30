@@ -13,6 +13,7 @@ from constance import config
 from datastar_py.django import DatastarResponse, ServerSentEventGenerator
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
@@ -1678,6 +1679,10 @@ def event_bot_role_check_view(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
+_PUBLIC_CHANNELS_CACHE_KEY = "squad_public_channel_ids"  # per-guild suffix appended
+_PUBLIC_CHANNELS_TTL = 60  # 1 min -- channel permissions change rarely, pages reload often
+
+
 def _public_channel_ids(channels: list[dict] | None, roles: list[dict] | None) -> set[str] | None:
     """Work out which channels the whole server can see.
 
@@ -1826,13 +1831,23 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     # Which channels the whole server can read. One guild-wide fetch rather than one call
     # per squad; None means Discord could not be reached, which is deliberately different
     # from "none are public" so an outage does not quietly clear every warning.
-    from apps.accounts.discord_service import get_guild_channels, get_guild_roles
+    #
+    # Cached for a minute. Without it this page makes two blocking Discord calls on every
+    # render, each with a 10s timeout, on a page captains reload constantly -- a slow
+    # Discord would turn into a twenty-second page. A failed read is never cached, so the
+    # next render retries rather than holding on to an outage.
+    public_channel_ids: set[str] | None = set()
+    if any(s.discord_channel_id for s in squads):
+        cache_key = f"{_PUBLIC_CHANNELS_CACHE_KEY}:{config.GUILD_ID}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            public_channel_ids = cached
+        else:
+            from apps.accounts.discord_service import get_guild_channels, get_guild_roles
 
-    public_channel_ids = (
-        _public_channel_ids(get_guild_channels(), get_guild_roles())
-        if any(s.discord_channel_id for s in squads)
-        else set()
-    )
+            public_channel_ids = _public_channel_ids(get_guild_channels(), get_guild_roles())
+            if public_channel_ids is not None:
+                cache.set(cache_key, public_channel_ids, _PUBLIC_CHANNELS_TTL)
 
     # Build ID→name lookups for Discord channels and roles
     channel_ids = set()
