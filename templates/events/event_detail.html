@@ -42,7 +42,7 @@
         </div>
         {# Gear menu replaces the old "Edit Event" button. #}
         {# Items the user's roles don't cover are greyed out, as on the squad manage page. #}
-        {% if is_event_admin or can_view_squad_manage or can_view_v_report %}
+        {% if is_event_admin or can_view_squad_manage or can_view_v_report or can_add_members %}
         <div class="flex justify-end shrink-0">
           <div class="dropdown dropdown-end">
             <label tabindex="0" class="btn btn-outline btn-sm btn-square" title="Event actions" aria-label="Event actions">
@@ -76,6 +76,15 @@
                   Eligibility
                 </a>
               </li>
+              <li{% if not can_add_members %} class="menu-disabled"{% endif %}>
+                <button type="button"
+                        {% if can_add_members %}onclick="document.getElementById('add_members_modal').showModal()"{% else %}disabled title="Requires the event head captain role, app admin, or superuser"{% endif %}>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
+                  </svg>
+                  Add members
+                </button>
+              </li>
             </ul>
           </div>
         </div>
@@ -89,6 +98,33 @@
       {% if event.description %}
       <div class="prose prose-sm max-w-none mt-4">{{ event.description|render_markdown }}</div>
       {% endif %}
+
+      {% comment %}
+        Summary counts. The signup figures follow the same gate as the count badge and the
+        signup table -- aggregate rather than personal, but there is no reason to show them
+        to someone who cannot see the list they summarise. The squad count is ungated
+        because the squads themselves are listed further down this page for everyone.
+      {% endcomment %}
+      <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1 mt-4">
+        {% if can_view_signups %}
+        <div class="flex items-baseline gap-1.5">
+          <dd class="text-lg font-semibold tabular-nums">{{ signup_count }}</dd>
+          <dt class="text-sm text-base-content/70">{{ signup_count|pluralize:"signup,signups" }}</dt>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <dd class="text-lg font-semibold tabular-nums">{{ signup_male_count }}</dd>
+          <dt class="text-sm text-base-content/70">male</dt>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <dd class="text-lg font-semibold tabular-nums">{{ signup_female_count }}</dd>
+          <dt class="text-sm text-base-content/70">female</dt>
+        </div>
+        {% endif %}
+        <div class="flex items-baseline gap-1.5">
+          <dd class="text-lg font-semibold tabular-nums">{{ squads|length }}</dd>
+          <dt class="text-sm text-base-content/70">{{ squads|length|pluralize:"squad,squads" }}</dt>
+        </div>
+      </dl>
 
       {% if event.url or event.discord_channel_id %}
       <div class="flex flex-wrap items-center gap-4 mt-4">
@@ -543,15 +579,7 @@
       {% endif %}
 
       {% if can_add_members %}
-      <div class="mt-3">
-        <div class="tooltip" data-tip="Add team members to this event and assign the event Discord role">
-          <button class="btn btn-outline btn-sm" onclick="document.getElementById('add_members_modal').showModal()">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
-            Add Members
-          </button>
-        </div>
-      </div>
-
+      {# The trigger lives in the event gear menu; only the dialog remains here. #}
       <dialog id="add_members_modal" class="modal">
         <div class="modal-box max-w-lg">
           <h3 class="text-lg font-bold mb-4">Add Members to Event</h3>

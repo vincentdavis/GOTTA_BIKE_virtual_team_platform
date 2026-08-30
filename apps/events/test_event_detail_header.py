@@ -39,8 +39,13 @@ def _detail(client, event: Event) -> str:
 
 
 @pytest.mark.django_db
-def test_event_admin_gets_every_menu_item_enabled(client, event, event_admin) -> None:
-    """An event admin passes all three gates, so nothing is greyed out."""
+def test_event_admin_gets_every_navigation_item_enabled(client, event, event_admin) -> None:
+    """An event admin passes all three navigation gates, so none of those is greyed out.
+
+    "Add members" is the exception and is asserted separately: despite what
+    ``_can_add_members``' docstring says, the code grants it to superusers, app admins and
+    the event's head captain role only -- not to event admins.
+    """
     Squad.objects.create(event=event, name="Squad A")
     client.force_login(event_admin)
 
@@ -52,7 +57,9 @@ def test_event_admin_gets_every_menu_item_enabled(client, event, event_admin) ->
     assert reverse("events:event_edit", args=[event.pk]) in body
     assert reverse("events:squad_manage", args=[event.pk]) in body
     assert reverse("events:squad_v_report", args=[event.pk]) in body
-    assert "menu-disabled" not in body
+    # Only "Add members" is disabled, so the three navigation items are all live.
+    assert body.count("menu-disabled") == 1
+    assert "Requires the event head captain role" in body
     # Each URL appears once: the old header button and the two Squads-section buttons are gone.
     assert body.count(reverse("events:squad_manage", args=[event.pk])) == 1
     assert body.count(reverse("events:squad_v_report", args=[event.pk])) == 1
@@ -75,7 +82,8 @@ def test_squad_captain_sees_event_setup_greyed_out(client, event, user_model) ->
     body = _detail(client, event)
 
     assert 'aria-label="Event actions"' in body
-    assert body.count("menu-disabled") == 1
+    # Event setup and Add members: a squad captain has neither permission.
+    assert body.count("menu-disabled") == 2
     assert "Requires the event admin permission" in body
     # Listed but not actionable, so no href that would 403.
     assert "Event setup" in body

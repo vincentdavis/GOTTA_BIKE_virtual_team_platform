@@ -1244,6 +1244,13 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         event.squads.prefetch_related("captains", "vice_captains").annotate(member_count=Count("squad_members")).all()
     )
     signups = event.signups.select_related("user").all()
+    # One aggregate rather than three .count() round trips, and it replaces the separate
+    # signups.count() the template's badge used to trigger.
+    signup_totals = signups.aggregate(
+        total=Count("pk"),
+        male=Count("pk", filter=Q(user__gender=User.Gender.MALE)),
+        female=Count("pk", filter=Q(user__gender=User.Gender.FEMALE)),
+    )
     user_signup = event.signups.filter(user=request.user).first()
     # Event admins and anyone who passes the eligibility gate (head captain, squad
     # captains/vice-captains) get the full signup table so they can filter by answers.
@@ -1341,7 +1348,9 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "races": races,
             "squads": squads,
             "signups": enriched_signups,
-            "signup_count": signups.count(),
+            "signup_count": signup_totals["total"],
+            "signup_male_count": signup_totals["male"],
+            "signup_female_count": signup_totals["female"],
             "user_signup": user_signup,
             "signup_questions": signup_questions,
             "signup_question_fields": signup_question_fields,
