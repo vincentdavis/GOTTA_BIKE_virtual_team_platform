@@ -144,14 +144,17 @@ def update_team_riders() -> dict:
                 "date_left": None,  # Clear date_left if rider is back on team
             }
 
-            obj, created = ZPTeamRiders.objects.update_or_create(
+            _obj, created = ZPTeamRiders.objects.update_or_create(
                 zwid=zwid,
                 defaults=defaults,
             )
 
             if created:
                 created_count += 1
-                logfire.info(f"Created rider: {obj.name} ({zwid})")
+                # No rider name: this sweep covers every rider on the ZwiftPower team page,
+                # including people who never registered here. The summary below carries the
+                # counts, and the zwid is enough to find the row.
+                logfire.info("Created ZwiftPower rider record", zwid=zwid)
             else:
                 updated_count += 1
 
@@ -166,7 +169,7 @@ def update_team_riders() -> dict:
             rider.date_left = timezone.now()
             rider.save(update_fields=["date_left"])
             left_count += 1
-            logfire.info(f"Rider left team: {rider.name} ({rider.zwid})")
+            logfire.info("ZwiftPower rider left team", zwid=rider.zwid)
 
             # Enqueue notification task
             from apps.accounts.tasks import notify_rider_left_team
