@@ -569,6 +569,42 @@ def get_channel(channel_id: str | int) -> dict | None:
         return None
 
 
+def get_guild_channels() -> list[dict] | None:
+    """Fetch every channel in the guild, each with its permission overwrites.
+
+    One request for the whole guild rather than one per channel: a page showing many squads
+    would otherwise make a Discord call per squad and hit rate limits for no reason.
+
+    Returns:
+        A list of channel objects, or None if they could not be fetched.
+
+    """
+    bot_token = config.DISCORD_BOT_TOKEN
+    guild_id = config.GUILD_ID
+    if not bot_token or not guild_id:
+        logfire.warning("Discord bot token or guild not configured, skipping channel list fetch")
+        return None
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(
+                f"{DISCORD_API_BASE}/guilds/{guild_id}/channels",
+                headers={"Authorization": f"Bot {bot_token}"},
+            )
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        logfire.error(
+            "Failed to fetch Discord channel list",
+            status_code=e.response.status_code,
+            error=str(e),
+        )
+        return None
+    except httpx.RequestError as e:
+        logfire.error("Discord API request failed for channel list fetch", error=str(e))
+        return None
+
+
 def get_guild_roles() -> list[dict] | None:
     """Fetch the guild's roles, including their permission bitfields.
 

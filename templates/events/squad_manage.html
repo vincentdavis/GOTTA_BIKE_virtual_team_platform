@@ -134,7 +134,7 @@
   </div>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="squad-grid">
     {% for squad in squads %}
-    <div class="card bg-base-200 shadow-md squad-card{% if squad.role_violations %} border-2 border-error{% endif %}"
+    <div class="card bg-base-200 shadow-md squad-card{% if squad.role_violations or squad.channel_warnings %} border-2 border-error{% endif %}"
          data-timezone="{{ squad.squad_timezone|default:'' }}"
          data-gender="{{ squad.gender|default:'' }}"
          data-search="{{ squad.name|lower }} {% for c in squad.captains.all %}{{ c.get_full_name|lower }} {% endfor %}{% for c in squad.vice_captains.all %}{{ c.get_full_name|lower }} {% endfor %}">
@@ -243,6 +243,27 @@
               <span class="text-sm">{{ squad.min_womens_zwift_category|default:"" }}{% if squad.min_womens_zwift_category and squad.max_womens_zwift_category %} &ndash; {% endif %}{{ squad.max_womens_zwift_category|default:"" }}</span>
             </div>
             {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if squad.channel_warnings %}
+        {% comment %}
+          Checked live on every render, not stored: channel permissions change in Discord,
+          so a check made when the squad was set up would go stale without anyone noticing.
+        {% endcomment %}
+        <div class="alert alert-error py-2 mb-2">
+          <div>
+            <p class="font-semibold text-sm">Discord channel is visible to the whole server</p>
+            <ul class="list-disc list-inside text-xs">
+              {% for problem in squad.channel_warnings %}<li>{{ problem }}</li>{% endfor %}
+            </ul>
+            <p class="text-xs mt-1">
+              Fix it in Discord by restricting the channel to the squad's role, or pick a
+              private channel when editing this squad.
+              Or use <span class="font-medium">Channel access</span> in the panel below to see
+              exactly who can view it.
+            </p>
           </div>
         </div>
         {% endif %}

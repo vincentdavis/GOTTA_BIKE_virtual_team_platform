@@ -39,6 +39,7 @@ from apps.accounts.models import Permissions, User
 from apps.events import ds_service, grid_defaults
 from apps.events.answer_facets import answers_payload, build_facets, panel_starts_open
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
+from apps.events.channel_access import can_view
 from apps.events.forms import EventForm, EventRoleSetupForm, SignupQuestionForm, SquadForm
 from apps.events.models import (
     ZR_CATEGORY_ORDER,
@@ -1677,6 +1678,62 @@ def event_bot_role_check_view(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
+def _public_channel_ids(channels: list[dict] | None, roles: list[dict] | None) -> set[str] | None:
+    """Work out which channels the whole server can see.
+
+    A thread inherits its parent channel's visibility, so a squad's race thread -- rider
+    names, availability, who was picked -- is readable by everyone in the guild whenever the
+    channel is. Discord thread type is not the lever here; the parent channel is.
+
+    Args:
+        channels: Guild channels, each with ``permission_overwrites``.
+        roles: Guild roles, for the ``@everyone`` base permissions.
+
+    Returns:
+        Ids of channels a member holding no role but ``@everyone`` can view, or None when
+        Discord could not be reached -- which is not the same as "none are public".
+
+    """
+    if channels is None or roles is None:
+        return None
+
+    guild_id = str(config.GUILD_ID)
+    roles_by_id = {r["id"]: r for r in roles}
+    public = set()
+    for channel in channels:
+        visible = can_view(
+            member_role_ids=set(),
+            member_id="",
+            guild_id=guild_id,
+            roles_by_id=roles_by_id,
+            overwrites=channel.get("permission_overwrites") or [],
+        )
+        if visible:
+            public.add(str(channel["id"]))
+    return public
+
+
+def _squad_channel_warnings(squad: Squad, public_channel_ids: set[str] | None) -> list[str]:
+    """Flag a squad whose Discord channel the whole server can read.
+
+    Args:
+        squad: The squad to check.
+        public_channel_ids: From ``_public_channel_ids``, or None when unknown.
+
+    Returns:
+        One human-readable line per problem, empty when the channel is private or unknown.
+
+    """
+    if not squad.discord_channel_id or public_channel_ids is None:
+        return []
+    if str(squad.discord_channel_id) not in public_channel_ids:
+        return []
+    return [
+        "Everyone on the server can see this squad's Discord channel, so race threads "
+        "created in it - rider names, availability and selections - are visible team-wide."
+    ]
+
+
 def _squad_role_violations(squad: Squad, event: Event, role_names: dict[str, str]) -> list[str]:
     """Describe squad roles that the event's Role Setup would no longer permit.
 
@@ -1766,6 +1823,17 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         .order_by("name")
     )
 
+    # Which channels the whole server can read. One guild-wide fetch rather than one call
+    # per squad; None means Discord could not be reached, which is deliberately different
+    # from "none are public" so an outage does not quietly clear every warning.
+    from apps.accounts.discord_service import get_guild_channels, get_guild_roles
+
+    public_channel_ids = (
+        _public_channel_ids(get_guild_channels(), get_guild_roles())
+        if any(s.discord_channel_id for s in squads)
+        else set()
+    )
+
     # Build ID→name lookups for Discord channels and roles
     channel_ids = set()
     role_ids = set()
@@ -1835,6 +1903,10 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         # a value silently on the next edit -- so surface it here rather than let it
         # vanish unnoticed.
         s.role_violations = _squad_role_violations(s, event, role_names)
+        # Channel visibility is read live rather than from the synced DiscordChannel rows,
+        # which carry no permissions -- and it is checked on every render because the
+        # permissions live in Discord and can change after a squad is set up.
+        s.channel_warnings = _squad_channel_warnings(s, public_channel_ids)
         # Per-squad management: full managers, or this squad's captain/VC.
         s.can_manage = can_manage_all or _can_manage_squad_availability(request.user, s)
 
