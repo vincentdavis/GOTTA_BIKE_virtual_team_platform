@@ -99,18 +99,6 @@
       <div class="prose prose-sm max-w-none mt-4">{{ event.description|render_markdown }}</div>
       {% endif %}
 
-      {% comment %}
-        How the event is structured, which is fixed for the whole event. The signup figures
-        move with the signup button below, because they describe a state that changes and
-        that the button is the way to change.
-      {% endcomment %}
-      <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1 mt-4">
-        <div class="flex items-baseline gap-1.5">
-          <dd class="text-lg font-semibold tabular-nums">{{ squads|length }}</dd>
-          <dt class="text-sm text-base-content/70">{{ squads|length|pluralize:"squad,squads" }}</dt>
-        </div>
-      </dl>
-
       {% if event.url or event.discord_channel_id %}
       <div class="flex flex-wrap items-center gap-4 mt-4">
         {% if event.url %}
@@ -160,9 +148,10 @@
         {% endif %}
 
         {% comment %}
-          Shown to every team member: aggregate rather than personal, and the squads they
-          describe are listed in full further down the page for everyone. Registered only --
-          withdrawn riders are still in the table below, marked.
+          Shown to every team member: aggregate rather than personal, and the squads and
+          riders they describe are listed in full further down the page for everyone. The
+          signup figures are registered-only -- withdrawn riders are still in the table
+          below, marked.
         {% endcomment %}
         <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1 mt-3">
           <div class="flex items-baseline gap-1.5">
@@ -176,6 +165,10 @@
           <div class="flex items-baseline gap-1.5">
             <dd class="text-lg font-semibold tabular-nums">{{ signup_female_count }}</dd>
             <dt class="text-sm text-base-content/70">female</dt>
+          </div>
+          <div class="flex items-baseline gap-1.5">
+            <dd class="text-lg font-semibold tabular-nums">{{ squads|length }}</dd>
+            <dt class="text-sm text-base-content/70">{{ squads|length|pluralize:"squad,squads" }}</dt>
           </div>
         </dl>
       </div>

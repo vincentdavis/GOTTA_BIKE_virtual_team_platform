@@ -68,8 +68,8 @@ def _counts(body: str) -> dict[str, int]:
         Mapping of label to count.
 
     """
-    # Two lists now: the squad count sits with the event's structure in the header, the
-    # signup figures with the signup button. Read both.
+    # One list, under the signup button. Written as a loop so it still works if the counts
+    # are ever split across more than one list again.
     counts = {}
     for block in re.findall(r"<dl[^>]*>(.*?)</dl>", body, re.S):
         for n, label in re.findall(r'<dd[^>]*>\s*(\d+)\s*</dd>\s*<dt[^>]*>\s*([a-z]+)\s*</dt>', block):
@@ -272,11 +272,7 @@ def test_closed_signups_say_so_without_a_button(client, event, team_member):
 
 @pytest.mark.django_db
 def test_signup_figures_sit_with_the_signup_button(client, event, team_member, user_model):
-    """They describe a state the button is the way to change, so they travel with it.
-
-    The squad count stays in the header: it describes how the event is built, not who is in
-    it, and it does not change when you press the button.
-    """
+    """All four counts sit together directly under the signup button."""
     event.signups_open = True
     event.save(update_fields=["signups_open"])
     Squad.objects.create(event=event, name="A")
@@ -286,6 +282,6 @@ def test_signup_figures_sit_with_the_signup_button(client, event, team_member, u
     body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
 
     button = body.index("Sign up for this event")
-    assert body.index(">squad</dt>") < button, "squad count belongs above, with the event links"
-    assert button < body.index(">male</dt>"), "signup figures belong below the button"
-    assert body.index(">male</dt>") < body.index(">Signups</h3>")
+    for label in (">signup</dt>", ">male</dt>", ">female</dt>", ">squad</dt>"):
+        assert button < body.index(label), f"{label} should sit below the signup button"
+    assert body.index(">squad</dt>") < body.index(">Signups</h3>")
