@@ -623,19 +623,33 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
 
 @task
 def purge_expired_media() -> dict:
-    """Strip evidence from verification records whose verification has expired.
+    """Strip evidence from verification records that have expired or aged out.
 
     Scheduled daily. Uploaded photos and videos of riders on scales otherwise sit in
     storage until an admin remembers to click the manual purge button, which is what this
     replaces as the routine path -- the button stays for purging on demand.
 
+    Two sweeps, because they answer different questions. The first removes evidence whose
+    verification has expired. The second removes evidence we have simply held too long,
+    whatever its type -- which is what catches height, where the verification is valid
+    forever and so the photograph used to be kept forever too.
+
     Returns:
-        Counts of records ``considered``, ``purged`` and ``failed``.
+        Counts of records ``considered``, ``purged`` and ``failed``, summed across both
+        sweeps, plus each sweep's own counts under ``expired`` and ``aged``.
 
     """
-    from apps.team.services import purge_expired_verification_media
+    from apps.team.services import purge_aged_verification_media, purge_expired_verification_media
 
-    return purge_expired_verification_media()
+    expired = purge_expired_verification_media()
+    aged = purge_aged_verification_media()
+    return {
+        "considered": expired["considered"] + aged["considered"],
+        "purged": expired["purged"] + aged["purged"],
+        "failed": expired["failed"] + aged["failed"],
+        "expired": expired,
+        "aged": aged,
+    }
 
 
 @task

@@ -494,8 +494,12 @@ def purge_expired_verification_media() -> dict[str, int]:
     Python -- the queryset only narrows to verified records that still hold evidence.
 
     A verify_type whose ``*_DAYS`` setting is ``0`` never expires (height, by default), so
-    those records are never reached by this sweep. That is the setting working as intended,
-    not an omission.
+    those records are never reached by this sweep. That is the validity setting working as
+    intended -- an adult's height does not change, so the verification stays good.
+
+    It is not a reason to keep the photograph forever, which is what used to happen.
+    ``purge_aged_verification_media`` below is the backstop: how long a verification stays
+    valid and how long we keep the body image that evidenced it are separate questions.
 
     Returns:
         Counts of records ``considered``, ``purged`` and ``failed``.
@@ -505,6 +509,44 @@ def purge_expired_verification_media() -> dict[str, int]:
     expired = [record for record in candidates if record.is_expired]
     result = _strip_media(expired, reason="expired")
     logfire.info("Purged expired verification media", **result)
+    return result
+
+
+def purge_aged_verification_media() -> dict[str, int]:
+    """Strip evidence we have held longer than ``VERIFICATION_MEDIA_MAX_DAYS``.
+
+    The backstop for verification types that never expire. Height is the case that motivated
+    it: the verification is valid forever and the photograph was therefore kept forever, so a
+    body image uploaded in 2023 was still in storage with nothing scheduled to remove it.
+
+    Measured from ``date_created`` -- when we took possession of the file -- rather than
+    ``record_date``, which the expiry logic uses. ``record_date`` is the date the evidence
+    depicts and a rider may enter one well in the past, so measuring from it would delete a
+    backdated record's media the day it was uploaded. The question here is how long we have
+    held the file, not how old the measurement is.
+
+    Only verified records are swept. A pending record's media is the evidence a reviewer has
+    yet to look at, and rejected media has its own shorter sweep.
+
+    Returns:
+        Counts of records ``considered``, ``purged`` and ``failed``. All zero when the
+        setting is ``0``, which keeps media indefinitely.
+
+    """
+    max_days = config.VERIFICATION_MEDIA_MAX_DAYS
+    if not max_days or max_days <= 0:
+        logfire.info("Verification media retention disabled, skipping aged sweep")
+        return {"considered": 0, "purged": 0, "failed": 0}
+
+    cutoff = timezone.now() - timedelta(days=max_days)
+    aged = list(
+        RaceReadyRecord.objects.filter(
+            status=RaceReadyRecord.Status.VERIFIED,
+            date_created__lt=cutoff,
+        ).filter(_has_media())
+    )
+    result = _strip_media(aged, reason="aged out")
+    logfire.info("Purged aged verification media", max_days=max_days, **result)
     return result
 
 

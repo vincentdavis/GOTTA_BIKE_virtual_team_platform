@@ -537,6 +537,12 @@ CONSTANCE_CONFIG = {
         int,
     ),
     "POWER_VERIFICATION_DAYS": (365, "Days a power verification is valid", int),
+    "VERIFICATION_MEDIA_MAX_DAYS": (
+        365,
+        "Maximum days to keep verification photos and videos, whatever the type and even if "
+        "the verification itself never expires (0 = keep indefinitely)",
+        int,
+    ),
     "POWER_REQUIRES_PER_VER": (
         False,
         "Require PERM_PERFORMANCE_VERIFICATION_TEAM_ROLES to review power records",
@@ -1079,6 +1085,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "WEIGHT_FULL_DAYS",
         "WEIGHT_LIGHT_DAYS",
         "HEIGHT_VERIFICATION_DAYS",
+        "VERIFICATION_MEDIA_MAX_DAYS",
         "POWER_VERIFICATION_DAYS",
         "POWER_REQUIRES_PER_VER",
         "EXPIRE_WARNING_DAYS",
