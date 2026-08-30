@@ -115,6 +115,7 @@ def test_results_show_plain_name_when_unlinked(auth_client, zp_result) -> None:
     response = auth_client.get(reverse("zwiftpower:team_results"))
     assert response.status_code == 200
     assert b"Test Rider" in response.content
-    # The tooltip partial wraps the name in a hover dropdown. With no linked user,
-    # the dropdown wrapper should not appear around the result name cell.
-    assert b"dropdown-hover" not in response.content
+    # The rider-card partial wraps the name in a dropdown. With no linked user, that wrapper
+    # should not appear around the result name cell. Matched on the markup attribute rather
+    # than a class name the card's script also mentions.
+    assert b'dropdown-bottom" data-user-tooltip' not in response.content

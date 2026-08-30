@@ -569,8 +569,8 @@ def test_racing_report_tallies_past_and_future_races(client, event_admin, team_m
     assert "Future 1" in body
     assert "Past 1" in body
     assert "Past 2" in body
-    # Riders render via the shared user tooltip component (avatar/icon + hover).
-    assert "dropdown dropdown-hover" in body
+    # Riders render via the shared rider-card component (avatar/icon + click to open).
+    assert 'dropdown dropdown-bottom" data-user-tooltip' in body
     # Both tabs are present on the page.
     assert 'aria-label="All Races"' in body
     assert 'aria-label="Participation"' in body

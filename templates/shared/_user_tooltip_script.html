@@ -1,100 +1,163 @@
 {% comment %}
-  Gets the rider hover-card out of the table it is trapped in.
+  Opens the rider card on click, and keeps it open.
 
-  Two separate things bury it, and they need different fixes:
+  It used to open on hover, which could not work: the card holds four links (Profile,
+  Discord, ZP, ZR), and hover-triggered UI containing controls fails for everyone. A mouse
+  user crossing the gap between the name and the card left both, so the card closed before
+  they reached the buttons. Touch has no hover at all, and the name is a link, so tapping a
+  rider on a phone just navigated -- the card was unreachable there entirely. It also failed
+  WCAG 1.4.13, which requires content shown on hover to be hoverable, persistent and
+  dismissable.
 
-  1. Clipping. daisyUI positions .dropdown-content with `position: absolute`, and nearly
-     every table sits in an `overflow-x-auto` wrapper. CSS will not let one axis scroll
-     while the other overflows, so those wrappers clip vertically too and the card is cut
-     off for the last rows of a long table.
+  So: click the name, the card opens and stays open. `popover="auto"` puts it in the top
+  layer -- which is also what keeps it clear of the `overflow-x-auto` table wrappers that
+  clip it and the `table-pin-col` sticky cells that paint over it -- and gives light dismiss
+  and Escape for free.
 
-  2. Stacking. Tables using `table-pin-col` make every first cell `position: sticky` with
-     `z-index: 5` (responsive-tables.css). That cell is a stacking context, and the card
-     lives inside one. Its own `z-index: 999` only competes *within* that cell, so the next
-     row's cell -- same z-index, later in the DOM -- paints straight over it. No z-index on
-     the card can fix this, and neither can `position: fixed`: fixed elements escape
-     overflow, not stacking contexts.
+  The trigger stays an <a href> to the profile rather than becoming a <button>. Plain clicks
+  are intercepted to open the card; modified and middle clicks fall through, so cmd-click
+  still opens the profile in a new tab, and if this script never runs the name simply
+  navigates as it always did.
 
-  Only the top layer escapes both, so the card is promoted to a popover on hover and
-  positioned against the viewport. The `popover` attribute is added by script rather than
-  sitting in the markup: with JS off the card keeps daisyUI's CSS-only hover instead of
-  becoming permanently invisible.
-
-  Listeners are delegated from the document, so cards arriving in an HTMX swap need no
-  re-init. Included once from base.html -- not from the partial, which renders per rider.
+  Delegated from the document, so cards arriving in an HTMX swap need no re-init. Included
+  once from base.html -- not from the partial, which renders once per rider.
 {% endcomment %}
 <script>
 (function () {
   var GAP = 8;    // matches daisyUI's .dropdown-content margin-top: .5rem
   var EDGE = 8;   // keep this far from the viewport edge
-  var TOP_LAYER = typeof HTMLElement !== 'undefined' && !!HTMLElement.prototype.showPopover;
-  var open = null;
+  var SUPPORTED = typeof HTMLElement !== 'undefined' && !!HTMLElement.prototype.showPopover;
+  var open = null;        // the card currently open
+  var openWrap = null;    // and its wrapper, so focus can go back to the trigger
+  var justClosed = null;  // set by light dismiss, so a click on the trigger toggles shut
+  var justClosedAt = 0;
 
   function panelOf(wrap) { return wrap.querySelector(':scope > .dropdown-content'); }
+  function triggerOf(wrap) { return wrap.firstElementChild; }
 
-  function show(wrap) {
-    var panel = panelOf(wrap);
-    if (!panel) return;
-    var trigger = wrap.firstElementChild;
+  function place(wrap, panel) {
+    var trigger = triggerOf(wrap);
     if (!trigger || trigger === panel) return;
-
-    if (TOP_LAYER) {
-      if (!panel.hasAttribute('popover')) panel.setAttribute('popover', 'manual');
-      if (!panel.matches(':popover-open')) {
-        try { panel.showPopover(); } catch (e) { return; }
-      }
-      // The UA centres popovers with inset:0 + margin:auto; we place them ourselves.
-      panel.style.inset = 'auto';
-      panel.style.opacity = '1';
-      panel.style.scale = '1';
-    }
     panel.style.position = 'fixed';
+    panel.style.inset = 'auto';
     panel.style.margin = '0';
 
-    // Reading offsetHeight flushes style, so the card is measurable straight away.
     var h = panel.offsetHeight;
     var w = panel.offsetWidth;
-    if (!h) { hide(); return; }
-
     var t = trigger.getBoundingClientRect();
     var below = window.innerHeight - t.bottom;
     var flip = below < h + GAP && t.top > below;
 
     panel.style.top = Math.max(EDGE, flip ? t.top - h - GAP : t.bottom + GAP) + 'px';
     panel.style.left = Math.max(EDGE, Math.min(t.left, window.innerWidth - w - EDGE)) + 'px';
-    open = panel;
   }
 
-  function hide() {
+  function show(wrap) {
+    var panel = panelOf(wrap);
+    if (!panel || !SUPPORTED) return false;
+    hide();
+    if (!panel.hasAttribute('popover')) panel.setAttribute('popover', 'auto');
+    try { panel.showPopover(); } catch (e) { return false; }
+
+    // daisyUI hides .dropdown-content with `display: none` unless the dropdown matches one of
+    //   .dropdown:not(details, .dropdown-open, [the hover class]:hover, :focus-within)
+    // and with hover gone none of those hold. Relying on :focus-within would work only
+    // because a click happens to focus the trigger -- so set daisyUI's own open state, which
+    // is the documented way to force a dropdown open and brings its opacity/scale with it.
+    wrap.classList.add('dropdown-open');
+    place(wrap, panel);
+
+    open = panel;
+    openWrap = wrap;
+    var trigger = triggerOf(wrap);
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    // Move focus in so Tab continues to the card's links rather than the next row. Deferred:
+    // a click focuses the clicked element *after* the handler returns, so focusing here
+    // synchronously is undone and focus stays on the trigger. Mouse clicks do not match
+    // :focus-visible, so this shows no ring unless the keyboard opened it.
+    // A timer rather than requestAnimationFrame: rAF does not fire while the tab is hidden,
+    // so a card opened in a background tab would never take focus.
+    setTimeout(function () {
+      if (open === panel) panel.focus({ preventScroll: true });
+    }, 0);
+    return true;
+  }
+
+  function hide(returnFocus) {
     if (!open) return;
     var panel = open;
+    var wrap = openWrap;
     open = null;
-    if (TOP_LAYER && panel.matches(':popover-open')) {
+    openWrap = null;
+    if (panel.matches(':popover-open')) {
       try { panel.hidePopover(); } catch (e) { /* already closed */ }
     }
+    clear(panel);
+    if (wrap) wrap.classList.remove('dropdown-open');
+    if (wrap) {
+      var trigger = triggerOf(wrap);
+      if (trigger) {
+        trigger.setAttribute('aria-expanded', 'false');
+        if (returnFocus) trigger.focus({ preventScroll: true });
+      }
+    }
+  }
+
+  function clear(panel) {
     panel.style.position = '';
-    panel.style.margin = '';
     panel.style.inset = '';
+    panel.style.margin = '';
     panel.style.top = '';
     panel.style.left = '';
     panel.style.opacity = '';
     panel.style.scale = '';
   }
 
-  function enter(e) {
+  document.addEventListener('click', function (e) {
     var wrap = e.target.closest && e.target.closest('[data-user-tooltip]');
-    if (!wrap) { if (open && !open.contains(e.target)) hide(); return; }
-    if (open && wrap.contains(open)) return;   // already showing this one
-    hide();
-    show(wrap);
-  }
+    if (!wrap) return;
+    var panel = panelOf(wrap);
+    if (panel && panel.contains(e.target)) return;   // a click on the card's own links
+    // Let anything that is not a plain left click through, so the name keeps working as a
+    // link: cmd/ctrl-click and middle-click open the profile in a new tab.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (e.button && e.button !== 0)) return;
 
-  document.addEventListener('pointerover', enter);
-  document.addEventListener('focusin', enter);
-  // A manual popover has no light dismiss, so give it the escape hatch by hand.
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
-  // The card does not travel with its row, so drop it rather than let it drift.
-  window.addEventListener('scroll', hide, true);
-  window.addEventListener('resize', hide);
+    // Light dismiss fires on pointerdown, before this click. Without that check, clicking an
+    // open card's trigger would close it and immediately reopen it.
+    if (panel === justClosed && Date.now() - justClosedAt < 300) { justClosed = null; return; }
+    if (panel && panel === open) { e.preventDefault(); hide(true); return; }
+    if (show(wrap)) e.preventDefault();
+  });
+
+  // popover="auto" closes itself on outside click and on Escape; keep our state in step.
+  document.addEventListener('toggle', function (e) {
+    if (e.newState !== 'closed') return;
+    var panel = e.target;
+    if (!panel.classList || !panel.classList.contains('dropdown-content')) return;
+    justClosed = panel;
+    justClosedAt = Date.now();
+    if (panel === open) {
+      var wrap = openWrap;
+      open = null;
+      openWrap = null;
+      clear(panel);
+      if (wrap) {
+        wrap.classList.remove('dropdown-open');
+        var trigger = triggerOf(wrap);
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+      }
+    }
+  }, true);
+
+  // popover="auto" is meant to close on Escape via the UA close watcher, but that depends on
+  // the browser and on where focus sits. Closing it here too costs nothing and means Escape
+  // also returns focus to the name, which the UA path would not do.
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && open) { e.stopPropagation(); hide(true); }
+  });
+
+  // A fixed card does not travel with its row.
+  window.addEventListener('scroll', function () { hide(false); }, true);
+  window.addEventListener('resize', function () { hide(false); });
 })();
 </script>

@@ -1,13 +1,15 @@
-"""Guards for the rider hover-card's escape from the table it is trapped in.
+"""Guards for the rider card: how it escapes the table, and how it opens.
 
 Two things bury it. The ``overflow-x-auto`` wrapper around nearly every table clips it
 (CSS forces the other axis to ``auto`` too, so those wrappers clip vertically as well).
 And ``table-pin-col`` makes every first cell ``position: sticky; z-index: 5`` -- a stacking
-context the card lives inside, so the next row's cell paints straight over it.
+context the card lives inside, so the next row's cell paints straight over it. Only the top
+layer escapes both. ``position: fixed`` is not enough: it escapes overflow but not stacking
+contexts, and that distinction is the whole reason for the popover.
 
-Only the top layer escapes both, which is why the card is promoted to a popover on hover.
-``position: fixed`` is not enough: it escapes overflow but not stacking contexts, and that
-distinction is the whole reason for the popover, so it is pinned here.
+It opens on click, not hover. The card holds four links, and hover-triggered UI containing
+controls cannot work: the mouse had to cross a gap to reach it and the card closed on the
+way, touch has no hover at all, and it fails WCAG 1.4.13.
 """
 
 import re
@@ -17,9 +19,9 @@ import pytest
 from django.urls import reverse
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
-# Unique to the script, and absent from the markup -- so a page can be counted without the
-# `data-user-tooltip` selector inside the script itself inflating the total.
-_SCRIPT_MARKER = "addEventListener('pointerover', enter)"
+# Unique to the script and absent from the markup, so counting it on a page is not inflated
+# by the script's own `data-user-tooltip` selector string.
+_SCRIPT_MARKER = "var justClosedAt"
 _MARKUP_MARKER = 'dropdown-bottom" data-user-tooltip'
 
 
@@ -31,6 +33,41 @@ def test_partial_carries_the_hook():
 def test_script_is_included_from_base():
     base = (_ROOT / "theme/templates/base.html").read_text()
     assert 'include "shared/_user_tooltip_script.html"' in base
+
+
+def test_card_opens_on_click_not_hover():
+    """Hover cannot work for a card containing links, so the class must stay off.
+
+    ``dropdown-hover`` is what made daisyUI reveal it on hover; with it gone, nothing shows
+    the card except the script, and the pointer can travel to the links.
+    """
+    partial = (_ROOT / "templates/accounts/_user_tooltip.html").read_text()
+    assert "dropdown-hover" not in partial
+    script = (_ROOT / "templates/shared/_user_tooltip_script.html").read_text()
+    assert "addEventListener('click'" in script
+    assert "'pointerover'" not in script
+
+
+def test_daisyui_open_state_is_set():
+    """Without it daisyUI's own rule computes the card to `display: none`.
+
+    `.dropdown:not(details,.dropdown-open,.dropdown-hover:hover,:focus-within)
+    .dropdown-content{display:none}` -- with hover gone, only `dropdown-open` keeps it
+    rendered. Relying on `:focus-within` instead appears to work, because a click happens to
+    focus the trigger, and then breaks whenever it does not.
+    """
+    script = (_ROOT / "templates/shared/_user_tooltip_script.html").read_text()
+    assert "classList.add('dropdown-open')" in script
+    assert script.count("classList.remove('dropdown-open')") >= 2  # hide() and the toggle listener
+
+
+def test_trigger_stays_a_link():
+    """So the profile is still reachable if the script never runs, and cmd-click still works."""
+    partial = (_ROOT / "templates/accounts/_user_tooltip.html").read_text()
+    assert "public_profile" in partial
+    assert 'aria-haspopup="dialog"' in partial
+    script = (_ROOT / "templates/shared/_user_tooltip_script.html").read_text()
+    assert "metaKey" in script and "ctrlKey" in script
 
 
 def test_card_is_promoted_to_the_top_layer():

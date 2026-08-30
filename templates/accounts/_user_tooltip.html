@@ -1,6 +1,7 @@
 {% load accounts_tags %}
-<div class="dropdown dropdown-hover dropdown-bottom" data-user-tooltip>
+<div class="dropdown dropdown-bottom" data-user-tooltip>
   <a tabindex="0"
+     aria-haspopup="dialog" aria-expanded="false"
      {% if user_id %}href="{% url 'accounts:public_profile' user_id %}"{% endif %}
      class="flex items-center gap-1.5 flex-wrap {% if user_id %}link link-hover no-underline hover:underline{% endif %}">
     {% if discord_avatar_url %}
