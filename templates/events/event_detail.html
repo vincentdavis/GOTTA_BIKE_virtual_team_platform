@@ -173,515 +173,43 @@
         </dl>
       </div>
 
-      {# Event Signup Section #}
+      {% comment %}
+        Tabs, so the page states what it holds instead of making you scroll to find out.
+
+        Every panel is rendered and the script hides all but one, rather than the server
+        sending a single panel per ?tab=. That keeps each panel's own scripts working (they
+        find their elements on load), keeps the page a single document for anything that
+        reads it whole, and degrades to today's behaviour -- everything stacked -- if the
+        script never runs. The URL still carries ?tab= so a link opens on the right panel.
+
+        aria-selected as well as the visual tab-active: daisyUI styles the tab but does not
+        set the state, so on its own it tells assistive tech nothing.
+      {% endcomment %}
       <div class="divider mt-6"></div>
-      <div class="flex items-center gap-2 mb-4">
-        <h3 class="text-lg font-semibold">Signups</h3>
-        {% comment %}
-          Gated on `signups`, not `signup_count`: the count is registered-only, so an event
-          where everyone withdrew would render the table with no way to open it.
-        {% endcomment %}
-        {% if can_view_signups and signups %}
-        <span class="badge badge-neutral tabular-nums" id="signup-count-badge">{{ signup_count }}</span>
-        <button aria-label="Show signups" type="button" class="btn btn-ghost btn-xs" id="toggle-signups-btn" onclick="toggleSignups()" title="Show signups">
-          <svg id="signups-arrow" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
-        {% endif %}
-        {% if event.signups_open %}
-          {% comment %}
-            Shareable link that lands on this page with the signup form already open, so a
-            rider following it does not have to find the button. ?signup=1 rather than a
-            #fragment: the page is login-gated, and allauth's ?next= carries a query string
-            through the login round-trip where a fragment would be dropped.
-          {% endcomment %}
-          <button type="button" class="btn btn-ghost btn-sm btn-square ml-auto"
-                  data-signup-share="{{ request.scheme }}://{{ request.get_host }}{% url 'events:event_detail' event.pk %}?signup=1"
-                  title="Copy a link that opens the signup form"
-                  aria-label="Copy a link that opens the signup form">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
-                 stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round"
-                    d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5"/>
-              <path stroke-linecap="round" stroke-linejoin="round"
-                    d="M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5"/>
-            </svg>
-          </button>
-        {% endif %}
+      <div role="tablist" class="tabs tabs-bordered mb-4" id="event-tabs">
+        <a role="tab" href="?tab=squads" data-tab="squads" id="tab-squads"
+           aria-controls="panel-squads" aria-selected="false"
+           class="tab">Squads
+          <span class="badge badge-sm badge-neutral tabular-nums ml-2">{{ squads|length }}</span>
+        </a>
+        <a role="tab" href="?tab=signups" data-tab="signups" id="tab-signups"
+           aria-controls="panel-signups" aria-selected="false"
+           class="tab">Signups
+          <span class="badge badge-sm badge-neutral tabular-nums ml-2">{{ signup_count }}</span>
+        </a>
+        <a role="tab" href="?tab=category" data-tab="category" id="tab-category"
+           aria-controls="panel-category" aria-selected="false"
+           class="tab">By Category
+          <span class="badge badge-sm badge-neutral tabular-nums ml-2">{{ zp_total_all }}</span>
+        </a>
+        <a role="tab" href="?tab=races" data-tab="races" id="tab-races"
+           aria-controls="panel-races" aria-selected="false"
+           class="tab">Races
+          <span class="badge badge-sm badge-neutral tabular-nums ml-2">{{ races|length }}</span>
+        </a>
       </div>
 
-      {% if event.signups_open %}
-        {% if user_signup and user_signup.status == "registered" %}
-        <dialog id="edit_signup_modal" class="modal">
-          <div class="modal-box">
-            <h3 class="text-lg font-bold mb-4">Edit Signup</h3>
-            <form method="post" action="{% url 'events:event_signup_edit' event.pk %}" class="space-y-4">
-              {% csrf_token %}
-              {% if event.timezone_options %}
-              <div class="form-control w-full">
-                <label class="label">
-                  <span class="label-text">Timezone{% if event.timezone_required %} <span class="text-error">*</span>{% endif %}</span>
-                </label>
-                <div class="flex flex-wrap gap-3">
-                  {% for tz in event.timezone_options %}
-                  <label class="label cursor-pointer gap-2">
-                    <input type="checkbox" name="signup_timezone" value="{{ tz }}" class="checkbox checkbox-sm"{% if tz in user_signup.signup_timezone %} checked{% endif %}>
-                    <span class="label-text">{{ tz }}</span>
-                  </label>
-                  {% endfor %}
-                </div>
-              </div>
-              {% endif %}
-              {% if event.squad_gender_required and event.squad_gender_options %}
-              <div class="form-control w-full">
-                <label class="label">
-                  <span class="label-text">Squad Gender Preference <span class="text-error">*</span></span>
-                </label>
-                <div class="flex flex-wrap gap-3">
-                  {% for g in event.squad_gender_options %}
-                  <label class="label cursor-pointer gap-2">
-                    <input type="checkbox" name="signup_squad_gender" value="{{ g }}" class="checkbox checkbox-sm"{% if g in user_signup.signup_squad_gender %} checked{% endif %}>
-                    <span class="label-text">{{ g }}</span>
-                  </label>
-                  {% endfor %}
-                </div>
-              </div>
-              {% endif %}
-              {% include "events/_signup_question_fields.html" with fields=signup_question_fields %}
-              <div class="form-control w-full">
-                <label class="label" for="edit_signup_notes">
-                  <span class="label-text">Notes</span>
-                </label>
-                <textarea name="notes" id="edit_signup_notes" class="textarea textarea-bordered w-full" rows="3" placeholder="Any notes for the people running this event (optional)">{{ user_signup.notes }}</textarea>
-              </div>
-              <div class="modal-action">
-                <button type="button" class="btn btn-ghost" onclick="document.getElementById('edit_signup_modal').close()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-              </div>
-            </form>
-            <div class="divider">or</div>
-            <form method="post" action="{% url 'events:event_signup_delete' event.pk %}" onsubmit="return confirm('Are you sure you want to remove your signup?')">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-error btn-outline btn-sm w-full">Remove Signup</button>
-            </form>
-          </div>
-          <form method="dialog" class="modal-backdrop"><button>close</button></form>
-        </dialog>
-        {% else %}
-        <dialog id="signup_modal" class="modal">
-          <div class="modal-box">
-            <h3 class="text-lg font-bold mb-4">Sign Up for {{ event.title }}</h3>
-            {% if event.signup_instructions %}
-            <div class="prose prose-sm max-w-none mb-4">{{ event.signup_instructions|render_markdown }}</div>
-            {% endif %}
-            <form method="post" action="{% url 'events:event_signup' event.pk %}" class="space-y-4">
-              {% csrf_token %}
-              {% if event.timezone_options %}
-              <div class="form-control w-full">
-                <label class="label">
-                  <span class="label-text">Timezone{% if event.timezone_required %} <span class="text-error">*</span>{% endif %}</span>
-                </label>
-                <div class="flex flex-wrap gap-3">
-                  {% for tz in event.timezone_options %}
-                  <label class="label cursor-pointer gap-2">
-                    <input type="checkbox" name="signup_timezone" value="{{ tz }}" class="checkbox checkbox-sm">
-                    <span class="label-text">{{ tz }}</span>
-                  </label>
-                  {% endfor %}
-                </div>
-              </div>
-              {% endif %}
-              {% if event.squad_gender_required and event.squad_gender_options %}
-              <div class="form-control w-full">
-                <label class="label">
-                  <span class="label-text">Squad Gender Preference <span class="text-error">*</span></span>
-                </label>
-                <div class="flex flex-wrap gap-3">
-                  {% for g in event.squad_gender_options %}
-                  <label class="label cursor-pointer gap-2">
-                    <input type="checkbox" name="signup_squad_gender" value="{{ g }}" class="checkbox checkbox-sm">
-                    <span class="label-text">{{ g }}</span>
-                  </label>
-                  {% endfor %}
-                </div>
-              </div>
-              {% endif %}
-              {% include "events/_signup_question_fields.html" with fields=signup_question_fields %}
-              <div class="form-control w-full">
-                <label class="label" for="signup_notes">
-                  <span class="label-text">Notes</span>
-                </label>
-                <textarea name="notes" id="signup_notes" class="textarea textarea-bordered w-full" rows="3" placeholder="Any notes for the people running this event (optional)"></textarea>
-              </div>
-              <div class="modal-action">
-                <button type="button" class="btn btn-ghost" onclick="document.getElementById('signup_modal').close()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Sign Up</button>
-              </div>
-            </form>
-          </div>
-          <form method="dialog" class="modal-backdrop"><button>close</button></form>
-        </dialog>
-        {% endif %}
-      {% endif %}
-
-      {% if can_view_signups and signups %}
-      <div id="signups-content" style="display:none">
-      {% if can_view_signup_table %}
-      <div class="mt-2">
-        <div class="flex items-center gap-2 mb-2">
-          <div class="ml-auto flex items-center gap-2">
-            <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
-            {% if can_export_signups %}
-            <a href="{% url 'events:signup_export' event.pk %}" class="btn btn-outline btn-sm btn-square"
-               title="Download every registered signup as CSV, all columns" aria-label="Export signups as CSV">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-              </svg>
-            </a>
-            {% endif %}
-            <div class="dropdown dropdown-end">
-              <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>
-              <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-56 max-h-72 overflow-y-auto">
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="name" checked> Name</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zwid" checked> ZWID</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="timezone" checked> Timezone</label></li>
-                {% if event.squad_gender_required %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad_gender" checked> Squad Gender</label></li>{% endif %}
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="gender" checked> Gender</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="category" checked> ZP Category</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="rating" checked> ZR Category</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="ftp" checked> FTP</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="wkg" checked> WKG</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zftp" checked> zFTP</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zmap" checked> zMAP</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zauth" checked> Zauth</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="verified" checked> Verified</label></li>
-                {% if squads %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad" checked> Squad</label></li>{% endif %}
-                {% if can_view_signup_notes %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="notes" checked> Notes</label></li>{% endif %}
-                {% if signup_questions %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="custom_answers" checked> Answers</label></li>{% endif %}
-                <li class="menu-title text-xs pt-2">Zwift Racing</li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_age"> Age</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_cur_rating"> Current Rating</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_cur_cat"> Current Cat</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max30_rating"> Max30 Rating</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max30_cat"> Max30 Cat</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max90_rating"> Max90 Rating</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max90_cat"> Max90 Cat</label></li>
-                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_phenotype"> Phenotype</label></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        {% if answer_facets %}
-        {% include "events/_answer_facets.html" %}
-        {{ answer_payload|json_script:"answer-payload" }}
-        <div class="text-center py-8 hidden" id="answer-empty">
-          <p class="text-base-content/60 mb-3">No signup matches these answers.</p>
-          <button type="button" class="btn btn-sm btn-outline" id="answer-empty-clear">Clear all filters</button>
-        </div>
-        {% endif %}
-        <div class="overflow-x-auto">
-          <table class="table table-sm table-pin-col" data-signup-table="detail">
-            <thead>
-              <tr>
-                <th data-col="name" data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
-                <th data-col="zwid" data-sort="num" class="cursor-pointer hover:text-primary select-none">ZWID</th>
-                <th data-col="timezone" data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
-                {% if event.squad_gender_required %}<th data-col="squad_gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>{% endif %}
-                <th data-col="gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Gender</th>
-                <th data-col="category" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZP Category</th>
-                <th data-col="rating" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZR Category</th>
-                <th data-col="ftp" data-sort="num" class="cursor-pointer hover:text-primary select-none">FTP</th>
-                <th data-col="wkg" data-sort="num" class="cursor-pointer hover:text-primary select-none">WKG</th>
-                <th data-col="zftp" data-sort="num" class="cursor-pointer hover:text-primary select-none">zFTP</th>
-                <th data-col="zmap" data-sort="num" class="cursor-pointer hover:text-primary select-none">zMAP</th>
-                <th data-col="zauth" data-sort="text" class="cursor-pointer hover:text-primary select-none" title="How the rider's Zwift account was verified. Squads with &quot;require zauth&quot; accept only Zwift OAuth.">Zauth</th>
-                <th data-col="verified" data-sort="text" class="cursor-pointer hover:text-primary select-none">Verified</th>
-                {% if event.event_role %}<th data-col="event_role" data-sort="text" class="cursor-pointer hover:text-primary select-none">Event Role</th>{% endif %}
-                {% if squads %}<th data-col="squad" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>{% endif %}
-                {% if can_view_signup_notes %}<th data-col="notes" data-sort="text" class="cursor-pointer hover:text-primary select-none">Notes</th>{% endif %}
-                {% if signup_questions %}<th data-col="custom_answers">Answers{% if answer_facets %} <span class="text-xs font-normal text-base-content/50">(sort in a facet &#9650;&#9660;)</span>{% endif %}</th>{% endif %}
-                <th data-col="zr_age" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Age</th>
-                <th data-col="zr_cur_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Rating</th>
-                <th data-col="zr_cur_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Cat</th>
-                <th data-col="zr_max30_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Max30 Rating</th>
-                <th data-col="zr_max30_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Max30 Cat</th>
-                <th data-col="zr_max90_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Max90 Rating</th>
-                <th data-col="zr_max90_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Max90 Cat</th>
-                <th data-col="zr_phenotype" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Phenotype</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for entry in signups %}
-              {% with withdrawn=entry.signup.is_withdrawn %}
-              <tr data-signup-pk="{{ entry.signup.pk }}" data-name="{{ entry.user.get_full_name|default:entry.user.discord_username }}"{% if withdrawn %} data-signup-withdrawn class="opacity-60"{% endif %}>
-                <td data-col="name" data-sort-value="{{ entry.user.get_full_name|default:entry.user.discord_username }}">
-                  {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
-                  {% if withdrawn %}<span class="badge badge-ghost badge-sm ml-1 whitespace-nowrap">Withdrawn</span>{% endif %}
-                  {% if answer_facets %}<div class="md:hidden text-xs text-base-content/60 mt-1 max-w-48 empty:hidden" data-answer-focus></div>{% endif %}
-                </td>
-                <td data-col="zwid">
-                  {% if entry.zwid %}
-                  <span class="font-mono text-sm">{{ entry.zwid }}</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="timezone">{% if entry.signup.signup_timezone %}{% for tz in entry.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
-                {% if event.squad_gender_required %}<td data-col="squad_gender">{% if entry.signup.signup_squad_gender %}{% for g in entry.signup.signup_squad_gender %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ g }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
-                <td data-col="gender">
-                  {% if entry.gender == "male" %}
-                  <span class="badge badge-info badge-sm">M</span>
-                  {% elif entry.gender == "female" %}
-                  <span class="badge badge-secondary badge-sm">F</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="category">
-                  {% if entry.in_zwiftpower %}
-                    {% if entry.zp_category_w %}
-                    {% zp_category_badge entry.zp_category_w is_women=True %}
-                    {% else %}
-                    {% zp_category_badge entry.zp_category|default:"-" %}
-                    {% endif %}
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="rating">
-                  {% if entry.in_zwiftracing %}
-                  <span class="badge badge-secondary badge-sm">{{ entry.zr_category|default:"N/A" }}</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="ftp">
-                  {% if entry.zp_ftp %}
-                  <span class="font-mono text-sm">{{ entry.zp_ftp }}</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="wkg">
-                  {% if entry.wkg %}
-                  <span class="font-mono text-sm">{{ entry.wkg }}</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="zftp" data-sort-value="{{ entry.z_ftp|default_if_none:0 }}">
-                  {% if entry.z_ftp %}
-                  <span class="font-mono text-sm">{{ entry.z_ftp|floatformat:0 }}w</span>
-                  {% if entry.z_ftp_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ entry.z_ftp_wkg|floatformat:2 }}</span>{% endif %}
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="zmap" data-sort-value="{{ entry.z_map|default_if_none:0 }}">
-                  {% if entry.z_map %}
-                  <span class="font-mono text-sm">{{ entry.z_map|floatformat:0 }}w</span>
-                  {% if entry.z_map_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ entry.z_map_wkg|floatformat:2 }}</span>{% endif %}
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="zauth" data-sort-value="{% if entry.user.is_zauth_verified %}1{% elif entry.user.zwid_verified %}2{% else %}3{% endif %}">
-                  {% if entry.user.is_zauth_verified %}
-                  <span class="badge badge-success badge-sm" title="Connected through Zwift OAuth">Zauth</span>
-                  {% elif entry.user.zwid_verified %}
-                  <span class="badge badge-warning badge-sm badge-outline" title="Verified, but not through Zwift OAuth -- fails a squad that requires zauth">{{ entry.user.get_zwid_verification_method_display|default:"Other" }}</span>
-                  {% else %}
-                  <span class="text-base-content/30" title="Zwift account not verified">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="verified">
-                  {% if entry.is_extra_verified %}
-                    {% if site_settings.extra_verified_emoji %}
-                    <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
-                    {% else %}
-                    <span class="badge badge-warning badge-sm">EV</span>
-                    {% endif %}
-                  {% elif entry.is_race_ready %}
-                    {% if site_settings.verified_emoji %}
-                    <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
-                    {% else %}
-                    <span class="badge badge-success badge-sm">Yes</span>
-                    {% endif %}
-                  {% else %}
-                    {% if site_settings.not_verified_emoji %}
-                    <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
-                    {% else %}
-                    <span class="badge badge-error badge-sm">No</span>
-                    {% endif %}
-                  {% endif %}
-                </td>
-                {% if event.event_role %}
-                <td data-col="event_role">
-                  {% if entry.has_event_role %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                  {% else %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-error" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                  {% endif %}
-                </td>
-                {% endif %}
-                {% if squads %}
-                <td data-col="squad" id="squad-cell-{{ entry.signup.pk }}">
-                  {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk %}
-                </td>
-                {% endif %}
-                {% if can_view_signup_notes %}
-                <td data-col="notes">
-                  {% if entry.signup.notes %}
-                  <div class="tooltip tooltip-left" data-tip="{{ entry.signup.notes }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-info cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
-                  </div>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                {% endif %}
-                {% if signup_questions %}
-                <td data-col="custom_answers" class="align-top">
-                  <div class="max-w-xs space-y-0.5">
-                    {% for a in entry.custom_answers %}{% if a.answered %}<div class="text-xs" data-aq="{{ a.question.pk }}"><span class="text-base-content/50">{{ a.label|render_markdown_inline }}:</span> <span data-aq-value>{{ a.display }}</span></div>{% endif %}{% endfor %}
-                  </div>
-                </td>
-                {% endif %}
-                <td data-col="zr_age" style="display:none">
-                  {% if entry.zr_age %}<span class="text-sm">{{ entry.zr_age }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_cur_rating" style="display:none">
-                  {% if entry.zr_current_rating %}<span class="font-mono text-sm">{{ entry.zr_current_rating }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_cur_cat" style="display:none">
-                  {% if entry.zr_current_category %}<span class="badge badge-sm">{{ entry.zr_current_category }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_max30_rating" style="display:none">
-                  {% if entry.zr_max30_rating %}<span class="font-mono text-sm">{{ entry.zr_max30_rating }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_max30_cat" style="display:none">
-                  {% if entry.zr_max30_category %}<span class="badge badge-sm">{{ entry.zr_max30_category }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_max90_rating" style="display:none">
-                  {% if entry.zr_max90_rating %}<span class="font-mono text-sm">{{ entry.zr_max90_rating }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_max90_cat" style="display:none">
-                  {% if entry.zr_max90_category %}<span class="badge badge-sm">{{ entry.zr_max90_category }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_phenotype" style="display:none">
-                  {% if entry.zr_phenotype %}<span class="text-sm">{{ entry.zr_phenotype }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-              </tr>
-              {% endwith %}
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        </div>
-      {% else %}
-      {# Non-admin members with show_signups on: names + icons only #}
-      <div class="mt-2 flex flex-wrap gap-2">
-        {% for entry in signups %}
-        <div class="badge badge-ghost badge-lg gap-1 py-3">
-          {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-      </div>
-      {% endif %}
-
-      {% if can_add_members %}
-      {# The trigger lives in the event gear menu; only the dialog remains here. #}
-      <dialog id="add_members_modal" class="modal">
-        <div class="modal-box max-w-lg">
-          <h3 class="text-lg font-bold mb-4">Add Members to Event</h3>
-          <p class="text-sm text-base-content/70 mb-4">Search for team members to add to this event{% if event.event_role %} and assign the event Discord role{% endif %}.</p>
-          <div class="form-control mb-4">
-            <input type="text" id="add-members-search" class="input input-bordered w-full" placeholder="Search by name (min 2 characters)..." autocomplete="off">
-          </div>
-          <div id="add-members-results" class="max-h-60 overflow-y-auto mb-4"></div>
-          <form method="post" action="{% url 'events:add_members' event.pk %}" id="add-members-form">
-            {% csrf_token %}
-            <div id="add-members-selected" class="flex flex-wrap gap-2 mb-4"></div>
-            <div class="modal-action">
-              <button type="button" class="btn btn-ghost" onclick="document.getElementById('add_members_modal').close()">Cancel</button>
-              <button type="submit" class="btn btn-primary" id="add-members-submit" disabled>Add Selected</button>
-            </div>
-          </form>
-        </div>
-        <form method="dialog" class="modal-backdrop"><button>close</button></form>
-      </dialog>
-      {% endif %}
-
-      {% if races %}
-      <div class="divider mt-6"></div>
-      <h3 class="text-lg font-semibold mb-4">Races</h3>
-      <div class="space-y-3">
-        {% for race in races %}
-        <div class="card bg-base-300">
-          <div class="card-body p-4">
-            <h4 class="font-semibold">{{ race.title }}</h4>
-            <p class="text-sm text-base-content/70">
-              {{ race.start_date|date:"M j, Y" }}{% if race.start_time %} at {{ race.start_time|time:"g:i A" }}{% endif %}
-              {% if race.end_date %} &ndash; {{ race.end_date|date:"M j, Y" }}{% endif %}
-            </p>
-            {% if race.zwift_category or race.zwift_rating %}
-            <div class="flex gap-2 mt-1">
-              {% if race.zwift_category %}
-              <span class="badge badge-sm badge-outline">Cat {{ race.zwift_category }}</span>
-              {% endif %}
-              {% if race.zwift_rating %}
-              <span class="badge badge-sm badge-outline">Rating: {{ race.zwift_rating }}</span>
-              {% endif %}
-            </div>
-            {% endif %}
-            {% if race.description %}
-            <p class="text-sm mt-2">{{ race.description }}</p>
-            {% endif %}
-            {% if race.url or race.race_pass or race.discord_channel_id %}
-            <div class="flex flex-wrap gap-3 mt-2">
-              {% if race.url %}
-              <a href="{{ race.url }}" target="_blank" rel="noopener" class="link link-primary text-sm">
-                Race Details
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-              {% endif %}
-              {% if race.race_pass %}
-              <a href="{{ race.race_pass }}" target="_blank" rel="noopener" class="link link-primary text-sm">
-                Race Pass
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-              {% endif %}
-              {% if race.discord_channel_id %}
-              <a href="https://discord.com/channels/{{ guild_id }}/{{ race.discord_channel_id }}" target="_blank" rel="noopener" class="link link-primary text-sm">
-                Discord Channel
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-              {% endif %}
-            </div>
-            {% endif %}
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-
+      <div role="tabpanel" id="panel-squads" data-tab-panel="squads" aria-labelledby="tab-squads">
       {% if squads or is_event_admin %}
       <div class="divider mt-6"></div>
       <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
@@ -970,19 +498,329 @@
       </div>
       {% endif %}
       {% endif %}
+      </div>
 
+      <div role="tabpanel" id="panel-signups" data-tab-panel="signups" aria-labelledby="tab-signups">
+      {# Event Signup Section #}
+      <div class="divider mt-6"></div>
+      <div class="flex items-center gap-2 mb-4">
+        <h3 class="text-lg font-semibold">Signups</h3>
+        {% comment %}
+          Gated on `signups`, not `signup_count`: the count is registered-only, so an event
+          where everyone withdrew would render the table with no way to open it.
+        {% endcomment %}
+        {% if can_view_signups and signups %}
+        <span class="badge badge-neutral tabular-nums" id="signup-count-badge">{{ signup_count }}</span>
+        {% endif %}
+        {% if event.signups_open %}
+          {% comment %}
+            Shareable link that lands on this page with the signup form already open, so a
+            rider following it does not have to find the button. ?signup=1 rather than a
+            #fragment: the page is login-gated, and allauth's ?next= carries a query string
+            through the login round-trip where a fragment would be dropped.
+          {% endcomment %}
+          <button type="button" class="btn btn-ghost btn-sm btn-square ml-auto"
+                  data-signup-share="{{ request.scheme }}://{{ request.get_host }}{% url 'events:event_detail' event.pk %}?signup=1"
+                  title="Copy a link that opens the signup form"
+                  aria-label="Copy a link that opens the signup form">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                 stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5"/>
+              <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M10.172 13.828a4 4 0 010-5.656l3-3a4 4 0 015.656 5.656l-1.5 1.5"/>
+            </svg>
+          </button>
+        {% endif %}
+      </div>
+
+
+      {% if can_view_signups and signups %}
+      <div id="signups-content">
+      {% if can_view_signup_table %}
+      <div class="mt-2">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="ml-auto flex items-center gap-2">
+            <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
+            {% if can_export_signups %}
+            <a href="{% url 'events:signup_export' event.pk %}" class="btn btn-outline btn-sm btn-square"
+               title="Download every registered signup as CSV, all columns" aria-label="Export signups as CSV">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+            </a>
+            {% endif %}
+            <div class="dropdown dropdown-end">
+              <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>
+              <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-56 max-h-72 overflow-y-auto">
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="name" checked> Name</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zwid" checked> ZWID</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="timezone" checked> Timezone</label></li>
+                {% if event.squad_gender_required %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad_gender" checked> Squad Gender</label></li>{% endif %}
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="gender" checked> Gender</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="category" checked> ZP Category</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="rating" checked> ZR Category</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="ftp" checked> FTP</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="wkg" checked> WKG</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zftp" checked> zFTP</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zmap" checked> zMAP</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zauth" checked> Zauth</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="verified" checked> Verified</label></li>
+                {% if squads %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad" checked> Squad</label></li>{% endif %}
+                {% if can_view_signup_notes %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="notes" checked> Notes</label></li>{% endif %}
+                {% if signup_questions %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="custom_answers" checked> Answers</label></li>{% endif %}
+                <li class="menu-title text-xs pt-2">Zwift Racing</li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_age"> Age</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_cur_rating"> Current Rating</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_cur_cat"> Current Cat</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max30_rating"> Max30 Rating</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max30_cat"> Max30 Cat</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max90_rating"> Max90 Rating</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max90_cat"> Max90 Cat</label></li>
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_phenotype"> Phenotype</label></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        {% if answer_facets %}
+        {% include "events/_answer_facets.html" %}
+        {{ answer_payload|json_script:"answer-payload" }}
+        <div class="text-center py-8 hidden" id="answer-empty">
+          <p class="text-base-content/60 mb-3">No signup matches these answers.</p>
+          <button type="button" class="btn btn-sm btn-outline" id="answer-empty-clear">Clear all filters</button>
+        </div>
+        {% endif %}
+        <div class="overflow-x-auto">
+          <table class="table table-sm table-pin-col" data-signup-table="detail">
+            <thead>
+              <tr>
+                <th data-col="name" data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+                <th data-col="zwid" data-sort="num" class="cursor-pointer hover:text-primary select-none">ZWID</th>
+                <th data-col="timezone" data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
+                {% if event.squad_gender_required %}<th data-col="squad_gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>{% endif %}
+                <th data-col="gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Gender</th>
+                <th data-col="category" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZP Category</th>
+                <th data-col="rating" data-sort="text" class="cursor-pointer hover:text-primary select-none">ZR Category</th>
+                <th data-col="ftp" data-sort="num" class="cursor-pointer hover:text-primary select-none">FTP</th>
+                <th data-col="wkg" data-sort="num" class="cursor-pointer hover:text-primary select-none">WKG</th>
+                <th data-col="zftp" data-sort="num" class="cursor-pointer hover:text-primary select-none">zFTP</th>
+                <th data-col="zmap" data-sort="num" class="cursor-pointer hover:text-primary select-none">zMAP</th>
+                <th data-col="zauth" data-sort="text" class="cursor-pointer hover:text-primary select-none" title="How the rider's Zwift account was verified. Squads with &quot;require zauth&quot; accept only Zwift OAuth.">Zauth</th>
+                <th data-col="verified" data-sort="text" class="cursor-pointer hover:text-primary select-none">Verified</th>
+                {% if event.event_role %}<th data-col="event_role" data-sort="text" class="cursor-pointer hover:text-primary select-none">Event Role</th>{% endif %}
+                {% if squads %}<th data-col="squad" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>{% endif %}
+                {% if can_view_signup_notes %}<th data-col="notes" data-sort="text" class="cursor-pointer hover:text-primary select-none">Notes</th>{% endif %}
+                {% if signup_questions %}<th data-col="custom_answers">Answers{% if answer_facets %} <span class="text-xs font-normal text-base-content/50">(sort in a facet &#9650;&#9660;)</span>{% endif %}</th>{% endif %}
+                <th data-col="zr_age" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Age</th>
+                <th data-col="zr_cur_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Rating</th>
+                <th data-col="zr_cur_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Current Cat</th>
+                <th data-col="zr_max30_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Max30 Rating</th>
+                <th data-col="zr_max30_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Max30 Cat</th>
+                <th data-col="zr_max90_rating" data-sort="num" class="cursor-pointer hover:text-primary select-none" style="display:none">Max90 Rating</th>
+                <th data-col="zr_max90_cat" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Max90 Cat</th>
+                <th data-col="zr_phenotype" data-sort="text" class="cursor-pointer hover:text-primary select-none" style="display:none">Phenotype</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in signups %}
+              {% with withdrawn=entry.signup.is_withdrawn %}
+              <tr data-signup-pk="{{ entry.signup.pk }}" data-name="{{ entry.user.get_full_name|default:entry.user.discord_username }}"{% if withdrawn %} data-signup-withdrawn class="opacity-60"{% endif %}>
+                <td data-col="name" data-sort-value="{{ entry.user.get_full_name|default:entry.user.discord_username }}">
+                  {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                  {% if withdrawn %}<span class="badge badge-ghost badge-sm ml-1 whitespace-nowrap">Withdrawn</span>{% endif %}
+                  {% if answer_facets %}<div class="md:hidden text-xs text-base-content/60 mt-1 max-w-48 empty:hidden" data-answer-focus></div>{% endif %}
+                </td>
+                <td data-col="zwid">
+                  {% if entry.zwid %}
+                  <span class="font-mono text-sm">{{ entry.zwid }}</span>
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="timezone">{% if entry.signup.signup_timezone %}{% for tz in entry.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
+                {% if event.squad_gender_required %}<td data-col="squad_gender">{% if entry.signup.signup_squad_gender %}{% for g in entry.signup.signup_squad_gender %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ g }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
+                <td data-col="gender">
+                  {% if entry.gender == "male" %}
+                  <span class="badge badge-info badge-sm">M</span>
+                  {% elif entry.gender == "female" %}
+                  <span class="badge badge-secondary badge-sm">F</span>
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="category">
+                  {% if entry.in_zwiftpower %}
+                    {% if entry.zp_category_w %}
+                    {% zp_category_badge entry.zp_category_w is_women=True %}
+                    {% else %}
+                    {% zp_category_badge entry.zp_category|default:"-" %}
+                    {% endif %}
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="rating">
+                  {% if entry.in_zwiftracing %}
+                  <span class="badge badge-secondary badge-sm">{{ entry.zr_category|default:"N/A" }}</span>
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="ftp">
+                  {% if entry.zp_ftp %}
+                  <span class="font-mono text-sm">{{ entry.zp_ftp }}</span>
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="wkg">
+                  {% if entry.wkg %}
+                  <span class="font-mono text-sm">{{ entry.wkg }}</span>
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="zftp" data-sort-value="{{ entry.z_ftp|default_if_none:0 }}">
+                  {% if entry.z_ftp %}
+                  <span class="font-mono text-sm">{{ entry.z_ftp|floatformat:0 }}w</span>
+                  {% if entry.z_ftp_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ entry.z_ftp_wkg|floatformat:2 }}</span>{% endif %}
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="zmap" data-sort-value="{{ entry.z_map|default_if_none:0 }}">
+                  {% if entry.z_map %}
+                  <span class="font-mono text-sm">{{ entry.z_map|floatformat:0 }}w</span>
+                  {% if entry.z_map_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ entry.z_map_wkg|floatformat:2 }}</span>{% endif %}
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="zauth" data-sort-value="{% if entry.user.is_zauth_verified %}1{% elif entry.user.zwid_verified %}2{% else %}3{% endif %}">
+                  {% if entry.user.is_zauth_verified %}
+                  <span class="badge badge-success badge-sm" title="Connected through Zwift OAuth">Zauth</span>
+                  {% elif entry.user.zwid_verified %}
+                  <span class="badge badge-warning badge-sm badge-outline" title="Verified, but not through Zwift OAuth -- fails a squad that requires zauth">{{ entry.user.get_zwid_verification_method_display|default:"Other" }}</span>
+                  {% else %}
+                  <span class="text-base-content/30" title="Zwift account not verified">-</span>
+                  {% endif %}
+                </td>
+                <td data-col="verified">
+                  {% if entry.is_extra_verified %}
+                    {% if site_settings.extra_verified_emoji %}
+                    <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
+                    {% else %}
+                    <span class="badge badge-warning badge-sm">EV</span>
+                    {% endif %}
+                  {% elif entry.is_race_ready %}
+                    {% if site_settings.verified_emoji %}
+                    <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
+                    {% else %}
+                    <span class="badge badge-success badge-sm">Yes</span>
+                    {% endif %}
+                  {% else %}
+                    {% if site_settings.not_verified_emoji %}
+                    <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
+                    {% else %}
+                    <span class="badge badge-error badge-sm">No</span>
+                    {% endif %}
+                  {% endif %}
+                </td>
+                {% if event.event_role %}
+                <td data-col="event_role">
+                  {% if entry.has_event_role %}
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+                  {% else %}
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-error" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                  {% endif %}
+                </td>
+                {% endif %}
+                {% if squads %}
+                <td data-col="squad" id="squad-cell-{{ entry.signup.pk }}">
+                  {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk %}
+                </td>
+                {% endif %}
+                {% if can_view_signup_notes %}
+                <td data-col="notes">
+                  {% if entry.signup.notes %}
+                  <div class="tooltip tooltip-left" data-tip="{{ entry.signup.notes }}">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-info cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
+                  </div>
+                  {% else %}
+                  <span class="text-base-content/30">-</span>
+                  {% endif %}
+                </td>
+                {% endif %}
+                {% if signup_questions %}
+                <td data-col="custom_answers" class="align-top">
+                  <div class="max-w-xs space-y-0.5">
+                    {% for a in entry.custom_answers %}{% if a.answered %}<div class="text-xs" data-aq="{{ a.question.pk }}"><span class="text-base-content/50">{{ a.label|render_markdown_inline }}:</span> <span data-aq-value>{{ a.display }}</span></div>{% endif %}{% endfor %}
+                  </div>
+                </td>
+                {% endif %}
+                <td data-col="zr_age" style="display:none">
+                  {% if entry.zr_age %}<span class="text-sm">{{ entry.zr_age }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_cur_rating" style="display:none">
+                  {% if entry.zr_current_rating %}<span class="font-mono text-sm">{{ entry.zr_current_rating }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_cur_cat" style="display:none">
+                  {% if entry.zr_current_category %}<span class="badge badge-sm">{{ entry.zr_current_category }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_max30_rating" style="display:none">
+                  {% if entry.zr_max30_rating %}<span class="font-mono text-sm">{{ entry.zr_max30_rating }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_max30_cat" style="display:none">
+                  {% if entry.zr_max30_category %}<span class="badge badge-sm">{{ entry.zr_max30_category }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_max90_rating" style="display:none">
+                  {% if entry.zr_max90_rating %}<span class="font-mono text-sm">{{ entry.zr_max90_rating }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_max90_cat" style="display:none">
+                  {% if entry.zr_max90_category %}<span class="badge badge-sm">{{ entry.zr_max90_category }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+                <td data-col="zr_phenotype" style="display:none">
+                  {% if entry.zr_phenotype %}<span class="text-sm">{{ entry.zr_phenotype }}</span>
+                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                </td>
+              </tr>
+              {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        </div>
+      {% else %}
+      {# Non-admin members with show_signups on: names + icons only #}
+      <div class="mt-2 flex flex-wrap gap-2">
+        {% for entry in signups %}
+        <div class="badge badge-ghost badge-lg gap-1 py-3">
+          {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      </div>
+      {% endif %}
+
+
+      </div>
+
+      <div role="tabpanel" id="panel-category" data-tab-panel="category" aria-labelledby="tab-category">
       {% if zp_by_squad %}
       <div class="divider mt-6"></div>
       <div class="flex items-center gap-2 mb-4">
         <h3 class="text-lg font-semibold">By Category</h3>
         <span class="badge badge-neutral" id="category-total-badge">{{ zp_total_all }}</span>
-        <button aria-label="Show category breakdown" type="button" class="btn btn-ghost btn-xs" onclick="toggleByCategory()" title="Show category breakdown">
-          <svg id="category-arrow" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
       </div>
-      <div id="category-content" style="display:none">
+      <div id="category-content">
         <div class="flex items-center gap-1 mb-3">
           <span class="text-sm text-base-content/70 mr-1">Source:</span>
           <button type="button" class="btn btn-xs btn-primary" id="cat-toggle-zp" onclick="switchCategorySource('zp')">ZwiftPower</button>
@@ -1116,6 +954,8 @@
         </div>
       </div>
       {% endif %}
+      </div>
+
 
       <div class="mt-6">
         <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">&larr; Back to Events</a>
@@ -1124,18 +964,212 @@
   </div>
 </div>
 
+
+      <div role="tabpanel" id="panel-races" data-tab-panel="races" aria-labelledby="tab-races">
+      {% if races %}
+      <div class="divider mt-6"></div>
+      <h3 class="text-lg font-semibold mb-4">Races</h3>
+      <div class="space-y-3">
+        {% for race in races %}
+        <div class="card bg-base-300">
+          <div class="card-body p-4">
+            <h4 class="font-semibold">{{ race.title }}</h4>
+            <p class="text-sm text-base-content/70">
+              {{ race.start_date|date:"M j, Y" }}{% if race.start_time %} at {{ race.start_time|time:"g:i A" }}{% endif %}
+              {% if race.end_date %} &ndash; {{ race.end_date|date:"M j, Y" }}{% endif %}
+            </p>
+            {% if race.zwift_category or race.zwift_rating %}
+            <div class="flex gap-2 mt-1">
+              {% if race.zwift_category %}
+              <span class="badge badge-sm badge-outline">Cat {{ race.zwift_category }}</span>
+              {% endif %}
+              {% if race.zwift_rating %}
+              <span class="badge badge-sm badge-outline">Rating: {{ race.zwift_rating }}</span>
+              {% endif %}
+            </div>
+            {% endif %}
+            {% if race.description %}
+            <p class="text-sm mt-2">{{ race.description }}</p>
+            {% endif %}
+            {% if race.url or race.race_pass or race.discord_channel_id %}
+            <div class="flex flex-wrap gap-3 mt-2">
+              {% if race.url %}
+              <a href="{{ race.url }}" target="_blank" rel="noopener" class="link link-primary text-sm">
+                Race Details
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+              {% endif %}
+              {% if race.race_pass %}
+              <a href="{{ race.race_pass }}" target="_blank" rel="noopener" class="link link-primary text-sm">
+                Race Pass
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+              {% endif %}
+              {% if race.discord_channel_id %}
+              <a href="https://discord.com/channels/{{ guild_id }}/{{ race.discord_channel_id }}" target="_blank" rel="noopener" class="link link-primary text-sm">
+                Discord Channel
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      </div>
+
+      {% comment %}
+        Dialogs sit at the end, outside every panel, because the controls that open them
+        do: the signup button is in the header and Add members in the gear menu. A <dialog>
+        inside a display:none panel cannot be opened by showModal(), so keeping them out
+        here is what lets the panels be hidden without breaking the buttons.
+      {% endcomment %}
+      {% if event.signups_open %}
+        {% if user_signup and user_signup.status == "registered" %}
+        <dialog id="edit_signup_modal" class="modal">
+          <div class="modal-box">
+            <h3 class="text-lg font-bold mb-4">Edit Signup</h3>
+            <form method="post" action="{% url 'events:event_signup_edit' event.pk %}" class="space-y-4">
+              {% csrf_token %}
+              {% if event.timezone_options %}
+              <div class="form-control w-full">
+                <label class="label">
+                  <span class="label-text">Timezone{% if event.timezone_required %} <span class="text-error">*</span>{% endif %}</span>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  {% for tz in event.timezone_options %}
+                  <label class="label cursor-pointer gap-2">
+                    <input type="checkbox" name="signup_timezone" value="{{ tz }}" class="checkbox checkbox-sm"{% if tz in user_signup.signup_timezone %} checked{% endif %}>
+                    <span class="label-text">{{ tz }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              {% if event.squad_gender_required and event.squad_gender_options %}
+              <div class="form-control w-full">
+                <label class="label">
+                  <span class="label-text">Squad Gender Preference <span class="text-error">*</span></span>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  {% for g in event.squad_gender_options %}
+                  <label class="label cursor-pointer gap-2">
+                    <input type="checkbox" name="signup_squad_gender" value="{{ g }}" class="checkbox checkbox-sm"{% if g in user_signup.signup_squad_gender %} checked{% endif %}>
+                    <span class="label-text">{{ g }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              {% include "events/_signup_question_fields.html" with fields=signup_question_fields %}
+              <div class="form-control w-full">
+                <label class="label" for="edit_signup_notes">
+                  <span class="label-text">Notes</span>
+                </label>
+                <textarea name="notes" id="edit_signup_notes" class="textarea textarea-bordered w-full" rows="3" placeholder="Any notes for the people running this event (optional)">{{ user_signup.notes }}</textarea>
+              </div>
+              <div class="modal-action">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('edit_signup_modal').close()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+              </div>
+            </form>
+            <div class="divider">or</div>
+            <form method="post" action="{% url 'events:event_signup_delete' event.pk %}" onsubmit="return confirm('Are you sure you want to remove your signup?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-error btn-outline btn-sm w-full">Remove Signup</button>
+            </form>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
+        {% else %}
+        <dialog id="signup_modal" class="modal">
+          <div class="modal-box">
+            <h3 class="text-lg font-bold mb-4">Sign Up for {{ event.title }}</h3>
+            {% if event.signup_instructions %}
+            <div class="prose prose-sm max-w-none mb-4">{{ event.signup_instructions|render_markdown }}</div>
+            {% endif %}
+            <form method="post" action="{% url 'events:event_signup' event.pk %}" class="space-y-4">
+              {% csrf_token %}
+              {% if event.timezone_options %}
+              <div class="form-control w-full">
+                <label class="label">
+                  <span class="label-text">Timezone{% if event.timezone_required %} <span class="text-error">*</span>{% endif %}</span>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  {% for tz in event.timezone_options %}
+                  <label class="label cursor-pointer gap-2">
+                    <input type="checkbox" name="signup_timezone" value="{{ tz }}" class="checkbox checkbox-sm">
+                    <span class="label-text">{{ tz }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              {% if event.squad_gender_required and event.squad_gender_options %}
+              <div class="form-control w-full">
+                <label class="label">
+                  <span class="label-text">Squad Gender Preference <span class="text-error">*</span></span>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  {% for g in event.squad_gender_options %}
+                  <label class="label cursor-pointer gap-2">
+                    <input type="checkbox" name="signup_squad_gender" value="{{ g }}" class="checkbox checkbox-sm">
+                    <span class="label-text">{{ g }}</span>
+                  </label>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              {% include "events/_signup_question_fields.html" with fields=signup_question_fields %}
+              <div class="form-control w-full">
+                <label class="label" for="signup_notes">
+                  <span class="label-text">Notes</span>
+                </label>
+                <textarea name="notes" id="signup_notes" class="textarea textarea-bordered w-full" rows="3" placeholder="Any notes for the people running this event (optional)"></textarea>
+              </div>
+              <div class="modal-action">
+                <button type="button" class="btn btn-ghost" onclick="document.getElementById('signup_modal').close()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Sign Up</button>
+              </div>
+            </form>
+          </div>
+          <form method="dialog" class="modal-backdrop"><button>close</button></form>
+        </dialog>
+        {% endif %}
+      {% endif %}
+
+      {% if can_add_members %}
+      {# The trigger lives in the event gear menu; only the dialog remains here. #}
+      <dialog id="add_members_modal" class="modal">
+        <div class="modal-box max-w-lg">
+          <h3 class="text-lg font-bold mb-4">Add Members to Event</h3>
+          <p class="text-sm text-base-content/70 mb-4">Search for team members to add to this event{% if event.event_role %} and assign the event Discord role{% endif %}.</p>
+          <div class="form-control mb-4">
+            <input type="text" id="add-members-search" class="input input-bordered w-full" placeholder="Search by name (min 2 characters)..." autocomplete="off">
+          </div>
+          <div id="add-members-results" class="max-h-60 overflow-y-auto mb-4"></div>
+          <form method="post" action="{% url 'events:add_members' event.pk %}" id="add-members-form">
+            {% csrf_token %}
+            <div id="add-members-selected" class="flex flex-wrap gap-2 mb-4"></div>
+            <div class="modal-action">
+              <button type="button" class="btn btn-ghost" onclick="document.getElementById('add_members_modal').close()">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="add-members-submit" disabled>Add Selected</button>
+            </div>
+          </form>
+        </div>
+        <form method="dialog" class="modal-backdrop"><button>close</button></form>
+      </dialog>
+      {% endif %}
+
 <script>
-function toggleSignups() {
-  var content = document.getElementById('signups-content');
-  var arrow = document.getElementById('signups-arrow');
-  if (content.style.display === 'none') {
-    content.style.display = '';
-    arrow.style.transform = 'rotate(90deg)';
-  } else {
-    content.style.display = 'none';
-    arrow.style.transform = '';
-  }
-}
 function toggleSquadMembers(squadPk) {
   var row = document.getElementById('squad-members-' + squadPk);
   var arrow = document.getElementById('squad-arrow-' + squadPk);
@@ -1171,17 +1205,6 @@ function syncSquadExpandAllLabel() {
   button.textContent = allOpen ? 'Collapse all' : 'Expand all';
 }
 
-function toggleByCategory() {
-  var content = document.getElementById('category-content');
-  var arrow = document.getElementById('category-arrow');
-  if (content.style.display === 'none') {
-    content.style.display = '';
-    arrow.style.transform = 'rotate(90deg)';
-  } else {
-    content.style.display = 'none';
-    arrow.style.transform = '';
-  }
-}
 function switchCategorySource(source) {
   var zpTable = document.getElementById('cat-table-zp');
   var zrTable = document.getElementById('cat-table-zr');
@@ -1638,4 +1661,63 @@ function switchCategorySource(source) {
     }
   })();
 </script>
+
+<script>
+  // Tab switching. Every panel is in the page and this shows one. If the script never runs
+  // the page renders as it used to, every section stacked -- which is why the panels are not
+  // hidden in the markup.
+  (function () {
+    var bar = document.getElementById('event-tabs');
+    if (!bar) return;
+    var tabs = Array.prototype.slice.call(bar.querySelectorAll('[data-tab]'));
+    var panels = Array.prototype.slice.call(document.querySelectorAll('[data-tab-panel]'));
+    if (!tabs.length || !panels.length) return;
+
+    var known = tabs.map(function (a) { return a.dataset.tab; });
+    function wanted() {
+      var q = new URLSearchParams(window.location.search).get('tab');
+      return known.indexOf(q) !== -1 ? q : known[0];
+    }
+
+    function show(key) {
+      panels.forEach(function (panel) { panel.hidden = panel.dataset.tabPanel !== key; });
+      tabs.forEach(function (tab) {
+        var on = tab.dataset.tab === key;
+        tab.classList.toggle('tab-active', on);
+        tab.classList.toggle('font-semibold', on);
+        tab.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+    }
+
+    bar.addEventListener('click', function (e) {
+      var tab = e.target.closest && e.target.closest('[data-tab]');
+      if (!tab || e.metaKey || e.ctrlKey || e.shiftKey || (e.button && e.button !== 0)) return;
+      e.preventDefault();
+      show(tab.dataset.tab);
+      // Keep the URL honest so a copied link opens the same panel, without a reload and
+      // without stacking a history entry for every click.
+      var url = new URL(window.location.href);
+      url.searchParams.set('tab', tab.dataset.tab);
+      window.history.replaceState({}, '', url);
+    });
+
+    // Automatic activation: arrows move and select, the expected tablist behaviour and a
+    // natural fit for these being ordinary links.
+    bar.addEventListener('keydown', function (e) {
+      var i = tabs.indexOf(document.activeElement);
+      if (i === -1) return;
+      var next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1
+               : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : null;
+      if (next === null) return;
+      e.preventDefault();
+      next = (next + tabs.length) % tabs.length;
+      tabs[next].focus();
+      tabs[next].click();
+    });
+
+    show(wanted());
+    window.addEventListener('popstate', function () { show(wanted()); });
+  })();
+</script>
+
 {% endblock %}
