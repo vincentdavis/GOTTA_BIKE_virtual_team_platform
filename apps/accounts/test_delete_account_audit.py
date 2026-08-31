@@ -6,6 +6,7 @@ hold the audit line in place, and hold the line on what it may and may not carry
 person is asking to be forgotten, so name and email must never reach Logfire.
 """
 
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -34,22 +35,33 @@ def deleting_member(client, team_member):
 
 
 def _delete(client, confirmation="Delete"):
-    """POST the delete form with logfire.info patched.
+    """POST the delete form with logfire's info and error both patched.
 
     Patching the module attribute catches the media-purge service's own log line too, so
     callers pick out the call they mean with :func:`_line` rather than assuming one call.
 
+    Both levels are captured because the audit goes to one or the other by design: an
+    erasure that could not finish every step is logged at error, so that a standing
+    obligation is findable without knowing to look for it. Which level carried it is not
+    what these tests are about -- they are about the payload -- so both are searched.
+
     Returns:
-        The mock standing in for ``logfire.info``, carrying the captured calls.
+        An object exposing ``call_args_list`` across both mocks.
 
     """
-    with patch("apps.accounts.views.logfire.info") as info:
+    with (
+        patch("apps.accounts.views.logfire.info") as info,
+        patch("apps.accounts.views.logfire.error") as error,
+    ):
         client.post(reverse("accounts:profile_delete"), {"confirmation": confirmation})
-    return info
+    return SimpleNamespace(call_args_list=[*info.call_args_list, *error.call_args_list])
 
 
 def _line(info, message):
-    """Find the captured logfire.info call carrying ``message``.
+    """Find the captured log call whose message starts with ``message``.
+
+    Matched by prefix rather than equality: the unfinished-erasure line extends the same
+    opening words, and callers asking for "User account deleted" mean either of them.
 
     Returns:
         Its keyword arguments.
@@ -59,9 +71,9 @@ def _line(info, message):
 
     """
     for call in info.call_args_list:
-        if call[0] and call[0][0] == message:
+        if call[0] and str(call[0][0]).startswith(message):
             return call[1]
-    raise AssertionError(f"no logfire.info call for {message!r}; got {info.call_args_list}")
+    raise AssertionError(f"no log call for {message!r}; got {info.call_args_list}")
 
 
 @pytest.mark.django_db
@@ -80,7 +92,9 @@ def test_deletion_log_never_carries_name_or_email(client, deleting_member):
     """The point of the deletion is to forget the person; the audit line must not undo that."""
     info = _delete(client)
 
-    logged = str(info.call_args)
+    # Every captured call, not just the last: the audit may go to error instead of info,
+    # and a leak in any line is a leak.
+    logged = str(info.call_args_list)
     assert "Delible" not in logged
     assert "Rider" not in logged
     assert "delible@example.com" not in logged

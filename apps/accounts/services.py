@@ -320,6 +320,10 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
         (GuildMember, MembershipApplication, and the zwid-keyed ZwiftPower / Zwift Racing
         tables) are keyed by them, so a later erasure request is unanswerable without them.
 
+        ``complete`` says whether every step actually finished, and ``incomplete_reasons``
+        lists what did not in words a caller can show someone. Check ``complete`` rather than
+        assuming success -- the deletion proceeds even when a step fails, by design.
+
     """
     from django.db.models import Q
 
@@ -333,11 +337,16 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
     # The zauth service holds its own record of the zwid-to-user link. Nothing in this
     # database can reach it once the row is gone.
     zauth_disconnected = None
+    zauth_error = None
     if zwift_client.is_configured():
         try:
+            # False here means there was no link to remove, which is the ordinary case for a
+            # rider who never connected Zwift. Only the exception below is a failure -- do not
+            # collapse the two, or every such deletion reports itself as unfinished.
             zauth_disconnected = bool(zwift_client.disconnect(str(user.pk)))
         except Exception as exc:
             zauth_disconnected = False
+            zauth_error = str(exc)
             logfire.error("Could not disconnect Zwift on account deletion", user_id=user.pk, error=str(exc))
 
     # Neither of these is reached by the cascade. MembershipApplication has no FK to User
@@ -375,8 +384,30 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
         "self_serve": deleted_by is None or deleted_by.pk == user.pk,
     }
 
+    # Whether the erasure actually finished. The steps above are deliberately allowed to fail
+    # without blocking the deletion, which is the right call -- but it means a partial erasure
+    # and a clean one are otherwise indistinguishable, and the person has been told their data
+    # is gone either way. That gap is what this closes.
+    #
+    # A transaction is not the fix and would make it worse: the storage purge and the zauth
+    # call reach outside this database and cannot be rolled back, so wrapping the function
+    # would undo the rows while leaving the blobs and the upstream link deleted -- less
+    # consistent than now, while looking safer.
+    incomplete = []
+    if media["failed"]:
+        incomplete.append(f"{media['failed']} verification file(s) still in storage")
+    if zauth_error:
+        incomplete.append("the upstream Zwift link could not be dropped")
+    audit["complete"] = not incomplete
+    audit["incomplete_reasons"] = incomplete
+
     user.delete()
-    logfire.info("User account deleted", **audit)
+    if incomplete:
+        # Deliberately an error, not an info with a flag on it: an unfinished erasure is a
+        # standing obligation, and it has to be findable without knowing to look for it.
+        logfire.error("User account deleted, but the erasure did not finish", **audit)
+    else:
+        logfire.info("User account deleted", **audit)
     return audit
 
 

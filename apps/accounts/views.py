@@ -757,8 +757,15 @@ def profile_delete(request: HttpRequest) -> HttpResponse:
     # logout() before the delete: the session row is keyed to the user, and the request
     # still needs a valid session to carry the success message to the next page.
     logout(request)
-    delete_user_account(user)
-    messages.success(request, "Your account has been deleted.")
+    result = delete_user_account(user)
+    if result["complete"]:
+        messages.success(request, "Your account has been deleted.")
+    else:
+        messages.warning(
+            request,
+            "Your account has been deleted, but some of your data could not be removed "
+            "automatically. This has been flagged for an administrator to finish by hand.",
+        )
     return redirect("/")
 
 
@@ -1276,8 +1283,16 @@ def compliance_delete_user(request: HttpRequest) -> HttpResponse:
         return redirect("accounts:profile_delete_confirm")
 
     label = target.get_full_name() or target.username
-    delete_user_account(target, deleted_by=request.user)
-    messages.success(request, f"Deleted the account for {label}.")
+    result = delete_user_account(target, deleted_by=request.user)
+    if result["complete"]:
+        messages.success(request, f"Deleted the account for {label}.")
+    else:
+        messages.warning(
+            request,
+            f"Deleted the account for {label}, but the erasure did not finish: "
+            f"{'; '.join(result['incomplete_reasons'])}. This needs finishing by hand — "
+            f"the file paths are in the deletion log entry.",
+        )
     return redirect("config_section_page", section_key="compliance")
 
 
