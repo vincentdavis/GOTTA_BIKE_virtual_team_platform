@@ -60,6 +60,39 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
+    # HSTS. SECURE_SSL_REDIRECT already sends browsers to HTTPS, but it does so with a
+    # redirect -- so the very first request of a session still leaves in the clear and can be
+    # intercepted before the redirect is seen. HSTS closes that window by telling the browser
+    # to go straight to HTTPS next time, without asking.
+    #
+    # It is worth understanding what this commits to, because it is not freely reversible: for
+    # max-age seconds after their last visit, browsers that have seen this header will REFUSE
+    # to load the site over plain HTTP, and clearing that early means reaching every visitor's
+    # browser, which you cannot do. Set SECURE_HSTS_SECONDS low (3600) to trial it and raise
+    # it once satisfied.
+    #
+    # INCLUDE_SUBDOMAINS applies to subdomains of the host that sent the header -- that is,
+    # *.app.coalitionracing.com, not the apex and not siblings like zwiftspeedlab. Nothing is
+    # served under app.* today, so this costs nothing and covers anything added later.
+    #
+    # PRELOAD stays off deliberately. It ships the domain in browsers' built-in lists, which
+    # covers the whole apex including every sibling subdomain, and removal takes months. That
+    # is a decision about the domain, not about this app.
+    SECURE_HSTS_SECONDS = config.hsts_seconds
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = False
+
+    # Derived from ALLOWED_HOSTS so a new host cannot be added in one place and forgotten in
+    # the other. Not currently load-bearing -- one domain, and Django accepts same-origin
+    # posts without it -- but it is what makes adding a second domain a one-variable change
+    # instead of a puzzling 403 on every form.
+    CSRF_TRUSTED_ORIGINS = config.csrf_trusted_origins
+
+    # W021 says we could submit to the browser preload list. Declining is the decision above,
+    # so silence it rather than carry a warning we intend never to act on -- a `check --deploy`
+    # that always prints something is a check nobody reads.
+    SILENCED_SYSTEM_CHECKS = ["security.W021"]
+
 
 # Application definition
 

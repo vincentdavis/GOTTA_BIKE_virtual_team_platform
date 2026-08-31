@@ -32,6 +32,11 @@ class Settings(BaseSettings):
         alias="INTERNAL_IPS",
         description="Comma-separated internal IPs for debug toolbar",
     )
+    hsts_seconds: int = Field(
+        default=31536000,
+        alias="SECURE_HSTS_SECONDS",
+        description="HSTS max-age in seconds (0 disables). Lower it to trial HSTS before committing.",
+    )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -43,6 +48,29 @@ class Settings(BaseSettings):
 
         """
         return [h.strip() for h in self.allowed_hosts_str.split(",") if h.strip()]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def csrf_trusted_origins(self) -> list[str]:
+        """Origins Django will accept unsafe requests from, derived from ALLOWED_HOSTS.
+
+        Derived rather than configured separately so the two cannot drift apart: a host added
+        to ALLOWED_HOSTS and forgotten here would fail CSRF on every form post, which surfaces
+        as a confusing 403 rather than a misconfiguration. Since Django 4.0 each entry must
+        carry a scheme, and a leading-dot wildcard host becomes an explicit ``*`` subdomain
+        pattern. ``*`` on its own has no origin form and is skipped.
+
+        Returns:
+            Scheme-qualified origins for CSRF_TRUSTED_ORIGINS.
+
+        """
+        origins: list[str] = []
+        for host in self.allowed_hosts:
+            if host == "*":
+                continue
+            scheme = "http" if host in ("localhost", "127.0.0.1", "[::1]") else "https"
+            origins.append(f"{scheme}://*{host}" if host.startswith(".") else f"{scheme}://{host}")
+        return origins
 
     @computed_field  # type: ignore[prop-decorator]
     @property
