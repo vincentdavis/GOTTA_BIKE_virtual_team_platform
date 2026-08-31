@@ -167,3 +167,32 @@ def test_another_rider_cannot_see_that_trail(client, rider, record_factory, user
     client.force_login(other)
     html = client.get(reverse("accounts:verification")).content.decode()
     assert viewer_pseudonym(rider.pk, reviewer.pk) not in html
+
+
+@pytest.mark.django_db
+def test_a_pending_record_is_not_labelled_manual(client, rider, record_factory):
+    """"Manual" means an administrator can trigger it. For pending evidence nothing exists to trigger.
+
+    The badge is driven by ``automatic``, which is False for pending too -- so without the
+    extra condition the card told riders a process existed that does not.
+    """
+    record_factory(RaceReadyRecord.Status.PENDING)
+    client.force_login(rider)
+    html = client.get(reverse("accounts:verification")).content.decode()
+
+    start = html.index("While awaiting review")
+    block = html[start : html.index("Who can open it", start)]
+    assert "manual" not in block
+    assert "No removal is scheduled" in block
+
+
+@pytest.mark.django_db
+def test_a_rejected_record_is_labelled_manual(client, rider, record_factory):
+    """Where a manual process does exist, the rider should be told it is not automatic."""
+    record_factory(RaceReadyRecord.Status.REJECTED, reviewed_days_ago=2)
+    client.force_login(rider)
+    html = client.get(reverse("accounts:verification")).content.decode()
+
+    start = html.index("After rejection")
+    block = html[start : html.index("Who can open it", start)]
+    assert "manual" in block

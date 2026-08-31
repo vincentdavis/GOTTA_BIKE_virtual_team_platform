@@ -345,9 +345,10 @@
                               <li>
                                 {{ rule.label }}:
                                 {% if rule.due %}<strong>{{ rule.due|date:"j M Y" }}</strong>{% else %}<strong>no date set</strong>{% endif %}
-                                {% if not rule.automatic %}
+                                {% if rule.due and not rule.automatic %}
+                                  {# Only where a manual process exists. A rule with no date has no process at all. #}
                                   <span class="badge badge-ghost badge-xs align-middle"
-                                        title="Not on a schedule">manual</span>
+                                        title="Runs when an administrator triggers it, not on a schedule">manual</span>
                                 {% endif %}
                                 <span class="block text-xs text-base-content/60">{{ rule.detail }}</span>
                               </li>
@@ -381,7 +382,10 @@
                                 {% endfor %}
                               </ul>
                               <p class="text-xs text-base-content/50 mt-1">
-                                Each tag is one person. The same tag across your records is the same reviewer.
+                                Each tag is one person, and the same tag across your records is the same
+                                reviewer. Counted when the page put your evidence on their screen &mdash;
+                                which is not the same as saying they studied it, and we cannot tell the
+                                difference.
                               </p>
                             {% else %}
                               <span class="text-base-content/70">nobody has opened the evidence yet</span>
