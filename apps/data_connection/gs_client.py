@@ -124,38 +124,6 @@ def create_spreadsheet(title: str, sheet_name: str = "DATA_CONN") -> str:
             raise GSSheetError(f"Failed to create spreadsheet: {e}") from e
 
 
-def share_spreadsheet(spreadsheet_url: str, email: str, role: str = "writer", transfer_ownership: bool = False) -> None:
-    """Share a spreadsheet with an email address.
-
-    Args:
-        spreadsheet_url: URL of the spreadsheet.
-        email: Email address to share with.
-        role: Permission role (reader, writer, owner). Default: writer.
-        transfer_ownership: If True and role is 'owner', transfer ownership to the email.
-
-    Raises:
-        GSSheetError: If sharing fails.
-
-    """
-    with logfire.span("gs_share_spreadsheet", email=email, role=role, transfer_ownership=transfer_ownership):
-        try:
-            client = _get_client()
-            spreadsheet_id = _extract_spreadsheet_id(spreadsheet_url)
-            spreadsheet = client.open_by_key(spreadsheet_id)
-
-            if transfer_ownership and role == "owner":
-                # Transfer ownership requires the transferOwnership parameter
-                spreadsheet.share(email, perm_type="user", role="owner", notify=True, transferOwnership=True)
-                logfire.info(f"Transferred ownership to {email}")
-            else:
-                spreadsheet.share(email, perm_type="user", role=role)
-                logfire.info(f"Shared spreadsheet with {email} as {role}")
-
-        except gspread.exceptions.APIError as e:
-            logfire.error(f"Failed to share spreadsheet: {e}")
-            raise GSSheetError(f"Failed to share spreadsheet: {e}") from e
-
-
 def set_headers(spreadsheet_url: str, sheet_name: str, headers: list[str]) -> None:
     """Set header row in a spreadsheet.
 
