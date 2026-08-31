@@ -9,18 +9,24 @@
         <h3 class="font-semibold mb-2">What is deleted</h3>
         <ul class="list-disc list-inside mb-6 text-sm text-base-content/80 space-y-1">
           <li>{% if subject %}Their {% else %}Your {% endif %}profile — name, birth year, gender, country, timezone, email, equipment and social links</li>
-          <li>{% if subject %}Their {% else %}Your {% endif %}Discord sign-in link, and two-factor authentication if you set it up</li>
+          <li>{% if subject %}Their {% else %}Your {% endif %}Discord sign-in link, and two-factor authentication if
+            {% if subject %}they{% else %}you{% endif %} set it up</li>
           <li>{% if subject %}Their {% else %}Your {% endif %}Race Verified records, including the weight, height and FTP measurements on them,
             and the verification photos and videos {% if subject %}they uploaded{% else %}you uploaded{% endif %} as evidence</li>
           <li>{% if subject %}Their {% else %}Your {% endif %}event signups and answers to signup questions, availability responses, squad memberships,
             race registrations and DS assignments</li>
-          <li>{% if subject %}Their {% else %}Your {% endif %}API keys and any login links issued to you</li>
-          <li>TTT plans, ladder matchups and Google Sheets data connections you created</li>
-          <li>YouTube videos of yours shown on the Team Feed</li>
+          <li>{% if subject %}Their {% else %}Your {% endif %}API keys and any login links issued to
+            {% if subject %}them{% else %}you{% endif %}</li>
+          <li>TTT plans, ladder matchups and Google Sheets data connections
+            {% if subject %}they{% else %}you{% endif %} created</li>
+          <li>YouTube videos of {% if subject %}theirs{% else %}yours{% endif %} shown on the Team Feed</li>
           <li>{% if subject %}Their {% else %}Your {% endif %}membership registration &mdash; the form filled in when {% if subject %}they joined{% else %}you joined{% endif %},
             holding {% if subject %}their {% else %}your {% endif %}name, email, birth year, gender, country and Zwift ID</li>
           <li>{% if subject %}Their {% else %}Your {% endif %}Discord server membership record here &mdash; Discord ID, username, nickname,
             roles and join date</li>
+          <li>{% if subject %}Their {% else %}Your {% endif %}Zwift connection &mdash; the link between this account and
+            {% if subject %}their {% else %}your {% endif %}Zwift account is dropped with the Zwift sign-in service too, not just here.
+            The race data those services hold is separate; see below</li>
         </ul>
 
         <h3 class="font-semibold mb-2">What we keep</h3>
@@ -31,18 +37,18 @@
           <li><strong>{% if subject %}Their {% else %}Your {% endif %}ZwiftPower and Zwift Racing data</strong> — race results, weight, height, power and
             heart rate. This comes from those services and is tied to {% if subject %}their {% else %}your {% endif %}Zwift ID, not to this account.
             The same is true of Strava club activities.</li>
-          <li><strong>Support tickets you opened</strong>, and anything you created for the team — events,
+          <li><strong>Support tickets {% if subject %}they{% else %}you{% endif %} opened</strong>,
+            and anything {% if subject %}they{% else %}you{% endif %} created for the team — events,
             squads, availability sheets, verification reviews you carried out. These stay, with {% if subject %}their {% else %}your {% endif %}name
             removed from them.</li>
           <li><strong>Page visit logs</strong>, including IP address, with {% if subject %}their {% else %}your {% endif %}name removed.</li>
           <li><strong>The Discord server itself.</strong> Deleting the account does not remove
-            {% if subject %}their {% else %}your {% endif %}from the Discord server, so the membership record above reappears on the next
-            sync &mdash; unlinked, but present. Remove them in Discord as well if that matters.</li>
-          <li><strong>{% if subject %}Their {% else %}Your {% endif %}Zwift connection</strong> is not disconnected automatically. Disconnect it from
-            {% if subject %}their {% else %}your {% endif %}profile first if {% if subject %}you want{% else %}you want{% endif %} that undone.</li>
+            {% if subject %}them{% else %}you{% endif %} from the Discord server, so the membership record above reappears on the next
+            sync &mdash; unlinked, but present.
+            {% if subject %}Remove them in Discord as well if that matters.{% else %}Leave the server too if that matters.{% endif %}</li>
         </ul>
         <p class="text-sm text-base-content/70 mb-6">
-          If {% if subject %}you want{% else %}you want{% endif %} any of the above removed as well, ask a team admin
+          If you want any of the above removed as well, ask a team admin
           {% if config.DISCORD_URL and config.DISCORD_URL != "#" %}
             on <a href="{{ config.DISCORD_URL }}" target="_blank" rel="noopener"
                   class="link link-primary">Discord</a>
