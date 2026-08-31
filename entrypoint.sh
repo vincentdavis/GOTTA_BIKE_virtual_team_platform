@@ -39,5 +39,11 @@ uv run manage.py scheduler &
 # CPU count if left unset — which exhausted Postgres ("too many clients already").
 # Peak web DB connections = WEB_WORKERS x WEB_BLOCKING_THREADS. Tune via env if needed.
 echo "Starting server with Granian..."
-uv run granian gotta_bike_platform.wsgi:application --interface wsgi --host 0.0.0.0 --port "${PORT:-8000}" \
+# Bind :: rather than 0.0.0.0. Railway's private network is IPv6-only, so a service
+# listening on 0.0.0.0 is unreachable at its *.railway.internal name -- which is how
+# the Discord bot is meant to reach this API without leaving Railway. On Linux a ::
+# socket is dual-stack (IPV6_V6ONLY defaults to 0), so IPv4 traffic from the public
+# edge is still accepted; that dual behaviour is the thing to re-check if the public
+# site ever stops responding after a base-image change.
+uv run granian gotta_bike_platform.wsgi:application --interface wsgi --host :: --port "${PORT:-8000}" \
   --workers "${WEB_WORKERS:-2}" --blocking-threads "${WEB_BLOCKING_THREADS:-2}"
