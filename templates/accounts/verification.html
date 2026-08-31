@@ -280,37 +280,18 @@
             <div class="collapse-content">
               <form method="post" action="{% url 'accounts:verification_delete' %}" id="delete-records-form">
                 {% csrf_token %}
-              <div class="overflow-x-auto">
-                <table class="table table-sm">
-                  <thead>
-                  <tr>
-                    <th class="w-8">
-                      <input type="checkbox" class="checkbox checkbox-xs" id="select-all-records"
-                             aria-label="Select all records"/>
-                    </th>
-                    <th>Type</th>
-                    <th>Media</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Days Remaining</th>
-                    <th>Notes</th>
-                  </tr>
-                  </thead>
-                  <tbody>
-                  {% for record in race_ready_records %}
-                    <tr>
-                      <td>
+              <div class="flex flex-col gap-3">
+                {% for entry in race_ready_records %}
+                  {% with record=entry.record %}
+                  <div class="card bg-base-100 border border-base-300">
+                    <div class="card-body p-4 gap-3">
+
+                      <div class="flex flex-wrap items-center gap-2">
                         <input type="checkbox" name="record_ids" value="{{ record.pk }}"
                                class="checkbox checkbox-xs record-checkbox"
                                data-supporting="{% if record.pk in supporting_record_ids %}1{% endif %}"
                                aria-label="Select {{ record.get_verify_type_display }} record from {{ record.date_created|date:"M d, Y" }}{% if record.pk in supporting_record_ids %}, currently counts towards your verified status{% endif %}"/>
-                      </td>
-                      <td>
                         <span class="badge badge-sm text-xs whitespace-nowrap {% if record.verify_type == 'weight_full' %}badge-primary{% elif record.verify_type == 'weight_light' %}badge-secondary{% elif record.verify_type == 'height' %}badge-accent{% elif record.verify_type == 'power' %}badge-warning{% else %}badge-outline{% endif %}">{{ record.get_verify_type_display }}</span>
-                      </td>
-                      <td>{{ record.get_media_type_display }}</td>
-                      <td>{{ record.date_created|date:"M d, Y" }}</td>
-                      <td>
                         {% if record.is_verified %}
                           <span class="badge badge-success badge-sm">Verified</span>
                         {% elif record.is_rejected %}
@@ -318,33 +299,101 @@
                         {% else %}
                           <span class="badge badge-warning badge-sm">Pending</span>
                         {% endif %}
-                      </td>
-                      <td>
-                        {% if record.is_verified %}
-                          {% if record.days_remaining is not None %}
-                            {% if record.days_remaining >= 0 %}
-                              <span class="font-mono text-success">{{ record.days_remaining }}</span>
-                            {% else %}
-                              <span class="font-mono text-error">{{ record.days_remaining }}</span>
-                            {% endif %}
-                          {% else %}
-                            <span class="text-base-content/50" title="Never expires">&infin;</span>
-                          {% endif %}
-                        {% else %}
-                          <span class="text-base-content/30">-</span>
-                        {% endif %}
-                      </td>
-                      <td class="max-w-xs truncate">
                         {% if record.pk in supporting_record_ids %}
-                          <span class="badge badge-outline badge-sm badge-success mr-1"
+                          <span class="badge badge-outline badge-sm badge-success"
                                 title="This record is what makes you Race Verified right now">Counts now</span>
                         {% endif %}
-                        {{ record.notes|default:"-"|truncatechars:50 }}
-                      </td>
-                    </tr>
-                  {% endfor %}
-                  </tbody>
-                </table>
+                        <span class="text-sm text-base-content/60 ms-auto">
+                          Submitted {{ record.date_created|date:"j M Y" }}
+                        </span>
+                      </div>
+
+                      <div class="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                        <span><span class="text-base-content/60">Evidence:</span> {{ record.get_media_type_display }}</span>
+                        {% if record.is_verified %}
+                          <span>
+                            <span class="text-base-content/60">Verification valid:</span>
+                            {% if record.days_remaining is not None %}
+                              {% if record.days_remaining >= 0 %}
+                                <span class="font-mono text-success">{{ record.days_remaining }} days left</span>
+                              {% else %}
+                                <span class="font-mono text-error">expired</span>
+                              {% endif %}
+                            {% else %}
+                              does not expire
+                            {% endif %}
+                          </span>
+                        {% endif %}
+                      </div>
+
+                      {% if record.notes %}
+                        <p class="text-sm text-base-content/70">{{ record.notes }}</p>
+                      {% endif %}
+
+                      {% comment %}
+                        What happens to the photo or video itself, which is a different
+                        question from whether the verification is still valid.
+                      {% endcomment %}
+                      <div class="rounded bg-base-200 p-3 text-sm flex flex-col gap-2">
+                        {% if not entry.has_media %}
+                          <div><span class="font-medium">Evidence removed.</span>
+                            <span class="text-base-content/70">Nothing is stored for this record any more.</span></div>
+                        {% else %}
+                          <div><span class="font-medium">Evidence retained.</span></div>
+                          <ul class="list-disc list-inside text-base-content/80 space-y-1">
+                            {% for rule in entry.retention_rules %}
+                              <li>
+                                {{ rule.label }}:
+                                {% if rule.due %}<strong>{{ rule.due|date:"j M Y" }}</strong>{% else %}<strong>no date set</strong>{% endif %}
+                                {% if not rule.automatic %}
+                                  <span class="badge badge-ghost badge-xs align-middle"
+                                        title="Not on a schedule">manual</span>
+                                {% endif %}
+                                <span class="block text-xs text-base-content/60">{{ rule.detail }}</span>
+                              </li>
+                            {% endfor %}
+                          </ul>
+
+                          <div class="pt-1">
+                            <span class="text-base-content/60">Who can open it:</span>
+                            <strong>{{ entry.access.count }}</strong>
+                            {% if entry.access.count == 1 %}reviewer{% else %}reviewers{% endif %}
+                            {% if entry.access.same_gender_only %}
+                              <span class="text-base-content/60">&mdash; same gender only, as you asked</span>
+                            {% endif %}
+                            {% if entry.access.restricted_to_team %}
+                              <span class="text-base-content/60">&mdash; now limited to the verification team</span>
+                            {% endif %}
+                          </div>
+
+                          <div>
+                            <span class="text-base-content/60">Opened by:</span>
+                            {% if entry.views %}
+                              <ul class="mt-1 space-y-1">
+                                {% for view in entry.views %}
+                                  <li class="font-mono text-xs">
+                                    &hellip;{{ view.tag }}
+                                    <span class="text-base-content/60">
+                                      &middot; {{ view.last_viewed_at|date:"j M Y, H:i" }}
+                                      {% if view.media_view_count > 1 %}&middot; {{ view.media_view_count }} times{% endif %}
+                                    </span>
+                                  </li>
+                                {% endfor %}
+                              </ul>
+                              <p class="text-xs text-base-content/50 mt-1">
+                                Each tag is one person. The same tag across your records is the same reviewer.
+                              </p>
+                            {% else %}
+                              <span class="text-base-content/70">nobody has opened the evidence yet</span>
+                            {% endif %}
+                          </div>
+                        {% endif %}
+                      </div>
+
+                    </div>
+                  </div>
+                  {% endwith %}
+                {% endfor %}
               </div>
 
               <div class="flex items-center gap-3 mt-3">

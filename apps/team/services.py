@@ -1,14 +1,18 @@
 """Service layer for unified team roster operations."""
 
+import hashlib
+import hmac
 import inspect
 import json
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import ClassVar
 
 import logfire
 from constance import config
+from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Count, F, Max, Min, OuterRef, Q, Subquery
 from django.utils import timezone
 
@@ -589,6 +593,109 @@ VERIFICATION_MEDIA_URL_TTL_SECONDS = 300
 VERIFICATION_VIDEO_URL_TTL_SECONDS = 1800
 
 
+# Grace period before a rejected record's evidence is purged. Mirrors
+# REJECTED_MEDIA_GRACE_DAYS in apps/team/views.py, which is what the admin button uses.
+REJECTED_MEDIA_GRACE_DAYS = 30
+
+
+@dataclass(frozen=True)
+class MediaRetentionRule:
+    """One rule that will eventually remove a record's evidence.
+
+    Attributes:
+        label: Short name for the rule, as a rider should read it.
+        due: The date the rule bites, or None when it cannot be dated.
+        automatic: Whether anything actually enforces it on a schedule. A rule that only
+            runs when an admin presses a button is not a promise, and saying so is the
+            difference between a retention notice and a retention aspiration.
+        detail: Why this rule applies to this record.
+
+    """
+
+    label: str
+    due: date | None
+    automatic: bool
+    detail: str
+
+
+def media_retention_rules(record: RaceReadyRecord) -> list[MediaRetentionRule]:
+    """Every rule that will remove ``record``'s evidence, with the date each one bites.
+
+    Derived from the sweeps themselves rather than restated, because a retention notice that
+    disagrees with the code is worse than none -- it is a claim about someone's data that
+    cannot be honoured. Three sweeps exist and they do not cover the same records:
+
+    * ``purge_expired_verification_media`` -- VERIFIED only, once the verification lapses.
+      A type whose ``*_DAYS`` is 0 never expires, so this never reaches it.
+    * ``purge_aged_verification_media`` -- VERIFIED only, ``VERIFICATION_MEDIA_MAX_DAYS``
+      after we took possession. This is the backstop for the case above.
+    * ``purge_rejected_verification_media`` -- REJECTED only, and **not scheduled**: it runs
+      from an admin button. Reported with ``automatic=False`` rather than dressed up as a date.
+
+    A pending record is covered by none of them, which is worth saying plainly instead of
+    leaving a blank space where a date should be.
+
+    Args:
+        record: The verification record.
+
+    Returns:
+        The applicable rules, soonest dated first, undated last.
+
+    """
+    rules: list[MediaRetentionRule] = []
+
+    if record.status == RaceReadyRecord.Status.VERIFIED:
+        expires = record.expires_date
+        if expires is not None:
+            rules.append(
+                MediaRetentionRule(
+                    label="When this verification expires",
+                    due=expires,
+                    automatic=True,
+                    detail=(
+                        f"{record.get_verify_type_display()} verifications stay valid for "
+                        f"{record.validity_days} days."
+                    ),
+                )
+            )
+        max_days = config.VERIFICATION_MEDIA_MAX_DAYS
+        if max_days and max_days > 0:
+            rules.append(
+                MediaRetentionRule(
+                    label="Retention limit",
+                    due=(record.date_created + timedelta(days=max_days)).date(),
+                    automatic=True,
+                    detail=(
+                        f"We do not keep evidence longer than {max_days} days, even while the "
+                        "verification is still valid."
+                    ),
+                )
+            )
+    elif record.status == RaceReadyRecord.Status.REJECTED and record.reviewed_date:
+        rules.append(
+            MediaRetentionRule(
+                label="After rejection",
+                due=(record.reviewed_date + timedelta(days=REJECTED_MEDIA_GRACE_DAYS)).date(),
+                automatic=False,
+                detail=(
+                    f"Rejected evidence is removed {REJECTED_MEDIA_GRACE_DAYS} days after review, "
+                    "but this runs when an administrator triggers it rather than on a schedule."
+                ),
+            )
+        )
+    elif record.is_pending:
+        rules.append(
+            MediaRetentionRule(
+                label="While awaiting review",
+                due=None,
+                automatic=False,
+                detail="Evidence is kept until the record is reviewed. No removal is scheduled before then.",
+            )
+        )
+
+    return sorted(rules, key=lambda rule: (rule.due is None, rule.due))
+
+
 def can_view_verification_media(user: User, record: RaceReadyRecord) -> bool:
     """Report whether ``user`` may see ``record``'s uploaded evidence.
 
@@ -622,6 +729,122 @@ def can_view_verification_media(user: User, record: RaceReadyRecord) -> bool:
         return False
 
     return record.is_pending or user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+
+
+_REVIEWER_POOL_CACHE_KEY = "verification:reviewer_pool_ids"
+_REVIEWER_POOL_TTL_SECONDS = 300
+
+
+def _reviewer_pool_ids() -> list[int]:
+    """Primary keys of everyone who can approve verifications at all.
+
+    Permissions resolve through Discord roles and per-user overrides in Python, so this
+    cannot be a queryset filter. The candidate set is narrowed to users who could plausibly
+    hold a permission before the real check runs, and the result is cached briefly -- the
+    membership changes when Discord roles change, which is not a per-request event.
+
+    Only ids are cached. The gate itself is re-run against live User objects by
+    :func:`media_access_summary`, so the rule has exactly one definition.
+
+    Returns:
+        User primary keys, unordered.
+
+    """
+    cached = cache.get(_REVIEWER_POOL_CACHE_KEY)
+    if cached is not None:
+        return cached
+
+    candidates = User.objects.filter(
+        Q(is_superuser=True) | ~Q(discord_roles={}) | ~Q(permission_overrides={})
+    ).only("id", "is_superuser", "discord_roles", "permission_overrides", "roles")
+    ids = [user.pk for user in candidates if user.is_superuser or user.can_approve_verification]
+    cache.set(_REVIEWER_POOL_CACHE_KEY, ids, _REVIEWER_POOL_TTL_SECONDS)
+    return ids
+
+
+def media_access_summary(record: RaceReadyRecord) -> dict:
+    """How many people can currently open ``record``'s evidence, and under what restriction.
+
+    Counted by running :func:`can_view_verification_media` against the live reviewer pool, so
+    this cannot drift from what the endpoint actually permits.
+
+    Deliberately a count and a category rather than names. Article 15 asks for "the recipients
+    or categories of recipient", and naming the individuals who reviewed a body photograph
+    exposes them to whoever disputes the outcome. The count is the part that tells a rider
+    something they can act on.
+
+    Args:
+        record: The verification record.
+
+    Returns:
+        ``count`` of people who can see it now, ``same_gender_only`` reflecting the rider's
+        own request, and ``restricted_to_team`` when the record is decided and only the
+        performance verification team retains access.
+
+    """
+    reviewers = User.objects.filter(pk__in=_reviewer_pool_ids())
+    eligible = [user for user in reviewers if can_view_verification_media(user, record)]
+    return {
+        "count": len(eligible),
+        "same_gender_only": bool(record.same_gender),
+        "restricted_to_team": not record.is_pending,
+    }
+
+
+def viewer_pseudonym(owner_id: int, viewer_id: int) -> str:
+    """Build a stable, non-reversible tag for a viewer, shown to the record's owner.
+
+    The same reviewer reads the same across all of one rider's records, so a rider can see
+    that one person opened three submissions rather than three people opening one each. The
+    owner is part of the key, so two riders comparing notes cannot line their tags up and
+    rebuild the reviewer roster between them.
+
+    Not a privacy control on its own -- with a handful of reviewers the set is small enough to
+    guess from -- which is why the access summary gives a count rather than names.
+
+    Args:
+        owner_id: The rider whose record it is.
+        viewer_id: The person who viewed it.
+
+    Returns:
+        Six hex characters.
+
+    """
+    digest = hmac.new(
+        settings.SECRET_KEY.encode(),
+        f"verification-viewer:{owner_id}:{viewer_id}".encode(),
+        hashlib.sha256,
+    )
+    return digest.hexdigest()[:6]
+
+
+def record_view_trail(record: RaceReadyRecord) -> list[dict]:
+    """Return the access trail for ``record``, as its owner should see it.
+
+    ``RecordView`` has existed for a while but was shown only to reviewers, which left the
+    data subject as the one person unable to see who had looked at their own photographs.
+
+    Only views that actually displayed the evidence are listed. Opening the page without
+    passing the media gate is a different event, and reporting it as "viewed" would overstate
+    what the person saw.
+
+    Args:
+        record: The verification record.
+
+    Returns:
+        One entry per viewer, most recent first, each with a pseudonym and counts.
+
+    """
+    views = RecordView.objects.filter(record=record, media_view_count__gt=0).order_by("-last_viewed_at")
+    return [
+        {
+            "tag": viewer_pseudonym(record.user_id, view.user_id),
+            "first_viewed_at": view.first_viewed_at,
+            "last_viewed_at": view.last_viewed_at,
+            "media_view_count": view.media_view_count,
+        }
+        for view in views
+    ]
 
 
 def verification_media_url(record: RaceReadyRecord) -> str:

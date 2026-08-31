@@ -28,6 +28,9 @@ from apps.team.services import (
     delete_verification_records,
     get_user_required_verification_types,
     get_user_verification_types,
+    media_access_summary,
+    media_retention_rules,
+    record_view_trail,
 )
 from apps.zwift import profile_fields
 
@@ -429,12 +432,28 @@ def verification_view(request: HttpRequest) -> HttpResponse:
             status = "missing"
         required_summary.append({"type": vtype, "label": type_labels.get(vtype, vtype), "status": status})
 
+    # Each card answers three questions a rider could not previously ask of their own record:
+    # what happens to the evidence and when, how many people can open it, and who actually
+    # has. The last is the gap the audit named -- RecordView has always logged access, but
+    # only reviewers could see it.
+    annotated_records = []
+    for record in race_ready_records:
+        has_media = bool(record.media_file or record.url)
+        annotated_records.append(
+            {
+                "record": record,
+                "has_media": has_media,
+                "retention_rules": media_retention_rules(record) if has_media else [],
+                "access": media_access_summary(record) if has_media else None,
+                "views": record_view_trail(record) if has_media else [],
+            }
+        )
     return render(
         request,
         "accounts/verification.html",
         {
             "race_ready_form": race_ready_form,
-            "race_ready_records": race_ready_records,
+            "race_ready_records": annotated_records,
             "latest_by_type": latest_by_type,
             "verify_type_options": build_verify_type_options(request.user),
             "required_summary": required_summary,
