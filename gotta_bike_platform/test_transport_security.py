@@ -157,3 +157,80 @@ def test_the_port_on_the_internal_host_header_does_not_defeat_the_match():
     assert domain == "coalitionapp.railway.internal"
     assert port == "8080"
     assert validate_host(domain, ["coalitionapp.railway.internal"])
+
+
+class TestPrivateNetworkSslRedirect:
+    """The HTTPS redirect must skip private-network traffic and nothing else.
+
+    Railway terminates TLS at its edge, which internal traffic bypasses, so a call to
+    *.railway.internal arrives as plain HTTP. Redirecting it produces a 301 the caller cannot
+    usefully follow — the symptom that broke the Discord bot.
+    """
+
+    PRIVATE = "coalitionapp.railway.internal"
+
+    def _middleware(self):
+        """Build the middleware with a trivial get_response.
+
+        Returns:
+            The configured middleware instance.
+
+        """
+        from django.http import HttpResponse
+
+        from gotta_bike_platform.middleware import PrivateNetworkAwareSecurityMiddleware
+
+        return PrivateNetworkAwareSecurityMiddleware(lambda _request: HttpResponse("ok"))
+
+    def _request(self, host):
+        """Build a plain-HTTP GET against a bot API path.
+
+        Args:
+            host: Value for the Host header.
+
+        Returns:
+            The request.
+
+        """
+        from django.test import RequestFactory
+
+        return RequestFactory().get("/api/dbot/my_profile", HTTP_HOST=host)
+
+    def test_private_host_over_http_is_not_redirected(self):
+        """The bot calls over plain HTTP internally; a 301 there is what broke it."""
+        from django.test import override_settings
+
+        with override_settings(
+            SECURE_SSL_REDIRECT=True,
+            RAILWAY_PRIVATE_DOMAIN=self.PRIVATE,
+            ALLOWED_HOSTS=["app.coalitionracing.com", self.PRIVATE],
+        ):
+            assert self._middleware().process_request(self._request(f"{self.PRIVATE}:8080")) is None
+
+    def test_public_host_over_http_is_still_redirected(self):
+        """The exemption must not weaken the public site.
+
+        This is why the match is on host rather than the path-based SECURE_REDIRECT_EXEMPT,
+        which would also have exempted public calls carrying the bot API key.
+        """
+        from django.test import override_settings
+
+        with override_settings(
+            SECURE_SSL_REDIRECT=True,
+            RAILWAY_PRIVATE_DOMAIN=self.PRIVATE,
+            ALLOWED_HOSTS=["app.coalitionracing.com", self.PRIVATE],
+        ):
+            response = self._middleware().process_request(self._request("app.coalitionracing.com"))
+        assert response is not None, "public HTTP must still be redirected to HTTPS"
+        assert response.status_code in (301, 302)
+        assert response["Location"].startswith("https://")
+
+    def test_nothing_is_exempt_when_not_running_on_railway(self):
+        """With no private domain configured the middleware must behave exactly as Django's."""
+        from django.test import override_settings
+
+        with override_settings(
+            SECURE_SSL_REDIRECT=True, RAILWAY_PRIVATE_DOMAIN="", ALLOWED_HOSTS=["*"]
+        ):
+            response = self._middleware().process_request(self._request(self.PRIVATE))
+        assert response is not None and response.status_code in (301, 302)

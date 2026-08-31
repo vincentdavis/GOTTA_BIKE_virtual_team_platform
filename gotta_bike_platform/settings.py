@@ -57,9 +57,9 @@ ALLOWED_HOSTS = config.allowed_hosts
 #
 # This is what lets the Discord bot reach /api/dbot/ at coalitionapp.railway.internal
 # instead of going out to the public internet and back through the edge.
-_railway_private_domain = os.environ.get("RAILWAY_PRIVATE_DOMAIN", "").strip()
-if _railway_private_domain and _railway_private_domain not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(_railway_private_domain)
+RAILWAY_PRIVATE_DOMAIN = os.environ.get("RAILWAY_PRIVATE_DOMAIN", "").strip()
+if RAILWAY_PRIVATE_DOMAIN and RAILWAY_PRIVATE_DOMAIN not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RAILWAY_PRIVATE_DOMAIN)
 
 INTERNAL_IPS = config.internal_ips
 
@@ -159,7 +159,9 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
-    "django.middleware.security.SecurityMiddleware",
+    # SecurityMiddleware, except that private-network traffic is not redirected to HTTPS.
+    # See the class docstring for why this is host-based rather than SECURE_REDIRECT_EXEMPT.
+    "gotta_bike_platform.middleware.PrivateNetworkAwareSecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
