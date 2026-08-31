@@ -89,3 +89,71 @@ def test_production_block_sets_hsts_and_leaves_preload_off():
     assert data["preload"] is False, "preload is a domain-level commitment, not an app setting"
     assert data["ssl_redirect"] is True
     assert data["origins"] == ["https://app.coalitionracing.com"]
+
+
+def _allowed_hosts_with(private_domain: str) -> list[str]:
+    """Resolve ALLOWED_HOSTS in a subprocess with RAILWAY_PRIVATE_DOMAIN set to ``private_domain``.
+
+    ALLOWED_HOSTS is computed at import, so it cannot be re-derived by overriding a setting.
+
+    Args:
+        private_domain: Value to place in the environment; "" to leave it unset.
+
+    Returns:
+        The resolved ALLOWED_HOSTS list.
+
+    """
+    import json
+    import subprocess  # noqa: S404 -- fixed interpreter, literal script, no user input
+    import sys
+
+    script = (
+        "import django, os;"
+        "os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'gotta_bike_platform.settings');"
+        "django.setup();"
+        "from django.conf import settings;"
+        "import json, sys;"
+        "sys.stdout.write('@@' + json.dumps(settings.ALLOWED_HOSTS))"
+    )
+    env = {
+        **os.environ,
+        "DEBUG": "False",
+        "SECRET_KEY": "t" * 60,
+        "ALLOWED_HOSTS": "app.coalitionracing.com",
+        "RAILWAY_PRIVATE_DOMAIN": private_domain,
+    }
+    out = subprocess.run(  # noqa: S603 -- argv is sys.executable plus a literal script
+        [sys.executable, "-c", script], capture_output=True, text=True, env=env, check=True
+    )
+    return json.loads(out.stdout.split("@@", 1)[1])
+
+
+def test_the_railway_private_domain_is_allowed_automatically():
+    """Traffic over Railway's private network arrives with the internal hostname in Host.
+
+    Without this the bot's calls fail as DisallowedHost — a 400 that looks nothing like the
+    networking change that caused it.
+    """
+    assert _allowed_hosts_with("coalitionapp.railway.internal") == [
+        "app.coalitionracing.com",
+        "coalitionapp.railway.internal",
+    ]
+
+
+def test_nothing_is_added_when_not_running_on_railway():
+    """Local and CI runs have no private domain, and must not gain a phantom entry."""
+    assert _allowed_hosts_with("") == ["app.coalitionracing.com"]
+
+
+def test_the_port_on_the_internal_host_header_does_not_defeat_the_match():
+    """The bot addresses the service by port, so Host is 'name:8080', not 'name'.
+
+    Django splits the port off before matching, which is why the bare hostname is the right
+    thing to allow — asserted here because getting it wrong fails only in production.
+    """
+    from django.http.request import split_domain_port, validate_host
+
+    domain, port = split_domain_port("coalitionapp.railway.internal:8080")
+    assert domain == "coalitionapp.railway.internal"
+    assert port == "8080"
+    assert validate_host(domain, ["coalitionapp.railway.internal"])

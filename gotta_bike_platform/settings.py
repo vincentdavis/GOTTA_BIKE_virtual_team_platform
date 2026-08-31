@@ -49,6 +49,18 @@ DEBUG = config.debug
 
 ALLOWED_HOSTS = config.allowed_hosts
 
+# Requests arriving over Railway's private network carry the service's internal hostname in
+# Host, not the public domain, so Django rejects them with DisallowedHost (a 400 that looks
+# nothing like a networking problem). Railway injects RAILWAY_PRIVATE_DOMAIN into every
+# service, so take it from there rather than asking someone to keep a variable in step --
+# it is correct per-service and per-environment without anyone maintaining it.
+#
+# This is what lets the Discord bot reach /api/dbot/ at coalitionapp.railway.internal
+# instead of going out to the public internet and back through the edge.
+_railway_private_domain = os.environ.get("RAILWAY_PRIVATE_DOMAIN", "").strip()
+if _railway_private_domain and _railway_private_domain not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_railway_private_domain)
+
 INTERNAL_IPS = config.internal_ips
 
 TAILWIND_APP_NAME = "theme"
