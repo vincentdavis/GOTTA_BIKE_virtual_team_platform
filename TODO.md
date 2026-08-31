@@ -43,6 +43,13 @@
   *(Done — `templates/accounts/profile_delete.html` now lists both what is deleted and what is kept,
   guarded by `apps/accounts/test_delete_account_copy.py`. The underlying behaviour is unchanged; the
   deletion-parity items under Privacy & Data Protection are what actually close the gaps.)*
+  *(Amended 31 Aug 2026 — that "Done" was not the end of it, and the way it failed is worth keeping.
+  The copy went on claiming the Zwift connection was **not** disconnected long after
+  `delete_user_account` started calling `zwift_client.disconnect()`, and the guard test asserted the
+  false version, so nothing caught the drift. Corrected, along with a pronoun branch rendering
+  "does not remove your from the Discord server" and several `{% if subject %}` branches with
+  identical arms. The lesson for the next copy audit: a test that pins wording only helps if the
+  wording is checked against behaviour, not against the previous wording.)*
 - [x] **Log account deletion.** `apps/accounts/views.py:profile_delete` is `logout(); user.delete()` with
   zero logfire calls — the most destructive action in the app leaves no trace, while deleting a single
   verification record is fully logged (`apps/team/views.py:1022`). Contradicts the logging rule in CLAUDE.md.
@@ -246,10 +253,10 @@ self-serve view and an admin action — deletion spread across a view body is ho
   (`get_weight_height_history(zwid)` exists specifically to reconstruct a weight-over-time series).
   `ClubActivity` is worse: Strava withholds athlete IDs (`apps/club_strava/models.py:11`), so one person's
   rows **cannot be located or deleted on request** even if asked.
-- [ ] Review the Sheets export scope: `apps/data_connection/services.py:383-385` unions zwids from `User`,
-  `ZPTeamRiders` **and** `ZRRider`, so exports include riders who never signed up here. Also
-  `apps/data_connection/gs_client.py:148` can transfer sheet ownership to an arbitrary external email, after
-  which the app has no control over the exported data.
+- [ ] ~~Review the Sheets export scope~~ — **superseded by removing the feature** (see Data Connections).
+  Recorded because the reasoning still stands if removal stalls: exports union zwids from `User`,
+  `ZPTeamRiders` **and** `ZRRider`, so they include riders who never signed up here. The
+  ownership-transfer half of this item is already gone — that function was deleted in `31cee7b`.
 
 ### User Profile
 
@@ -263,7 +270,47 @@ self-serve view and an admin action — deletion spread across a view body is ho
 
 ### Data Connections
 
-- [ ] Verify spreadsheet is owned by the organization
+- [ ] **Remove the Google Sheets data-connection feature entirely.** Decided 31 Aug 2026. It exports
+  roster data to third-party spreadsheets that the app cannot govern once written, and it is the only
+  reason this project holds Google service-account credentials at all. Removing it closes that whole
+  surface rather than hardening it piece by piece — it **supersedes** the sync-should-be-POST item, the
+  sync-ownership question, and the export-scope review that used to sit in this section.
+
+  Do the destructive parts in this order, because two of them are one-way:
+
+  1. **Deal with the existing spreadsheets first.** They live in Google Drive under
+     `GOOGLE_DRIVE_FOLDER_ID` and were created by the service account, which therefore owns them.
+     Transfer or download anything worth keeping *before* touching the credentials — deleting a
+     service account can take its files with it.
+  2. **Revoke the service-account key**, do not merely unset it. `GOOGLE_CREDENTIALS_BASE64`
+     (env) holds a base64 private key; removing the variable leaves a live key in Google Cloud.
+     Delete the key, then the service account. Also drop the `GOOGLE_SERVICE_ACCOUNT_EMAIL` and
+     `GOOGLE_DRIVE_FOLDER_ID` Constance settings — but **keep `GOOGLE_ANALYTICS_ID`**, which is
+     unrelated despite the shared prefix.
+  3. **Write a `DeleteModel` migration** for `DataConnection`. Deleting the app without one leaves
+     the table behind with its rows; the whole point is that the data goes.
+
+  Then the code, which is mechanical:
+
+  - App `apps/data_connection/` — 13 modules, 5 migrations, one model. Unregister from
+    `settings.py:132` (INSTALLED_APPS) and `gotta_bike_platform/urls.py:55`.
+  - Scheduled task: `task_registry.py:33` (import) and `:149` (`sync_data_connections`), plus the
+    `SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS` Constance setting (`settings.py:931`) and its entry in
+    the `Scheduler` fieldset.
+  - Permission `data_connection`: `apps/accounts/models.py:61`, `PERM_DATA_CONNECTION_ROLES`, and
+    `apps/accounts/permission_registry.py:96-100`. Check no Discord role mapping is left pointing at it.
+  - Templates: `templates/data_connection/`, `templates/admin/data_connection/`, and the sidebar link
+    at `theme/templates/sidebar.html:162`.
+  - Tests: `apps/data_connection/tests.py`, and the `/data-connections/` entry in
+    `apps/accounts/test_sidebar_current_page.py:51`.
+  - Dependencies: `gspread`, `google-api-python-client`, `google-auth` in `pyproject.toml`. Verified
+    31 Aug 2026 that `apps/data_connection/gs_client.py` is their only importer, so all three go.
+  - Docs: `CLAUDE.md` (3 places), `AGENTS.md` (3), `README.md`, `docs/api.md`, `docs/index.md`,
+    `docs/permissions.md`, `docs/race-ready.md`, `plans/permissions_sitemap.md`. Two entries in
+    `docs/accessibility.md` become moot rather than fixed — say so rather than deleting them silently.
+
+  Worth knowing before starting: `sync_connection` is also referenced from the race-ready docs as the
+  way `race_ready` status reaches a sheet, so anyone relying on that loses it. Confirm nobody is.
 
 ### Admin Logging (remaining from audit)
 
@@ -284,6 +331,15 @@ self-serve view and an admin action — deletion spread across a view body is ho
 - [ ] CSV export from verification records
 - [ ] CSV export from membership applications
 - [ ] CSV export from performance review
+
+### Analytics
+
+- [ ] **Nothing warns when an analytics retention window is set to 0.** `ANALYTICS_ANONYMISE_DAYS`
+  (90) and `ANALYTICS_DELETE_DAYS` (730) each disable their stage when set to 0 — the behaviour is
+  correct, explicitly guarded in `apps/analytics/tasks.py:40,45` and covered by
+  `apps/analytics/test_retention.py`. There is no "deletes everything" hazard; the gap is only that
+  "keep forever" is indistinguishable from "not configured yet" in the admin UI. Low value; noted
+  so it stops being re-raised as a data-loss risk, which it is not.
 
 ### Caching
 
