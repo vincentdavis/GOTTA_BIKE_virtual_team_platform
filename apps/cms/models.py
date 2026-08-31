@@ -7,6 +7,8 @@ from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 
+from gotta_bike_platform.retention import RetentionPolicy
+
 
 class Page(models.Model):
     """Dynamic CMS page with markdown content and optional hero/cards sections.
@@ -41,6 +43,12 @@ class Page(models.Model):
         created_by: User who created the page.
 
     """
+
+    retention = RetentionPolicy.keep(
+        "Site content. created_by attributes authorship and is SET_NULL, so a page outlives "
+        "its author's account rather than vanishing with it -- which is why this is keep, "
+        "not cascade."
+    )
 
     class Status(models.TextChoices):
         """Page publication status choices."""

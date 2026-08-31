@@ -18,9 +18,15 @@ from typing import ClassVar
 
 from django.db import models
 
+from gotta_bike_platform.retention import RetentionPolicy
+
 
 class ZwiftWorld(models.Model):
     """A Zwift world (Watopia, London, …). ``world_id`` is Zwift's numeric id."""
+
+    retention = RetentionPolicy.keep(
+        "Canonical world catalogue synced from the Speed Lab bundle. No personal content."
+    )
 
     world_id = models.PositiveIntegerField(unique=True, help_text="Zwift numeric world id")
     name = models.CharField(max_length=100, unique=True, help_text="World display name")
@@ -45,6 +51,12 @@ class ZwiftWorld(models.Model):
 
 class ZwiftRoute(models.Model):
     """One Zwift route. Keyed by ``(world_id, name_hash)`` — the join to profiles/GPX."""
+
+    retention = RetentionPolicy.keep(
+        "Canonical route catalogue, and an FK target: TttPlan.route and LadderMatchup.route "
+        "point at these rows, so ageing one out would break a saved plan rather than protect "
+        "anyone. Also carries curated vELO weights a re-sync deliberately preserves."
+    )
 
     class Sport(models.TextChoices):
         """Whether the route is a cycling or running route."""
@@ -182,6 +194,10 @@ class ZwiftRoute(models.Model):
 class ZwiftSegment(models.Model):
     """A Zwift live segment (sprint / KOM / climb / lap). ``segment_id`` is signed 64-bit."""
 
+    retention = RetentionPolicy.keep(
+        "Canonical segment catalogue synced from the Speed Lab bundle. No personal content."
+    )
+
     class SegmentType(models.TextChoices):
         """The kind of live segment."""
 
@@ -242,6 +258,10 @@ class ZwiftSegment(models.Model):
 
 class ZwiftDataset(models.Model):
     """Singleton tracking the last synced Speed Lab bundle (version + counts)."""
+
+    retention = RetentionPolicy.keep(
+        "One row recording which bundle version is loaded. Configuration, not data about anyone."
+    )
 
     SINGLETON_ID = 1
 

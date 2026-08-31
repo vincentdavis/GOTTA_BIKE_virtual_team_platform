@@ -11,6 +11,8 @@ from django.db import models
 from django.utils import timezone
 from django_countries.fields import CountryField
 
+from gotta_bike_platform.retention import RetentionPolicy
+
 
 class RaceReadyRecord(models.Model):
     """Track race ready verification records for team members.
@@ -480,6 +482,10 @@ class TeamLink(models.Model):
 
     """
 
+    retention = RetentionPolicy.keep(
+        "Curated team resource links, reused season to season. No personal content."
+    )
+
     PERMISSION_CHOICES: ClassVar[list[tuple[str, str]]] = [
         ("PERM_APP_ADMIN_ROLES", "App Admin"),
         ("PERM_TEAM_CAPTAIN_ROLES", "Team Captain"),
@@ -623,6 +629,11 @@ class TeamLink(models.Model):
 class DiscordRole(models.Model):
     """Discord guild roles synced from the server."""
 
+    retention = RetentionPolicy.keep(
+        "Mirror of the guild's roles, refreshed by sync. Role names and snowflake ids only -- "
+        "which members hold them lives on GuildMember, classified separately."
+    )
+
     role_id = models.CharField(
         max_length=20,
         unique=True,
@@ -684,6 +695,10 @@ class DiscordRole(models.Model):
 
 class DiscordChannel(models.Model):
     """Discord guild channels synced from the server."""
+
+    retention = RetentionPolicy.keep(
+        "Mirror of the guild's channels, refreshed by sync. Channel names and snowflake ids only."
+    )
 
     class ChannelType(models.IntegerChoices):
         """Discord channel type choices."""

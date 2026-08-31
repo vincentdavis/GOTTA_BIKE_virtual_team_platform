@@ -15,6 +15,7 @@ from django.db import models
 from django.utils.text import slugify
 
 from apps.ttt_planner import terrain
+from gotta_bike_platform.retention import RetentionPolicy
 
 
 class PowerUp(models.Model):
@@ -24,6 +25,10 @@ class PowerUp(models.Model):
     ``excluded_from_ladder`` flag marks PowerUps that do not count for the Club
     Ladder (the XP bonuses and Boost).
     """
+
+    retention = RetentionPolicy.keep(
+        "Locally curated reference list shown on the routes page. No personal content."
+    )
 
     name = models.CharField(max_length=100, unique=True, help_text="PowerUp name (e.g. Feather)")
     aka = models.CharField(max_length=100, blank=True, help_text="Alternate name (e.g. Lightweight)")

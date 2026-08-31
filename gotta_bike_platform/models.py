@@ -3,6 +3,8 @@
 from django.core.cache import cache
 from django.db import models
 
+from gotta_bike_platform.retention import RetentionPolicy
+
 SITE_SETTINGS_CACHE_KEY = "site_settings_singleton"
 SITE_SETTINGS_CACHE_TIMEOUT = 300  # 5 minutes
 
@@ -24,6 +26,10 @@ class SiteSettings(models.Model):
         date_modified: When the settings were last updated.
 
     """
+
+    retention = RetentionPolicy.keep(
+        "One row of site-wide images and display settings. Configuration."
+    )
 
     site_logo = models.ImageField(
         upload_to="site/",
