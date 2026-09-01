@@ -151,6 +151,7 @@ INSTALLED_APPS = [
     "apps.ttt_planner.apps.TttPlannerConfig",
     "apps.ladder_planner.apps.LadderPlannerConfig",
     "apps.zwift_data.apps.ZwiftDataConfig",
+    "apps.rider_data.apps.RiderDataConfig",
     "django_tasks",
     "django_tasks_db",
 ]
@@ -580,6 +581,16 @@ CONSTANCE_CONFIG = {
         int,
     ),
     "POWER_VERIFICATION_DAYS": (365, "Days a power verification is valid", int),
+    "RIDER_PROFILE_MAX_DAYS": (
+        365,
+        "Days a cached rider profile is kept after their last known race (0 = keep forever)",
+        int,
+    ),
+    "RIDER_PROFILE_REFRESH_HOURS": (
+        24,
+        "Hours before a cached rider profile is considered stale and worth refetching (0 = never stale)",
+        int,
+    ),
     "VERIFICATION_MEDIA_MAX_DAYS": (
         365,
         "Maximum days to keep verification photos and videos, whatever the type and even if "
@@ -1199,6 +1210,10 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_ZAUTH_VERIFICATIONS_HOURS",
     ),
     "Zwift Data": ("ZWIFT_SPEED_LAB_URL",),
+    "Rider Data": (
+        "RIDER_PROFILE_MAX_DAYS",
+        "RIDER_PROFILE_REFRESH_HOURS",
+    ),
     "TTT Planner": (
         "TTT_AIR_DENSITY",
         "TTT_CRR",

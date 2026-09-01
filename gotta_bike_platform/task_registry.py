@@ -33,6 +33,7 @@ from apps.club_strava.tasks import sync_strava_activities
 from apps.data_connection.tasks import sync_all_data_connections
 from apps.events.tasks import remove_expired_ds_roles
 from apps.ladder_planner.tasks import refresh_cached_clubs
+from apps.rider_data.tasks import purge_rider_profiles
 from apps.team.tasks import (
     purge_expired_media,
     sync_discord_channels,
@@ -169,6 +170,14 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Delete uploaded media from expired verification records",
         "scheduled": True,
         "hours_setting": "SCHEDULER_PURGE_EXPIRED_MEDIA_HOURS",
+    },
+    # Deliberately manual for now. The model landed before any consumer, so nothing has yet
+    # validated that last_race_at is populated correctly -- scheduling a delete against an
+    # anchor nobody has checked is how you lose data quietly. Register it as schedulable once
+    # the sync has run for a while and the values look right.
+    "purge_rider_profiles": {
+        "task": purge_rider_profiles,
+        "description": "Delete cached rider profiles whose last known race is outside the retention window",
     },
     "purge_expired_api_keys": {
         "task": purge_expired_api_keys,
