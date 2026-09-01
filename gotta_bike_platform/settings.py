@@ -581,6 +581,11 @@ CONSTANCE_CONFIG = {
         int,
     ),
     "POWER_VERIFICATION_DAYS": (365, "Days a power verification is valid", int),
+    "SCHEDULER_SYNC_RIDER_PROFILES_HOURS": (
+        24,
+        "Hours between rider profile refreshes from the zauth service",
+        int,
+    ),
     "RIDER_PROFILE_MAX_DAYS": (
         365,
         "Days a cached rider profile is kept after their last known race (0 = keep forever)",
@@ -1213,6 +1218,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
     "Rider Data": (
         "RIDER_PROFILE_MAX_DAYS",
         "RIDER_PROFILE_REFRESH_HOURS",
+        "SCHEDULER_SYNC_RIDER_PROFILES_HOURS",
     ),
     "TTT Planner": (
         "TTT_AIR_DENSITY",

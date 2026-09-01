@@ -33,7 +33,7 @@ from apps.club_strava.tasks import sync_strava_activities
 from apps.data_connection.tasks import sync_all_data_connections
 from apps.events.tasks import remove_expired_ds_roles
 from apps.ladder_planner.tasks import refresh_cached_clubs
-from apps.rider_data.tasks import purge_rider_profiles
+from apps.rider_data.tasks import purge_rider_profiles, sync_rider_profiles
 from apps.team.tasks import (
     purge_expired_media,
     sync_discord_channels,
@@ -170,6 +170,12 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Delete uploaded media from expired verification records",
         "scheduled": True,
         "hours_setting": "SCHEDULER_PURGE_EXPIRED_MEDIA_HOURS",
+    },
+    "sync_rider_profiles": {
+        "task": sync_rider_profiles,
+        "description": "Refresh cached rider profiles from the zauth unified source",
+        "scheduled": True,
+        "hours_setting": "SCHEDULER_SYNC_RIDER_PROFILES_HOURS",
     },
     # Deliberately manual for now. The model landed before any consumer, so nothing has yet
     # validated that last_race_at is populated correctly -- scheduling a delete against an

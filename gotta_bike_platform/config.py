@@ -178,6 +178,24 @@ class Settings(BaseSettings):
         alias="ZWIFT_APP_API_KEY",
         description="Per-app X-API-Key for the Zwift API service OAuth/status endpoints",
     )
+    # Separate from the per-app key above, and deliberately so. The app key resolves to an
+    # app name on the service and can only reach that app's own users; the service key can
+    # request arbitrary zwids, which is what the rider-profile batch needs in order to cover
+    # members who never linked Zwift. Two keys because they grant different reach.
+    zwift_service_api_key: str | None = Field(
+        default=None,
+        alias="ZWIFT_SERVICE_API_KEY",
+        description="Service X-API-Key for the Zwift API service's zwid-keyed batch endpoints",
+    )
+    # Our app's name as the zauth service knows it. Used only to ask the service "which
+    # riders are linked to this app" -- the service derives the app name from the per-app
+    # key for app-scoped calls, but the zwid batch runs under the service key, so the name
+    # has to be stated.
+    zwift_connected_app_name: str | None = Field(
+        default=None,
+        alias="ZWIFT_CONNECTED_APP_NAME",
+        description="This platform's app name on the Zwift API service, for connected-rider batches",
+    )
 
     # CORS
     cors_allowed_origins_str: str = Field(

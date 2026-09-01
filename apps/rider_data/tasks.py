@@ -7,7 +7,47 @@ from constance import config
 from django.tasks import task
 from django.utils import timezone
 
+from apps.rider_data import client, services
 from apps.rider_data.models import RiderProfile
+from gotta_bike_platform.config import settings as app_config
+
+
+@task
+def sync_rider_profiles() -> dict:
+    """Refresh cached rider profiles from zauth.
+
+    Two populations, fetched together because they overlap and the service deduplicates by
+    zwid anyway:
+
+    * everyone registered here who has a Zwift id, which includes members who never linked
+      Zwift and therefore never appear in the connected set;
+    * everyone linked to this app, resolved by the service from ``connected_app`` so we do
+      not have to keep a local copy of that list in step.
+
+    Riders the service holds no data for are absent from the response rather than returned
+    empty, so the stored count is legitimately lower than the requested count.
+
+    This task deliberately does not touch ``zwid_verified`` or any other verification field.
+    Connection status moves onto this source as its own step, because verification gates Race
+    Verified status and Discord roles, and ``zwift_connection.status`` does not mean what its
+    name suggests -- it reports whether a Zwift account exists service-wide, not whether the
+    rider is still linked to us.
+
+    Returns:
+        Counts of rows fetched, created, updated and skipped.
+
+    """
+    if not client.is_configured():
+        logfire.warning("Rider profile sync skipped: zauth service key not configured")
+        return {"fetched": 0, "created": 0, "updated": 0, "skipped": 0}
+
+    with logfire.span("sync_rider_profiles"):
+        profiles = client.fetch_profiles(
+            services.zwids_to_refresh(),
+            connected_app=app_config.zwift_connected_app_name or None,
+        )
+        result = services.store_profiles(profiles)
+        return {"fetched": len(profiles), **result}
 
 
 @task
@@ -38,7 +78,13 @@ def purge_rider_profiles() -> dict:
         return {"considered": 0, "deleted": 0, "cutoff": None}
 
     cutoff = timezone.now() - timedelta(days=max_days)
-    stale = RiderProfile.objects.filter(last_race_at__isnull=False, last_race_at__lt=cutoff)
+    # Current members are never evicted, whatever their race activity. Ageing one out would
+    # only have the next sync re-create the row, so this is churn prevention as much as
+    # anything -- and it is what makes "removed if not a member" mean demotion rather than
+    # deletion: losing membership does not delete the row, it stops protecting it.
+    stale = RiderProfile.objects.filter(last_race_at__isnull=False, last_race_at__lt=cutoff).exclude(
+        zwid__in=services.protected_zwids()
+    )
     considered = stale.count()
     deleted, _ = stale.delete()
 
