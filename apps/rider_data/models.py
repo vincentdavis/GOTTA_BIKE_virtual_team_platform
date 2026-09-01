@@ -107,7 +107,9 @@ class RiderProfile(models.Model):
         "who never registered here -- the ZwiftPower team page, scouted opponents -- so holding "
         "their weight, power and heart rate indefinitely is the thing this app exists to bound. "
         "Anchored on last known race rather than fetch time, so an active teammate's row is not "
-        "aged out merely because nothing has looked them up lately.",
+        "aged out merely because nothing has looked them up lately. Currently DISABLED: "
+        "RIDER_PROFILE_MAX_DAYS defaults to 0 while the team decides what should be deleted and "
+        "when. The rule is declared so the decision is visible; nothing acts on it yet.",
         anchor="last_race_at",
         setting="RIDER_PROFILE_MAX_DAYS",
         task="purge_rider_profiles",

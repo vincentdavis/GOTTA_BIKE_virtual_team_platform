@@ -193,3 +193,20 @@ def test_a_departed_rider_outside_the_window_is_evicted(user_model):
     purge_rider_profiles.func()
 
     assert not RiderProfile.objects.filter(zwid=3003).exists()
+
+
+@pytest.mark.django_db
+def test_eviction_is_off_by_default(user_model):
+    """Nothing is deleted until somebody chooses a window.
+
+    The purge has a Run Now button in the admin, so "not scheduled" is not sufficient
+    protection while the deletion policy is still being decided. Zero disables the sweep
+    through the same convention the analytics and verification sweeps use.
+    """
+    services.store_profiles([_doc(4004)])
+    RiderProfile.objects.filter(zwid=4004).update(last_race_at=timezone.now() - timedelta(days=9999))
+
+    result = purge_rider_profiles.func()
+
+    assert result["deleted"] == 0
+    assert RiderProfile.objects.filter(zwid=4004).exists()
