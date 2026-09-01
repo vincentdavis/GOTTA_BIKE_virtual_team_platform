@@ -174,3 +174,38 @@ def test_the_purge_is_not_scheduled_yet():
     assert not entry.get("scheduled", False), (
         "Scheduling this means deleting production rows on an anchor no sync has validated"
     )
+
+
+# --- admin ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_cache_is_not_editable_in_admin():
+    """Every field mirrors the service, so an edit would be overwritten by the next sync.
+
+    A form that appears to save but silently reverts is worse than no form.
+    """
+    from django.contrib import admin
+
+    model_admin = admin.site._registry[RiderProfile]
+    readonly = set(model_admin.get_readonly_fields(None))
+    editable = {f.name for f in RiderProfile._meta.fields} - readonly
+
+    assert not editable, f"these would appear editable and silently revert: {sorted(editable)}"
+    assert model_admin.has_add_permission(None) is False
+
+
+@pytest.mark.django_db
+def test_admin_can_separate_evictable_rows_from_the_rest(profile_factory):
+    """The filter behind the deletion decision: rows with no last race are never evicted."""
+    from apps.rider_data.admin import HasLastRaceFilter
+
+    profile_factory(zwid=1, last_race_days_ago=10)
+    profile_factory(zwid=2, last_race_days_ago=None)
+
+    def _filtered(value):
+        filt = HasLastRaceFilter(None, {"has_last_race": [value]}, RiderProfile, None)
+        return set(filt.queryset(None, RiderProfile.objects.all()).values_list("zwid", flat=True))
+
+    assert _filtered("yes") == {1}
+    assert _filtered("no") == {2}
