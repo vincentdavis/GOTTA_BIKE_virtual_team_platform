@@ -1413,6 +1413,7 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "current_section": {"name": "Background Tasks", "key": "background_tasks"},
                 "is_background_tasks": True,
                 "tasks": tasks,
+                "task_groups": _grouped_tasks(tasks),
                 "available_roles": [],
             },
         )
@@ -1853,6 +1854,23 @@ def _get_task_registry() -> dict:
     from gotta_bike_platform.task_registry import TASK_REGISTRY
 
     return TASK_REGISTRY
+
+
+def _grouped_tasks(tasks: dict) -> list:
+    """Group the enriched registry by the service each task contacts.
+
+    Grouped after enrichment rather than before, so each task keeps its last-run info.
+
+    Args:
+        tasks: The registry, already enriched with last-run details.
+
+    Returns:
+        Display-ordered groups, each with a label and its tasks.
+
+    """
+    from gotta_bike_platform.task_registry import grouped_tasks
+
+    return grouped_tasks(tasks)
 
 
 def _enrich_tasks_with_last_run(tasks: dict) -> None:
