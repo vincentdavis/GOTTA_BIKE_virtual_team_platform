@@ -138,7 +138,9 @@ class RiderProfileAdmin(admin.ModelAdmin):
 
         """
         if obj.last_race_at is None:
-            return format_html('<span style="color:#888">none — not evictable</span>')
+            # format_html requires an interpolation argument in Django 6; a bare HTML
+            # string raises TypeError at render time, not at check time.
+            return format_html('<span style="color:#888">{}</span>', "none — not evictable")
         days = (timezone.now() - obj.last_race_at).days
         return format_html("{} <span style='color:#888'>({} days ago)</span>", obj.last_race_at.date(), days)
 

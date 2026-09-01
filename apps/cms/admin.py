@@ -107,5 +107,7 @@ class PageAdmin(admin.ModelAdmin):
 
         """
         if obj.status == Page.Status.PUBLISHED:
-            return format_html('<span style="color: green; font-weight: bold;">Published</span>')
-        return format_html('<span style="color: orange; font-weight: bold;">Draft</span>')
+            # format_html needs an interpolation argument in Django 6 -- a bare HTML string
+            # raises TypeError when the row renders, which 500s the whole changelist.
+            return format_html('<span style="color: green; font-weight: bold;">{}</span>', "Published")
+        return format_html('<span style="color: orange; font-weight: bold;">{}</span>', "Draft")

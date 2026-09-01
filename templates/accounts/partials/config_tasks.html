@@ -32,7 +32,20 @@
             </tr>
         </thead>
         <tbody>
-            {% for task_name, task_info in tasks.items %}
+            {% comment %}
+              Grouped by the service each task contacts, because that is the question when
+              something breaks: if Discord is rate-limiting or ZwiftPower is down, which of
+              these fail? Local tasks come first -- they are the ones that keep working when
+              nothing else is reachable.
+            {% endcomment %}
+            {% for group in task_groups %}
+            <tr class="bg-base-200">
+              <td colspan="5" class="font-semibold text-sm py-2">
+                {{ group.label }}
+                <span class="text-base-content/50 font-normal">&middot; {{ group.tasks|length }}</span>
+              </td>
+            </tr>
+            {% for task_name, task_info in group.tasks.items %}
             <tr>
                 <td class="font-mono text-sm">{{ task_name }}</td>
                 <td class="text-base-content/70">{{ task_info.description }}</td>
@@ -101,6 +114,7 @@
                     No background tasks available.
                 </td>
             </tr>
+            {% endfor %}
             {% endfor %}
         </tbody>
     </table>
