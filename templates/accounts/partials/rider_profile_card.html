@@ -180,20 +180,20 @@
         {% endif %}
       {% endwith %}
 
-      {% with totals=rider_profile.totals %}
-        {% if totals.distance_km or totals.climbed_m %}
+      {% with km=rider_profile.lifetime_distance_km climbed=rider_profile.lifetime_climbed_m %}
+        {% if km or climbed %}
           <div class="space-y-1 pt-2 border-t border-base-content/10">
-            {% if totals.distance_km %}
+            {% if km %}
               <div class="flex justify-between gap-3">
                 <span class="text-base-content/70">Lifetime distance</span>
-                <span class="font-mono">{{ totals.distance_km|floatformat:0|intcomma }} km</span>
+                <span class="font-mono">{{ km|floatformat:0|intcomma }} km</span>
               </div>
             {% endif %}
-            {% if totals.climbed_m %}
-              {# climbed_m is METRES; distance_km is kilometres. They do not share a unit. #}
+            {% if climbed %}
+              {# Both values arrive in METRES, despite one key being named *_km. #}
               <div class="flex justify-between gap-3">
                 <span class="text-base-content/70">Lifetime climbed</span>
-                <span class="font-mono">{{ totals.climbed_m|floatformat:0|intcomma }} m</span>
+                <span class="font-mono">{{ climbed|floatformat:0|intcomma }} m</span>
               </div>
             {% endif %}
           </div>

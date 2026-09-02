@@ -33,7 +33,11 @@ PAYLOAD = {
         "scores": {"sprinter": 62.2, "puncheur": 40.5, "pursuiter": 34.9, "climber": 24.7, "tt": 26.5},
     },
     "handicaps": {"flat": 16.39, "rolling": -58.03, "hilly": -56.48, "mountainous": -80.47},
-    "totals": {"distance_km": 63988, "climbed_m": 483132},
+    # Both in METRES, as upstream really sends them -- distance_km is misnamed and carries
+    # metres. The earlier fixture stored 63988 here, an already-converted value that existed
+    # nowhere in the real payload, which is precisely why the units bug rendered a rider's
+    # lifetime distance as 37,209,725 km without failing a single test.
+    "totals": {"distance_km": 63988161, "climbed_m": 483132},
 }
 
 
@@ -109,7 +113,7 @@ def _body(client, viewer, target):
 def test_the_accessors_read_the_documented_payload_paths(profile):
     """These paths are the contract with zauth; a shape change must fail here, not in a page."""
     assert profile.handicaps == PAYLOAD["handicaps"]
-    assert profile.totals == PAYLOAD["totals"]
+    assert profile.totals == PAYLOAD["totals"]  # raw block, units uncorrected
     assert profile.phenotype_scores == PAYLOAD["phenotype"]["scores"]
     assert profile.phenotype_bias == pytest.approx(21.62)
     assert profile.power_extras == {"zmap": 265.0, "vo2max": 54.2, "cp": 178.99, "awc": 28659.03}
@@ -515,3 +519,62 @@ def test_the_edit_page_carries_the_same_three_links(client, rider):
     assert f"{ZWIFT_LINK}/41c49fb6-uuid" in body
     assert f"{ZP_LINK}?z={rider.zwid}" in body
     assert f"{ZR_LINK}/{rider.zwid}" in body
+
+
+# ---------------------------------------------------------------- lifetime totals units
+
+
+@pytest.mark.django_db
+def test_lifetime_distance_is_converted_from_metres(profile):
+    """``totals.distance_km`` is misnamed: zauth passes ZwiftPower's metres through unchanged.
+
+    ``"distance_km": zp.distance`` in the zauth builder, and ZwiftPower reports metres -- our
+    own ZPTeamRiders.distance help_text says "Total distance in meters".
+    """
+    assert profile.totals["distance_km"] == 63988161  # metres, as stored
+    assert profile.lifetime_distance_km == pytest.approx(63988.161)
+
+
+@pytest.mark.django_db
+def test_lifetime_climbed_is_not_converted(profile):
+    """Its neighbour genuinely is metres, so converting both would break this one."""
+    assert profile.lifetime_climbed_m == 483132
+
+
+@pytest.mark.django_db
+def test_a_real_lifetime_total_renders_as_a_believable_distance(client, rider, team_member):
+    """The reported bug: a real rider's total rendered as 37,209,725 km.
+
+    Uses the value from the live site rather than a rounder one, so the test fails the way a
+    person noticed it rather than in a shape only a test would produce.
+    """
+    now = timezone.now()
+    RiderProfile.objects.create(
+        zwid=rider.zwid,
+        payload={"totals": {"distance_km": 37209725, "climbed_m": 400000}},
+        fetched_at=now,
+        last_requested_at=now,
+    )
+
+    body = _body(client, team_member, rider)
+
+    assert "37,210 km" in body
+    assert "37,209,725 km" not in body
+
+
+@pytest.mark.django_db
+def test_the_totals_accessors_tolerate_a_missing_or_non_numeric_block(rider):
+    """Absent totals must not raise inside a division."""
+    now = timezone.now()
+    bare = RiderProfile.objects.create(zwid=rider.zwid, payload={}, fetched_at=now, last_requested_at=now)
+    odd = RiderProfile.objects.create(
+        zwid=rider.zwid + 1,
+        payload={"totals": {"distance_km": "lots", "climbed_m": None}},
+        fetched_at=now,
+        last_requested_at=now,
+    )
+
+    assert bare.lifetime_distance_km is None
+    assert bare.lifetime_climbed_m is None
+    assert odd.lifetime_distance_km is None
+    assert odd.lifetime_climbed_m is None

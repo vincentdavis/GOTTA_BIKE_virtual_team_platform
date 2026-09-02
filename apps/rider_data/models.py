@@ -266,6 +266,40 @@ class RiderProfile(models.Model):
         return self._block("totals")
 
     @property
+    def lifetime_distance_km(self) -> float | None:
+        """Lifetime distance in kilometres, converted from the metres actually stored.
+
+        The payload key is ``totals.distance_km`` but the value is METRES. zauth passes
+        ZwiftPower's figure through unconverted -- ``"distance_km": zp.distance`` in
+        profile_full.py -- and ZwiftPower reports metres, as our own
+        ``ZPTeamRiders.distance`` help_text states. Trusting the key name rendered a rider's
+        total as 37,209,725 km.
+
+        Returns:
+            Distance in kilometres, or None if absent.
+
+        """
+        block = self.totals or {}
+        metres = block.get("distance_km")
+        return metres / 1000 if isinstance(metres, int | float) else None
+
+    @property
+    def lifetime_climbed_m(self) -> float | None:
+        """Lifetime elevation in metres.
+
+        ``climbed_m`` IS metres, so unlike its neighbour this needs no conversion. Exposed as
+        a property anyway so the template reads both totals the same way and nobody has to
+        remember that exactly one of the two pair is mislabelled.
+
+        Returns:
+            Elevation in metres, or None if absent.
+
+        """
+        block = self.totals or {}
+        metres = block.get("climbed_m")
+        return metres if isinstance(metres, int | float) else None
+
+    @property
     def phenotype_scores(self) -> dict | None:
         """The five per-discipline phenotype scores behind ``phenotype_value``.
 
