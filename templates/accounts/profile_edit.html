@@ -457,6 +457,26 @@
                 </div>
             </div>
 
+            {% comment %}
+              The same consolidated card the public profile shows, so a rider can see exactly
+              what their teammates see about them. Read-only: it is a cache of what zauth
+              returned, and the next sync would overwrite anything edited here.
+
+              profile_user is passed explicitly because the partial is written for the public
+              profile, where the subject is not the logged-in user.
+            {% endcomment %}
+            <div class="divider"></div>
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-3">Your Racing Data</h3>
+                <p class="text-sm text-base-content/60 mb-3">
+                    Synced from Zwift, ZwiftPower and ZwiftRacing. This is what teammates see on
+                    your profile &mdash; it is not editable here.
+                </p>
+                <div class="max-w-md">
+                    {% include "accounts/partials/rider_profile_card.html" with profile_user=user %}
+                </div>
+            </div>
+
 
             <p class="text-sm text-base-content/50 mt-4"><span class="text-error">*</span> Required fields</p>
         </div>

@@ -1,4 +1,4 @@
-"""The consolidated rider card on the public profile.
+"""The consolidated rider card, on the public profile and the edit page.
 
 Replaces three cards that each fetched their own source -- ZwiftPower, Zwift Racing, and a
 live per-render call to zauth for the official Racing Profile -- with one cached RiderProfile
@@ -10,6 +10,10 @@ breaks the card silently: the accessor tests below pin the paths. Second, the ca
 become a verification signal -- RiderProfile carries no verification state by design, and
 `zwift_connection.status` reports whether a Zwift account exists service-wide, not whether
 this rider is still linked to us.
+
+The same partial renders on /user/profile/edit/ so a rider can see what teammates see. It is
+read-only there, which is worth pinning: on a page whose whole purpose is editing, a block of
+data that looks editable but silently discards changes would be worse than not showing it.
 """
 
 import pytest
@@ -332,3 +336,89 @@ def test_payload_only_data_counts_as_display_data(rider):
     )
 
     assert profile.has_display_data is True
+
+
+# ---------------------------------------------------------------- the edit page
+
+
+def _edit_body(client, viewer):
+    """Render the profile edit page for a signed-in user.
+
+    Args:
+        client: Test client.
+        viewer: The signed-in user.
+
+    Returns:
+        The response body.
+
+    """
+    client.force_login(viewer)
+    return client.get(reverse("accounts:profile_edit")).content.decode()
+
+
+def _card_region(body: str) -> str:
+    """Slice out the card so assertions do not accidentally match the surrounding form.
+
+    Args:
+        body: The rendered page.
+
+    Returns:
+        The markup from the card heading to the end of its section.
+
+    """
+    start = body.index("Racing &amp; Performance")
+    end = body.find("Required fields", start)
+    return body[start : end if end != -1 else len(body)]
+
+
+@pytest.mark.django_db
+def test_the_edit_page_shows_the_same_card_as_the_public_profile(client, profile, rider):
+    """A rider should be able to see what the rest of the team sees about them."""
+    body = _edit_body(client, rider)
+
+    assert "Your Racing Data" in body
+    for expected in ("Racing &amp; Performance", "COALITION", "Bronze", "165 cm", "Terrain handicaps"):
+        assert expected in body, f"{expected!r} missing from the edit page"
+
+
+@pytest.mark.django_db
+def test_the_edit_page_card_carries_the_payload_groups_too(client, profile, rider):
+    """Not a trimmed copy -- the whole card, including the payload-only groups."""
+    body = _edit_body(client, rider)
+
+    assert "63,988 km" in body
+    assert "483,132 m" in body
+    assert "16.4" in body
+
+
+@pytest.mark.django_db
+def test_the_card_is_read_only_on_the_edit_page(client, profile, rider):
+    """Every other block on this page is editable, so this one must not look like it is.
+
+    A nested <form> would also be silently dropped by the browser, and an input inside the
+    card would post a value nothing reads -- the sync overwrites this row on its next run.
+    """
+    card = _card_region(_edit_body(client, rider))
+
+    assert "<input" not in card
+    assert "<form" not in card
+    assert "<select" not in card
+    assert "not editable here" in _edit_body(client, rider)
+
+
+@pytest.mark.django_db
+def test_the_edit_page_card_uses_the_same_verification_gate(client, user_model):
+    """The rider's own view is gated exactly as the public one; being the owner is not a bypass."""
+    now = timezone.now()
+    unverified = user_model.objects.create_user(
+        username="mine", email="mine@example.test", zwid=888, zwid_verified=False,
+        permission_overrides={"team_member": True},
+    )
+    RiderProfile.objects.create(
+        zwid=888, club_name="SECRETCLUB", fetched_at=now, last_requested_at=now,
+    )
+
+    body = _edit_body(client, unverified)
+
+    assert "SECRETCLUB" not in body
+    assert "Zwift account not verified" in body

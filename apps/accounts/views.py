@@ -702,6 +702,10 @@ def profile_edit(request: HttpRequest) -> HttpResponse:
         "form": form,
         "pending_application": pending_application,
         "importable_fields": importable_fields,
+        # The same cached row the public profile shows, so a rider can see what the rest of
+        # the team sees about them. Read-only: nothing on this page edits it, and the sync
+        # would overwrite an edit on its next run anyway.
+        "rider_profile": _rider_profile_for(request.user),
     }
 
     if request.headers.get("HX-Request"):
