@@ -457,6 +457,37 @@ def sync_discord_roles() -> dict:
         }
 
 
+def _threshold_due(remaining: int, already_warned: int | None, thresholds: list[int]) -> int | None:
+    """Return the warning threshold this record is due, or None if it owes nothing.
+
+    "Due" means crossed but not yet served. A record at 14 days with thresholds [15, 7, 3, 1]
+    and nothing warned yet is due the 15-day warning -- the day it was exactly 15 has passed,
+    and under the old exact-equality test that warning was simply lost.
+
+    Thresholds are served largest-first and only once each, so a rider gets at most one DM per
+    threshold no matter how many runs land, and a rider nobody could reach for a week still
+    gets the most urgent warning they have earned rather than nothing.
+
+    Args:
+        remaining: Days until this record expires. May be negative (already lapsed).
+        already_warned: Lowest threshold previously served, or None if never warned.
+        thresholds: The configured EXPIRE_WARNING_DAYS values.
+
+    Returns:
+        The threshold to warn about now, or None.
+
+    """
+    # Crossed = the rider has this much time left or less.
+    crossed = [t for t in thresholds if remaining <= t]
+    if not crossed:
+        return None
+    due = min(crossed)
+    if already_warned is not None and due >= already_warned:
+        # Already served this one, or a more urgent one.
+        return None
+    return due
+
+
 @task
 def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bool = False) -> dict:
     """Send Discord DMs to users whose verification records expire in exactly N days.
@@ -483,8 +514,6 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
     else:
         days_list = [int(d) for d in days]
 
-    days_set = set(days_list)
-
     today = timezone.now().date()
 
     with logfire.span("warn_expiring_verifications", days=days_list, dry_run=dry_run):
@@ -495,7 +524,8 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
 
         total_checked = 0
         # List of (record, days_remaining) so the DM can quote the actual threshold hit.
-        matching_records: list[tuple[RaceReadyRecord, int]] = []
+        # (record, days_remaining, threshold_being_served)
+        matching_records: list[tuple[RaceReadyRecord, int, int]] = []
         # Per-user map of all verified records with a meaningful days_remaining, used
         # to enrich the DM with the user's other verifications.
         verified_by_user: dict[int, list[tuple[RaceReadyRecord, int]]] = {}
@@ -520,11 +550,22 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                 if remaining is None:
                     continue
                 verified_by_user.setdefault(user_id, []).append((record, remaining))
-                if remaining in days_set:
-                    if record.last_warned_at == today:
-                        skipped_already_warned += 1
-                        continue
-                    matching_records.append((record, remaining))
+
+                # Warn on the highest threshold this record has CROSSED but not yet been
+                # warned about -- not on exact equality with today's days_remaining.
+                #
+                # The exact test gave each threshold a single calendar day, and the job runs
+                # once a day on an interval anchored at process boot, so every deploy shifts
+                # the slot and some days get no run at all. A rider sitting on 15 days that
+                # day lost that warning permanently; nothing recorded that one was owed. This
+                # makes any later run a catch-up: the 15-day warning still goes out on day 14.
+                due = _threshold_due(remaining, record.last_warned_threshold, days_list)
+                if due is None:
+                    continue
+                if record.last_warned_at == today:
+                    skipped_already_warned += 1
+                    continue
+                matching_records.append((record, remaining, due))
 
         logfire.info(
             "Expiring verification scan complete",
@@ -538,8 +579,9 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
         if dry_run:
             users_warned = [
                 f"{_get_user_display_name(r.user)} ({r.get_verify_type_display()}, "
-                f"{remaining}d remaining, expires {r.expires_date})"
-                for r, remaining in matching_records
+                f"{remaining}d remaining, expires {r.expires_date}, "
+                f"serving the {due}-day warning)"
+                for r, remaining, due in matching_records
             ]
             return {
                 "status": "dry_run",
@@ -555,7 +597,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
         users_warned = []
         errors = []
 
-        for record, remaining in matching_records:
+        for record, remaining, due in matching_records:
             user = record.user
             verify_label = record.get_verify_type_display()
             expires = record.expires_date
@@ -586,10 +628,30 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             lines.append("Please submit a new verification record to maintain your Race Ready status.")
             message = "\n".join(lines)
 
-            success = send_discord_dm(user.discord_id, message)
+            # One rider must not cost the rest of the batch their only warning. send_discord_dm
+            # returns False for handled errors, but an unhandled one (a DNS failure, a bad
+            # token) previously aborted the loop, skipping every rider after this point --
+            # always the same riders, since the iteration order is stable.
+            try:
+                success = send_discord_dm(user.discord_id, message)
+            except Exception as exc:
+                success = False
+                logfire.error(
+                    "Expiring verification DM raised",
+                    user_id=user.id,
+                    discord_id=user.discord_id,
+                    verify_type=record.verify_type,
+                    record_id=record.pk,
+                    error=str(exc),
+                )
+
             if success:
                 record.last_warned_at = today
-                record.save(update_fields=["last_warned_at"])
+                # Stamping the threshold, not just the date, is what makes a later run a
+                # catch-up rather than a duplicate: it records WHICH warning this rider has
+                # had, so the next run serves the next one down and never repeats this one.
+                record.last_warned_threshold = due
+                record.save(update_fields=["last_warned_at", "last_warned_threshold"])
                 warnings_sent += 1
                 users_warned.append(_get_user_display_name(user))
                 logfire.info(
@@ -598,6 +660,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                     discord_id=user.discord_id,
                     verify_type=record.verify_type,
                     days_remaining=remaining,
+                    threshold=due,
                 )
             else:
                 errors.append(f"Failed to DM {_get_user_display_name(user)} ({user.discord_id})")
@@ -606,8 +669,9 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                     user_id=user.id,
                     discord_id=user.discord_id,
                     verify_type=record.verify_type,
+                    record_id=record.pk,
+                    threshold=due,
                 )
-
             time.sleep(0.5)
 
         return {

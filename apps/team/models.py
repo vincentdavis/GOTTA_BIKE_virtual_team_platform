@@ -153,6 +153,13 @@ class RaceReadyRecord(models.Model):
         help_text="Date of the most recent expiring-verification DM for this record. "
         "Used by warn_expiring_verifications to enforce one DM per record per day.",
     )
+    last_warned_threshold = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Lowest EXPIRE_WARNING_DAYS threshold already warned about for this record. "
+        "Without it the task could only ask 'did we DM today', never 'which warning has this "
+        "rider actually had' -- so a run that missed a threshold day could never make it up.",
+    )
 
     class Meta:
         """Meta options for RaceReadyRecord model."""
