@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 import httpx
@@ -112,6 +113,64 @@ def bot_has_role(role_id: str | int, *, force: bool = False) -> bool | None:
     return role_id in roles
 
 
+# Discord's own guidance is to wait the interval it names. Bounded, because a task holding a
+# worker open indefinitely is worse than one dropped message.
+_MAX_RATE_LIMIT_RETRIES = 3
+_MAX_RETRY_AFTER_SECONDS = 30.0
+
+
+def _post_with_retry(client: httpx.Client, url: str, **kwargs) -> httpx.Response:
+    """POST to Discord, waiting out a 429 instead of treating it as a failure.
+
+    Opening a DM channel is itself rate limited, and the expiring-verification task sends in a
+    loop with only a short sleep between riders -- so on a busy threshold day the first few
+    succeed and the rest are refused. A 429 was indistinguishable from a real failure, and
+    each one cost a rider their warning.
+
+    Only 429 is retried. Any other status is returned as-is for the caller to raise on: a 403
+    (the rider has DMs closed) or a 404 will not improve by asking again.
+
+    Args:
+        client: An open httpx client.
+        url: The endpoint to post to.
+        **kwargs: Passed through to ``client.post``.
+
+    Returns:
+        The final response, which may still be an error status for the caller to raise on.
+
+    """
+    response = client.post(url, **kwargs)
+    for attempt in range(_MAX_RATE_LIMIT_RETRIES):
+        if response.status_code != 429:
+            return response
+
+        # Discord puts retry_after in the JSON body (fractional seconds) and also sends a
+        # Retry-After header; prefer the body, fall back to the header, then to one second.
+        wait = None
+        try:
+            wait = float(response.json().get("retry_after"))
+        except (ValueError, TypeError, AttributeError):
+            header = response.headers.get("Retry-After")
+            if header:
+                try:
+                    wait = float(header)
+                except ValueError:
+                    wait = None
+        if wait is None:
+            wait = 1.0
+        wait = min(wait, _MAX_RETRY_AFTER_SECONDS)
+
+        logfire.warning(
+            "Discord rate limited, backing off",
+            url=url,
+            retry_after=wait,
+            attempt=attempt + 1,
+        )
+        time.sleep(wait)
+        response = client.post(url, **kwargs)
+    return response
+
+
 def send_discord_dm(discord_id: str, message: str) -> bool:
     """Send a direct message to a Discord user.
 
@@ -150,7 +209,8 @@ def send_discord_dm(discord_id: str, message: str) -> bool:
     try:
         with httpx.Client(timeout=10.0) as client:
             # Step 1: Create a DM channel with the user
-            create_dm_response = client.post(
+            create_dm_response = _post_with_retry(
+                client,
                 f"{DISCORD_API_BASE}/users/@me/channels",
                 headers=headers,
                 json={"recipient_id": discord_id},
@@ -159,7 +219,8 @@ def send_discord_dm(discord_id: str, message: str) -> bool:
             channel_id = create_dm_response.json()["id"]
 
             # Step 2: Send the message to the DM channel
-            send_response = client.post(
+            send_response = _post_with_retry(
+                client,
                 f"{DISCORD_API_BASE}/channels/{channel_id}/messages",
                 headers=headers,
                 json={"content": message},

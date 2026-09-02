@@ -551,6 +551,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
         # to enrich the DM with the user's other verifications.
         verified_by_user: dict[int, list[tuple[RaceReadyRecord, int]]] = {}
         skipped_already_warned = 0
+        skipped_opted_out = 0
 
         from collections import defaultdict
 
@@ -590,6 +591,13 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                 if record.last_warned_at == today:
                     skipped_already_warned += 1
                     continue
+                # send_discord_dm returns True for an opted-out member -- deliberately, so
+                # callers do not retry forever -- which meant they were counted in
+                # warnings_sent and listed as warned. The number an admin reads should mean
+                # "DMs delivered", so they are counted separately and never attempted.
+                if record.user.discord_dm_opt_out:
+                    skipped_opted_out += 1
+                    continue
                 matching_records.append((record, remaining, due))
 
         logfire.info(
@@ -598,6 +606,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             total_checked=total_checked,
             matching=len(matching_records),
             skipped_already_warned=skipped_already_warned,
+            skipped_opted_out=skipped_opted_out,
             dry_run=dry_run,
         )
 
@@ -614,6 +623,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                 "dry_run": True,
                 "total_checked": total_checked,
                 "warnings_sent": 0,
+                "skipped_opted_out": skipped_opted_out,
                 "users_warned": users_warned,
                 "errors": [],
             }
@@ -705,6 +715,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             "dry_run": False,
             "total_checked": total_checked,
             "warnings_sent": warnings_sent,
+            "skipped_opted_out": skipped_opted_out,
             "users_warned": users_warned,
             "errors": errors,
         }

@@ -13,6 +13,7 @@ scheduler restart to take effect.
 
 import signal
 import sys
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import logfire
@@ -21,6 +22,31 @@ from apscheduler.triggers.interval import IntervalTrigger
 from django.core.management.base import BaseCommand
 
 from gotta_bike_platform.task_registry import get_scheduled_tasks
+
+
+def _anchor_for(minutes: float) -> datetime:
+    """Return a fixed wall-clock anchor so restarts do not move a job's slot.
+
+    An IntervalTrigger with no start_date counts from the moment the scheduler booted, so a
+    daily job fires at boot+24h. Every deploy re-anchors it, walking the slot forward and
+    occasionally skipping a calendar day altogether -- which is how expiring-verification
+    warnings were being missed.
+
+    Anchoring to midnight UTC makes the schedule a property of the clock rather than of the
+    last deploy: a job restarted at 15:00 still fires at its usual time, and the interval
+    stays aligned across restarts.
+
+    Args:
+        minutes: The job's interval in minutes.
+
+    Returns:
+        A start_date in the past, aligned to midnight UTC.
+
+    """
+    midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Sub-daily jobs anchor to today's midnight; anything daily or slower to yesterday's, so
+    # the first fire is never more than one interval away.
+    return midnight if minutes < 24 * 60 else midnight - timedelta(days=1)
 
 
 def _enqueue_task(task_func: Any, job_id: str, kwargs: dict | None = None) -> None:
@@ -71,11 +97,16 @@ class Command(BaseCommand):
 
             scheduler.add_job(
                 _enqueue_task,
-                trigger=IntervalTrigger(minutes=minutes),
+                trigger=IntervalTrigger(minutes=minutes, start_date=_anchor_for(minutes)),
                 args=[job["task"], job["id"], job.get("kwargs")],
                 id=job["id"],
                 name=job["description"],
                 replace_existing=True,
+                # A 24h job whose run is missed during a deploy should run on restart, not
+                # wait another full day. The default grace is 1 second, which is why a daily
+                # job could skip a calendar day entirely.
+                misfire_grace_time=int(minutes * 60),
+                coalesce=True,
             )
             active_count += 1
             cadence = f"{minutes / 60:g}h" if minutes >= 60 else f"{minutes:g}m"

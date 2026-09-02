@@ -290,3 +290,69 @@ def test_an_unparseable_threshold_list_falls_back_rather_than_silencing_warnings
 
     with override_config(EXPIRE_WARNING_DAYS="not json"):
         assert expiry_warning_thresholds() == [15]
+
+
+# ---------------------------------------------------------------- opt-out accounting
+
+
+@pytest.mark.django_db
+@override_config(EXPIRE_WARNING_DAYS="[15, 7, 3, 1, 0]")
+def test_an_opted_out_rider_is_not_counted_as_warned(rider):
+    """send_discord_dm returns True for an opt-out, so they were reported as delivered.
+
+    That is the right return value -- it stops callers retrying forever -- but it made
+    warnings_sent mean "attempted", and an admin reading the number could not tell how many
+    riders actually heard anything.
+    """
+    rider.discord_dm_opt_out = True
+    rider.save(update_fields=["discord_dm_opt_out"])
+    _record(rider, days_left=15)
+    sent = []
+
+    result = _run(sent)
+
+    assert sent == [], "no DM should even be attempted"
+    assert result["warnings_sent"] == 0
+    assert result["skipped_opted_out"] == 1
+    assert result["users_warned"] == []
+
+
+@pytest.mark.django_db
+@override_config(EXPIRE_WARNING_DAYS="[15, 7, 3, 1, 0]")
+def test_an_opt_out_does_not_burn_the_threshold(rider):
+    """Nothing is stamped, so a rider who later opts back in still gets the warning."""
+    rider.discord_dm_opt_out = True
+    rider.save(update_fields=["discord_dm_opt_out"])
+    _record(rider, days_left=15)
+    _run([])
+
+    record = RaceReadyRecord.objects.get(user=rider)
+    assert record.last_warned_threshold is None
+
+    rider.discord_dm_opt_out = False
+    rider.save(update_fields=["discord_dm_opt_out"])
+    sent = []
+    _run(sent)
+
+    assert len(sent) == 1
+
+
+@pytest.mark.django_db
+@override_config(EXPIRE_WARNING_DAYS="[15, 7, 3, 1, 0]")
+def test_opting_out_does_not_silence_other_riders(rider, user_model):
+    """The opt-out is a per-rider skip, not an early exit from the batch."""
+    other = user_model.objects.create_user(
+        username="other", email="other@example.test", discord_id="777002",
+        first_name="Bo", last_name="Two",
+    )
+    rider.discord_dm_opt_out = True
+    rider.save(update_fields=["discord_dm_opt_out"])
+    _record(rider, days_left=15)
+    _record(other, days_left=15)
+    sent = []
+
+    result = _run(sent)
+
+    assert [d for d, _ in sent] == ["777002"]
+    assert result["warnings_sent"] == 1
+    assert result["skipped_opted_out"] == 1
