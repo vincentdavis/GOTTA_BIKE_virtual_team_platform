@@ -42,7 +42,9 @@ def test_dm_sent_for_genuinely_expiring_type(verification_factory, user):
     assert result["warnings_sent"] == 1
     message = dm.call_args.args[1]
     assert "Weight Full" in message
-    assert "expires in **1 days**" in message
+    # Singular. This assertion used to pin "1 days" -- the wording riders actually received
+    # on the most urgent warning of the sequence.
+    assert "expires in **1 day**" in message
 
 
 @pytest.mark.django_db

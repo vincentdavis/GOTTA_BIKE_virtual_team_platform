@@ -457,6 +457,28 @@ def sync_discord_roles() -> dict:
         }
 
 
+def _expiry_sentence(verify_label: str, remaining: int, expires_str: str) -> str:
+    """Phrase the headline for the number of days actually remaining.
+
+    The old wording was ``f"expires in **{remaining} days**"`` unconditionally, which reads
+    "expires in 1 days" on the one-day warning and "in 0 days" on the day it lapses -- exactly
+    the two most urgent messages a rider gets.
+
+    Args:
+        verify_label: Display name of the verification type.
+        remaining: Days until expiry. Zero means today.
+        expires_str: Formatted expiry date.
+
+    Returns:
+        The headline sentence.
+
+    """
+    if remaining == 0:
+        return f"Your **{verify_label}** verification expires **today** ({expires_str})."
+    day_word = "day" if remaining == 1 else "days"
+    return f"Your **{verify_label}** verification expires in **{remaining} {day_word}** ({expires_str})."
+
+
 def _threshold_due(remaining: int, already_warned: int | None, thresholds: list[int]) -> int | None:
     """Return the warning threshold this record is due, or None if it owes nothing.
 
@@ -502,13 +524,12 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
         Summary dict with status, counts, and user list.
 
     """
+    from apps.team.services import expiry_warning_thresholds
+
     if days is None:
-        try:
-            parsed = json.loads(config.EXPIRE_WARNING_DAYS)
-        except (json.JSONDecodeError, TypeError) as e:
-            logfire.error("Failed to parse EXPIRE_WARNING_DAYS config", error=str(e))
-            parsed = [15]
-        days_list = [int(d) for d in parsed if isinstance(d, int) or str(d).strip().lstrip("-").isdigit()]
+        # Shared with the banner (services.expiry_warning_thresholds) so the two surfaces
+        # cannot drift apart the way they had.
+        days_list = expiry_warning_thresholds()
     elif isinstance(days, int):
         days_list = [days]
     else:
@@ -533,7 +554,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
 
         from collections import defaultdict
 
-        from apps.team.services import covering_records_by_type
+        from apps.team.services import covering_records_by_type, is_expiring_soon
 
         records_by_user: dict[int, list[RaceReadyRecord]] = defaultdict(list)
         for record in verified_records:
@@ -559,6 +580,10 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                 # the slot and some days get no run at all. A rider sitting on 15 days that
                 # day lost that warning permanently; nothing recorded that one was owed. This
                 # makes any later run a catch-up: the 15-day warning still goes out on day 14.
+                # A lapsed record is expired, not expiring. Without this the catch-up
+                # would serve it the 0-day threshold and DM "expires in -4 days".
+                if not is_expiring_soon(remaining):
+                    continue
                 due = _threshold_due(remaining, record.last_warned_threshold, days_list)
                 if due is None:
                     continue
@@ -606,7 +631,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             lines = [
                 "\u23f0 **Verification Expiring Soon**",
                 "",
-                f"Your **{verify_label}** verification expires in **{remaining} days** ({expires_str}).",
+                _expiry_sentence(verify_label, remaining, expires_str),
             ]
             others = sorted(
                 (

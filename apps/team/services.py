@@ -936,6 +936,55 @@ def _covers_longer(candidate: RaceReadyRecord, current: RaceReadyRecord) -> bool
     return candidate_days > current_days
 
 
+def expiry_warning_thresholds() -> list[int]:
+    """Return the configured EXPIRE_WARNING_DAYS values, parsed once for every consumer.
+
+    The banner and the DM task each parsed this Constance JSON string themselves, with their
+    own fallbacks, while both docstrings claimed the two were "in lockstep". They were not,
+    and duplicated parsing is how they would drift again.
+
+    Returns:
+        Thresholds in descending order, e.g. ``[15, 7, 3, 1, 0]``. Falls back to ``[15]`` if
+        the setting cannot be parsed, and drops negatives -- a record past expiry is expired,
+        not expiring, which is a different notification.
+
+    """
+    from constance import config
+
+    try:
+        parsed = json.loads(config.EXPIRE_WARNING_DAYS)
+    except (json.JSONDecodeError, TypeError) as exc:
+        logfire.error("Failed to parse EXPIRE_WARNING_DAYS config", error=str(exc))
+        parsed = [15]
+
+    values = {
+        int(d) for d in parsed if isinstance(d, int) or str(d).strip().lstrip("-").isdigit()
+    }
+    usable = sorted((v for v in values if v >= 0), reverse=True)
+    return usable or [15]
+
+
+def is_expiring_soon(days_remaining: int | None) -> bool:
+    """Whether a record counts as "expiring soon" for both the banner and the DM.
+
+    The one definition both surfaces use, so they cannot disagree about the boundary.
+
+    A record expiring TODAY (0 days) still counts -- the rider can act on it. One that has
+    already lapsed does not: that is a lost-Race-Verified state needing different wording, not
+    an "expires in -4 days" warning.
+
+    Args:
+        days_remaining: Days until expiry, or None for a record that never expires.
+
+    Returns:
+        True if the record is inside the warning window.
+
+    """
+    if days_remaining is None:
+        return False
+    return 0 <= days_remaining <= max(expiry_warning_thresholds())
+
+
 def covering_records_by_type(records) -> dict[str, RaceReadyRecord]:
     """Collapse verified records to the single coverage-defining record per verify_type.
 

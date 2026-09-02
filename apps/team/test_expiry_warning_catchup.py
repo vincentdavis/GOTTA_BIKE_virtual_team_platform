@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import pytest
 from constance.test import override_config
+from django.core.cache import cache
 from django.utils import timezone
 
 from apps.team.models import RaceReadyRecord
@@ -209,3 +210,83 @@ def test_one_riders_exception_does_not_abandon_the_rest(user_model):
     assert set(reached) == {"888001", "888002"}, "the second rider must still be attempted"
     assert result["warnings_sent"] == 1
     assert len(result["errors"]) == 1
+
+
+# ---------------------------------------------------------------- banner / DM agreement
+
+
+@pytest.mark.django_db
+@override_config(EXPIRE_WARNING_DAYS="[15, 7, 3, 1, 0]")
+def test_the_banner_and_the_dm_share_one_window_definition(rider, rf):
+    """Both surfaces asked "is this expiring?" separately while claiming to be in lockstep.
+
+    They disagreed on the last day: the banner used ``0 < days``, so it vanished exactly when
+    a record expired today -- the moment it mattered most -- while the task's threshold list
+    included 0. Both now call ``is_expiring_soon``.
+    """
+    from apps.team.context_processors import expiring_verifications
+    from apps.team.services import is_expiring_soon
+
+    # The banner caches per user for 60s, so a value computed by an earlier test in this file
+    # would be served instead of the one this test sets up.
+    cache.clear()
+    record = _record(rider, days_left=0)
+    request = rf.get("/")
+    request.user = rider
+
+    banner = expiring_verifications(request)["expiring_verifications"]
+
+    assert is_expiring_soon(record.days_remaining) is True
+    assert banner is not None, "a record expiring today must still show the banner"
+    assert banner["soonest_days"] == 0
+
+
+@pytest.mark.django_db
+@override_config(EXPIRE_WARNING_DAYS="[15, 7, 3, 1, 0]")
+def test_a_lapsed_record_warns_on_neither_surface(rider, rf):
+    """Expired is not expiring -- it needs different wording, not "expires in -4 days".
+
+    Catch-up matching would otherwise serve a lapsed record the 0-day threshold.
+    """
+    from apps.team.context_processors import expiring_verifications
+
+    cache.clear()
+    _record(rider, days_left=-4)
+    request = rf.get("/")
+    request.user = rider
+    sent = []
+
+    banner = expiring_verifications(request)["expiring_verifications"]
+    _run(sent)
+
+    assert banner is None
+    assert sent == []
+
+
+@pytest.mark.django_db
+@override_config(EXPIRE_WARNING_DAYS="[15, 7, 3, 1, 0]")
+def test_the_expiry_headline_reads_correctly_at_every_threshold(rider):
+    """"expires in 1 days" and "in 0 days" were the two most urgent messages riders got."""
+    from apps.team.tasks import _expiry_sentence
+
+    assert "expires **today**" in _expiry_sentence("Weight Full", 0, "September 03, 2026")
+    assert "in **1 day**" in _expiry_sentence("Weight Full", 1, "September 03, 2026")
+    assert "in **3 days**" in _expiry_sentence("Weight Full", 3, "September 05, 2026")
+
+
+@pytest.mark.django_db
+def test_negative_thresholds_are_dropped_from_the_configured_list():
+    """A negative threshold would reopen the "expires in -N days" case through config alone."""
+    from apps.team.services import expiry_warning_thresholds
+
+    with override_config(EXPIRE_WARNING_DAYS="[15, 3, -5]"):
+        assert expiry_warning_thresholds() == [15, 3]
+
+
+@pytest.mark.django_db
+def test_an_unparseable_threshold_list_falls_back_rather_than_silencing_warnings():
+    """A bad Constance value must not mean nobody is ever warned."""
+    from apps.team.services import expiry_warning_thresholds
+
+    with override_config(EXPIRE_WARNING_DAYS="not json"):
+        assert expiry_warning_thresholds() == [15]

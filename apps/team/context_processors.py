@@ -67,11 +67,17 @@ def expiring_verifications(request: HttpRequest) -> dict:
     renewed — a newer same-type record with more days left — never raises a warning
     for the old expiring record it replaced. A *type* counts as "expiring soon" when
     its longest-lived verified record has a finite expiry whose ``days_remaining``
-    falls in ``1..threshold``, where ``threshold`` is the largest value in the
-    ``EXPIRE_WARNING_DAYS`` Constance list (the same window the
-    ``warn_expiring_verifications`` DM task uses, so the web banner and the DMs
-    stay in lockstep). Already-expired records (``days_remaining <= 0``) are
-    excluded — those are a "lost race ready" state, not an "expiring" warning.
+    is inside ``services.is_expiring_soon`` — the single definition the
+    ``warn_expiring_verifications`` DM task also uses, so the two cannot disagree
+    about the boundary. That window is ``0..max(EXPIRE_WARNING_DAYS)``: a record
+    expiring TODAY still counts, because the rider can still act on it. Records
+    that have already lapsed are excluded — that is a "lost race ready" state
+    needing different wording, not an "expiring" warning.
+
+    Note the banner is CONTINUOUS while the DM is discrete: the banner shows on
+    every day inside the window, the task sends at most one DM per configured
+    threshold. Same window, different cadence — deliberately, since nobody wants
+    fifteen DMs.
 
     Returns an empty payload (and skips the database query) for anonymous users,
     so the cost is zero on anonymous pageviews. Per-user cache with a short TTL
@@ -95,32 +101,19 @@ def expiring_verifications(request: HttpRequest) -> dict:
         # ``False`` is the sentinel for "computed, nothing expiring".
         return {"expiring_verifications": cached or None}
 
-    import json
-
-    from constance import config
-
-    # EXPIRE_WARNING_DAYS is stored as a JSON string (e.g. "[15, 7, 3, 1]"); the
-    # banner uses the same window as the warn_expiring_verifications DM task, so
-    # we parse it the same way and take the largest value as the warning horizon.
-    try:
-        parsed = json.loads(config.EXPIRE_WARNING_DAYS)
-    except (json.JSONDecodeError, TypeError) as e:
-        logfire.error("Failed to parse EXPIRE_WARNING_DAYS config", error=str(e))
-        parsed = [15]
-    warning_days = [int(d) for d in parsed if isinstance(d, int) or str(d).strip().lstrip("-").isdigit()]
-    threshold = max(warning_days) if warning_days else 15
-
     with logfire.span("expiring_verifications", user_id=user.pk):
-        from apps.team.services import covering_records_by_type
+        from apps.team.services import covering_records_by_type, is_expiring_soon
 
         records = user.race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
         # Reconcile per verify_type: a type is only "expiring" when its longest-lived
         # record is inside the window. This keeps a record the rider has already renewed
         # (a newer same-type record with more days left) from raising a false warning.
         covering = covering_records_by_type(records)
-        expiring = [
-            r for r in covering.values() if (days := r.days_remaining) is not None and 0 < days <= threshold
-        ]
+        # One shared definition with the DM task -- see services.is_expiring_soon. Both used
+        # to parse EXPIRE_WARNING_DAYS separately while claiming to be in lockstep, and they
+        # disagreed about the last day: the banner vanished when a record expired today, and
+        # the rider lost the warning on the one day it was most urgent.
+        expiring = [r for r in covering.values() if is_expiring_soon(r.days_remaining)]
         payload: dict | bool = False
         if expiring:
             soonest = min(expiring, key=lambda r: r.days_remaining)
