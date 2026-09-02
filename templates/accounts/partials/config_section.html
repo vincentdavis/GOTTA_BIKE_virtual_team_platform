@@ -83,7 +83,7 @@
                    id="id_{{ setting.key }}"
                    class="toggle toggle-primary"
                    {% if setting.current_value %}checked{% endif %}>
-            <span class="label-text-alt">{{ setting.description }}</span>
+            <span class="text-base-content/60">{{ setting.description }}</span>
         </div>
 
         {% elif setting.input_type == "number" %}
@@ -93,9 +93,7 @@
                id="id_{{ setting.key }}"
                value="{{ setting.current_value }}"
                class="input input-bordered w-full">
-        <label class="label">
-            <span class="label-text-alt">{{ setting.description }}</span>
-        </label>
+        <p class="mt-1 text-base-content/60">{{ setting.description }}</p>
 
         {% elif setting.input_type == "password" %}
         <!-- Password Input with Toggle -->
@@ -115,9 +113,7 @@
                 </svg>
             </button>
         </div>
-        <label class="label">
-            <span class="label-text-alt">{{ setting.description }}</span>
-        </label>
+        <p class="mt-1 text-base-content/60">{{ setting.description }}</p>
 
         {% elif setting.input_type == "json_list" %}
         <!-- Multi-select for Role IDs using Tom Select -->
@@ -137,9 +133,7 @@
             {% endfor %}
             {% endwith %}
         </select>
-        <label class="label">
-            <span class="label-text-alt">{{ setting.description }}</span>
-        </label>
+        <p class="mt-1 text-base-content/60">{{ setting.description }}</p>
 
         {% elif setting.input_type == "string_list" %}
         <!-- Sortable String List -->
@@ -173,9 +167,7 @@
                 Add Item
             </button>
         </div>
-        <label class="label">
-            <span class="label-text-alt">{{ setting.description }}</span>
-        </label>
+        <p class="mt-1 text-base-content/60">{{ setting.description }}</p>
 
         {% elif setting.input_type == "json" %}
         <!-- JSON Textarea -->
@@ -184,9 +176,7 @@
                   class="textarea textarea-bordered w-full font-mono text-sm"
                   rows="4"
                   placeholder='{"key": "value"}'>{{ setting.current_value }}</textarea>
-        <label class="label">
-            <span class="label-text-alt">{{ setting.description }} (Must be valid JSON)</span>
-        </label>
+        <p class="mt-1 text-base-content/60">{{ setting.description }} (Must be valid JSON)</p>
 
         {% elif setting.input_type == "textarea" %}
         <!-- Large Textarea (Markdown) with Preview -->
@@ -216,9 +206,7 @@
         <div id="preview_{{ setting.key }}" class="hidden bg-base-100 border border-base-300 rounded-lg p-4 min-h-[12rem] prose prose-sm max-w-none text-base-content">
             <!-- Preview content loaded via HTMX -->
         </div>
-        <label class="label">
-            <span class="label-text-alt">{{ setting.description }}</span>
-        </label>
+        <p class="mt-1 text-base-content/60">{{ setting.description }}</p>
 
         {% else %}
         <!-- Text Input -->
@@ -227,9 +215,7 @@
                id="id_{{ setting.key }}"
                value="{{ setting.current_value }}"
                class="input input-bordered w-full">
-        <label class="label">
-            <span class="label-text-alt">{{ setting.description }}</span>
-        </label>
+        <p class="mt-1 text-base-content/60">{{ setting.description }}</p>
         {% endif %}
     </div>
     {% if forloop.last and setting.group_label %}</fieldset>{% endif %}
@@ -246,7 +232,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
         </a>
-        <span class="label-text-alt text-base-content/60">Generated based on settings above</span>
+        <span class="text-base-content/60">Generated based on settings above</span>
     </div>
     {% endif %}
 
