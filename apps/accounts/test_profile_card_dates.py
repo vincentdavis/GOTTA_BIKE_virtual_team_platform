@@ -55,8 +55,11 @@ def test_own_profile_cards_show_the_update_date(client, verified_rider, monkeypa
 @pytest.mark.django_db
 def test_public_profile_card_shows_the_update_date(client, verified_rider, team_member) -> None:
     """One card, one date -- sourced from RiderProfile.fetched_at, not the ZP/ZR rows."""
+    # Needs something the card actually displays: a row carrying only a name renders the
+    # "not synced" state, since `name` is never shown on the card.
     RiderProfile.objects.create(
-        zwid=555, name="Alice Rider", fetched_at=timezone.now(), last_requested_at=timezone.now(),
+        zwid=555, name="Alice Rider", category_open="B", ftp=250,
+        fetched_at=timezone.now(), last_requested_at=timezone.now(),
     )
     client.force_login(team_member)
 

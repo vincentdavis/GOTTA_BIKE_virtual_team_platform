@@ -251,3 +251,84 @@ def test_the_card_does_not_invent_the_data_riderprofile_cannot_supply(client, pr
 
     for absent in ("Best seen", "Races", "Rank"):
         assert absent not in card, f"{absent!r} cannot come from RiderProfile"
+
+
+# ---------------------------------------------------------------- sparse and empty rows
+
+
+@pytest.mark.django_db
+def test_height_renders_for_a_rider_who_has_no_weight_or_power(client, rider, team_member):
+    """Height and weight come from different upstream blocks, so one arrives without the other.
+
+    zauth reads height from the top level of the Zwift profile and weight from the
+    competitionMetrics sub-object, which is routinely absent. The row that renders height was
+    written to handle exactly this, but the group guard around it omitted height_cm, making
+    that branch unreachable.
+    """
+    now = timezone.now()
+    RiderProfile.objects.create(
+        zwid=rider.zwid, height_cm=182.0, fetched_at=now, last_requested_at=now,
+    )
+
+    body = _body(client, team_member, rider)
+
+    assert "182 cm" in body
+
+
+@pytest.mark.django_db
+def test_a_row_with_nothing_to_show_is_reported_as_unsynced(client, rider, team_member):
+    """A model instance is always truthy, so row existence is not the same as having data.
+
+    Without this the card renders its header, an empty body and an "Updated <date>" stamp --
+    asserting freshly synced data while showing none of it.
+    """
+    now = timezone.now()
+    RiderProfile.objects.create(zwid=rider.zwid, name="Alex Rivera", fetched_at=now, last_requested_at=now)
+
+    body = _body(client, team_member, rider)
+
+    assert "has not been synced" in body
+    # The card stamps an ISO date; the page footer carries its own "Updated 2026/09/02"
+    # deploy stamp, which a bare "Updated" check matches instead.
+    assert f"Updated {timezone.localtime(now).strftime('%Y-%m-%d')}" not in body
+
+
+@pytest.mark.django_db
+def test_a_zero_measurement_counts_as_data(client, rider, team_member):
+    """A 0.0 handicap or 0 FTP is a real measurement, not an absent one.
+
+    has_display_data tests presence rather than truthiness precisely so a legitimate zero does
+    not read as "never synced".
+    """
+    now = timezone.now()
+    profile = RiderProfile.objects.create(
+        zwid=rider.zwid, ftp=0.0, fetched_at=now, last_requested_at=now,
+    )
+
+    assert profile.has_display_data is True
+    assert "has not been synced" not in _body(client, team_member, rider)
+
+
+@pytest.mark.django_db
+def test_name_alone_does_not_count_as_display_data(rider):
+    """``name`` is promoted but never rendered -- the profile header already carries it."""
+    now = timezone.now()
+    profile = RiderProfile.objects.create(
+        zwid=rider.zwid, name="Alex Rivera", fetched_at=now, last_requested_at=now,
+    )
+
+    assert profile.has_display_data is False
+
+
+@pytest.mark.django_db
+def test_payload_only_data_counts_as_display_data(rider):
+    """A row with no populated columns but a usable payload still has something to show."""
+    now = timezone.now()
+    profile = RiderProfile.objects.create(
+        zwid=rider.zwid,
+        payload={"totals": {"distance_km": 63988}},
+        fetched_at=now,
+        last_requested_at=now,
+    )
+
+    assert profile.has_display_data is True

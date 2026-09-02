@@ -200,6 +200,46 @@ class RiderProfile(models.Model):
         return node if isinstance(node, dict) and node else None
 
     @property
+    def has_display_data(self) -> bool:
+        """Whether this row holds anything a profile card could actually show.
+
+        A model instance is always truthy, so ``{% if rider_profile %}`` only asks whether a
+        row exists. Every column here is nullable and every payload block optional, so a row
+        can exist and display nothing -- and the card would then render an "Updated <date>"
+        stamp over an empty body, asserting fresh data while showing none.
+
+        ``name`` is deliberately not counted: it is a promoted column but the card never
+        renders it, because the profile header already carries the rider's name.
+
+        Zero counts as data. A 0.0 handicap or a 0 FTP is a real measurement, and testing
+        truthiness rather than presence would silently discard it.
+
+        Returns:
+            True if at least one displayed field is populated.
+
+        """
+        columns = (
+            self.club_name,
+            self.country,
+            self.age,
+            self.category_open,
+            self.category_women,
+            self.category_racing,
+            self.zwift_racing_score,
+            self.weight_kg,
+            self.height_cm,
+            self.ftp,
+            self.zftp,
+            self.velo,
+            self.zp_skill,
+            self.compound_score,
+            self.phenotype_value,
+        )
+        if any(value is not None and value != "" for value in columns):
+            return True
+        return any((self.power_extras, self.peak_ratings, self.handicaps, self.totals))
+
+    @property
     def handicaps(self) -> dict | None:
         """Terrain handicaps: flat, rolling, hilly, mountainous.
 

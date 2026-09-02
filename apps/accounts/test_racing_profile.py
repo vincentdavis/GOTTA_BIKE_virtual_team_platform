@@ -30,24 +30,28 @@ _PROFILE = {
 
 
 @pytest.mark.django_db
-def test_public_profile_no_longer_renders_the_live_racing_profile(auth_client, user_model, monkeypatch):
-    """The public profile was consolidated onto RiderProfile; this card stays on own-profile only.
+def test_public_profile_makes_no_live_racing_profile_call(auth_client, user_model, monkeypatch):
+    """The public profile was consolidated onto the cached RiderProfile row.
 
-    Asserted against the live call's own distinctive output -- the zwift.com athlete link, which
-    only the racing-profile partial emits -- rather than against a label the replacement card
-    also uses. A weaker check would pass for the wrong reason once the consolidated card renders
-    its own "Racing Score" row.
+    Asserted on the CALL rather than on the rendered output. An output check passes for the
+    wrong reason here: the replacement card renders its own "zMAP / VO2max" row, so any string
+    the old partial emitted is either absent for unrelated reasons or shared with the new card.
+    Spying on the client boundary tests the thing that actually matters -- that viewing a
+    teammate no longer costs a per-render call to zauth.
     """
     target = user_model.objects.create_user(username="target", email="target@example.test")
-    monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda user_id: dict(_PROFILE))
+    calls = []
+
+    def _spy(user_id):
+        calls.append(user_id)
+        return dict(_PROFILE)
+
+    monkeypatch.setattr("apps.zwift.client.get_racing_profile", _spy)
 
     resp = auth_client.get(reverse("accounts:public_profile", args=[target.pk]))
 
     assert resp.status_code == 200
-    body = resp.content.decode()
-    assert "https://www.zwift.com/uk/athlete/41c49fb6-3a6a-41a5-a0e5-1ac65ceec060" not in body
-    # And the live call is not made for a public view at all any more.
-    assert "vo2max" not in body.lower()
+    assert calls == [], f"public profile still called zauth for {calls}"
 
 
 @pytest.mark.django_db

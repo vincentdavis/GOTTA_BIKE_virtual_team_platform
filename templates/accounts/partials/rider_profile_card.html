@@ -22,7 +22,7 @@
     Racing &amp; Performance
   </h3>
 
-  {% if rider_profile %}
+  {% if rider_profile.has_display_data %}
     <div class="space-y-3 text-sm">
 
       {% if rider_profile.country or rider_profile.age or rider_profile.club_name %}
@@ -73,7 +73,7 @@
         </div>
       {% endif %}
 
-      {% if rider_profile.weight_kg or rider_profile.ftp or rider_profile.zftp or rider_profile.power_extras %}
+      {% if rider_profile.weight_kg or rider_profile.height_cm or rider_profile.ftp or rider_profile.zftp or rider_profile.power_extras %}
         <div class="space-y-1 pt-2 border-t border-base-content/10">
           {% if rider_profile.weight_kg or rider_profile.height_cm %}
             <div class="flex justify-between gap-3">
