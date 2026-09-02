@@ -31,7 +31,22 @@
       class="space-y-4 pt-2">
     {% csrf_token %}
 
+    {% comment %}
+      Group headers, currently only on the Scheduler section, where the view attaches
+      group_label/group_start. Every other section leaves them unset and renders a flat list
+      exactly as before. Grouped by the service the task contacts, matching the background
+      tasks page, because when a cadence needs changing the question is normally "what are we
+      hammering" rather than "what is this task called".
+    {% endcomment %}
     {% for setting in section.settings %}
+    {% if setting.group_start %}
+    {% if not forloop.first %}</fieldset>{% endif %}
+    <fieldset class="m-0 min-w-0 space-y-4 border-0 p-0 {% if not forloop.first %}pt-6{% endif %}">
+        <legend class="flex w-full items-center gap-3 p-0 pb-1 text-sm font-semibold text-base-content/80">
+            {{ setting.group_label }}
+            <span aria-hidden="true" class="h-px flex-1 bg-base-300"></span>
+        </legend>
+    {% endif %}
     <div class="form-control">
         <label class="label" for="id_{{ setting.key }}">
             <span class="label-text font-medium flex items-center gap-1">
@@ -217,6 +232,7 @@
         </label>
         {% endif %}
     </div>
+    {% if forloop.last and setting.group_label %}</fieldset>{% endif %}
     {% endfor %}
 
     {% if section.key == "seo_settings" %}

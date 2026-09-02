@@ -1136,6 +1136,9 @@ def _get_config_sections() -> dict:
                     "current_value": current_value,
                 })
 
+        if section_key == "scheduler":
+            section_settings = _group_scheduler_settings(section_settings)
+
         sections[section_key] = {
             "name": section_name,
             "key": section_key,
@@ -1143,6 +1146,58 @@ def _get_config_sections() -> dict:
         }
 
     return sections
+
+
+def _group_scheduler_settings(section_settings: list[dict]) -> list[dict]:
+    """Order cadence settings by the service their task contacts, and label the boundaries.
+
+    The same grouping the background-tasks page uses, for the same reason: when something is
+    misbehaving the question is usually which service it talks to, and a flat list of
+    twenty-eight intervals does not answer it.
+
+    The mapping is derived from the task registry rather than written out again here, so a task
+    registered with a group and a cadence lands in the right place with no second list to keep
+    in step. Settings that drive no task -- a fallback value that happens to sit among the
+    cadences -- collect under their own heading rather than being silently dropped or, worse,
+    filed under whichever group they happen to sort next to.
+
+    Args:
+        section_settings: The scheduler section's settings, in fieldset order.
+
+    Returns:
+        The same settings, reordered, each carrying ``group_label`` and a ``group_start`` flag
+        marking the first entry of its group.
+
+    """
+    from gotta_bike_platform.task_registry import (
+        TASK_GROUP_ORDER,
+        group_rank,
+        scheduler_setting_anchors,
+        scheduler_setting_groups,
+    )
+
+    groups = scheduler_setting_groups()
+    anchors = scheduler_setting_anchors()
+    ungrouped = "Not a task cadence"
+
+    def sort_key(setting: dict) -> tuple[int, str, str, int]:
+        key = setting["key"]
+        label = groups.get(key, ungrouped)
+        # Settings driving no task sort last whatever they are called.
+        rank = len(TASK_GROUP_ORDER) + 1 if label == ungrouped else group_rank(label)
+        # Within a group, order by cadence -- a companion sorts under its cadence's key and
+        # then after it, so a threshold stays beside the interval it is compared against
+        # instead of drifting off alphabetically.
+        return (rank, label, anchors.get(key, key), 1 if key in anchors else 0)
+
+    ordered = sorted(section_settings, key=sort_key)
+    seen: set[str] = set()
+    for setting in ordered:
+        label = groups.get(setting["key"], ungrouped)
+        setting["group_label"] = label
+        setting["group_start"] = label not in seen
+        seen.add(label)
+    return ordered
 
 
 @login_required

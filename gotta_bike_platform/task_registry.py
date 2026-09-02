@@ -80,6 +80,81 @@ TASK_GROUP_ORDER: tuple[str, ...] = (
 )
 
 
+# Settings that are not cadences themselves but are read only in relation to one -- a threshold
+# the interval is compared against. Mapped to the task they qualify rather than to a group, so
+# they follow it if it is ever regrouped. Keep this small: anything that actually drives a task
+# belongs in TASK_REGISTRY, where it gets grouped without an entry here.
+SCHEDULER_COMPANION_SETTINGS: dict[str, str] = {
+    "ZWIFT_METRICS_FALLBACK_MIN_MINUTES": "refresh_zwift_racing_metrics",
+}
+
+
+def scheduler_setting_anchors() -> dict[str, str]:
+    """Map each companion setting to the cadence setting it should sit next to.
+
+    Sorting by group alone would separate a threshold from the interval it qualifies, which is
+    where its wording gets its meaning -- "below this interval" is unreadable on its own.
+
+    Returns:
+        Companion setting to the cadence setting of the task it qualifies. Companions whose
+        task is missing or has no cadence are omitted rather than pointing at nothing.
+
+    """
+    anchors: dict[str, str] = {}
+    for setting, task_name in SCHEDULER_COMPANION_SETTINGS.items():
+        info = TASK_REGISTRY.get(task_name)
+        if not info:
+            continue
+        cadence = info.get("hours_setting") or info.get("minutes_setting")
+        if cadence:
+            anchors[setting] = cadence
+    return anchors
+
+
+def scheduler_setting_groups() -> dict[str, str]:
+    """Map each scheduler cadence setting to the group label of the task it drives.
+
+    Derived from the registry rather than listed separately, so a task added with a group and
+    a cadence is grouped on the settings page without anyone maintaining a second mapping.
+
+    Returns:
+        Setting name to group label. Settings whose task has no group, and cadence-adjacent
+        settings that drive no task at all, are absent -- callers decide where to put those.
+
+    """
+    mapping: dict[str, str] = {}
+    for info in TASK_REGISTRY.values():
+        label = TASK_GROUPS.get(info.get("group", ""), "")
+        if not label:
+            continue
+        for key in ("hours_setting", "minutes_setting"):
+            setting = info.get(key)
+            if setting:
+                mapping[setting] = label
+
+    for setting, task_name in SCHEDULER_COMPANION_SETTINGS.items():
+        info = TASK_REGISTRY.get(task_name)
+        label = TASK_GROUPS.get(info.get("group", ""), "") if info else ""
+        if label:
+            mapping[setting] = label
+    return mapping
+
+
+def group_rank(label: str) -> int:
+    """Sort position for a group label, matching the order used on the tasks page.
+
+    Args:
+        label: A group label from :data:`TASK_GROUPS`.
+
+    Returns:
+        Its index in the display order; a large number for anything unrecognised, so unknown
+        groups sort last rather than jumping to the front.
+
+    """
+    labels = [TASK_GROUPS[key] for key in TASK_GROUP_ORDER if key in TASK_GROUPS]
+    return labels.index(label) if label in labels else len(labels)
+
+
 def grouped_tasks(tasks: dict[str, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """Group tasks by the service they contact, in display order.
 
