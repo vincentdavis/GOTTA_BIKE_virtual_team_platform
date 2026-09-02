@@ -98,5 +98,31 @@
   {% else %}
   <p class="text-sm text-base-content/60">No blocked accounts.</p>
   {% endif %}
+
+  {% comment %}
+    The Compliance fieldset, rendered here rather than on its own page so the retention
+    windows sit with the tools that act on the same data. Last rather than first on purpose:
+    the erasure tool is what this page is opened to do, and a settings form above it would
+    push that below the fold. The id/section-content wrapper is what the shared partial's
+    form posts back into, so HTMX swaps the form rather than the whole page.
+  {% endcomment %}
+  {% if current_section.settings %}
+  <div class="divider"></div>
+
+  <div>
+    <h3 class="text-lg font-semibold">Retention and policy</h3>
+    <p class="text-sm text-base-content/70 mt-1">
+      How long analytics data is kept before it is anonymised and then deleted, and where the
+      published policies live. These are what the questions above are usually answered
+      against, so they are set here rather than under Site Settings.
+    </p>
+  </div>
+
+  <div id="section-{{ current_section.key }}">
+    <div class="section-content">
+      {% include "accounts/partials/config_section.html" with section=current_section %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% include "events/_filter_select_script.html" %}

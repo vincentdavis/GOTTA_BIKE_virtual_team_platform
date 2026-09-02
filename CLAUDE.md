@@ -338,7 +338,9 @@ Custom admin buttons are added via:
 
 Runtime-configurable settings stored in database, editable via Django admin at `/admin/constance/config/`.
 
-Settings are grouped: Team Identity, Zwift Credentials, API Keys, Permission Mappings (`PERM_*_ROLES` — JSON arrays of Discord role IDs), Discord Guild (`EVENT_ROLE_PREFIXES` — JSON array of allowed event prefix characters), Discord Roles/Channels, New Arrival Messages (support `{member}`/`{server}` placeholders), Verification (`CATEGORY_REQUIREMENTS` JSON, `*_DAYS` expiration settings, `VERIFICATION_FORM_MESSAGE` Markdown message shown on verification form), Google, Strava, Site Settings.
+Settings are grouped: Team Identity, Zwift Credentials, API Keys, Permission Mappings (`PERM_*_ROLES` — JSON arrays of Discord role IDs), Discord Guild (`EVENT_ROLE_PREFIXES` — JSON array of allowed event prefix characters), Discord Roles/Channels, New Arrival Messages (support `{member}`/`{server}` placeholders), Verification (`CATEGORY_REQUIREMENTS` JSON, `*_DAYS` expiration settings, `VERIFICATION_FORM_MESSAGE` Markdown message shown on verification form), Google, Strava, Site Settings, Compliance (`PRIVACY_POLICY_URL`, `TERMS_OF_SERVICE_URL`, `ANALYTICS_ANONYMISE_DAYS`, `ANALYTICS_DELETE_DAYS`).
+
+**Note**: the `Compliance` fieldset has no page of its own — `/site/config/compliance/` is special-cased in `config_section_page`, and its settings form is rendered by `templates/accounts/partials/config_compliance.html` below the erasure and blocked-login tools, so the retention windows sit with the tools acting on the same data.
 
 Usage: `from constance import config; config.SETTING_NAME`. Add new settings in `settings.py` under `CONSTANCE_CONFIG`.
 

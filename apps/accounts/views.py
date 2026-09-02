@@ -1445,7 +1445,14 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
             {
                 "sections": sections,
                 "current_section_key": section_key,
-                "current_section": {"name": "Compliance", "key": "compliance"},
+                # The real fieldset-backed section, so the retention windows and policy
+                # URLs render as an editable form on this page at all -- the template decides
+                # where, and puts them below the tools. Falls back to a
+                # bare section rather than raising: this page is how an erasure request gets
+                # honoured, so it has to stay reachable even if the fieldset is ever renamed.
+                "current_section": sections.get(
+                    section_key, {"name": "Compliance", "key": "compliance", "settings": []}
+                ),
                 "is_compliance": True,
                 # Everyone with an account, so an erasure request can be honoured for
                 # someone who has already lost their team role.

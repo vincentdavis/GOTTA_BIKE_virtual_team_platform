@@ -1082,10 +1082,6 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "GOOGLE_ANALYTICS_ID",
         "ABOUT_URL",
         "CONTACT_URL",
-        "PRIVACY_POLICY_URL",
-        "ANALYTICS_ANONYMISE_DAYS",
-        "ANALYTICS_DELETE_DAYS",
-        "TERMS_OF_SERVICE_URL",
     ),
     "Social Links": (
         "SOCIAL_LINKEDIN_URL",
@@ -1255,6 +1251,16 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "TTT_CDA_HEIGHT_EXP",
         "TTT_CDA_WEIGHT_EXP",
         "TTT_DRAFT_SAVINGS",
+    ),
+    # Sits alongside the erasure and blocked-login tools on /site/config/compliance/ rather
+    # than under Site Settings, where a retention window read as site furniture next to the
+    # team name. These four are the settings an admin is asked about when someone asks what
+    # is kept and for how long, so they belong on the page that answers that question.
+    "Compliance": (
+        "PRIVACY_POLICY_URL",
+        "TERMS_OF_SERVICE_URL",
+        "ANALYTICS_ANONYMISE_DAYS",
+        "ANALYTICS_DELETE_DAYS",
     ),
 }
 
