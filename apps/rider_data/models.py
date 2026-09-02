@@ -166,3 +166,113 @@ class RiderProfile(models.Model):
         if not max_age or max_age <= 0:
             return False
         return timezone.now() - self.fetched_at > timedelta(hours=max_age)
+
+    # ------------------------------------------------------------------
+    # Payload accessors
+    #
+    # Everything below reads the JSON document rather than a column, because of the promotion
+    # rule: a field earns a column only if something filters, sorts or joins on it, and none
+    # of these do -- they are display-only. The deep paths live here rather than in a template
+    # so there is ONE place to fix when zauth's shape moves, and so they can be tested. Each
+    # returns None (not {}) when the block is absent, so a template can gate a whole group
+    # with a single {% if %}.
+    # ------------------------------------------------------------------
+
+    def _block(self, *path: str) -> dict | None:
+        """Walk into ``payload`` by key, tolerating anything missing or the wrong type.
+
+        Upstream sends ``null`` for whole blocks routinely -- a rider with no ZwiftRacing row
+        has no handicaps, no phenotype and no power curve -- so absence is the normal case
+        rather than an error worth raising.
+
+        Args:
+            *path: Successive dict keys.
+
+        Returns:
+            The nested dict, or None if any step is missing or is not a dict.
+
+        """
+        node = self.payload
+        for key in path:
+            if not isinstance(node, dict):
+                return None
+            node = node.get(key)
+        return node if isinstance(node, dict) and node else None
+
+    @property
+    def handicaps(self) -> dict | None:
+        """Terrain handicaps: flat, rolling, hilly, mountainous.
+
+        Note zauth FLATTENS this block -- it returns ``zr_payload["handicaps"]["profile"]``,
+        so there is no ``profile`` wrapper key here and reaching for one finds nothing.
+
+        Returns:
+            The handicaps dict, or None.
+
+        """
+        return self._block("handicaps")
+
+    @property
+    def totals(self) -> dict | None:
+        """Lifetime distance and elevation, from ZwiftPower.
+
+        ``climbed_m`` is in METRES while ``distance_km`` is in kilometres; they do not share a
+        unit and rendering them as if they did is the obvious mistake.
+
+        Returns:
+            The totals dict, or None.
+
+        """
+        return self._block("totals")
+
+    @property
+    def phenotype_scores(self) -> dict | None:
+        """The five per-discipline phenotype scores behind ``phenotype_value``.
+
+        Returns:
+            The scores dict (sprinter, puncheur, pursuiter, climber, tt), or None.
+
+        """
+        return self._block("phenotype", "scores")
+
+    @property
+    def phenotype_bias(self) -> float | None:
+        """The phenotype bias figure shown beside the type.
+
+        Returns:
+            The bias, or None if the phenotype block is absent.
+
+        """
+        block = self._block("phenotype")
+        value = block.get("bias") if block else None
+        return value if isinstance(value, int | float) else None
+
+    @property
+    def power_extras(self) -> dict | None:
+        """Power values with no column: zmap, vo2max, cp, awc.
+
+        Returns:
+            A dict of whichever are present, or None if none are.
+
+        """
+        block = self._block("power") or {}
+        found = {k: block.get(k) for k in ("zmap", "vo2max", "cp", "awc") if block.get(k) is not None}
+        return found or None
+
+    @property
+    def peak_ratings(self) -> dict | None:
+        """30- and 90-day peak vELO.
+
+        The CATEGORY that went with each peak is deliberately absent: zauth carries one racing
+        category, the current one, so these are bare numbers. Labelling them with
+        ``category_racing`` would attach today's tier to a rating from ninety days ago.
+
+        Returns:
+            A dict with whichever of max30/max90 are present, or None.
+
+        """
+        block = self._block("ratings") or {}
+        found = {
+            key: block.get(f"rating_{key}") for key in ("max30", "max90") if block.get(f"rating_{key}") is not None
+        }
+        return found or None

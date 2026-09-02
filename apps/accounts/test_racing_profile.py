@@ -1,4 +1,8 @@
-"""Tests for the official Zwift Racing Profile card on the profile pages.
+"""Tests for the official Zwift Racing Profile card on the own-profile page.
+
+It used to render on the public profile too. That page now shows one consolidated card fed by
+RiderProfile instead, so the coverage here is the own-profile render plus a guard that the
+public page no longer makes the live call.
 
 The zauth service call is patched at the ``apps.zwift.client`` boundary so no
 real network traffic happens.
@@ -26,7 +30,14 @@ _PROFILE = {
 
 
 @pytest.mark.django_db
-def test_public_profile_shows_racing_profile_when_connected(auth_client, user_model, monkeypatch):
+def test_public_profile_no_longer_renders_the_live_racing_profile(auth_client, user_model, monkeypatch):
+    """The public profile was consolidated onto RiderProfile; this card stays on own-profile only.
+
+    Asserted against the live call's own distinctive output -- the zwift.com athlete link, which
+    only the racing-profile partial emits -- rather than against a label the replacement card
+    also uses. A weaker check would pass for the wrong reason once the consolidated card renders
+    its own "Racing Score" row.
+    """
     target = user_model.objects.create_user(username="target", email="target@example.test")
     monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda user_id: dict(_PROFILE))
 
@@ -34,24 +45,9 @@ def test_public_profile_shows_racing_profile_when_connected(auth_client, user_mo
 
     assert resp.status_code == 200
     body = resp.content.decode()
-    assert "Racing Score" in body  # a label only in the rendered card
-    assert "435" in body  # racing score value
-    assert "66.0 kg" in body  # weight derived from grams
-    # Link out to the zwift.com athlete page uses the account UUID.
-    assert "https://www.zwift.com/uk/athlete/41c49fb6-3a6a-41a5-a0e5-1ac65ceec060" in body
-
-
-@pytest.mark.django_db
-def test_public_profile_omits_racing_profile_when_not_connected(auth_client, user_model, monkeypatch):
-    target = user_model.objects.create_user(username="target2", email="target2@example.test")
-    monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda user_id: None)
-
-    resp = auth_client.get(reverse("accounts:public_profile", args=[target.pk]))
-
-    assert resp.status_code == 200
-    # "Racing Profile" also appears in an HTML comment, so assert on a
-    # rendered-only label instead.
-    assert "Racing Score" not in resp.content.decode()
+    assert "https://www.zwift.com/uk/athlete/41c49fb6-3a6a-41a5-a0e5-1ac65ceec060" not in body
+    # And the live call is not made for a public view at all any more.
+    assert "vo2max" not in body.lower()
 
 
 @pytest.mark.django_db

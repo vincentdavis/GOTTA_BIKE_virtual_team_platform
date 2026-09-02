@@ -1,0 +1,220 @@
+{% load humanize %}
+{% comment %}
+  The consolidated rider card, replacing the separate ZwiftPower, Zwift Racing and Racing
+  Profile cards. One cached RiderProfile row instead of three fetches, two of them live.
+
+  Everything here is display-only, so most values come from the JSON payload through the
+  accessors on the model rather than from promoted columns -- the deep paths live there so
+  there is one place to fix when zauth's shape moves.
+
+  Deliberately NOT shown, because RiderProfile cannot supply them:
+    * ZwiftPower rank            -- zauth's ZpRider has no such column
+    * race finishes/wins/podiums -- ProfileFull carries only the two peak ratings
+    * best-ever rating           -- needs a history table; this is an evictable snapshot
+    * gender/country mismatch    -- needs Zwift's raw values to disagree with
+  The peak ratings are shown WITHOUT category badges for the same reason: zauth carries one
+  racing category, the current one, so labelling a 90-day-old rating with today's tier would
+  be a lie rather than a gap.
+{% endcomment %}
+<div class="card bg-base-300 p-4">
+  <h3 class="font-semibold mb-3 flex items-center gap-2">
+    <span class="px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary rounded">RP</span>
+    Racing &amp; Performance
+  </h3>
+
+  {% if rider_profile %}
+    <div class="space-y-3 text-sm">
+
+      {% if rider_profile.country or rider_profile.age or rider_profile.club_name %}
+        <div class="space-y-1">
+          {% if rider_profile.club_name %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">Club</span>
+              <span class="font-semibold text-right">{{ rider_profile.club_name }}</span>
+            </div>
+          {% endif %}
+          {% if rider_profile.country or rider_profile.age %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">Country / Age</span>
+              <span class="font-mono text-right">
+                {{ rider_profile.country|upper|default:"&mdash;" }}{% if rider_profile.age %} &middot; {{ rider_profile.age }}{% endif %}
+              </span>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if rider_profile.category_open or rider_profile.category_women or rider_profile.category_racing or rider_profile.zwift_racing_score %}
+        <div class="space-y-1 pt-2 border-t border-base-content/10">
+          {% if rider_profile.category_open %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">Category</span>
+              <span class="font-semibold">{{ rider_profile.category_open }}</span>
+            </div>
+          {% endif %}
+          {% if rider_profile.category_women %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">Category (W)</span>
+              <span class="font-semibold">{{ rider_profile.category_women }}</span>
+            </div>
+          {% endif %}
+          {% if rider_profile.category_racing %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">Racing tier</span>
+              <span class="font-semibold">{{ rider_profile.category_racing }}</span>
+            </div>
+          {% endif %}
+          {% if rider_profile.zwift_racing_score %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">Racing Score</span>
+              <span class="font-mono">{{ rider_profile.zwift_racing_score|floatformat:0 }}</span>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if rider_profile.weight_kg or rider_profile.ftp or rider_profile.zftp or rider_profile.power_extras %}
+        <div class="space-y-1 pt-2 border-t border-base-content/10">
+          {% if rider_profile.weight_kg or rider_profile.height_cm %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">Weight / Height</span>
+              <span class="font-mono text-right">
+                {% if rider_profile.weight_kg %}{{ rider_profile.weight_kg|floatformat:1 }} kg{% endif %}{% if rider_profile.weight_kg and rider_profile.height_cm %} &middot; {% endif %}{% if rider_profile.height_cm %}{{ rider_profile.height_cm|floatformat:0 }} cm{% endif %}
+              </span>
+            </div>
+          {% endif %}
+          {% if rider_profile.ftp or rider_profile.zftp %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">FTP / zFTP</span>
+              <span class="font-mono text-right">
+                {% if rider_profile.ftp %}{{ rider_profile.ftp|floatformat:0 }}{% else %}&mdash;{% endif %} / {% if rider_profile.zftp %}{{ rider_profile.zftp|floatformat:0 }}{% else %}&mdash;{% endif %}w
+              </span>
+            </div>
+          {% endif %}
+          {% with power=rider_profile.power_extras %}
+            {% if power.zmap or power.vo2max %}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">zMAP / VO2max</span>
+                <span class="font-mono text-right">
+                  {% if power.zmap %}{{ power.zmap|floatformat:0 }}w{% else %}&mdash;{% endif %} / {% if power.vo2max %}{{ power.vo2max|floatformat:1 }}{% else %}&mdash;{% endif %}
+                </span>
+              </div>
+            {% endif %}
+            {% if power.cp or power.awc %}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">CP / AWC</span>
+                <span class="font-mono text-right">
+                  {% if power.cp %}{{ power.cp|floatformat:0 }}w{% else %}&mdash;{% endif %}{% if power.awc %} &middot; {{ power.awc|floatformat:0 }}J{% endif %}
+                </span>
+              </div>
+            {% endif %}
+          {% endwith %}
+        </div>
+      {% endif %}
+
+      {% if rider_profile.velo or rider_profile.peak_ratings or rider_profile.zp_skill or rider_profile.compound_score %}
+        <div class="space-y-1 pt-2 border-t border-base-content/10">
+          {% if rider_profile.velo %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">vELO</span>
+              <span class="font-mono font-semibold">{{ rider_profile.velo|floatformat:0 }}</span>
+            </div>
+          {% endif %}
+          {% with peaks=rider_profile.peak_ratings %}
+            {% if peaks %}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">30 / 90-day peak</span>
+                <span class="font-mono text-right">
+                  {% if peaks.max30 %}{{ peaks.max30|floatformat:0 }}{% else %}&mdash;{% endif %} / {% if peaks.max90 %}{{ peaks.max90|floatformat:0 }}{% else %}&mdash;{% endif %}
+                </span>
+              </div>
+            {% endif %}
+          {% endwith %}
+          {% if rider_profile.zp_skill %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">ZP skill</span>
+              <span class="font-mono">{{ rider_profile.zp_skill|floatformat:0 }}</span>
+            </div>
+          {% endif %}
+          {% if rider_profile.compound_score %}
+            <div class="flex justify-between gap-3">
+              <span class="text-base-content/70">Compound</span>
+              <span class="font-mono">{{ rider_profile.compound_score|floatformat:0 }}</span>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if rider_profile.phenotype_value %}
+        <div class="space-y-1 pt-2 border-t border-base-content/10">
+          <div class="flex justify-between gap-3">
+            <span class="text-base-content/70">Phenotype</span>
+            <span class="font-semibold text-right">
+              {{ rider_profile.phenotype_value }}{% if rider_profile.phenotype_bias %} <span class="text-base-content/50 font-normal">bias {{ rider_profile.phenotype_bias|floatformat:1 }}</span>{% endif %}
+            </span>
+          </div>
+          {% with scores=rider_profile.phenotype_scores %}
+            {% if scores %}
+              <div class="flex flex-wrap gap-1 pt-1">
+                {% for label, value in scores.items %}
+                  <span class="badge badge-sm badge-ghost font-mono">{{ label }} {{ value|floatformat:0 }}</span>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% endwith %}
+        </div>
+      {% endif %}
+
+      {% with handicaps=rider_profile.handicaps %}
+        {% if handicaps %}
+          <div class="space-y-1 pt-2 border-t border-base-content/10">
+            <div class="text-base-content/70">Terrain handicaps</div>
+            <div class="flex flex-wrap gap-1">
+              {% for label, value in handicaps.items %}
+                <span class="badge badge-sm font-mono {% if value > 0 %}badge-success{% elif value < 0 %}badge-error{% else %}badge-ghost{% endif %} badge-outline">
+                  {{ label }} {{ value|floatformat:1 }}
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% with totals=rider_profile.totals %}
+        {% if totals.distance_km or totals.climbed_m %}
+          <div class="space-y-1 pt-2 border-t border-base-content/10">
+            {% if totals.distance_km %}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">Lifetime distance</span>
+                <span class="font-mono">{{ totals.distance_km|floatformat:0|intcomma }} km</span>
+              </div>
+            {% endif %}
+            {% if totals.climbed_m %}
+              {# climbed_m is METRES; distance_km is kilometres. They do not share a unit. #}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">Lifetime climbed</span>
+                <span class="font-mono">{{ totals.climbed_m|floatformat:0|intcomma }} m</span>
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+      {% endwith %}
+    </div>
+
+    {% if profile_user.zwid %}
+      <a href="https://zwiftpower.com/profile.php?z={{ profile_user.zwid }}"
+         target="_blank" rel="noopener" class="btn btn-sm btn-ghost mt-3 w-full">
+        View on ZwiftPower
+      </a>
+    {% endif %}
+
+    <p class="text-base-content/40 text-xs mt-3">
+      Updated {{ rider_profile.fetched_at|date:"Y-m-d" }}{% if rider_profile.is_stale %} &middot; refresh pending{% endif %}
+    </p>
+
+  {% elif profile_user.zwid_verified and profile_user.zwid %}
+    <p class="text-base-content/60 text-sm">No profile data yet &mdash; this rider has not been synced.</p>
+  {% else %}
+    <p class="text-base-content/60 text-sm">Zwift account not verified.</p>
+  {% endif %}
+</div>

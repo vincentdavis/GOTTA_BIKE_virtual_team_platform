@@ -22,6 +22,7 @@ from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm
 from apps.accounts.models import BlockedDiscordId, User
 from apps.accounts.services import delete_user_account
+from apps.rider_data.models import RiderProfile
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import (
     build_verify_type_options,
@@ -144,6 +145,33 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
         "zauth_connected_at": (zauth or {}).get("connected_at"),
         "zauth_uuid_tail": zauth_uuid.split("-")[-1] if zauth_uuid else None,
     }
+
+
+def _rider_profile_for(profile_user):
+    """Return the cached RiderProfile backing the consolidated card, or None.
+
+    Gated on the SAME verification state the ZwiftPower and ZwiftRacing cards used, and
+    deliberately not on anything in the profile itself. RiderProfile carries no verification
+    state by design, and ``payload["zwift_connection"]["status"]`` is not a stand-in for it:
+    it reports whether a Zwift account exists service-wide, not whether this rider is linked
+    to us. Reading it here would show a card for someone who had disconnected.
+
+    Note this is narrower than the live racing-profile call it replaces, which resolved the
+    connection service-side and so worked for a connected rider with no local ``zwid``. The
+    cache is keyed on ``zwid`` and only ever fetches riders who have one, so those riders get
+    no card until they are verified here.
+
+    Args:
+        profile_user: The user whose profile is being viewed.
+
+    Returns:
+        The RiderProfile row, or None if the rider is unverified, has no zwid, or has not
+        been synced yet.
+
+    """
+    if not (profile_user.zwid_verified and profile_user.zwid):
+        return None
+    return RiderProfile.objects.filter(zwid=profile_user.zwid).first()
 
 
 def _fetch_racing_profile(user: User) -> dict | None:
@@ -549,65 +577,17 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
     """
     from django.shortcuts import get_object_or_404
 
-    from apps.team.services import ZP_DIV_TO_CATEGORY
-    from apps.zwiftpower.models import ZPRiderResults, ZPTeamRiders
-    from apps.zwiftracing.models import ZRRider
+    from apps.zwiftpower.models import ZPRiderResults
 
     profile_user = get_object_or_404(User, id=user_id)
 
     # Check if viewing own profile
     is_own_profile = profile_user == request.user
 
-    # Fetch ZwiftPower and ZwiftRacing data if user is verified
-    zp_data = None
-    zr_data = None
+    # Recent results still come from ZwiftPower: they are race records, not rider attributes,
+    # so the consolidated RiderProfile card cannot supply them and this query stays.
     recent_results = []
     if profile_user.zwid_verified and profile_user.zwid:
-        # Get ZwiftPower data
-        zp_rider = ZPTeamRiders.objects.filter(zwid=profile_user.zwid).first()
-        if zp_rider:
-            # Use divw for females, div for everyone else
-            div = zp_rider.divw if profile_user.gender == "female" else zp_rider.div
-            wkg = round(float(zp_rider.ftp) / float(zp_rider.weight), 2) if zp_rider.ftp and zp_rider.weight else None
-            zp_data = {
-                "category": ZP_DIV_TO_CATEGORY.get(div, ""),
-                "rank": zp_rider.rank,
-                "ftp": zp_rider.ftp,
-                "wkg": wkg,
-                "weight": zp_rider.weight,
-                "h_1200_watts": zp_rider.h_1200_watts,
-                "h_1200_wkg": zp_rider.h_1200_wkg,
-                "h_15_watts": zp_rider.h_15_watts,
-                "h_15_wkg": zp_rider.h_15_wkg,
-                "updated": zp_rider.date_modified,
-            }
-            # Include women's category for female riders
-            if profile_user.gender == "female" and zp_rider.div:
-                zp_data["category_mixed"] = ZP_DIV_TO_CATEGORY.get(zp_rider.div, "")
-
-        # Get ZwiftRacing data
-        zr_rider = ZRRider.objects.filter(zwid=profile_user.zwid).first()
-        if zr_rider:
-            zr_data = {
-                "category": zr_rider.race_current_category,
-                "rating": zr_rider.race_current_rating,
-                "tiers": zr_rating_tiers(zr_rider),
-                "best_seen": zr_rider.best_rating_seen(),
-                "phenotype": zr_rider.phenotype_value,
-                "phenotype_bias": zr_rider.phenotype_bias,
-                "age": zr_rider.age,
-                "race_finishes": zr_rider.race_finishes,
-                "race_wins": zr_rider.race_wins,
-                "race_podiums": zr_rider.race_podiums,
-                "race_dnfs": zr_rider.race_dnfs,
-                "handicap_flat": zr_rider.handicap_flat,
-                "handicap_rolling": zr_rider.handicap_rolling,
-                "handicap_hilly": zr_rider.handicap_hilly,
-                "handicap_mountainous": zr_rider.handicap_mountainous,
-                "updated": zr_rider.date_modified,
-            }
-
-        # Get last 5 race results
         recent_results = ZPRiderResults.objects.filter(zwid=profile_user.zwid).select_related("event")[:5]
 
     # Get YouTube videos from database (synced via background task)
@@ -636,9 +616,7 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
         "accounts/public_profile.html",
         {
             "profile_user": profile_user,
-            "zp_data": zp_data,
-            "zr_data": zr_data,
-            "racing_profile": _fetch_racing_profile(profile_user),
+            "rider_profile": _rider_profile_for(profile_user),
             "activity_window": _fetch_activity_window(profile_user),
             "is_own_profile": is_own_profile,
             "recent_results": recent_results,

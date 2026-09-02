@@ -1,14 +1,16 @@
-"""ZwiftPower and Zwift Racing cards show when their data was last updated.
+"""Profile cards show when their data was last updated.
 
-The Racing Profile card already did. Both profile pages render the ZP/ZR pair from
-separate context builders, so the date has to be added in both -- adding it to one
-would show it on the own-profile page and not the public one.
+The own-profile page still renders the ZwiftPower and Zwift Racing pair. The public profile
+no longer does: its three source cards were replaced by one consolidated card fed by
+RiderProfile, which carries a single fetched_at. So the two pages legitimately show a
+different number of dates, and each is asserted against what it actually renders.
 """
 
 import pytest
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.rider_data.models import RiderProfile
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
 
@@ -51,18 +53,21 @@ def test_own_profile_cards_show_the_update_date(client, verified_rider, monkeypa
 
 
 @pytest.mark.django_db
-def test_public_profile_cards_show_the_update_date(client, verified_rider, team_member, monkeypatch) -> None:
-    monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda uid: None)
+def test_public_profile_card_shows_the_update_date(client, verified_rider, team_member) -> None:
+    """One card, one date -- sourced from RiderProfile.fetched_at, not the ZP/ZR rows."""
+    RiderProfile.objects.create(
+        zwid=555, name="Alice Rider", fetched_at=timezone.now(), last_requested_at=timezone.now(),
+    )
     client.force_login(team_member)
 
     body = client.get(reverse("accounts:public_profile", args=[verified_rider.pk])).content.decode()
 
-    assert body.count(f"Updated {_today()}") >= 2
+    assert body.count(f"Updated {_today()}") == 1
 
 
 @pytest.mark.django_db
 def test_no_date_is_shown_without_the_underlying_row(client, user_model, team_member, monkeypatch) -> None:
-    """A rider with no ZP/ZR record must not grow an empty "Updated" line.
+    """A rider with no RiderProfile row must not grow an empty "Updated" line.
 
     Asserted against the cards' ISO format specifically: the page footer carries its own
     "Updated 2026/08/20" last-deploy stamp, which a looser check matches.
