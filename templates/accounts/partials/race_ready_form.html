@@ -216,13 +216,19 @@
       <div id="file-info" class="text-sm text-base-content/70 mt-1 hidden">
         <span id="file-name"></span> (<span id="file-size"></span>)
       </div>
+      {% comment %}
+        Client-side size rejection lands here. Rendered as a full alert rather than the small
+        label-text-alt used elsewhere: this one has to stop a rider before they spend minutes
+        uploading a file the server will refuse.
+      {% endcomment %}
+      <div id="file-error" class="alert alert-error mt-2 hidden" role="alert"></div>
       {% if race_ready_form.media_file.errors %}
-        <label class="label">
-          <span class="label-text-alt text-error">{{ race_ready_form.media_file.errors.0 }}</span>
-        </label>
+        <div class="alert alert-error mt-2" role="alert">
+          <span>{{ race_ready_form.media_file.errors.0 }}</span>
+        </div>
       {% endif %}
       <label class="label">
-        <span class="label-text-alt">Max 50MB. Allowed: jpg, jpeg, png, gif, mp4, mov, avi, webm</span>
+        <span class="label-text-alt">Max {{ race_ready_form.max_media_upload_mb }}MB. Allowed: {{ race_ready_form.allowed_media_extensions }}</span>
       </label>
     </div>
 
@@ -280,6 +286,9 @@
         </div>
       </div>
     {% endif %}
+
+    {# Submit failures land here, beside the button that was just pressed. #}
+    <div id="submit-error" class="alert alert-error hidden" role="alert" aria-live="assertive"></div>
 
     <div class="form-control">
       <button id="submit-btn" type="submit" class="btn btn-primary">
@@ -404,21 +413,62 @@
               if (heightInput.value) updateHeightPreview();
           }
 
-          // File info display
+          // File info display, and a size check BEFORE the upload starts.
           const fileInput = document.getElementById('id_media_file');
           const fileInfo = document.getElementById('file-info');
           const fileName = document.getElementById('file-name');
           const fileSize = document.getElementById('file-size');
+          const fileError = document.getElementById('file-error');
+          const submitBtn = document.getElementById('submit-btn');
+          const submitError = document.getElementById('submit-error');
+          // Read from the widget attribute so the browser, the help text and the server
+          // validator all come from the one constant in forms.py.
+          const maxMb = fileInput ? parseInt(fileInput.dataset.maxMb || '0', 10) : 0;
+
+          function showBanner(el, message) {
+              if (!el) return;
+              el.innerHTML = '';
+              const span = document.createElement('span');
+              span.textContent = message;   // textContent, not innerHTML: file names are user input
+              el.appendChild(span);
+              el.classList.remove('hidden');
+              el.scrollIntoView({behavior: 'smooth', block: 'center'});
+          }
+
+          function clearBanner(el) {
+              if (!el) return;
+              el.classList.add('hidden');
+              el.innerHTML = '';
+          }
+
+          function setSubmitEnabled(enabled) {
+              if (!submitBtn) return;
+              submitBtn.disabled = !enabled;
+              submitBtn.classList.toggle('btn-disabled', !enabled);
+          }
+
           if (fileInput) {
               fileInput.addEventListener('change', function () {
-                  if (this.files && this.files[0]) {
-                      const f = this.files[0];
-                      const mb = (f.size / 1024 / 1024).toFixed(1);
-                      fileName.textContent = f.name;
-                      fileSize.textContent = mb + ' MB';
-                      fileInfo.classList.remove('hidden');
-                  } else {
+                  clearBanner(fileError);
+                  clearBanner(submitError);
+                  setSubmitEnabled(true);
+
+                  if (!(this.files && this.files[0])) {
                       fileInfo.classList.add('hidden');
+                      return;
+                  }
+                  const f = this.files[0];
+                  const mb = f.size / 1024 / 1024;
+                  fileName.textContent = f.name;
+                  fileSize.textContent = mb.toFixed(1) + ' MB';
+                  fileInfo.classList.remove('hidden');
+
+                  // Catch it here rather than after a long upload that the server will refuse.
+                  if (maxMb && mb > maxMb) {
+                      showBanner(fileError,
+                          f.name + ' is ' + mb.toFixed(0) + ' MB. The limit is ' + maxMb +
+                          ' MB — please trim or compress it, then choose the file again.');
+                      setSubmitEnabled(false);
                   }
               });
           }
@@ -428,7 +478,13 @@
           const progressEl = document.getElementById('upload-progress');
           const progressBar = document.getElementById('upload-bar');
           const progressPct = document.getElementById('upload-pct');
-          const submitBtn = document.getElementById('submit-btn');
+
+          function resetSubmitButton() {
+              if (!submitBtn) return;
+              setSubmitEnabled(true);
+              submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Submit Record';
+              if (progressEl) progressEl.classList.add('hidden');
+          }
 
           if (form) {
               form.addEventListener('htmx:xhr:progress', function (e) {
@@ -439,38 +495,49 @@
                   }
               });
               form.addEventListener('htmx:beforeRequest', function () {
+                  clearBanner(submitError);
                   if (fileInput && fileInput.files && fileInput.files.length > 0) {
                       progressEl.classList.remove('hidden');
                       progressBar.value = 0;
                       progressPct.textContent = '';
                   }
-                  submitBtn.disabled = true;
-                  submitBtn.classList.add('btn-disabled');
+                  setSubmitEnabled(false);
                   submitBtn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Submitting...';
               });
               form.addEventListener('htmx:afterRequest', function () {
-                  progressEl.classList.add('hidden');
+                  if (progressEl) progressEl.classList.add('hidden');
               });
-              form.addEventListener('htmx:responseError', function () {
-                  submitBtn.disabled = false;
-                  submitBtn.classList.remove('btn-disabled');
-                  submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Submit Record';
-                  progressEl.classList.add('hidden');
-                  const errDiv = document.createElement('div');
-                  errDiv.className = 'alert alert-error mb-4';
-                  errDiv.innerHTML = '<span>Something went wrong submitting your record. Please try again or refresh the page.</span>';
-                  form.parentNode.insertBefore(errDiv, form);
+              form.addEventListener('htmx:responseError', function (e) {
+                  resetSubmitButton();
+                  // 413 is the one a rider can act on: the file got past the browser check but
+                  // the server or its proxy still refused the body.
+                  const status = (e.detail && e.detail.xhr) ? e.detail.xhr.status : 0;
+                  const message = status === 413
+                      ? 'That file was too large for the server to accept. Please trim or compress it below ' + maxMb + ' MB and try again.'
+                      : 'Your record was not submitted (server error ' + (status || 'unknown') + '). Please try again, or refresh the page if it keeps happening.';
+                  showBanner(submitError, message);
               });
               form.addEventListener('htmx:sendError', function () {
-                  submitBtn.disabled = false;
-                  submitBtn.classList.remove('btn-disabled');
-                  submitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg> Submit Record';
-                  progressEl.classList.add('hidden');
-                  const errDiv = document.createElement('div');
-                  errDiv.className = 'alert alert-error mb-4';
-                  errDiv.innerHTML = '<span>Network error. Please check your connection and try again.</span>';
-                  form.parentNode.insertBefore(errDiv, form);
+                  resetSubmitButton();
+                  showBanner(submitError,
+                      'Your record was not submitted — the connection dropped. Large uploads are ' +
+                      'especially prone to this on a weak network. Please check your connection and try again.');
               });
+              form.addEventListener('htmx:timeout', function () {
+                  resetSubmitButton();
+                  showBanner(submitError,
+                      'The upload timed out before it finished. A smaller or shorter clip will upload more reliably.');
+              });
+          }
+
+
+          // After an invalid submit HTMX swaps this whole partial back in with the errors
+          // rendered, but the page does not move -- so on a long form the rider sees the
+          // button stop spinning and nothing else. This script re-runs on every swap, so a
+          // rendered error is scrolled to exactly once, on arrival.
+          const serverError = document.querySelector('#race-ready-form-container .alert-error:not(.hidden)');
+          if (serverError) {
+              serverError.scrollIntoView({behavior: 'smooth', block: 'center'});
           }
       })();
   </script>

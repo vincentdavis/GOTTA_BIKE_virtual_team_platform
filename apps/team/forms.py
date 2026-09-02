@@ -143,6 +143,14 @@ class TeamLinkEditForm(forms.ModelForm):
         }
 
 
+# Verification evidence is often a phone video of a scale or a power meter, which runs large.
+# Declared once: the validator, the help text under the field and the browser-side pre-check
+# all read this, so the number a rider is told cannot drift from the number enforced.
+MAX_MEDIA_UPLOAD_MB = 150
+
+ALLOWED_MEDIA_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".mp4", ".mov", ".avi", ".webm")
+
+
 class RaceReadyRecordForm(forms.ModelForm):
     """Form for submitting race ready verification records."""
 
@@ -217,6 +225,15 @@ class RaceReadyRecordForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.unit_preference = unit_preference
 
+        # Surfaced to the template (help text) and to the browser (pre-upload size check) from
+        # the same constant the validator uses, so the three cannot disagree.
+        self.max_media_upload_mb = MAX_MEDIA_UPLOAD_MB
+        self.allowed_media_extensions = ", ".join(ALLOWED_MEDIA_EXTENSIONS)
+        self.fields["media_file"].widget.attrs.update({
+            "data-max-mb": MAX_MEDIA_UPLOAD_MB,
+            "accept": ",".join(ALLOWED_MEDIA_EXTENSIONS),
+        })
+
         # Make record_date required (model allows null for existing records)
         self.fields["record_date"].required = True
 
@@ -261,27 +278,33 @@ class RaceReadyRecordForm(forms.ModelForm):
         """
         media_file = self.cleaned_data.get("media_file")
         if media_file:
-            # Limit file size to 50MB
-            if media_file.size > 50 * 1024 * 1024:
+            if media_file.size > MAX_MEDIA_UPLOAD_MB * 1024 * 1024:
+                actual_mb = media_file.size / 1024 / 1024
                 logfire.warning(
                     "RaceReadyRecordForm media file validation failed",
                     file_name=media_file.name,
                     file_size=media_file.size,
                     error_reason="file_too_large",
                 )
-                raise forms.ValidationError("File size must be under 50MB.")
+                # Naming the rider's own file size turns "it failed" into "it is 40 MB too
+                # big", which is the difference between retrying blindly and trimming a clip.
+                raise forms.ValidationError(
+                    f"That file is {actual_mb:.0f} MB. The limit is {MAX_MEDIA_UPLOAD_MB} MB — "
+                    f"please trim or compress it and try again."
+                )
 
-            # Check file extension
-            allowed_extensions = [".jpg", ".jpeg", ".png", ".gif", ".mp4", ".mov", ".avi", ".webm"]
             ext = media_file.name.lower().split(".")[-1]
-            if f".{ext}" not in allowed_extensions:
+            if f".{ext}" not in ALLOWED_MEDIA_EXTENSIONS:
                 logfire.warning(
                     "RaceReadyRecordForm media file validation failed",
                     file_name=media_file.name,
                     file_size=media_file.size,
                     error_reason="invalid_file_type",
                 )
-                raise forms.ValidationError(f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}")
+                raise forms.ValidationError(
+                    f"{media_file.name} is not an allowed file type. "
+                    f"Allowed: {', '.join(ALLOWED_MEDIA_EXTENSIONS)}"
+                )
         return media_file
 
     def clean_weight(self):
