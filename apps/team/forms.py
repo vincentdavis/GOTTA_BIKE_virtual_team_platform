@@ -143,11 +143,10 @@ class TeamLinkEditForm(forms.ModelForm):
         }
 
 
-# Verification evidence is often a phone video of a scale or a power meter, which runs large.
-# Declared once: the validator, the help text under the field and the browser-side pre-check
-# all read this, so the number a rider is told cannot drift from the number enforced.
-MAX_MEDIA_UPLOAD_MB = 150
-
+# Extensions are not admin-tunable: the set is dictated by what browsers and the storage
+# backend can actually handle, not by policy. The SIZE ceiling is, and lives in Constance as
+# MAX_MEDIA_UPLOAD_MB -- read at call time, never captured at import, or a change would not
+# take effect until the process restarted.
 ALLOWED_MEDIA_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".mp4", ".mov", ".avi", ".webm")
 
 
@@ -227,10 +226,10 @@ class RaceReadyRecordForm(forms.ModelForm):
 
         # Surfaced to the template (help text) and to the browser (pre-upload size check) from
         # the same constant the validator uses, so the three cannot disagree.
-        self.max_media_upload_mb = MAX_MEDIA_UPLOAD_MB
+        self.max_media_upload_mb = config.MAX_MEDIA_UPLOAD_MB
         self.allowed_media_extensions = ", ".join(ALLOWED_MEDIA_EXTENSIONS)
         self.fields["media_file"].widget.attrs.update({
-            "data-max-mb": MAX_MEDIA_UPLOAD_MB,
+            "data-max-mb": config.MAX_MEDIA_UPLOAD_MB,
             "accept": ",".join(ALLOWED_MEDIA_EXTENSIONS),
         })
 
@@ -278,7 +277,8 @@ class RaceReadyRecordForm(forms.ModelForm):
         """
         media_file = self.cleaned_data.get("media_file")
         if media_file:
-            if media_file.size > MAX_MEDIA_UPLOAD_MB * 1024 * 1024:
+            max_mb = config.MAX_MEDIA_UPLOAD_MB
+            if media_file.size > max_mb * 1024 * 1024:
                 actual_mb = media_file.size / 1024 / 1024
                 logfire.warning(
                     "RaceReadyRecordForm media file validation failed",
@@ -289,7 +289,7 @@ class RaceReadyRecordForm(forms.ModelForm):
                 # Naming the rider's own file size turns "it failed" into "it is 40 MB too
                 # big", which is the difference between retrying blindly and trimming a clip.
                 raise forms.ValidationError(
-                    f"That file is {actual_mb:.0f} MB. The limit is {MAX_MEDIA_UPLOAD_MB} MB — "
+                    f"That file is {actual_mb:.0f} MB. The limit is {max_mb} MB — "
                     f"please trim or compress it and try again."
                 )
 

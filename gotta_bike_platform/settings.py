@@ -607,6 +607,13 @@ CONSTANCE_CONFIG = {
         "Hours before a cached rider profile is considered stale and worth refetching (0 = never stale)",
         int,
     ),
+    "MAX_MEDIA_UPLOAD_MB": (
+        150,
+        "Largest verification photo or video a rider may upload, in megabytes. Evidence is "
+        "often a phone video of a scale or power meter, which runs large. Raising this does "
+        "not raise any limit the host or its proxy imposes on the request body",
+        int,
+    ),
     "VERIFICATION_MEDIA_MAX_DAYS": (
         365,
         "Maximum days to keep verification photos and videos, whatever the type and even if "
@@ -1165,6 +1172,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "WEIGHT_LIGHT_DAYS",
         "HEIGHT_VERIFICATION_DAYS",
         "VERIFICATION_MEDIA_MAX_DAYS",
+        "MAX_MEDIA_UPLOAD_MB",
         "POWER_VERIFICATION_DAYS",
         "POWER_REQUIRES_PER_VER",
         "EXPIRE_WARNING_DAYS",
