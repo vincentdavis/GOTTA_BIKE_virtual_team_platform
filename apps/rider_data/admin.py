@@ -14,17 +14,17 @@ from django.utils.html import format_html
 from apps.rider_data.models import RiderProfile
 
 
-class HasLastRaceFilter(admin.SimpleListFilter):
-    """Split rows by whether the retention anchor is populated.
+class EvictionRiskFilter(admin.SimpleListFilter):
+    """Split rows by how close they are to being evicted.
 
-    This is the filter the deletion policy turns on. ``last_race_at`` is derived from
-    ZwiftPower results and excludes races with no club, so a rider can be active and still
-    have no date -- and rows without one are never evicted. Seeing the split is the quickest
-    way to judge whether a retention window would do what it appears to.
+    Eviction is anchored on ``fetched_at``: the sync refreshes every rider we have a reason to
+    hold, so a row going stale means that rider has dropped out of the refresh set. This
+    filter is therefore the operational view of the retention policy -- "what is about to go,
+    and is that right?" -- rather than a fact about the riders themselves.
     """
 
-    title = "last race known"
-    parameter_name = "has_last_race"
+    title = "refresh status"
+    parameter_name = "refresh_status"
 
     def lookups(self, request, model_admin):
         """Return the filter options.
@@ -37,7 +37,11 @@ class HasLastRaceFilter(admin.SimpleListFilter):
             Pairs of query value and label.
 
         """
-        return (("yes", "Yes — evictable"), ("no", "No — never evicted"))
+        return (
+            ("fresh", "Refreshed recently"),
+            ("aging", "Not refreshed in half the window"),
+            ("evictable", "Past the window — would be deleted"),
+        )
 
     def queryset(self, request, queryset):
         """Narrow by whether a last race is known.
@@ -50,10 +54,24 @@ class HasLastRaceFilter(admin.SimpleListFilter):
             The filtered queryset.
 
         """
-        if self.value() == "yes":
-            return queryset.filter(last_race_at__isnull=False)
-        if self.value() == "no":
-            return queryset.filter(last_race_at__isnull=True)
+        from datetime import timedelta
+
+        from constance import config
+        from django.utils import timezone
+
+        window = config.RIDER_PROFILE_MAX_DAYS
+        if not window or window <= 0:
+            # With eviction disabled nothing is at risk, so the split would be misleading.
+            return queryset
+
+        cutoff = timezone.now() - timedelta(days=window)
+        halfway = timezone.now() - timedelta(days=window / 2)
+        if self.value() == "evictable":
+            return queryset.filter(fetched_at__lt=cutoff)
+        if self.value() == "aging":
+            return queryset.filter(fetched_at__lt=halfway, fetched_at__gte=cutoff)
+        if self.value() == "fresh":
+            return queryset.filter(fetched_at__gte=halfway)
         return queryset
 
 
@@ -71,7 +89,7 @@ class RiderProfileAdmin(admin.ModelAdmin):
         "last_race_display",
         "freshness",
     )
-    list_filter = (HasLastRaceFilter, "gender", "category_racing", "category_open")
+    list_filter = (EvictionRiskFilter, "fetched_at", "gender", "category_racing", "category_open")
     search_fields = ("name", "zwid", "club_name")
     ordering = ("-last_race_at", "name")
     list_per_page = 50
@@ -140,7 +158,7 @@ class RiderProfileAdmin(admin.ModelAdmin):
         if obj.last_race_at is None:
             # format_html requires an interpolation argument in Django 6; a bare HTML
             # string raises TypeError at render time, not at check time.
-            return format_html('<span style="color:#888">{}</span>', "none — not evictable")
+            return format_html('<span style="color:#888">{}</span>', "no known race")
         days = (timezone.now() - obj.last_race_at).days
         return format_html("{} <span style='color:#888'>({} days ago)</span>", obj.last_race_at.date(), days)
 

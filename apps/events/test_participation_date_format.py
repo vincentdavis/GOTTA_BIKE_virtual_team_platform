@@ -60,7 +60,9 @@ def test_the_date_is_month_and_day_only(auth_client, scheduled) -> None:
 
     # The visible badge text, not the tooltip -- the tooltip keeps the year on purpose.
     assert ">SEP 2 &middot; Race 1</span>" in body
-    assert "Sep 02" not in body  # %d pads; the day is formatted separately to avoid it
+    # Scoped to the badge. An unscoped check also matched the event's date range elsewhere
+    # on the page, so this passed or failed depending on what today's date made that range say.
+    assert ">SEP 02" not in body  # %d pads; the day is formatted separately to avoid it
     assert "Sep 2, 2026" not in body
 
 

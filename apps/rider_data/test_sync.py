@@ -170,7 +170,7 @@ def test_a_current_member_is_never_evicted(user_model):
     GuildMember.objects.create(discord_id="1", username="still_here", user=member, date_left=None)
 
     services.store_profiles([_doc(2002)])
-    RiderProfile.objects.filter(zwid=2002).update(last_race_at=timezone.now() - timedelta(days=900))
+    RiderProfile.objects.filter(zwid=2002).update(fetched_at=timezone.now() - timedelta(days=900))
 
     purge_rider_profiles.func()
 
@@ -188,7 +188,7 @@ def test_a_departed_rider_outside_the_window_is_evicted(user_model):
     )
 
     services.store_profiles([_doc(3003)])
-    RiderProfile.objects.filter(zwid=3003).update(last_race_at=timezone.now() - timedelta(days=900))
+    RiderProfile.objects.filter(zwid=3003).update(fetched_at=timezone.now() - timedelta(days=900))
 
     purge_rider_profiles.func()
 
@@ -196,17 +196,25 @@ def test_a_departed_rider_outside_the_window_is_evicted(user_model):
 
 
 @pytest.mark.django_db
-def test_eviction_is_off_by_default(user_model):
-    """Nothing is deleted until somebody chooses a window.
+def test_a_freshly_synced_row_is_never_evicted_at_the_default_window(user_model):
+    """The anchor makes this inherently safe on the day it ships.
 
-    The purge has a Run Now button in the admin, so "not scheduled" is not sufficient
-    protection while the deletion policy is still being decided. Zero disables the sweep
-    through the same convention the analytics and verification sweeps use.
+    Every row the sync writes has fetched_at = now, so nothing can be evicted until a rider
+    has gone unrefreshed for the whole window. There is no moment where turning this on
+    deletes a backlog.
     """
     services.store_profiles([_doc(4004)])
-    RiderProfile.objects.filter(zwid=4004).update(last_race_at=timezone.now() - timedelta(days=9999))
 
     result = purge_rider_profiles.func()
 
     assert result["deleted"] == 0
     assert RiderProfile.objects.filter(zwid=4004).exists()
+
+
+@pytest.mark.django_db
+@override_config(RIDER_PROFILE_MAX_DAYS=0)
+def test_zero_still_disables_the_sweep(user_model):
+    services.store_profiles([_doc(4005)])
+    RiderProfile.objects.filter(zwid=4005).update(fetched_at=timezone.now() - timedelta(days=9999))
+
+    assert purge_rider_profiles.func()["deleted"] == 0

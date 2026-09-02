@@ -35,7 +35,7 @@ def test_the_rider_profile_changelist_renders_with_rows(admin_client_staff):
 
     assert response.status_code == 200
     body = response.content.decode()
-    assert "not evictable" in body, "the null-anchor case must render, not raise"
+    assert "no known race" in body, "the null last-race case must render, not raise"
 
 
 @pytest.mark.django_db

@@ -106,11 +106,16 @@ class RiderProfile(models.Model):
         "Cached copies of a remote document, re-fetchable at any time. Most rows describe riders "
         "who never registered here -- the ZwiftPower team page, scouted opponents -- so holding "
         "their weight, power and heart rate indefinitely is the thing this app exists to bound. "
-        "Anchored on last known race rather than fetch time, so an active teammate's row is not "
-        "aged out merely because nothing has looked them up lately. Currently DISABLED: "
-        "RIDER_PROFILE_MAX_DAYS defaults to 0 while the team decides what should be deleted and "
-        "when. The rule is declared so the decision is visible; nothing acts on it yet.",
-        anchor="last_race_at",
+        "The window is set in Constance as RIDER_PROFILE_MAX_DAYS and DEFAULTS TO 120 DAYS; 0 "
+        "disables eviction entirely. "
+        "Anchored on fetch time, which is the useful signal here precisely because the sync is "
+        "not demand-driven: it refreshes every rider we have a reason to hold -- registered "
+        "users and app-connected riders -- on a schedule. So a stale fetched_at does not mean "
+        "'nobody looked them up lately', it means 'this rider has dropped out of the set we "
+        "refresh at all', which is exactly the population to evict. Race activity was the "
+        "obvious-looking anchor and is the wrong one: it describes the rider rather than our "
+        "reason for holding them, and it is missing entirely for anyone who races unattached.",
+        anchor="fetched_at",
         setting="RIDER_PROFILE_MAX_DAYS",
         task="purge_rider_profiles",
     )

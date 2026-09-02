@@ -52,21 +52,24 @@ def sync_rider_profiles() -> dict:
 
 @task
 def purge_rider_profiles() -> dict:
-    """Delete cached profiles for riders who have not raced inside the retention window.
+    """Delete cached profiles that have not been refreshed inside the retention window.
 
-    Anchored on ``last_race_at`` rather than ``fetched_at``, which is the distinction that
-    makes this safe: fetch time says when we last looked, not whether the rider still
-    matters. Ageing on it would evict an active teammate simply because nothing had opened
-    their profile lately, and the next sync would immediately re-create the row -- churn that
-    protects nobody.
+    Anchored on ``fetched_at``, which works here only because the sync is not demand-driven.
+    It refreshes a defined set on a schedule -- every registered user with a zwid, plus every
+    rider linked to this app -- so a member's row is touched every cycle whether or not
+    anybody opens it. A stale ``fetched_at`` therefore does not mean "nobody looked at them",
+    it means "this rider is no longer in the set we have any reason to refresh". That is the
+    population worth evicting, and the field records it without anything extra to maintain.
 
-    A profile with no known race is kept. That sounds backwards for a retention sweep, but
-    ``last_race_at`` is derived from ZwiftPower results, so a null means "we have no race
-    history for them", not "they are inactive" -- and deleting on absence of evidence would
-    remove the riders we know least about, which is the wrong direction.
+    Race activity was the obvious-looking anchor and is the wrong one. It describes the rider
+    rather than our reason for holding them: someone who raced yesterday but has nothing to do
+    with this team should go, while a member who has not raced in two years should stay. It is
+    also derived from ZwiftPower results and excludes races with no club, so it is absent
+    entirely for anyone racing unattached -- a deletion policy resting on it would look
+    stricter than it is.
 
-    Zero disables the sweep, matching the convention the analytics and verification sweeps
-    already use.
+    Window is ``RIDER_PROFILE_MAX_DAYS``, 120 days by default; 0 disables the sweep, matching
+    the convention the analytics and verification sweeps already use.
 
     Returns:
         Counts of rows ``considered`` and ``deleted``, and the cutoff applied.
@@ -82,9 +85,7 @@ def purge_rider_profiles() -> dict:
     # only have the next sync re-create the row, so this is churn prevention as much as
     # anything -- and it is what makes "removed if not a member" mean demotion rather than
     # deletion: losing membership does not delete the row, it stops protecting it.
-    stale = RiderProfile.objects.filter(last_race_at__isnull=False, last_race_at__lt=cutoff).exclude(
-        zwid__in=services.protected_zwids()
-    )
+    stale = RiderProfile.objects.filter(fetched_at__lt=cutoff).exclude(zwid__in=services.protected_zwids())
     considered = stale.count()
     deleted, _ = stale.delete()
 

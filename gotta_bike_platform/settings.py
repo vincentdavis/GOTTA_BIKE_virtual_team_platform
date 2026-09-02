@@ -587,10 +587,10 @@ CONSTANCE_CONFIG = {
         int,
     ),
     "RIDER_PROFILE_MAX_DAYS": (
-        0,
-        "Days a cached rider profile is kept after their last known race. 0 disables eviction "
-        "entirely, which is the current default: what to delete and when is still being decided, "
-        "and a 'Run Now' button that deletes rows is not the place to discover the answer",
+        120,
+        "Days a cached rider profile is kept after it was last refreshed. The sync refreshes "
+        "every rider we have a reason to hold, so an old fetch means the rider has dropped out "
+        "of that set entirely. 0 disables eviction",
         int,
     ),
     "RIDER_PROFILE_REFRESH_HOURS": (

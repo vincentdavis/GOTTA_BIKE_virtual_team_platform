@@ -124,15 +124,24 @@ def test_the_model_declares_its_retention():
     policy = policy_for(RiderProfile)
     assert policy is not None
     assert policy.kind == RetentionPolicy.KIND_DELETE
-    assert policy.anchor == "last_race_at"
+    assert policy.anchor == "fetched_at"
     assert policy.setting == "RIDER_PROFILE_MAX_DAYS"
 
 
 @pytest.mark.django_db
-@override_config(RIDER_PROFILE_MAX_DAYS=365)
-def test_a_rider_who_has_not_raced_in_the_window_is_purged(profile_factory):
-    profile_factory(zwid=1, last_race_days_ago=400)
-    profile_factory(zwid=2, last_race_days_ago=10)
+def test_the_declared_window_is_the_configured_one():
+    """The declaration names a Constance setting; this pins the default it documents."""
+    from constance import config
+
+    assert config.RIDER_PROFILE_MAX_DAYS == 120
+
+
+@pytest.mark.django_db
+@override_config(RIDER_PROFILE_MAX_DAYS=120)
+def test_a_rider_the_sync_has_stopped_refreshing_is_purged(profile_factory):
+    """An old fetch means the rider left the refresh set, which is the reason to evict."""
+    profile_factory(zwid=1, fetched_days_ago=200)
+    profile_factory(zwid=2, fetched_days_ago=1)
 
     result = purge_rider_profiles.func()
 
@@ -141,13 +150,14 @@ def test_a_rider_who_has_not_raced_in_the_window_is_purged(profile_factory):
 
 
 @pytest.mark.django_db
-@override_config(RIDER_PROFILE_MAX_DAYS=365)
-def test_a_rider_with_no_known_race_is_kept(profile_factory):
-    """last_race_at is null when we have no race history, not when they are inactive.
+@override_config(RIDER_PROFILE_MAX_DAYS=120)
+def test_race_activity_no_longer_decides_anything(profile_factory):
+    """A rider who has not raced in years stays, as long as the sync still refreshes them.
 
-    Deleting on absence of evidence would remove the riders we know least about.
+    This is the whole point of the anchor change: race activity describes the rider, not our
+    reason for holding their data.
     """
-    profile_factory(zwid=1, last_race_days_ago=None, fetched_days_ago=999)
+    profile_factory(zwid=1, last_race_days_ago=2000, fetched_days_ago=0)
 
     purge_rider_profiles.func()
 
@@ -196,16 +206,19 @@ def test_the_cache_is_not_editable_in_admin():
 
 
 @pytest.mark.django_db
-def test_admin_can_separate_evictable_rows_from_the_rest(profile_factory):
-    """The filter behind the deletion decision: rows with no last race are never evicted."""
-    from apps.rider_data.admin import HasLastRaceFilter
+@override_config(RIDER_PROFILE_MAX_DAYS=120)
+def test_admin_shows_which_rows_eviction_would_reach(profile_factory):
+    """The operational view of the policy: what is about to go, before it goes."""
+    from apps.rider_data.admin import EvictionRiskFilter
 
-    profile_factory(zwid=1, last_race_days_ago=10)
-    profile_factory(zwid=2, last_race_days_ago=None)
+    profile_factory(zwid=1, fetched_days_ago=1)
+    profile_factory(zwid=2, fetched_days_ago=90)
+    profile_factory(zwid=3, fetched_days_ago=200)
 
     def _filtered(value):
-        filt = HasLastRaceFilter(None, {"has_last_race": [value]}, RiderProfile, None)
+        filt = EvictionRiskFilter(None, {"refresh_status": [value]}, RiderProfile, None)
         return set(filt.queryset(None, RiderProfile.objects.all()).values_list("zwid", flat=True))
 
-    assert _filtered("yes") == {1}
-    assert _filtered("no") == {2}
+    assert _filtered("fresh") == {1}
+    assert _filtered("aging") == {2}
+    assert _filtered("evictable") == {3}
