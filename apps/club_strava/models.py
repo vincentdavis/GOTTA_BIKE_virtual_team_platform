@@ -4,6 +4,8 @@ from typing import ClassVar
 
 from django.db import models
 
+from gotta_bike_platform.retention import RetentionPolicy
+
 
 class ClubActivity(models.Model):
     """Strava club activity from the Club Activities API.
@@ -38,6 +40,20 @@ class ClubActivity(models.Model):
     # Timestamps
     date_created = models.DateTimeField(auto_now_add=True, help_text="Record created in database")
     date_modified = models.DateTimeField(auto_now=True, help_text="Record last modified")
+
+    retention = RetentionPolicy.delete(
+        "Club ride data for named people, held with no way to identify them. Strava's club feed "
+        "omits the athlete ID by design, so we cannot locate one person's rows and could not "
+        "honour an erasure request against this table -- which makes the window the only "
+        "control there is. Set in Constance as STRAVA_ACTIVITY_MAX_DAYS, DEFAULTING TO 120 "
+        "DAYS; 0 disables the sweep. "
+        "Anchored on date_created, when we ingested the row, because the same reduced payload "
+        "omits the start date: activity_date is null on every row we hold, so a sweep keyed to "
+        "it would match nothing while looking like a policy.",
+        anchor="date_created",
+        setting="STRAVA_ACTIVITY_MAX_DAYS",
+        task="purge_strava_activities",
+    )
 
     class Meta:
         """Meta options for ClubActivity model."""

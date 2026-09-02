@@ -34,7 +34,6 @@ UNCLASSIFIED = {
     "accounts.User",
     "accounts.YouTubeVideo",
     "analytics.PageVisit",
-    "club_strava.ClubActivity",
     "data_connection.DataConnection",
     "dbot_api.BotStats",
     "events.AvailabilityGrid",

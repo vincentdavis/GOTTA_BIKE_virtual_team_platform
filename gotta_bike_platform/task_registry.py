@@ -29,7 +29,7 @@ from apps.accounts.tasks import (
     sync_zr_category_roles,
 )
 from apps.analytics.tasks import purge_page_visits
-from apps.club_strava.tasks import sync_strava_activities
+from apps.club_strava.tasks import purge_strava_activities, sync_strava_activities
 from apps.data_connection.tasks import sync_all_data_connections
 from apps.events.tasks import remove_expired_ds_roles
 from apps.ladder_planner.tasks import refresh_cached_clubs
@@ -228,6 +228,13 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Sync all data connections with auto_sync enabled to Google Sheets",
         "scheduled": True,
         "hours_setting": "SCHEDULER_SYNC_DATA_CONNECTIONS_HOURS",
+    },
+    "purge_strava_activities": {
+        "group": "local",
+        "task": purge_strava_activities,
+        "description": "Delete Strava club activities older than the retention window",
+        "scheduled": True,
+        "hours_setting": "SCHEDULER_PURGE_STRAVA_ACTIVITIES_HOURS",
     },
     "purge_page_visits": {
         "task": purge_page_visits,

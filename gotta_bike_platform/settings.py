@@ -865,6 +865,14 @@ CONSTANCE_CONFIG = {
         str,
     ),
     # Strava API
+    "STRAVA_ACTIVITY_MAX_DAYS": (
+        120,
+        "Days a Strava club activity is kept, measured from when we ingested it. Strava's club "
+        "feed omits both the athlete ID and the activity date, so we cannot delete one person's "
+        "rows on request and cannot age rows by when the ride happened -- this window is the "
+        "only control over the data. 0 disables the sweep",
+        int,
+    ),
     "STRAVA_CLUB_ID": (0, "Strava club ID for fetching club activities", int),
     "STRAVA_CLUB_URL": ("", "Strava club URL (e.g., https://www.strava.com/clubs/your-club)", str),
     "STRAVA_CLIENT_ID": ("", "Strava API client ID (from your Strava app)", str),
@@ -982,6 +990,11 @@ CONSTANCE_CONFIG = {
     "ANALYTICS_DELETE_DAYS": (
         730,
         "Age at which page-visit rows are deleted outright (days). 0 disables.",
+        int,
+    ),
+    "SCHEDULER_PURGE_STRAVA_ACTIVITIES_HOURS": (
+        48,
+        "Hours between sweeps of aged-out Strava club activities",
         int,
     ),
     "SCHEDULER_PURGE_PAGE_VISITS_HOURS": (
@@ -1188,6 +1201,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "EVENT_TYPES",
     ),
     "Strava": (
+        "STRAVA_ACTIVITY_MAX_DAYS",
         "STRAVA_CLUB_ID",
         "STRAVA_CLUB_URL",
         "STRAVA_CLIENT_ID",
@@ -1207,6 +1221,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_SYNC_ZR_RIDERS_HOURS",
         "SCHEDULER_SYNC_RIDER_PROFILES_HOURS",
         "SCHEDULER_SYNC_STRAVA_ACTIVITIES_HOURS",
+        "SCHEDULER_PURGE_STRAVA_ACTIVITIES_HOURS",
         "SCHEDULER_SYNC_RACE_READY_ROLES_HOURS",
         "SCHEDULER_GUILD_MEMBER_SYNC_STATUS_HOURS",
         "SCHEDULER_SYNC_GUILD_MEMBERS_HOURS",
