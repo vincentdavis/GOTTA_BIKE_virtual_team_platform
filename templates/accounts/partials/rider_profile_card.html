@@ -201,13 +201,6 @@
       {% endwith %}
     </div>
 
-    {% if profile_user.zwid %}
-      <a href="https://zwiftpower.com/profile.php?z={{ profile_user.zwid }}"
-         target="_blank" rel="noopener" class="btn btn-sm btn-ghost mt-3 w-full">
-        View on ZwiftPower
-      </a>
-    {% endif %}
-
     <p class="text-base-content/40 text-xs mt-3">
       Updated {{ rider_profile.fetched_at|date:"Y-m-d" }}{% if rider_profile.is_stale %} &middot; refresh pending{% endif %}
     </p>
@@ -216,5 +209,30 @@
     <p class="text-base-content/60 text-sm">No profile data yet &mdash; this rider has not been synced.</p>
   {% else %}
     <p class="text-base-content/60 text-sm">Zwift account not verified.</p>
+  {% endif %}
+
+  {% comment %}
+    Source links, deliberately OUTSIDE the branches above. The cards this replaced showed
+    their link in the no-data branch as well as the data one, so a rider we hold nothing for
+    could still be looked up at the source. Keeping that inside the data branch would make the
+    "not synced" state a dead end.
+
+    Gated on zwid_verified, as the replaced cards were: an unverified zwid is a number the
+    rider typed, so linking it out would assert an identity nobody has confirmed.
+
+    The zwift.com link needs zwift_user_id, which only the cached row carries -- so it appears
+    only once the rider has been synced, while the other two need just the zwid.
+  {% endcomment %}
+  {% if profile_user.zwid_verified and profile_user.zwid %}
+    <div class="flex flex-wrap gap-1 mt-3">
+      {% if rider_profile.zwift_user_id %}
+        <a href="https://www.zwift.com/uk/athlete/{{ rider_profile.zwift_user_id }}"
+           target="_blank" rel="noopener" class="btn btn-xs btn-ghost flex-1">Zwift</a>
+      {% endif %}
+      <a href="https://zwiftpower.com/profile.php?z={{ profile_user.zwid }}"
+         target="_blank" rel="noopener" class="btn btn-xs btn-ghost flex-1">ZwiftPower</a>
+      <a href="https://www.zwiftracing.app/riders/{{ profile_user.zwid }}"
+         target="_blank" rel="noopener" class="btn btn-xs btn-ghost flex-1">ZwiftRacing</a>
+    </div>
   {% endif %}
 </div>

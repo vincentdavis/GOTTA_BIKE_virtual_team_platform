@@ -422,3 +422,96 @@ def test_the_edit_page_card_uses_the_same_verification_gate(client, user_model):
 
     assert "SECRETCLUB" not in body
     assert "Zwift account not verified" in body
+
+
+# ---------------------------------------------------------------- source links
+
+ZWIFT_LINK = "zwift.com/uk/athlete"
+ZP_LINK = "zwiftpower.com/profile.php"
+ZR_LINK = "zwiftracing.app/riders"
+
+
+@pytest.mark.django_db
+def test_all_three_source_links_render_for_a_synced_rider(client, rider, team_member):
+    """Zwift, ZwiftPower and ZwiftRacing -- the three places this data is merged from."""
+    now = timezone.now()
+    RiderProfile.objects.create(
+        zwid=rider.zwid, club_name="COALITION", zwift_user_id="41c49fb6-uuid",
+        fetched_at=now, last_requested_at=now,
+    )
+
+    body = _body(client, team_member, rider)
+
+    assert f"{ZWIFT_LINK}/41c49fb6-uuid" in body
+    assert f"{ZP_LINK}?z={rider.zwid}" in body
+    assert f"{ZR_LINK}/{rider.zwid}" in body
+
+
+@pytest.mark.django_db
+def test_the_links_survive_when_the_rider_has_not_been_synced(client, rider, team_member):
+    """The state that regressed when three cards became one.
+
+    The replaced cards each showed their link in the no-data branch as well as the data one,
+    so a rider we hold nothing for could still be looked up at the source. Consolidating put
+    the only link inside the data branch and turned that state into a dead end.
+
+    The zwift.com link is the exception: it is keyed on zwift_user_id, which only the cached
+    row carries, so it cannot appear before a sync.
+    """
+    body = _body(client, team_member, rider)
+
+    assert "has not been synced" in body
+    assert f"{ZP_LINK}?z={rider.zwid}" in body
+    assert f"{ZR_LINK}/{rider.zwid}" in body
+    assert ZWIFT_LINK not in body
+
+
+@pytest.mark.django_db
+def test_no_source_links_for_an_unverified_rider(client, user_model, team_member):
+    """An unverified zwid is a number the rider typed.
+
+    Linking it out would assert an identity nobody has confirmed, and would do it on a page
+    other members read. The replaced cards drew the same line.
+    """
+    now = timezone.now()
+    unverified = user_model.objects.create_user(
+        username="unlinked", email="unlinked@example.test", zwid=999, zwid_verified=False,
+    )
+    RiderProfile.objects.create(
+        zwid=999, zwift_user_id="should-not-link", fetched_at=now, last_requested_at=now,
+    )
+
+    body = _body(client, team_member, unverified)
+
+    for fragment in (ZWIFT_LINK, ZP_LINK, ZR_LINK):
+        assert fragment not in body, f"{fragment} linked for an unverified rider"
+
+
+@pytest.mark.django_db
+def test_the_zwift_link_is_omitted_when_the_account_id_is_unknown(client, rider, team_member):
+    """zwift_user_id is the Zwift account UUID; without it there is no URL to build."""
+    now = timezone.now()
+    RiderProfile.objects.create(
+        zwid=rider.zwid, club_name="COALITION", fetched_at=now, last_requested_at=now,
+    )
+
+    body = _body(client, team_member, rider)
+
+    assert ZWIFT_LINK not in body
+    assert f"{ZP_LINK}?z={rider.zwid}" in body
+
+
+@pytest.mark.django_db
+def test_the_edit_page_carries_the_same_three_links(client, rider):
+    """A rider reaches their own source profiles from the page they already have open."""
+    now = timezone.now()
+    RiderProfile.objects.create(
+        zwid=rider.zwid, club_name="COALITION", zwift_user_id="41c49fb6-uuid",
+        fetched_at=now, last_requested_at=now,
+    )
+
+    body = _edit_body(client, rider)
+
+    assert f"{ZWIFT_LINK}/41c49fb6-uuid" in body
+    assert f"{ZP_LINK}?z={rider.zwid}" in body
+    assert f"{ZR_LINK}/{rider.zwid}" in body
