@@ -23,6 +23,7 @@ from apps.accounts.forms import ProfileForm
 from apps.accounts.models import BlockedDiscordId, User
 from apps.accounts.services import delete_user_account
 from apps.rider_data.models import RiderProfile
+from apps.rider_data.tasks import request_profile_refresh
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import (
     build_verify_type_options,
@@ -172,6 +173,120 @@ def _rider_profile_for(profile_user):
     if not (profile_user.zwid_verified and profile_user.zwid):
         return None
     return RiderProfile.objects.filter(zwid=profile_user.zwid).first()
+
+
+# How many times the card comes back for a fresh copy of itself after an update is
+# requested, and how far apart. A self-terminating chain carried in the URL rather than a
+# server-side "in progress" flag: the cache is per-process (LocMem) so a flag would be
+# invisible to the other web workers, and a chain needs no cleanup when the rider closes the
+# tab halfway through.
+RIDER_CARD_RECHECKS = 3
+RIDER_CARD_RECHECK_SECONDS = 45
+
+# What to call each zauth source in front of a rider.
+_SOURCE_LABELS = {"zwiftpower": "ZwiftPower", "zwiftracing": "ZwiftRacing"}
+
+
+def _rider_card_context(profile_user: User, *, check: int = 0, message: str = "", level: str = "") -> dict:
+    """Build the context for one render of the consolidated rider card.
+
+    Args:
+        profile_user: The rider the card describes.
+        check: Which re-check this render is; 0 for the first response after the button.
+        message: Status line to show above the card, if any.
+        level: DaisyUI alert modifier for that line ("info", "error").
+
+    Returns:
+        Template context, including the next re-check step when one is still due.
+
+    """
+    return {
+        "profile_user": profile_user,
+        "rider_profile": _rider_profile_for(profile_user),
+        "refresh_message": message,
+        "refresh_level": level,
+        # An error is the end of the road -- there is nothing in flight to come back for.
+        "recheck_in": 0 if level == "error" else (check + 1 if check < RIDER_CARD_RECHECKS else 0),
+        "recheck_seconds": RIDER_CARD_RECHECK_SECONDS,
+    }
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def refresh_rider_data(request: HttpRequest, user_id: int) -> HttpResponse:
+    """Ask zauth to re-check a rider at ZwiftPower and ZwiftRacing, and re-render their card.
+
+    POST triggers; GET is the card fetching a fresh copy of itself while the service works,
+    so the rider sees the new numbers without reloading. Both return the same partial, which
+    is why the two methods share a view -- the swap target and the markup must not drift.
+
+    Any team member may refresh any rider, and riders may always refresh themselves. The data
+    is public racing data either way, and the expensive half is throttled per source by zauth
+    rather than here, so a second click costs a skipped-status response.
+
+    Args:
+        request: The HTTP request.
+        user_id: The rider whose card is being refreshed.
+
+    Returns:
+        The rendered rider profile card partial.
+
+    Raises:
+        PermissionDenied: When viewing someone else without team_member.
+
+    """
+    profile_user = get_object_or_404(User, id=user_id)
+    if profile_user != request.user and not request.user.has_permission("team_member"):
+        raise PermissionDenied
+
+    check = 0
+    try:
+        check = max(0, int(request.GET.get("check") or 0))
+    except ValueError:
+        check = 0
+
+    if request.method == "GET":
+        context = _rider_card_context(profile_user, check=check)
+        return render(request, "accounts/partials/rider_profile_card.html", context)
+
+    if not (profile_user.zwid_verified and profile_user.zwid):
+        # No button is rendered in this state, so this is a tampered or stale POST. Say so
+        # plainly rather than triggering a refresh for a zwid nobody has confirmed.
+        return render(
+            request,
+            "accounts/partials/rider_profile_card.html",
+            _rider_card_context(
+                profile_user,
+                message="This rider has no verified Zwift account to update.",
+                level="error",
+            ),
+        )
+
+    outcome = request_profile_refresh(profile_user.zwid)
+    logfire.info(
+        "Rider profile refresh requested from profile",
+        requested_by=request.user.id,
+        profile_user_id=profile_user.id,
+        zwid=profile_user.zwid,
+        reached=outcome["reached"],
+        queued=outcome["queued"],
+    )
+
+    if not outcome["reached"]:
+        message, level = "Could not reach the rider data service. Try again in a few minutes.", "error"
+    elif outcome["queued"]:
+        names = " and ".join(_SOURCE_LABELS[source] for source in sorted(outcome["queued"]))
+        message, level = f"Checking {names} for new data. This usually takes about a minute.", "info"
+    else:
+        # Every source was refreshed too recently upstream to check again. The pull still
+        # runs, so this is not a no-op -- our copy can be older than the service's.
+        message, level = "Both sources were checked very recently. Pulling the latest into this profile.", "info"
+
+    return render(
+        request,
+        "accounts/partials/rider_profile_card.html",
+        _rider_card_context(profile_user, message=message, level=level),
+    )
 
 
 def _fetch_racing_profile(user: User) -> dict | None:

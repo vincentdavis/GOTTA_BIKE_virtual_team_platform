@@ -12,6 +12,8 @@ urlpatterns = [
     # By Zwift id: the identifier that actually travels between systems. Redirects to the
     # canonical profile URL above.
     path("profile/z/<int:zwid>/", views.public_profile_by_zwid, name="public_profile_by_zwid"),
+    # POST triggers an upstream re-check; GET is the card polling for the result.
+    path("profile/<int:user_id>/refresh-data/", views.refresh_rider_data, name="refresh_rider_data"),
     path("profile/edit/", views.profile_edit, name="profile_edit"),
     path("profile/import/<uuid:application_id>/", views.import_application_view, name="import_application"),
     path("profile/delete/", views.profile_delete_confirm, name="profile_delete_confirm"),

@@ -16,7 +16,7 @@
   racing category, the current one, so labelling a 90-day-old rating with today's tier would
   be a lie rather than a gap.
 {% endcomment %}
-<div class="card bg-base-300 p-4">
+<div id="rider-profile-card" class="card bg-base-300 p-4">
   <h3 class="font-semibold mb-3 flex items-center gap-2">
     <span class="px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary rounded">RP</span>
     Racing &amp; Performance
@@ -233,6 +233,47 @@
          target="_blank" rel="noopener" class="btn btn-xs btn-ghost flex-1">ZwiftPower</a>
       <a href="https://www.zwiftracing.app/riders/{{ profile_user.zwid }}"
          target="_blank" rel="noopener" class="btn btn-xs btn-ghost flex-1">ZwiftRacing</a>
+    </div>
+
+    {% comment %}
+      The button asks zauth to go and re-read the sources; the fresh document then has to be
+      pulled back here, which is a background task, so pressing this does not return new data
+      in the response. `.tooltip` is inline-block, hence block/w-full to keep the button full
+      width inside it.
+    {% endcomment %}
+    <span class="tooltip tooltip-top block w-full mt-2"
+          data-tip="Checks ZwiftPower and ZwiftRacing for updates. Can take about 60 seconds.">
+      <button hx-post="{% url 'accounts:refresh_rider_data' profile_user.id %}"
+              hx-target="#rider-profile-card"
+              hx-swap="outerHTML"
+              hx-disabled-elt="this"
+              class="btn btn-xs btn-outline w-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Update
+      </button>
+    </span>
+  {% endif %}
+
+  {% if refresh_level == "error" %}
+    <p class="text-xs text-error mt-2">{{ refresh_message }}</p>
+  {% endif %}
+
+  {% comment %}
+    While a refresh is in flight the card comes back for a fresh copy of itself, so the new
+    numbers appear without a reload. The chain is finite and carried in the URL: each render
+    asks for the next step, and the view stops handing one out after RIDER_CARD_RECHECKS.
+  {% endcomment %}
+  {% if recheck_in %}
+    <div class="flex items-start gap-2 mt-2 text-xs text-base-content/60"
+         hx-get="{% url 'accounts:refresh_rider_data' profile_user.id %}?check={{ recheck_in }}"
+         hx-trigger="load delay:{{ recheck_seconds }}s"
+         hx-target="#rider-profile-card"
+         hx-swap="outerHTML">
+      <span class="loading loading-spinner loading-xs shrink-0"></span>
+      <span>{{ refresh_message|default:"Checking for updates…" }}</span>
     </div>
   {% endif %}
 </div>

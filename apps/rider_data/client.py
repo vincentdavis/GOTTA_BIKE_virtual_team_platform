@@ -25,6 +25,10 @@ _TIMEOUT = 60.0
 # and an all-or-nothing failure. Chunking bounds both.
 _BATCH_SIZE = 200
 
+# The refresh endpoint only enqueues work on the service side and returns, so it has none of
+# the batch endpoint's reasons to be slow. A user is waiting on this one.
+_REFRESH_TIMEOUT = 15.0
+
 
 def is_configured() -> bool:
     """Report whether the zwid-keyed batch endpoints can be called.
@@ -121,3 +125,51 @@ def fetch_profiles(zwids: list[int] | None = None, *, connected_app: str | None 
 
         logfire.info("Fetched rider profiles", requested=len(zwids), returned=len(profiles))
     return profiles
+
+
+def request_refresh(zwid: int, *, sources: str | None = None) -> dict | None:
+    """Ask zauth to re-fetch one rider from ZwiftPower and/or zwiftracing.
+
+    This only *triggers* work: the service enqueues a fetch onto its own worker and answers
+    immediately, so a successful call means "asked", never "updated". The refreshed document
+    has to be pulled separately once that work lands, which is what
+    ``apps.rider_data.tasks.pull_rider_profile`` is for.
+
+    The service throttles each source independently (30 minutes by default) and reports
+    ``skipped`` rather than refusing the request, so a caller cannot tell from the status code
+    whether anything was actually queued -- read the per-source ``status`` instead.
+
+    Args:
+        zwid: The rider's Zwift id.
+        sources: Comma-separated sources to refresh, e.g. ``"zwiftracing"``. Defaults to both
+            when omitted, which is what the service does with no filter.
+
+    Returns:
+        The service's ``{zwid, zwiftpower: {status, last_updated}, zwiftracing: {...}}``
+        document, or None when the client is not configured or the call failed.
+
+    """
+    if not is_configured():
+        logfire.warning("Rider refresh skipped: service key or base URL not configured", zwid=zwid)
+        return None
+
+    try:
+        response = httpx.post(
+            _url(f"/api/riders/{zwid}/refresh"),
+            params={"sources": sources} if sources else None,
+            headers=_headers(),
+            timeout=_REFRESH_TIMEOUT,
+        )
+        response.raise_for_status()
+        result = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logfire.error("Rider refresh request failed", zwid=zwid, sources=sources, error=str(exc))
+        return None
+
+    logfire.info(
+        "Rider refresh requested",
+        zwid=zwid,
+        zwiftpower=(result.get("zwiftpower") or {}).get("status"),
+        zwiftracing=(result.get("zwiftracing") or {}).get("status"),
+    )
+    return result

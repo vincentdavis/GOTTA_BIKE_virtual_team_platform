@@ -137,3 +137,116 @@ def purge_rider_profiles() -> dict:
         cutoff=cutoff.isoformat(),
     )
     return {"considered": considered, "deleted": deleted, "cutoff": cutoff.isoformat()}
+
+
+# zauth answers the refresh trigger immediately and does the actual fetching on its own
+# worker, so the updated document is not there when we ask. These bound how long we keep
+# coming back for it: three tries, roughly two minutes, then give up and let the nightly
+# sync collect whatever landed.
+PULL_DELAY_SECONDS = 40
+MAX_PULL_ATTEMPTS = 3
+
+
+def _zwiftracing_stamp(zwid: int) -> str:
+    """Read the cached row's zwiftracing fetch time, as the service reported it.
+
+    This is the one stamp in the document that reliably moves when an on-demand refresh
+    lands, which is why the pull watches it rather than anything else. ``sources.zwiftpower``
+    does NOT move: the zwiftpower half of a refresh writes race-result rows, and that stamp
+    comes from the rider row those results are not part of.
+
+    Args:
+        zwid: The rider's Zwift id.
+
+    Returns:
+        The ISO stamp, or "" when we hold no row or the source has never been fetched.
+
+    """
+    sources = RiderProfile.objects.filter(zwid=zwid).values_list("sources", flat=True).first() or {}
+    return (sources.get("zwiftracing") or {}).get("fetched_at") or ""
+
+
+@task
+def pull_rider_profile(zwid: int, *, await_zwiftracing: bool = False, zr_baseline: str = "", attempt: int = 1) -> dict:
+    """Fetch one rider's profile from zauth and store it, retrying while a refresh is in flight.
+
+    Split from the trigger on purpose. ``client.request_refresh`` only asks the service to go
+    and look; this is what collects the answer, so it has to run *after* the service's own
+    worker has finished — an unknown amount of time later, which is why it re-enqueues itself
+    instead of sleeping and holding a worker slot open.
+
+    ``await_zwiftracing`` says the trigger actually queued a zwiftracing fetch, so there is a
+    reason to expect the stamp to move. Without it (the source was throttled, or only
+    zwiftpower was asked for) a single pull is correct: our cache can still be behind what the
+    service already holds, but nothing new is coming, so waiting for it would just be three
+    identical requests.
+
+    Args:
+        zwid: The rider's Zwift id.
+        await_zwiftracing: Whether a zwiftracing fetch was queued upstream.
+        zr_baseline: The zwiftracing stamp before the trigger; a change means the fetch landed.
+        attempt: 1-based try counter, used to stop re-enqueueing.
+
+    Returns:
+        Whether the refreshed data ``landed``, the ``attempt`` this ran as, and the store
+        counts.
+
+    """
+    if not client.is_configured():
+        logfire.warning("Rider profile pull skipped: zauth service key not configured", zwid=zwid)
+        return {"landed": False, "attempt": attempt, "stored": 0}
+
+    profiles = client.fetch_profiles([zwid])
+    result = services.store_profiles(profiles)
+    services.mark_requested([zwid])
+
+    landed = not await_zwiftracing or _zwiftracing_stamp(zwid) != zr_baseline
+    if not landed and attempt < MAX_PULL_ATTEMPTS:
+        pull_rider_profile.using(run_after=timezone.now() + timedelta(seconds=PULL_DELAY_SECONDS)).enqueue(
+            zwid,
+            await_zwiftracing=True,
+            zr_baseline=zr_baseline,
+            attempt=attempt + 1,
+        )
+        logfire.info("Rider profile pull found nothing new, will retry", zwid=zwid, attempt=attempt)
+
+    logfire.info("Pulled rider profile", zwid=zwid, attempt=attempt, landed=landed, stored=len(profiles))
+    return {"landed": landed, "attempt": attempt, "stored": len(profiles), **result}
+
+
+def request_profile_refresh(zwid: int) -> dict:
+    """Ask zauth to re-check a rider upstream, and schedule the pull that brings it back.
+
+    The two halves belong together: triggering without pulling leaves the fresh data sitting
+    on the service until the nightly sync, and pulling without triggering just re-reads what
+    we already have.
+
+    Args:
+        zwid: The rider's Zwift id.
+
+    Returns:
+        ``reached`` (whether the service answered at all) and the per-source statuses it gave,
+        which are what the caller should tell the rider — "queued" means a fetch is running,
+        "skipped" means that source was refreshed too recently to check again.
+
+    """
+    baseline = _zwiftracing_stamp(zwid)
+    outcome = client.request_refresh(zwid)
+
+    statuses = {
+        source: ((outcome or {}).get(source) or {}).get("status") or "unknown"
+        for source in ("zwiftpower", "zwiftracing")
+    }
+    queued = [source for source, status in statuses.items() if status == "queued"]
+
+    # Pull either way. A throttled trigger still means the service may hold data newer than
+    # our cache -- the button is the only thing that pulls a single rider off-schedule, so
+    # declining to pull would make "nothing was queued" look like "nothing happened".
+    delay = PULL_DELAY_SECONDS if queued else 0
+    pull_rider_profile.using(run_after=timezone.now() + timedelta(seconds=delay)).enqueue(
+        zwid,
+        await_zwiftracing="zwiftracing" in queued,
+        zr_baseline=baseline,
+    )
+
+    return {"reached": outcome is not None, "statuses": statuses, "queued": queued}
