@@ -9,6 +9,9 @@ app_name = "accounts"
 urlpatterns = [
     path("profile/", views.profile_view, name="profile"),
     path("profile/<int:user_id>/", views.public_profile_view, name="public_profile"),
+    # By Zwift id: the identifier that actually travels between systems. Redirects to the
+    # canonical profile URL above.
+    path("profile/z/<int:zwid>/", views.public_profile_by_zwid, name="public_profile_by_zwid"),
     path("profile/edit/", views.profile_edit, name="profile_edit"),
     path("profile/import/<uuid:application_id>/", views.import_application_view, name="import_application"),
     path("profile/delete/", views.profile_delete_confirm, name="profile_delete_confirm"),

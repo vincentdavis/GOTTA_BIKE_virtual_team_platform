@@ -67,6 +67,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/team/verification/{id}/ - Verification detail",
             "/team/team-feed/ - Team feed",
             "/user/profile/{id}/ - View teammate profiles",
+            "/user/profile/z/{zwid}/ - Find a teammate by Zwift id",
             "/zp/results/ - Team-wide ZwiftPower race results",
             "/zp/results/{zid}/ - Per-event ZP results leaderboard",
             "/events/squad-invite/{token}/ - Accept squad invite link",

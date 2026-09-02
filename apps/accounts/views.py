@@ -11,7 +11,7 @@ from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -556,6 +556,52 @@ def verification_delete(request: HttpRequest) -> HttpResponse:
         )
 
     return redirect("accounts:verification")
+
+
+@login_required
+@team_member_required()
+@require_GET
+def public_profile_by_zwid(request: HttpRequest, zwid: int) -> HttpResponse:
+    """Reach a rider's profile by Zwift id instead of by our own user id.
+
+    The zwid is the join key across ZwiftPower, ZwiftRacing, zauth and the roster, so it is
+    usually the identifier in hand -- from a result row, a Discord message, or a link someone
+    pasted -- while our user id is known only to this app.
+
+    Redirects rather than rendering, so the profile page stays the single place that decides
+    what a viewer may see. It also keeps one canonical URL per rider instead of two that can
+    drift apart.
+
+    ``zwid`` is indexed but not unique on User, so two accounts claiming one id is possible
+    in the schema even though it should not happen in practice. This raises rather than
+    picking a winner: quietly resolving it would send a viewer to one of two people with no
+    sign anything was wrong, and would hide the duplicate for as long as nobody noticed.
+
+    Args:
+        request: The HTTP request.
+        zwid: The rider's Zwift id.
+
+    Returns:
+        Redirect to the canonical profile URL.
+
+    Raises:
+        Http404: If no account claims that zwid.
+        MultipleObjectsReturned: If more than one does, which is a data problem to fix.
+
+    """
+    try:
+        rider = User.objects.get(zwid=zwid)
+    except User.DoesNotExist as exc:
+        raise Http404(f"No member with Zwift id {zwid}") from exc
+    except User.MultipleObjectsReturned:
+        logfire.error(
+            "Multiple accounts claim one Zwift id",
+            zwid=zwid,
+            user_ids=list(User.objects.filter(zwid=zwid).values_list("pk", flat=True)),
+        )
+        raise
+
+    return redirect("accounts:public_profile", user_id=rider.pk)
 
 
 @login_required
