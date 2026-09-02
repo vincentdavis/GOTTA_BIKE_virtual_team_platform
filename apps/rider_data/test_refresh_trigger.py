@@ -6,8 +6,10 @@ its own worker, so the fresh document is not in that response and has to be pull
 Collapsing the two -- treating a 200 as "updated" -- would show a rider stale numbers under a
 success message, which is worse than showing them stale numbers.
 
-The retry is watching one specific stamp, and which one is not arbitrary: see
-``test_the_pull_watches_the_one_stamp_that_actually_moves``.
+The retry watches the `sources` block for a stamp that moves. Both sources move one now --
+zauth's zwiftpower refresh re-fetches the rider's team roster as well as their race history --
+but a queued source can still fail to move its stamp, which is why the retry is bounded rather
+than a poll.
 """
 
 from unittest.mock import patch
@@ -25,12 +27,32 @@ from apps.rider_data.models import RiderProfile
 from apps.rider_data.tasks import pull_rider_profile
 
 
-def _row(zwid=4242, zr_stamp="2026-09-01T10:00:00Z"):
-    """Store a cached profile carrying a zwiftracing fetch stamp.
+def _sources(zp=None, zr=None):
+    """Build a `sources` block with the given per-source stamps.
+
+    Args:
+        zp: The zwiftpower fetch stamp, or None to omit the source.
+        zr: The zwiftracing fetch stamp, or None to omit the source.
+
+    Returns:
+        The sources block.
+
+    """
+    block = {}
+    if zp is not None:
+        block["zwiftpower"] = {"present": True, "fetched_at": zp}
+    if zr is not None:
+        block["zwiftracing"] = {"present": True, "fetched_at": zr}
+    return block
+
+
+def _row(zwid=4242, zp_stamp=None, zr_stamp="2026-09-01T10:00:00Z"):
+    """Store a cached profile carrying per-source fetch stamps.
 
     Args:
         zwid: The rider's Zwift id.
-        zr_stamp: The stamp to record, or "" for a source never fetched.
+        zp_stamp: The zwiftpower stamp, or None for a source never fetched.
+        zr_stamp: The zwiftracing stamp, or None for a source never fetched.
 
     Returns:
         The stored row.
@@ -40,7 +62,7 @@ def _row(zwid=4242, zr_stamp="2026-09-01T10:00:00Z"):
     return RiderProfile.objects.create(
         zwid=zwid,
         payload={"zwid": zwid},
-        sources={"zwiftracing": {"present": True, "fetched_at": zr_stamp}} if zr_stamp else {},
+        sources=_sources(zp_stamp, zr_stamp),
         fetched_at=now,
         last_requested_at=now,
     )
@@ -128,7 +150,7 @@ def test_a_failed_trigger_reports_none_rather_than_raising():
 @pytest.mark.django_db
 def test_a_queued_source_schedules_a_delayed_pull_that_waits_for_it():
     """Pulling straight away would fetch the same document the service has not replaced yet."""
-    _row(zr_stamp="2026-09-01T10:00:00Z")
+    _row(zp_stamp="2026-08-30T10:00:00Z", zr_stamp="2026-09-01T10:00:00Z")
     with (
         patch.object(client, "request_refresh", return_value=_answer()),
         patch.object(tasks, "pull_rider_profile") as pull,
@@ -142,9 +164,22 @@ def test_a_queued_source_schedules_a_delayed_pull_that_waits_for_it():
     assert (run_after - timezone.now()).total_seconds() > tasks.PULL_DELAY_SECONDS - 5
     pull.using.return_value.enqueue.assert_called_once_with(
         4242,
-        await_zwiftracing=True,
-        zr_baseline="2026-09-01T10:00:00Z",
+        awaiting=["zwiftpower", "zwiftracing"],
+        baseline={"zwiftpower": "2026-08-30T10:00:00Z", "zwiftracing": "2026-09-01T10:00:00Z"},
     )
+
+
+@pytest.mark.django_db
+def test_only_the_sources_that_were_queued_are_waited_on():
+    """A throttled source is not going to move; waiting on it would spend the whole retry budget."""
+    _row(zp_stamp="2026-08-30T10:00:00Z")
+    with (
+        patch.object(client, "request_refresh", return_value=_answer(zwiftracing="skipped")),
+        patch.object(tasks, "pull_rider_profile") as pull,
+    ):
+        tasks.request_profile_refresh(4242)
+
+    assert pull.using.return_value.enqueue.call_args.kwargs["awaiting"] == ["zwiftpower"]
 
 
 @pytest.mark.django_db
@@ -159,7 +194,7 @@ def test_a_fully_throttled_trigger_still_pulls_immediately():
 
     assert outcome["queued"] == []
     assert (pull.using.call_args.kwargs["run_after"] - timezone.now()).total_seconds() < 5
-    assert pull.using.return_value.enqueue.call_args.kwargs["await_zwiftracing"] is False
+    assert pull.using.return_value.enqueue.call_args.kwargs["awaiting"] == []
 
 
 @pytest.mark.django_db
@@ -180,55 +215,99 @@ def test_an_unreachable_service_is_reported_but_the_pull_is_still_scheduled():
 
 
 @pytest.mark.django_db
-def test_the_pull_watches_the_one_stamp_that_actually_moves():
-    """Only the zwiftracing stamp actually advances, so it is the only usable signal.
-
-    The zwiftpower half of a refresh runs the rider's race *history* fetch, which writes result
-    rows. ``sources.zwiftpower.fetched_at`` comes from the rider row, which that fetch does not
-    touch -- so watching it would mean waiting for something that never happens.
-    """
+def test_a_moved_zwiftracing_stamp_ends_the_wait():
+    """The zwiftracing fetch writes the rider row that stamp comes from, so it moves when it lands."""
     _row(zr_stamp="2026-09-01T10:00:00Z")
-    fresh = {
-        "zwid": 4242,
-        "sources": {"zwiftracing": {"present": True, "fetched_at": "2026-09-02T09:00:00Z"}},
-    }
+    fresh = {"zwid": 4242, "sources": _sources(zr="2026-09-02T09:00:00Z")}
     with (
         patch.object(client, "is_configured", return_value=True),
         patch.object(client, "fetch_profiles", return_value=[fresh]),
         patch.object(tasks, "pull_rider_profile") as retry,
     ):
-        result = pull_rider_profile.func(4242, await_zwiftracing=True, zr_baseline="2026-09-01T10:00:00Z")
+        result = pull_rider_profile.func(
+            4242,
+            awaiting=["zwiftracing"],
+            baseline={"zwiftracing": "2026-09-01T10:00:00Z"},
+        )
 
     assert result["landed"] is True
     retry.using.assert_not_called()
 
 
 @pytest.mark.django_db
-def test_the_pull_comes_back_while_the_stamp_has_not_moved():
+def test_a_moved_zwiftpower_stamp_ends_the_wait_too():
+    """It only moves because zauth's zwiftpower refresh now re-fetches the rider's team roster.
+
+    Before that, a ZwiftPower refresh wrote race-result rows and left ``sources.zwiftpower``
+    untouched -- so watching it here would have been waiting for something that never happened.
+    """
+    _row(zp_stamp="2026-08-30T10:00:00Z", zr_stamp=None)
+    fresh = {"zwid": 4242, "sources": _sources(zp="2026-09-02T09:00:00Z")}
+    with (
+        patch.object(client, "is_configured", return_value=True),
+        patch.object(client, "fetch_profiles", return_value=[fresh]),
+        patch.object(tasks, "pull_rider_profile") as retry,
+    ):
+        result = pull_rider_profile.func(
+            4242,
+            awaiting=["zwiftpower"],
+            baseline={"zwiftpower": "2026-08-30T10:00:00Z"},
+        )
+
+    assert result["landed"] is True
+    retry.using.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_one_source_landing_is_enough():
+    """The rider asked for a refresh, not for every source to have something new to give."""
+    _row(zp_stamp="2026-08-30T10:00:00Z", zr_stamp="2026-09-01T10:00:00Z")
+    fresh = {"zwid": 4242, "sources": _sources(zp="2026-08-30T10:00:00Z", zr="2026-09-02T09:00:00Z")}
+    with (
+        patch.object(client, "is_configured", return_value=True),
+        patch.object(client, "fetch_profiles", return_value=[fresh]),
+        patch.object(tasks, "pull_rider_profile") as retry,
+    ):
+        result = pull_rider_profile.func(
+            4242,
+            awaiting=["zwiftpower", "zwiftracing"],
+            baseline={"zwiftpower": "2026-08-30T10:00:00Z", "zwiftracing": "2026-09-01T10:00:00Z"},
+        )
+
+    assert result["landed"] is True
+    retry.using.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_the_pull_comes_back_while_no_stamp_has_moved():
     """The service's worker sets the pace; a single fixed wait would miss a slow fetch entirely."""
     _row(zr_stamp="2026-09-01T10:00:00Z")
-    same = {"zwid": 4242, "sources": {"zwiftracing": {"present": True, "fetched_at": "2026-09-01T10:00:00Z"}}}
+    same = {"zwid": 4242, "sources": _sources(zr="2026-09-01T10:00:00Z")}
     with (
         patch.object(client, "is_configured", return_value=True),
         patch.object(client, "fetch_profiles", return_value=[same]),
         patch.object(tasks, "pull_rider_profile") as retry,
     ):
-        result = pull_rider_profile.func(4242, await_zwiftracing=True, zr_baseline="2026-09-01T10:00:00Z")
+        result = pull_rider_profile.func(
+            4242,
+            awaiting=["zwiftracing"],
+            baseline={"zwiftracing": "2026-09-01T10:00:00Z"},
+        )
 
     assert result["landed"] is False
     retry.using.return_value.enqueue.assert_called_once_with(
         4242,
-        await_zwiftracing=True,
-        zr_baseline="2026-09-01T10:00:00Z",
+        awaiting=["zwiftracing"],
+        baseline={"zwiftracing": "2026-09-01T10:00:00Z"},
         attempt=2,
     )
 
 
 @pytest.mark.django_db
 def test_the_pull_gives_up_after_the_last_attempt():
-    """Unbounded retries would have a rider's button quietly queueing work for the rest of the day."""
+    """A queued source can still have nothing to give -- zauth debounces the roster fetch."""
     _row(zr_stamp="2026-09-01T10:00:00Z")
-    same = {"zwid": 4242, "sources": {"zwiftracing": {"present": True, "fetched_at": "2026-09-01T10:00:00Z"}}}
+    same = {"zwid": 4242, "sources": _sources(zr="2026-09-01T10:00:00Z")}
     with (
         patch.object(client, "is_configured", return_value=True),
         patch.object(client, "fetch_profiles", return_value=[same]),
@@ -236,8 +315,8 @@ def test_the_pull_gives_up_after_the_last_attempt():
     ):
         pull_rider_profile.func(
             4242,
-            await_zwiftracing=True,
-            zr_baseline="2026-09-01T10:00:00Z",
+            awaiting=["zwiftracing"],
+            baseline={"zwiftracing": "2026-09-01T10:00:00Z"},
             attempt=tasks.MAX_PULL_ATTEMPTS,
         )
 
@@ -253,7 +332,7 @@ def test_a_pull_with_nothing_in_flight_runs_once():
         patch.object(client, "fetch_profiles", return_value=[]),
         patch.object(tasks, "pull_rider_profile") as retry,
     ):
-        result = pull_rider_profile.func(4242, await_zwiftracing=False)
+        result = pull_rider_profile.func(4242, awaiting=[])
 
     assert result["landed"] is True
     retry.using.assert_not_called()
@@ -266,7 +345,7 @@ def test_the_pull_stores_what_it_fetched():
         "zwid": 4242,
         "identity": {"name": "Ada Racer"},
         "ratings": {"velo": 1610.0},
-        "sources": {"zwiftracing": {"present": True, "fetched_at": "2026-09-02T09:00:00Z"}},
+        "sources": _sources(zr="2026-09-02T09:00:00Z"),
     }
     with (
         patch.object(client, "is_configured", return_value=True),
