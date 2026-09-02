@@ -16,7 +16,17 @@ from constance import config
 from django.conf import settings
 from django.urls import reverse
 
-MOVED = ("PRIVACY_POLICY_URL", "TERMS_OF_SERVICE_URL", "ANALYTICS_ANONYMISE_DAYS", "ANALYTICS_DELETE_DAYS")
+# Moved out of Site Settings.
+MOVED_FROM_SITE_SETTINGS = (
+    "PRIVACY_POLICY_URL",
+    "TERMS_OF_SERVICE_URL",
+    "ANALYTICS_ANONYMISE_DAYS",
+    "ANALYTICS_DELETE_DAYS",
+)
+# Moved out of Rider Data: it is a retention window, so it belongs with the others rather
+# than beside the operational knobs for how often the rider sync runs.
+MOVED_FROM_RIDER_DATA = ("RIDER_PROFILE_MAX_DAYS",)
+MOVED = MOVED_FROM_SITE_SETTINGS + MOVED_FROM_RIDER_DATA
 
 
 def test_the_compliance_fieldset_holds_exactly_the_moved_settings():
@@ -24,10 +34,12 @@ def test_the_compliance_fieldset_holds_exactly_the_moved_settings():
     assert settings.CONSTANCE_CONFIG_FIELDSETS["Compliance"] == MOVED
 
 
-def test_the_moved_settings_left_site_settings():
+def test_the_moved_settings_left_their_old_fieldsets():
     """A key in two fieldsets renders twice and saves twice; the move has to be a move."""
-    for key in MOVED:
+    for key in MOVED_FROM_SITE_SETTINGS:
         assert key not in settings.CONSTANCE_CONFIG_FIELDSETS["Site Settings"], f"{key} still in Site Settings"
+    for key in MOVED_FROM_RIDER_DATA:
+        assert key not in settings.CONSTANCE_CONFIG_FIELDSETS["Rider Data"], f"{key} still in Rider Data"
 
 
 def test_no_setting_appears_in_two_fieldsets():
@@ -82,7 +94,7 @@ def test_the_moved_settings_are_gone_from_the_site_settings_form(admin_authed_cl
     start = body.index("<form hx-post")
     form = body[start : body.index("</form>", start)]
 
-    for key in MOVED:
+    for key in MOVED_FROM_SITE_SETTINGS:
         assert key not in form, f"{key} still renders under Site Settings"
 
 
@@ -96,6 +108,7 @@ def test_saving_from_the_compliance_page_persists_every_setting(admin_authed_cli
             "TERMS_OF_SERVICE_URL": "https://example.test/terms",
             "ANALYTICS_ANONYMISE_DAYS": "45",
             "ANALYTICS_DELETE_DAYS": "400",
+            "RIDER_PROFILE_MAX_DAYS": "180",
         },
         headers={"hx-request": "true"},
     )
@@ -105,6 +118,7 @@ def test_saving_from_the_compliance_page_persists_every_setting(admin_authed_cli
     assert config.TERMS_OF_SERVICE_URL == "https://example.test/terms"
     assert config.ANALYTICS_ANONYMISE_DAYS == 45
     assert config.ANALYTICS_DELETE_DAYS == 400
+    assert config.RIDER_PROFILE_MAX_DAYS == 180
 
 
 @pytest.mark.django_db
@@ -128,6 +142,7 @@ def test_the_save_returns_the_form_alone_not_the_whole_compliance_page(admin_aut
             "TERMS_OF_SERVICE_URL": "",
             "ANALYTICS_ANONYMISE_DAYS": "30",
             "ANALYTICS_DELETE_DAYS": "365",
+            "RIDER_PROFILE_MAX_DAYS": "120",
         },
         headers={"hx-request": "true"},
     ).content.decode()

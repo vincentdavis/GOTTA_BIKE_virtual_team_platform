@@ -57,14 +57,19 @@ def sync_rider_profiles() -> dict:
 
 @task
 def purge_rider_profiles() -> dict:
-    """Delete cached profiles that have not been refreshed inside the retention window.
+    """Delete cached profiles we have stopped asking about, once the window has passed.
 
-    Anchored on ``fetched_at``, which works here only because the sync is not demand-driven.
-    It refreshes a defined set on a schedule -- every registered user with a zwid, plus every
-    rider linked to this app -- so a member's row is touched every cycle whether or not
-    anybody opens it. A stale ``fetched_at`` therefore does not mean "nobody looked at them",
-    it means "this rider is no longer in the set we have any reason to refresh". That is the
-    population worth evicting, and the field records it without anything extra to maintain.
+    Anchored on ``last_requested_at`` -- when the rider was last INCLUDED IN A BATCH -- not on
+    ``fetched_at``, when data last came back. The two diverge for a rider the service holds
+    nothing for: we ask every cycle and store nothing every cycle, so ``fetched_at`` goes
+    stale while we are still asking. Anchoring there would evict them for a gap in upstream
+    data rather than for leaving the set, which is the one thing this sweep is meant to mean.
+
+    That works because the sync is not demand-driven. It asks about a defined set on a
+    schedule -- every registered user with a zwid, plus every rider linked to this app -- so a
+    member is stamped every cycle whether or not anybody opens their profile. A stale
+    ``last_requested_at`` therefore does not mean "nobody looked at them", it means "we have
+    stopped having a reason to ask", which is the population worth evicting.
 
     Race activity was the obvious-looking anchor and is the wrong one. It describes the rider
     rather than our reason for holding them: someone who raced yesterday but has nothing to do

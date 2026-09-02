@@ -595,9 +595,10 @@ CONSTANCE_CONFIG = {
     ),
     "RIDER_PROFILE_MAX_DAYS": (
         120,
-        "Days a cached rider profile is kept after it was last refreshed. The sync refreshes "
-        "every rider we have a reason to hold, so an old fetch means the rider has dropped out "
-        "of that set entirely. 0 disables eviction",
+        "Days a cached rider profile is kept after we last ASKED about that rider -- not after "
+        "data last came back, so a rider the service holds nothing for is not evicted over a gap "
+        "in upstream data. The sync asks about every rider we have a reason to hold, so an old "
+        "timestamp means they have dropped out of that set. 0 disables eviction",
         int,
     ),
     "RIDER_PROFILE_REFRESH_HOURS": (
@@ -1237,7 +1238,6 @@ CONSTANCE_CONFIG_FIELDSETS = {
     ),
     "Zwift Data": ("ZWIFT_SPEED_LAB_URL",),
     "Rider Data": (
-        "RIDER_PROFILE_MAX_DAYS",
         "RIDER_PROFILE_REFRESH_HOURS",
         "RIDER_PROFILE_PURGE_MAX_FRACTION",
     ),
@@ -1261,6 +1261,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "TERMS_OF_SERVICE_URL",
         "ANALYTICS_ANONYMISE_DAYS",
         "ANALYTICS_DELETE_DAYS",
+        "RIDER_PROFILE_MAX_DAYS",
     ),
 }
 
