@@ -42,12 +42,17 @@ def sync_rider_profiles() -> dict:
         return {"fetched": 0, "created": 0, "updated": 0, "skipped": 0}
 
     with logfire.span("sync_rider_profiles"):
+        requested = services.zwids_to_refresh()
         profiles = client.fetch_profiles(
-            services.zwids_to_refresh(),
+            requested,
             connected_app=app_config.zwift_connected_app_name or None,
         )
         result = services.store_profiles(profiles)
-        return {"fetched": len(profiles), **result}
+        # Stamp everyone we asked about, including riders the service had nothing for.
+        # Without this they drift toward eviction because of a gap in upstream data rather
+        # than because they left the set we have a reason to hold.
+        stamped = services.mark_requested(requested)
+        return {"fetched": len(profiles), "requested": len(requested), "stamped": stamped, **result}
 
 
 @task
@@ -80,13 +85,43 @@ def purge_rider_profiles() -> dict:
         logfire.info("Rider profile retention disabled, skipping sweep")
         return {"considered": 0, "deleted": 0, "cutoff": None}
 
+    # A broken sync looks exactly like every rider leaving at once: nothing gets stamped, so
+    # every row ages past the window together. Without this the first purge after a long
+    # outage would empty the cache, and the cause would be 120 days in the past.
+    last_sync = services.last_successful_sync()
+    if last_sync is None or timezone.now() - last_sync > timedelta(days=max_days):
+        logfire.error(
+            "Rider profile purge refused: no recent successful sync",
+            last_successful_sync=last_sync.isoformat() if last_sync else None,
+            max_days=max_days,
+        )
+        return {"considered": 0, "deleted": 0, "cutoff": None, "refused": "stale_sync"}
+
     cutoff = timezone.now() - timedelta(days=max_days)
-    # Current members are never evicted, whatever their race activity. Ageing one out would
-    # only have the next sync re-create the row, so this is churn prevention as much as
-    # anything -- and it is what makes "removed if not a member" mean demotion rather than
-    # deletion: losing membership does not delete the row, it stops protecting it.
-    stale = RiderProfile.objects.filter(fetched_at__lt=cutoff).exclude(zwid__in=services.protected_zwids())
+    # Current members are never evicted. Ageing one out would only have the next sync
+    # re-create the row, so this is churn prevention as much as anything -- and it is what
+    # makes "removed if not a member" mean demotion rather than deletion: losing membership
+    # does not delete the row, it stops protecting it.
+    stale = RiderProfile.objects.filter(last_requested_at__lt=cutoff).exclude(
+        zwid__in=services.protected_zwids()
+    )
     considered = stale.count()
+    total = RiderProfile.objects.count()
+
+    # Second backstop, for the case the first cannot see: a sync that succeeds while asking
+    # for the wrong set still stamps nobody. A single run should never remove most of the
+    # cache, so an unusually large sweep is treated as a symptom rather than carried out.
+    limit = config.RIDER_PROFILE_PURGE_MAX_FRACTION
+    if total and limit and (considered / total) > limit:
+        logfire.error(
+            "Rider profile purge refused: would remove an implausible share of the cache",
+            considered=considered,
+            total=total,
+            fraction=round(considered / total, 3),
+            limit=limit,
+        )
+        return {"considered": considered, "deleted": 0, "cutoff": cutoff.isoformat(), "refused": "too_many"}
+
     deleted, _ = stale.delete()
 
     logfire.info(

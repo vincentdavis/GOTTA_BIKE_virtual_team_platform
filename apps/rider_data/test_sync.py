@@ -170,7 +170,8 @@ def test_a_current_member_is_never_evicted(user_model):
     GuildMember.objects.create(discord_id="1", username="still_here", user=member, date_left=None)
 
     services.store_profiles([_doc(2002)])
-    RiderProfile.objects.filter(zwid=2002).update(fetched_at=timezone.now() - timedelta(days=900))
+    RiderProfile.objects.filter(zwid=2002).update(last_requested_at=timezone.now() - timedelta(days=900))
+    _sync_ok()
 
     purge_rider_profiles.func()
 
@@ -178,7 +179,7 @@ def test_a_current_member_is_never_evicted(user_model):
 
 
 @pytest.mark.django_db
-@override_config(RIDER_PROFILE_MAX_DAYS=365)
+@override_config(RIDER_PROFILE_MAX_DAYS=365, RIDER_PROFILE_PURGE_MAX_FRACTION=0.9)
 def test_a_departed_rider_outside_the_window_is_evicted(user_model):
     from apps.accounts.models import GuildMember
 
@@ -187,12 +188,16 @@ def test_a_departed_rider_outside_the_window_is_evicted(user_model):
         discord_id="2", username="departed", user=gone, date_left=timezone.now() - timedelta(days=400)
     )
 
-    services.store_profiles([_doc(3003)])
-    RiderProfile.objects.filter(zwid=3003).update(fetched_at=timezone.now() - timedelta(days=900))
+    # Three other riders still in the refresh set, so evicting one is a plausible sweep
+    # rather than the whole cache -- which the blast-radius guard would refuse.
+    services.store_profiles([_doc(3003), _doc(3004), _doc(3005), _doc(3006)])
+    RiderProfile.objects.filter(zwid=3003).update(last_requested_at=timezone.now() - timedelta(days=900))
+    _sync_ok()
 
     purge_rider_profiles.func()
 
     assert not RiderProfile.objects.filter(zwid=3003).exists()
+    assert RiderProfile.objects.count() == 3
 
 
 @pytest.mark.django_db
@@ -218,3 +223,104 @@ def test_zero_still_disables_the_sweep(user_model):
     RiderProfile.objects.filter(zwid=4005).update(fetched_at=timezone.now() - timedelta(days=9999))
 
     assert purge_rider_profiles.func()["deleted"] == 0
+
+
+# --- the difference between "asked and got nothing" and "stopped asking" ---------------
+
+
+@pytest.mark.django_db
+@override_config(RIDER_PROFILE_MAX_DAYS=120)
+def test_a_rider_the_service_has_no_data_for_is_not_evicted(user_model):
+    """The failure the request-time anchor exists to prevent.
+
+    store_profiles only touches rows it received data for, so a rider we ask about every
+    cycle and the service has nothing for would drift toward eviction -- deleted for a gap in
+    upstream data rather than for leaving the set we have a reason to hold.
+    """
+    rider = _make_user(user_model, username="thin_data", zwid=5005)
+    services.store_profiles([_doc(5005)])
+    RiderProfile.objects.filter(zwid=5005).update(
+        fetched_at=timezone.now() - timedelta(days=200),
+        last_requested_at=timezone.now() - timedelta(days=200),
+    )
+
+    # The sync asks for them; the service returns nothing.
+    with (
+        patch.object(client, "is_configured", return_value=True),
+        patch.object(client, "fetch_profiles", return_value=[]),
+    ):
+        result = sync_rider_profiles.func()
+
+    assert result["stamped"] == 1, "a requested rider must be stamped even with no data returned"
+
+    _sync_ok()
+    purge_rider_profiles.func()
+    assert RiderProfile.objects.filter(zwid=5005).exists()
+    assert rider.zwid == 5005
+
+
+def _sync_ok(days_ago=0):
+    """Record a successful sync run so the purge's health guard passes."""
+    from django.apps import apps as django_apps
+
+    django_apps.get_model("django_tasks_database", "DBTaskResult").objects.create(
+        task_path="apps.rider_data.tasks.sync_rider_profiles",
+        status="SUCCESSFUL",
+        finished_at=timezone.now() - timedelta(days=days_ago),
+        args_kwargs={"args": [], "kwargs": {}},
+        queue_name="default",
+        backend_name="default",
+        priority=0,
+    )
+
+
+# --- guard one: a broken sync must not look like everyone leaving ----------------------
+
+
+@pytest.mark.django_db
+@override_config(RIDER_PROFILE_MAX_DAYS=120)
+def test_the_purge_refuses_when_the_sync_has_not_succeeded_recently():
+    """A dead sync stamps nobody, so every row ages out together. That is an outage, not churn."""
+    services.store_profiles([_doc(6006)])
+    RiderProfile.objects.filter(zwid=6006).update(last_requested_at=timezone.now() - timedelta(days=200))
+
+    result = purge_rider_profiles.func()
+
+    assert result["refused"] == "stale_sync"
+    assert result["deleted"] == 0
+    assert RiderProfile.objects.filter(zwid=6006).exists()
+
+
+@pytest.mark.django_db
+@override_config(RIDER_PROFILE_MAX_DAYS=120, RIDER_PROFILE_PURGE_MAX_FRACTION=0.9)
+def test_the_purge_runs_when_the_sync_is_healthy():
+    services.store_profiles([_doc(7007), _doc(7008)])
+    RiderProfile.objects.filter(zwid=7007).update(last_requested_at=timezone.now() - timedelta(days=200))
+    _sync_ok()
+
+    result = purge_rider_profiles.func()
+
+    assert result.get("refused") is None
+    assert result["deleted"] == 1
+
+
+# --- guard two: a sync that succeeds against the wrong set ------------------------------
+
+
+@pytest.mark.django_db
+@override_config(RIDER_PROFILE_MAX_DAYS=120, RIDER_PROFILE_PURGE_MAX_FRACTION=0.2)
+def test_an_implausibly_large_sweep_is_refused():
+    """A healthy sync asking for the wrong set stamps nobody and the first guard cannot see it.
+
+    Deleting most of the cache in one run is a symptom, not an instruction.
+    """
+    for zwid in (8001, 8002, 8003):
+        services.store_profiles([_doc(zwid)])
+    RiderProfile.objects.all().update(last_requested_at=timezone.now() - timedelta(days=200))
+    _sync_ok()
+
+    result = purge_rider_profiles.func()
+
+    assert result["refused"] == "too_many"
+    assert result["deleted"] == 0
+    assert RiderProfile.objects.count() == 3

@@ -86,7 +86,17 @@ class RiderProfile(models.Model):
     )
 
     # --- cache mechanics, not rider data ----------------------------------------------
-    fetched_at = models.DateTimeField(db_index=True, help_text="When we last called zauth for this rider")
+    fetched_at = models.DateTimeField(db_index=True, help_text="When we last stored data for this rider")
+    last_requested_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "When this rider was last INCLUDED IN A BATCH, whether or not data came back. "
+            "Distinct from fetched_at on purpose: the difference is 'we asked and got nothing' "
+            "versus 'we stopped asking', and only the second is a reason to evict"
+        ),
+    )
     sources = models.JSONField(default=dict, help_text="Per-source {present, fetched_at} as returned")
     has_account = models.JSONField(
         default=dict,
@@ -108,14 +118,14 @@ class RiderProfile(models.Model):
         "their weight, power and heart rate indefinitely is the thing this app exists to bound. "
         "The window is set in Constance as RIDER_PROFILE_MAX_DAYS and DEFAULTS TO 120 DAYS; 0 "
         "disables eviction entirely. "
-        "Anchored on fetch time, which is the useful signal here precisely because the sync is "
-        "not demand-driven: it refreshes every rider we have a reason to hold -- registered "
-        "users and app-connected riders -- on a schedule. So a stale fetched_at does not mean "
-        "'nobody looked them up lately', it means 'this rider has dropped out of the set we "
-        "refresh at all', which is exactly the population to evict. Race activity was the "
-        "obvious-looking anchor and is the wrong one: it describes the rider rather than our "
-        "reason for holding them, and it is missing entirely for anyone who races unattached.",
-        anchor="fetched_at",
+        "Anchored on when the rider was last REQUESTED, not when data last came back. The sync "
+        "is not demand-driven -- it asks for every rider we have a reason to hold, on a "
+        "schedule -- so dropping out of that set is the thing worth evicting on. Anchoring on "
+        "fetched_at instead would conflate that with 'we asked and the service had nothing', "
+        "which is a data problem, not a reason to delete somebody. Race activity, the "
+        "obvious-looking anchor, is wrong for a third reason again: it describes the rider "
+        "rather than our reason for holding them.",
+        anchor="last_requested_at",
         setting="RIDER_PROFILE_MAX_DAYS",
         task="purge_rider_profiles",
     )

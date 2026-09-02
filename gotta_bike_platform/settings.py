@@ -586,6 +586,13 @@ CONSTANCE_CONFIG = {
         "Hours between rider profile refreshes from the zauth service",
         int,
     ),
+    "RIDER_PROFILE_PURGE_MAX_FRACTION": (
+        0.2,
+        "Refuse a rider-profile purge that would delete more than this share of the cache in "
+        "one run. A sweep that large means the refresh set is wrong, not that every rider left. "
+        "0 disables the check",
+        float,
+    ),
     "RIDER_PROFILE_MAX_DAYS": (
         120,
         "Days a cached rider profile is kept after it was last refreshed. The sync refreshes "
@@ -1221,6 +1228,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
     "Rider Data": (
         "RIDER_PROFILE_MAX_DAYS",
         "RIDER_PROFILE_REFRESH_HOURS",
+        "RIDER_PROFILE_PURGE_MAX_FRACTION",
     ),
     "TTT Planner": (
         "TTT_AIR_DENSITY",

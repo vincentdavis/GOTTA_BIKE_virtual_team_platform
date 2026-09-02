@@ -122,6 +122,7 @@ def to_row(profile: dict) -> dict | None:
         "has_account": profile.get("has_account") or {},
         "last_race_at": last_race_from(profile),
         "fetched_at": timezone.now(),
+        "last_requested_at": timezone.now(),
     }
 
 
@@ -150,6 +151,29 @@ def store_profiles(profiles: list[dict]) -> dict[str, int]:
     return {"created": created, "updated": updated, "skipped": skipped}
 
 
+def mark_requested(zwids: list[int]) -> int:
+    """Record that these riders were asked for, whether or not anything came back.
+
+    This is the whole point of keeping ``last_requested_at`` separate. ``store_profiles``
+    only touches rows it received data for, so a rider we ask about every cycle and the
+    service has nothing for would look abandoned and eventually be evicted -- punishing them
+    for a gap in the upstream data rather than for leaving the set we care about.
+
+    Rows are only stamped if they already exist; there is nothing to record for a rider we
+    have never successfully stored.
+
+    Args:
+        zwids: The riders included in the batch.
+
+    Returns:
+        How many existing rows were stamped.
+
+    """
+    if not zwids:
+        return 0
+    return RiderProfile.objects.filter(zwid__in=zwids).update(last_requested_at=timezone.now())
+
+
 def zwids_to_refresh() -> list[int]:
     """Return the riders whose profiles we want kept current.
 
@@ -166,6 +190,37 @@ def zwids_to_refresh() -> list[int]:
 
     """
     return sorted(User.objects.filter(zwid__isnull=False).values_list("zwid", flat=True).distinct())
+
+
+def last_successful_sync() -> datetime | None:
+    """When ``sync_rider_profiles`` last finished successfully.
+
+    Args:
+        None.
+
+    Returns:
+        The finish time of the most recent successful run, or None if there has never been one.
+
+    """
+    from django.apps import apps as django_apps
+    from django.db.models import Q
+
+    try:
+        results = django_apps.get_model("django_tasks_database", "DBTaskResult")
+    except LookupError:  # pragma: no cover - the task backend is always installed in practice
+        return None
+
+    row = (
+        results.objects.filter(
+            Q(task_path__endswith="sync_rider_profiles") | Q(task_path="sync_rider_profiles"),
+            status="SUCCESSFUL",
+            finished_at__isnull=False,
+        )
+        .order_by("-finished_at")
+        .values("finished_at")
+        .first()
+    )
+    return row["finished_at"] if row else None
 
 
 def protected_zwids() -> set[int]:

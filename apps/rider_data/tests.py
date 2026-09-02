@@ -19,11 +19,13 @@ from gotta_bike_platform.retention import RetentionPolicy, policy_for
 
 @pytest.fixture
 def profile_factory(db):
-    def _make(zwid=1001, *, last_race_days_ago=None, fetched_days_ago=0, **kwargs):
+    def _make(zwid=1001, *, last_race_days_ago=None, fetched_days_ago=0, requested_days_ago=None, **kwargs):
         return RiderProfile.objects.create(
             zwid=zwid,
             name=kwargs.pop("name", "Test Rider"),
             fetched_at=timezone.now() - timedelta(days=fetched_days_ago),
+            last_requested_at=timezone.now()
+            - timedelta(days=fetched_days_ago if requested_days_ago is None else requested_days_ago),
             last_race_at=(
                 None if last_race_days_ago is None else timezone.now() - timedelta(days=last_race_days_ago)
             ),
@@ -60,7 +62,7 @@ def test_the_promoted_columns_are_only_the_ones_something_queries():
         "category_open", "category_women", "category_racing",
         "velo", "zwift_racing_score", "zp_skill", "compound_score",
         "phenotype_value", "club_id", "club_name",
-        "payload", "fetched_at", "sources", "has_account", "last_race_at",
+        "payload", "fetched_at", "last_requested_at", "sources", "has_account", "last_race_at",
     }
     assert columns == expected, (
         "The column set changed. If a field was promoted out of payload, confirm something "
@@ -124,7 +126,7 @@ def test_the_model_declares_its_retention():
     policy = policy_for(RiderProfile)
     assert policy is not None
     assert policy.kind == RetentionPolicy.KIND_DELETE
-    assert policy.anchor == "fetched_at"
+    assert policy.anchor == "last_requested_at"
     assert policy.setting == "RIDER_PROFILE_MAX_DAYS"
 
 
@@ -137,11 +139,11 @@ def test_the_declared_window_is_the_configured_one():
 
 
 @pytest.mark.django_db
-@override_config(RIDER_PROFILE_MAX_DAYS=120)
-def test_a_rider_the_sync_has_stopped_refreshing_is_purged(profile_factory):
-    """An old fetch means the rider left the refresh set, which is the reason to evict."""
-    profile_factory(zwid=1, fetched_days_ago=200)
-    profile_factory(zwid=2, fetched_days_ago=1)
+@override_config(RIDER_PROFILE_MAX_DAYS=120, RIDER_PROFILE_PURGE_MAX_FRACTION=0.9)
+def test_a_rider_the_sync_has_stopped_asking_for_is_purged(profile_factory, healthy_sync):
+    """Not asked for in the window means the rider left the set we have a reason to hold."""
+    profile_factory(zwid=1, requested_days_ago=200)
+    profile_factory(zwid=2, requested_days_ago=1)
 
     result = purge_rider_profiles.func()
 
@@ -151,7 +153,7 @@ def test_a_rider_the_sync_has_stopped_refreshing_is_purged(profile_factory):
 
 @pytest.mark.django_db
 @override_config(RIDER_PROFILE_MAX_DAYS=120)
-def test_race_activity_no_longer_decides_anything(profile_factory):
+def test_race_activity_no_longer_decides_anything(profile_factory, healthy_sync):
     """A rider who has not raced in years stays, as long as the sync still refreshes them.
 
     This is the whole point of the anchor change: race activity describes the rider, not our
