@@ -2,6 +2,7 @@
 
 import csv
 import json
+import math
 import re
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
@@ -43,6 +44,7 @@ from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsig
 from apps.events.channel_access import can_view
 from apps.events.forms import EventForm, EventRoleSetupForm, SignupQuestionForm, SquadForm
 from apps.events.models import (
+    AVAILABILITY_REPOST_COOLDOWN,
     ZR_CATEGORY_ORDER,
     AvailabilityGrid,
     AvailabilityGridTemplate,
@@ -4703,12 +4705,20 @@ def _post_grid_published_notification(
     event: Event,
     squad: Squad,
     grid: AvailabilityGrid,
+    *,
+    reminder: bool = False,
 ) -> bool | str:
-    """Post a Discord channel message announcing that a grid is now published.
+    """Post a Discord channel message about an availability grid, pinging the squad role.
 
     Returns ``True`` on success or a short error string on failure. Failures are
     logged via Logfire; the caller decides whether to surface the error to the
     user. The grid's publish state is independent of this call.
+
+    ``reminder`` changes only the wording. The mention, the channel and the link are
+    identical, because the point of a re-post is to reach exactly the people the first
+    one reached. What must NOT stay identical is the heading: a second message saying
+    "New Availability Requested" reads as a second sheet, and riders would go looking for
+    one that does not exist.
 
     Date markdown uses ``<t:UNIX:D>`` so each Discord viewer sees the calendar
     day rendered in their own client locale. To avoid date drift across
@@ -4719,7 +4729,8 @@ def _post_grid_published_notification(
         request: The HTTP request (used for ``build_absolute_uri``).
         event: Parent event.
         squad: Squad whose Discord channel/role we post to.
-        grid: The just-published availability grid.
+        grid: The availability grid being announced.
+        reminder: Word it as a reminder about an already-published sheet.
 
     Returns:
         ``True`` on success, otherwise a string describing the failure.
@@ -4746,11 +4757,13 @@ def _post_grid_published_notification(
     title = grid.title or "Availability Grid"
     role_mention = f"<@&{squad.team_discord_role}>" if squad.team_discord_role else ""
     lines = [
-        "**New Availability Requested**",
+        "**Availability Reminder**" if reminder else "**New Availability Requested**",
         title,
         f"<t:{start_unix}:D> – <t:{end_unix}:D>",  # noqa: RUF001
         response_url,
     ]
+    if reminder:
+        lines.append("Please open the sheet and check your availability is still correct.")
     if role_mention:
         lines.extend(["", role_mention])
     body = "\n".join(lines)
@@ -4763,6 +4776,7 @@ def _post_grid_published_notification(
         squad_id=squad.pk,
         channel_id=str(squad.discord_channel_id),
         role_id=str(squad.team_discord_role) if squad.team_discord_role else None,
+        reminder=reminder,
     ):
         ok = send_discord_channel_message(
             squad.discord_channel_id,
@@ -4770,11 +4784,16 @@ def _post_grid_published_notification(
             allowed_role_ids=allowed_role_ids,
         )
     if ok:
+        # Stamped only on success. A failed send reached nobody, so leaving the stamp
+        # alone lets the captain press the button again straight away instead of waiting
+        # out a cooldown for a message that was never delivered.
+        AvailabilityGrid.objects.filter(pk=grid.pk).update(last_notified_at=timezone.now())
         logfire.info(
             "Availability grid publish notification posted",
             grid_id=str(grid.id),
             squad_id=squad.pk,
             channel_id=str(squad.discord_channel_id),
+            reminder=reminder,
         )
         return True
     return "Discord API call failed (see Logfire)"
@@ -4852,6 +4871,104 @@ def availability_status_view(request: HttpRequest, event_pk: int, squad_pk: int,
 
     messages.success(request, f'Grid "{grid.title}" is now {grid.get_status_display().lower()}.')
     return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def availability_repost_view(request: HttpRequest, event_pk: int, squad_pk: int, grid_pk: str) -> HttpResponse:
+    """Re-post a published availability sheet to the squad's Discord channel.
+
+    Same channel, same role mention and same link as the original publish notification --
+    the point is to reach the people that one reached -- worded as a reminder so it does
+    not read as a second sheet. Nothing about the grid changes; this only sends a message.
+
+    Published only. A draft has not been announced yet (that is what Publish & Notify is
+    for), and a closed sheet no longer accepts responses, so pinging a squad to go and
+    check it would send them to a page they cannot act on.
+
+    Args:
+        request: The HTTP request. ``return_to`` picks the redirect target.
+        event_pk: The parent event primary key.
+        squad_pk: The squad primary key.
+        grid_pk: The availability grid UUID.
+
+    Returns:
+        Redirect to the response page or the squad availability page.
+
+    """
+    event = get_object_or_404(Event, pk=event_pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = get_object_or_404(AvailabilityGrid, pk=grid_pk, squad=squad)
+
+    # Only ever one of two in-app pages, chosen by name rather than by URL, so this cannot
+    # become an open redirect however the form is tampered with.
+    back = (
+        redirect("events:availability_respond", event_pk=event_pk, squad_pk=squad_pk, grid_pk=grid_pk)
+        if request.POST.get("return_to") == "respond"
+        else redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+    )
+
+    if not _can_manage_squad_availability(request.user, squad):
+        logfire.warning(
+            "Unauthorized availability re-post attempt",
+            grid_id=str(grid.id),
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.error(request, "You don't have permission to manage availability.")
+        return redirect("events:event_detail", pk=event_pk)
+
+    if not grid.is_published:
+        messages.error(request, "Only a published sheet can be re-posted.")
+        return back
+
+    # Whether the squad has ever actually been told about this sheet -- read BEFORE the claim
+    # below overwrites it. "Publish only" leaves this null, so the first Discord message about
+    # such a sheet must announce it rather than ask riders to re-check something they have
+    # never seen.
+    already_announced = grid.last_notified_at is not None
+
+    # Claim the cooldown with a conditional UPDATE rather than reading the stamp and then
+    # sending. The Discord round trip is hundreds of milliseconds, and a check-then-send
+    # leaves that whole window open: two clicks, or two captains, both read an expired stamp
+    # and both ping the squad. Letting the database decide makes the rowcount the lock.
+    now = timezone.now()
+    claimed = (
+        AvailabilityGrid.objects.filter(pk=grid.pk)
+        .filter(Q(last_notified_at__isnull=True) | Q(last_notified_at__lte=now - AVAILABILITY_REPOST_COOLDOWN))
+        .update(last_notified_at=now)
+    )
+    if not claimed:
+        stamp = AvailabilityGrid.objects.filter(pk=grid.pk).values_list("last_notified_at", flat=True).first()
+        wait = AVAILABILITY_REPOST_COOLDOWN - (timezone.now() - stamp) if stamp else timedelta(0)
+        # Ceiling, not rounding: telling someone to wait 2 minutes when it is 2m40s sends them
+        # back to a button that refuses them again.
+        minutes = max(1, math.ceil(wait.total_seconds() / 60))
+        messages.warning(
+            request,
+            f"The squad was notified about this sheet recently. You can re-post again in {minutes} minute"
+            f"{'' if minutes == 1 else 's'}.",
+        )
+        return back
+
+    result = _post_grid_published_notification(request, event, squad, grid, reminder=already_announced)
+    if result is True:
+        logfire.info(
+            "Availability grid re-posted",
+            grid_id=str(grid.id),
+            squad_id=squad_pk,
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        messages.success(request, f'Reminder posted to Discord for "{grid.title or "Availability Grid"}".')
+    else:
+        # Hand the claim back. The message reached nobody, so holding the captain to a
+        # cooldown for it would punish them for our failure.
+        AvailabilityGrid.objects.filter(pk=grid.pk).update(last_notified_at=grid.last_notified_at)
+        messages.warning(request, f"The Discord reminder could not be posted: {result}.")
+    return back
 
 
 @login_required
@@ -5501,6 +5618,9 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
             "existing_rest_days": existing_response.rest_days if existing_response else None,
             "race_verified_required": race_verified_required,
             "user_is_race_ready": user_is_race_ready,
+            # Drives the Re-Post control. Riders see this page too, so the button has to be
+            # gated on the same permission the view behind it enforces.
+            "can_manage_availability": _can_manage_squad_availability(request.user, squad),
         },
     )
 

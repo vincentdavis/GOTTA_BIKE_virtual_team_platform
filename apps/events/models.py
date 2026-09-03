@@ -1292,6 +1292,13 @@ class SquadMember(models.Model):
         return f"{self.squad.name} - {self.user}"
 
 
+# How long after notifying a squad about a sheet before it can be done again. The re-post
+# @-mentions the whole squad role, so the thing being rate-limited is everyone's phone, not
+# a row in a table. Long enough that a double-click or two captains acting on the same
+# request cannot double-ping; short enough to re-send after a genuine correction.
+AVAILABILITY_REPOST_COOLDOWN = timedelta(minutes=30)
+
+
 class AvailabilityGrid(models.Model):
     """A date/time grid configuration for collecting squad member availability.
 
@@ -1353,6 +1360,15 @@ class AvailabilityGrid(models.Model):
         choices=Status.choices,
         default=Status.DRAFT,
         help_text="Grid lifecycle status",
+    )
+    # Set every time the squad is pinged about this sheet, by the publish notification and
+    # by a re-post alike. It exists to rate-limit the re-post: that message @-mentions the
+    # whole squad role, so a double-click is not a duplicate row somewhere quiet, it is a
+    # second notification on every rider's phone.
+    last_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the squad was last notified in Discord about this sheet",
     )
     max_races_question = models.BooleanField(
         default=False,
@@ -1505,6 +1521,22 @@ class AvailabilityGrid(models.Model):
 
         """
         return self.status == self.Status.PUBLISHED
+
+    @property
+    def in_notify_cooldown(self) -> bool:
+        """Report whether the squad was pinged about this sheet too recently to ping again.
+
+        Read by the templates so the Re-Post control can say why it is unavailable. The view
+        does not trust it -- it claims the cooldown in the database -- but a control that
+        silently does nothing is worse than one that explains itself.
+
+        Returns:
+            True while another re-post would be refused.
+
+        """
+        if self.last_notified_at is None:
+            return False
+        return timezone.now() - self.last_notified_at < AVAILABILITY_REPOST_COOLDOWN
 
     @property
     def is_closed(self) -> bool:

@@ -135,6 +135,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/events/{id}/assign-riders/ - Dedicated squad assignment page",
             "/events/{id}/squads/{squad_id}/regenerate-token/ - Generate/regenerate squad invite link",
             "/events/{id}/availability/ - Manage availability",
+            "/events/{id}/squads/{squad_id}/availability/{grid_id}/repost/ - Re-post an availability sheet to Discord",
         ],
     },
     Permissions.ASSIGN_ROLES: {

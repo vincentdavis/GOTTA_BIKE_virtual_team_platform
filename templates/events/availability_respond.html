@@ -61,8 +61,63 @@
     <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
   </div>
 
-  <h1 class="text-2xl font-bold mb-1">{{ grid.title }}</h1>
-  <p class="text-base-content/70 mb-2">{{ event.title }} &mdash; {{ squad.name }}</p>
+  <div class="flex flex-wrap items-start justify-between gap-3 mb-2">
+    <div>
+      <h1 class="text-2xl font-bold mb-1">{{ grid.title }}</h1>
+      <p class="text-base-content/70">{{ event.title }} &mdash; {{ squad.name }}</p>
+    </div>
+    {% comment %}
+      Captains-only reminder control, mirroring the one in the squad availability actions
+      menu. It sits here because this is the page a captain is on when they notice the
+      sheet is thin, and the alternative is navigating back to the squad page to send it.
+    {% endcomment %}
+    {% comment %}
+      A paper plane, not the pencil this codebase uses for Edit -- on a page whose whole job
+      is editing, an Edit glyph on a "send a message" control is actively misleading.
+    {% endcomment %}
+    {% if can_manage_availability and grid.is_published and squad.discord_channel_id %}
+    {% if grid.in_notify_cooldown %}
+    <span class="btn btn-sm btn-outline btn-disabled shrink-0"
+          title="The squad was notified {{ grid.last_notified_at|timesince }} ago. You can re-post again shortly.">
+      Re-Post sent recently
+    </span>
+    {% else %}
+    <button type="button" class="btn btn-sm btn-outline shrink-0"
+            onclick="document.getElementById('repost-modal').showModal()">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+      </svg>
+      Re-Post to Discord
+    </button>
+    {% endif %}
+    {% endif %}
+  </div>
+
+  {% if can_manage_availability and grid.is_published and squad.discord_channel_id and not grid.in_notify_cooldown %}
+  <dialog id="repost-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Re-post "{{ grid.title|default:'Availability Grid' }}"?</h3>
+      <p class="py-2 text-sm">
+        Posts a reminder to {{ squad.name }}'s Discord channel with a link to this sheet
+        {% if squad.team_discord_role %}and <strong>@-mentions the squad role</strong>{% endif %},
+        asking everyone to check their availability is still correct.
+        Nothing about the sheet or the responses changes.
+      </p>
+      {% if grid.last_notified_at %}
+      <p class="text-xs text-base-content/60">Squad last notified {{ grid.last_notified_at|timesince }} ago.</p>
+      {% endif %}
+      <div class="modal-action flex flex-wrap gap-2">
+        <form method="dialog" class="inline"><button class="btn btn-sm">Cancel</button></form>
+        <form method="post" action="{% url 'events:availability_repost' event.pk squad.pk grid.pk %}" class="inline">
+          {% csrf_token %}
+          <input type="hidden" name="return_to" value="respond">
+          <button type="submit" class="btn btn-sm btn-primary">Post reminder</button>
+        </form>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>close</button></form>
+  </dialog>
+  {% endif %}
 
   {% if race_verified_required and not user_is_race_ready %}
   <div role="alert" class="alert alert-warning mb-4">

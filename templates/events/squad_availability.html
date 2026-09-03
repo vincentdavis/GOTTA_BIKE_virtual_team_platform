@@ -72,6 +72,19 @@
                   {% if grid.is_draft %}
                   <li><button type="button" onclick="document.getElementById('publish-modal-{{ grid.pk }}').showModal()">Publish</button></li>
                   {% elif grid.is_published %}
+                  {% comment %}
+                    Re-post re-sends the publish announcement as a reminder -- same channel,
+                    same role ping, same link. Hidden without a Discord channel because there
+                    is nowhere for it to go, and the failure would only surface as a warning
+                    after the click.
+                  {% endcomment %}
+                  {% if squad.discord_channel_id %}
+                  {% if grid.in_notify_cooldown %}
+                  <li class="menu-disabled"><span title="The squad was notified less than 30 minutes ago">Re-Post to Discord</span></li>
+                  {% else %}
+                  <li><button type="button" onclick="document.getElementById('repost-modal-{{ grid.pk }}').showModal()">Re-Post to Discord</button></li>
+                  {% endif %}
+                  {% endif %}
                   <li><button type="submit" form="close-grid-{{ grid.pk }}">Close</button></li>
                   {% endif %}
                   <li><button type="button" onclick="document.getElementById('copy-modal-{{ grid.pk }}').showModal()">Copy</button></li>
@@ -84,6 +97,34 @@
                   {% csrf_token %}
                   <input type="hidden" name="status" value="closed">
                 </form>
+                {% if squad.discord_channel_id and not grid.in_notify_cooldown %}
+                <dialog id="repost-modal-{{ grid.pk }}" class="modal">
+                  <div class="modal-box">
+                    <h3 class="font-bold text-lg">Re-post "{{ grid.title|default:'Availability Grid' }}"?</h3>
+                    <p class="py-2 text-sm">
+                      Posts a reminder to the squad's Discord channel with a link to this sheet
+                      {% if squad.team_discord_role %}and <strong>@-mentions the squad role</strong>{% endif %},
+                      asking everyone to check their availability is still correct.
+                      Nothing about the sheet or the responses changes.
+                    </p>
+                    {% if grid.last_notified_at %}
+                    <p class="text-xs text-base-content/60">
+                      Squad last notified {{ grid.last_notified_at|timesince }} ago.
+                    </p>
+                    {% endif %}
+                    <div class="modal-action flex flex-wrap gap-2">
+                      <form method="dialog" class="inline">
+                        <button class="btn btn-sm">Cancel</button>
+                      </form>
+                      <form method="post" action="{% url 'events:availability_repost' event.pk squad.pk grid.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-primary">Post reminder</button>
+                      </form>
+                    </div>
+                  </div>
+                  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+                </dialog>
+                {% endif %}
                 {% endif %}
                 <form id="delete-grid-{{ grid.pk }}" method="post" action="{% url 'events:availability_delete' event.pk squad.pk grid.pk %}"
                       onsubmit="return confirm('Delete availability grid &quot;{{ grid.title|escapejs }}&quot;? This will remove the grid and all {{ grid.response_count }} response(s). This cannot be undone.');">
