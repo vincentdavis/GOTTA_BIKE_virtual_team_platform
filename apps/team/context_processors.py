@@ -17,6 +17,9 @@ PENDING_VERIFICATION_CACHE_TIMEOUT = 60  # seconds
 EXPIRING_VERIFICATION_CACHE_PREFIX = "expiring_verifications:v1"
 EXPIRING_VERIFICATION_CACHE_TIMEOUT = 360  # seconds
 
+SQUAD_EXPIRING_CACHE_PREFIX = "squad_expiring_verifications:v1"
+SQUAD_EXPIRING_CACHE_TIMEOUT = 360  # seconds
+
 
 def pending_verification_count(request: HttpRequest) -> dict[str, int]:
     """Expose the count of pending verification records the user can review.
@@ -126,3 +129,51 @@ def expiring_verifications(request: HttpRequest) -> dict:
     cache.set(cache_key, payload, EXPIRING_VERIFICATION_CACHE_TIMEOUT)
     logfire.debug("expiring_verifications computed", user_id=user.pk, payload=payload)
     return {"expiring_verifications": payload or None}
+
+
+def squad_expiring_verifications(request: HttpRequest) -> dict:
+    """Expose how many of a captain's squad-mates have a verification expiring soon.
+
+    Drives the captain banner in ``base.html``. Only the count is cached and rendered; the
+    names, links and days are fetched on click by ``squad_expiring_modal_view``. Note the
+    summary itself IS computed here to get that count -- the row-building costs no extra
+    queries, but this is why ``squad_expiring_summary`` hoists its Constance reads instead of
+    leaving them to ``days_remaining``.
+
+    Distinct from the rider's own ``expiring_verifications`` banner in both audience and
+    tone: that one is "renew yours", this one is "go and nudge these people". They can both
+    be showing at once, which is why they are separate banners rather than one merged count.
+
+    Gated on ``team_member`` as well as authentication, deliberately matching
+    ``squad_expiring_modal_view``: a banner the modal behind it would refuse leaves the dialog
+    on its spinner forever, which is worse than no banner. Both run no query for users who
+    fail the gate. Past that, the first query filters on an opt-in that is off by default, so
+    for almost every team member this is one cheap miss per cache window.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        Dictionary with ``squad_expiring_verifications`` -- ``None``, or a dict with
+        ``count`` (distinct riders to remind).
+
+    """
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated or not user.is_team_member:
+        return {"squad_expiring_verifications": None}
+
+    cache_key = f"{SQUAD_EXPIRING_CACHE_PREFIX}:{user.pk}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        # ``False`` is the sentinel for "computed, nothing to remind about".
+        return {"squad_expiring_verifications": cached or None}
+
+    with logfire.span("squad_expiring_verifications", user_id=user.pk):
+        from apps.team.services import squad_expiring_summary
+
+        count = squad_expiring_summary(user)["rider_count"]
+        payload: dict | bool = {"count": count} if count else False
+
+    cache.set(cache_key, payload, SQUAD_EXPIRING_CACHE_TIMEOUT)
+    logfire.debug("squad_expiring_verifications computed", user_id=user.pk, count=count)
+    return {"squad_expiring_verifications": payload or None}

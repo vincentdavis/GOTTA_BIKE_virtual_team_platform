@@ -1,0 +1,52 @@
+{% comment %}
+  Body of the captain banner's modal: squad-mates whose Race Verified status is expiring,
+  grouped by squad and soonest-first within each, because the list exists to answer "who do
+  I chase today".
+
+  Every squad here is one the viewer captains -- the service filters on that -- so the names
+  are people they already manage. Names link to the public profile, which is where the
+  Discord handle to nudge them on lives.
+{% endcomment %}
+<h3 class="font-bold text-lg mb-1">Expiring verifications in your squads</h3>
+<p class="text-sm text-base-content/60 mb-4">
+  {{ rider_count }} squad-mate{{ rider_count|pluralize }} to remind. Riders who have already
+  lost Race Verified are listed first; for the rest, the days shown are what is left.
+</p>
+
+{% for group in squads %}
+<div class="mb-4">
+  <div class="flex items-baseline gap-2 mb-1">
+    <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">{{ group.squad.name }}</p>
+    <span class="text-xs text-base-content/40">{{ group.squad.event.title }}</span>
+  </div>
+  <ul class="divide-y divide-base-content/10">
+    {% for row in group.rows %}
+    <li class="flex items-center justify-between gap-3 py-1.5">
+      <a href="{% url 'accounts:public_profile' row.user.pk %}" class="link link-primary text-sm">
+        {{ row.user.get_full_name|default:row.user.discord_username }}
+      </a>
+      {% comment %}
+        A lapsed rider gets a badge rather than a number: "-4 days" reads as a bug, and the
+        state is categorically different from a deadline -- they cannot race right now.
+      {% endcomment %}
+      {% if row.lapsed %}
+      <span class="badge badge-error badge-sm whitespace-nowrap" title="{{ row.verify_type }}">
+        expired {{ row.days_abs }} day{{ row.days_abs|pluralize }} ago
+      </span>
+      {% else %}
+      <span class="text-sm whitespace-nowrap {% if row.days <= 3 %}text-error font-semibold{% else %}text-warning{% endif %}"
+            title="{{ row.verify_type }}">
+        {% if row.days == 0 %}today{% else %}{{ row.days }} day{{ row.days|pluralize }}{% endif %}
+      </span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% empty %}
+{% comment %}
+  Reachable: the banner's count is cached for a few minutes, so a captain can open this
+  moments after the last rider renewed. Better to say so than to show an empty box.
+{% endcomment %}
+<p class="text-sm text-base-content/60">Nothing expiring right now &mdash; everyone is up to date.</p>
+{% endfor %}

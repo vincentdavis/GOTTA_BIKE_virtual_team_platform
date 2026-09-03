@@ -826,6 +826,15 @@ class Squad(models.Model):
         default=True,
         help_text="Notify captain/vice-captain via Discord DM when squad members' verification records change",
     )
+    # Off by default: it puts a banner in front of the captains of every squad that turns it
+    # on, and a squad that is not actively chasing verifications does not want one.
+    notify_captain_expiring_verification = models.BooleanField(
+        default=False,
+        help_text=(
+            "Show this squad's captains and vice-captains a banner listing members whose Race "
+            "Verified status is expiring or has lapsed, until the event's end date passes"
+        ),
+    )
     invite_token = models.UUIDField(
         null=True,
         blank=True,

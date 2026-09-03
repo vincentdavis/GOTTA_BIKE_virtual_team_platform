@@ -821,6 +821,7 @@ class SquadForm(forms.ModelForm):
             "url",
             "invite_url",
             "captain_notifications",
+            "notify_captain_expiring_verification",
         ]
         widgets: ClassVar[dict] = {
             "name": forms.TextInput(
@@ -926,6 +927,9 @@ class SquadForm(forms.ModelForm):
                 attrs={"class": "input input-bordered w-full", "placeholder": "https://..."},
             ),
             "captain_notifications": forms.CheckboxInput(
+                attrs={"class": "toggle toggle-primary"},
+            ),
+            "notify_captain_expiring_verification": forms.CheckboxInput(
                 attrs={"class": "toggle toggle-primary"},
             ),
             # Not SelectMultiple: DaisyUI's .select is display:inline-flex with a fixed

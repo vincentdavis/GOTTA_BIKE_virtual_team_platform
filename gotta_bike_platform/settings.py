@@ -210,6 +210,7 @@ TEMPLATES = [
                 "apps.cms.context_processors.cms_nav_pages",
                 "apps.team.context_processors.pending_verification_count",
                 "apps.team.context_processors.expiring_verifications",
+                "apps.team.context_processors.squad_expiring_verifications",
                 "apps.events.context_processors.pending_availability_count",
             ],
         },

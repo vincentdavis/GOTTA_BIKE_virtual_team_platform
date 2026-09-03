@@ -64,6 +64,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/team/links/submit/ - Submit new team link",
             "/team/links/{id}/edit/ - Edit team link",
             "/team/verification/ - Verification records",
+            "/team/verification/squad-expiring/ - Squad-mates with expiring verification (captain banner)",
             "/team/verification/{id}/ - Verification detail",
             "/team/team-feed/ - Team feed",
             "/user/profile/{id}/ - View teammate profiles",

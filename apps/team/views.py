@@ -36,6 +36,7 @@ from apps.team.services import (
     log_record_view,
     purge_expired_verification_media,
     purge_rejected_verification_media,
+    squad_expiring_summary,
     verification_media_url,
 )
 from apps.team.tasks import notify_application_update, notify_captains_verification, notify_race_ready_change
@@ -3088,3 +3089,33 @@ def application_zwid_admin_action_view(request: HttpRequest, pk: uuid.UUID) -> H
         "team/partials/application_zwid_status.html",
         {"application": application},
     )
+
+
+@login_required
+@team_member_required()
+@require_GET
+def squad_expiring_modal_view(request: HttpRequest) -> HttpResponse:
+    """List the squad-mates behind the captain banner, grouped by squad.
+
+    Loaded on click rather than rendered into every page: the banner needs a count, this
+    needs names, days and links, and a captain who never opens it should not pay for it.
+
+    No extra permission gate beyond team membership, because the query itself is the gate --
+    ``squad_expiring_summary`` only ever returns squads where THIS user is a captain or
+    vice-captain. A member of no such squad gets an empty list, not someone else's roster.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        The rendered modal body partial.
+
+    """
+    summary = squad_expiring_summary(request.user)
+    logfire.info(
+        "Squad expiring verification modal viewed",
+        user_id=request.user.id,
+        squads=len(summary["squads"]),
+        riders=summary["rider_count"],
+    )
+    return render(request, "team/partials/_squad_expiring_modal.html", summary)

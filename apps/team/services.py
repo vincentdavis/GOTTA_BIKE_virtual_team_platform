@@ -985,6 +985,38 @@ def is_expiring_soon(days_remaining: int | None) -> bool:
     return 0 <= days_remaining <= max(expiry_warning_thresholds())
 
 
+def needs_captain_attention(days_remaining: int | None, *, warn_within: int | None = None) -> bool:
+    """Whether a record should appear on a captain's squad-mates list.
+
+    Wider than :func:`is_expiring_soon` by exactly one thing: a record that has ALREADY
+    lapsed still counts, and sorts to the top.
+
+    For the rider the two states need different words -- "renew this" versus "you have lost
+    Race Verified" -- which is why their own banner keeps them apart. For a captain the
+    question collapses: this rider cannot race, or soon will not be able to. Leaving the
+    lapsed rider out hid the worse half of it.
+
+    ``is_expiring_soon`` is deliberately left as it was. It is the shared definition behind
+    the rider's banner and the DM task, and widening it there would start sending riders
+    reminders to renew things that have already gone.
+
+    Args:
+        days_remaining: Days until expiry (negative once lapsed), or None for a record that
+            never expires.
+        warn_within: The window, when the caller has already read it. Callers in a loop MUST
+            pass this: ``expiry_warning_thresholds()`` reads Constance, and Constance has no
+            cache backend configured here, so every default-path call is its own SELECT.
+
+    Returns:
+        True if the captain should be shown this record.
+
+    """
+    if days_remaining is None:
+        return False
+    limit = max(expiry_warning_thresholds()) if warn_within is None else warn_within
+    return days_remaining <= limit
+
+
 def covering_records_by_type(records) -> dict[str, RaceReadyRecord]:
     """Collapse verified records to the single coverage-defining record per verify_type.
 
@@ -1010,6 +1042,158 @@ def covering_records_by_type(records) -> dict[str, RaceReadyRecord]:
         if current is None or _covers_longer(record, current):
             covering[record.verify_type] = record
     return covering
+
+
+def squad_expiring_summary(user) -> dict:
+    """Squad-mates with an expiring verification, for the squads this user leads.
+
+    Drives both the captain banner and the modal behind it, deliberately from one place:
+    the banner is a count of what the modal lists, and two implementations of that would
+    eventually disagree and read as a bug.
+
+    Scope, in the order it narrows:
+
+    * squads that opted in (``notify_captain_expiring_verification``) -- off by default, so
+      most captains never reach a query past this one;
+    * squads whose EVENT HAS NOT ENDED. A finished event cannot be raced, so nagging a
+      captain to chase verifications for it is pure noise;
+    * riders with a ``MEMBER`` row on that squad -- a pending or rejected applicant is not
+      yet a squad-mate to remind;
+    * of those, riders whose verification is expiring OR has already lapsed
+      (``covering_records_by_type`` then ``needs_captain_attention``). The lapsed rider is
+      the most urgent case, not an excluded one -- they cannot race at all -- so they are
+      listed first and flagged. The rider's own banner still separates the two, because
+      "renew this" and "you have lost Race Verified" are different things to tell the person
+      themselves; to a captain chasing a roster they are one list.
+
+    Args:
+        user: The signed-in user, treated as a potential captain or vice-captain.
+
+    Returns:
+        ``{"squads": [{"squad", "rows": [...]}], "rider_count"}``, each row carrying ``user``,
+        ``days`` (signed -- negative once lapsed), ``days_abs``, ``lapsed`` and ``verify_type``.
+        ``rider_count`` counts DISTINCT riders: a rider in two of this captain's squads is
+        still one person to remind, so the banner speaks of people while the modal shows
+        them under each squad they belong to.
+
+    """
+    # Local import: apps.events imports this module, so a module-level import here would
+    # close the loop. Same pattern as apps/team/tasks.py.
+    from apps.events.models import Squad, SquadMember
+
+    squads = list(
+        Squad.objects.filter(
+            Q(captains=user) | Q(vice_captains=user),
+            notify_captain_expiring_verification=True,
+            event__end_date__gte=timezone.localdate(),
+            # Matches _active_squads() and the captain-notification query in tasks.py. An
+            # event hidden from riders should not be pushing a banner at its captains.
+            event__visible=True,
+        )
+        .select_related("event")
+        .distinct()
+        .order_by("event__title", "name")
+    )
+    if not squads:
+        return {"squads": [], "rider_count": 0}
+
+    members_by_squad: dict[int, list] = {}
+    member_ids: set[int] = set()
+    for membership in SquadMember.objects.filter(
+        squad__in=squads, status=SquadMember.Status.MEMBER
+    ).select_related("user"):
+        members_by_squad.setdefault(membership.squad_id, []).append(membership.user)
+        member_ids.add(membership.user_id)
+    if not member_ids:
+        return {"squads": [], "rider_count": 0}
+
+    records_by_user: dict[int, list[RaceReadyRecord]] = {}
+    for record in RaceReadyRecord.objects.filter(
+        user_id__in=member_ids, status=RaceReadyRecord.Status.VERIFIED
+    ):
+        records_by_user.setdefault(record.user_id, []).append(record)
+
+    # Read every Constance value ONCE, before the loop. RaceReadyRecord.days_remaining goes
+    # through validity_days, which reads all four windows on every single access, and
+    # CONSTANCE_DATABASE_CACHE_BACKEND is unset here, so each of those is a real SELECT. This
+    # runs in a context processor on every authenticated render and scales with squad size,
+    # so leaving the property to do it costs hundreds of queries a pageview for a captain of
+    # a full squad. get_unified_team_roster hoists them for the same reason.
+    validity_by_type = _verify_type_validity_days()
+    warn_within = max(expiry_warning_thresholds())
+    today = timezone.localdate()
+
+    def _days_left(record: RaceReadyRecord) -> int | None:
+        """Days until a record expires, without re-reading the config per record.
+
+        Args:
+            record: A verified record.
+
+        Returns:
+            Signed days remaining, or None when the type never expires.
+
+        """
+        validity = validity_by_type.get(record.verify_type, 0)
+        if not validity or not record.record_date:
+            return None
+        return (record.record_date + timedelta(days=validity) - today).days
+
+    # Per rider, the soonest-expiring type and how long it has left.
+    worst_by_user: dict[int, tuple[int, str]] = {}
+    for user_id, records in records_by_user.items():
+        # Same rule as covering_records_by_type/_covers_longer -- a never-expiring record
+        # outranks any finite one, otherwise more days wins -- applied to days computed once
+        # per record rather than re-derived on each comparison.
+        covering: dict[str, tuple[RaceReadyRecord, int | None]] = {}
+        for record in records:
+            days = _days_left(record)
+            current = covering.get(record.verify_type)
+            if current is None:
+                covering[record.verify_type] = (record, days)
+                continue
+            current_days = current[1]
+            if current_days is None:
+                continue  # current never expires -- nothing beats it
+            if days is None or days > current_days:
+                covering[record.verify_type] = (record, days)
+
+        flagged = [
+            (record, days)
+            for record, days in covering.values()
+            if needs_captain_attention(days, warn_within=warn_within)
+        ]
+        if flagged:
+            soonest, days = min(flagged, key=lambda pair: pair[1])
+            worst_by_user[user_id] = (days, soonest.get_verify_type_display())
+
+    groups = []
+    riders: set[int] = set()
+    for squad in squads:
+        rows = []
+        for member in members_by_squad.get(squad.pk, []):
+            # A playing captain has their own banner for their own verification; listing
+            # them among the squad-mates to chase double-counts one person's problem.
+            if member.pk == user.pk:
+                continue
+            hit = worst_by_user.get(member.pk)
+            if hit is None:
+                continue
+            days, verify_type = hit
+            rows.append({
+                "user": member,
+                "days": days,
+                "days_abs": abs(days),
+                "lapsed": days < 0,
+                "verify_type": verify_type,
+            })
+            riders.add(member.pk)
+        if rows:
+            # Signed days, so already-lapsed riders (negative) sort above the merely
+            # expiring. The point of the list is who to chase first.
+            rows.sort(key=lambda row: (row["days"], (row["user"].get_full_name() or "").lower()))
+            groups.append({"squad": squad, "rows": rows})
+
+    return {"squads": groups, "rider_count": len(riders)}
 
 
 @dataclass
