@@ -66,8 +66,16 @@ than on each row -- they are properties of the squad, not the rider.
           {# Closed / past sheets are muted, so "still open for responses" stays readable. #}
           <th class="text-center whitespace-nowrap {% if not col.is_open %}text-base-content/50 font-normal{% endif %}"
               data-col="availability" style="display:none"
-              title="{{ col.grid.title }}{% if not col.is_open %} (closed){% endif %}">
+              title="{{ col.detail }}{% if col.grid.title %} &middot; {{ col.grid.title }}{% endif %}{% if not col.is_open %} (closed){% endif %}">
             {{ col.label }}
+            {% comment %}
+              How many of the squad said yes, under the date it belongs to. The denominator
+              is the squad size shown in this table, so a column reads as a fraction of the
+              people in front of you rather than of some wider roster.
+            {% endcomment %}
+            <div class="text-xs font-normal text-base-content/60">
+              {{ col.available_count }} of {{ col.member_count }}
+            </div>
           </th>
           {% endfor %}
           <th class="text-left">Past races</th>

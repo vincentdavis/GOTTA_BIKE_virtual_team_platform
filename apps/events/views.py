@@ -4,7 +4,7 @@ import csv
 import json
 import math
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo, available_timezones
@@ -2007,21 +2007,51 @@ def _availability_columns(event: Event, tz_obj: ZoneInfo, today_local: date) -> 
         today_local: Today's date in that timezone, for the open/closed split.
 
     Returns:
-        ``{squad_id: [{"grid", "label", "is_open"}]}`` oldest-first within each squad.
+        ``{squad_id: [{"grid", "label", "detail", "is_open"}]}`` oldest-first within each
+        squad. ``detail`` carries the time the label drops, for the header tooltip.
 
     """
     utc = ZoneInfo("UTC")
 
-    def _label(grid: AvailabilityGrid) -> str:
-        start = datetime.combine(
+    def _start_of(grid: AvailabilityGrid) -> datetime:
+        """Return a grid's start moment in the viewer's timezone.
+
+        Args:
+            grid: The availability grid.
+
+        Returns:
+            The localized start datetime.
+
+        """
+        return datetime.combine(
             grid.start_date, time.fromisoformat(grid.start_time), tzinfo=utc
         ).astimezone(tz_obj)
+
+    def _label(grid: AvailabilityGrid, start: datetime) -> str:
+        """Build the column heading for a grid.
+
+        Deliberately without a time: a weekly series is read as a row of dates, and
+        "Sep 22 06:00" spent most of a narrow column on a number that is the same every
+        week. The time is not lost -- it moves to the tooltip, and comes back into the
+        label only where two sheets share a day (see below).
+
+        ``start.day`` rather than ``%d`` because ``%d`` pads, and "Sep 02" beside
+        "Sep 22" reads as a wider column for no gain. Matches the race badges.
+
+        Args:
+            grid: The availability grid.
+            start: Its localized start.
+
+        Returns:
+            The heading text.
+
+        """
         if grid.single_slot:
-            return start.strftime("%b %d %H:%M")
+            return f"{start:%b} {start.day}"
         end = datetime.combine(
             grid.end_date, time.fromisoformat(grid.end_time), tzinfo=utc
         ).astimezone(tz_obj)
-        return f"{start:%b %d}\u2013{end:%b %d}"
+        return f"{start:%b} {start.day}\u2013{end:%b} {end.day}"
 
     by_squad: dict[int, list[dict]] = defaultdict(list)
     grids = (
@@ -2033,13 +2063,27 @@ def _availability_columns(event: Event, tz_obj: ZoneInfo, today_local: date) -> 
         .order_by("start_date", "start_time", "end_date", "pk")
     )
     for grid in grids:
+        start = _start_of(grid)
         by_squad[grid.squad_id].append({
             "grid": grid,
-            "label": _label(grid),
+            "label": _label(grid, start),
+            "detail": f"{start:%A %d %B %Y, %H:%M}",
+            "start": start,
             "is_open": (
                 grid.status == AvailabilityGrid.Status.PUBLISHED and grid.end_date >= today_local
             ),
         })
+
+    # Dropping the time is only safe while the dates stay distinct. Two sheets on the same
+    # day -- a morning and an evening race, or two divisions -- would otherwise be two
+    # columns with identical headings, which is worse than the time we removed. Put it back
+    # on exactly those, and leave every other column short.
+    for cols in by_squad.values():
+        counts = Counter(col["label"] for col in cols)
+        for col in cols:
+            if counts[col["label"]] > 1:
+                col["label"] = f"{col['label']} {col['start']:%H:%M}"
+
     return by_squad
 
 
@@ -2302,6 +2346,14 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
                     for col in squad_grids
                 ],
             })
+        # How many of this squad's riders said yes to each sheet. Computed here rather than
+        # in the template because the answer lives on the rows, one per column, and a
+        # template cannot cross that axis. Counted against the rows actually rendered, so
+        # the denominator matches what the reader can see.
+        for index, col in enumerate(squad_grids):
+            col["available_count"] = sum(1 for row in rows if row["availability"][index]["state"] == "yes")
+            col["member_count"] = len(rows)
+
         report.append({
             "squad": squad,
             "rows": rows,
