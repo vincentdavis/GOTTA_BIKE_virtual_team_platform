@@ -1004,7 +1004,24 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         messages.error(request, "You don't have permission to view verification records.")
         return redirect("home")
 
-    record = get_object_or_404(RaceReadyRecord.objects.select_related("user", "reviewed_by"), pk=pk)
+    record = RaceReadyRecord.objects.select_related("user", "reviewed_by").filter(pk=pk).first()
+    if record is None:
+        # Not a hypothetical: the submission DM links straight to this page, and the rider can
+        # delete or replace the record before a reviewer opens it. Following a real
+        # notification to a bare 404 reads as the app having lost their work, so say what
+        # actually happened and put them back in the queue -- the same shape as the
+        # same-gender redirect below.
+        logfire.info(
+            "Verification record from a notification no longer exists",
+            record_id=pk,
+            user_id=request.user.id,
+        )
+        messages.info(
+            request,
+            f"Verification record #{pk} no longer exists — the rider deleted or replaced it. "
+            "Any newer submission from them will be in the queue below.",
+        )
+        return redirect("team:verification_records")
 
     # Check if user can verify records (has permission)
     has_permission = request.user.can_approve_verification or request.user.is_superuser

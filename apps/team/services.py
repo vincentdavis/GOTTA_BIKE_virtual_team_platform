@@ -475,6 +475,9 @@ def delete_verification_records(user: User, record_ids) -> dict:
     logfire.info(
         "Rider deleted their own verification records",
         user_id=user.pk,
+        # The ids, not just the count. A reviewer following a submission DM to a record that
+        # has since gone needs to know WHICH record vanished, and a count cannot answer that.
+        record_ids=sorted(r.pk for r in records),
         deleted=len(records),
         verify_types=sorted({r.verify_type for r in records}),
         failed_media=media["failed"],
