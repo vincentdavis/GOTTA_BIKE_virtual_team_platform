@@ -1227,7 +1227,9 @@ def squad_expiring_summary(user) -> dict:
                 key=lambda row: (
                     _ROW_ORDER[row["state"]],
                     row["days"] if row["days"] is not None else 0,
-                    (row["user"].get_full_name() or "").lower(),
+                    # The same string the row displays -- sorting on get_full_name alone
+                    # puts every unnamed rider under one empty key, in arbitrary order.
+                    (row["user"].get_full_name() or row["user"].discord_username or "").lower(),
                 )
             )
             groups.append({"squad": squad, "rows": rows})

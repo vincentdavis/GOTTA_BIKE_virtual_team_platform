@@ -27,21 +27,30 @@
         {{ row.user.get_full_name|default:row.user.discord_username }}
       </a>
       {% comment %}
-        The two can't-race states get badges rather than numbers: there is no number to show
-        for a rider who has verified nothing, and "-4 days" reads as a bug rather than a
-        state. Solid versus outline keeps them distinguishable while equally severe -- both
-        mean the rider cannot race right now, which a deadline does not.
+        A three-step severity ladder, and every step readable on its own background.
+
+        Solid badges only. DaisyUI pairs each colour with a *-content foreground designed
+        against it; raw text-error / text-warning are the colour itself on base-100, which in
+        the DEFAULT LIGHT theme is 2.87:1 and 1.76:1 against white -- below the 4.5:1 floor,
+        and invisible to anyone developing in dark mode, where both pass comfortably.
+
+        The two can't-race states share one colour on purpose. They are equally severe, the
+        words already tell them apart, and making colour the only difference between them
+        would be the thing that fails for a colour-blind reader.
       {% endcomment %}
       {% if row.state == "none" %}
       <span class="badge badge-error badge-sm whitespace-nowrap">nothing verified</span>
       {% elif row.state == "lapsed" %}
-      <span class="badge badge-error badge-outline badge-sm whitespace-nowrap" title="{{ row.verify_type }}">
+      <span class="badge badge-error badge-sm whitespace-nowrap" title="{{ row.verify_type }}">
         expired {{ row.days_abs }} day{{ row.days_abs|pluralize }} ago
       </span>
-      {% else %}
-      <span class="text-sm whitespace-nowrap {% if row.days <= 3 %}text-error font-semibold{% else %}text-warning{% endif %}"
-            title="{{ row.verify_type }}">
+      {% elif row.days <= 3 %}
+      <span class="badge badge-warning badge-sm whitespace-nowrap" title="{{ row.verify_type }}">
         {% if row.days == 0 %}today{% else %}{{ row.days }} day{{ row.days|pluralize }}{% endif %}
+      </span>
+      {% else %}
+      <span class="text-sm whitespace-nowrap text-base-content/70" title="{{ row.verify_type }}">
+        {{ row.days }} days
       </span>
       {% endif %}
     </li>

@@ -118,6 +118,24 @@ def _banner(client, viewer) -> str:
     return client.get(reverse("accounts:profile")).content.decode()
 
 
+def _warm_config(user) -> None:
+    """Run one summary so Constance has seeded its defaults before anything is measured.
+
+    The first call in a test inserts a ``constance_constance`` row per key it reads, four
+    statements each. Left unwarmed that lands ~20 queries of slack on whichever capture runs
+    first -- and in a ``few <= many`` comparison it lands on the SMALLER side, which is
+    exactly enough headroom to hide one reintroduced query per rider.
+
+    Must be called AFTER the squad has members: the function returns early on an empty squad
+    before it reads any config, so warming on an empty one warms nothing.
+
+    Args:
+        user: The captain to compute for.
+
+    """
+    _summary(user)
+
+
 def _summary(user) -> dict:
     """Compute the summary directly, bypassing the banner cache.
 
@@ -260,6 +278,11 @@ def test_the_rider_own_banner_still_excludes_lapsed_records(user_model, squad):
     assert needs_captain_attention(-5) is True
     assert is_expiring_soon(-5) is False
 
+    # The window's own edge, which nothing else pins. warn_within is passed explicitly so the
+    # assertion does not depend on whatever EXPIRE_WARNING_DAYS happens to be configured as.
+    assert needs_captain_attention(15, warn_within=15) is True
+    assert needs_captain_attention(16, warn_within=15) is False
+
 
 @pytest.mark.django_db
 def test_a_verification_that_never_expires_is_not_flagged(user_model, squad, captain):
@@ -386,14 +409,19 @@ def test_the_query_count_does_not_grow_with_squad_size(user_model, squad, captai
     configured -- so each access is a SELECT. This runs in a context processor on every
     authenticated render, so leaving the property to do the reads cost hundreds of queries a
     pageview for a captain of a full squad -- measured at ~790 Constance SELECTs for a
-    60-rider squad, now 5, flat. Pinned by shape rather than by an exact number: ten times
-    the riders must not mean ten times the queries.
+    60-rider squad, now 5, flat.
+
+    Config is warmed first and the assertion is EQUALITY. An earlier version compared an
+    unwarmed 2-rider baseline against a warm 20-rider one with <=, which left ~20 queries of
+    slack on the smaller side -- enough that reintroducing one config read per rider still
+    passed.
     """
     from django.db import connection
     from django.test.utils import CaptureQueriesContext
 
     for i in range(2):
         _expiring_member(user_model, squad, f"Small{i}", 5)
+    _warm_config(captain)
     with CaptureQueriesContext(connection) as small:
         _summary(captain)
 
@@ -402,8 +430,10 @@ def test_the_query_count_does_not_grow_with_squad_size(user_model, squad, captai
     with CaptureQueriesContext(connection) as big:
         _summary(captain)
 
-    # Ten times the members; the query count must stay flat, not merely grow more slowly.
-    assert len(big.captured_queries) <= len(small.captured_queries), (
+    # EQUALITY, not <=. Ten times the riders must cost the same, because a single
+    # reintroduced per-rider read is the whole regression -- and a <= comparison with an
+    # unwarmed baseline tolerates exactly that.
+    assert len(big.captured_queries) == len(small.captured_queries), (
         f"{len(small.captured_queries)} queries for 2 riders, {len(big.captured_queries)} for 20"
     )
 
@@ -504,9 +534,13 @@ def test_nothing_verified_reads_as_a_state_not_a_deadline(client, user_model, sq
     client.force_login(captain)
     body = client.get(reverse("team:squad_expiring_modal")).content.decode()
 
-    assert "nothing verified" in body
-    assert "None day" not in body
-    assert "0 day" not in body
+    # Scoped to the row: "nothing verified" also appears in the modal's intro sentence, so an
+    # unscoped check passes even when no row rendered at all.
+    row = body[body.index("Ana Rider") : body.index("</li>", body.index("Ana Rider"))]
+    assert "nothing verified" in row
+    assert "badge-error" in row
+    assert "None day" not in row
+    assert "0 day" not in row
 
 
 @pytest.mark.django_db
@@ -562,6 +596,7 @@ def test_adding_the_state_did_not_add_queries(user_model, squad, captain):
 
     for i in range(2):
         _bare_member(user_model, squad, f"Few{i}")
+    _warm_config(captain)
     with CaptureQueriesContext(connection) as few:
         assert _summary(captain)["rider_count"] == 2
 
@@ -570,6 +605,6 @@ def test_adding_the_state_did_not_add_queries(user_model, squad, captain):
     with CaptureQueriesContext(connection) as many:
         assert _summary(captain)["rider_count"] == 20
 
-    assert len(many.captured_queries) <= len(few.captured_queries), (
+    assert len(many.captured_queries) == len(few.captured_queries), (
         f"{len(few.captured_queries)} queries for 2 bare riders, {len(many.captured_queries)} for 20"
     )
