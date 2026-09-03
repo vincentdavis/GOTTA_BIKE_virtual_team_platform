@@ -160,7 +160,19 @@
           <span>{{ squad.member_count }} member{{ squad.member_count|pluralize }}</span>
         </div>
 
-        {# Profile section: timezone + squad gender #}
+        {% comment %}
+          Profile section: timezone, gender, and who leads the squad.
+
+          Leadership used to be its own card below Enforced Requirements. It reads as part of
+          who a squad IS rather than as a separate topic, and burying the captains under the
+          requirements block put the most-asked question ("who runs this one?") third. Folded
+          in here rather than duplicated -- the same names twice on one card is worse than
+          either placement.
+
+          The captain rows render even when empty, matching Timezone and Squad Gender above:
+          on a management page a squad with no captain is exactly what you are looking for,
+          and a hidden row cannot be scanned.
+        {% endcomment %}
         <div class="card bg-base-300 p-3 mb-2">
           <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Profile</p>
           <div class="space-y-1">
@@ -173,6 +185,36 @@
               <span class="text-sm">
                 {% if squad.gender %}<span class="badge badge-outline badge-sm">{{ squad.gender }}</span>{% else %}—{% endif %}
               </span>
+            </div>
+            {% for captain in squad.captains.all %}
+            <div class="flex items-start justify-between gap-3">
+              <span class="text-base-content/70 text-sm shrink-0">{% if forloop.first %}Captain{{ squad.captains.all|length|pluralize }}{% endif %}</span>
+              <span class="text-sm text-right">{{ captain.get_full_name|default:captain.discord_username }}</span>
+            </div>
+            {% empty %}
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-base-content/70 text-sm">Captain</span>
+              <span class="text-sm">—</span>
+            </div>
+            {% endfor %}
+            {% for vc in squad.vice_captains.all %}
+            <div class="flex items-start justify-between gap-3">
+              <span class="text-base-content/70 text-sm shrink-0">{% if forloop.first %}Vice Captain{{ squad.vice_captains.all|length|pluralize }}{% endif %}</span>
+              <span class="text-sm text-right">{{ vc.get_full_name|default:vc.discord_username }}</span>
+            </div>
+            {% empty %}
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-base-content/70 text-sm">Vice Captain</span>
+              <span class="text-sm">—</span>
+            </div>
+            {% endfor %}
+            <div class="flex items-center justify-between">
+              <span class="text-base-content/70 text-sm">Captain Notifications</span>
+              {% if squad.captain_notifications %}
+              <span class="badge badge-success badge-sm">On</span>
+              {% else %}
+              <span class="badge badge-neutral badge-sm">Off</span>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -190,35 +232,6 @@
           <span class="text-sm text-base-content/50">None enforced</span>
           {% endif %}
         </div>
-
-        {# Leadership section #}
-        {% if squad.captains.all or squad.vice_captains.all %}
-        <div class="card bg-base-300 p-3 mb-2">
-          <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-2">Leadership</p>
-          <div class="space-y-1">
-            {% for captain in squad.captains.all %}
-            <div class="flex items-center justify-between">
-              <span class="text-base-content/70 text-sm">{% if forloop.first %}Captain{% endif %}</span>
-              <span class="text-sm">{{ captain.get_full_name|default:captain.discord_username }}</span>
-            </div>
-            {% endfor %}
-            {% for vc in squad.vice_captains.all %}
-            <div class="flex items-center justify-between">
-              <span class="text-base-content/70 text-sm">{% if forloop.first %}Vice Captain{% endif %}</span>
-              <span class="text-sm">{{ vc.get_full_name|default:vc.discord_username }}</span>
-            </div>
-            {% endfor %}
-            <div class="flex items-center justify-between">
-              <span class="text-base-content/70 text-sm">Notifications</span>
-              {% if squad.captain_notifications %}
-              <span class="badge badge-success badge-sm">On</span>
-              {% else %}
-              <span class="badge badge-neutral badge-sm">Off</span>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-        {% endif %}
 
         {# Category Range section #}
         {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category or squad.min_zwift_category or squad.max_zwift_category or squad.min_womens_zwift_category or squad.max_womens_zwift_category %}
