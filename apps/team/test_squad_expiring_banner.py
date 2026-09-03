@@ -465,3 +465,111 @@ def test_reopening_the_dialog_cannot_show_the_previous_list(client, user_model, 
     trigger = trigger[: trigger.index("</button>")]
     assert "squad-expiring-body" in trigger
     assert "loading-spinner" in trigger  # reset to the spinner before opening
+
+
+# --- riders with nothing verified -----------------------------------------------------
+
+
+def _bare_member(user_model, squad, name: str):
+    """Add a squad member holding no verified record at all.
+
+    Args:
+        user_model: The active user model.
+        squad: The squad to join.
+        name: First name, also the username.
+
+    Returns:
+        The member.
+
+    """
+    user = user_model.objects.create_user(
+        username=name.lower(), email=f"{name.lower()}@example.test", first_name=name, last_name="Rider"
+    )
+    SquadMember.objects.create(squad=squad, user=user, status=SquadMember.Status.MEMBER)
+    return user
+
+
+@pytest.mark.django_db
+def test_a_member_with_nothing_verified_is_counted(client, user_model, squad, captain):
+    """The rider who never started is at least as far from racing as the one who lapsed."""
+    _bare_member(user_model, squad, "Ana")
+
+    assert "Remind your Squad-mates: 1 Expiring" in _banner(client, captain)
+
+
+@pytest.mark.django_db
+def test_nothing_verified_reads_as_a_state_not_a_deadline(client, user_model, squad, captain):
+    """There is no number of days to show, so the row must not pretend there is one."""
+    _bare_member(user_model, squad, "Ana")
+    client.force_login(captain)
+    body = client.get(reverse("team:squad_expiring_modal")).content.decode()
+
+    assert "nothing verified" in body
+    assert "None day" not in body
+    assert "0 day" not in body
+
+
+@pytest.mark.django_db
+def test_a_pending_submission_still_counts_as_nothing_verified(client, user_model, squad, captain):
+    """Submitted is not verified -- a rider awaiting review still cannot race."""
+    rider = _bare_member(user_model, squad, "Ana")
+    RaceReadyRecord.objects.create(
+        user=rider, verify_type="weight_light", status=RaceReadyRecord.Status.PENDING,
+        record_date=timezone.localdate(),
+    )
+
+    assert _summary(captain)["rider_count"] == 1
+    client.force_login(captain)
+    assert "nothing verified" in client.get(reverse("team:squad_expiring_modal")).content.decode()
+
+
+@pytest.mark.django_db
+def test_nothing_verified_sorts_above_lapsed_and_expiring(client, user_model, squad, captain):
+    """Worst first, all three states in one ordering."""
+    _expiring_member(user_model, squad, "Soon", 4)
+    _expiring_member(user_model, squad, "Gone", -6)
+    _bare_member(user_model, squad, "Never")
+    client.force_login(captain)
+    body = client.get(reverse("team:squad_expiring_modal")).content.decode()
+
+    assert body.index("Never Rider") < body.index("Gone Rider") < body.index("Soon Rider")
+
+
+@pytest.mark.django_db
+def test_a_verification_configured_never_to_expire_is_not_flagged(user_model, squad, captain):
+    """A rider holding a non-expiring record has verified something; they are not "nothing"."""
+    from constance.test import override_config
+
+    rider = _bare_member(user_model, squad, "Ana")
+    RaceReadyRecord.objects.create(
+        user=rider, verify_type="height", status=RaceReadyRecord.Status.VERIFIED,
+        record_date=timezone.localdate() - timedelta(days=900),
+    )
+
+    with override_config(HEIGHT_VERIFICATION_DAYS=0):
+        assert _summary(captain)["rider_count"] == 0
+
+
+@pytest.mark.django_db
+def test_adding_the_state_did_not_add_queries(user_model, squad, captain):
+    """The state is set arithmetic on data already fetched; it must stay that way.
+
+    Shape, not an absolute count: the first call in a process also pays one-time Constance
+    setup, so a fixed ceiling would pin that rather than the thing under test.
+    """
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    for i in range(2):
+        _bare_member(user_model, squad, f"Few{i}")
+    with CaptureQueriesContext(connection) as few:
+        assert _summary(captain)["rider_count"] == 2
+
+    for i in range(18):
+        _bare_member(user_model, squad, f"Many{i}")
+    with CaptureQueriesContext(connection) as many:
+        assert _summary(captain)["rider_count"] == 20
+
+    assert len(many.captured_queries) <= len(few.captured_queries), (
+        f"{len(few.captured_queries)} queries for 2 bare riders, {len(many.captured_queries)} for 20"
+    )

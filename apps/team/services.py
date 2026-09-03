@@ -985,6 +985,11 @@ def is_expiring_soon(days_remaining: int | None) -> bool:
     return 0 <= days_remaining <= max(expiry_warning_thresholds())
 
 
+# Worst first on a captain's list: a rider we hold nothing for cannot race and has not even
+# started, a lapsed rider cannot race, and an expiring one still can.
+_ROW_ORDER = {"none": 0, "lapsed": 1, "expiring": 2}
+
+
 def needs_captain_attention(days_remaining: int | None, *, warn_within: int | None = None) -> bool:
     """Whether a record should appear on a captain's squad-mates list.
 
@@ -1059,19 +1064,31 @@ def squad_expiring_summary(user) -> dict:
       captain to chase verifications for it is pure noise;
     * riders with a ``MEMBER`` row on that squad -- a pending or rejected applicant is not
       yet a squad-mate to remind;
-    * of those, riders whose verification is expiring OR has already lapsed
-      (``covering_records_by_type`` then ``needs_captain_attention``). The lapsed rider is
-      the most urgent case, not an excluded one -- they cannot race at all -- so they are
-      listed first and flagged. The rider's own banner still separates the two, because
-      "renew this" and "you have lost Race Verified" are different things to tell the person
-      themselves; to a captain chasing a roster they are one list.
+    * of those, riders in one of three states, worst first:
+
+      - ``none`` -- we hold no verified record for them at all. Free to detect: the member
+        ids and the fetched records are both already in hand, so it is set arithmetic.
+      - ``lapsed`` -- a covering record has gone past its expiry.
+      - ``expiring`` -- inside the warning window (``needs_captain_attention``).
+
+      The rider's own banner still separates expiring from lapsed, because "renew this" and
+      "you have lost Race Verified" are different things to tell the person themselves; to a
+      captain chasing a roster all three are one list.
+
+      NOTE the ``none`` state is the literal reading: zero verified records. It does NOT
+      catch a rider who holds some verifications but is missing a REQUIRED one and therefore
+      still cannot race. Answering that needs the per-category requirements, and
+      ``get_user_required_verification_types`` runs a ZPTeamRiders query plus a Constance
+      read per rider -- exactly the amplification this function exists to avoid. Widening it
+      would mean batching that lookup first.
 
     Args:
         user: The signed-in user, treated as a potential captain or vice-captain.
 
     Returns:
-        ``{"squads": [{"squad", "rows": [...]}], "rider_count"}``, each row carrying ``user``,
-        ``days`` (signed -- negative once lapsed), ``days_abs``, ``lapsed`` and ``verify_type``.
+        ``{"squads": [{"squad", "rows": [...]}], "rider_count"}``. Each row carries ``user``,
+        ``state`` (``"none"``, ``"lapsed"`` or ``"expiring"``), and for the latter two
+        ``days`` (signed), ``days_abs`` and ``verify_type``.
         ``rider_count`` counts DISTINCT riders: a rider in two of this captain's squads is
         still one person to remind, so the banner speaks of people while the modal shows
         them under each squad they belong to.
@@ -1112,6 +1129,10 @@ def squad_expiring_summary(user) -> dict:
         user_id__in=member_ids, status=RaceReadyRecord.Status.VERIFIED
     ):
         records_by_user.setdefault(record.user_id, []).append(record)
+
+    # Riders with no verified record at all. Deliberately derived rather than queried: both
+    # sides are already in memory, so this state costs nothing.
+    unverified = member_ids - set(records_by_user)
 
     # Read every Constance value ONCE, before the loop. RaceReadyRecord.days_remaining goes
     # through validity_days, which reads all four windows on every single access, and
@@ -1175,22 +1196,40 @@ def squad_expiring_summary(user) -> dict:
             # them among the squad-mates to chase double-counts one person's problem.
             if member.pk == user.pk:
                 continue
+            if member.pk in unverified:
+                rows.append({
+                    "user": member,
+                    "state": "none",
+                    "days": None,
+                    "days_abs": None,
+                    "verify_type": None,
+                })
+                riders.add(member.pk)
+                continue
             hit = worst_by_user.get(member.pk)
             if hit is None:
                 continue
             days, verify_type = hit
             rows.append({
                 "user": member,
+                "state": "lapsed" if days < 0 else "expiring",
                 "days": days,
                 "days_abs": abs(days),
-                "lapsed": days < 0,
                 "verify_type": verify_type,
             })
             riders.add(member.pk)
         if rows:
-            # Signed days, so already-lapsed riders (negative) sort above the merely
-            # expiring. The point of the list is who to chase first.
-            rows.sort(key=lambda row: (row["days"], (row["user"].get_full_name() or "").lower()))
+            # Worst first -- nothing at all, then lapsed (most overdue first), then the
+            # merely expiring (soonest first). Signed days do the second and third orderings
+            # in one key; _ROW_ORDER separates the states. The point of the list is who to
+            # chase first.
+            rows.sort(
+                key=lambda row: (
+                    _ROW_ORDER[row["state"]],
+                    row["days"] if row["days"] is not None else 0,
+                    (row["user"].get_full_name() or "").lower(),
+                )
+            )
             groups.append({"squad": squad, "rows": rows})
 
     return {"squads": groups, "rider_count": len(riders)}

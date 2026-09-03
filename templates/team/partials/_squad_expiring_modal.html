@@ -9,8 +9,9 @@
 {% endcomment %}
 <h3 class="font-bold text-lg mb-1">Expiring verifications in your squads</h3>
 <p class="text-sm text-base-content/60 mb-4">
-  {{ rider_count }} squad-mate{{ rider_count|pluralize }} to remind. Riders who have already
-  lost Race Verified are listed first; for the rest, the days shown are what is left.
+  {{ rider_count }} squad-mate{{ rider_count|pluralize }} to remind. Riders who cannot race
+  &mdash; nothing verified, or verification lapsed &mdash; come first; for the rest, the days
+  shown are what is left.
 </p>
 
 {% for group in squads %}
@@ -26,11 +27,15 @@
         {{ row.user.get_full_name|default:row.user.discord_username }}
       </a>
       {% comment %}
-        A lapsed rider gets a badge rather than a number: "-4 days" reads as a bug, and the
-        state is categorically different from a deadline -- they cannot race right now.
+        The two can't-race states get badges rather than numbers: there is no number to show
+        for a rider who has verified nothing, and "-4 days" reads as a bug rather than a
+        state. Solid versus outline keeps them distinguishable while equally severe -- both
+        mean the rider cannot race right now, which a deadline does not.
       {% endcomment %}
-      {% if row.lapsed %}
-      <span class="badge badge-error badge-sm whitespace-nowrap" title="{{ row.verify_type }}">
+      {% if row.state == "none" %}
+      <span class="badge badge-error badge-sm whitespace-nowrap">nothing verified</span>
+      {% elif row.state == "lapsed" %}
+      <span class="badge badge-error badge-outline badge-sm whitespace-nowrap" title="{{ row.verify_type }}">
         expired {{ row.days_abs }} day{{ row.days_abs|pluralize }} ago
       </span>
       {% else %}
