@@ -68,6 +68,8 @@ class Command(BaseCommand):
             return
         self.stdout.write(self.style.WARNING("  NOT FOUND — the row is gone."))
 
+        self._show_neighbourhood(record_id)
+
         # 1. Django admin is the only deletion path that writes an actor to the database.
         entries = (
             LogEntry.objects.filter(content_type=content_type, object_id=str(record_id))
@@ -117,6 +119,53 @@ class Command(BaseCommand):
                 "\nPass --user <id|username|discord_username> (the DM names the submitter) to see\n"
                 "whether they have a newer record, which would mean they deleted and resubmitted."
             )
+
+    def _show_neighbourhood(self, record_id: int) -> None:
+        """Say whether this id was ever issued, which settles "was it deleted at all".
+
+        The cheapest decisive evidence available without logs. An id above the highest one
+        the table has ever held was never a record, so nothing deleted it and the link was
+        wrong. An id sitting between existing neighbours was issued and is now gone.
+
+        One honest caveat, printed with the result: a Postgres sequence also burns an id on a
+        rolled-back INSERT, so a gap alone is strong evidence rather than proof. It becomes
+        proof when something is known to have READ the row -- for a record from a submission
+        DM, the notification task fetches it and sends nothing if it is missing.
+
+        Args:
+            record_id: The id under investigation.
+
+        """
+        highest = RaceReadyRecord.objects.order_by("-pk").values_list("pk", flat=True).first()
+        self.stdout.write(self.style.MIGRATE_HEADING("\nWas this id ever issued?"))
+        if highest is None:
+            self.stdout.write("  The table is empty; nothing can be said.")
+            return
+
+        self.stdout.write(f"  Highest id currently in the table: {highest}")
+        if record_id > highest:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"  {record_id} is ABOVE it — no such record exists or has existed, so nothing\n"
+                    "  deleted it. The link itself is wrong (mistyped, or from another environment)."
+                )
+            )
+            return
+
+        window = range(max(1, record_id - 2), record_id + 3)
+        present = set(
+            RaceReadyRecord.objects.filter(pk__in=list(window)).values_list("pk", flat=True)
+        )
+        rendered = "  " + "  ".join(
+            f"{i}{'✓' if i in present else ' ✗MISSING'}" for i in window
+        )
+        self.stdout.write(rendered)
+        self.stdout.write(
+            f"  {record_id} sits inside the issued range, so the id WAS used and the row is gone.\n"
+            "  (A rolled-back INSERT also burns an id, so this is strong evidence rather than\n"
+            "  proof on its own — but a submission DM proves it: the notification task fetches\n"
+            "  the record and sends nothing when it is missing, so a DM means the row was there.)"
+        )
 
     def _show_rider(self, needle: str) -> None:
         """Print a rider's verification records, newest first.

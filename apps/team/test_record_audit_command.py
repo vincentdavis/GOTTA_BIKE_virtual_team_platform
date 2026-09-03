@@ -129,3 +129,44 @@ def test_a_never_existing_id_is_handled(db):
     out = _run("999999")
 
     assert "NOT FOUND" in out
+
+
+# --- was the id ever issued? -----------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_an_id_above_the_highest_says_no_record_ever_existed(user, verification_factory):
+    """The other answer to "did someone delete it": nobody did, the link is wrong."""
+    verification_factory(user, "height", status=RaceReadyRecord.Status.PENDING, height=175)
+
+    out = _run("999999")
+
+    assert "is ABOVE it" in out
+    assert "nothing" in out and "deleted it" in out
+
+
+@pytest.mark.django_db
+def test_a_gap_between_neighbours_shows_the_id_was_used(user, verification_factory):
+    """A missing id with live neighbours is a deleted row, not an unused number."""
+    first = verification_factory(user, "height", status=RaceReadyRecord.Status.PENDING, height=175)
+    middle = verification_factory(user, "power", status=RaceReadyRecord.Status.PENDING)
+    verification_factory(user, "weight_light", status=RaceReadyRecord.Status.PENDING, weight=70)
+    gone = middle.pk
+    middle.delete()
+
+    out = _run(str(gone))
+
+    assert "MISSING" in out
+    assert "the row is gone" in out
+    assert str(first.pk) in out  # the neighbourhood is actually shown
+
+
+@pytest.mark.django_db
+def test_the_rolled_back_insert_caveat_is_stated(user, verification_factory):
+    """A gap is strong evidence, not proof; saying otherwise would mislead an investigation."""
+    first = verification_factory(user, "height", status=RaceReadyRecord.Status.PENDING, height=175)
+    verification_factory(user, "power", status=RaceReadyRecord.Status.PENDING)
+    gone = first.pk
+    first.delete()
+
+    assert "rolled-back INSERT" in _run(str(gone))
