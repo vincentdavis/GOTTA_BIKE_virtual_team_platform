@@ -1,6 +1,6 @@
 """Models for gotta_bike_platform app."""
 
-from django.core.cache import cache
+from django.core.cache import caches
 from django.db import models
 
 from gotta_bike_platform.retention import RetentionPolicy
@@ -226,7 +226,10 @@ class SiteSettings(models.Model):
         """Ensure only one instance exists and invalidate cache."""
         self.pk = 1
         super().save(*args, **kwargs)
-        cache.delete(SITE_SETTINGS_CACHE_KEY)
+        # "shared", not the default: this invalidates by DELETE, and a delete in a
+        # per-process cache never reaches the other Granian worker -- so a new logo appeared
+        # on roughly half of a viewer's refreshes and reverted on the rest, until the TTL.
+        caches["shared"].delete(SITE_SETTINGS_CACHE_KEY)
 
     def delete(self, *args, **kwargs):
         """Prevent deletion of the singleton instance."""
@@ -239,8 +242,9 @@ class SiteSettings(models.Model):
             The SiteSettings instance.
 
         """
-        obj = cache.get(SITE_SETTINGS_CACHE_KEY)
+        shared = caches["shared"]
+        obj = shared.get(SITE_SETTINGS_CACHE_KEY)
         if obj is None:
             obj, _ = cls.objects.get_or_create(pk=1)
-            cache.set(SITE_SETTINGS_CACHE_KEY, obj, SITE_SETTINGS_CACHE_TIMEOUT)
+            shared.set(SITE_SETTINGS_CACHE_KEY, obj, SITE_SETTINGS_CACHE_TIMEOUT)
         return obj

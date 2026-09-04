@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from django.core.cache import cache
+from django.core.cache import caches
 
 from apps.cms.models import Page
 
@@ -27,9 +27,15 @@ def _cache_key(tier: str) -> str:
 
 
 def clear_cms_nav_cache():
-    """Clear all CMS nav page cache entries."""
+    """Clear all CMS nav page cache entries.
+
+    Uses the "shared" alias because this is a delete, and a delete only reaches the process
+    that issued it. The Page post_save/post_delete signal also fires in the db_worker and the
+    scheduler, where a per-process cache would clear nothing any web worker can see.
+    """
+    shared = caches["shared"]
     for tier in ("anon", "member", "team_member"):
-        cache.delete(_cache_key(tier))
+        shared.delete(_cache_key(tier))
 
 
 def cms_nav_pages(request: HttpRequest) -> dict[str, list]:
@@ -61,7 +67,7 @@ def cms_nav_pages(request: HttpRequest) -> dict[str, list]:
         tier = "member"
 
     key = _cache_key(tier)
-    result = cache.get(key)
+    result = caches["shared"].get(key)
     if result is not None:
         return result
 
@@ -79,5 +85,5 @@ def cms_nav_pages(request: HttpRequest) -> dict[str, list]:
         "cms_nav_pages": list(pages.filter(nav_location=Page.NavLocation.MAIN_NAV)),
         "cms_user_menu_pages": list(pages.filter(nav_location=Page.NavLocation.USER_MENU)),
     }
-    cache.set(key, result, CMS_NAV_CACHE_TIMEOUT)
+    caches["shared"].set(key, result, CMS_NAV_CACHE_TIMEOUT)
     return result
