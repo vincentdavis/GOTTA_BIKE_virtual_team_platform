@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.core.cache import caches
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
@@ -193,20 +192,3 @@ def verification_factory(db):
         )
 
     return _make
-
-
-@pytest.fixture(autouse=True)
-def _clear_all_caches():
-    """Empty every cache alias between tests, not just ``default``.
-
-    Individual tests call ``cache.clear()``, which only reaches the default alias. Site
-    settings and the CMS nav moved to the "shared" alias because their invalidation is a
-    delete and a delete has to cross process boundaries -- which would otherwise let one
-    test's value survive into the next, since the cache is not rolled back with the
-    transaction.
-    """
-    for alias in caches:
-        caches[alias].clear()
-    yield
-    for alias in caches:
-        caches[alias].clear()

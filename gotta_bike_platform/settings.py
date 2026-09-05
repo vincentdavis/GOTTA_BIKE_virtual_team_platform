@@ -237,34 +237,7 @@ DATABASES = {
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-    },
-    # Separate alias for anything that must be seen by every process in the container.
-    #
-    # LocMemCache is per-process, so the two Granian workers, the db_worker and the scheduler
-    # each hold their own copy and a delete in one is invisible to the others. That is fine
-    # for a TTL'd per-user count; it is wrong for anything invalidated by an explicit delete,
-    # which is how the constance config, the site settings and the CMS nav all work.
-    #
-    # A file cache is genuinely shared here because entrypoint.sh starts all of those
-    # processes in ONE container, on one filesystem. If the services are ever split apart or
-    # scaled to a second replica, this stops crossing and the choice has to be revisited --
-    # the same boundary that already stops the in-process scheduler being replicated.
-    # Local memory under pytest: a file cache outlives the per-test transaction rollback, so a
-    # value written by one test would be served to the next from a row that no longer exists.
-    # Constance is unwired under pytest too (see below), so its cross-process requirement --
-    # the reason this alias is not LocMem in production -- does not apply here.
-    "shared": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "shared-test",
     }
-    if _UNDER_PYTEST
-    else {
-        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
-        "LOCATION": os.environ.get("SHARED_CACHE_DIR", "/tmp/gb-shared-cache"),  # noqa: S108
-        # constance alone stores one entry per setting plus a marker; the default ceiling of
-        # 300 would cull them.
-        "OPTIONS": {"MAX_ENTRIES": 2000},
-    },
 }
 
 # Password validation
@@ -458,27 +431,6 @@ LOGGING = {
 # https://django-constance.readthedocs.io/
 
 CONSTANCE_BACKEND = "constance.backends.database.DatabaseBackend"
-
-# Without this, EVERY `config.X` read is its own SELECT -- 33 of the 35 queries on a normal
-# authenticated page were the app re-reading its own settings, several of them the same key
-# more than once in one render. With it, the backend fills the whole set in a single query
-# and serves from there.
-#
-# Correctness rests on the cache being cross-process, which is why constance refuses a
-# local-memory backend for this setting: saving a value fires post_save -> clear(), and that
-# delete has to reach the other worker. See the "shared" alias above.
-#
-# Turned OFF under pytest deliberately. The file cache is not rolled back with the test
-# transaction, so a value cached inside one test would outlive the row it came from. Tests
-# therefore exercise the uncached path, and test_constance_cache.py covers the cached one
-# explicitly rather than globally.
-CONSTANCE_DATABASE_CACHE_BACKEND = None if _UNDER_PYTEST else "shared"
-
-# The backstop, not the mechanism. An edit through /site/config/ or /admin/constance/ takes
-# effect immediately via post_save; this only bounds how long a change made OUTSIDE this
-# container (a manage.py shell elsewhere, direct SQL) can go unnoticed. constance's own
-# default is 24 hours, which is far too long to be a useful backstop.
-CONSTANCE_DATABASE_CACHE_AUTOFILL_TIMEOUT = 300
 
 CONSTANCE_ADDITIONAL_FIELDS = {
     "password_field": [
