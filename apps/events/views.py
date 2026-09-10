@@ -77,6 +77,7 @@ from apps.events.tz_utils import (
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
+from gotta_bike_platform.csv_utils import csv_safe
 
 CATEGORY_COLUMNS = ["A+", "A", "B", "C", "D", "E"]
 
@@ -2160,30 +2161,6 @@ def _can_export_event_signups(user: User, event: Event) -> bool:
     return _is_event_coordinator(user, event)
 
 
-# Cells beginning with these are executed as formulas by Excel / Sheets when the file
-# is opened. Rider-authored text (notes, free-text answers, Discord display names) goes
-# straight into this export, so it is prefixed with an apostrophe and rendered inert.
-_CSV_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
-
-
-def _csv_safe(value: object) -> object:
-    """Neutralise a spreadsheet formula in a text cell.
-
-    Only strings are touched, so a negative rating stays a number rather than
-    becoming text a spreadsheet cannot sum.
-
-    Args:
-        value: The cell value.
-
-    Returns:
-        The value, prefixed with an apostrophe if it would otherwise be evaluated.
-
-    """
-    if isinstance(value, str) and value.startswith(_CSV_FORMULA_PREFIXES):
-        return "'" + value
-    return value
-
-
 def _signup_export_rows(event: Event, enriched: list[dict], questions: list) -> tuple[list[str], list[list]]:
     """Build the header and data rows for the signup CSV.
 
@@ -2255,7 +2232,7 @@ def _signup_export_rows(event: Event, enriched: list[dict], questions: list) -> 
         ]
         answers = {a["question"].pk: a["display"] for a in e["custom_answers"]}
         row += [answers.get(q.pk, "") for q in questions]
-        rows.append([_csv_safe(cell) for cell in row])
+        rows.append([csv_safe(cell) for cell in row])
     return header, rows
 
 

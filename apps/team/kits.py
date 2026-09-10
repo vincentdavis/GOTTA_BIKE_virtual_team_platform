@@ -124,6 +124,24 @@ def team_members():
     return User.objects.exclude(discord_id="")
 
 
+def member_filters(params, current: TeamKit | None) -> tuple[bool, bool]:
+    """Read the member-list filters from a query string.
+
+    Shared by the page and its CSV export, so "Export CSV" always downloads the list on screen.
+
+    Args:
+        params: The request's GET parameters.
+        current: The current kit, or None.
+
+    Returns:
+        ``(verified_only, needs_kit_only)``. Needs-the-kit is only meaningful with a current
+        kit to need; without one the page disables the box, and a hand-typed ``?need=1`` is
+        ignored rather than emptying the list for no visible reason.
+
+    """
+    return params.get("verified") == "1", params.get("need") == "1" and current is not None
+
+
 def kit_status_counts(kits: list[TeamKit]) -> dict[str, dict[str, int]]:
     """Count team members at each status, per kit, in one query.
 
@@ -185,9 +203,7 @@ def kit_member_rows(
     queryset = team_members()
     if verified_only:
         queryset = queryset.filter(zwid_verified=True)
-    members = list(
-        queryset.only("id", "discord_username", "discord_nickname", "zwid", "zwid_verified", "team_kit")
-    )
+    members = list(queryset.only("id", "discord_username", "discord_nickname", "zwid", "zwid_verified", "team_kit"))
 
     zwids = {member.zwid for member in members if member.zwid}
     zp_names = dict(ZPTeamRiders.objects.filter(zwid__in=zwids).values_list("zwid", "name")) if zwids else {}

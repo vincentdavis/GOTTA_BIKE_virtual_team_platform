@@ -14,6 +14,8 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/site/config/ - Site configuration settings",
             "/site/config/compliance/ - Compliance tools: delete an account on request, block logins by Discord ID",
             "/site/config/team_kit/ - Team kits: add kits, choose the current one, see who needs it",
+            "/site/config/team-kit/export/ - Team kits: download the member list and kit statuses as CSV",
+            "/site/config/team-kit/import/ - Team kits: set kit statuses from a CSV, after a preview",
         ],
     },
     Permissions.TEAM_CAPTAIN: {
@@ -48,6 +50,8 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/team/discord-review/ - Discord guild member review",
             "/team/zwift-connections/ - Zwift account connections (Zwift Link) list",
             "/site/config/team_kit/ - Team kits: add kits, choose the current one, see who needs it",
+            "/site/config/team-kit/export/ - Team kits: download the member list and kit statuses as CSV",
+            "/site/config/team-kit/import/ - Team kits: set kit statuses from a CSV, after a preview",
         ],
     },
     Permissions.RACING_ADMIN: {

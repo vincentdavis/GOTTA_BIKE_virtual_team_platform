@@ -1616,22 +1616,28 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
     # Handle special "team_kit" section -- kits are rows, not Constance settings, so like the
     # other special sections it renders its own partial and posts to its own routes.
     if section_key == "team_kit":
-        from apps.team.kits import kit_member_rows, kit_status_counts, team_members
-        from apps.team.models import TeamKit
+        from django.utils.http import urlencode
+
+        from apps.team.kit_csv import KIT_COLUMN_PREFIX, MAX_IMPORT_BYTES
+        from apps.team.kits import kit_member_rows, kit_status_counts, member_filters, team_members
+        from apps.team.models import KitStatus, TeamKit
 
         kits = list(TeamKit.objects.all())
         counts = kit_status_counts(kits)
         entries = [{"kit": kit, "counts": counts.get(kit.slug, {})} for kit in kits]
         current = next((kit for kit in kits if kit.is_current), None)
-        # The filter narrows only the member list. The counts above it stay whole-team, so a
+        # The filters narrow only the member list. The counts above it stay whole-team, so a
         # filtered view never changes what "12 need it" means.
-        verified_only = request.GET.get("verified") == "1"
-        # Only meaningful with a current kit to need; without one the box is disabled, and a
-        # hand-typed ?need=1 is ignored rather than emptying the list for no visible reason.
-        needs_kit_only = request.GET.get("need") == "1" and current is not None
+        verified_only, needs_kit_only = member_filters(request.GET, current)
         member_rows = kit_member_rows(verified_only=verified_only, needs_kit_only=needs_kit_only, kit=current)
         filtered = verified_only or needs_kit_only
         member_total = team_members().count() if filtered else len(member_rows)
+        # Built from the parsed filters rather than passing the query string through, so the
+        # export link carries exactly the filters the page applied.
+        export_query = urlencode({
+            **({"verified": "1"} if verified_only else {}),
+            **({"need": "1"} if needs_kit_only else {}),
+        })
         return render(
             request,
             "accounts/config_section_page.html",
@@ -1649,6 +1655,10 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "verified_only": verified_only,
                 "needs_kit_only": needs_kit_only,
                 "member_list_filtered": filtered,
+                "export_query": export_query,
+                "kit_column_prefix": KIT_COLUMN_PREFIX,
+                "kit_status_choices": KitStatus.choices,
+                "import_max_kb": MAX_IMPORT_BYTES // 1024,
                 "available_roles": [],
             },
         )

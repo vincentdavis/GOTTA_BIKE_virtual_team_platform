@@ -34,7 +34,15 @@ from apps.accounts.views import (
 )
 from apps.analytics.api import api as analytics_api
 from apps.dbot_api.api import api as dbot_api
-from apps.team.kit_views import team_kit_add, team_kit_edit, team_kit_make_current, team_kit_toggle_active
+from apps.team.kit_views import (
+    team_kit_add,
+    team_kit_edit,
+    team_kit_export,
+    team_kit_import,
+    team_kit_import_confirm,
+    team_kit_make_current,
+    team_kit_toggle_active,
+)
 from apps.user_api.api import api as user_api
 from gotta_bike_platform.views import about, block_social_signup, healthz, home, robots_txt
 
@@ -82,6 +90,9 @@ urlpatterns = [
     path("site/config/team-kit/<int:pk>/edit/", team_kit_edit, name="team_kit_edit"),
     path("site/config/team-kit/<int:pk>/current/", team_kit_make_current, name="team_kit_make_current"),
     path("site/config/team-kit/<int:pk>/active/", team_kit_toggle_active, name="team_kit_toggle_active"),
+    path("site/config/team-kit/export/", team_kit_export, name="team_kit_export"),
+    path("site/config/team-kit/import/", team_kit_import, name="team_kit_import"),
+    path("site/config/team-kit/import/confirm/", team_kit_import_confirm, name="team_kit_import_confirm"),
     path("site/config/markdown-preview/", markdown_preview, name="markdown_preview"),
     path("site/config/section/<str:section_key>/update/", config_section_update, name="config_section_update"),
     path("site/config/<str:section_key>/", config_section_page, name="config_section_page"),

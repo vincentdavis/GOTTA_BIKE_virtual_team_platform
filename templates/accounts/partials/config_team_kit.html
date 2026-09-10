@@ -183,6 +183,82 @@
   </form>
 </div>
 
+{% comment %}
+  Export takes the filters above (export_query), so it downloads the list on screen. Import
+  reads the export's shape back and always stops at a preview before writing anything.
+{% endcomment %}
+<div class="flex flex-wrap items-center gap-2 mb-3">
+  <a href="{% url 'team_kit_export' %}{% if export_query %}?{{ export_query }}{% endif %}" class="btn btn-sm btn-outline">
+    Export CSV{% if member_list_filtered %} ({{ member_rows|length }}){% endif %}
+  </a>
+  {% if kit_entries %}
+  <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('kit-import-dialog').showModal()">
+    Import CSV
+  </button>
+  {% else %}
+  <span class="btn btn-sm btn-disabled" title="Add a kit first -- there is nothing to import statuses for">Import CSV</span>
+  {% endif %}
+</div>
+
+{% if kit_entries %}
+<dialog id="kit-import-dialog" class="modal" aria-labelledby="kit-import-title">
+  <div class="modal-box max-w-2xl">
+    <h3 id="kit-import-title" class="font-semibold text-lg mb-3">Import kit statuses</h3>
+    <ol class="list-decimal list-inside text-sm space-y-1 mb-4">
+      <li>Export CSV and open it in a spreadsheet.</li>
+      <li>Change statuses in the kit columns. A blank cell leaves that status as it is.</li>
+      <li>Save as CSV and upload it here. You will see every change before anything is saved.</li>
+    </ol>
+
+    <div class="text-sm space-y-3 mb-4">
+      <div>
+        <p class="font-semibold mb-1">Statuses</p>
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+          {% for value, label in kit_status_choices %}
+          <li><code>{{ value }}</code> <span class="text-base-content/70">&mdash; {{ label }}</span></li>
+          {% endfor %}
+        </ul>
+        <p class="text-xs text-base-content/60 mt-1">The labels work too, as do the riders&rsquo; own (&ldquo;I need the kit&rdquo;).</p>
+      </div>
+      <div>
+        <p class="font-semibold mb-1">Kit columns</p>
+        <p>
+          {% for entry in kit_entries %}<code>{{ kit_column_prefix }}{{ entry.kit.slug }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}
+        </p>
+      </div>
+      <div>
+        <p class="font-semibold mb-1">Matching rows to members</p>
+        <p>
+          By <code>user_id</code>. A sheet without one can use <code>zwid</code> instead. Other columns are
+          only there to help you read the sheet, and are ignored.
+        </p>
+      </div>
+      <div>
+        <p class="font-semibold mb-1">Statuses that change after you export</p>
+        <p>
+          Leave the <code>exported_statuses</code> column as it is. It records what each row said when
+          exported, so a cell you did not edit never undoes a status a rider has changed since. If you
+          edited a status that has also changed since, the preview shows it and does not apply it.
+        </p>
+      </div>
+    </div>
+
+    <form method="post" action="{% url 'team_kit_import' %}" enctype="multipart/form-data">
+      {% csrf_token %}
+      <label class="form-control w-full">
+        <span class="label-text mb-1">CSV file (up to {{ import_max_kb }} KB)</span>
+        <input type="file" name="csv_file" accept=".csv,text/csv" required class="file-input file-input-bordered file-input-sm w-full">
+      </label>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm btn-ghost" onclick="this.closest('dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-sm btn-primary">Preview import</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
+{% endif %}
+
 {% if member_rows %}
 <div class="overflow-x-auto">
   <table class="table table-sm">
