@@ -4,6 +4,7 @@ import csv
 import json
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import logfire
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.http import HttpRequest, HttpResponse
@@ -12,6 +13,7 @@ from django.urls import path
 from django.utils.html import format_html
 
 from apps.accounts.models import BlockedDiscordId, GuildMember, Permissions, User, YouTubeVideo
+from apps.team.kits import active_kits, apply_kit_fields, build_kit_fields, field_name
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -155,6 +157,75 @@ class UserAdmin(BaseUserAdmin):
             },
         ),
     )
+
+    # --- team kit -------------------------------------------------------------------------
+    #
+    # team_kit is JSON, so it is not edited as a field: that would mean an admin typing kit
+    # slugs and status keys by hand. Instead each active kit gets a select offering all five
+    # statuses -- including "Submitted to Zwift" and "Completed by Zwift", which riders
+    # cannot set themselves -- built by the same helper the rider's profile form uses.
+
+    def get_fieldsets(self, request: HttpRequest, obj: User | None = None) -> tuple:
+        """Append a "Team kit" section with one select per active kit.
+
+        Args:
+            request: The HTTP request.
+            obj: The user being edited, or None when adding.
+
+        Returns:
+            The fieldsets, with the kit section added on the change form.
+
+        """
+        fieldsets = super().get_fieldsets(request, obj)
+        kits = active_kits() if obj is not None else []
+        if not kits:
+            return fieldsets
+        return (*fieldsets, ("Team kit", {"fields": tuple(field_name(kit) for kit in kits)}))
+
+    def get_form(self, request: HttpRequest, obj: User | None = None, change: bool = False, **kwargs: Any):
+        """Declare the kit selects on the admin form class.
+
+        They have to exist on the CLASS, not be added in ``__init__``: the admin builds the
+        form with ``modelform_factory`` from the fieldset field names, and any name that is
+        neither a model field nor a declared field is rejected as unknown.
+
+        Args:
+            request: The HTTP request.
+            obj: The user being edited, or None when adding.
+            change: Whether this is the change form.
+            **kwargs: Passed through to the parent.
+
+        Returns:
+            The form class.
+
+        """
+        if obj is not None:
+            kits = active_kits()
+            if kits:
+                base = kwargs.get("form", self.form)
+                attrs = {**build_kit_fields(obj, for_team=True, kits=kits), "team_kits": kits}
+                kwargs["form"] = type("UserKitAdminForm", (base,), attrs)
+        return super().get_form(request, obj, change=change, **kwargs)
+
+    def save_model(self, request: HttpRequest, obj: User, form: Any, change: bool) -> None:
+        """Merge any submitted kit statuses into ``team_kit`` before saving.
+
+        Args:
+            request: The HTTP request.
+            obj: The user being saved.
+            form: The bound admin form.
+            change: Whether this is an edit.
+
+        """
+        kits = getattr(form, "team_kits", None)
+        if kits and apply_kit_fields(obj, form.data, form.cleaned_data, kits=kits):
+            logfire.info(
+                "Team kit status set in admin",
+                user_id=obj.pk,
+                admin_user_id=request.user.pk,
+                team_kit=obj.team_kit,
+            )
+        super().save_model(request, obj, form, change)
 
     @admin.display(description="Full Name", ordering="first_name")
     def full_name(self, obj: User) -> str:

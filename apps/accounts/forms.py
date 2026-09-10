@@ -11,6 +11,8 @@ from django.utils import timezone
 from django_countries.widgets import CountrySelectWidget
 
 from apps.accounts.models import User
+from apps.team.kits import active_kits, apply_kit_fields, build_kit_fields
+from apps.team.kits import field_name as kit_field_name
 
 # Common timezones sorted by region
 TIMEZONE_CHOICES = [
@@ -325,6 +327,34 @@ class ProfileForm(forms.ModelForm):
                 self.initial["dual_recording"] = "False"
             else:
                 self.initial["dual_recording"] = ""
+
+        # One select per active team kit. team_kit is JSON and deliberately NOT in Meta.fields
+        # (it would render as a raw textarea); these fields are merged back in save().
+        self.team_kits = active_kits()
+        self.fields.update(build_kit_fields(self.instance, for_team=False, kits=self.team_kits))
+
+    @property
+    def team_kit_fields(self) -> list:
+        """The bound kit fields, for templates to loop over.
+
+        Returns:
+            The BoundFields for each kit, in display order.
+
+        """
+        return [self[kit_field_name(kit)] for kit in self.team_kits]
+
+    def save(self, commit: bool = True) -> User:
+        """Save the profile, merging any submitted team kit statuses into ``team_kit``.
+
+        Args:
+            commit: Whether to write to the database.
+
+        Returns:
+            The saved user.
+
+        """
+        apply_kit_fields(self.instance, self.data, self.cleaned_data, kits=self.team_kits)
+        return super().save(commit=commit)
 
     def clean_birth_year(self) -> int | None:
         """Validate birth year is in reasonable range.

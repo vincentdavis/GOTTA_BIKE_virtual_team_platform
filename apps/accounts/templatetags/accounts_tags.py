@@ -353,3 +353,22 @@ def phenotype_icon(context, phenotype):
         f'<img src="{escape(emoji_file.url)}" alt="{escape(phenotype)}" '
         f'class="h-5 w-5" title="{escape(phenotype)}">'
     )
+
+
+@register.simple_tag
+def team_kit_rows(user) -> list[dict]:
+    """Return a rider's team kit statuses for display, one row per active kit.
+
+    A tag rather than view context so any template showing a rider -- the profile today, the
+    roster or an export view later -- can render it without each view remembering to.
+
+    Args:
+        user: The rider.
+
+    Returns:
+        Rows with ``kit``, ``status``, ``label`` and ``badge``; empty when no kits are defined.
+
+    """
+    from apps.team.kits import kit_rows
+
+    return kit_rows(user)

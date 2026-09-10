@@ -1,0 +1,34 @@
+{% comment %}
+  Team kit selects for the rider's own profile form. Included by BOTH pages that post to
+  profile_edit (the full edit page and the form on My Profile), so the two cannot drift.
+
+  Renders nothing when no kits are defined. Saving never resets a kit this page did not
+  submit -- apply_kit_fields only touches fields present in the POST -- but including it on
+  both pages keeps the editor visible wherever the rider edits their profile.
+{% endcomment %}
+{% if form.team_kit_fields %}
+<div class="divider">Team Kit</div>
+<p class="text-sm text-base-content/60 -mt-2 mb-3">
+  Zwift issues team kits to members. Let us know where you stand so we can get one to you.
+</p>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  {% for field in form.team_kit_fields %}
+  <div class="form-control w-full">
+    <label class="label" for="{{ field.id_for_label }}">
+      <span class="label-text">{{ field.label }}</span>
+    </label>
+    <select name="{{ field.html_name }}" id="{{ field.id_for_label }}" class="select select-bordered w-full">
+      {% for value, text in field.field.choices %}
+      <option value="{{ value }}" {% if value == field.value %}selected{% endif %}>{{ text }}</option>
+      {% endfor %}
+    </select>
+    {% if field.help_text %}
+    <p class="text-xs text-base-content/60 mt-1">{{ field.help_text }}</p>
+    {% endif %}
+    {% if field.errors %}
+    <p class="text-xs text-error mt-1">{{ field.errors.0 }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

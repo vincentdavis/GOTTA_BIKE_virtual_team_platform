@@ -1,0 +1,17 @@
+{% load accounts_tags %}
+{% comment %}
+  A rider's team kit status, for the top of a profile. Solid badges only: each uses DaisyUI's
+  paired *-content foreground, which stays readable in both themes where a colour used as
+  text on the page background does not.
+{% endcomment %}
+{% team_kit_rows rider as kits %}
+{% if kits %}
+<div class="flex flex-wrap items-center gap-2 mt-2">
+  {% for row in kits %}
+  <span class="inline-flex items-center gap-1 text-sm">
+    <span class="text-base-content/70">{{ row.kit.name }}:</span>
+    <span class="badge {{ row.badge }} badge-sm">{{ row.label }}</span>
+  </span>
+  {% endfor %}
+</div>
+{% endif %}

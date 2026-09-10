@@ -5,7 +5,14 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import path, reverse
 
-from apps.team.models import DiscordChannel, DiscordRole, MembershipApplication, RaceReadyRecord, TeamLink
+from apps.team.models import (
+    DiscordChannel,
+    DiscordRole,
+    MembershipApplication,
+    RaceReadyRecord,
+    TeamKit,
+    TeamLink,
+)
 from apps.team.services import get_unified_team_roster
 from apps.team.tasks import sync_discord_channels
 
@@ -324,3 +331,43 @@ class MembershipApplicationAdmin(admin.ModelAdmin):
 
         """
         return obj.is_complete
+
+
+@admin.register(TeamKit)
+class TeamKitAdmin(admin.ModelAdmin):
+    """Define the team kits riders are asked about."""
+
+    list_display = ("name", "slug", "active", "sort_order", "created_at")
+    list_editable = ("active", "sort_order")
+    list_filter = ("active",)
+    search_fields = ("name", "slug")
+
+    def get_prepopulated_fields(self, request: HttpRequest, obj: TeamKit | None = None) -> dict:
+        """Suggest a slug from the name, but only while creating.
+
+        Args:
+            request: The HTTP request.
+            obj: The kit being edited, or None when adding.
+
+        Returns:
+            The prepopulation map.
+
+        """
+        return {} if obj else {"slug": ("name",)}
+
+    def get_readonly_fields(self, request: HttpRequest, obj: TeamKit | None = None) -> tuple:
+        """Freeze the slug once a kit exists.
+
+        The slug is the key in every rider's ``team_kit``. Changing it would orphan every
+        status already recorded for this kit, so it is editable only on the add form. Rename
+        a kit through ``name`` instead, which is free to change.
+
+        Args:
+            request: The HTTP request.
+            obj: The kit being edited, or None when adding.
+
+        Returns:
+            Read-only field names.
+
+        """
+        return ("slug", "created_at") if obj else ("created_at",)

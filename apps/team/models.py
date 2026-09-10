@@ -1266,3 +1266,70 @@ class MembershipApplication(models.Model):
             self.messages = []
         self.messages.append(new_message)
         return new_message
+
+
+class KitStatus(models.TextChoices):
+    """Where a rider's team kit stands, as stored on ``User.team_kit``.
+
+    One stored value per state, with the label depending on who is looking -- see
+    ``apps.team.kits``. The two lists this came from overlap with different wording: the
+    rider's "What's a kit" and the team's "Unknown" are the same state, as are "I need the
+    kit" and "Need kit". Storing the wording would have made them different values and
+    broken the moment either label was reworded, and would hand the planned import/export a
+    column of display strings to match against.
+    """
+
+    UNKNOWN = "unknown", "Unknown"
+    NEED = "need", "Need kit"
+    SUBMITTED = "submitted", "Submitted to Zwift"
+    COMPLETED = "completed", "Completed by Zwift"
+    HAVE = "have", "I have the kit"
+
+
+class TeamKit(models.Model):
+    """A team kit Zwift issues to members.
+
+    Each rider's status for each kit lives in ``User.team_kit``, keyed by ``slug`` rather
+    than by name or primary key. The slug is fixed once created (read-only in the admin):
+    renaming a kit changes ``name`` and leaves every rider's status attached, which keying
+    by name would not. It is also stable across environments, unlike a primary key, which
+    matters for the import/export that is meant to follow.
+
+    Retire a kit by clearing ``active`` rather than deleting it: riders' statuses for it are
+    kept, and it simply stops being shown and offered.
+    """
+
+    retention = RetentionPolicy.keep(
+        "Configuration: the list of team kits an admin has defined. No personal content -- "
+        "each rider's status for a kit is stored on the User row, not here."
+    )
+
+    name = models.CharField(max_length=100, help_text="Shown to riders, e.g. '2026 Race Kit'")
+    slug = models.SlugField(
+        max_length=100,
+        unique=True,
+        help_text="Permanent key for this kit in each rider's record. Cannot be changed after creation.",
+    )
+    description = models.TextField(blank=True, help_text="Optional detail shown to riders")
+    active = models.BooleanField(
+        default=True,
+        help_text="Inactive kits are hidden and not offered, but riders' statuses for them are kept",
+    )
+    sort_order = models.PositiveSmallIntegerField(default=0, help_text="Lower numbers are listed first")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        """Model metadata."""
+
+        ordering: ClassVar[list[str]] = ["sort_order", "name"]
+        verbose_name = "Team kit"
+        verbose_name_plural = "Team kits"
+
+    def __str__(self) -> str:
+        """Return the kit name.
+
+        Returns:
+            The display name.
+
+        """
+        return self.name

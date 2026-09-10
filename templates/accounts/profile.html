@@ -17,6 +17,8 @@
           </a>
         </div>
 
+        {% include "accounts/partials/_team_kit_badges.html" with rider=user %}
+
         <!-- Editable Profile Form -->
         <div id="profile-form-container">
           {% include "accounts/partials/profile_form.html" %}

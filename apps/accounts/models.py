@@ -337,6 +337,16 @@ class User(AbstractUser):
         default=None,
         help_text="Do you dual record data?",
     )
+    # Per-kit status for the team kits Zwift issues, as {kit_slug: status}. A kit with no
+    # entry reads as "unknown" ("What's a kit" to the rider), so adding a kit needs no
+    # backfill. Keyed by TeamKit.slug, which is fixed at creation, so renaming a kit keeps
+    # every rider's status attached. Statuses are KitStatus values, never display wording.
+    # See apps/team/kits.py for the labels and the read/write helpers.
+    team_kit = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Team kit status per kit, as {kit_slug: status}",
+    )
     heartrate_monitor = models.CharField(
         max_length=100,
         blank=True,
