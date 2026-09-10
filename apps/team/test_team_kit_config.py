@@ -515,3 +515,85 @@ def test_the_list_costs_the_same_however_many_members(user_model, old_kit):
         kit_member_rows(kit=old_kit)
 
     assert len(many.captured_queries) == len(few.captured_queries)
+
+
+# --- the "needs the kit" filter ------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_need_filter_shows_only_members_who_need_the_current_kit(client, app_admin, user_model, old_kit):
+    """Exactly the "Need kit" status -- not those already submitted, completed or equipped."""
+    _member(user_model, "needs", {old_kit.slug: KitStatus.NEED})
+    _member(user_model, "submitted", {old_kit.slug: KitStatus.SUBMITTED})
+    _member(user_model, "completed", {old_kit.slug: KitStatus.COMPLETED})
+    _member(user_model, "has", {old_kit.slug: KitStatus.HAVE})
+    _member(user_model, "silent")
+
+    assert _usernames(_list(client, app_admin, need="1")) == ["needs"]
+
+
+@pytest.mark.django_db
+def test_need_means_the_current_kit_not_any_kit(client, app_admin, user_model, old_kit, new_kit):
+    """Needing last season's kit is not needing this one -- the filter follows "current"."""
+    _member(user_model, "wants-old", {new_kit.slug: KitStatus.NEED, old_kit.slug: KitStatus.HAVE})
+    _member(user_model, "wants-current", {old_kit.slug: KitStatus.NEED})
+
+    assert _usernames(_list(client, app_admin, need="1")) == ["wants-current"]
+
+
+@pytest.mark.django_db
+def test_the_two_filters_combine(client, app_admin, user_model, old_kit):
+    """Both boxes on means both conditions: verified AND needs the kit."""
+    _member(user_model, "verified-needs", {old_kit.slug: KitStatus.NEED}, zwid=1, zwid_verified=True)
+    _member(user_model, "unverified-needs", {old_kit.slug: KitStatus.NEED}, zwid=2, zwid_verified=False)
+    _member(user_model, "verified-has", {old_kit.slug: KitStatus.HAVE}, zwid=3, zwid_verified=True)
+
+    assert _usernames(_list(client, app_admin, need="1", verified="1")) == ["verified-needs"]
+
+
+@pytest.mark.django_db
+def test_the_need_filter_does_not_change_the_counts(client, app_admin, user_model, old_kit):
+    """Same rule as the verified filter: it narrows the list, never the summary."""
+    _member(user_model, "a", {old_kit.slug: KitStatus.NEED})
+    _member(user_model, "b", {old_kit.slug: KitStatus.HAVE})
+
+    unfiltered = _list(client, app_admin).context["current_kit_entry"]["counts"]
+    filtered = _list(client, app_admin, need="1").context["current_kit_entry"]["counts"]
+
+    assert unfiltered == filtered
+
+
+@pytest.mark.django_db
+def test_the_summary_names_what_is_being_shown(client, app_admin, user_model, old_kit):
+    """A short list must read as filtered, and say by what."""
+    _member(user_model, "a", {old_kit.slug: KitStatus.NEED}, zwid=1, zwid_verified=True)
+    _member(user_model, "b", {old_kit.slug: KitStatus.HAVE}, zwid=2, zwid_verified=True)
+
+    need_only = " ".join(_list(client, app_admin, need="1").content.decode().split())
+    both = " ".join(_list(client, app_admin, need="1", verified="1").content.decode().split())
+
+    # &mdash; because this is the raw HTML, where the dash is an entity.
+    assert "Showing 1 of 2 members &mdash; those who need the 2026 Race Kit." in need_only
+    assert "Showing 1 of 2 members &mdash; verified Zwift accounts who need the 2026 Race Kit." in both
+
+
+@pytest.mark.django_db
+def test_without_a_current_kit_the_box_is_disabled(client, app_admin, user_model, new_kit):
+    """There is nothing to need until a kit is current."""
+    _member(user_model, "rider")
+
+    body = _list(client, app_admin).content.decode()
+
+    assert 'name="need"' not in body
+    assert "Make a kit current first" in body
+
+
+@pytest.mark.django_db
+def test_a_hand_typed_need_param_without_a_current_kit_is_ignored(client, app_admin, user_model, new_kit):
+    """Rather than emptying the list for a reason nothing on the page explains."""
+    _member(user_model, "rider")
+
+    response = _list(client, app_admin, need="1")
+
+    assert "rider" in _usernames(response)
+    assert response.context["needs_kit_only"] is False

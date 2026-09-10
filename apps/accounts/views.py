@@ -1618,8 +1618,12 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
         # The filter narrows only the member list. The counts above it stay whole-team, so a
         # filtered view never changes what "12 need it" means.
         verified_only = request.GET.get("verified") == "1"
-        member_rows = kit_member_rows(verified_only=verified_only, kit=current)
-        member_total = team_members().count() if verified_only else len(member_rows)
+        # Only meaningful with a current kit to need; without one the box is disabled, and a
+        # hand-typed ?need=1 is ignored rather than emptying the list for no visible reason.
+        needs_kit_only = request.GET.get("need") == "1" and current is not None
+        member_rows = kit_member_rows(verified_only=verified_only, needs_kit_only=needs_kit_only, kit=current)
+        filtered = verified_only or needs_kit_only
+        member_total = team_members().count() if filtered else len(member_rows)
         return render(
             request,
             "accounts/config_section_page.html",
@@ -1635,6 +1639,8 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "member_rows": member_rows,
                 "member_total": member_total,
                 "verified_only": verified_only,
+                "needs_kit_only": needs_kit_only,
+                "member_list_filtered": filtered,
                 "available_roles": [],
             },
         )

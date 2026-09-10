@@ -133,7 +133,9 @@ def kit_status_counts(kits: list[TeamKit]) -> dict[str, dict[str, int]]:
     return counts
 
 
-def kit_member_rows(*, verified_only: bool = False, kit: TeamKit | None = None) -> list[dict]:
+def kit_member_rows(
+    *, verified_only: bool = False, needs_kit_only: bool = False, kit: TeamKit | None = None
+) -> list[dict]:
     """Build the team member list for the team kit page.
 
     A fixed number of queries however many members there are: one for the members, one
@@ -146,6 +148,8 @@ def kit_member_rows(*, verified_only: bool = False, kit: TeamKit | None = None) 
 
     Args:
         verified_only: Limit to members whose Zwift account is verified.
+        needs_kit_only: Limit to members whose status for ``kit`` is "Need kit". Ignored
+            when no kit is given, since there is nothing to need.
         kit: The kit to report status for, normally the current one; None for no column.
 
     Returns:
@@ -182,6 +186,11 @@ def kit_member_rows(*, verified_only: bool = False, kit: TeamKit | None = None) 
             status = status_for(member, kit)
             row.update(status=status, label=KitStatus(status).label, badge=BADGE_CLASSES.get(status, "badge-ghost"))
         rows.append(row)
+    # Filtered here, on the already-loaded rows, rather than with a JSON key lookup in the
+    # query. A slug may contain "__", which Django would read as a lookup separator in
+    # team_kit__<slug>, and the rows are in memory anyway -- so this is both safer and free.
+    if needs_kit_only and kit is not None:
+        rows = [row for row in rows if row["status"] == KitStatus.NEED]
     rows.sort(key=lambda row: (row["discord_name"] or "").lower())
     return rows
 

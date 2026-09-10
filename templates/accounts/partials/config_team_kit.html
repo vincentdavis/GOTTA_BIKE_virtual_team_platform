@@ -152,20 +152,34 @@
   <div>
     <h3 class="font-semibold">Team members</h3>
     <p class="text-xs text-base-content/60">
-      {% if verified_only %}Showing {{ member_rows|length }} of {{ member_total }} members &mdash; verified Zwift accounts only.
+      {% if member_list_filtered %}Showing {{ member_rows|length }} of {{ member_total }} members &mdash;
+        {% if verified_only %}verified Zwift accounts{% endif %}{% if verified_only and needs_kit_only %} who {% elif needs_kit_only %}those who {% endif %}{% if needs_kit_only %}need the {{ current_kit_entry.kit.name }}{% endif %}.
       {% else %}{{ member_total }} member{{ member_total|pluralize }} with a Discord login.{% endif %}
     </p>
   </div>
   {% comment %}
     A GET form so the filtered view is a URL: bookmarkable, shareable, and survives a refresh.
-    Submits itself on change so there is no separate button to find.
+    Both boxes live in the one form so they submit together and combine; each submits the
+    form on change, so there is no separate button to find.
   {% endcomment %}
-  <form method="get" action="{% url 'config_section_page' 'team_kit' %}">
+  <form method="get" action="{% url 'config_section_page' 'team_kit' %}" class="flex flex-wrap gap-x-4">
     <label class="label cursor-pointer gap-2">
       <input type="checkbox" name="verified" value="1" class="checkbox checkbox-sm checkbox-primary"
              {% if verified_only %}checked{% endif %} onchange="this.form.submit()">
       <span class="label-text">Verified Zwift accounts only</span>
     </label>
+    {% if current_kit_entry %}
+    <label class="label cursor-pointer gap-2">
+      <input type="checkbox" name="need" value="1" class="checkbox checkbox-sm checkbox-primary"
+             {% if needs_kit_only %}checked{% endif %} onchange="this.form.submit()">
+      <span class="label-text">Needs the kit only</span>
+    </label>
+    {% else %}
+    <label class="label gap-2 cursor-not-allowed" title="Make a kit current first -- there is nothing to need until one is">
+      <input type="checkbox" class="checkbox checkbox-sm" disabled>
+      <span class="label-text text-base-content/50">Needs the kit only</span>
+    </label>
+    {% endif %}
   </form>
 </div>
 
@@ -207,6 +221,6 @@
 </div>
 {% else %}
 <p class="text-sm text-base-content/60">
-  {% if verified_only %}No members with a verified Zwift account.{% else %}No members with a Discord login yet.{% endif %}
+  {% if member_list_filtered %}No members match these filters.{% else %}No members with a Discord login yet.{% endif %}
 </p>
 {% endif %}
