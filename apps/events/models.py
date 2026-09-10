@@ -1501,15 +1501,43 @@ class AvailabilityGrid(models.Model):
             current += timedelta(days=1)
         return result
 
-    @property
-    def response_count(self) -> int:
-        """The number of responses for this grid.
+    def active_responses(self):
+        """Responses from riders who are still members of this grid's squad.
+
+        A response is keyed on (grid, user) with no link to the membership, so leaving a
+        squad does not remove it -- and nothing should: the row is the rider's own answer.
+        What must change is whether it COUNTS. Read through this, a rider who has left
+        stops appearing as a responder, stops adding to the heatmap, stops being offered in
+        the race-slot picker, and stops holding the sheet's shape lock.
+
+        Both conditions sit in ONE ``filter()`` call deliberately. Across a multi-valued
+        relation, two separate calls may match two different membership rows, so a rider
+        who is a MEMBER of some other squad but only pending here would slip through.
+        ``SquadMember`` is unique on (squad, user), so the join yields at most one row per
+        response and needs no ``distinct()``.
+
+        The participation report reaches the same answer from the other direction -- it
+        starts from members and looks their answers up -- and uses the same status rule, so
+        the two pages agree about who is in.
 
         Returns:
-            Count of AvailabilityResponse objects linked to this grid.
+            A queryset of this grid's responses from current squad members.
 
         """
-        return self.responses.count()
+        return self.responses.filter(
+            user__squad_memberships__squad=self.squad,
+            user__squad_memberships__status=SquadMember.Status.MEMBER,
+        )
+
+    @property
+    def response_count(self) -> int:
+        """The number of responses for this grid from current squad members.
+
+        Returns:
+            Count of this grid's responses whose rider is still in the squad.
+
+        """
+        return self.active_responses().count()
 
     @property
     def is_draft(self) -> bool:

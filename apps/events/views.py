@@ -4374,11 +4374,11 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
 
     # Once riders have answered, the shape is frozen and two of the still-editable
     # settings have consequences worth naming before the captain ticks the box.
-    response_count = grid.responses.count()
+    response_count = grid.active_responses().count()
     unverified_responders = 0
     if response_count and not grid.require_race_verified_availability:
         unverified_responders = sum(
-            1 for r in grid.responses.select_related("user") if not r.user.is_race_ready
+            1 for r in grid.active_responses().select_related("user") if not r.user.is_race_ready
         )
 
     logfire.debug(
@@ -4610,7 +4610,9 @@ def _handle_availability_save(
     else:
         # Refuse shape changes once riders have answered. The builder disables these
         # controls, but it posts JSON, so the check has to live here to mean anything.
-        if grid.responses.exists():
+        # Current members only: answers from riders who have since left protect nobody in
+        # the squad, and counting them froze a sheet nobody here had answered.
+        if grid.active_responses().exists():
             changed = _changed_shape_fields(grid, field_values)
             if changed:
                 logfire.warning(
@@ -5055,7 +5057,7 @@ def availability_delete_view(request: HttpRequest, event_pk: int, squad_pk: int,
         return redirect("events:event_detail", pk=event_pk)
 
     grid_title = grid.title or "Availability Grid"
-    response_count = grid.responses.count()
+    response_count = grid.active_responses().count()
     selection_count = grid.slot_selections.count()
     grid.delete()
 
@@ -5701,7 +5703,10 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         messages.error(request, "Results are not available for this grid.")
         return redirect("events:event_detail", pk=event_pk)
 
-    responses = list(AvailabilityResponse.objects.filter(grid=grid).select_related("user"))
+    # Current members only. This one query feeds the responders list, the heatmap and the
+    # race-slot picker, so filtering it here is what keeps a rider who has left from being
+    # offered as available for a race.
+    responses = list(grid.active_responses().select_related("user"))
     total_responders = len(responses)
 
     responder_users = [r.user for r in responses]

@@ -92,12 +92,20 @@ def _post(client, event, squad, grid, **over):
 
 
 def _respond(grid, user, cells=None) -> AvailabilityResponse:
-    """Store a rider's answer.
+    """Store a rider's answer, as a member of the grid's squad.
+
+    Membership is part of what makes an answer count: only responses from current squad
+    members hold the shape lock (``AvailabilityGrid.active_responses``). Before that rule,
+    these tests answered as a rider who was never in the squad and still locked the sheet,
+    which is precisely the behaviour that stopped a departed rider's answer freezing it.
 
     Returns:
         The response row.
 
     """
+    SquadMember.objects.get_or_create(
+        squad=grid.squad, user=user, defaults={"status": SquadMember.Status.MEMBER}
+    )
     return AvailabilityResponse.objects.create(
         grid=grid, user=user,
         available_cells=cells if cells is not None else [{"date": "2026-07-03", "time": "19:00"}],
