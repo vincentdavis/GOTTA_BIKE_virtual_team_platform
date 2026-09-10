@@ -87,30 +87,103 @@ def current_kit() -> TeamKit | None:
     return TeamKit.objects.filter(is_current=True).first()
 
 
-def kit_status_counts(kits: list[TeamKit]) -> dict[str, dict[str, int]]:
-    """Count riders at each RECORDED status, per kit, in one query.
+def team_members():
+    """Everyone this page treats as a team member: anyone with a Discord login.
 
-    Deliberately leaves out "unknown". A rider with no entry is unknown, but the honest
-    denominator for that is the team, and team membership comes from Discord roles rather
-    than anything filterable here -- so any number shown would silently include applicants
-    and people who have left. The four recorded statuses are exact.
+    The definition the team gave, and the one that makes a "hasn't answered" count honest.
+    Discord OAuth is the only login for riders, so this excludes accounts that never signed
+    in that way -- chiefly locally-created superusers -- while including everyone else.
+
+    Returns:
+        A queryset of users with a Discord id.
+
+    """
+    from apps.accounts.models import User
+
+    return User.objects.exclude(discord_id="")
+
+
+def kit_status_counts(kits: list[TeamKit]) -> dict[str, dict[str, int]]:
+    """Count team members at each status, per kit, in one query.
+
+    Includes "unknown" -- members with no answer for that kit -- now that "team member" has a
+    filterable definition (``team_members``). Before it did, that number had no honest
+    denominator and was left out rather than shown wrong. Every count on the team kit page
+    uses this same population, so the summary and the member list cannot disagree.
 
     Args:
         kits: The kits to count for.
 
     Returns:
-        ``{kit_slug: {status: count}}`` for need, submitted, completed and have.
+        ``{kit_slug: {status: count}}`` for every KitStatus, including unknown.
 
     """
-    from apps.accounts.models import User
-
-    recorded = (KitStatus.NEED, KitStatus.SUBMITTED, KitStatus.COMPLETED, KitStatus.HAVE)
-    counts = {kit.slug: dict.fromkeys(recorded, 0) for kit in kits}
-    for team_kit in User.objects.exclude(team_kit={}).values_list("team_kit", flat=True):
+    counts = {kit.slug: dict.fromkeys(KitStatus.values, 0) for kit in kits}
+    members = 0
+    for team_kit in team_members().values_list("team_kit", flat=True):
+        members += 1
         for slug, status in (team_kit or {}).items():
-            if slug in counts and status in counts[slug]:
+            # UNKNOWN is derived below; an entry explicitly set to it, or holding junk from a
+            # hand edit, must not be counted as an answer.
+            if slug in counts and status in KitStatus.values and status != KitStatus.UNKNOWN:
                 counts[slug][status] += 1
+    for by_status in counts.values():
+        answered = sum(n for status, n in by_status.items() if status != KitStatus.UNKNOWN)
+        by_status[KitStatus.UNKNOWN] = members - answered
     return counts
+
+
+def kit_member_rows(*, verified_only: bool = False, kit: TeamKit | None = None) -> list[dict]:
+    """Build the team member list for the team kit page.
+
+    A fixed number of queries however many members there are: one for the members, one
+    each for the ZwiftPower and ZwiftRacing names, and nothing per row -- each row's kit
+    status is read from the already-loaded ``team_kit``.
+
+    The Zwift name follows the team roster exactly (``UnifiedRider.display_name``): the
+    ZwiftPower name, else the ZwiftRacing name. Using a different source here would have the
+    two pages disagree about what a rider is called.
+
+    Args:
+        verified_only: Limit to members whose Zwift account is verified.
+        kit: The kit to report status for, normally the current one; None for no column.
+
+    Returns:
+        Rows sorted by Discord name, each with ``user``, ``discord_name``, ``zwift_name``,
+        ``zwid``, ``zwid_verified`` and -- when a kit is given -- ``status``, ``label`` and
+        ``badge``.
+
+    """
+    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftracing.models import ZRRider
+
+    queryset = team_members()
+    if verified_only:
+        queryset = queryset.filter(zwid_verified=True)
+    members = list(
+        queryset.only("id", "discord_username", "discord_nickname", "zwid", "zwid_verified", "team_kit")
+    )
+
+    zwids = {member.zwid for member in members if member.zwid}
+    zp_names = dict(ZPTeamRiders.objects.filter(zwid__in=zwids).values_list("zwid", "name")) if zwids else {}
+    zr_names = dict(ZRRider.objects.filter(zwid__in=zwids).values_list("zwid", "name")) if zwids else {}
+
+    rows = []
+    for member in members:
+        row = {
+            "user": member,
+            "discord_name": member.discord_nickname or member.discord_username,
+            "discord_username": member.discord_username,
+            "zwift_name": zp_names.get(member.zwid) or zr_names.get(member.zwid) or "",
+            "zwid": member.zwid,
+            "zwid_verified": member.zwid_verified,
+        }
+        if kit is not None:
+            status = status_for(member, kit)
+            row.update(status=status, label=KitStatus(status).label, badge=BADGE_CLASSES.get(status, "badge-ghost"))
+        rows.append(row)
+    rows.sort(key=lambda row: (row["discord_name"] or "").lower())
+    return rows
 
 
 def active_kits() -> list[TeamKit]:

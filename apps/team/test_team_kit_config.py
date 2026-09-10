@@ -121,41 +121,66 @@ def test_no_current_kit_is_a_valid_state(new_kit):
 # --- counts --------------------------------------------------------------------------
 
 
+def _member(user_model, name: str, team_kit: dict | None = None, **extra):
+    """Create a team member -- someone with a Discord login.
+
+    Args:
+        user_model: The active user model.
+        name: Username, also used for the Discord id and email.
+        team_kit: Their kit statuses.
+        **extra: Further user fields.
+
+    Returns:
+        The member.
+
+    """
+    return user_model.objects.create_user(
+        username=name, email=f"{name}@example.test", discord_id=f"d-{name}",
+        discord_username=name, team_kit=team_kit or {}, **extra,
+    )
+
+
 @pytest.mark.django_db
-def test_counts_are_per_kit_and_per_recorded_status(user_model, old_kit, new_kit):
+def test_counts_are_per_kit_and_per_status(user_model, old_kit, new_kit):
     """The progress the page exists to show: how far the team is with each kit."""
-    for i, (old_status, new_status) in enumerate(
-        [(KitStatus.HAVE, KitStatus.NEED), (KitStatus.HAVE, KitStatus.SUBMITTED), (KitStatus.NEED, None)]
-    ):
-        entry = {old_kit.slug: old_status}
-        if new_status:
-            entry[new_kit.slug] = new_status
-        user_model.objects.create_user(username=f"r{i}", email=f"r{i}@example.test", team_kit=entry)
+    _member(user_model, "r0", {old_kit.slug: KitStatus.HAVE, new_kit.slug: KitStatus.NEED})
+    _member(user_model, "r1", {old_kit.slug: KitStatus.HAVE, new_kit.slug: KitStatus.SUBMITTED})
+    _member(user_model, "r2", {old_kit.slug: KitStatus.NEED})
 
     counts = kit_status_counts([old_kit, new_kit])
 
-    assert counts[old_kit.slug] == {"need": 1, "submitted": 0, "completed": 0, "have": 2}
-    assert counts[new_kit.slug] == {"need": 1, "submitted": 1, "completed": 0, "have": 0}
+    assert counts[old_kit.slug] == {"unknown": 0, "need": 1, "submitted": 0, "completed": 0, "have": 2}
+    # r2 never answered for the new kit.
+    assert counts[new_kit.slug] == {"unknown": 1, "need": 1, "submitted": 1, "completed": 0, "have": 0}
 
 
 @pytest.mark.django_db
-def test_counts_leave_out_unknown_and_ignore_junk(user_model, old_kit):
-    """"Unknown" has no honest denominator here, and a hand-edited bad value is not a status."""
-    user_model.objects.create_user(username="a", email="a@example.test", team_kit={old_kit.slug: "unknown"})
-    user_model.objects.create_user(username="b", email="b@example.test", team_kit={old_kit.slug: "garbage"})
-    user_model.objects.create_user(username="c", email="c@example.test", team_kit={"no-such-kit": "have"})
+def test_haven_t_answered_counts_members_with_no_answer(user_model, old_kit):
+    """Now honest: "team member" has a filterable definition, so the denominator is real."""
+    _member(user_model, "answered", {old_kit.slug: KitStatus.HAVE})
+    _member(user_model, "silent")
+    _member(user_model, "explicit-unknown", {old_kit.slug: KitStatus.UNKNOWN})
 
-    counts = kit_status_counts([old_kit])
+    assert kit_status_counts([old_kit])[old_kit.slug]["unknown"] == 2
 
-    assert "unknown" not in counts[old_kit.slug]
-    assert sum(counts[old_kit.slug].values()) == 0
+
+@pytest.mark.django_db
+def test_counts_ignore_junk_and_people_without_a_discord_login(user_model, old_kit):
+    """A hand-edited bad value is not an answer, and a non-member is not in the denominator."""
+    _member(user_model, "junk", {old_kit.slug: "garbage"})
+    user_model.objects.create_user(username="local", email="local@example.test", team_kit={old_kit.slug: "have"})
+
+    counts = kit_status_counts([old_kit])[old_kit.slug]
+
+    assert counts["have"] == 0  # the local account is not a team member
+    assert counts["unknown"] == 1  # "junk" counted as unanswered, not as a status
 
 
 @pytest.mark.django_db
 def test_counting_is_one_query_however_many_riders(django_assert_max_num_queries, user_model, old_kit):
     """Rendered on an admin page, it must not become a query per rider."""
     for i in range(25):
-        user_model.objects.create_user(username=f"u{i}", email=f"u{i}@example.test", team_kit={old_kit.slug: "have"})
+        _member(user_model, f"u{i}", {old_kit.slug: "have"})
 
     with django_assert_max_num_queries(1):
         kit_status_counts([old_kit])
@@ -167,7 +192,7 @@ def test_counting_is_one_query_however_many_riders(django_assert_max_num_queries
 @pytest.mark.django_db
 def test_the_page_shows_the_current_kit_and_its_progress(client, app_admin, user_model, old_kit):
     """What the page is for: which kit, and how far along everyone is."""
-    user_model.objects.create_user(username="n", email="n@example.test", team_kit={old_kit.slug: "need"})
+    _member(user_model, "n", {old_kit.slug: "need"})
 
     body = _page(client, app_admin).content.decode()
 
@@ -318,3 +343,175 @@ def test_actions_refuse_get(client, app_admin, old_kit):
     client.force_login(app_admin)
 
     assert client.get(reverse("team_kit_make_current", args=[old_kit.pk])).status_code == 405
+
+
+# --- the team member list ------------------------------------------------------------------
+
+
+def _list(client, viewer, **params):
+    """Render the team kit section and return the response.
+
+    Args:
+        client: Test client.
+        viewer: The signed-in user.
+        **params: Query string, e.g. verified="1".
+
+    Returns:
+        The response.
+
+    """
+    client.force_login(viewer)
+    return client.get(reverse("config_section_page", args=["team_kit"]), params)
+
+
+def _usernames(response) -> list[str]:
+    """Usernames in the rendered member list, in order.
+
+    Args:
+        response: The page response.
+
+    Returns:
+        The listed usernames.
+
+    """
+    return [row["user"].username for row in response.context["member_rows"]]
+
+
+@pytest.mark.django_db
+def test_the_list_is_everyone_with_a_discord_login(client, app_admin, user_model):
+    """The definition given for "team member" -- a locally-created account is not one."""
+    _member(user_model, "rider")
+    user_model.objects.create_user(username="local", email="local@example.test")
+
+    names = _usernames(_list(client, app_admin))
+
+    assert "rider" in names
+    assert "local" not in names
+
+
+@pytest.mark.django_db
+def test_the_verified_filter_narrows_the_list(client, app_admin, user_model):
+    """The optional filter: verified Zwift accounts only."""
+    _member(user_model, "verified", zwid=111, zwid_verified=True)
+    _member(user_model, "unverified", zwid=222, zwid_verified=False)
+
+    assert set(_usernames(_list(client, app_admin))) >= {"verified", "unverified"}
+    filtered = _usernames(_list(client, app_admin, verified="1"))
+    assert "verified" in filtered
+    assert "unverified" not in filtered
+
+
+@pytest.mark.django_db
+def test_the_filter_does_not_change_the_counts(client, app_admin, user_model, old_kit):
+    """The filter narrows the list only -- "N need it" must mean the same thing either way."""
+    _member(user_model, "v", {old_kit.slug: "need"}, zwid=1, zwid_verified=True)
+    _member(user_model, "u", {old_kit.slug: "need"}, zwid=2, zwid_verified=False)
+
+    unfiltered = _list(client, app_admin).context["current_kit_entry"]["counts"]
+    filtered = _list(client, app_admin, verified="1").context["current_kit_entry"]["counts"]
+
+    assert unfiltered == filtered
+    assert filtered["need"] == 2
+
+
+@pytest.mark.django_db
+def test_a_filtered_list_says_how_much_it_is_showing(client, app_admin, user_model):
+    """Otherwise a short list reads as a small team rather than a filtered view."""
+    _member(user_model, "v", zwid=1, zwid_verified=True)
+    _member(user_model, "u1", zwid=2, zwid_verified=False)
+    _member(user_model, "u2", zwid=3, zwid_verified=False)
+
+    body = _list(client, app_admin, verified="1").content.decode()
+
+    assert "Showing 1 of 3 members" in body
+
+
+@pytest.mark.django_db
+def test_the_columns(client, app_admin, user_model, old_kit):
+    """Discord name, Zwift name, Zwift ID, Zwift verified, and the current kit's status."""
+    from apps.zwiftpower.models import ZPTeamRiders
+
+    _member(
+        user_model, "ana", {old_kit.slug: "submitted"},
+        discord_nickname="Ana R", zwid=6164399, zwid_verified=True,
+    )
+    ZPTeamRiders.objects.create(zwid=6164399, name="Ana Rider [COALITION]")
+
+    body = _list(client, app_admin).content.decode()
+    table = body[body.index("<th>Discord name</th>"):]
+
+    assert "Ana R" in table
+    assert "@ana" in table  # the username, since it differs from the nickname
+    assert "Ana Rider [COALITION]" in table
+    assert "6164399" in table
+    assert "Verified" in table
+    assert "Submitted to Zwift" in table
+    assert "2026 Race Kit" in table  # the status column is headed with the current kit's name
+
+
+@pytest.mark.django_db
+def test_the_zwift_name_follows_the_roster(user_model, old_kit):
+    """ZwiftPower first, then ZwiftRacing -- the same order as the team roster, so they agree."""
+    from apps.team.kits import kit_member_rows
+    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftracing.models import ZRRider
+
+    _member(user_model, "both", zwid=1)
+    _member(user_model, "zr-only", zwid=2)
+    ZPTeamRiders.objects.create(zwid=1, name="ZP Name")
+    ZRRider.objects.create(zwid=1, name="ZR Name")
+    ZRRider.objects.create(zwid=2, name="Only ZR")
+
+    names = {row["user"].username: row["zwift_name"] for row in kit_member_rows(kit=old_kit)}
+
+    assert names["both"] == "ZP Name"
+    assert names["zr-only"] == "Only ZR"
+
+
+@pytest.mark.django_db
+def test_no_current_kit_says_so_in_the_status_column(client, app_admin, user_model, new_kit):
+    """There is no kit to report on; the column must not invent a status."""
+    _member(user_model, "rider")
+
+    body = _list(client, app_admin).content.decode()
+
+    assert "No current kit" in body
+
+
+@pytest.mark.django_db
+def test_the_list_is_sorted_by_discord_name(client, app_admin, user_model):
+    """Predictable order, case-insensitive."""
+    _member(user_model, "zed", discord_nickname="zed")
+    _member(user_model, "amy", discord_nickname="Amy")
+    _member(user_model, "bob", discord_nickname="bob")
+
+    assert _usernames(_list(client, app_admin))[:3] == ["amy", "bob", "zed"]
+
+
+@pytest.mark.django_db
+def test_the_list_costs_the_same_however_many_members(user_model, old_kit):
+    """A fixed handful of queries, never one per rider -- the lesson of the captain banner.
+
+    Warmed first, and asserted as equality: an unwarmed baseline once hid a per-rider query
+    inside the slack of a <= comparison.
+    """
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    from apps.team.kits import kit_member_rows
+    from apps.zwiftpower.models import ZPTeamRiders
+
+    for i in range(2):
+        _member(user_model, f"few{i}", zwid=100 + i)
+        ZPTeamRiders.objects.create(zwid=100 + i, name=f"Few {i}")
+    kit_member_rows(kit=old_kit)  # warm
+    with CaptureQueriesContext(connection) as few:
+        kit_member_rows(kit=old_kit)
+
+    for i in range(20):
+        _member(user_model, f"many{i}", zwid=200 + i)
+        ZPTeamRiders.objects.create(zwid=200 + i, name=f"Many {i}")
+    with CaptureQueriesContext(connection) as many:
+        kit_member_rows(kit=old_kit)
+
+    assert len(many.captured_queries) == len(few.captured_queries)

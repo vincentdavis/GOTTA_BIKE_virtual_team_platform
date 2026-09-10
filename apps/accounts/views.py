@@ -1608,12 +1608,18 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
     # Handle special "team_kit" section -- kits are rows, not Constance settings, so like the
     # other special sections it renders its own partial and posts to its own routes.
     if section_key == "team_kit":
-        from apps.team.kits import kit_status_counts
+        from apps.team.kits import kit_member_rows, kit_status_counts, team_members
         from apps.team.models import TeamKit
 
         kits = list(TeamKit.objects.all())
         counts = kit_status_counts(kits)
         entries = [{"kit": kit, "counts": counts.get(kit.slug, {})} for kit in kits]
+        current = next((kit for kit in kits if kit.is_current), None)
+        # The filter narrows only the member list. The counts above it stay whole-team, so a
+        # filtered view never changes what "12 need it" means.
+        verified_only = request.GET.get("verified") == "1"
+        member_rows = kit_member_rows(verified_only=verified_only, kit=current)
+        member_total = team_members().count() if verified_only else len(member_rows)
         return render(
             request,
             "accounts/config_section_page.html",
@@ -1626,6 +1632,9 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 # Picked out here rather than by looping in the template for the one entry
                 # with is_current set.
                 "current_kit_entry": next((e for e in entries if e["kit"].is_current), None),
+                "member_rows": member_rows,
+                "member_total": member_total,
+                "verified_only": verified_only,
                 "available_roles": [],
             },
         )

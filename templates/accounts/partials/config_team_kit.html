@@ -8,9 +8,9 @@
   keep recording it, or retired. Only one kit can be current, and it must be active; the
   database enforces both, and the controls below say so before it has to.
 
-  Counts are of RECORDED statuses only. "Hasn't answered" is left out on purpose: the honest
-  denominator is the team, which comes from Discord roles, so any number shown would include
-  applicants and people who have left.
+  Every count on this page, and the member list, uses one population: team members, meaning
+  anyone with a Discord login (apps.team.kits.team_members). That is what makes "haven't
+  answered" an honest number. The verified filter narrows only the list, never the counts.
 {% endcomment %}
 {# --- the current kit, where it stands ------------------------------------------------ #}
 {% if current_kit_entry %}
@@ -22,6 +22,7 @@
     <span class="badge badge-info">{{ current_kit_entry.counts.submitted|default:0 }} submitted to Zwift</span>
     <span class="badge badge-info">{{ current_kit_entry.counts.completed|default:0 }} completed by Zwift</span>
     <span class="badge badge-success">{{ current_kit_entry.counts.have|default:0 }} have it</span>
+    <span class="badge badge-ghost">{{ current_kit_entry.counts.unknown|default:0 }} haven&rsquo;t answered</span>
   </div>
 </div>
 {% elif kit_entries %}
@@ -96,7 +97,8 @@
           {{ entry.counts.need|default:0 }} need it &middot;
           {{ entry.counts.submitted|default:0 }} submitted &middot;
           {{ entry.counts.completed|default:0 }} completed &middot;
-          {{ entry.counts.have|default:0 }} have it
+          {{ entry.counts.have|default:0 }} have it &middot;
+          {{ entry.counts.unknown|default:0 }} haven&rsquo;t answered
         </p>
       </div>
       <div class="flex flex-wrap gap-2 shrink-0">
@@ -142,4 +144,69 @@
   {% endwith %}
   {% endfor %}
 </div>
+{% endif %}
+
+{# --- team members ---------------------------------------------------------------------- #}
+<div class="divider mt-8"></div>
+<div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+  <div>
+    <h3 class="font-semibold">Team members</h3>
+    <p class="text-xs text-base-content/60">
+      {% if verified_only %}Showing {{ member_rows|length }} of {{ member_total }} members &mdash; verified Zwift accounts only.
+      {% else %}{{ member_total }} member{{ member_total|pluralize }} with a Discord login.{% endif %}
+    </p>
+  </div>
+  {% comment %}
+    A GET form so the filtered view is a URL: bookmarkable, shareable, and survives a refresh.
+    Submits itself on change so there is no separate button to find.
+  {% endcomment %}
+  <form method="get" action="{% url 'config_section_page' 'team_kit' %}">
+    <label class="label cursor-pointer gap-2">
+      <input type="checkbox" name="verified" value="1" class="checkbox checkbox-sm checkbox-primary"
+             {% if verified_only %}checked{% endif %} onchange="this.form.submit()">
+      <span class="label-text">Verified Zwift accounts only</span>
+    </label>
+  </form>
+</div>
+
+{% if member_rows %}
+<div class="overflow-x-auto">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Discord name</th>
+        <th>Zwift name</th>
+        <th>Zwift ID</th>
+        <th>Zwift verified</th>
+        <th>{% if current_kit_entry %}{{ current_kit_entry.kit.name }}{% else %}Kit status{% endif %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in member_rows %}
+      <tr>
+        <td>
+          <a href="{% url 'accounts:public_profile' row.user.pk %}" class="link link-hover">{{ row.discord_name|default:"—" }}</a>
+          {% if row.discord_username and row.discord_username != row.discord_name %}
+          <span class="block text-xs text-base-content/50">@{{ row.discord_username }}</span>
+          {% endif %}
+        </td>
+        <td>{{ row.zwift_name|default:"—" }}</td>
+        <td class="font-mono">{{ row.zwid|default:"—" }}</td>
+        <td>
+          {% if row.zwid_verified %}<span class="badge badge-success badge-sm">Verified</span>
+          {% else %}<span class="badge badge-ghost badge-sm">Not verified</span>{% endif %}
+        </td>
+        <td>
+          {% if current_kit_entry %}<span class="badge {{ row.badge }} badge-sm whitespace-nowrap">{{ row.label }}</span>
+          {% else %}<span class="text-base-content/50">No current kit</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="text-sm text-base-content/60">
+  {% if verified_only %}No members with a verified Zwift account.{% else %}No members with a Discord login yet.{% endif %}
+</p>
 {% endif %}
