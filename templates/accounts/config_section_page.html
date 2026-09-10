@@ -119,6 +119,8 @@
             <!-- Compliance -->
               {% include "accounts/partials/config_compliance.html" %}
 
+            {% elif is_team_kit %}
+                {% include "accounts/partials/config_team_kit.html" %}
             {% elif is_background_tasks %}
             <!-- Background Tasks -->
             <div id="tasks-container">

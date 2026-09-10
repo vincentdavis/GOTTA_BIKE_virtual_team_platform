@@ -74,6 +74,45 @@ def status_for(user: User, kit: TeamKit) -> str:
     return value if value in KitStatus.values else DEFAULT_STATUS
 
 
+def current_kit() -> TeamKit | None:
+    """Return the kit the team is currently getting everyone into.
+
+    The single place future automations and exports should ask "which kit?", so a new
+    season's kit is picked up by making it current rather than by editing code.
+
+    Returns:
+        The current kit, or None if none is set.
+
+    """
+    return TeamKit.objects.filter(is_current=True).first()
+
+
+def kit_status_counts(kits: list[TeamKit]) -> dict[str, dict[str, int]]:
+    """Count riders at each RECORDED status, per kit, in one query.
+
+    Deliberately leaves out "unknown". A rider with no entry is unknown, but the honest
+    denominator for that is the team, and team membership comes from Discord roles rather
+    than anything filterable here -- so any number shown would silently include applicants
+    and people who have left. The four recorded statuses are exact.
+
+    Args:
+        kits: The kits to count for.
+
+    Returns:
+        ``{kit_slug: {status: count}}`` for need, submitted, completed and have.
+
+    """
+    from apps.accounts.models import User
+
+    recorded = (KitStatus.NEED, KitStatus.SUBMITTED, KitStatus.COMPLETED, KitStatus.HAVE)
+    counts = {kit.slug: dict.fromkeys(recorded, 0) for kit in kits}
+    for team_kit in User.objects.exclude(team_kit={}).values_list("team_kit", flat=True):
+        for slug, status in (team_kit or {}).items():
+            if slug in counts and status in counts[slug]:
+                counts[slug][status] += 1
+    return counts
+
+
 def active_kits() -> list[TeamKit]:
     """Return the kits riders are currently shown and asked about.
 
@@ -104,6 +143,7 @@ def kit_rows(user: User, kits: list[TeamKit] | None = None) -> list[dict]:
             "status": status,
             "label": rider_label(status),
             "badge": BADGE_CLASSES.get(status, "badge-ghost"),
+            "is_current": kit.is_current,
         })
     return rows
 

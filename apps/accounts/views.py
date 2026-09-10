@@ -1605,6 +1605,31 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
             },
         )
 
+    # Handle special "team_kit" section -- kits are rows, not Constance settings, so like the
+    # other special sections it renders its own partial and posts to its own routes.
+    if section_key == "team_kit":
+        from apps.team.kits import kit_status_counts
+        from apps.team.models import TeamKit
+
+        kits = list(TeamKit.objects.all())
+        counts = kit_status_counts(kits)
+        entries = [{"kit": kit, "counts": counts.get(kit.slug, {})} for kit in kits]
+        return render(
+            request,
+            "accounts/config_section_page.html",
+            {
+                "sections": sections,
+                "current_section_key": section_key,
+                "current_section": {"name": "Team Kit", "key": "team_kit"},
+                "is_team_kit": True,
+                "kit_entries": entries,
+                # Picked out here rather than by looping in the template for the one entry
+                # with is_current set.
+                "current_kit_entry": next((e for e in entries if e["kit"].is_current), None),
+                "available_roles": [],
+            },
+        )
+
     # Handle special "background_tasks" section
     if section_key == "background_tasks":
         tasks = _get_task_registry()

@@ -34,6 +34,7 @@ from apps.accounts.views import (
 )
 from apps.analytics.api import api as analytics_api
 from apps.dbot_api.api import api as dbot_api
+from apps.team.kit_views import team_kit_add, team_kit_edit, team_kit_make_current, team_kit_toggle_active
 from apps.user_api.api import api as user_api
 from gotta_bike_platform.views import about, block_social_signup, healthz, home, robots_txt
 
@@ -76,6 +77,11 @@ urlpatterns = [
         compliance_delete_confirm,
         name="compliance_delete_confirm",
     ),
+    # Team kit section actions (the section page itself is config_section_page "team_kit").
+    path("site/config/team-kit/add/", team_kit_add, name="team_kit_add"),
+    path("site/config/team-kit/<int:pk>/edit/", team_kit_edit, name="team_kit_edit"),
+    path("site/config/team-kit/<int:pk>/current/", team_kit_make_current, name="team_kit_make_current"),
+    path("site/config/team-kit/<int:pk>/active/", team_kit_toggle_active, name="team_kit_toggle_active"),
     path("site/config/markdown-preview/", markdown_preview, name="markdown_preview"),
     path("site/config/section/<str:section_key>/update/", config_section_update, name="config_section_update"),
     path("site/config/<str:section_key>/", config_section_page, name="config_section_page"),

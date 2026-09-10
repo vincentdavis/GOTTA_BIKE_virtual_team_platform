@@ -1,0 +1,145 @@
+{% comment %}
+  Team kit management. Kits are rows rather than Constance settings, so this section posts to
+  its own routes (team_kit_add / _edit / _make_current / _toggle_active) and each redirects
+  back here with a message.
+
+  The "current" kit is the one the team is working to get everyone into. A new season's kit is
+  added and made current; the previous one is left as it was -- still active if riders should
+  keep recording it, or retired. Only one kit can be current, and it must be active; the
+  database enforces both, and the controls below say so before it has to.
+
+  Counts are of RECORDED statuses only. "Hasn't answered" is left out on purpose: the honest
+  denominator is the team, which comes from Discord roles, so any number shown would include
+  applicants and people who have left.
+{% endcomment %}
+{# --- the current kit, where it stands ------------------------------------------------ #}
+{% if current_kit_entry %}
+<div class="card bg-base-300 p-4 mb-6">
+  <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">Current kit</p>
+  <h3 class="text-lg font-semibold mb-3">{{ current_kit_entry.kit.name }}</h3>
+  <div class="flex flex-wrap gap-2">
+    <span class="badge badge-warning">{{ current_kit_entry.counts.need|default:0 }} need it</span>
+    <span class="badge badge-info">{{ current_kit_entry.counts.submitted|default:0 }} submitted to Zwift</span>
+    <span class="badge badge-info">{{ current_kit_entry.counts.completed|default:0 }} completed by Zwift</span>
+    <span class="badge badge-success">{{ current_kit_entry.counts.have|default:0 }} have it</span>
+  </div>
+</div>
+{% elif kit_entries %}
+<div class="alert alert-warning mb-6">
+  <span>No kit is current. Make one current so riders are asked about it first.</span>
+</div>
+{% endif %}
+
+{% if not kit_entries %}
+<div class="alert mb-6">
+  <span>No kits yet. Add the first one below and make it current to start asking riders about it.</span>
+</div>
+{% endif %}
+
+{# --- add a kit ------------------------------------------------------------------------ #}
+<div class="card bg-base-300 p-4 mb-6">
+  <h3 class="font-semibold mb-3">Add a kit</h3>
+  <form method="post" action="{% url 'team_kit_add' %}" class="space-y-3">
+    {% csrf_token %}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <label class="form-control w-full">
+        <span class="label-text mb-1">Name <span class="text-error">*</span></span>
+        <input type="text" name="name" required maxlength="100" class="input input-bordered w-full"
+               placeholder="2027 Race Kit">
+      </label>
+      <label class="form-control w-full">
+        <span class="label-text mb-1">Slug</span>
+        <input type="text" name="slug" maxlength="100" pattern="[-a-zA-Z0-9_]+" class="input input-bordered w-full"
+               placeholder="made from the name if left blank">
+      </label>
+    </div>
+    <label class="form-control w-full">
+      <span class="label-text mb-1">Description</span>
+      <input type="text" name="description" class="input input-bordered w-full"
+             placeholder="Shown to riders under the kit's name (optional)">
+    </label>
+    <div class="flex flex-wrap items-end gap-4">
+      <label class="form-control w-32">
+        <span class="label-text mb-1">Sort order</span>
+        <input type="number" name="sort_order" value="0" min="0" class="input input-bordered w-full">
+      </label>
+      <label class="label cursor-pointer justify-start gap-2 pb-3">
+        <input type="checkbox" name="make_current" value="1" class="checkbox checkbox-primary">
+        <span class="label-text">Make this the current kit</span>
+      </label>
+    </div>
+    <p class="text-xs text-base-content/60">
+      The slug is permanent: it is the key every rider's status for this kit is stored under,
+      so it cannot be changed once the kit exists. Rename the kit freely afterwards.
+    </p>
+    <button type="submit" class="btn btn-primary btn-sm">Add kit</button>
+  </form>
+</div>
+
+{# --- every kit --------------------------------------------------------------------- #}
+{% if kit_entries %}
+<h3 class="font-semibold mb-3">All kits</h3>
+<div class="space-y-3">
+  {% for entry in kit_entries %}
+  {% with kit=entry.kit %}
+  <div class="card bg-base-300 p-4 {% if kit.is_current %}ring-2 ring-primary{% endif %}">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="font-semibold">{{ kit.name }}</span>
+          {% if kit.is_current %}<span class="badge badge-primary badge-sm">Current</span>{% endif %}
+          {% if not kit.active %}<span class="badge badge-ghost badge-sm">Retired</span>{% endif %}
+        </div>
+        <p class="text-xs font-mono text-base-content/50 mt-1">{{ kit.slug }}</p>
+        {% if kit.description %}<p class="text-sm text-base-content/70 mt-1">{{ kit.description }}</p>{% endif %}
+        <p class="text-xs text-base-content/60 mt-2">
+          {{ entry.counts.need|default:0 }} need it &middot;
+          {{ entry.counts.submitted|default:0 }} submitted &middot;
+          {{ entry.counts.completed|default:0 }} completed &middot;
+          {{ entry.counts.have|default:0 }} have it
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2 shrink-0">
+        {% if not kit.is_current %}
+        <form method="post" action="{% url 'team_kit_make_current' kit.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline">Make current</button>
+        </form>
+        {% endif %}
+        {% if kit.is_current %}
+        <span class="btn btn-sm btn-disabled" title="Make another kit current before retiring this one">Retire</span>
+        {% else %}
+        <form method="post" action="{% url 'team_kit_toggle_active' kit.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-ghost">{% if kit.active %}Retire{% else %}Restore{% endif %}</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <details class="mt-3">
+      <summary class="text-sm link link-hover w-fit">Edit</summary>
+      <form method="post" action="{% url 'team_kit_edit' kit.pk %}" class="space-y-3 mt-3">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label class="form-control w-full md:col-span-2">
+            <span class="label-text mb-1">Name</span>
+            <input type="text" name="name" value="{{ kit.name }}" required maxlength="100" class="input input-bordered input-sm w-full">
+          </label>
+          <label class="form-control w-full">
+            <span class="label-text mb-1">Sort order</span>
+            <input type="number" name="sort_order" value="{{ kit.sort_order }}" min="0" class="input input-bordered input-sm w-full">
+          </label>
+        </div>
+        <label class="form-control w-full">
+          <span class="label-text mb-1">Description</span>
+          <input type="text" name="description" value="{{ kit.description }}" class="input input-bordered input-sm w-full">
+        </label>
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+      </form>
+    </details>
+  </div>
+  {% endwith %}
+  {% endfor %}
+</div>
+{% endif %}

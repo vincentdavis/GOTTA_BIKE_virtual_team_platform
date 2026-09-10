@@ -1316,14 +1316,39 @@ class TeamKit(models.Model):
         help_text="Inactive kits are hidden and not offered, but riders' statuses for them are kept",
     )
     sort_order = models.PositiveSmallIntegerField(default=0, help_text="Lower numbers are listed first")
+    # The kit the team is working to get everyone into. Each year or so a new kit is added and
+    # made current; the previous one stays as it was (still active if riders should keep
+    # recording it, or retired). Listed first everywhere, and the one future automations and
+    # exports will target. At most one kit is current, and it must be active -- both enforced
+    # by the database, so no path (the config page, the Django admin, a shell) can break them.
+    is_current = models.BooleanField(
+        default=False,
+        help_text="The kit the team is currently getting everyone into. Only one kit can be current.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         """Model metadata."""
 
-        ordering: ClassVar[list[str]] = ["sort_order", "name"]
+        # Current first, so the kit being chased leads every list without each caller sorting.
+        ordering: ClassVar[list[str]] = ["-is_current", "sort_order", "name"]
         verbose_name = "Team kit"
         verbose_name_plural = "Team kits"
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            # A partial unique index: uniqueness applies only to rows where is_current is
+            # true, so any number of kits may be non-current but only one can be current.
+            models.UniqueConstraint(
+                fields=["is_current"],
+                condition=models.Q(is_current=True),
+                name="team_kit_single_current",
+            ),
+            # Chasing a retired kit makes no sense, and a current kit that is inactive would
+            # be hidden from the very riders it is meant to reach.
+            models.CheckConstraint(
+                condition=models.Q(is_current=False) | models.Q(active=True),
+                name="team_kit_current_is_active",
+            ),
+        ]
 
     def __str__(self) -> str:
         """Return the kit name.
@@ -1333,3 +1358,19 @@ class TeamKit(models.Model):
 
         """
         return self.name
+
+    def make_current(self) -> None:
+        """Make this the current kit, clearing the previous one.
+
+        In one transaction and in this order -- clear, then set -- because the partial unique
+        index allows only one current row at a time: setting first would collide with the
+        outgoing kit. Also activates this kit, since a current kit must be active.
+
+        """
+        from django.db import transaction
+
+        with transaction.atomic():
+            TeamKit.objects.filter(is_current=True).exclude(pk=self.pk).update(is_current=False)
+            TeamKit.objects.filter(pk=self.pk).update(is_current=True, active=True)
+        self.is_current = True
+        self.active = True

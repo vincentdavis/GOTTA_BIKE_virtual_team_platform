@@ -9,7 +9,8 @@
 <div class="flex flex-wrap items-center gap-2 mt-2">
   {% for row in kits %}
   <span class="inline-flex items-center gap-1 text-sm">
-    <span class="text-base-content/70">{{ row.kit.name }}:</span>
+    {# The current kit already sorts first; bold marks it as the one to act on. #}
+    <span class="{% if row.is_current %}font-semibold{% else %}text-base-content/70{% endif %}">{{ row.kit.name }}:</span>
     <span class="badge {{ row.badge }} badge-sm">{{ row.label }}</span>
   </span>
   {% endfor %}

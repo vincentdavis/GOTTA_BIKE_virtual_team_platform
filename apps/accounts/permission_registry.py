@@ -13,6 +13,7 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "views": [
             "/site/config/ - Site configuration settings",
             "/site/config/compliance/ - Compliance tools: delete an account on request, block logins by Discord ID",
+            "/site/config/team_kit/ - Team kits: add kits, choose the current one, see who needs it",
         ],
     },
     Permissions.TEAM_CAPTAIN: {
