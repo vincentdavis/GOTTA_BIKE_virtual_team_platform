@@ -93,6 +93,16 @@ def app_admin(db, user_model) -> UserType:
 
 
 @pytest.fixture
+def membership_admin(db, user_model) -> UserType:
+    """User with ``membership_admin`` permission."""
+    return _make_user(
+        user_model,
+        username="membership_admin",
+        permissions={"membership_admin": True, "team_member": True},
+    )
+
+
+@pytest.fixture
 def event_admin(db, user_model) -> UserType:
     """User with ``event_admin`` permission."""
     return _make_user(

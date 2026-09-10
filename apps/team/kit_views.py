@@ -1,8 +1,9 @@
 """Team kit management at /site/config/team_kit/.
 
 The section page itself is rendered by ``config_section_page`` (like Compliance and the
-other special sections); these are the POST actions it posts to. Same gate as the rest of
-/site/config/: app_admin or superuser.
+other special sections); these are the POST actions it posts to. Gated by
+``can_manage_team_kit``: app admins and superusers as for the rest of /site/config/, plus
+membership admins, for this section only.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from django.shortcuts import get_object_or_404, redirect
 from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 
+from apps.team.kits import can_manage_team_kit
 from apps.team.models import TeamKit
 
 if TYPE_CHECKING:
@@ -25,16 +27,16 @@ if TYPE_CHECKING:
 
 
 def _require_config_access(request: HttpRequest) -> None:
-    """Apply the /site/config/ gate.
+    """Apply the team kit gate -- app admins, superusers and membership admins.
 
     Args:
         request: The HTTP request.
 
     Raises:
-        PermissionDenied: If the user is neither a superuser nor an app admin.
+        PermissionDenied: If the user may not manage team kits.
 
     """
-    if not (request.user.is_superuser or request.user.is_app_admin):
+    if not can_manage_team_kit(request.user):
         logfire.warning("Unauthorized team kit config action", user_id=request.user.id, path=request.path)
         raise PermissionDenied("You don't have permission to manage team kits.")
 

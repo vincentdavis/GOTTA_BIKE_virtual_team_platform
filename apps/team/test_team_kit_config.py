@@ -597,3 +597,81 @@ def test_a_hand_typed_need_param_without_a_current_kit_is_ignored(client, app_ad
 
     assert "rider" in _usernames(response)
     assert response.context["needs_kit_only"] is False
+
+
+# --- membership admins -------------------------------------------------------------------
+#
+# Getting kits to riders is membership work, so membership admins can use this page. The
+# thing that must NOT happen is that opening one section opens the rest of /site/config/,
+# which holds the Discord bot token, API credentials and the permission mappings. The gate
+# is repeated across six views, which is exactly how a widening meant for one lands on
+# another -- hence the explicit refusals below.
+
+
+@pytest.mark.django_db
+def test_a_membership_admin_can_open_the_team_kit_page(client, membership_admin, old_kit):
+    """The request: PERM_MEMBERSHIP_ADMIN_ROLES should have access."""
+    assert _page(client, membership_admin).status_code == 200
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("name", "needs_pk", "data"),
+    [
+        ("team_kit_add", False, {"name": "2027 Race Kit", "sort_order": "0"}),
+        ("team_kit_edit", True, {"name": "Renamed", "description": "", "sort_order": "1"}),
+        ("team_kit_make_current", True, {}),
+        ("team_kit_toggle_active", True, {}),
+    ],
+)
+def test_a_membership_admin_can_use_every_action(client, membership_admin, old_kit, new_kit, name, needs_pk, data):
+    """Access to the page is useless without access to what it posts to."""
+    client.force_login(membership_admin)
+    url = reverse(name, args=[new_kit.pk]) if needs_pk else reverse(name)
+
+    response = client.post(url, data)
+
+    assert response.status_code == 302  # redirected back with a message, not refused
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "section",
+    ["permission_mappings", "zwift_credentials", "discord_guild", "compliance", "background_tasks", "site_images"],
+)
+def test_a_membership_admin_cannot_open_any_other_config_section(client, membership_admin, section):
+    """One section opened, not all of them -- these hold credentials and permission mappings."""
+    client.force_login(membership_admin)
+
+    assert client.get(reverse("config_section_page", args=[section])).status_code == 403
+
+
+@pytest.mark.django_db
+def test_a_membership_admin_cannot_save_other_config_settings(client, membership_admin):
+    """The section page is not the only door: its settings form posts somewhere else."""
+    client.force_login(membership_admin)
+
+    response = client.post(reverse("config_section_update", args=["permission_mappings"]), {})
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_a_membership_admin_finds_the_page_among_their_own_tools(client, membership_admin, old_kit):
+    """They never see the Configuration menu, so the link has to be in the Membership one."""
+    body = _page(client, membership_admin).content.decode()
+
+    assert reverse("config_section_page", args=["team_kit"]) in body
+    # The Configuration menu, and so the links to the credential-bearing sections, stays hidden.
+    assert reverse("config_section_page", args=["permission_mappings"]) not in body
+    assert reverse("config_section_page", args=["zwift_credentials"]) not in body
+
+
+@pytest.mark.django_db
+def test_the_rule_refuses_an_anonymous_user():
+    """Checked before any permission attribute, which an anonymous user does not have."""
+    from django.contrib.auth.models import AnonymousUser
+
+    from apps.team.kits import can_manage_team_kit
+
+    assert can_manage_team_kit(AnonymousUser()) is False

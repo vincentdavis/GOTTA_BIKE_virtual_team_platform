@@ -205,6 +205,16 @@
                 Zwift Connections
             </a>
         </li>
+        {# Also reachable under Configuration for app admins. Here so membership admins, who #}
+        {# never see the Configuration menu, can find it among their own tools. #}
+        <li>
+            <a href="{% url 'config_section_page' 'team_kit' %}" {% if request.resolver_match.url_name == 'config_section_page' and 'team_kit' in request.path %}class="menu-active" aria-current="page"{% endif %}>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
+                Team Kit
+            </a>
+        </li>
         {% endif %}
         {% endif %}
 

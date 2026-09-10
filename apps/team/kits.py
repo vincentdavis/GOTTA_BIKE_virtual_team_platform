@@ -57,6 +57,27 @@ def rider_label(status: str) -> str:
     return RIDER_LABELS.get(status) or KitStatus(status).label
 
 
+def can_manage_team_kit(user) -> bool:
+    """Whether a user may use the team kit page and its actions.
+
+    Superusers and app admins, as for all of /site/config/, plus membership admins -- getting
+    kits to riders is membership work. Membership admins get THIS page only: the rest of
+    /site/config/ holds the Discord bot token, API credentials and permission mappings, and
+    stays app-admin-only. Kept in one place so the page, every action and the sidebar cannot
+    come to disagree about who is allowed.
+
+    Args:
+        user: The requesting user.
+
+    Returns:
+        True if they may manage team kits.
+
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return bool(user.is_superuser or user.is_app_admin or user.is_membership_admin)
+
+
 def status_for(user: User, kit: TeamKit) -> str:
     """Return a rider's stored status for one kit.
 

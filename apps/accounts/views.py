@@ -1553,8 +1553,16 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
         PermissionDenied: If user lacks app_admin permission and is not superuser.
 
     """
-    # Check permissions: app_admin OR superuser
-    if not request.user.is_superuser and not request.user.is_app_admin:
+    # Check permissions: app_admin OR superuser -- except the team kit section, which is also
+    # open to membership admins. That widens ONE section, not /site/config/: every other
+    # section still requires app_admin, because they hold credentials and the permission
+    # mappings. (This gate is repeated in five sibling views, all still app-admin only.)
+    if section_key == "team_kit":
+        from apps.team.kits import can_manage_team_kit
+
+        if not can_manage_team_kit(request.user):
+            raise PermissionDenied("You don't have permission to access this page.")
+    elif not request.user.is_superuser and not request.user.is_app_admin:
         raise PermissionDenied("You don't have permission to access this page.")
 
     sections = _get_config_sections()
