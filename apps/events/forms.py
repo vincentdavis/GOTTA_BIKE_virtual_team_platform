@@ -1005,6 +1005,22 @@ class SquadForm(forms.ModelForm):
         # roles and eligibility. Stripped from the pickers below and refused in clean().
         self.head_captain_role_id = str(getattr(event, "head_captain_role_id", 0) or 0)
 
+        # The same reasoning covers every role that carries power, not just the head
+        # captain's: a coordinator role feeds `_is_event_coordinator`, which opens squad
+        # CRUD, Role Setup, Discord Roles, Eligibility and the signup export; a captain role
+        # makes its holder a captain of whichever squad designates it. A squad's own role
+        # and its region role are handed to members as they join, so neither may point at
+        # any of these -- otherwise a squad captain could edit their own squad, point its
+        # role at a coordinator role, add themselves, and come out an event coordinator.
+        # The designation fields (`discord_captain_role`, `regional_coordinator_role`) are
+        # not member-facing and keep only the head captain refusal.
+        self.member_facing_blocked_roles = {self.head_captain_role_id: "the event's Head Captain role"}
+        for rid in self.coordinator_role_ids:
+            self.member_facing_blocked_roles.setdefault(str(rid), "an event Coordinator role")
+        for rid in self.captain_role_ids:
+            self.member_facing_blocked_roles.setdefault(str(rid), "a squad Captain role")
+        self.member_facing_blocked_roles.pop("0", None)
+
         # Squad gender is a fixed set (Male/Female/COED) and required when configuring a squad.
         self.fields["gender"].choices = [("", "Select gender"), *SQUAD_GENDER_CHOICES]
 
@@ -1050,7 +1066,7 @@ class SquadForm(forms.ModelForm):
         # When prefixes is empty, the field is shown but disabled and presents a
         # placeholder, matching the pre-multi-prefix behavior.
         if self.event_prefixes:
-            role_choices = self._without_head_captain(_get_role_choices(prefixes=self.event_prefixes))
+            role_choices = self._without_privileged_roles(_get_role_choices(prefixes=self.event_prefixes))
         else:
             role_choices = [("0", "(none — set event prefixes first)")]
             self.fields["team_discord_role"].widget.attrs["disabled"] = True
@@ -1099,7 +1115,7 @@ class SquadForm(forms.ModelForm):
             region_role_choices.extend(
                 (rid, f"@{region_name_by_id.get(rid, f'Unknown Role ({rid})')}")
                 for rid in self.region_role_ids
-                if rid != self.head_captain_role_id
+                if rid not in self.member_facing_blocked_roles
             )
         else:
             region_role_choices = [("0", "(none — set region roles in Role Setup first)")]
@@ -1141,8 +1157,8 @@ class SquadForm(forms.ModelForm):
         self.fields["regional_coordinator_role"].widget.choices = coord_role_choices
         self.initial["regional_coordinator_role"] = current_coord_role
 
-    def _without_head_captain(self, choices: list) -> list:
-        """Drop the event's head captain role from a role picker.
+    def _without_privileged_roles(self, choices: list) -> list:
+        """Drop every role that carries event or squad power from a member-facing picker.
 
         Handles the optgroup shape ``_get_role_choices`` returns when the event has more
         than one prefix, where the pairs live one level down.
@@ -1151,21 +1167,43 @@ class SquadForm(forms.ModelForm):
             choices: A Django choices list, flat or grouped.
 
         Returns:
-            The same list without the head captain role.
+            The same list without the head captain, coordinator and captain roles.
 
         """
-        blocked = self.head_captain_role_id
-        if blocked == "0":
+        blocked = self.member_facing_blocked_roles
+        if not blocked:
             return choices
         pruned = []
         for value, label in choices:
             if isinstance(label, (list, tuple)):
-                group = [pair for pair in label if str(pair[0]) != blocked]
+                group = [pair for pair in label if str(pair[0]) not in blocked]
                 if group:
                     pruned.append((value, group))
-            elif str(value) != blocked:
+            elif str(value) not in blocked:
                 pruned.append((value, label))
         return pruned
+
+    def _refuse_privileged_role(self, role_id: int, *, what: str) -> None:
+        """Reject any role that carries event or squad power as a member-facing squad role.
+
+        The picker no longer offers these, but the picker is not the gate -- a crafted POST,
+        or a role added to Role Setup after the squad was saved, would otherwise sail through.
+
+        Args:
+            role_id: The submitted role id.
+            what: How to name the field in the error, e.g. "squad role".
+
+        Raises:
+            forms.ValidationError: If the role grants event or squad control.
+
+        """
+        grants = self.member_facing_blocked_roles.get(str(role_id)) if role_id else None
+        if grants:
+            raise forms.ValidationError(
+                f"{grants[0].upper()}{grants[1:]} cannot be used as a {what}. Riders are given a squad's roles "
+                "when they join it, so this would grant every member of this squad the control that "
+                "role carries."
+            )
 
     def _refuse_head_captain(self, role_id: int, *, what: str) -> None:
         """Reject the head captain role wherever a squad tries to use it.
@@ -1251,7 +1289,7 @@ class SquadForm(forms.ModelForm):
         except (ValueError, TypeError):
             return 0
 
-        self._refuse_head_captain(role_id, what="squad role")
+        self._refuse_privileged_role(role_id, what="squad role")
 
         if role_id and role_id != 0 and not self.event_prefixes:
             raise forms.ValidationError("Set at least one event prefix before assigning a role.")
@@ -1281,7 +1319,7 @@ class SquadForm(forms.ModelForm):
         except (ValueError, TypeError):
             return 0
 
-        self._refuse_head_captain(role_id, what="region role")
+        self._refuse_privileged_role(role_id, what="region role")
 
         # The authoritative gate. The picker only offers the event's configured region
         # roles, but a crafted POST carrying any other role id is rejected here.
