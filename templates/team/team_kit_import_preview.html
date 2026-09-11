@@ -113,46 +113,80 @@
       {% endif %}
 
       {% if plan.changes %}
-      <div class="overflow-x-auto">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>Member</th>
-              <th>Zwift ID</th>
-              <th>Kit</th>
-              <th>Change</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for change in plan.changes %}
-            <tr>
-              <td>
-                <a href="{% url 'accounts:public_profile' change.member.pk %}" class="link link-hover">{{ change.member_name }}</a>
-              </td>
-              <td class="font-mono">{{ change.member.zwid|default:"—" }}</td>
-              <td>{{ change.kit.name }}</td>
-              <td class="whitespace-nowrap">
-                <span class="badge {{ change.old_badge }} badge-sm">{{ change.old_label }}</span>
-                <span aria-hidden="true" class="mx-1">&rarr;</span><span class="sr-only">to</span>
-                <span class="badge {{ change.new_badge }} badge-sm">{{ change.new_label }}</span>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+      {% if plan.held_back_count %}
+      <p class="text-sm">
+        {{ plan.held_back_count }} row{{ plan.held_back_count|pluralize }} would change a rider who already has
+        the kit. {{ plan.held_back_count|pluralize:"It is,They are" }} not ticked &mdash; tick any you do mean to change.
+      </p>
+      {% endif %}
 
-      <form method="post" action="{% url 'team_kit_import_confirm' %}" class="flex flex-wrap items-center gap-2">
+      {% comment %}
+        Every change is ticked to be applied except one that would move a rider who already has the
+        kit (ImportChange.selected_by_default).
+
+        The selection posts as ONE field, "apply" -- the ticked rows' positions in this list (the
+        list held in the session), comma-separated -- which the script below keeps in step with the
+        boxes. The boxes themselves have no name: one field per row would hit Django's 1000-field
+        limit on a large import and fail with a bare 400. Without JavaScript the boxes stay
+        disabled, showing exactly the default selection the hidden field already holds.
+
+        autocomplete="off" stops the browser restoring ticks on Back after the script has run,
+        which would leave the count and the posted selection disagreeing with the boxes.
+      {% endcomment %}
+      <form method="post" action="{% url 'team_kit_import_confirm' %}" id="kit-import-confirm" class="space-y-3">
         {% csrf_token %}
         <input type="hidden" name="token" value="{{ token }}">
-        <button type="submit" class="btn btn-primary btn-sm">
-          Apply {{ plan.changes|length }} change{{ plan.changes|length|pluralize }}
-        </button>
-        <a href="{% url 'config_section_page' 'team_kit' %}" class="btn btn-ghost btn-sm">Cancel</a>
+        <input type="hidden" name="apply" id="kit-import-apply-list" value="{{ plan.default_selection }}" autocomplete="off">
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th class="w-8">
+                  <input type="checkbox" id="kit-import-select-all" class="checkbox checkbox-sm" aria-label="Tick or untick every row" autocomplete="off" hidden>
+                </th>
+                <th>Member</th>
+                <th>Zwift ID</th>
+                <th>Kit</th>
+                <th>Change</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for change in plan.changes %}
+              <tr>
+                <td>
+                  <input type="checkbox" data-position="{{ forloop.counter0 }}" class="checkbox checkbox-sm checkbox-primary"
+                         aria-label="Apply {{ change.member_name }}, {{ change.kit.name }}: {{ change.old_label }} to {{ change.new_label }}"
+                         autocomplete="off" disabled {% if change.selected_by_default %}checked{% endif %}>
+                </td>
+                <td>
+                  <a href="{% url 'accounts:public_profile' change.member.pk %}" class="link link-hover">{{ change.member_name }}</a>
+                </td>
+                <td class="font-mono">{{ change.member.zwid|default:"—" }}</td>
+                <td>{{ change.kit.name }}</td>
+                <td class="whitespace-nowrap">
+                  <span class="badge {{ change.old_badge }} badge-sm">{{ change.old_label }}</span>
+                  <span aria-hidden="true" class="mx-1">&rarr;</span><span class="sr-only">to</span>
+                  <span class="badge {{ change.new_badge }} badge-sm">{{ change.new_label }}</span>
+                  {% if not change.selected_by_default %}
+                  <span class="block text-xs text-base-content/60 mt-1">Already has the kit &mdash; tick to change it anyway</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="submit" id="kit-import-apply" class="btn btn-primary btn-sm">
+            Apply selected (<span id="kit-import-selected-count">{{ plan.default_selected_count }}</span>)
+          </button>
+          <a href="{% url 'config_section_page' 'team_kit' %}" class="btn btn-ghost btn-sm">Cancel</a>
+        </div>
       </form>
       <p class="text-xs text-base-content/60">
-        Nothing outside this list changes. If a status moves between now and applying &mdash; a
-        rider updating their own, say &mdash; it is skipped rather than overwritten.
+        Only ticked rows change. If a status moves between now and applying &mdash; a rider
+        updating their own, say &mdash; it is skipped rather than overwritten.
       </p>
       {% else %}
       <div class="alert">
@@ -167,4 +201,44 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if plan.changes %}
+<script>
+// Makes the row boxes live: writes the ticked positions into the one "apply" field the form
+// posts, keeps the Apply button's count and state honest, and offers tick/untick-all. Without
+// JavaScript the boxes stay disabled and the field keeps the default selection it was rendered
+// with, so what is shown is always what is posted.
+(function () {
+  var form = document.getElementById('kit-import-confirm');
+  if (!form) return;
+  var boxes = Array.prototype.slice.call(form.querySelectorAll('input[data-position]'));
+  var field = document.getElementById('kit-import-apply-list');
+  var all = document.getElementById('kit-import-select-all');
+  var count = document.getElementById('kit-import-selected-count');
+  var apply = document.getElementById('kit-import-apply');
+  function update() {
+    var ticked = boxes.filter(function (box) { return box.checked; });
+    field.value = ticked.map(function (box) { return box.getAttribute('data-position'); }).join(',');
+    count.textContent = ticked.length;
+    apply.disabled = ticked.length === 0;
+    all.checked = ticked.length === boxes.length;
+    all.indeterminate = ticked.length > 0 && ticked.length < boxes.length;
+  }
+  boxes.forEach(function (box) {
+    box.disabled = false;
+    box.addEventListener('change', update);
+  });
+  all.hidden = false;
+  all.addEventListener('change', function () {
+    boxes.forEach(function (box) { box.checked = all.checked; });
+    update();
+  });
+  update();
+  // A page shown again from the back/forward cache keeps whatever the boxes held; re-read them.
+  window.addEventListener('pageshow', function () { setTimeout(update, 0); });
+})();
+</script>
+{% endif %}
 {% endblock %}

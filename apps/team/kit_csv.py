@@ -220,6 +220,20 @@ class ImportChange:
         return _member_name(self.member)
 
     @property
+    def selected_by_default(self) -> bool:
+        """Whether the preview ticks this change to be applied.
+
+        Every change is, except one that would move a rider who already has the kit. Those
+        are almost always a stale sheet rather than news -- Zwift does not take a kit back --
+        so they wait for someone to tick them on purpose.
+
+        Returns:
+            False when the rider's current status is "I have the kit".
+
+        """
+        return self.old != KitStatus.HAVE
+
+    @property
     def old_label(self) -> str:
         """Word the current status for the preview.
 
@@ -324,6 +338,36 @@ class ImportPlan:
 
         """
         return len({change.member.pk for change in self.changes})
+
+    @property
+    def default_selected_count(self) -> int:
+        """Count the changes the preview ticks to begin with.
+
+        Returns:
+            The number ticked by default.
+
+        """
+        return sum(change.selected_by_default for change in self.changes)
+
+    @property
+    def default_selection(self) -> str:
+        """Write the default ticks the way the confirm form posts them.
+
+        Returns:
+            The positions ticked by default, comma-separated.
+
+        """
+        return ",".join(str(position) for position, change in enumerate(self.changes) if change.selected_by_default)
+
+    @property
+    def held_back_count(self) -> int:
+        """Count the changes left unticked because the rider already has the kit.
+
+        Returns:
+            The number held back.
+
+        """
+        return len(self.changes) - self.default_selected_count
 
     @property
     def refused_row_count(self) -> int:
@@ -661,6 +705,31 @@ def build_import_plan(raw: bytes, kits: list[TeamKit]) -> ImportPlan:
     plan.changes.sort(key=display_order)
     plan.conflicts.sort(key=display_order)
     return plan
+
+
+def selected_changes(changes: list[dict], ticked: list[str]) -> list[dict]:
+    """Pick the rows the person ticked out of a pending import.
+
+    The ticks arrive as positions in the preview's list of changes, which is the list held in
+    the session, written as ONE comma-separated field ("0,2,5"). One field however many rows:
+    Django refuses a POST of more than DATA_UPLOAD_MAX_NUMBER_FIELDS (1000) fields, so a box
+    per field would make a large import impossible to apply.
+
+    Positions are compared as text and never parsed as numbers, so anything that is not
+    exactly one of them -- out of range, negative, padded, a digit from another script, or
+    thousands of digits long (``int()`` refuses those) -- is simply ignored. A stale or
+    hand-edited form can only ever choose among the changes that were previewed.
+
+    Args:
+        changes: The pending import's changes, in preview order.
+        ticked: The submitted ``apply`` values, each a comma-separated list of positions.
+
+    Returns:
+        The chosen changes, in preview order, each at most once.
+
+    """
+    wanted = {part for value in ticked for part in value.split(",")}
+    return [change for position, change in enumerate(changes) if str(position) in wanted]
 
 
 def apply_import(changes: list[dict]) -> tuple[list[dict], int]:

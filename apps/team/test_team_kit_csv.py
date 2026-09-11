@@ -12,6 +12,7 @@ from unittest import mock
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.urls import reverse
 
 from apps.accounts.permission_registry import PERMISSION_REGISTRY
@@ -108,17 +109,58 @@ def _upload(client, viewer, content: str | bytes, name: str = "kits.csv"):
     """
     client.force_login(viewer)
     data = content.encode("utf-8") if isinstance(content, str) else content
-    return client.post(
+    response = client.post(
         reverse("team_kit_import"), {"csv_file": SimpleUploadedFile(name, data, content_type="text/csv")}
     )
+    client.last_preview = response  # what _confirm submits from, as a browser would
+    return response
 
 
-def _confirm(client, token: str | None = None):
+def _ticked_rows(response) -> list[str]:
+    """Read the selection a preview page's confirm form will post.
+
+    The one ``apply`` field, holding the default ticks as the page was rendered -- what
+    pressing Apply without touching anything sends.
+
+    Args:
+        response: The preview response.
+
+    Returns:
+        The positions in the field, in order.
+
+    """
+    import re
+
+    if response is None or response.status_code != 200:
+        return []
+    found = re.search(r'name="apply" id="kit-import-apply-list" value="([^"]*)"', response.content.decode())
+    return found.group(1).split(",") if found and found.group(1) else []
+
+
+def _ticked_boxes(response) -> list[str]:
+    """Read which row boxes a preview page shows ticked.
+
+    Args:
+        response: The preview response.
+
+    Returns:
+        The ``data-position`` of every ticked row box, in page order.
+
+    """
+    import re
+
+    return re.findall(r'data-position="(\d+)"[^>]*\bchecked\b', response.content.decode())
+
+
+def _confirm(client, token: str | None = None, apply: list | None = None):
     """Confirm the pending preview.
 
     Args:
         client: Test client, already signed in.
         token: The token to post; defaults to the pending preview's own.
+        apply: The rows to apply, as positions; defaults to exactly the rows the last preview
+            ticked -- what pressing Apply without touching anything sends. Posted as the one
+            comma-separated field the page's form posts.
 
     Returns:
         The response.
@@ -126,7 +168,9 @@ def _confirm(client, token: str | None = None):
     """
     if token is None:
         token = client.session[SESSION_KEY]["token"]
-    return client.post(reverse("team_kit_import_confirm"), {"token": token}, follow=True)
+    if apply is None:
+        apply = _ticked_rows(getattr(client, "last_preview", None))
+    return client.post(reverse("team_kit_import_confirm"), {"token": token, "apply": ",".join(apply)}, follow=True)
 
 
 def _messages(response) -> list[str]:
@@ -373,12 +417,17 @@ def test_semicolon_and_tab_separated_files_are_read(client, app_admin, user_mode
 
 @pytest.mark.django_db
 def test_blank_cell_leaves_the_status_alone(client, app_admin, user_model, kits):
-    """Blank means "no change" -- never "reset to unknown"."""
-    anna = _member(user_model, "anna", {"race-2026": "have"})
+    """Blank means "no change" -- never "reset to unknown".
+
+    Anna is at "Need kit", not "I have the kit": a have-row is held back from applying by
+    default, which would hide a blank cell wrongly read as unknown.
+    """
+    anna = _member(user_model, "anna", {"race-2026": "need"})
     bert = _member(user_model, "bert")
-    _upload(client, app_admin, _csv([["user_id", "kit:race-2026"], [anna.pk, ""], [bert.pk, "need"]]))
+    preview = _upload(client, app_admin, _csv([["user_id", "kit:race-2026"], [anna.pk, ""], [bert.pk, "need"]]))
+    assert [c.member.username for c in preview.context["plan"].changes] == ["bert"]
     _confirm(client)
-    assert _kit(anna) == {"race-2026": "have"}
+    assert _kit(anna) == {"race-2026": "need"}
     assert _kit(bert) == {"race-2026": "need"}
 
 
@@ -728,7 +777,11 @@ def test_an_edit_to_a_status_that_also_moved_is_shown_and_not_applied(client, ap
 
 @pytest.mark.django_db
 def test_clearing_the_snapshot_cell_applies_the_edit_anyway(client, app_admin, user_model, kits):
-    """The way out of a conflict the preview names: the row is then read like a hand-built one."""
+    """The way out of a conflict the preview names: the row is then read like a hand-built one.
+
+    She has the kit by now, so the row is also held back by default -- overriding both takes
+    clearing the cell and then ticking the row.
+    """
     anna = _member(user_model, "anna", {"race-2026": "need"})
     _, rows = _export(client, app_admin)
     anna.team_kit = {"race-2026": "have"}
@@ -736,8 +789,11 @@ def test_clearing_the_snapshot_cell_applies_the_edit_anyway(client, app_admin, u
     rows[1][KIT_2026] = "submitted"
     rows[1][SNAPSHOT] = ""
 
-    _upload(client, app_admin, _csv(rows))
-    _confirm(client)
+    preview = _upload(client, app_admin, _csv(rows))
+    assert [(c.old, c.new) for c in preview.context["plan"].changes] == [("have", "submitted")]
+    assert _ticked_rows(preview) == []
+
+    _confirm(client, apply=["0"])
 
     assert _kit(anna) == {"race-2026": "submitted"}
 
@@ -897,3 +953,204 @@ def test_a_header_that_could_mean_two_kits_is_not_guessed(client, app_admin, use
     plan = response.context["plan"]
     assert plan.unknown_kit_columns == ["kit:RACE-2027"]
     assert [(c.kit.slug, c.new) for c in plan.changes] == [("race-2027", "have")]
+
+
+# --- choosing which rows to apply ---------------------------------------------------------
+
+
+def _three_riders(user_model) -> tuple:
+    """Build three riders whose rows an import will change, one of whom has the kit.
+
+    Args:
+        user_model: The User class.
+
+    Returns:
+        ``(anna, bert, cleo)`` -- need, have and no answer, all about to be set to submitted.
+
+    """
+    anna = _member(user_model, "anna", {"race-2026": "need"})
+    bert = _member(user_model, "bert", {"race-2026": "have"})
+    cleo = _member(user_model, "cleo")
+    return anna, bert, cleo
+
+
+def _submit_all(*riders) -> str:
+    """Write a sheet setting every rider's current kit to submitted.
+
+    Args:
+        *riders: The riders.
+
+    Returns:
+        The CSV.
+
+    """
+    return _csv([["user_id", "kit:race-2026"], *([rider.pk, "submitted"] for rider in riders)])
+
+
+@pytest.mark.django_db
+def test_every_row_is_ticked_except_riders_who_have_the_kit(client, app_admin, user_model, kits):
+    """Moving a rider who already has the kit is almost always a stale sheet, so it waits for a tick.
+
+    Only "I have the kit" holds a row back -- a rider at Submitted or Completed is still ticked.
+    """
+    anna, bert, cleo = _three_riders(user_model)
+    dora = _member(user_model, "dora", {"race-2026": "submitted"})
+    eve = _member(user_model, "eve", {"race-2026": "completed"})
+    sheet = _csv([
+        ["user_id", "kit:race-2026"],
+        *([rider.pk, "submitted"] for rider in (anna, bert, cleo)),
+        [dora.pk, "need"],
+        [eve.pk, "need"],
+    ])
+
+    preview = _upload(client, app_admin, sheet)
+
+    changes = preview.context["plan"].changes
+    assert [(c.member.username, c.old) for c in changes] == [
+        ("anna", "need"),
+        ("bert", "have"),
+        ("cleo", "unknown"),
+        ("dora", "submitted"),
+        ("eve", "completed"),
+    ]
+    # What is shown ticked and what Apply will post agree.
+    assert _ticked_boxes(preview) == ["0", "2", "3", "4"]
+    assert _ticked_rows(preview) == ["0", "2", "3", "4"]
+    content = " ".join(preview.content.decode().split())
+    assert "1 row would change a rider who already has the kit. It is not ticked" in content
+    assert "Already has the kit &mdash; tick to change it anyway" in content
+    assert 'Apply selected (<span id="kit-import-selected-count">4</span>)' in content
+
+
+@pytest.mark.django_db
+def test_pressing_apply_leaves_the_unticked_rider_alone(client, app_admin, user_model, kits):
+    """The default: everyone moves but the rider who has the kit, and the message says so."""
+    anna, bert, cleo = _three_riders(user_model)
+    _upload(client, app_admin, _submit_all(anna, bert, cleo))
+
+    response = _confirm(client)
+
+    assert _kit(anna) == {"race-2026": "submitted"}
+    assert _kit(bert) == {"race-2026": "have"}
+    assert _kit(cleo) == {"race-2026": "submitted"}
+    assert _messages(response) == ["Updated 2 kit statuses for 2 members. 1 unticked row was left as it was."]
+
+
+@pytest.mark.django_db
+def test_only_ticked_rows_are_applied(client, app_admin, user_model, kits):
+    """Untick a row and it is not written -- including one that was ticked by default."""
+    anna, bert, cleo = _three_riders(user_model)
+    _upload(client, app_admin, _submit_all(anna, bert, cleo))
+
+    _confirm(client, apply=["2"])
+
+    assert _kit(anna) == {"race-2026": "need"}
+    assert _kit(bert) == {"race-2026": "have"}
+    assert _kit(cleo) == {"race-2026": "submitted"}
+
+
+@pytest.mark.django_db
+def test_ticking_a_held_back_row_applies_it(client, app_admin, user_model, kits):
+    """Held back is a default, not a rule: a rider who has the kit can still be changed on purpose."""
+    anna, bert, cleo = _three_riders(user_model)
+    _upload(client, app_admin, _submit_all(anna, bert, cleo))
+
+    _confirm(client, apply=["0", "1", "2"])
+
+    assert _kit(bert) == {"race-2026": "submitted"}
+
+
+@pytest.mark.django_db
+def test_nothing_ticked_changes_nothing_and_ends_the_preview(client, app_admin, user_model, kits):
+    """Applying with every row unticked is a cancel: nothing written, and nothing left pending."""
+    anna, bert, cleo = _three_riders(user_model)
+    _upload(client, app_admin, _submit_all(anna, bert, cleo))
+    token = client.session[SESSION_KEY]["token"]
+
+    response = _confirm(client, apply=[])
+
+    assert (_kit(anna), _kit(bert), _kit(cleo)) == ({"race-2026": "need"}, {"race-2026": "have"}, {})
+    assert _messages(response) == ["No rows were ticked, so nothing was changed."]
+    assert SESSION_KEY not in client.session
+    assert "no longer waiting" in _messages(_confirm(client, token, apply=["0"]))[0]
+
+
+@pytest.mark.django_db
+def test_a_tampered_selection_can_only_choose_previewed_rows(client, app_admin, user_model, kits):
+    """Out-of-range, negative, non-numeric and repeated positions are ignored, not guessed at."""
+    anna, bert, cleo = _three_riders(user_model)
+    _upload(client, app_admin, _submit_all(anna, bert, cleo))
+
+    # 5000 digits: int() refuses anything over 4300, so parsing positions would crash with a 500.
+    _confirm(client, apply=["99", "-1", "abc", "1.0", "\uff11", "", "01", " 1", "1" * 5000, "2", "2"])
+
+    # "\uff11" is a full-width 1 -- bert's row -- which int() would happily read as 1.
+    assert _kit(anna) == {"race-2026": "need"}
+    assert _kit(bert) == {"race-2026": "have"}
+    assert _kit(cleo) == {"race-2026": "submitted"}
+
+
+@pytest.mark.django_db
+def test_unticked_rows_are_logged_with_the_import(client, app_admin, user_model, kits):
+    """The audit trail says how many previewed rows were deliberately left out."""
+    anna, bert, cleo = _three_riders(user_model)
+    _upload(client, app_admin, _submit_all(anna, bert, cleo))
+
+    with mock.patch("apps.team.kit_views.logfire") as logfire:
+        _confirm(client, apply=["2"])
+
+    applied = [call for call in logfire.info.call_args_list if call.args[0] == "Team kit CSV import applied"]
+    assert applied[0].kwargs["unticked_count"] == 2
+    assert applied[0].kwargs["changes"] == [{"user_id": cleo.pk, "kit": "race-2026", "old": None, "new": "submitted"}]
+
+
+@pytest.mark.django_db
+def test_the_tick_all_box_waits_for_javascript(client, app_admin, user_model, kits):
+    """Without the script it would do nothing, so it starts hidden and the script reveals it."""
+    anna, bert, cleo = _three_riders(user_model)
+    content = _upload(client, app_admin, _submit_all(anna, bert, cleo)).content.decode()
+
+    box = content[
+        content.index('id="kit-import-select-all"') : content.index(">", content.index('id="kit-import-select-all"'))
+    ]
+    assert " hidden" in box
+    assert "all.hidden = false;" in content
+
+
+@pytest.mark.django_db
+def test_row_boxes_post_nothing_themselves(client, app_admin, user_model, kits):
+    """The selection travels in one field; the row boxes post nothing themselves.
+
+    They are nameless, and disabled until the script wires them to that field, so without
+    JavaScript the page shows exactly what it will post.
+    """
+    import re
+
+    anna, bert, cleo = _three_riders(user_model)
+    content = _upload(client, app_admin, _submit_all(anna, bert, cleo)).content.decode()
+    form = content[
+        content.index('id="kit-import-confirm"') : content.index("</form>", content.index('id="kit-import-confirm"'))
+    ]
+
+    assert re.findall(r'name="(\w+)"', form) == ["csrfmiddlewaretoken", "token", "apply"]
+    boxes = re.findall(r"<input[^>]*data-position[^>]*>", form)
+    assert len(boxes) == 3
+    assert all(" disabled" in box and 'autocomplete="off"' in box for box in boxes)
+    assert "box.disabled = false;" in content
+
+
+@pytest.mark.django_db
+@override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=10)
+def test_an_import_bigger_than_the_field_limit_still_applies(client, app_admin, user_model, kits):
+    """An import with more rows than Django's POST field limit can still be applied.
+
+    Django refuses a POST of more fields than DATA_UPLOAD_MAX_NUMBER_FIELDS (1000 by default).
+    One field for the whole selection fits any import; one field per row could not.
+    """
+    riders = [_member(user_model, f"rider{n:02d}") for n in range(30)]
+    _upload(client, app_admin, _submit_all(*riders))
+
+    response = _confirm(client)
+
+    assert response.status_code == 200
+    assert all(_kit(rider) == {"race-2026": "submitted"} for rider in riders)

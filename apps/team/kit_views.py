@@ -30,6 +30,7 @@ from apps.team.kit_csv import (
     build_import_plan,
     export_filename,
     export_table,
+    selected_changes,
 )
 from apps.team.kits import can_manage_team_kit, kit_member_rows, member_filters
 from apps.team.models import TeamKit
@@ -363,10 +364,11 @@ def team_kit_import(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def team_kit_import_confirm(request: HttpRequest) -> HttpResponse:
-    """Apply the import the person just previewed.
+    """Apply the rows the person ticked on the import they just previewed.
 
     Args:
-        request: The HTTP request, with the preview's ``token``.
+        request: The HTTP request, with the preview's ``token`` and the ticked rows' ``apply``
+            positions.
 
     Returns:
         Redirect to the team kit section.
@@ -385,7 +387,19 @@ def team_kit_import_confirm(request: HttpRequest) -> HttpResponse:
         return _back()
     del request.session[SESSION_KEY]
 
-    applied, skipped = apply_import(pending["changes"])
+    chosen = selected_changes(pending["changes"], request.POST.getlist("apply"))
+    unticked = len(pending["changes"]) - len(chosen)
+    if not chosen:
+        logfire.info(
+            "Team kit CSV import applied nothing",
+            user_id=request.user.id,
+            filename=pending.get("filename", ""),
+            unticked_count=unticked,
+        )
+        messages.info(request, "No rows were ticked, so nothing was changed.")
+        return _back()
+
+    applied, skipped = apply_import(chosen)
     # Every change, so "who set my kit to submitted?" has an answer later.
     logfire.info(
         "Team kit CSV import applied",
@@ -393,6 +407,7 @@ def team_kit_import_confirm(request: HttpRequest) -> HttpResponse:
         filename=pending.get("filename", ""),
         applied_count=len(applied),
         skipped_count=skipped,
+        unticked_count=unticked,
         changes=applied,
     )
     members = len({change["user_id"] for change in applied})
@@ -400,6 +415,11 @@ def team_kit_import_confirm(request: HttpRequest) -> HttpResponse:
         f"Updated {len(applied)} kit status{'es' if len(applied) != 1 else ''}"
         f" for {members} member{'s' if members != 1 else ''}."
     )
+    if unticked:
+        message += (
+            f" {unticked} unticked row{'s were' if unticked != 1 else ' was'}"
+            f" left as {'they were' if unticked != 1 else 'it was'}."
+        )
     if skipped:
         message += (
             f" {skipped} {'were' if skipped != 1 else 'was'} skipped because {'they' if skipped != 1 else 'it'}"
