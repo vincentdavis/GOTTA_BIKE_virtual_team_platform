@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from datetime import date
 
     from apps.accounts.models import User
+    from apps.team.kits import MemberFilters
 
 KIT_COLUMN_PREFIX = "kit:"
 
@@ -49,7 +50,8 @@ INFO_COLUMNS: tuple[str, ...] = (
     "discord_username",
     "zwift_name",
     "zwid",
-    "zwift_verified",
+    "zauth_verified",
+    "verification_method",
 )
 
 # What each row's statuses were when exported, as "slug=status" pairs. The last column, so it
@@ -79,12 +81,11 @@ def kit_column(kit: TeamKit) -> str:
     return f"{KIT_COLUMN_PREFIX}{kit.slug}"
 
 
-def export_filename(*, verified_only: bool, needs_kit_only: bool, today: date) -> str:
+def export_filename(filters: MemberFilters, *, today: date) -> str:
     """Name the export file after the day and the filters it was taken with.
 
     Args:
-        verified_only: Whether the verified filter was on.
-        needs_kit_only: Whether the needs-the-kit filter was on.
+        filters: The member-list filters the export applied.
         today: The date to stamp it with.
 
     Returns:
@@ -92,9 +93,11 @@ def export_filename(*, verified_only: bool, needs_kit_only: bool, today: date) -
 
     """
     parts = ["team-kit", today.isoformat()]
-    if verified_only:
-        parts.append("verified")
-    if needs_kit_only:
+    if filters.verified_only:
+        parts.append("zauth-verified")
+    if filters.race_verified_only:
+        parts.append("race-verified")
+    if filters.needs_kit_only:
         parts.append("need")
     return "-".join(parts) + ".csv"
 
@@ -123,12 +126,15 @@ def export_table(rows: list[dict], kits: list[TeamKit]) -> tuple[list[str], list
         data.append([
             member.pk,
             # Discord and Zwift names are chosen by the rider, so they go through the formula
-            # guard. The other cells are ids, yes/no and fixed status keys.
+            # guard. The other cells are ids, yes/no, and fixed method and status keys.
             csv_safe(row["discord_name"] or ""),
             csv_safe(row["discord_username"] or ""),
             csv_safe(row["zwift_name"] or ""),
             member.zwid or "",
-            "yes" if row["zwid_verified"] else "no",
+            # The page's rule (kits.zauth_verified_q): yes only through zauth. The method column
+            # beside it keeps a legacy or admin verification visible rather than folding it into "no".
+            "yes" if row["zauth_verified"] else "no",
+            row["verification_method"],
             *statuses,
             # Guarded too: an admin-typed slug may begin with "-".
             csv_safe(" ".join(f"{kit.slug}={status}" for kit, status in zip(kits, statuses, strict=True))),

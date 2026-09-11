@@ -19,6 +19,9 @@ from apps.team.kit_csv import INFO_COLUMNS, MAX_IMPORT_BYTES, SESSION_KEY, parse
 from apps.team.models import KitStatus, TeamKit
 
 EXPORT_HEADER = [*INFO_COLUMNS, "kit:race-2026", "kit:race-2025", "exported_statuses"]
+# Looked up by name, so a column added to the export cannot silently shift what a test edits.
+KIT_2026 = EXPORT_HEADER.index("kit:race-2026")
+SNAPSHOT = EXPORT_HEADER.index("exported_statuses")
 
 
 @pytest.fixture
@@ -192,9 +195,21 @@ def test_export_and_import_are_in_the_permission_registry():
 
 @pytest.mark.django_db
 def test_export_lists_every_member_with_every_kit(client, app_admin, user_model, kits):
-    """Every team member, a column per kit (retired included), statuses as stored keys."""
-    have = _member(user_model, "anna", {"race-2026": "have", "race-2025": "completed"}, zwid=111, zwid_verified=True)
+    """Every team member, a column per kit (retired included), statuses as stored keys.
+
+    "Verified" is the page's rule -- through zauth -- with the method beside it, so a legacy
+    verification shows as "no" but is still visible as legacy.
+    """
+    have = _member(
+        user_model,
+        "anna",
+        {"race-2026": "have", "race-2025": "completed"},
+        zwid=111,
+        zwid_verified=True,
+        zwid_verification_method="zauth",
+    )
     blank = _member(user_model, "bert")
+    legacy = _member(user_model, "cleo", zwid=333, zwid_verified=True, zwid_verification_method="legacy")
     user_model.objects.create_user(username="local-admin", email="l@example.test")  # no Discord login
 
     response, rows = _export(client, app_admin)
@@ -202,25 +217,97 @@ def test_export_lists_every_member_with_every_kit(client, app_admin, user_model,
     assert response.status_code == 200
     assert rows[0] == EXPORT_HEADER
     assert rows[1:] == [
-        [str(have.pk), "anna", "anna", "", "111", "yes", "have", "completed", "race-2026=have race-2025=completed"],
-        [str(blank.pk), "bert", "bert", "", "", "no", "unknown", "unknown", "race-2026=unknown race-2025=unknown"],
+        [
+            str(have.pk),
+            "anna",
+            "anna",
+            "",
+            "111",
+            "yes",
+            "zauth",
+            "have",
+            "completed",
+            "race-2026=have race-2025=completed",
+        ],
+        [str(blank.pk), "bert", "bert", "", "", "no", "", "unknown", "unknown", "race-2026=unknown race-2025=unknown"],
+        [
+            str(legacy.pk),
+            "cleo",
+            "cleo",
+            "",
+            "333",
+            "no",
+            "legacy",
+            "unknown",
+            "unknown",
+            "race-2026=unknown race-2025=unknown",
+        ],
     ]
 
 
 @pytest.mark.django_db
 def test_export_downloads_the_list_on_screen(client, app_admin, user_model, kits):
     """The page's filters apply, so "needs the kit" exports the list to send to Zwift."""
-    _member(user_model, "needs-verified", {"race-2026": "need"}, zwid_verified=True)
+    zauth = {"zwid_verified": True, "zwid_verification_method": "zauth"}
+    _member(user_model, "needs-verified", {"race-2026": "need"}, **zauth)
     _member(user_model, "needs-unverified", {"race-2026": "need"})
-    _member(user_model, "has-it", {"race-2026": "have"}, zwid_verified=True)
+    _member(user_model, "needs-legacy", {"race-2026": "need"}, zwid_verified=True, zwid_verification_method="legacy")
+    _member(user_model, "has-it", {"race-2026": "have"}, **zauth)
 
     response, rows = _export(client, app_admin, "?need=1")
-    assert [row[2] for row in rows[1:]] == ["needs-unverified", "needs-verified"]
+    assert [row[2] for row in rows[1:]] == ["needs-legacy", "needs-unverified", "needs-verified"]
     assert "-need.csv" in response["Content-Disposition"]
 
     response, rows = _export(client, app_admin, "?need=1&verified=1")
     assert [row[2] for row in rows[1:]] == ["needs-verified"]
-    assert "-verified-need.csv" in response["Content-Disposition"]
+    assert "-zauth-verified-need.csv" in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("verified", "method", "zauth_cell", "method_cell"),
+    [
+        (True, "zauth", "yes", "zauth"),
+        (True, "legacy", "no", "legacy"),
+        (True, "admin", "no", "admin"),
+        (True, "", "no", "other"),
+        # What unverify_zwift leaves behind -- and the state User.is_zauth_verified gets wrong,
+        # since it reads the method alone. The export must follow the page, not that property.
+        (False, "zauth", "no", ""),
+        (False, "", "no", ""),
+    ],
+    ids=["zauth", "legacy", "admin", "verified-no-method", "zauth-method-left-behind", "never-verified"],
+)
+def test_export_verification_columns_follow_the_page_rule(
+    client, app_admin, user_model, kits, verified, method, zauth_cell, method_cell
+):
+    """Every stored verification state, in both columns and in the zauth-verified export."""
+    _member(user_model, "rider", zwid=111, zwid_verified=verified, zwid_verification_method=method)
+
+    _, rows = _export(client, app_admin)
+    header = rows[0]
+    assert rows[1][header.index("zauth_verified")] == zauth_cell
+    assert rows[1][header.index("verification_method")] == method_cell
+
+    _, filtered = _export(client, app_admin, "?verified=1")
+    assert [row[2] for row in filtered[1:]] == (["rider"] if zauth_cell == "yes" else [])
+
+
+@pytest.mark.django_db
+def test_export_follows_the_race_verified_filter(client, app_admin, user_model, kits):
+    """Race verified narrows the file as it narrows the page, alone and with the others."""
+    zauth = {"zwid_verified": True, "zwid_verification_method": "zauth"}
+    _member(user_model, "ready-zauth-needs", {"race-2026": "need"}, is_race_ready=True, **zauth)
+    _member(user_model, "ready-needs", {"race-2026": "need"}, is_race_ready=True)
+    _member(user_model, "not-ready-needs", {"race-2026": "need"}, **zauth)
+
+    response, rows = _export(client, app_admin, "?race_verified=1")
+    assert [row[2] for row in rows[1:]] == ["ready-needs", "ready-zauth-needs"]
+    assert response["Content-Disposition"].endswith('-race-verified.csv"')
+
+    response, rows = _export(client, app_admin, "?verified=1&race_verified=1&need=1")
+    assert [row[2] for row in rows[1:]] == ["ready-zauth-needs"]
+    assert response["Content-Disposition"].endswith('-zauth-verified-race-verified-need.csv"')
 
 
 @pytest.mark.django_db
@@ -249,7 +336,7 @@ def test_round_trip_changes_only_the_cells_edited(client, app_admin, user_model,
     anna = _member(user_model, "anna", {"race-2026": "need", "race-2025": "have"}, zwid=111)
     bert = _member(user_model, "bert", {"race-2026": "need"}, zwid=222)
     _, rows = _export(client, app_admin)
-    rows[1][6] = "submitted"  # anna, kit:race-2026
+    rows[1][KIT_2026] = "submitted"  # anna, kit:race-2026
 
     response = _upload(client, app_admin, _csv(rows))
 
@@ -597,7 +684,7 @@ def test_an_unedited_cell_never_undoes_a_newer_status(client, app_admin, user_mo
     _, rows = _export(client, app_admin)
     anna.team_kit = {"race-2026": "have"}
     anna.save(update_fields=["team_kit"])
-    rows[2][6] = "submitted"  # bert, kit:race-2026 -- anna's row is left exactly as exported
+    rows[2][KIT_2026] = "submitted"  # bert, kit:race-2026 -- anna's row is left exactly as exported
 
     response = _upload(client, app_admin, _csv(rows))
 
@@ -617,7 +704,7 @@ def test_an_edit_to_a_status_that_also_moved_is_shown_and_not_applied(client, ap
     _, rows = _export(client, app_admin)
     anna.team_kit = {"race-2026": "have"}
     anna.save(update_fields=["team_kit"])
-    rows[1][6] = "submitted"
+    rows[1][KIT_2026] = "submitted"
 
     response = _upload(client, app_admin, _csv(rows))
 
@@ -640,8 +727,8 @@ def test_clearing_the_snapshot_cell_applies_the_edit_anyway(client, app_admin, u
     _, rows = _export(client, app_admin)
     anna.team_kit = {"race-2026": "have"}
     anna.save(update_fields=["team_kit"])
-    rows[1][6] = "submitted"
-    rows[1][8] = ""
+    rows[1][KIT_2026] = "submitted"
+    rows[1][SNAPSHOT] = ""
 
     _upload(client, app_admin, _csv(rows))
     _confirm(client)

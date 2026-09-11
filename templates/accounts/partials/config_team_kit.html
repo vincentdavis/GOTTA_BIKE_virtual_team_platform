@@ -10,7 +10,12 @@
 
   Every count on this page, and the member list, uses one population: team members, meaning
   anyone with a Discord login (apps.team.kits.team_members). That is what makes "haven't
-  answered" an honest number. The verified filter narrows only the list, never the counts.
+  answered" an honest number. The filters narrow only the list, never the counts.
+
+  "Verified" here means verified through zauth, the official Zwift OAuth -- the kit goes to the
+  Zwift account zauth vouches for. Legacy (Sauce mod) and admin verifications are shown in the
+  column but do not count: apps.team.kits.zauth_verified_q is the one rule, for the filter,
+  the column and the export alike.
 {% endcomment %}
 {# --- the current kit, where it stands ------------------------------------------------ #}
 {% if current_kit_entry %}
@@ -152,21 +157,28 @@
   <div>
     <h3 class="font-semibold">Team members</h3>
     <p class="text-xs text-base-content/60">
-      {% if member_list_filtered %}Showing {{ member_rows|length }} of {{ member_total }} members &mdash;
-        {% if verified_only %}verified Zwift accounts{% endif %}{% if verified_only and needs_kit_only %} who {% elif needs_kit_only %}those who {% endif %}{% if needs_kit_only %}need the {{ current_kit_entry.kit.name }}{% endif %}.
+      {% if member_list_filtered %}Showing {{ member_rows|length }} of {{ member_total }} members &mdash; {{ member_filter_summary }}.
       {% else %}{{ member_total }} member{{ member_total|pluralize }} with a Discord login.{% endif %}
     </p>
   </div>
   {% comment %}
     A GET form so the filtered view is a URL: bookmarkable, shareable, and survives a refresh.
-    Both boxes live in the one form so they submit together and combine; each submits the
-    form on change, so there is no separate button to find.
+    Every box lives in the one form so they submit together and combine; each submits the
+    form on change, so there is no separate button to find. The summary sentence above comes
+    from apps.team.kits.MemberFilters.describe.
   {% endcomment %}
   <form method="get" action="{% url 'config_section_page' 'team_kit' %}" class="flex flex-wrap gap-x-4">
-    <label class="label cursor-pointer gap-2">
+    <label class="label cursor-pointer gap-2"
+           title="Verified through zauth, the official Zwift OAuth. Legacy (Sauce mod) and admin verifications are not counted.">
       <input type="checkbox" name="verified" value="1" class="checkbox checkbox-sm checkbox-primary"
              {% if verified_only %}checked{% endif %} onchange="this.form.submit()">
-      <span class="label-text">Verified Zwift accounts only</span>
+      <span class="label-text">Verified with zauth only</span>
+    </label>
+    <label class="label cursor-pointer gap-2"
+           title="Race Verified: every verification their category requires is approved and in date -- the status the roster's Race Verified filter and the Discord race-ready role use.">
+      <input type="checkbox" name="race_verified" value="1" class="checkbox checkbox-sm checkbox-primary"
+             {% if race_verified_only %}checked{% endif %} onchange="this.form.submit()">
+      <span class="label-text">Race verified only</span>
     </label>
     {% if current_kit_entry %}
     <label class="label cursor-pointer gap-2">
@@ -283,8 +295,9 @@
         <td>{{ row.zwift_name|default:"—" }}</td>
         <td class="font-mono">{{ row.zwid|default:"—" }}</td>
         <td>
-          {% if row.zwid_verified %}<span class="badge badge-success badge-sm">Verified</span>
-          {% else %}<span class="badge badge-ghost badge-sm">Not verified</span>{% endif %}
+          {% if row.zauth_verified %}<span class="badge badge-success badge-sm" title="Verified through zauth, the official Zwift OAuth">Zauth</span>
+          {% elif row.verification_method %}<span class="badge badge-warning badge-sm whitespace-nowrap" title="Verified, but not through zauth -- not counted as verified here">{{ row.verification_label }}</span>
+          {% else %}<span class="badge badge-ghost badge-sm whitespace-nowrap">Not verified</span>{% endif %}
         </td>
         <td>
           {% if current_kit_entry %}<span class="badge {{ row.badge }} badge-sm whitespace-nowrap">{{ row.label }}</span>

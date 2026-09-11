@@ -11,12 +11,18 @@ side of a Zwift order.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
+
+from django.db.models import Q
 
 from apps.team.models import KitStatus, TeamKit
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
+
+# Matches User.VerificationMethod.ZAUTH; a literal so this module need not import the User
+# model at load time (apps.zwift.verification does the same).
+ZAUTH = "zauth"
 
 # What a rider sees for their own status. The Zwift-side states have no rider wording of
 # their own; the team's label ("Submitted to Zwift") is already the right thing to tell them.
@@ -124,7 +130,114 @@ def team_members():
     return User.objects.exclude(discord_id="")
 
 
-def member_filters(params, current: TeamKit | None) -> tuple[bool, bool]:
+def zauth_verified_q() -> Q:
+    """Select members whose Zwift account is verified through zauth (the official Zwift OAuth).
+
+    What "verified" means on the team kit page -- its filter, its column and its export all
+    use this rule. Two stored fields, both required:
+
+    - ``zwid_verification_method == "zauth"``. Legacy (Sauce mod) and admin verifications are
+      still accepted elsewhere, but they are what the zauth migration is replacing, and a kit
+      goes to the Zwift account zauth vouches for.
+    - ``zwid_verified``. The method alone is not enough: a rider removing their own
+      verification (``unverify_zwift``) clears ``zwid_verified`` but leaves the method at
+      "zauth". So ``User.is_zauth_verified``, which reads the method only, still says yes
+      for them. This page does not.
+
+    Never the live zauth connection, nor ``has_account``: the platform records the
+    verification (``apps.zwift.verification`` keeps it in step with the service), and asking
+    the service per row would also make the page depend on it being up.
+
+    Returns:
+        The filter.
+
+    """
+    return Q(zwid_verified=True, zwid_verification_method=ZAUTH)
+
+
+def verified_through_zauth(member: User) -> bool:
+    """Apply ``zauth_verified_q`` to a member already in memory.
+
+    Args:
+        member: The member, with ``zwid_verified`` and ``zwid_verification_method`` loaded.
+
+    Returns:
+        True if their Zwift account is verified through zauth.
+
+    """
+    return bool(member.zwid_verified and member.zwid_verification_method == ZAUTH)
+
+
+def _join(parts: list[str]) -> str:
+    """Join phrases as a sentence would: "a", "a and b", "a, b and c".
+
+    Args:
+        parts: The phrases.
+
+    Returns:
+        The joined phrase.
+
+    """
+    return parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+class MemberFilters(NamedTuple):
+    """The team kit page's member-list filters. Each narrows the list; together they combine.
+
+    The field names are ``kit_member_rows``'s keyword arguments, so the filters can be passed
+    straight through with ``**filters._asdict()``.
+    """
+
+    verified_only: bool = False  # Zwift account verified through zauth -- zauth_verified_q
+    race_verified_only: bool = False  # Race Verified -- the cached User.is_race_ready
+    needs_kit_only: bool = False  # "Need kit" for the current kit
+
+    @property
+    def active(self) -> bool:
+        """Whether any filter is on.
+
+        Returns:
+            True if the list is narrowed at all.
+
+        """
+        return any(self)
+
+    def query(self) -> dict[str, str]:
+        """Write the filters back as query parameters, for the export link.
+
+        Built from the parsed filters rather than passing the request's query string through,
+        so the export carries exactly the filters the page applied.
+
+        Returns:
+            The parameters that are on.
+
+        """
+        names = {"verified_only": "verified", "race_verified_only": "race_verified", "needs_kit_only": "need"}
+        return {names[field]: "1" for field, on in self._asdict().items() if on}
+
+    def describe(self, kit_name: str) -> str:
+        """Say what a filtered list is showing, for "Showing 3 of 40 members -- ...".
+
+        Args:
+            kit_name: The current kit's name, for the needs-the-kit filter.
+
+        Returns:
+            A phrase such as "verified with zauth, race verified and needing the 2026 Race Kit".
+
+        """
+        qualities = []
+        if self.verified_only:
+            qualities.append("verified with zauth")
+        if self.race_verified_only:
+            qualities.append("race verified")
+        if self.needs_kit_only:
+            if not qualities:
+                return f"those who need the {kit_name}"
+            qualities.append(f"needing the {kit_name}")
+        return _join(qualities) if qualities else ""
+
+
+def member_filters(params, current: TeamKit | None) -> MemberFilters:
     """Read the member-list filters from a query string.
 
     Shared by the page and its CSV export, so "Export CSV" always downloads the list on screen.
@@ -134,12 +247,16 @@ def member_filters(params, current: TeamKit | None) -> tuple[bool, bool]:
         current: The current kit, or None.
 
     Returns:
-        ``(verified_only, needs_kit_only)``. Needs-the-kit is only meaningful with a current
-        kit to need; without one the page disables the box, and a hand-typed ``?need=1`` is
-        ignored rather than emptying the list for no visible reason.
+        The filters. Needs-the-kit is only meaningful with a current kit to need; without one
+        the page disables the box, and a hand-typed ``?need=1`` is ignored rather than emptying
+        the list for no visible reason.
 
     """
-    return params.get("verified") == "1", params.get("need") == "1" and current is not None
+    return MemberFilters(
+        verified_only=params.get("verified") == "1",
+        race_verified_only=params.get("race_verified") == "1",
+        needs_kit_only=params.get("need") == "1" and current is not None,
+    )
 
 
 def kit_status_counts(kits: list[TeamKit]) -> dict[str, dict[str, int]]:
@@ -172,8 +289,34 @@ def kit_status_counts(kits: list[TeamKit]) -> dict[str, dict[str, int]]:
     return counts
 
 
+def _verification_method(member: User) -> dict[str, str]:
+    """Say how a member's current Zwift verification was obtained, for the column and export.
+
+    Only a current verification has a method worth showing. A method left behind after the
+    verification was removed (see ``zauth_verified_q``) reads as not verified.
+
+    Args:
+        member: The member.
+
+    Returns:
+        ``verification_method`` -- "zauth", "legacy", "admin", "other" for a verification
+        with no recorded method, or "" when not verified -- and ``verification_label``, the
+        wording the page shows ("" when not verified).
+
+    """
+    if not member.zwid_verified:
+        return {"verification_method": "", "verification_label": ""}
+    method = member.zwid_verification_method or "other"
+    label = member.get_zwid_verification_method_display() if member.zwid_verification_method else "Other"
+    return {"verification_method": method, "verification_label": label}
+
+
 def kit_member_rows(
-    *, verified_only: bool = False, needs_kit_only: bool = False, kit: TeamKit | None = None
+    *,
+    verified_only: bool = False,
+    race_verified_only: bool = False,
+    needs_kit_only: bool = False,
+    kit: TeamKit | None = None,
 ) -> list[dict]:
     """Build the team member list for the team kit page.
 
@@ -186,15 +329,25 @@ def kit_member_rows(
     two pages disagree about what a rider is called.
 
     Args:
-        verified_only: Limit to members whose Zwift account is verified.
+        verified_only: Limit to members whose Zwift account is verified through zauth
+            (``zauth_verified_q``) -- not by the legacy or admin methods.
+        race_verified_only: Limit to members who are Race Verified, read from the cached
+            ``User.is_race_ready`` -- what the roster's Race Verified filter, event
+            eligibility and the Discord race-ready role all use, so the pages agree. Not
+            recalculated here: that would be queries per rider, and the cache is kept current
+            by ``refresh_race_ready`` and the scheduled sweep. (Display badges rank Extra
+            Verified above it, so a rider who is Extra Verified but not race ready shows "EV"
+            on their profile yet is left out here, as by the roster's filter.)
         needs_kit_only: Limit to members whose status for ``kit`` is "Need kit". Ignored
             when no kit is given, since there is nothing to need.
         kit: The kit to report status for, normally the current one; None for no column.
 
     Returns:
         Rows sorted by Discord name, each with ``user``, ``discord_name``, ``zwift_name``,
-        ``zwid``, ``zwid_verified`` and -- when a kit is given -- ``status``, ``label`` and
-        ``badge``.
+        ``zwid``, ``zauth_verified``, ``verification_method`` (the stored method of a current
+        verification: "zauth", "legacy", "admin", "other" when it has none, or "" when not
+        verified), ``verification_label`` and -- when a kit is given -- ``status``, ``label``
+        and ``badge``.
 
     """
     from apps.zwiftpower.models import ZPTeamRiders
@@ -202,8 +355,21 @@ def kit_member_rows(
 
     queryset = team_members()
     if verified_only:
-        queryset = queryset.filter(zwid_verified=True)
-    members = list(queryset.only("id", "discord_username", "discord_nickname", "zwid", "zwid_verified", "team_kit"))
+        queryset = queryset.filter(zauth_verified_q())
+    if race_verified_only:
+        queryset = queryset.filter(is_race_ready=True)
+    # zwid_verification_method is loaded with the rest: left deferred, every row would fetch it.
+    members = list(
+        queryset.only(
+            "id",
+            "discord_username",
+            "discord_nickname",
+            "zwid",
+            "zwid_verified",
+            "zwid_verification_method",
+            "team_kit",
+        )
+    )
 
     zwids = {member.zwid for member in members if member.zwid}
     zp_names = dict(ZPTeamRiders.objects.filter(zwid__in=zwids).values_list("zwid", "name")) if zwids else {}
@@ -217,7 +383,8 @@ def kit_member_rows(
             "discord_username": member.discord_username,
             "zwift_name": zp_names.get(member.zwid) or zr_names.get(member.zwid) or "",
             "zwid": member.zwid,
-            "zwid_verified": member.zwid_verified,
+            "zauth_verified": verified_through_zauth(member),
+            **_verification_method(member),
         }
         if kit is not None:
             status = status_for(member, kit)

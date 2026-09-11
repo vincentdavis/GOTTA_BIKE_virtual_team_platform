@@ -1628,16 +1628,9 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
         current = next((kit for kit in kits if kit.is_current), None)
         # The filters narrow only the member list. The counts above it stay whole-team, so a
         # filtered view never changes what "12 need it" means.
-        verified_only, needs_kit_only = member_filters(request.GET, current)
-        member_rows = kit_member_rows(verified_only=verified_only, needs_kit_only=needs_kit_only, kit=current)
-        filtered = verified_only or needs_kit_only
-        member_total = team_members().count() if filtered else len(member_rows)
-        # Built from the parsed filters rather than passing the query string through, so the
-        # export link carries exactly the filters the page applied.
-        export_query = urlencode({
-            **({"verified": "1"} if verified_only else {}),
-            **({"need": "1"} if needs_kit_only else {}),
-        })
+        filters = member_filters(request.GET, current)
+        member_rows = kit_member_rows(kit=current, **filters._asdict())
+        member_total = team_members().count() if filters.active else len(member_rows)
         return render(
             request,
             "accounts/config_section_page.html",
@@ -1652,10 +1645,12 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "current_kit_entry": next((e for e in entries if e["kit"].is_current), None),
                 "member_rows": member_rows,
                 "member_total": member_total,
-                "verified_only": verified_only,
-                "needs_kit_only": needs_kit_only,
-                "member_list_filtered": filtered,
-                "export_query": export_query,
+                "verified_only": filters.verified_only,
+                "race_verified_only": filters.race_verified_only,
+                "needs_kit_only": filters.needs_kit_only,
+                "member_list_filtered": filters.active,
+                "member_filter_summary": filters.describe(current.name if current else ""),
+                "export_query": urlencode(filters.query()),
                 "kit_column_prefix": KIT_COLUMN_PREFIX,
                 "kit_status_choices": KitStatus.choices,
                 "import_max_kb": MAX_IMPORT_BYTES // 1024,

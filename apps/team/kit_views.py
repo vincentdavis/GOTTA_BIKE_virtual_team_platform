@@ -266,11 +266,11 @@ def team_kit_export(request: HttpRequest) -> HttpResponse:
     _require_config_access(request)
     kits = list(TeamKit.objects.all())
     current = next((kit for kit in kits if kit.is_current), None)
-    verified_only, needs_kit_only = member_filters(request.GET, current)
-    rows = kit_member_rows(verified_only=verified_only, needs_kit_only=needs_kit_only, kit=current)
+    filters = member_filters(request.GET, current)
+    rows = kit_member_rows(kit=current, **filters._asdict())
     header, data = export_table(rows, kits)
 
-    filename = export_filename(verified_only=verified_only, needs_kit_only=needs_kit_only, today=timezone.localdate())
+    filename = export_filename(filters, today=timezone.localdate())
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
     # A byte-order mark, or Excel reads the file as the local code page and mangles every
@@ -285,8 +285,9 @@ def team_kit_export(request: HttpRequest) -> HttpResponse:
         user_id=request.user.id,
         row_count=len(data),
         kit_count=len(kits),
-        verified_only=verified_only,
-        needs_kit_only=needs_kit_only,
+        verified_only=filters.verified_only,
+        race_verified_only=filters.race_verified_only,
+        needs_kit_only=filters.needs_kit_only,
     )
     return response
 

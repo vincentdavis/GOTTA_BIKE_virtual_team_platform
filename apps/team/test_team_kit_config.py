@@ -7,6 +7,8 @@ active. A page can promise both; only a constraint means no other path -- the Dj
 a shell, a future automation -- can quietly break them.
 """
 
+from unittest import mock
+
 import pytest
 from django.db import IntegrityError, transaction
 from django.urls import reverse
@@ -135,8 +137,12 @@ def _member(user_model, name: str, team_kit: dict | None = None, **extra):
 
     """
     return user_model.objects.create_user(
-        username=name, email=f"{name}@example.test", discord_id=f"d-{name}",
-        discord_username=name, team_kit=team_kit or {}, **extra,
+        username=name,
+        email=f"{name}@example.test",
+        discord_id=f"d-{name}",
+        discord_username=name,
+        team_kit=team_kit or {},
+        **extra,
     )
 
 
@@ -347,6 +353,9 @@ def test_actions_refuse_get(client, app_admin, old_kit):
 
 # --- the team member list ------------------------------------------------------------------
 
+# A member verified the way the kit page counts: through zauth.
+ZAUTH_VERIFIED = {"zwid_verified": True, "zwid_verification_method": "zauth"}
+
 
 def _list(client, viewer, **params):
     """Render the team kit section and return the response.
@@ -389,22 +398,205 @@ def test_the_list_is_everyone_with_a_discord_login(client, app_admin, user_model
     assert "local" not in names
 
 
-@pytest.mark.django_db
-def test_the_verified_filter_narrows_the_list(client, app_admin, user_model):
-    """The optional filter: verified Zwift accounts only."""
-    _member(user_model, "verified", zwid=111, zwid_verified=True)
-    _member(user_model, "unverified", zwid=222, zwid_verified=False)
+# Every stored state a member's Zwift verification can be in, as (zwid_verified, method), with
+# whether the kit page counts it as verified and the badge its column shows.
+VERIFICATION_STATES = [
+    pytest.param(True, "zauth", True, "Zauth", id="zauth"),
+    pytest.param(True, "legacy", False, "Legacy (Sauce mod)", id="legacy"),
+    pytest.param(True, "admin", False, "Admin (manual)", id="admin"),
+    pytest.param(True, "", False, "Other", id="verified-no-method"),
+    # What unverify_zwift leaves behind: the method stays "zauth", the verification is gone.
+    pytest.param(False, "zauth", False, "Not verified", id="zauth-method-left-behind"),
+    pytest.param(False, "", False, "Not verified", id="never-verified"),
+]
 
-    assert set(_usernames(_list(client, app_admin))) >= {"verified", "unverified"}
-    filtered = _usernames(_list(client, app_admin, verified="1"))
-    assert "verified" in filtered
-    assert "unverified" not in filtered
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("verified", "method", "counts", "badge"), VERIFICATION_STATES)
+def test_verified_means_verified_through_zauth(client, app_admin, user_model, verified, method, counts, badge):
+    """The filter is zauth only -- not the legacy Sauce-mod or admin verifications."""
+    _member(user_model, "rider", zwid=111, zwid_verified=verified, zwid_verification_method=method)
+
+    assert "rider" in _usernames(_list(client, app_admin))
+    assert ("rider" in _usernames(_list(client, app_admin, verified="1"))) is counts
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("verified", "method", "counts", "badge"), VERIFICATION_STATES)
+def test_the_verified_column_shows_how(client, app_admin, user_model, verified, method, counts, badge):
+    """Zauth, the older method by name, or not verified -- so a legacy rider is visibly one."""
+    _member(user_model, "rider", zwid=111, zwid_verified=verified, zwid_verification_method=method)
+
+    body = _list(client, app_admin).content.decode()
+    cell = body[body.index("<th>Discord name</th>") :]
+
+    assert f">{badge}</span>" in cell
+    for other in {"Zauth", "Legacy (Sauce mod)", "Admin (manual)", "Other", "Not verified"} - {badge}:
+        assert f">{other}</span>" not in cell
+
+
+@pytest.mark.django_db
+def test_the_page_never_asks_the_zauth_service(client, app_admin, user_model, old_kit):
+    """Verification is read from what the platform stored, never the live connection."""
+    from apps.zwift import client as zwift_client
+
+    _member(user_model, "rider", zwid=111, zwid_verified=True, zwid_verification_method="zauth")
+    # Every function in the zauth client that talks to the service.
+    service_calls = (
+        "get_connection_status",
+        "get_authorize_url",
+        "get_racing_profile",
+        "get_profile_stats",
+        "get_activity_stats",
+        "list_connections",
+        "disconnect",
+    )
+    calls = dict.fromkeys(service_calls, mock.DEFAULT)
+    with mock.patch.multiple(zwift_client, **calls) as patched:
+        for name in calls:
+            patched[name].side_effect = AssertionError(f"the team kit page called {name}")
+        assert _usernames(_list(client, app_admin, verified="1")) == ["rider"]
+        assert client.get(reverse("team_kit_export"), {"verified": "1"}).status_code == 200
+
+
+def test_the_zauth_literal_matches_the_model():
+    """kits.py spells it out rather than importing User at load time; the two must not drift."""
+    from apps.accounts.models import User
+    from apps.team.kits import ZAUTH
+
+    assert ZAUTH == User.VerificationMethod.ZAUTH
+
+
+# --- the race verified filter --------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_race_verified_filter_narrows_the_list(client, app_admin, user_model):
+    """Race Verified only -- the status the rest of the app calls Race Verified."""
+    _member(user_model, "ready", is_race_ready=True)
+    _member(user_model, "not-ready", is_race_ready=False)
+
+    assert set(_usernames(_list(client, app_admin))) >= {"ready", "not-ready"}
+    assert _usernames(_list(client, app_admin, race_verified="1")) == ["ready"]
+
+
+@pytest.mark.django_db
+def test_race_verified_is_the_stored_status_not_recalculated(client, app_admin, user_model):
+    """The cached is_race_ready the roster also reads -- recalculating would query per rider."""
+    from apps.accounts.models import User
+
+    _member(user_model, "ready", is_race_ready=True)  # no verification records at all
+    with mock.patch.object(User, "calculate_race_ready", side_effect=AssertionError("recalculated")):
+        assert _usernames(_list(client, app_admin, race_verified="1")) == ["ready"]
+
+
+@pytest.mark.django_db
+def test_only_race_verified_1_turns_it_on(rf):
+    """The same strictness as the other boxes: the page only ever sends "1"."""
+    from apps.team.kits import member_filters
+
+    assert member_filters(rf.get("/", {"race_verified": "1"}).GET, None).race_verified_only is True
+    for value in ("yes", "true", "0", ""):
+        assert member_filters(rf.get("/", {"race_verified": value}).GET, None).race_verified_only is False
+
+
+@pytest.mark.django_db
+def test_all_three_filters_combine(client, app_admin, user_model, old_kit):
+    """Every box on means every condition at once."""
+    need = {old_kit.slug: KitStatus.NEED}
+    _member(user_model, "all-three", need, zwid=1, is_race_ready=True, **ZAUTH_VERIFIED)
+    _member(user_model, "not-race", need, zwid=2, is_race_ready=False, **ZAUTH_VERIFIED)
+    _member(
+        user_model, "legacy", need, zwid=3, is_race_ready=True, zwid_verified=True, zwid_verification_method="legacy"
+    )
+    _member(user_model, "has-it", {old_kit.slug: KitStatus.HAVE}, zwid=4, is_race_ready=True, **ZAUTH_VERIFIED)
+
+    assert _usernames(_list(client, app_admin, verified="1", race_verified="1", need="1")) == ["all-three"]
+
+
+@pytest.mark.django_db
+def test_the_race_filter_does_not_change_the_counts(client, app_admin, user_model, old_kit):
+    """Like the others, it narrows the list and never the summary above it."""
+    _member(user_model, "r", {old_kit.slug: "need"}, is_race_ready=True)
+    _member(user_model, "n", {old_kit.slug: "need"}, is_race_ready=False)
+
+    unfiltered = _list(client, app_admin).context["current_kit_entry"]["counts"]
+    filtered = _list(client, app_admin, race_verified="1").context["current_kit_entry"]["counts"]
+
+    assert unfiltered == filtered
+    assert filtered["need"] == 2
+
+
+@pytest.mark.parametrize(
+    ("filters", "phrase"),
+    [
+        ({"verified_only": True}, "verified with zauth"),
+        ({"race_verified_only": True}, "race verified"),
+        ({"needs_kit_only": True}, "those who need the 2026 Race Kit"),
+        ({"verified_only": True, "race_verified_only": True}, "verified with zauth and race verified"),
+        ({"verified_only": True, "needs_kit_only": True}, "verified with zauth and needing the 2026 Race Kit"),
+        ({"race_verified_only": True, "needs_kit_only": True}, "race verified and needing the 2026 Race Kit"),
+        (
+            {"verified_only": True, "race_verified_only": True, "needs_kit_only": True},
+            "verified with zauth, race verified and needing the 2026 Race Kit",
+        ),
+        ({}, ""),
+    ],
+)
+def test_the_summary_says_which_filters_are_on(filters, phrase):
+    """Every combination reads as a sentence, so a short list is never mistaken for a small team."""
+    from apps.team.kits import MemberFilters
+
+    assert MemberFilters(**filters).describe("2026 Race Kit") == phrase
+
+
+@pytest.mark.django_db
+def test_the_race_filter_is_on_the_page_and_in_the_export_link(client, app_admin, user_model, old_kit):
+    """Ticked when on, named in the summary, and carried to Export CSV."""
+    _member(user_model, "ready", is_race_ready=True)
+    _member(user_model, "not-ready")
+
+    body = " ".join(_list(client, app_admin, race_verified="1").content.decode().split())
+
+    assert 'name="race_verified" value="1" class="checkbox checkbox-sm checkbox-primary" checked' in body
+    assert "Showing 1 of 2 members &mdash; race verified." in body
+    assert f'href="{reverse("team_kit_export")}?race_verified=1"' in body
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "on",
+    [
+        (),
+        ("verified",),
+        ("race_verified",),
+        ("need",),
+        ("verified", "race_verified"),
+        ("verified", "need"),
+        ("race_verified", "need"),
+        ("verified", "race_verified", "need"),
+    ],
+    ids=lambda on: "+".join(on) or "none",
+)
+def test_each_box_is_ticked_exactly_when_its_filter_is_on(client, app_admin, old_kit, on):
+    """Each box shows its own filter, and no other.
+
+    The form submits on change, and an unticked box sends nothing -- so a box shown unticked
+    while its filter is on would quietly drop that filter the next time any box is clicked.
+    """
+    import re
+
+    body = _list(client, app_admin, **dict.fromkeys(on, "1")).content.decode()
+    form = body[body.index('<form method="get"') :]
+    form = form[: form.index("</form>")]
+
+    assert set(re.findall(r'name="(\w+)" value="1"[^>]*\bchecked\b', form)) == set(on)
 
 
 @pytest.mark.django_db
 def test_the_filter_does_not_change_the_counts(client, app_admin, user_model, old_kit):
     """The filter narrows the list only -- "N need it" must mean the same thing either way."""
-    _member(user_model, "v", {old_kit.slug: "need"}, zwid=1, zwid_verified=True)
+    _member(user_model, "v", {old_kit.slug: "need"}, zwid=1, **ZAUTH_VERIFIED)
     _member(user_model, "u", {old_kit.slug: "need"}, zwid=2, zwid_verified=False)
 
     unfiltered = _list(client, app_admin).context["current_kit_entry"]["counts"]
@@ -417,9 +609,9 @@ def test_the_filter_does_not_change_the_counts(client, app_admin, user_model, ol
 @pytest.mark.django_db
 def test_a_filtered_list_says_how_much_it_is_showing(client, app_admin, user_model):
     """Otherwise a short list reads as a small team rather than a filtered view."""
-    _member(user_model, "v", zwid=1, zwid_verified=True)
+    _member(user_model, "v", zwid=1, **ZAUTH_VERIFIED)
     _member(user_model, "u1", zwid=2, zwid_verified=False)
-    _member(user_model, "u2", zwid=3, zwid_verified=False)
+    _member(user_model, "u2", zwid=3, zwid_verified=True, zwid_verification_method="legacy")
 
     body = _list(client, app_admin, verified="1").content.decode()
 
@@ -432,19 +624,23 @@ def test_the_columns(client, app_admin, user_model, old_kit):
     from apps.zwiftpower.models import ZPTeamRiders
 
     _member(
-        user_model, "ana", {old_kit.slug: "submitted"},
-        discord_nickname="Ana R", zwid=6164399, zwid_verified=True,
+        user_model,
+        "ana",
+        {old_kit.slug: "submitted"},
+        discord_nickname="Ana R",
+        zwid=6164399,
+        **ZAUTH_VERIFIED,
     )
     ZPTeamRiders.objects.create(zwid=6164399, name="Ana Rider [COALITION]")
 
     body = _list(client, app_admin).content.decode()
-    table = body[body.index("<th>Discord name</th>"):]
+    table = body[body.index("<th>Discord name</th>") :]
 
     assert "Ana R" in table
     assert "@ana" in table  # the username, since it differs from the nickname
     assert "Ana Rider [COALITION]" in table
     assert "6164399" in table
-    assert "Verified" in table
+    assert ">Zauth</span>" in table
     assert "Submitted to Zwift" in table
     assert "2026 Race Kit" in table  # the status column is headed with the current kit's name
 
@@ -489,11 +685,16 @@ def test_the_list_is_sorted_by_discord_name(client, app_admin, user_model):
 
 
 @pytest.mark.django_db
-def test_the_list_costs_the_same_however_many_members(user_model, old_kit):
+@pytest.mark.parametrize(
+    "filters",
+    [{}, {"verified_only": True}, {"race_verified_only": True}, {"needs_kit_only": True}],
+    ids=["unfiltered", "zauth", "race", "need"],
+)
+def test_the_list_costs_the_same_however_many_members(user_model, old_kit, filters):
     """A fixed handful of queries, never one per rider -- the lesson of the captain banner.
 
     Warmed first, and asserted as equality: an unwarmed baseline once hid a per-rider query
-    inside the slack of a <= comparison.
+    inside the slack of a <= comparison. Run under each filter, since each could add one.
     """
     from django.db import connection
     from django.test.utils import CaptureQueriesContext
@@ -501,19 +702,34 @@ def test_the_list_costs_the_same_however_many_members(user_model, old_kit):
     from apps.team.kits import kit_member_rows
     from apps.zwiftpower.models import ZPTeamRiders
 
-    for i in range(2):
-        _member(user_model, f"few{i}", zwid=100 + i)
-        ZPTeamRiders.objects.create(zwid=100 + i, name=f"Few {i}")
-    kit_member_rows(kit=old_kit)  # warm
+    # Verified, and by varied methods, so every row reads zwid_verification_method -- left
+    # out of the query's field list, that read would cost a query per rider.
+    methods = ["zauth", "legacy", "admin", ""]
+    kit_need = {old_kit.slug: KitStatus.NEED}
+
+    def make(prefix: str, count: int, zwid_base: int) -> None:
+        for i in range(count):
+            _member(
+                user_model,
+                f"{prefix}{i}",
+                kit_need,
+                zwid=zwid_base + i,
+                zwid_verified=True,
+                zwid_verification_method=methods[i % 4],
+                is_race_ready=True,
+            )
+            ZPTeamRiders.objects.create(zwid=zwid_base + i, name=f"{prefix} {i}")
+
+    make("few", 4, 100)
+    kit_member_rows(kit=old_kit, **filters)  # warm
     with CaptureQueriesContext(connection) as few:
-        kit_member_rows(kit=old_kit)
+        rows_few = kit_member_rows(kit=old_kit, **filters)
 
-    for i in range(20):
-        _member(user_model, f"many{i}", zwid=200 + i)
-        ZPTeamRiders.objects.create(zwid=200 + i, name=f"Many {i}")
+    make("many", 20, 200)
     with CaptureQueriesContext(connection) as many:
-        kit_member_rows(kit=old_kit)
+        rows_many = kit_member_rows(kit=old_kit, **filters)
 
+    assert len(rows_many) > len(rows_few) > 0, "the filter left nothing to measure"
     assert len(many.captured_queries) == len(few.captured_queries)
 
 
@@ -544,9 +760,17 @@ def test_need_means_the_current_kit_not_any_kit(client, app_admin, user_model, o
 @pytest.mark.django_db
 def test_the_two_filters_combine(client, app_admin, user_model, old_kit):
     """Both boxes on means both conditions: verified AND needs the kit."""
-    _member(user_model, "verified-needs", {old_kit.slug: KitStatus.NEED}, zwid=1, zwid_verified=True)
+    _member(user_model, "verified-needs", {old_kit.slug: KitStatus.NEED}, zwid=1, **ZAUTH_VERIFIED)
     _member(user_model, "unverified-needs", {old_kit.slug: KitStatus.NEED}, zwid=2, zwid_verified=False)
-    _member(user_model, "verified-has", {old_kit.slug: KitStatus.HAVE}, zwid=3, zwid_verified=True)
+    _member(
+        user_model,
+        "legacy-needs",
+        {old_kit.slug: KitStatus.NEED},
+        zwid=4,
+        zwid_verified=True,
+        zwid_verification_method="legacy",
+    )
+    _member(user_model, "verified-has", {old_kit.slug: KitStatus.HAVE}, zwid=3, **ZAUTH_VERIFIED)
 
     assert _usernames(_list(client, app_admin, need="1", verified="1")) == ["verified-needs"]
 
@@ -566,15 +790,17 @@ def test_the_need_filter_does_not_change_the_counts(client, app_admin, user_mode
 @pytest.mark.django_db
 def test_the_summary_names_what_is_being_shown(client, app_admin, user_model, old_kit):
     """A short list must read as filtered, and say by what."""
-    _member(user_model, "a", {old_kit.slug: KitStatus.NEED}, zwid=1, zwid_verified=True)
-    _member(user_model, "b", {old_kit.slug: KitStatus.HAVE}, zwid=2, zwid_verified=True)
+    _member(user_model, "a", {old_kit.slug: KitStatus.NEED}, zwid=1, **ZAUTH_VERIFIED)
+    _member(user_model, "b", {old_kit.slug: KitStatus.HAVE}, zwid=2, **ZAUTH_VERIFIED)
 
     need_only = " ".join(_list(client, app_admin, need="1").content.decode().split())
+    verified_only = " ".join(_list(client, app_admin, verified="1").content.decode().split())
     both = " ".join(_list(client, app_admin, need="1", verified="1").content.decode().split())
 
     # &mdash; because this is the raw HTML, where the dash is an entity.
     assert "Showing 1 of 2 members &mdash; those who need the 2026 Race Kit." in need_only
-    assert "Showing 1 of 2 members &mdash; verified Zwift accounts who need the 2026 Race Kit." in both
+    assert "Showing 2 of 2 members &mdash; verified with zauth." in verified_only
+    assert "Showing 1 of 2 members &mdash; verified with zauth and needing the 2026 Race Kit." in both
 
 
 @pytest.mark.django_db
