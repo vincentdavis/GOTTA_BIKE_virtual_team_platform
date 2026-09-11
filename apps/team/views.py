@@ -1180,8 +1180,10 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     review_note=review_note or None,
                 )
 
-            # Recalculate and save cached race ready status
-            is_now_race_ready = record.user.refresh_race_ready()
+            # refresh_race_ready() returns (is_race_ready, is_extra_verified). Unpack it:
+            # the pair never equals was_race_ready, and being truthy it announced every
+            # review as a GAIN -- so taking the status away handed out the role instead.
+            is_now_race_ready, _ = record.user.refresh_race_ready()
             if was_race_ready != is_now_race_ready:
                 notify_race_ready_change.enqueue(
                     user_id=record.user.id,
@@ -1227,8 +1229,10 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                     review_note=review_note or None,
                 )
 
-            # Recalculate and save cached race ready status
-            is_now_race_ready = record.user.refresh_race_ready()
+            # refresh_race_ready() returns (is_race_ready, is_extra_verified). Unpack it:
+            # the pair never equals was_race_ready, and being truthy it announced every
+            # review as a GAIN -- so taking the status away handed out the role instead.
+            is_now_race_ready, _ = record.user.refresh_race_ready()
             if was_race_ready != is_now_race_ready:
                 notify_race_ready_change.enqueue(
                     user_id=record.user.id,
@@ -1265,8 +1269,10 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
                 reset_by_username=request.user.username,
             )
 
-            # Recalculate and save cached race ready status
-            is_now_race_ready = record.user.refresh_race_ready()
+            # refresh_race_ready() returns (is_race_ready, is_extra_verified). Unpack it:
+            # the pair never equals was_race_ready, and being truthy it announced every
+            # review as a GAIN -- so taking the status away handed out the role instead.
+            is_now_race_ready, _ = record.user.refresh_race_ready()
             if was_race_ready != is_now_race_ready:
                 notify_race_ready_change.enqueue(
                     user_id=record.user.id,
