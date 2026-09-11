@@ -319,8 +319,8 @@ def test_export_downloads_the_list_on_screen(client, app_admin, user_model, kits
         (True, "legacy", "no", "legacy"),
         (True, "admin", "no", "admin"),
         (True, "", "no", "other"),
-        # What unverify_zwift leaves behind -- and the state User.is_zauth_verified gets wrong,
-        # since it reads the method alone. The export must follow the page, not that property.
+        # What unverify_zwift leaves behind: the flag cleared, the method still "zauth" until
+        # the reconcile runs. Not zauth-verified -- the method alone must never count.
         (False, "zauth", "no", ""),
         (False, "", "no", ""),
     ],
