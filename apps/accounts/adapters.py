@@ -2,6 +2,7 @@
 
 import httpx
 import logfire
+from allauth.account.adapter import DefaultAccountAdapter
 from allauth.core.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from constance import config
@@ -10,6 +11,34 @@ from django.shortcuts import redirect
 from django.urls import reverse
 
 from apps.accounts.discord_service import sync_user_discord_roles
+
+
+class NoLocalSignupAccountAdapter(DefaultAccountAdapter):
+    """Refuse allauth's own signup: an account comes from a Discord login or not at all.
+
+    Every membership check -- the block list, guild membership, Discord's verified email --
+    lives in ``DiscordSocialAccountAdapter.pre_social_login``. allauth's local
+    ``/accounts/signup/`` skips all of them: an email-only POST created a password-less
+    account with no ``discord_id`` and logged it straight in. With
+    ``SOCIALACCOUNT_EMAIL_AUTHENTICATION`` and ``_AUTO_CONNECT`` on, such an account would
+    then capture the first Discord login carrying the same email address.
+
+    This closes only the creation of new local accounts. Existing accounts are untouched, and
+    ``/admin/`` still authenticates username and password through ``ModelBackend``, which is
+    how the superuser signs in.
+    """
+
+    def is_open_for_signup(self, request) -> bool:
+        """Whether allauth may create a local account.
+
+        Args:
+            request: The HTTP request.
+
+        Returns:
+            False, always.
+
+        """
+        return False
 
 
 class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
@@ -22,6 +51,24 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
     It also verifies that users are members of the configured Discord guild
     before allowing signup or login.
     """
+
+    def is_open_for_signup(self, request, sociallogin) -> bool:
+        """Whether a Discord login may create an account.
+
+        allauth's social adapter otherwise delegates this to the account adapter, which
+        refuses every signup (``NoLocalSignupAccountAdapter``) -- that would shut new riders
+        out of Discord signup too. Discord signups stay open; who may have one is decided by
+        ``pre_social_login`` (block list, guild membership, verified email).
+
+        Args:
+            request: The HTTP request.
+            sociallogin: The social login being processed.
+
+        Returns:
+            True, always.
+
+        """
+        return True
 
     def _check_guild_membership(self, request, sociallogin):
         """Check if user is a member of the required Discord guild.

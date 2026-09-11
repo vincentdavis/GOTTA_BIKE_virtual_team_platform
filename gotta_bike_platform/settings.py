@@ -359,7 +359,11 @@ SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
 SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
 SOCIALACCOUNT_LOGIN_ON_GET = True
 
-# Custom adapter for Discord field population
+# Custom adapters. The account adapter refuses allauth's own signup, so an account can only
+# come from a Discord login, where the block list / guild / verified-email checks live; the
+# social adapter re-opens signup for Discord (allauth would otherwise delegate to the account
+# adapter and shut Discord signup out too).
+ACCOUNT_ADAPTER = "apps.accounts.adapters.NoLocalSignupAccountAdapter"
 SOCIALACCOUNT_ADAPTER = "apps.accounts.adapters.DiscordSocialAccountAdapter"
 
 # Discord provider settings
