@@ -851,11 +851,17 @@ class User(AbstractUser):
         nothing per request. Legacy and admin verifications return False: they are
         still accepted today, but they are what the zauth migration is replacing.
 
+        ``zwid_verified`` is checked too, not just the method: ``unverify_zwift``
+        clears the flag but leaves the method at "zauth" until the hourly reconcile
+        clears it -- and indefinitely if that reconcile aborts because the service is
+        down. Without it, a rider who removed their own verification would still pass
+        a squad's ``require_zauth`` gate.
+
         Returns:
-            True if the current verification came from Zwift OAuth.
+            True if the account is verified and that verification came from Zwift OAuth.
 
         """
-        return self.zwid_verification_method == self.VerificationMethod.ZAUTH
+        return self.zwid_verified and self.zwid_verification_method == self.VerificationMethod.ZAUTH
 
     def _metric_wkg(self, watts: Decimal | None) -> float | None:
         """Divide a stored wattage by the weight Zwift used to compute it.

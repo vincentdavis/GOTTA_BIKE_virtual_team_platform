@@ -74,8 +74,10 @@ def test_power_bound_marks_riders_ineligible(client, event, user_model, event_ad
 @pytest.mark.django_db
 def test_zauth_requirement_marks_unconnected_riders_ineligible(client, event, user_model, event_admin) -> None:
     Squad.objects.create(event=event, name="Verified", require_zauth=True)
-    _rider(user_model, event, "connected", zwid_verification_method=user_model.VerificationMethod.ZAUTH)
-    _rider(user_model, event, "legacy", zwid_verification_method=user_model.VerificationMethod.LEGACY)
+    _rider(user_model, event, "connected", zwid_verified=True,
+           zwid_verification_method=user_model.VerificationMethod.ZAUTH)
+    _rider(user_model, event, "legacy", zwid_verified=True,
+           zwid_verification_method=user_model.VerificationMethod.LEGACY)
     client.force_login(event_admin)
 
     opts = _options(client.get(reverse("events:squad_manage", args=[event.pk])).content.decode())

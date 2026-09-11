@@ -75,6 +75,19 @@ def test_zauth_legacy_and_unverified_are_three_distinct_states(client, event, ev
 
 
 @pytest.mark.django_db
+def test_a_removed_verification_reads_as_unverified(client, event, event_admin, user_model) -> None:
+    """unverify_zwift leaves the method at "zauth"; the column must not show them as connected."""
+    gone = _signup(user_model, event, "gone", zwid_verified=False,
+                   zwid_verification_method=user_model.VerificationMethod.ZAUTH)
+    client.force_login(event_admin)
+
+    cell = _cell(client.get(reverse("events:event_detail", args=[event.pk])).content.decode(), gone)
+
+    assert "badge" not in cell
+    assert 'data-sort-value="3"' in cell
+
+
+@pytest.mark.django_db
 def test_the_column_is_offered_in_the_picker(client, event, event_admin, user_model) -> None:
     _signup(user_model, event, "rider")
     client.force_login(event_admin)

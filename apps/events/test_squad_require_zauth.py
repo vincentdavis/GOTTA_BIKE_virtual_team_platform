@@ -80,6 +80,25 @@ def test_assign_is_blocked_end_to_end(client, event, user_model, event_admin) ->
 
 
 @pytest.mark.django_db
+def test_assign_is_blocked_after_the_rider_removed_their_verification(client, event, user_model, event_admin) -> None:
+    """unverify_zwift leaves the method at "zauth"; the cleared flag must still close the gate."""
+    squad = Squad.objects.create(event=event, name="Synthesis", require_zauth=True)
+    rider = user_model.objects.create_user(
+        username="gone", email="g@example.test",
+        zwid_verified=False, zwid_verification_method=user_model.VerificationMethod.ZAUTH,
+    )
+    signup = EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED)
+    client.force_login(event_admin)
+
+    client.post(
+        reverse("events:squad_assign", args=[event.pk]),
+        data={"signup_id": signup.pk, "squad_id": squad.pk},
+    )
+
+    assert not SquadMember.objects.filter(squad=squad, user=rider).exists()
+
+
+@pytest.mark.django_db
 def test_assign_succeeds_without_the_requirement(client, event, user_model, event_admin) -> None:
     """Control for the test above: proves that POST really does assign when unblocked."""
     squad = Squad.objects.create(event=event, name="Open", require_zauth=False)

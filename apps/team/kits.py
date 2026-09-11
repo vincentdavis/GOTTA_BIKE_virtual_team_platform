@@ -143,8 +143,8 @@ def zauth_verified_q() -> Q:
       goes to the Zwift account zauth vouches for.
     - ``zwid_verified``. The method alone is not enough: a rider removing their own
       verification (``unverify_zwift``) clears ``zwid_verified`` but leaves the method at
-      "zauth". So ``User.is_zauth_verified``, which reads the method only, still says yes
-      for them. This page does not.
+      "zauth". ``User.is_zauth_verified`` applies the same two-field rule; this is its
+      queryset form.
 
     Never the live zauth connection, nor ``has_account``: the platform records the
     verification (``apps.zwift.verification`` keeps it in step with the service), and asking

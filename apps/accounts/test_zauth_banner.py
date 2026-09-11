@@ -34,12 +34,38 @@ def legacy_client(client, user_model):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    ("method", "expected"),
-    [("zauth", True), ("legacy", False), ("admin", False), ("", False)],
+    ("verified", "method", "expected"),
+    [
+        (True, "zauth", True),
+        (True, "legacy", False),
+        (True, "admin", False),
+        (True, "", False),
+        # What unverify_zwift leaves behind until the reconcile clears the method.
+        (False, "zauth", False),
+        (False, "", False),
+    ],
+    ids=["zauth", "legacy", "admin", "verified-no-method", "zauth-method-left-behind", "never-verified"],
 )
-def test_is_zauth_verified_reads_the_stored_method(user_model, method, expected):
-    user = _member(user_model, "u", zwid_verified=bool(method), zwid_verification_method=method)
+def test_is_zauth_verified_needs_the_flag_and_the_method(user_model, verified, method, expected):
+    user = _member(user_model, "u", zwid_verified=verified, zwid_verification_method=method)
     assert user.is_zauth_verified is expected
+
+
+@pytest.mark.django_db
+def test_removing_your_own_verification_ends_zauth_verified(client, user_model):
+    """unverify_zwift clears zwid_verified but leaves the method for the hourly reconcile.
+
+    The property must not wait for that reconcile: it aborts while the zauth service is
+    down, so the method can stay "zauth" indefinitely.
+    """
+    user = _member(user_model, "z", zwid_verified=True, zwid_verification_method="zauth", zwid=99)
+    client.force_login(user)
+
+    client.post(reverse("accounts:unverify_zwift"))
+    user.refresh_from_db()
+
+    assert user.zwid_verification_method == "zauth"  # the leftover this guards against
+    assert user.is_zauth_verified is False
 
 
 # --- visibility --------------------------------------------------------------
