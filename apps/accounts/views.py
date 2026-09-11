@@ -1619,7 +1619,7 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
         from django.utils.http import urlencode
 
         from apps.team.kit_csv import KIT_COLUMN_PREFIX, MAX_IMPORT_BYTES
-        from apps.team.kits import kit_member_rows, kit_status_counts, member_filters, team_members
+        from apps.team.kits import BADGE_CLASSES, kit_member_rows, kit_status_counts, member_filters, team_members
         from apps.team.models import KitStatus, TeamKit
 
         kits = list(TeamKit.objects.all())
@@ -1647,7 +1647,17 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "member_total": member_total,
                 "verified_only": filters.verified_only,
                 "race_verified_only": filters.race_verified_only,
-                "needs_kit_only": filters.needs_kit_only,
+                "status_filter": filters.statuses,
+                # One box per status, worded and coloured as the list's status column shows it.
+                "status_filter_options": [
+                    {
+                        "value": status.value,
+                        "label": status.label,
+                        "badge": BADGE_CLASSES.get(status.value, "badge-ghost"),
+                        "checked": status.value in filters.statuses,
+                    }
+                    for status in KitStatus
+                ],
                 "member_list_filtered": filters.active,
                 "member_filter_summary": filters.describe(current.name if current else ""),
                 "export_query": urlencode(filters.query()),

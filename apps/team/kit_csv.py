@@ -97,8 +97,8 @@ def export_filename(filters: MemberFilters, *, today: date) -> str:
         parts.append("zauth-verified")
     if filters.race_verified_only:
         parts.append("race-verified")
-    if filters.needs_kit_only:
-        parts.append("need")
+    if filters.statuses:
+        parts.extend(["status", *filters.statuses])
     return "-".join(parts) + ".csv"
 
 

@@ -223,6 +223,101 @@ def test_the_page_is_in_the_config_sidebar(client, app_admin):
     assert reverse("config_section_page", args=["team_kit"]) in body
 
 
+def _add_dialog(body: str) -> str:
+    """Cut the Add a kit dialog out of the page.
+
+    Args:
+        body: The rendered page.
+
+    Returns:
+        The dialog's HTML, from its opening tag to its close.
+
+    """
+    start = body.index('<dialog id="kit-add-dialog"')
+    return body[start : body.index("</dialog>", start)]
+
+
+@pytest.mark.django_db
+def test_adding_a_kit_waits_in_a_closed_dialog(client, app_admin, old_kit):
+    """The form is not on the page until asked for -- adding a kit is a once-a-season job."""
+    body = _page(client, app_admin).content.decode()
+    dialog = _add_dialog(body)
+
+    assert "<dialog" in dialog and " open" not in dialog.split(">", 1)[0]
+    assert f'action="{reverse("team_kit_add")}"' in dialog
+    # The only way to add a kit is through the dialog.
+    assert body.count(f'action="{reverse("team_kit_add")}"') == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("dialog_id", "submit_label"), [("kit-add-dialog", "Add kit"), ("kit-import-dialog", "Preview import")]
+)
+def test_cancelling_a_dialog_never_submits_it(client, app_admin, old_kit, dialog_id, submit_label):
+    """Cancel closes the dialog without posting it.
+
+    As a submit button it would add the kit anyway -- and, with "Make this the current kit"
+    pre-ticked, make it the kit riders are asked about.
+    """
+    import re
+
+    body = _page(client, app_admin).content.decode()
+    start = body.index(f'<dialog id="{dialog_id}"')
+    dialog = body[start : body.index("</dialog>", start)]
+    post_form = dialog[dialog.index('<form method="post"') : dialog.index("</form>")]
+
+    # A form nested in the POST form is dropped by the HTML parser, and its button with it.
+    assert "<form" not in post_form[1:]
+    buttons = re.findall(r"<button([^>]*)>\s*([^<]*?)\s*</button>", post_form)
+    assert [label for attrs, label in buttons if 'type="submit"' in attrs] == [submit_label]
+    assert all('type="button"' in attrs for attrs, label in buttons if label != submit_label)
+    assert any(label == "Cancel" for _, label in buttons)
+
+
+@pytest.mark.django_db
+def test_every_filter_box_applies_itself(client, app_admin, old_kit):
+    """The filter form has no button: a box that does not submit on change would tick and do nothing."""
+    import re
+
+    body = _page(client, app_admin).content.decode()
+    form = body[body.index('<form method="get"') : body.index("</form>", body.index('<form method="get"'))]
+    boxes = re.findall(r'<input type="checkbox" name="(\w+)"[^>]*>', form)
+
+    assert sorted(boxes) == sorted(["verified", "race_verified", *["status"] * len(KitStatus.values)])
+    for box in re.findall(r'<input type="checkbox" name="\w+"[^>]*>', form):
+        assert 'onchange="this.form.submit()"' in box, box
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("have_kits", [True, False], ids=["beside-all-kits", "in-the-empty-state"])
+def test_the_add_button_opens_the_dialog(client, app_admin, have_kits):
+    """Beside "All kits" normally; in the "No kits yet" note when there is nothing else to show."""
+    if have_kits:
+        TeamKit.objects.create(name="2026 Race Kit", slug="race-2026", is_current=True)
+    body = " ".join(_page(client, app_admin).content.decode().split())
+    button = "onclick=\"document.getElementById('kit-add-dialog').showModal()\">Add a kit</button>"
+
+    assert body.count(button) == 1
+    heading = body.index("All kits") if have_kits else body.index("No kits yet")
+    assert heading < body.index(button) < heading + 400
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("setup", "ticked"),
+    [("none", True), ("none-current", True), ("current", False)],
+    ids=["no-kits", "kits-but-none-current", "a-kit-is-current"],
+)
+def test_make_current_starts_ticked_only_without_a_current_kit(client, app_admin, setup, ticked):
+    """With no current kit the new one is almost always it; otherwise the choice stays deliberate."""
+    if setup != "none":
+        TeamKit.objects.create(name="2026 Race Kit", slug="race-2026", is_current=setup == "current")
+    dialog = " ".join(_add_dialog(_page(client, app_admin).content.decode()).split())
+
+    box = dialog[dialog.index('name="make_current"') : dialog.index(">", dialog.index('name="make_current"'))]
+    assert ("checked" in box) is ticked
+
+
 @pytest.mark.django_db
 def test_the_page_is_refused_to_a_plain_team_member(client, team_member):
     """Same gate as the rest of /site/config/."""
@@ -511,7 +606,7 @@ def test_all_three_filters_combine(client, app_admin, user_model, old_kit):
     )
     _member(user_model, "has-it", {old_kit.slug: KitStatus.HAVE}, zwid=4, is_race_ready=True, **ZAUTH_VERIFIED)
 
-    assert _usernames(_list(client, app_admin, verified="1", race_verified="1", need="1")) == ["all-three"]
+    assert _usernames(_list(client, app_admin, verified="1", race_verified="1", status="need")) == ["all-three"]
 
 
 @pytest.mark.django_db
@@ -532,13 +627,21 @@ def test_the_race_filter_does_not_change_the_counts(client, app_admin, user_mode
     [
         ({"verified_only": True}, "verified with zauth"),
         ({"race_verified_only": True}, "race verified"),
-        ({"needs_kit_only": True}, "those who need the 2026 Race Kit"),
-        ({"verified_only": True, "race_verified_only": True}, "verified with zauth and race verified"),
-        ({"verified_only": True, "needs_kit_only": True}, "verified with zauth and needing the 2026 Race Kit"),
-        ({"race_verified_only": True, "needs_kit_only": True}, "race verified and needing the 2026 Race Kit"),
+        ({"statuses": ("need",)}, "whose 2026 Race Kit status is Need kit"),
+        ({"statuses": ("need", "submitted")}, "whose 2026 Race Kit status is Need kit or Submitted to Zwift"),
         (
-            {"verified_only": True, "race_verified_only": True, "needs_kit_only": True},
-            "verified with zauth, race verified and needing the 2026 Race Kit",
+            {"statuses": ("unknown", "need", "have")},
+            "whose 2026 Race Kit status is Unknown, Need kit or I have the kit",
+        ),
+        ({"verified_only": True, "race_verified_only": True}, "verified with zauth and race verified"),
+        ({"verified_only": True, "statuses": ("need",)}, "verified with zauth, whose 2026 Race Kit status is Need kit"),
+        (
+            {"race_verified_only": True, "statuses": ("completed",)},
+            "race verified, whose 2026 Race Kit status is Completed by Zwift",
+        ),
+        (
+            {"verified_only": True, "race_verified_only": True, "statuses": ("need", "submitted")},
+            "verified with zauth and race verified, whose 2026 Race Kit status is Need kit or Submitted to Zwift",
         ),
         ({}, ""),
     ],
@@ -563,20 +666,39 @@ def test_the_race_filter_is_on_the_page_and_in_the_export_link(client, app_admin
     assert f'href="{reverse("team_kit_export")}?race_verified=1"' in body
 
 
+def _ticked(response) -> set[tuple[str, str]]:
+    """Read which filter boxes the page shows ticked.
+
+    Args:
+        response: The page response.
+
+    Returns:
+        ``(name, value)`` for every ticked box in the filter form.
+
+    """
+    import re
+
+    body = response.content.decode()
+    form = body[body.index('<form method="get"') :]
+    form = form[: form.index("</form>")]
+    return set(re.findall(r'name="(\w+)" value="(\w+)"[^>]*\bchecked\b', form))
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "on",
     [
         (),
-        ("verified",),
-        ("race_verified",),
-        ("need",),
-        ("verified", "race_verified"),
-        ("verified", "need"),
-        ("race_verified", "need"),
-        ("verified", "race_verified", "need"),
+        (("verified", "1"),),
+        (("race_verified", "1"),),
+        (("status", "need"),),
+        (("status", "need"), ("status", "submitted")),
+        (("verified", "1"), ("status", "unknown")),
+        (("race_verified", "1"), ("status", "completed"), ("status", "have")),
+        (("verified", "1"), ("race_verified", "1"), ("status", "need")),
+        tuple(("status", status) for status in KitStatus.values),
     ],
-    ids=lambda on: "+".join(on) or "none",
+    ids=lambda on: "+".join(f"{name}={value}" for name, value in on) or "none",
 )
 def test_each_box_is_ticked_exactly_when_its_filter_is_on(client, app_admin, old_kit, on):
     """Each box shows its own filter, and no other.
@@ -584,13 +706,11 @@ def test_each_box_is_ticked_exactly_when_its_filter_is_on(client, app_admin, old
     The form submits on change, and an unticked box sends nothing -- so a box shown unticked
     while its filter is on would quietly drop that filter the next time any box is clicked.
     """
-    import re
+    params: dict[str, list[str]] = {}
+    for name, value in on:
+        params.setdefault(name, []).append(value)
 
-    body = _list(client, app_admin, **dict.fromkeys(on, "1")).content.decode()
-    form = body[body.index('<form method="get"') :]
-    form = form[: form.index("</form>")]
-
-    assert set(re.findall(r'name="(\w+)" value="1"[^>]*\bchecked\b', form)) == set(on)
+    assert _ticked(_list(client, app_admin, **params)) == set(on)
 
 
 @pytest.mark.django_db
@@ -687,8 +807,8 @@ def test_the_list_is_sorted_by_discord_name(client, app_admin, user_model):
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "filters",
-    [{}, {"verified_only": True}, {"race_verified_only": True}, {"needs_kit_only": True}],
-    ids=["unfiltered", "zauth", "race", "need"],
+    [{}, {"verified_only": True}, {"race_verified_only": True}, {"statuses": ("need",)}],
+    ids=["unfiltered", "zauth", "race", "status"],
 )
 def test_the_list_costs_the_same_however_many_members(user_model, old_kit, filters):
     """A fixed handful of queries, never one per rider -- the lesson of the captain banner.
@@ -733,7 +853,76 @@ def test_the_list_costs_the_same_however_many_members(user_model, old_kit, filte
     assert len(many.captured_queries) == len(few.captured_queries)
 
 
-# --- the "needs the kit" filter ------------------------------------------------------------
+# --- the kit status filter -------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_several_statuses_combine_as_any_of(client, app_admin, user_model, old_kit):
+    """Tick several and a member shows if their current-kit status is any one of them."""
+    for status in KitStatus.values:
+        _member(user_model, status, {old_kit.slug: status})
+    _member(user_model, "never-answered")
+    _member(user_model, "junk", {old_kit.slug: "not-a-status"})  # a hand edit; reads as unknown
+
+    assert _usernames(_list(client, app_admin, status=["need", "submitted"])) == ["need", "submitted"]
+    assert _usernames(_list(client, app_admin, status=["completed", "have"])) == ["completed", "have"]
+    # Unknown is everyone without an answer: no entry, a junk one, or one set to unknown.
+    assert _usernames(_list(client, app_admin, status="unknown")) == ["junk", "never-answered", "unknown"]
+    # Every status ticked leaves everyone in.
+    assert len(_usernames(_list(client, app_admin, status=list(KitStatus.values)))) == len(KitStatus.values) + 2
+
+
+@pytest.mark.django_db
+def test_a_value_that_is_not_a_status_is_ignored(client, app_admin, user_model, old_kit):
+    """Rather than matching nobody and emptying the list."""
+    _member(user_model, "needs", {old_kit.slug: KitStatus.NEED})
+    _member(user_model, "has", {old_kit.slug: KitStatus.HAVE})
+
+    alone = _list(client, app_admin, status="bogus")
+    assert _usernames(alone) == ["has", "needs"]
+    assert alone.context["member_list_filtered"] is False
+    assert _usernames(_list(client, app_admin, status=["bogus", "need"])) == ["needs"]
+
+
+@pytest.mark.django_db
+def test_statuses_are_read_in_the_teams_order_once_each(rf, old_kit):
+    """So the export link, its filename and the summary come out the same for the same choice."""
+    from apps.team.kits import member_filters
+
+    params = rf.get("/", {"status": ["have", "need", "need", "unknown"]}).GET
+
+    assert member_filters(params, old_kit).statuses == ("unknown", "need", "have")
+
+
+@pytest.mark.django_db
+def test_old_need_links_still_mean_need_kit(client, app_admin, user_model, old_kit):
+    """?need=1 was this filter's only option; bookmarks and shared links keep working."""
+    _member(user_model, "needs", {old_kit.slug: KitStatus.NEED})
+    _member(user_model, "submitted", {old_kit.slug: KitStatus.SUBMITTED})
+
+    response = _list(client, app_admin, need="1")
+    assert _usernames(response) == ["needs"]
+    assert _ticked(response) == {("status", "need")}
+    assert f'href="{reverse("team_kit_export")}?status=need"' in response.content.decode()
+    # Alongside the new form, it adds Need kit to whatever else is ticked.
+    assert _usernames(_list(client, app_admin, need="1", status="submitted")) == ["needs", "submitted"]
+
+
+@pytest.mark.django_db
+def test_the_status_boxes_wear_the_status_columns_badges(client, app_admin, old_kit):
+    """What you tick looks like what the list shows, one box per status."""
+    import re
+
+    from apps.team.kits import BADGE_CLASSES
+
+    body = _list(client, app_admin).content.decode()
+    form = body[body.index('<form method="get"') : body.index("</form>", body.index('<form method="get"'))]
+    boxes = re.findall(
+        r'name="status" value="(\w+)"[^>]*>\s*<span class="badge ([\w-]+) badge-sm[^"]*">([^<]+)</span>', form
+    )
+
+    assert boxes == [(status.value, BADGE_CLASSES[status.value], status.label) for status in KitStatus]
+    assert f'id="kit-status-filter-label" class="label-text">{old_kit.name} status</p>' in form
 
 
 @pytest.mark.django_db
@@ -745,7 +934,7 @@ def test_the_need_filter_shows_only_members_who_need_the_current_kit(client, app
     _member(user_model, "has", {old_kit.slug: KitStatus.HAVE})
     _member(user_model, "silent")
 
-    assert _usernames(_list(client, app_admin, need="1")) == ["needs"]
+    assert _usernames(_list(client, app_admin, status="need")) == ["needs"]
 
 
 @pytest.mark.django_db
@@ -754,7 +943,7 @@ def test_need_means_the_current_kit_not_any_kit(client, app_admin, user_model, o
     _member(user_model, "wants-old", {new_kit.slug: KitStatus.NEED, old_kit.slug: KitStatus.HAVE})
     _member(user_model, "wants-current", {old_kit.slug: KitStatus.NEED})
 
-    assert _usernames(_list(client, app_admin, need="1")) == ["wants-current"]
+    assert _usernames(_list(client, app_admin, status="need")) == ["wants-current"]
 
 
 @pytest.mark.django_db
@@ -772,7 +961,7 @@ def test_the_two_filters_combine(client, app_admin, user_model, old_kit):
     )
     _member(user_model, "verified-has", {old_kit.slug: KitStatus.HAVE}, zwid=3, **ZAUTH_VERIFIED)
 
-    assert _usernames(_list(client, app_admin, need="1", verified="1")) == ["verified-needs"]
+    assert _usernames(_list(client, app_admin, status="need", verified="1")) == ["verified-needs"]
 
 
 @pytest.mark.django_db
@@ -782,7 +971,7 @@ def test_the_need_filter_does_not_change_the_counts(client, app_admin, user_mode
     _member(user_model, "b", {old_kit.slug: KitStatus.HAVE})
 
     unfiltered = _list(client, app_admin).context["current_kit_entry"]["counts"]
-    filtered = _list(client, app_admin, need="1").context["current_kit_entry"]["counts"]
+    filtered = _list(client, app_admin, status="need").context["current_kit_entry"]["counts"]
 
     assert unfiltered == filtered
 
@@ -793,14 +982,18 @@ def test_the_summary_names_what_is_being_shown(client, app_admin, user_model, ol
     _member(user_model, "a", {old_kit.slug: KitStatus.NEED}, zwid=1, **ZAUTH_VERIFIED)
     _member(user_model, "b", {old_kit.slug: KitStatus.HAVE}, zwid=2, **ZAUTH_VERIFIED)
 
-    need_only = " ".join(_list(client, app_admin, need="1").content.decode().split())
-    verified_only = " ".join(_list(client, app_admin, verified="1").content.decode().split())
-    both = " ".join(_list(client, app_admin, need="1", verified="1").content.decode().split())
+    def summary(**params) -> str:
+        return " ".join(_list(client, app_admin, **params).content.decode().split())
 
     # &mdash; because this is the raw HTML, where the dash is an entity.
-    assert "Showing 1 of 2 members &mdash; those who need the 2026 Race Kit." in need_only
-    assert "Showing 2 of 2 members &mdash; verified with zauth." in verified_only
-    assert "Showing 1 of 2 members &mdash; verified with zauth and needing the 2026 Race Kit." in both
+    assert "Showing 1 of 2 members &mdash; whose 2026 Race Kit status is Need kit." in summary(status="need")
+    assert "Showing 2 of 2 members &mdash; verified with zauth." in summary(verified="1")
+    assert "Showing 1 of 2 members &mdash; verified with zauth, whose 2026 Race Kit status is Need kit." in summary(
+        status="need", verified="1"
+    )
+    assert "Showing 2 of 2 members &mdash; whose 2026 Race Kit status is Need kit or I have the kit." in summary(
+        status=["need", "have"]
+    )
 
 
 @pytest.mark.django_db
@@ -810,19 +1003,20 @@ def test_without_a_current_kit_the_box_is_disabled(client, app_admin, user_model
 
     body = _list(client, app_admin).content.decode()
 
-    assert 'name="need"' not in body
+    assert 'name="status"' not in body
     assert "Make a kit current first" in body
 
 
 @pytest.mark.django_db
-def test_a_hand_typed_need_param_without_a_current_kit_is_ignored(client, app_admin, user_model, new_kit):
+@pytest.mark.parametrize("params", [{"status": "need"}, {"status": ["need", "have"]}, {"need": "1"}])
+def test_a_hand_typed_status_without_a_current_kit_is_ignored(client, app_admin, user_model, new_kit, params):
     """Rather than emptying the list for a reason nothing on the page explains."""
     _member(user_model, "rider")
 
-    response = _list(client, app_admin, need="1")
+    response = _list(client, app_admin, **params)
 
     assert "rider" in _usernames(response)
-    assert response.context["needs_kit_only"] is False
+    assert response.context["status_filter"] == ()
 
 
 # --- membership admins -------------------------------------------------------------------

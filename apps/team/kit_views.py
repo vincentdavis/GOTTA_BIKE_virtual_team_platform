@@ -287,7 +287,7 @@ def team_kit_export(request: HttpRequest) -> HttpResponse:
         kit_count=len(kits),
         verified_only=filters.verified_only,
         race_verified_only=filters.race_verified_only,
-        needs_kit_only=filters.needs_kit_only,
+        statuses=list(filters.statuses),
     )
     return response
 

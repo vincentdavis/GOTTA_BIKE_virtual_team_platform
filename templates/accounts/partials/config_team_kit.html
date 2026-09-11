@@ -38,53 +38,69 @@
 
 {% if not kit_entries %}
 <div class="alert mb-6">
-  <span>No kits yet. Add the first one below and make it current to start asking riders about it.</span>
+  <span>No kits yet. Add the first one and make it current to start asking riders about it.</span>
+  <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('kit-add-dialog').showModal()">Add a kit</button>
 </div>
 {% endif %}
 
-{# --- add a kit ------------------------------------------------------------------------ #}
-<div class="card bg-base-300 p-4 mb-6">
-  <h3 class="font-semibold mb-3">Add a kit</h3>
-  <form method="post" action="{% url 'team_kit_add' %}" class="space-y-3">
-    {% csrf_token %}
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+{# --- add a kit: a dialog, opened from "All kits" or the empty state above ------------- #}
+{% comment %}
+  Adding a kit is occasional -- once a season -- so the form waits in a dialog rather than
+  taking the top of the page. "Make this the current kit" starts ticked when no kit is current,
+  since the kit being added is then almost always the one to make current.
+{% endcomment %}
+<dialog id="kit-add-dialog" class="modal" aria-labelledby="kit-add-title">
+  <div class="modal-box max-w-2xl">
+    <h3 id="kit-add-title" class="font-semibold text-lg mb-3">Add a kit</h3>
+    <form method="post" action="{% url 'team_kit_add' %}" class="space-y-3">
+      {% csrf_token %}
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label class="form-control w-full">
+          <span class="label-text mb-1">Name <span class="text-error">*</span></span>
+          <input type="text" name="name" required maxlength="100" class="input input-bordered w-full"
+                 placeholder="2027 Race Kit">
+        </label>
+        <label class="form-control w-full">
+          <span class="label-text mb-1">Slug</span>
+          <input type="text" name="slug" maxlength="100" pattern="[-a-zA-Z0-9_]+" class="input input-bordered w-full"
+                 placeholder="made from the name if left blank">
+        </label>
+      </div>
       <label class="form-control w-full">
-        <span class="label-text mb-1">Name <span class="text-error">*</span></span>
-        <input type="text" name="name" required maxlength="100" class="input input-bordered w-full"
-               placeholder="2027 Race Kit">
+        <span class="label-text mb-1">Description</span>
+        <input type="text" name="description" class="input input-bordered w-full"
+               placeholder="Shown to riders under the kit's name (optional)">
       </label>
-      <label class="form-control w-full">
-        <span class="label-text mb-1">Slug</span>
-        <input type="text" name="slug" maxlength="100" pattern="[-a-zA-Z0-9_]+" class="input input-bordered w-full"
-               placeholder="made from the name if left blank">
-      </label>
-    </div>
-    <label class="form-control w-full">
-      <span class="label-text mb-1">Description</span>
-      <input type="text" name="description" class="input input-bordered w-full"
-             placeholder="Shown to riders under the kit's name (optional)">
-    </label>
-    <div class="flex flex-wrap items-end gap-4">
-      <label class="form-control w-32">
-        <span class="label-text mb-1">Sort order</span>
-        <input type="number" name="sort_order" value="0" min="0" class="input input-bordered w-full">
-      </label>
-      <label class="label cursor-pointer justify-start gap-2 pb-3">
-        <input type="checkbox" name="make_current" value="1" class="checkbox checkbox-primary">
-        <span class="label-text">Make this the current kit</span>
-      </label>
-    </div>
-    <p class="text-xs text-base-content/60">
-      The slug is permanent: it is the key every rider's status for this kit is stored under,
-      so it cannot be changed once the kit exists. Rename the kit freely afterwards.
-    </p>
-    <button type="submit" class="btn btn-primary btn-sm">Add kit</button>
-  </form>
-</div>
+      <div class="flex flex-wrap items-end gap-4">
+        <label class="form-control w-32">
+          <span class="label-text mb-1">Sort order</span>
+          <input type="number" name="sort_order" value="0" min="0" class="input input-bordered w-full">
+        </label>
+        <label class="label cursor-pointer justify-start gap-2 pb-3">
+          <input type="checkbox" name="make_current" value="1" class="checkbox checkbox-primary"
+                 {% if not current_kit_entry %}checked{% endif %}>
+          <span class="label-text">Make this the current kit</span>
+        </label>
+      </div>
+      <p class="text-xs text-base-content/60">
+        The slug is permanent: it is the key every rider's status for this kit is stored under,
+        so it cannot be changed once the kit exists. Rename the kit freely afterwards.
+      </p>
+      <div class="modal-action">
+        <button type="button" class="btn btn-sm btn-ghost" onclick="this.closest('dialog').close()">Cancel</button>
+        <button type="submit" class="btn btn-primary btn-sm">Add kit</button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>close</button></form>
+</dialog>
 
 {# --- every kit --------------------------------------------------------------------- #}
 {% if kit_entries %}
-<h3 class="font-semibold mb-3">All kits</h3>
+<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+  <h3 class="font-semibold">All kits</h3>
+  <button type="button" class="btn btn-primary btn-sm" onclick="document.getElementById('kit-add-dialog').showModal()">Add a kit</button>
+</div>
 <div class="space-y-3">
   {% for entry in kit_entries %}
   {% with kit=entry.kit %}
@@ -153,7 +169,7 @@
 
 {# --- team members ---------------------------------------------------------------------- #}
 <div class="divider mt-8"></div>
-<div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+<div class="space-y-2 mb-3">
   <div>
     <h3 class="font-semibold">Team members</h3>
     <p class="text-xs text-base-content/60">
@@ -166,8 +182,11 @@
     Every box lives in the one form so they submit together and combine; each submits the
     form on change, so there is no separate button to find. The summary sentence above comes
     from apps.team.kits.MemberFilters.describe.
+
+    The status boxes are the current kit's statuses. Tick any number: a member shows if their
+    status is any one of them, and ticking none means any status.
   {% endcomment %}
-  <form method="get" action="{% url 'config_section_page' 'team_kit' %}" class="flex flex-wrap gap-x-4">
+  <form method="get" action="{% url 'config_section_page' 'team_kit' %}" class="flex flex-wrap items-center gap-x-4">
     <label class="label cursor-pointer gap-2"
            title="Verified through zauth, the official Zwift OAuth. Legacy (Sauce mod) and admin verifications are not counted.">
       <input type="checkbox" name="verified" value="1" class="checkbox checkbox-sm checkbox-primary"
@@ -181,15 +200,22 @@
       <span class="label-text">Race verified only</span>
     </label>
     {% if current_kit_entry %}
-    <label class="label cursor-pointer gap-2">
-      <input type="checkbox" name="need" value="1" class="checkbox checkbox-sm checkbox-primary"
-             {% if needs_kit_only %}checked{% endif %} onchange="this.form.submit()">
-      <span class="label-text">Needs the kit only</span>
-    </label>
+    <div class="basis-full" role="group" aria-labelledby="kit-status-filter-label">
+      <p id="kit-status-filter-label" class="label-text">{{ current_kit_entry.kit.name }} status</p>
+      <div class="flex flex-wrap items-center gap-x-3">
+        {% for option in status_filter_options %}
+        <label class="label cursor-pointer gap-1.5">
+          <input type="checkbox" name="status" value="{{ option.value }}" class="checkbox checkbox-sm checkbox-primary"
+                 {% if option.checked %}checked{% endif %} onchange="this.form.submit()">
+          <span class="badge {{ option.badge }} badge-sm whitespace-nowrap">{{ option.label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
     {% else %}
-    <label class="label gap-2 cursor-not-allowed" title="Make a kit current first -- there is nothing to need until one is">
+    <label class="label gap-2 cursor-not-allowed basis-full" title="Make a kit current first -- there is no kit status to filter by until one is">
       <input type="checkbox" class="checkbox checkbox-sm" disabled>
-      <span class="label-text text-base-content/50">Needs the kit only</span>
+      <span class="label-text text-base-content/50">Kit status</span>
     </label>
     {% endif %}
   </form>
