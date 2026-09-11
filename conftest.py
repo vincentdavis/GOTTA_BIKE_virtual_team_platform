@@ -124,6 +124,41 @@ def superuser(db, user_model) -> UserType:
 
 
 @pytest.fixture
+def complete_profile(db):
+    """Return a function that fills in every field ``User.is_profile_complete`` requires.
+
+    Events require a complete profile to sign up by default
+    (``Event.require_complete_profile_signup``), so a test that signs a rider up -- and is
+    not about that requirement -- uses this to meet it. Fields already set are kept. The
+    Zwift verification is through zauth, so the profile stays complete even with the
+    ``ZAUTH_VERIFICATION_REQUIRED`` cutover on.
+
+    Returns:
+        ``fill(user) -> user``, saving the user.
+
+    """
+
+    def fill(user: UserType) -> UserType:
+        user.first_name = user.first_name or "Test"
+        user.last_name = user.last_name or "Rider"
+        user.gender = user.gender or "female"
+        user.timezone = user.timezone or "UTC"
+        user.country = user.country or "US"
+        user.birth_year = user.birth_year or 1990
+        user.trainer = user.trainer or "Smart trainer"
+        user.heartrate_monitor = user.heartrate_monitor or "Chest strap"
+        user.zwid = user.zwid or 1_000_000 + user.pk
+        user.zwid_verified = True
+        user.zwid_verification_method = "zauth"
+        user.save()
+        if not user.is_profile_complete:
+            pytest.fail("complete_profile left a required field empty -- has is_profile_complete gained one?")
+        return user
+
+    return fill
+
+
+@pytest.fixture
 def auth_client(client, team_member):
     """Test client logged in as a team_member."""
     client.force_login(team_member)

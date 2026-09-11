@@ -108,17 +108,17 @@ def test_parse_role_map_ignores_options_the_event_does_not_have(event) -> None:
 
 
 @pytest.fixture
-def rider(user_model):
-    """Build a rider with Discord linked.
+def rider(user_model, complete_profile):
+    """Build a rider with Discord linked and a complete profile, so they can sign up.
 
     Returns:
         The rider user.
 
     """
-    return user_model.objects.create_user(
+    return complete_profile(user_model.objects.create_user(
         username="rider", email="rider@example.test", discord_id="900",
         permission_overrides={"team_member": True},
-    )
+    ))
 
 
 @pytest.fixture

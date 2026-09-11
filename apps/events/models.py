@@ -135,6 +135,16 @@ class Event(models.Model):
         default=False,
         help_text="Require Race Verified status before a member can submit availability for this event",
     )
+    # Who may be put on this event at all -- by signing up, through a squad invite link, or by
+    # a captain adding them. See apps.events.signup_requirements.
+    require_complete_profile_signup = models.BooleanField(
+        default=True,
+        help_text="Only riders with a complete profile can sign up (or be added by a captain)",
+    )
+    require_race_verified_signup = models.BooleanField(
+        default=False,
+        help_text="Only Race Verified riders can sign up (or be added by a captain)",
+    )
 
     # Event-level defaults for the availability builder's toggles. Each is a pair:
     #

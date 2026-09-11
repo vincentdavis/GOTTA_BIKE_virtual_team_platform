@@ -2354,7 +2354,8 @@ def test_parse_custom_answers_validates_and_merges() -> None:
 
 
 @pytest.mark.django_db
-def test_event_signup_stores_and_edits_custom_answers(client, team_member) -> None:
+def test_event_signup_stores_and_edits_custom_answers(client, team_member, complete_profile) -> None:
+    complete_profile(team_member)  # events require a complete profile to sign up by default
     from django.urls import reverse
 
     from apps.events.models import EventSignup, SignupQuestion
@@ -2376,16 +2377,20 @@ def test_event_signup_stores_and_edits_custom_answers(client, team_member) -> No
 
 
 @pytest.mark.django_db
-def test_event_signup_required_question_blocks_signup(client, team_member) -> None:
+def test_event_signup_required_question_blocks_signup(client, team_member, complete_profile) -> None:
     from django.urls import reverse
 
     from apps.events.models import EventSignup, SignupQuestion
 
+    # Complete, so the refusal comes from the unanswered question -- an incomplete profile is
+    # refused earlier and would pass this test without ever reaching the question check.
+    complete_profile(team_member)
     event = _q_event()
     SignupQuestion.objects.create(event=event, label="Confirm", question_type="text", required=True, order=0)
     client.force_login(team_member)
-    assert client.post(reverse("events:event_signup", args=[event.pk]), {}).status_code == 302
+    response = client.post(reverse("events:event_signup", args=[event.pk]), {}, follow=True)
     assert not EventSignup.objects.filter(event=event, user=team_member).exists()
+    assert [str(m) for m in response.context["messages"]] == ['Please answer "Confirm".']
 
 
 @pytest.mark.django_db
@@ -2417,7 +2422,8 @@ def test_render_markdown_inline_filter() -> None:
 
 
 @pytest.mark.django_db
-def test_signup_question_label_renders_markdown(client, team_member) -> None:
+def test_signup_question_label_renders_markdown(client, team_member, complete_profile) -> None:
+    complete_profile(team_member)  # events require a complete profile to sign up by default
     from django.urls import reverse
 
     from apps.events.models import SignupQuestion
@@ -2454,8 +2460,9 @@ def test_deleted_question_answer_orphaned_not_shown(client, event_admin, team_me
 
 
 @pytest.mark.django_db
-def test_blank_answer_not_persisted_and_type_not_frozen(client, event_admin, team_member) -> None:
+def test_blank_answer_not_persisted_and_type_not_frozen(client, event_admin, team_member, complete_profile) -> None:
     """Signing up without answering an optional question doesn't freeze its type."""
+    complete_profile(team_member)  # events require a complete profile to sign up by default
     from django.urls import reverse
 
     from apps.events.models import EventSignup, SignupQuestion
@@ -2479,8 +2486,9 @@ def test_blank_answer_not_persisted_and_type_not_frozen(client, event_admin, tea
 
 
 @pytest.mark.django_db
-def test_removed_option_preserved_and_does_not_block_edit(client, team_member) -> None:
+def test_removed_option_preserved_and_does_not_block_edit(client, team_member, complete_profile) -> None:
     """A required answer whose option was later removed is grandfathered, not blocking edits."""
+    complete_profile(team_member)  # events require a complete profile to sign up by default
     from django.urls import reverse
 
     from apps.events.models import EventSignup, SignupQuestion
@@ -2880,7 +2888,8 @@ def test_assign_riders_filters_hidden_when_no_values(client, superuser, user_mod
 
 
 @pytest.mark.django_db
-def test_event_signup_assigns_event_discord_role(client, team_member) -> None:
+def test_event_signup_assigns_event_discord_role(client, team_member, complete_profile) -> None:
+    complete_profile(team_member)  # events require a complete profile to sign up by default
     from django.urls import reverse
 
     team_member.discord_id = "555000111"
@@ -2905,7 +2914,8 @@ def test_event_signup_assigns_event_discord_role(client, team_member) -> None:
 
 
 @pytest.mark.django_db
-def test_event_signup_without_event_role_skips_role(client, team_member) -> None:
+def test_event_signup_without_event_role_skips_role(client, team_member, complete_profile) -> None:
+    complete_profile(team_member)  # events require a complete profile to sign up by default
     from django.urls import reverse
 
     team_member.discord_id = "555000222"

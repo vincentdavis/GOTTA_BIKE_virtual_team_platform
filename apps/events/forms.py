@@ -201,6 +201,8 @@ class EventForm(forms.ModelForm):
             "timezone_options",
             "timezone_required",
             "squad_gender_required",
+            "require_complete_profile_signup",
+            "require_race_verified_signup",
             "require_race_verified_availability",
             "grid_default_max_races_question",
             "grid_enforce_max_races_question",
@@ -280,6 +282,12 @@ class EventForm(forms.ModelForm):
                 attrs={"class": "checkbox checkbox-primary checkbox-sm"},
             ),
             "require_race_verified_availability": forms.CheckboxInput(
+                attrs={"class": "checkbox"},
+            ),
+            "require_complete_profile_signup": forms.CheckboxInput(
+                attrs={"class": "checkbox"},
+            ),
+            "require_race_verified_signup": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
         }

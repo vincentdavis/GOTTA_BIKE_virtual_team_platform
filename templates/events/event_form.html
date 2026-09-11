@@ -274,6 +274,32 @@
           </label>
         </div>
 
+        <!-- Who may join the event: checked on signup, on squad invite links, and when a captain adds members -->
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-2">
+            {{ form.require_complete_profile_signup }}
+            <span class="label-text">Require a complete profile to sign up</span>
+          </label>
+          <label class="label">
+            <span class="label-text-alt">
+              When on, a rider missing any required profile field &mdash; including Zwift verification &mdash;
+              is told what to finish before they can sign up. Captains can&rsquo;t add them either.
+            </span>
+          </label>
+        </div>
+
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-2">
+            {{ form.require_race_verified_signup }}
+            <span class="label-text">Require Race Verified status to sign up</span>
+          </label>
+          <label class="label">
+            <span class="label-text-alt">
+              When on, only Race Verified riders can sign up, join through a squad invite, or be added by a captain.
+            </span>
+          </label>
+        </div>
+
         <!-- Require Race Verified for Availability -->
         <div class="form-control">
           <label class="label cursor-pointer justify-start gap-2">

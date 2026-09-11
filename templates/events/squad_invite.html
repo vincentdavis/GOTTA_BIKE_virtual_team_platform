@@ -27,10 +27,26 @@
         </div>
       </div>
       {% endif %}
+      {% if signup_blockers %}
+      {# Joining signs you up for the event, so its signup requirements apply here too. #}
+      <div class="alert alert-warning mt-4" role="alert">
+        <div>
+          <p class="font-semibold">Before you can join</p>
+          <p class="text-sm">{{ event.title }} requires:</p>
+          <ul class="list-disc list-inside text-sm mt-1 space-y-1">
+            {% for blocker in signup_blockers %}
+            <li>{{ blocker.needs|capfirst }} &mdash; <a href="{{ blocker.fix_url }}" class="link font-semibold">{{ blocker.fix_label }}</a></li>
+            {% endfor %}
+          </ul>
+          <p class="text-sm mt-2">Come back to this link once that&rsquo;s done.</p>
+        </div>
+      </div>
+      {% else %}
       <form method="post" action="{% url 'events:squad_invite' token %}" class="mt-4">
         {% csrf_token %}
         <button type="submit" class="btn btn-primary btn-wide">Join Squad</button>
       </form>
+      {% endif %}
       {% endif %}
 
       {% if members %}

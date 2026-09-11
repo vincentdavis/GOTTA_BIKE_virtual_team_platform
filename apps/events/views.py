@@ -64,6 +64,7 @@ from apps.events.signup_questions import (
     parse_custom_answers,
     resolve_signup_answers,
 )
+from apps.events.signup_requirements import blocker_details, missing_phrase, requirement_phrase, signup_blockers
 from apps.events.squads import squad_member_users as squad_roster_users
 from apps.events.timezone_roles import mapped_roles, parse_role_map, role_columns
 from apps.events.tz_utils import (
@@ -1263,6 +1264,13 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         female=Count("pk", filter=registered & Q(user__gender=User.Gender.FEMALE)),
     )
     user_signup = event.signups.filter(user=request.user).first()
+    # What would stop this rider signing up, with where to fix each -- shown in the signup dialog
+    # instead of the form. Only asked while signups are open and they are not already on the event.
+    signup_blocker_details = (
+        blocker_details(signup_blockers(event, request.user))
+        if event.signups_open and not (user_signup and user_signup.status == EventSignup.Status.REGISTERED)
+        else []
+    )
     # Event admins and anyone who passes the eligibility gate (head captain, squad
     # captains/vice-captains) get the full signup table so they can filter by answers.
     # With show_signups on, any other team member can expand a names-only list.
@@ -1363,6 +1371,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "signup_male_count": signup_totals["male"],
             "signup_female_count": signup_totals["female"],
             "user_signup": user_signup,
+            "signup_blockers": signup_blocker_details,
             "signup_questions": signup_questions,
             "signup_question_fields": signup_question_fields,
             "answer_facets": answer_facets,
@@ -2835,6 +2844,18 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
 
     if event.signups.filter(user=request.user).exists():
         messages.warning(request, "You are already signed up for this event.")
+        return redirect("events:event_detail", pk=pk)
+
+    blockers = signup_blockers(event, request.user)
+    if blockers:
+        logfire.info(
+            "Event signup refused by signup requirements", event_id=pk, user_id=request.user.id, blockers=blockers
+        )
+        messages.error(
+            request,
+            f"You can't sign up yet: this event requires {requirement_phrase(blockers)}. "
+            "Press Sign up to see how to fix it.",
+        )
         return redirect("events:event_detail", pk=pk)
 
     signup_timezone = []
@@ -6745,6 +6766,14 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
         squad=squad, user=request.user, status=SquadMember.Status.MEMBER
     ).exists()
 
+    # Joining signs the rider up for the event (or re-activates a withdrawn signup), so the
+    # event's signup requirements apply -- the invite link must not be the way round them. A
+    # rider already signed up has joined the event already and is not re-checked.
+    already_signed_up = EventSignup.objects.filter(
+        event=event, user=request.user, status=EventSignup.Status.REGISTERED
+    ).exists()
+    blockers = [] if already_signed_up else signup_blockers(event, request.user)
+
     # Build list of roles the user will receive
     from apps.team.models import DiscordRole
 
@@ -6787,6 +6816,7 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
                 "already_member": already_member,
                 "token": token,
                 "pending_roles": pending_roles,
+                "signup_blockers": blocker_details(blockers),
             },
         )
 
@@ -6794,6 +6824,17 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
     if already_member:
         messages.info(request, f"You're already a member of squad {squad.name}.")
         return redirect("events:my_events")
+
+    if blockers:
+        logfire.info(
+            "Squad invite join blocked by event signup requirements",
+            squad_id=squad.pk,
+            event_id=event.pk,
+            user_id=request.user.id,
+            blockers=blockers,
+        )
+        messages.error(request, f"You can't join {squad.name} yet: this event requires {requirement_phrase(blockers)}.")
+        return redirect("events:squad_invite", token=token)
 
     # Enforce the squad's gender and category requirements before joining
     rider_zr = ""
@@ -8341,10 +8382,13 @@ def add_members_search_view(request: HttpRequest, event_pk: int) -> JsonResponse
     results = []
     for u in users:
         display = u.get_full_name() or u.discord_username or u.discord_nickname or str(u.pk)
+        blockers = signup_blockers(event, u)
         results.append({
             "id": u.pk,
             "display_name": display,
             "discord_username": u.discord_username or "",
+            # Shown against the name and the row disabled; add_members_view refuses them anyway.
+            "blocked": missing_phrase(blockers) if blockers else "",
         })
     return JsonResponse({"results": results})
 
@@ -8389,7 +8433,14 @@ def add_members_view(request: HttpRequest, event_pk: int) -> HttpResponse:
 
     from apps.events.tasks import enqueue_signup_notification
 
+    # A captain adding a rider is held to the same requirements as the rider signing up.
+    skipped: list[str] = []
     for user in users_to_add:
+        blockers = signup_blockers(event, user)
+        if blockers:
+            name = user.get_full_name() or user.discord_username or user.discord_nickname or str(user.pk)
+            skipped.append(f"{name} ({missing_phrase(blockers)})")
+            continue
         signup = EventSignup.objects.create(event=event, user=user)
         added_count += 1
         enqueue_signup_notification(signup, request=request)
@@ -8408,9 +8459,13 @@ def add_members_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         admin_user_id=request.user.id,
         added_count=added_count,
         role_assigned_count=role_count,
+        skipped_count=len(skipped),
     )
-    msg = f"Added {added_count} member{'s' if added_count != 1 else ''} to the event."
-    if event.event_role and role_count:
-        msg += f" Assigned event role to {role_count}."
-    messages.success(request, msg)
+    if added_count or not skipped:
+        msg = f"Added {added_count} member{'s' if added_count != 1 else ''} to the event."
+        if event.event_role and role_count:
+            msg += f" Assigned event role to {role_count}."
+        messages.success(request, msg)
+    if skipped:
+        messages.warning(request, f"Not added -- the event's signup requirements aren't met: {', '.join(skipped)}.")
     return redirect("events:event_detail", pk=event_pk)

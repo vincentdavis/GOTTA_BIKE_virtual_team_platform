@@ -100,6 +100,7 @@ Read these helpers before touching event/squad views — most non-trivial behavi
 - Role Setup (`/events/<id>/role-setup/`): editable by `assign_roles` or event head captain. Discord Roles (`/events/<id>/discord-roles/`): `assign_roles`, head captain, **or a coordinator role**
 - Discord thread actions ("Save & Create Thread" / "Save & Post Update") require `status=confirmed`, riders selected, and `squad.discord_channel_id`. Both go through `apps/accounts/discord_service.py`; the resulting URL lands on `slot.thread_link`. Captain, vice-captain, and substitute are added to `allowed_user_ids` so they get pinged even when not racing
 - `signup_notification_channel_id` on `Event`: `0` disables per-rider signup notifications
+- **Signup requirements** (`apps/events/signup_requirements.py`): `Event.require_complete_profile_signup` (default **on** — `User.is_profile_complete`, which includes Zwift verification) and `Event.require_race_verified_signup` (default off — the cached `is_race_ready`). `signup_blockers(event, user)` is the one rule, and **every way onto an event asks it**: `event_signup_view`; `squad_invite_view` (joining signs the rider up, and would otherwise also re-activate a withdrawn signup); and `add_members_view`, because a captain adding a rider must not bypass it — ineligible riders are skipped and named, and the member search marks them "can't add". A rider already REGISTERED is neither removed nor re-checked (edit still works; an invite only adds a squad place). No superuser exception. The Django admin is deliberately unrestricted. Tests that sign a rider up and are not about these use the `complete_profile` fixture
 - **Published sheets are editable; their *shape* is not, once anyone has answered.** `SHAPE_FIELDS` in `apps/events/views.py` (dates, times, `slot_duration`, `grid_timezone`, `single_slot`, `blocked_cells`) is refused by `_changed_shape_fields` when `grid.responses.exists()`. A response stores UTC `"date|time"` strings with **no FK to a cell**, and the rider's next submit is a wholesale replace — so a shape change orphans answers and the next submit deletes them. Closed sheets are not editable at all. The builder disables the controls, but it posts JSON, so the server check is the real one.
 - All grid/response/slot times stored in UTC, converted at render. `EventSignup.signup_timezone` and `signup_squad_gender` are only saved when the matching `*_required` flag is on
 
@@ -401,6 +402,7 @@ All user fixtures depend on `db` and grant permissions via `User.permission_over
 - `app_admin` — `app_admin` + `team_member`
 - `event_admin` — `event_admin` + `team_member`
 - `superuser` — `is_superuser=True` (bypasses all checks)
+- `complete_profile` — a function, `complete_profile(user)`, filling every field `User.is_profile_complete` needs (zauth-verified, so it holds under the cutover flag). Events require a complete profile to sign up by default, so signup tests use it
 - `auth_client` — `pytest-django`'s `client` force-logged-in as `team_member`
 - `admin_authed_client` — `client` force-logged-in as `app_admin`
 
