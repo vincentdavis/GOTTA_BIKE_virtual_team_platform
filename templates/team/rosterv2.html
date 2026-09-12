@@ -19,7 +19,7 @@
 
         <div class="alert alert-warning mt-4">
           <span>
-            <strong>Under construction.</strong> Race counts, videos and event chips are not built yet.
+            <strong>Under construction.</strong> Videos and event chips are not built yet.
             The roster everyone uses is still at <a class="link" href="{% url 'team:roster' %}">/team/roster/</a>.
           </span>
         </div>
@@ -141,6 +141,16 @@
                   {% for value in ftp_steps %}
                     <option value="{{ value }}" {% if filters.ftp == value %}selected{% endif %}>{{ value }} W and up</option>
                   {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-racing"><span class="label-text">Racing</span></label>
+                <select class="select select-bordered w-full" id="f-racing" name="racing">
+                  <option value="">Any</option>
+                  <option value="30" {% if filters.racing == "30" %}selected{% endif %}>Raced in the last 30 days</option>
+                  <option value="90" {% if filters.racing == "90" %}selected{% endif %}>Raced in the last 90 days</option>
+                  <option value="quiet" {% if filters.racing == "quiet" %}selected{% endif %}>No race in 60 days</option>
                 </select>
               </div>
 

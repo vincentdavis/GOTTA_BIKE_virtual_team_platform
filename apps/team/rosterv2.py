@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING
 
 import logfire
 from constance import config
-from django.db.models import Max
+from django.db.models import Count, Max, Q
 from django.utils import timezone
 
 from apps.accounts.models import GuildMember, User
@@ -252,6 +252,21 @@ class RiderCard:
     climbed_m: float | None = None
     club_name: str = ""
     last_race_at: datetime | None = None
+    races_30d: int = 0
+    time_trials_30d: int = 0
+    rides_30d: int = 0
+    podiums_30d: int = 0
+    wins_30d: int = 0
+
+    @property
+    def competitive_30d(self) -> int:
+        """Races and time trials in the window, which is what the roster ranks on.
+
+        Returns:
+            Competitive starts; group rides are counted separately and never ranked.
+
+        """
+        return self.races_30d + self.time_trials_30d
 
     def __str__(self) -> str:
         """Return the rider's name, so rendering a card never falls back to its repr.
@@ -422,17 +437,19 @@ def _wkg(payload: dict, seconds: str) -> float | None:
     return round(value, 1) if value is not None else None
 
 
-def _card(row: dict, payload: dict) -> RiderCard:
-    """Build one card from an allow-listed row and its (discarded) payload.
+def _card(row: dict, payload: dict, record: RaceRecord | None = None) -> RiderCard:
+    """Build one card from an allow-listed row, its (discarded) payload and its results.
 
     Args:
         row: A ``.values(*CARD_COLUMNS)`` row, with ``payload`` already removed.
         payload: The ProfileFull document, read here and not retained.
+        record: The rider's recent racing, or None when we hold no results for them.
 
     Returns:
         The rider's card.
 
     """
+    record = record or RaceRecord()
     totals = _block(payload, "totals")
     metres = _number(totals.get("distance_km"))  # MISNAMED upstream: the value is metres.
 
@@ -458,7 +475,15 @@ def _card(row: dict, payload: dict) -> RiderCard:
         distance_km=metres / 1000 if metres is not None else None,
         climbed_m=_number(totals.get("climbed_m")),
         club_name=row["club_name"] or "",
-        last_race_at=row["last_race_at"],
+        # Our own results first: they are refreshed on a schedule, while the cached profile's
+        # date only moves when somebody presses Update. The cached one is still the fallback,
+        # because results exist for well under half the roster and a date we hold beats none.
+        last_race_at=record.last_result_at or row["last_race_at"],
+        races_30d=record.races,
+        time_trials_30d=record.time_trials,
+        rides_30d=record.rides,
+        podiums_30d=record.podiums,
+        wins_30d=record.wins,
     )
 
 
@@ -612,6 +637,8 @@ def search(rows: tuple[RosterRow, ...], query: str) -> list[RosterRow]:
 # LAST regardless of direction -- a descending sort that leads with every rider we know
 # nothing about is the opposite of what the reader asked for.
 SORTS = {
+    "races": ("Team races (30 days)", lambda row: row.card.competitive_30d),
+    "podiums": ("Podiums (30 days)", lambda row: row.card.podiums_30d),
     "name": ("Name", lambda row: row.card.name.casefold()),
     "velo": ("vELO", lambda row: row.card.velo),
     "ftp": ("FTP", lambda row: row.card.zftp),
@@ -620,8 +647,9 @@ SORTS = {
     "newest": ("Newest member", lambda row: row.account.member_since if row.account else None),
     "longest": ("Longest serving", lambda row: row.account.member_since if row.account else None),
 }
-DEFAULT_SORT = "name"
-_DESCENDING_BY_DEFAULT = frozenset({"velo", "ftp", "wkg", "last_raced", "newest"})
+# The page opens on the riders who are racing, which is the point of it.
+DEFAULT_SORT = "races"
+_DESCENDING_BY_DEFAULT = frozenset({"races", "podiums", "velo", "ftp", "wkg", "last_raced", "newest"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -642,6 +670,8 @@ class RosterFilters:
         wkg: Minimum 20-minute W/kg.
         ftp: Minimum zFTP in watts.
         joined: Days since joining the Discord, 30 or 90.
+        racing: "30" or "90" for a rider who raced that recently, "quiet" for one who has
+            not raced in 60 days -- including one who has never raced at all.
 
     """
 
@@ -655,6 +685,7 @@ class RosterFilters:
     wkg: float | None = None
     ftp: int | None = None
     joined: int | None = None
+    racing: str = ""
 
     @property
     def active(self) -> bool:
@@ -666,7 +697,7 @@ class RosterFilters:
         """
         return any(value not in ("", None) for value in (
             self.category, self.zr, self.gender, self.phenotype,
-            self.verified, self.age, self.account, self.wkg, self.ftp, self.joined,
+            self.verified, self.age, self.account, self.wkg, self.ftp, self.joined, self.racing,
         ))
 
 
@@ -733,6 +764,7 @@ def parse_filters(params, rows: tuple[RosterRow, ...]) -> RosterFilters:
         wkg=_number_choice(params, "wkg", WKG_STEPS),
         ftp=_number_choice(params, "ftp", FTP_STEPS),
         joined=_number_choice(params, "joined", JOINED_WINDOWS),
+        racing=_one_of(params, "racing", ("30", "90", "quiet")),
     )
 
 
@@ -769,7 +801,8 @@ def apply_filters(rows: list[RosterRow], filters: RosterFilters) -> list[RosterR
         The matching rows, order preserved.
 
     """
-    cutoff = timezone.now() - timedelta(days=filters.joined) if filters.joined else None
+    now = timezone.now()
+    cutoff = now - timedelta(days=filters.joined) if filters.joined else None
 
     def keep(row: RosterRow) -> bool:
         card, account = row.card, row.account
@@ -797,9 +830,38 @@ def apply_filters(rows: list[RosterRow], filters: RosterFilters) -> list[RosterR
             return False
         if filters.ftp is not None and (card.zftp is None or card.zftp < filters.ftp):
             return False
+        if filters.racing and not _raced(card, filters.racing, now):
+            return False
         return not (cutoff and not (account and account.member_since and account.member_since >= cutoff))
 
     return [row for row in rows if keep(row)]
+
+
+# "Quiet" is deliberately longer than the windows above it: a rider is only worth flagging
+# as inactive once they have been missing for longer than a normal break between blocks.
+QUIET_DAYS = 60
+
+
+def _raced(card: RiderCard, window: str, now: datetime) -> bool:
+    """Whether a card satisfies a race-recency filter.
+
+    A rider we hold no race date for counts as quiet, not as excluded: "no race on record"
+    and "has not raced lately" are the same answer to the reader's question, and treating
+    absence as a third state would hide exactly the riders the filter is looking for.
+
+    Args:
+        card: The rider's card.
+        window: "30", "90" or "quiet".
+        now: The moment to measure from.
+
+    Returns:
+        Whether the rider matches.
+
+    """
+    last = card.last_race_at
+    if window == "quiet":
+        return last is None or last < now - timedelta(days=QUIET_DAYS)
+    return last is not None and last >= now - timedelta(days=int(window))
 
 
 def sort_rows(rows: list[RosterRow], sort: str, direction: str) -> list[RosterRow]:
@@ -824,6 +886,126 @@ def sort_rows(rows: list[RosterRow], sort: str, direction: str) -> list[RosterRo
     # Stable, and the rows arrive in name order, so equal values stay alphabetical.
     present.sort(key=key, reverse=descending)
     return present + missing
+
+
+# How far back the card's counts look. Thirty days is the window Vincent asked for, and it
+# is short enough that "races recently" means something on a page people check weekly.
+RACE_WINDOW_DAYS = 30
+
+# ZwiftPower's f_t is a SPACE-SEPARATED SET OF FLAGS, not a type: "TYPE_RACE TYPE_WOMENS",
+# "TYPE_TEAM_TIME_TRIAL TYPE_RACE". Three consequences, each of which is a live bug
+# somewhere in this app if you get it wrong:
+#
+# * Match by CONTAINS, never by equality. `f_t="TYPE_RACE"` drops all 576 women's races,
+#   which is what apps/zwiftpower/views.py does today.
+# * "TIME_TRIAL", not "TYPE_TIME_TRIAL", because the flag for a team TT is
+#   TYPE_TEAM_TIME_TRIAL and the longer needle does not appear inside it.
+# * The flags overlap, so the order below is a decision. A team time trial is flagged
+#   TYPE_TEAM_TIME_TRIAL *and* TYPE_RACE; counting it under both would inflate a rider's
+#   race count with their own time trials. Time trial wins, race beats ride, and workouts
+#   and runs are neither.
+_TT_FLAG = "TIME_TRIAL"
+_RACE_FLAG = "TYPE_RACE"
+_RIDE_FLAG = "TYPE_RIDE"
+
+# A podium means a podium in the rider's own category, which is what riders claim and what
+# ZwiftPower shows them. Overall position across every category is close to meaningless in a
+# mixed field, and would flatter riders in the fastest one.
+_PODIUM = 3
+
+
+@dataclass(frozen=True, slots=True)
+class RaceRecord:
+    """One rider's racing in the recent window, from our own results table.
+
+    Attributes:
+        races: Races, excluding time trials and group rides.
+        time_trials: Individual and team time trials.
+        rides: Group rides. Counted and shown, never ranked -- Vincent's rule is that a
+            group ride is not racing.
+        podiums: Top-three finishes in the rider's own category, races and TTs only.
+        wins: Category wins, a subset of podiums.
+        last_result_at: The rider's most recent result of any kind, ALL TIME rather than
+            within the window -- otherwise a rider who has not raced for two months would
+            read as never having raced at all.
+
+    """
+
+    races: int = 0
+    time_trials: int = 0
+    rides: int = 0
+    podiums: int = 0
+    wins: int = 0
+    last_result_at: datetime | None = None
+
+    @property
+    def competitive(self) -> int:
+        """Races and time trials together, which is what the roster ranks on.
+
+        Returns:
+            The number of competitive starts in the window.
+
+        """
+        return self.races + self.time_trials
+
+
+def race_records(roster_zwids: list[int], *, now: datetime | None = None) -> dict[int, RaceRecord]:
+    """Count each rider's recent racing, in two queries flat.
+
+    Read from ``ZPRiderResults`` rather than from the cached profile's ``last_race_at``,
+    which zauth only refreshes when somebody asks it to and is stale for most riders.
+
+    Every row in that table is already the team's own: the sync fetches this team's results,
+    so "team-tagged" needs no filter here. If that ever stops being true, this is the
+    function that quietly starts counting other clubs' racing.
+
+    Args:
+        roster_zwids: The riders on the roster.
+        now: The moment to measure the window from; defaults to the present.
+
+    Returns:
+        One record per rider who has any result at all.
+
+    """
+    from apps.zwiftpower.models import ZPRiderResults
+
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=RACE_WINDOW_DAYS)
+
+    is_tt = Q(f_t__contains=_TT_FLAG)
+    is_race = Q(f_t__contains=_RACE_FLAG) & ~is_tt
+    is_ride = Q(f_t__contains=_RIDE_FLAG) & ~is_tt & ~Q(f_t__contains=_RACE_FLAG)
+    podium = Q(position_in_cat__lte=_PODIUM) & Q(position_in_cat__gt=0) & (is_race | is_tt)
+
+    # .order_by() clears Meta.ordering ("-event__event_date", "pos"), which would otherwise
+    # drag those columns into the GROUP BY.
+    windowed = (
+        ZPRiderResults.objects.filter(zwid__in=roster_zwids, event__event_date__gte=cutoff, event__event_date__lte=now)
+        .order_by()
+        .values("zwid")
+        .annotate(
+            races=Count("pk", filter=is_race),
+            time_trials=Count("pk", filter=is_tt),
+            rides=Count("pk", filter=is_ride),
+            podiums=Count("pk", filter=podium),
+            wins=Count("pk", filter=Q(position_in_cat=1) & (is_race | is_tt)),
+        )
+    )
+    # Last result is deliberately NOT windowed: "last raced 4 months ago" is the useful
+    # answer for a rider who has been quiet, and an empty window would say nothing at all.
+    latest = (
+        ZPRiderResults.objects.filter(zwid__in=roster_zwids)
+        .order_by()
+        .values("zwid")
+        .annotate(last=Max("event__event_date"))
+    )
+
+    records: dict[int, dict] = {}
+    for row in windowed:
+        records[row["zwid"]] = {k: v for k, v in row.items() if k != "zwid"}
+    for row in latest:
+        records.setdefault(row["zwid"], {})["last_result_at"] = row["last"]
+    return {zwid: RaceRecord(**values) for zwid, values in records.items()}
 
 
 def _guild_rows() -> dict[int, dict]:
@@ -892,9 +1074,9 @@ def build_roster_index() -> RosterIndex:
     ``zwid_verified``. Fixing that is out of this module's hands; the duplicate rule caps the
     damage at losing an account half rather than taking one over.
 
-    Costs 10 queries, flat in the number of riders: three for the union, one Constance read
-    for the cutover policy, accounts, guild memberships, the two per-source name tables, the
-    cache, and the freshness stamp.
+    Costs 12 queries, flat in the number of riders: three for the union, one Constance read
+    for the cutover policy, accounts, guild memberships, the two per-source name tables, two
+    for the race counts, the cache, and the freshness stamp.
 
     Returns:
         The roster, ordered by folded name with nameless riders last.
@@ -905,6 +1087,7 @@ def build_roster_index() -> RosterIndex:
     claimants = _verified_claimants(zauth_required=zauth_required)
     guild_rows = _guild_rows()
     zwift_names = _zwift_names(roster_zwids)
+    records = race_records(roster_zwids)
 
     rows: list[RosterRow] = []
     joined = 0
@@ -915,7 +1098,7 @@ def build_roster_index() -> RosterIndex:
     cached = RiderProfile.objects.filter(zwid__in=roster_zwids).order_by().values(*CARD_COLUMNS)
     for row in cached.iterator(chunk_size=500):
         payload = row.pop("payload") or {}
-        card = _card(row, payload)
+        card = _card(row, payload, records.get(row["zwid"]))
 
         claims = claimants.get(card._zwid, ())
         account = None

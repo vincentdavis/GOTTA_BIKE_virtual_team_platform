@@ -102,7 +102,11 @@
       measured nothing" into "we have no figure". `|default_if_none` cannot do this job
       either: floatformat turns None into "", so the default would never fire.
     {% endcomment %}
-    <dl class="grid grid-cols-3 gap-2 text-center">
+    {% comment %}
+      Two by two, not four across: a card is a quarter of the grid on a wide screen, so four
+      tiles in a row leaves each about sixty pixels and the units wrap off the number.
+    {% endcomment %}
+    <dl class="grid grid-cols-2 gap-2 text-center">
       <div class="rounded border border-base-300 px-1 py-2">
         <dt class="text-xs text-base-content/70">vELO</dt>
         <dd class="font-semibold tabular-nums">{% if row.card.velo is not None %}{{ row.card.velo|floatformat:0 }}{% else %}—{% endif %}</dd>
@@ -117,6 +121,17 @@
       <div class="rounded border border-base-300 px-1 py-2">
         <dt class="text-xs text-base-content/70">20 min</dt>
         <dd class="font-semibold tabular-nums">{% if row.card.wkg_20min is not None %}{{ row.card.wkg_20min|floatformat:1 }}<span class="text-xs font-normal"> w/kg</span>{% else %}—{% endif %}</dd>
+      </div>
+      <div class="rounded border border-base-300 px-1 py-2">
+        <dt class="text-xs text-base-content/70">Races 30d</dt>
+        <dd class="font-semibold tabular-nums">{{ row.card.competitive_30d }}</dd>
+        {% if row.card.rides_30d %}
+          {# Counted, never ranked: a group ride is not racing. #}
+          <dd class="text-xs text-base-content/70 tabular-nums">+{{ row.card.rides_30d }} ride{{ row.card.rides_30d|pluralize }}</dd>
+        {% endif %}
+        {% if row.card.podiums_30d %}
+          <dd class="text-xs text-base-content/70 tabular-nums">{{ row.card.podiums_30d }} podium{{ row.card.podiums_30d|pluralize }}</dd>
+        {% endif %}
       </div>
     </dl>
 

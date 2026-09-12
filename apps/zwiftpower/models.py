@@ -196,6 +196,10 @@ class ZPEvent(models.Model):
         verbose_name = "ZP Event"
         verbose_name_plural = "ZP Events"
         ordering: ClassVar[list[str]] = ["-event_date"]
+        # The roster counts each rider's races in a rolling 30-day window, which filters
+        # results by their event's date. Without this the roster reads the whole event table
+        # on every request; it is ~5,500 rows here and grows with every synced event.
+        indexes: ClassVar[list] = [models.Index(fields=["event_date"], name="zpevent_event_date_idx")]
 
     def __str__(self) -> str:
         """Return string representation of event.

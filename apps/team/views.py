@@ -507,6 +507,7 @@ _CHIP_LABELS = {
     "wkg": "Min W/kg",
     "ftp": "Min FTP",
     "joined": "Joined within",
+    "racing": "Racing",
 }
 
 
