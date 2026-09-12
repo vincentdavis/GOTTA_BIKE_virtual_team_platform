@@ -19,12 +19,42 @@
 
         <div class="alert alert-warning mt-4">
           <span>
-            <strong>Under construction.</strong> The rider cards are not built yet. The roster
-            everyone uses is still at <a class="link" href="{% url 'team:roster' %}">/team/roster/</a>.
+            <strong>Under construction.</strong> Search, filters and race counts are not built yet.
+            The roster everyone uses is still at <a class="link" href="{% url 'team:roster' %}">/team/roster/</a>.
           </span>
         </div>
 
-        <p class="mt-4 text-sm text-base-content/70">
+        {% if page_obj.object_list %}
+          <ul class="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 list-none p-0">
+            {% for row in page_obj.object_list %}
+              {% include "team/partials/_rider_card.html" with row=row %}
+            {% endfor %}
+          </ul>
+
+          {% if page_obj.has_other_pages %}
+            <nav class="mt-6 flex justify-center" aria-label="Roster pages">
+              <div class="join">
+                {% if page_obj.has_previous %}
+                  <a class="join-item btn btn-sm" href="?page={{ page_obj.previous_page_number }}"
+                     aria-label="Go to the previous page of riders">«</a>
+                {% endif %}
+                <span class="join-item btn btn-sm btn-disabled" aria-current="page">
+                  Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </span>
+                {% if page_obj.has_next %}
+                  <a class="join-item btn btn-sm" href="?page={{ page_obj.next_page_number }}"
+                     aria-label="Go to the next page of riders">»</a>
+                {% endif %}
+              </div>
+            </nav>
+          {% endif %}
+        {% else %}
+          <p class="mt-6 text-center text-base-content/70">
+            No riders yet. Rider stats arrive with the profile sync.
+          </p>
+        {% endif %}
+
+        <p class="mt-6 text-sm text-base-content/70">
           Weight and exact age are never shown on this page.
         </p>
       </div>

@@ -480,6 +480,9 @@ def filtered_roster_view(request: HttpRequest, filter_id: uuid.UUID) -> HttpResp
     )
 
 
+ROSTER_PAGE_SIZE = 48
+
+
 @login_required
 @team_member_required()
 @require_GET
@@ -498,18 +501,23 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
         request: The HTTP request.
 
     Returns:
-        The roster page. The cards themselves land in a later step; the index is already
-        passed into the context so the tests that pin what may never reach a page have a
-        rendered page to assert against.
+        The roster page: one page of cards, the header counts, and nothing a card may not
+        carry -- the index decides that, not the template.
 
     """
     roster = build_roster_index()
+
+    # 48 a page: enough to fill four columns twelve deep, and the reason the whole index is
+    # never handed to the template. v1 sends ~450 KB of HTML for 100 rows.
+    paginator = Paginator(roster.rows, ROSTER_PAGE_SIZE)
+    page_obj = paginator.get_page(request.GET.get("page", "1"))
 
     return render(
         request,
         "team/rosterv2.html",
         {
             "roster": roster,
+            "page_obj": page_obj,
             "rider_count": roster.rider_count,
             "stats_synced_at": roster.synced_at,
         },

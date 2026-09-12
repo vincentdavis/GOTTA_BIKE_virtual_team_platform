@@ -1,0 +1,98 @@
+{% load humanize %}
+{% comment %}
+  One rider's card. Everything it can render comes off `row`, which apps/team/rosterv2.py
+  built -- never off a model, and never off anything that carries weight, height, birth year
+  or the zwid. If a value is not on the card object, it is not meant to be here.
+
+  Two halves: the racing half always renders, the account half only when the rider proved the
+  Zwift id is theirs. A missing value is an em dash, never a zero -- "we have no figure" and
+  "they scored nothing" are different claims.
+{% endcomment %}
+<li class="card bg-base-100 border border-base-300 h-full">
+  <div class="card-body gap-3 p-4">
+
+    <div class="flex items-start gap-3">
+      {% if row.account.avatar_url %}
+        <img src="{{ row.account.avatar_url }}" alt="" class="h-10 w-10 rounded-full shrink-0" loading="lazy">
+      {% else %}
+        <div class="h-10 w-10 rounded-full bg-base-300 shrink-0" aria-hidden="true"></div>
+      {% endif %}
+
+      <div class="min-w-0 flex-1">
+        <h3 class="font-semibold leading-tight break-words">
+          {% if row.account %}
+            <a class="link link-hover" href="{% url 'accounts:public_profile' row.account.user_id %}">{{ row.card.name }}</a>
+          {% else %}
+            {{ row.card.name }}
+          {% endif %}
+        </h3>
+        <p class="text-xs text-base-content/70 break-words">
+          {% if row.account %}
+            {{ row.account.discord_name }}{% if row.account.member_since %} · member since {{ row.account.member_since|date:"M Y" }}{% endif %}
+          {% else %}
+            No account here
+          {% endif %}
+        </p>
+      </div>
+
+      {% if row.account %}
+        <div class="shrink-0">
+          {% if row.account.is_extra_verified %}
+            {% if site_settings.extra_verified_emoji %}
+              <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
+            {% else %}
+              <span class="badge badge-warning badge-sm">Extra Verified</span>
+            {% endif %}
+          {% elif row.account.is_race_ready %}
+            {% if site_settings.verified_emoji %}
+              <img src="{{ site_settings.verified_emoji.url }}" alt="Race Verified" class="h-5 w-5">
+            {% else %}
+              <span class="badge badge-success badge-sm">Race Verified</span>
+            {% endif %}
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+
+    {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.phenotype or row.card.age_bracket or row.card.country %}
+      {# Every tag says in words what it is. Colour alone would carry the meaning otherwise. #}
+      <ul class="flex flex-wrap gap-1 text-xs">
+        {% if row.card.category_open %}<li class="badge badge-sm badge-neutral">Cat {{ row.card.category_open }}</li>{% endif %}
+        {% if row.card.category_women %}<li class="badge badge-sm badge-neutral">Women's Cat {{ row.card.category_women }}</li>{% endif %}
+        {% if row.card.category_racing %}<li class="badge badge-sm badge-outline">ZR {{ row.card.category_racing }}</li>{% endif %}
+        {% if row.card.phenotype %}<li class="badge badge-sm badge-outline">{{ row.card.phenotype }}</li>{% endif %}
+        {% if row.card.age_bracket %}<li class="badge badge-sm badge-outline">Age {{ row.card.age_bracket }}</li>{% endif %}
+        {% if row.card.country %}<li class="badge badge-sm badge-outline">{{ row.card.country|upper }}</li>{% endif %}
+      </ul>
+    {% endif %}
+
+    {% comment %}
+      Tested with `is not None`, not truthiness. A zero is a measurement -- the model says so
+      in as many words -- and `{% if value %}` would print an em dash over it, turning "we
+      measured nothing" into "we have no figure". `|default_if_none` cannot do this job
+      either: floatformat turns None into "", so the default would never fire.
+    {% endcomment %}
+    <dl class="grid grid-cols-3 gap-2 text-center">
+      <div class="rounded border border-base-300 px-1 py-2">
+        <dt class="text-xs text-base-content/70">vELO</dt>
+        <dd class="font-semibold tabular-nums">{% if row.card.velo is not None %}{{ row.card.velo|floatformat:0 }}{% else %}—{% endif %}</dd>
+        {% if row.card.velo_max90 is not None %}
+          <dd class="text-xs text-base-content/70 tabular-nums">90d peak {{ row.card.velo_max90|floatformat:0 }}</dd>
+        {% endif %}
+      </div>
+      <div class="rounded border border-base-300 px-1 py-2">
+        <dt class="text-xs text-base-content/70">FTP</dt>
+        <dd class="font-semibold tabular-nums">{% if row.card.zftp is not None %}{{ row.card.zftp|floatformat:0 }}<span class="text-xs font-normal"> W</span>{% else %}—{% endif %}</dd>
+      </div>
+      <div class="rounded border border-base-300 px-1 py-2">
+        <dt class="text-xs text-base-content/70">20 min</dt>
+        <dd class="font-semibold tabular-nums">{% if row.card.wkg_20min is not None %}{{ row.card.wkg_20min|floatformat:1 }}<span class="text-xs font-normal"> w/kg</span>{% else %}—{% endif %}</dd>
+      </div>
+    </dl>
+
+    <p class="text-xs text-base-content/70">
+      {% if row.card.last_race_at %}Last raced {{ row.card.last_race_at|date:"j M Y" }}{% else %}No race on record{% endif %}
+      {% if row.card.distance_km is not None %} · {{ row.card.distance_km|floatformat:0|intcomma }} km lifetime{% endif %}
+    </p>
+  </div>
+</li>
