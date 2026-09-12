@@ -8,6 +8,7 @@ zero, and printing a joined rider's identity over an unjoined rider's racing.
 import re
 
 import pytest
+from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from apps.team.views import ROSTER_PAGE_SIZE
@@ -187,3 +188,48 @@ def test_a_nonsense_page_number_lands_on_a_real_page(auth_client, roster_rider):
 
     for query in ("?page=99", "?page=banana"):
         assert auth_client.get(reverse("team:rosterv2") + query).status_code == 200
+
+
+# --- the uploaded category / tier / phenotype icons ---------------------------------------
+
+
+@pytest.mark.django_db
+def test_an_uploaded_icon_appears_inside_the_badge_beside_its_label(auth_client, roster_rider, settings, tmp_path):
+    """The icon joins the words; it never replaces them.
+
+    An icon standing alone would leave colour and shape carrying the meaning, which is the
+    thing every tag on this card is labelled in text to avoid. alt="" keeps a screen reader
+    from announcing the category twice.
+    """
+    from gotta_bike_platform.models import SiteSettings
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    site = SiteSettings.get_settings()
+    site.zr_gold_emoji.save("gold.png", ContentFile(b"not-a-real-png"), save=True)
+
+    # Two different kinds, so a tag that ignored `kind` and always read one map would fail.
+    site.phenotype_sprinter_emoji.save("sprinter.png", ContentFile(b"not-a-real-png"), save=True)
+
+    roster_rider(zwid=4242, name="Ada Racer", category_racing="Gold", phenotype="Sprinter")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    # EVERY icon, not just one of them: asserting that alt="" appears somewhere passes while
+    # another icon on the same card announces its label a second time.
+    assert card.count("<img") == card.count('alt=""'), "every icon is decorative; the words are the label"
+    assert "gold" in card
+    assert "sprinter" in card
+    assert "ZR Gold" in _text_of(card), "the words must survive the icon"
+    assert "Sprinter" in _text_of(card)
+
+
+@pytest.mark.django_db
+def test_a_tier_with_no_uploaded_icon_still_reads(auth_client, roster_rider):
+    """Nothing uploaded is the normal case, and it must cost the reader nothing."""
+    roster_rider(zwid=4242, name="Ada Racer", category_racing="Copper", phenotype="Sprinter", category_open="B")
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    assert "ZR Copper" in card
+    assert "Sprinter" in card
+    assert "Cat B" in card

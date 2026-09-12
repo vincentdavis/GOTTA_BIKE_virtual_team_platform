@@ -1,4 +1,4 @@
-{% load humanize %}
+{% load humanize accounts_tags %}
 {% comment %}
   One rider's card. Everything it can render comes off `row`, which apps/team/rosterv2.py
   built -- never off a model, and never off anything that carries weight, height, birth year
@@ -60,11 +60,37 @@
 
     {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.phenotype or row.card.age_bracket or row.card.country %}
       {# Every tag says in words what it is. Colour alone would carry the meaning otherwise. #}
+      {% comment %}
+        The uploaded icon sits INSIDE the badge, beside the words, never instead of them:
+        alt="" because the label is right there, so the icon is decorative and a screen
+        reader should not read the category twice. Riders with no icon uploaded lose
+        nothing -- the badge is the same, minus a picture.
+      {% endcomment %}
       <ul class="flex flex-wrap gap-1 text-xs">
-        {% if row.card.category_open %}<li class="badge badge-sm badge-neutral">Cat {{ row.card.category_open }}</li>{% endif %}
-        {% if row.card.category_women %}<li class="badge badge-sm badge-neutral">Women's Cat {{ row.card.category_women }}</li>{% endif %}
-        {% if row.card.category_racing %}<li class="badge badge-sm badge-outline">ZR {{ row.card.category_racing }}</li>{% endif %}
-        {% if row.card.phenotype %}<li class="badge badge-sm badge-outline">{{ row.card.phenotype }}</li>{% endif %}
+        {% if row.card.category_open %}
+          {% site_icon_url "category" row.card.category_open as cat_icon %}
+          <li class="badge badge-sm badge-neutral gap-1">
+            {% if cat_icon %}<img src="{{ cat_icon }}" alt="" class="h-4 w-4">{% endif %}Cat {{ row.card.category_open }}
+          </li>
+        {% endif %}
+        {% if row.card.category_women %}
+          {% site_icon_url "category" row.card.category_women as wcat_icon %}
+          <li class="badge badge-sm badge-neutral gap-1">
+            {% if wcat_icon %}<img src="{{ wcat_icon }}" alt="" class="h-4 w-4">{% endif %}Women's Cat {{ row.card.category_women }}
+          </li>
+        {% endif %}
+        {% if row.card.category_racing %}
+          {% site_icon_url "zr" row.card.category_racing as zr_icon %}
+          <li class="badge badge-sm badge-outline gap-1">
+            {% if zr_icon %}<img src="{{ zr_icon }}" alt="" class="h-4 w-4">{% endif %}ZR {{ row.card.category_racing }}
+          </li>
+        {% endif %}
+        {% if row.card.phenotype %}
+          {% site_icon_url "phenotype" row.card.phenotype as ph_icon %}
+          <li class="badge badge-sm badge-outline gap-1">
+            {% if ph_icon %}<img src="{{ ph_icon }}" alt="" class="h-4 w-4">{% endif %}{{ row.card.phenotype }}
+          </li>
+        {% endif %}
         {% if row.card.age_bracket %}<li class="badge badge-sm badge-outline">Age {{ row.card.age_bracket }}</li>{% endif %}
         {% if row.card.country %}<li class="badge badge-sm badge-outline">{{ row.card.country|upper }}</li>{% endif %}
       </ul>

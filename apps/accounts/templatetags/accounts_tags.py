@@ -355,6 +355,43 @@ def phenotype_icon(context, phenotype):
     )
 
 
+# The three maps above, keyed so one tag can serve all of them.
+_ICON_MAPS = {
+    "category": ZP_CATEGORY_EMOJI_FIELDS,
+    "zr": ZR_CATEGORY_EMOJI_FIELDS,
+    "phenotype": PHENOTYPE_EMOJI_FIELDS,
+}
+
+
+@register.simple_tag(takes_context=True)
+def site_icon_url(context, kind: str, value: str) -> str:
+    """Return the URL of the uploaded icon for a category, tier or phenotype.
+
+    The URL rather than an ``<img>``, unlike the three badge tags beside it, so a caller can
+    put the icon INSIDE its own badge next to the text label. That matters twice over: the
+    badge tags' fallback uses ``badge-secondary`` and ``badge-primary``, which this project's
+    own accessibility notes record as failing contrast, and an icon that replaces the label
+    rather than joining it leaves colour carrying the meaning on its own.
+
+    Args:
+        context: Template context, for ``site_settings``.
+        kind: "category", "zr" or "phenotype".
+        value: The category, tier or phenotype name.
+
+    Returns:
+        The icon's URL, or "" when nothing is uploaded for it.
+
+    """
+    site_settings = context.get("site_settings")
+    if not value or not site_settings:
+        return ""
+    field_name = _ICON_MAPS.get(kind, {}).get(value)
+    if not field_name:
+        return ""
+    icon = getattr(site_settings, field_name, None)
+    return icon.url if icon else ""
+
+
 @register.simple_tag
 def team_kit_rows(user) -> list[dict]:
     """Return a rider's team kit statuses for display, one row per active kit.
