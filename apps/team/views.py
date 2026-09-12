@@ -27,7 +27,18 @@ from apps.team.forms import (
     TeamLinkForm,
 )
 from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView, RosterFilter, TeamLink
-from apps.team.rosterv2 import build_roster_index
+from apps.team.rosterv2 import (
+    DEFAULT_SORT,
+    FTP_STEPS,
+    JOINED_WINDOWS,
+    SORTS,
+    WKG_STEPS,
+    apply_filters,
+    build_roster_index,
+    filter_options,
+    parse_filters,
+    sort_rows,
+)
 from apps.team.rosterv2 import search as roster_search
 from apps.team.services import (
     ZP_DIV_TO_CATEGORY,
@@ -483,6 +494,56 @@ def filtered_roster_view(request: HttpRequest, filter_id: uuid.UUID) -> HttpResp
 
 ROSTER_PAGE_SIZE = 48
 
+# Labels for the removable chips. Only what a reader would recognise: "Cat B", not "category=B".
+_CHIP_LABELS = {
+    "q": "Search",
+    "category": "Category",
+    "zr": "Zwift Racing",
+    "gender": "Gender",
+    "phenotype": "Phenotype",
+    "verified": "Race Verified",
+    "age": "Age",
+    "account": "Account",
+    "wkg": "Min W/kg",
+    "ftp": "Min FTP",
+    "joined": "Joined within",
+}
+
+
+def _query_without(request: HttpRequest, *drop: str) -> str:
+    """Rebuild the querystring without the named parameters.
+
+    Args:
+        request: The HTTP request.
+        *drop: Parameter names to leave out.
+
+    Returns:
+        An encoded querystring, empty when nothing is left.
+
+    """
+    params = request.GET.copy()
+    for name in drop:
+        params.pop(name, None)
+    return params.urlencode()
+
+
+def _roster_chips(request: HttpRequest) -> list[dict]:
+    """Describe each active control as a chip that can be taken off.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        One entry per active control, with the querystring that removes it.
+
+    """
+    chips = []
+    for name, label in _CHIP_LABELS.items():
+        value = (request.GET.get(name) or "").strip()
+        if value:
+            chips.append({"label": label, "value": value, "without": _query_without(request, name, "page")})
+    return chips
+
 
 @login_required
 @team_member_required()
@@ -510,6 +571,12 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     rows = roster_search(roster.rows, query) if query else list(roster.rows)
 
+    filters = parse_filters(request.GET, roster.rows)
+    rows = apply_filters(rows, filters)
+    sort = request.GET.get("sort", "") if request.GET.get("sort", "") in SORTS else DEFAULT_SORT
+    direction = request.GET.get("dir", "")
+    rows = sort_rows(rows, sort, direction)
+
     # 48 a page: enough to fill four columns twelve deep, and the reason the whole index is
     # never handed to the template. v1 sends ~450 KB of HTML for 100 rows.
     paginator = Paginator(rows, ROSTER_PAGE_SIZE)
@@ -529,8 +596,18 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
             "match_count": len(rows),
             "rider_count": roster.rider_count,
             "stats_synced_at": roster.synced_at,
-            # Paging has to carry the search, or page 2 of a search silently shows everyone.
-            "page_query": urlencode({"q": query}) if query else "",
+            "filters": filters,
+            "options": filter_options(roster.rows),
+            "wkg_steps": WKG_STEPS,
+            "ftp_steps": FTP_STEPS,
+            "joined_windows": JOINED_WINDOWS,
+            "chips": _roster_chips(request),
+            "sorts": [(key, label) for key, (label, _) in SORTS.items()],
+            "sort": sort,
+            "direction": direction,
+            # Paging has to carry every control, or page 2 of a filtered search silently
+            # becomes page 2 of everyone.
+            "page_query": _query_without(request, "page"),
         },
     )
 

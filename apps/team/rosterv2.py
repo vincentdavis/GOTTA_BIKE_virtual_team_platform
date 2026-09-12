@@ -33,11 +33,13 @@ import html
 import re
 import unicodedata
 from dataclasses import dataclass, field, replace
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import logfire
 from constance import config
 from django.db.models import Max
+from django.utils import timezone
 
 from apps.accounts.models import GuildMember, User
 from apps.rider_data.models import RiderProfile
@@ -101,7 +103,8 @@ GUILD_COLUMNS = ("user_id", "joined_at", "nickname", "display_name", "username")
 # Jnr is SHOWN because Vincent said so ("Don't hide Jnr", 2026-09-11), overruling the plan,
 # which had proposed hiding it so a minor is not marked out to the team. Recorded because the
 # question is worth re-asking if the roster ever leaves team_member.
-AGE_BRACKETS_SHOWN = frozenset({"Jnr", "U23", "Snr", "Vet", "Mas", "50+", "60+", "70+"})
+AGE_BRACKETS_ORDER = ("Jnr", "U23", "Snr", "Vet", "Mas", "50+", "60+", "70+")
+AGE_BRACKETS_SHOWN = frozenset(AGE_BRACKETS_ORDER)
 
 # Duration keys on the zauth power curves, in SECONDS.
 _20_MINUTES = "1200"
@@ -166,6 +169,45 @@ def as_zwid(query: str) -> int | None:
     """
     text = query.strip()
     return int(text) if text.isascii() and text.isdigit() else None
+
+
+# Highest to lowest. Sorting these alphabetically is a live bug on the roster this
+# replaces (Amethyst, Bronze, Copper...), which puts the top tier sixth.
+ZR_CATEGORY_ORDER = (
+    "Diamond", "Ruby", "Emerald", "Sapphire", "Amethyst",
+    "Platinum", "Gold", "Silver", "Bronze", "Copper",
+)
+CATEGORY_ORDER = ("A+", "A", "B", "C", "D", "E")
+
+# Upstream says "M"/"F"; zauth has passed through "male"/"female" as well. Both are read,
+# and ANYTHING else is unknown -- never quietly counted as men, which is what the roster
+# this replaces does in four separate places.
+_WOMEN = frozenset({"f", "female", "w", "women"})
+_MEN = frozenset({"m", "male", "men"})
+
+# Coarse on purpose. Fine-grained power steps narrow the weight recoverable from
+# zFTP over W/kg, and nobody browses a roster by the watt.
+WKG_STEPS = (2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
+FTP_STEPS = (150, 200, 250, 300, 350, 400)
+JOINED_WINDOWS = (30, 90)
+
+
+def gender_bucket(raw: str) -> str:
+    """Bucket a stored gender into the three states the roster actually has.
+
+    Args:
+        raw: The stored value, in whatever spelling upstream used.
+
+    Returns:
+        "women", "men", or "unknown".
+
+    """
+    value = (raw or "").strip().casefold()
+    if value in _WOMEN:
+        return "women"
+    if value in _MEN:
+        return "men"
+    return "unknown"
 
 
 @dataclass(frozen=True, slots=True)
@@ -564,6 +606,224 @@ def search(rows: tuple[RosterRow, ...], query: str) -> list[RosterRow]:
         # the rider was found by something the card does not show.
         hits.append(row if matched == row.card.name else replace(row, matched_as=matched))
     return hits
+
+
+# Sorts. Each is (label, key). A key returning None means "no figure", which always sorts
+# LAST regardless of direction -- a descending sort that leads with every rider we know
+# nothing about is the opposite of what the reader asked for.
+SORTS = {
+    "name": ("Name", lambda row: row.card.name.casefold()),
+    "velo": ("vELO", lambda row: row.card.velo),
+    "ftp": ("FTP", lambda row: row.card.zftp),
+    "wkg": ("20-minute W/kg", lambda row: row.card.wkg_20min),
+    "last_raced": ("Last raced", lambda row: row.card.last_race_at),
+    "newest": ("Newest member", lambda row: row.account.member_since if row.account else None),
+    "longest": ("Longest serving", lambda row: row.account.member_since if row.account else None),
+}
+DEFAULT_SORT = "name"
+_DESCENDING_BY_DEFAULT = frozenset({"velo", "ftp", "wkg", "last_raced", "newest"})
+
+
+@dataclass(frozen=True, slots=True)
+class RosterFilters:
+    """What the reader asked the roster to narrow to.
+
+    Every field is a plain string straight off the querystring, validated on the way in, so
+    an unknown or hand-edited value narrows nothing rather than raising.
+
+    Attributes:
+        category: A ZwiftPower category, matched against the open OR the women's field.
+        zr: A Zwift Racing tier.
+        gender: "women", "men" or "unknown" -- three states, never two.
+        phenotype: A phenotype label.
+        verified: "verified" or "extra".
+        age: A bracket label, from the shown set only.
+        account: "yes" for riders with an account here, "no" for the rest.
+        wkg: Minimum 20-minute W/kg.
+        ftp: Minimum zFTP in watts.
+        joined: Days since joining the Discord, 30 or 90.
+
+    """
+
+    category: str = ""
+    zr: str = ""
+    gender: str = ""
+    phenotype: str = ""
+    verified: str = ""
+    age: str = ""
+    account: str = ""
+    wkg: float | None = None
+    ftp: int | None = None
+    joined: int | None = None
+
+    @property
+    def active(self) -> bool:
+        """Whether anything is being narrowed.
+
+        Returns:
+            True if any filter is set.
+
+        """
+        return any(value not in ("", None) for value in (
+            self.category, self.zr, self.gender, self.phenotype,
+            self.verified, self.age, self.account, self.wkg, self.ftp, self.joined,
+        ))
+
+
+def _one_of(params, key: str, allowed) -> str:
+    """Read a querystring value only if it is one we offer.
+
+    Args:
+        params: The request's GET parameters.
+        key: The parameter name.
+        allowed: The values this parameter may take.
+
+    Returns:
+        The value, or "" when absent or unrecognised.
+
+    """
+    value = (params.get(key) or "").strip()
+    return value if value in allowed else ""
+
+
+def _number_choice(params, key: str, allowed):
+    """Read a numeric querystring value, restricted to the steps offered.
+
+    Args:
+        params: The request's GET parameters.
+        key: The parameter name.
+        allowed: The permitted numbers.
+
+    Returns:
+        The number, or None.
+
+    """
+    raw = (params.get(key) or "").strip()
+    for step in allowed:
+        if raw == str(step):
+            return step
+    return None
+
+
+def parse_filters(params, rows: tuple[RosterRow, ...]) -> RosterFilters:
+    """Read the filter state out of a querystring.
+
+    Values are checked against what this roster actually offers -- the categories present,
+    the phenotypes present -- rather than against a fixed list, so an option that no rider
+    has cannot be selected and a typo narrows nothing instead of returning an empty page
+    the reader cannot explain.
+
+    Args:
+        params: The request's GET parameters.
+        rows: The whole roster, for the vocabularies it actually contains.
+
+    Returns:
+        The filters to apply.
+
+    """
+    options = filter_options(rows)
+    return RosterFilters(
+        category=_one_of(params, "category", options["categories"]),
+        zr=_one_of(params, "zr", options["zr"]),
+        gender=_one_of(params, "gender", ("women", "men", "unknown")),
+        phenotype=_one_of(params, "phenotype", options["phenotypes"]),
+        verified=_one_of(params, "verified", ("verified", "extra")),
+        age=_one_of(params, "age", options["ages"]),
+        account=_one_of(params, "account", ("yes", "no")),
+        wkg=_number_choice(params, "wkg", WKG_STEPS),
+        ftp=_number_choice(params, "ftp", FTP_STEPS),
+        joined=_number_choice(params, "joined", JOINED_WINDOWS),
+    )
+
+
+def filter_options(rows: tuple[RosterRow, ...]) -> dict[str, list]:
+    """Collect the values the roster actually holds, in a sensible order.
+
+    Args:
+        rows: The whole roster.
+
+    Returns:
+        The choices for each dropdown.
+
+    """
+    categories = {row.card.category_open for row in rows} | {row.card.category_women for row in rows}
+    zr = {row.card.category_racing for row in rows}
+    phenotypes = {row.card.phenotype for row in rows}
+    ages = {row.card.age_bracket for row in rows}
+    return {
+        "categories": [c for c in CATEGORY_ORDER if c in categories],
+        "zr": [c for c in ZR_CATEGORY_ORDER if c in zr],
+        "phenotypes": sorted(p for p in phenotypes if p),
+        "ages": [a for a in AGE_BRACKETS_ORDER if a in ages],
+    }
+
+
+def apply_filters(rows: list[RosterRow], filters: RosterFilters) -> list[RosterRow]:
+    """Narrow the roster to the riders the reader asked for.
+
+    Args:
+        rows: The rows to narrow.
+        filters: The filter state.
+
+    Returns:
+        The matching rows, order preserved.
+
+    """
+    cutoff = timezone.now() - timedelta(days=filters.joined) if filters.joined else None
+
+    def keep(row: RosterRow) -> bool:
+        card, account = row.card, row.account
+        if filters.category and filters.category not in (card.category_open, card.category_women):
+            return False
+        if filters.zr and card.category_racing != filters.zr:
+            return False
+        if filters.gender and gender_bucket(card.gender) != filters.gender:
+            return False
+        if filters.phenotype and card.phenotype != filters.phenotype:
+            return False
+        if filters.age and card.age_bracket != filters.age:
+            return False
+        if filters.verified == "verified" and not (account and account.is_race_ready):
+            return False
+        if filters.verified == "extra" and not (account and account.is_extra_verified):
+            return False
+        if filters.account == "yes" and account is None:
+            return False
+        if filters.account == "no" and account is not None:
+            return False
+        # A missing figure is not a small one: a rider we have no W/kg for must not be
+        # swept up by "at least 2.5", which would assert a measurement we do not hold.
+        if filters.wkg is not None and (card.wkg_20min is None or card.wkg_20min < filters.wkg):
+            return False
+        if filters.ftp is not None and (card.zftp is None or card.zftp < filters.ftp):
+            return False
+        return not (cutoff and not (account and account.member_since and account.member_since >= cutoff))
+
+    return [row for row in rows if keep(row)]
+
+
+def sort_rows(rows: list[RosterRow], sort: str, direction: str) -> list[RosterRow]:
+    """Order the roster, keeping riders with no figure at the end either way.
+
+    Args:
+        rows: The rows to order, already in name order.
+        sort: A key from ``SORTS``.
+        direction: "asc" or "desc".
+
+    Returns:
+        The ordered rows.
+
+    """
+    if sort not in SORTS:
+        sort = DEFAULT_SORT
+    key = SORTS[sort][1]
+    descending = direction == "desc" if direction in ("asc", "desc") else sort in _DESCENDING_BY_DEFAULT
+
+    present = [row for row in rows if key(row) is not None]
+    missing = [row for row in rows if key(row) is None]
+    # Stable, and the rows arrive in name order, so equal values stay alphabetical.
+    present.sort(key=key, reverse=descending)
+    return present + missing
 
 
 def _guild_rows() -> dict[int, dict]:

@@ -208,8 +208,11 @@ def test_finding_a_rider_by_zwid_does_not_print_it_back(auth_client, roster_ride
     body = auth_client.get(reverse("team:rosterv2") + "?q=8675309").content.decode()
 
     assert "Ada Racer" in body
-    # The query echoes in the box and the count line; the card must still not carry the id.
-    assert body.count("8675309") == body.count('value="8675309"') + body.count("match “8675309”")
+    # The query necessarily echoes in the search box and its chip -- the reader typed it.
+    # The claim is narrower and more important: no CARD carries the id.
+    cards = body.split('class="card bg-base-100')[1:]
+    assert cards, "expected the rider's card to render"
+    assert not [card for card in cards if "8675309" in card]
 
 
 # --- "matched:" -------------------------------------------------------------------------
@@ -248,7 +251,7 @@ def test_the_search_survives_paging(auth_client, roster_rider):
     assert "q=sprinter" in first
     second = auth_client.get(reverse("team:rosterv2") + "?q=sprinter&page=2").content.decode()
     assert "Climber" not in second
-    assert "60 of 65 riders match" in first
+    assert "Showing 60 of 65 riders" in first
 
 
 @pytest.mark.django_db

@@ -19,7 +19,7 @@
 
         <div class="alert alert-warning mt-4">
           <span>
-            <strong>Under construction.</strong> Filters, sorts and race counts are not built yet.
+            <strong>Under construction.</strong> Race counts, videos and event chips are not built yet.
             The roster everyone uses is still at <a class="link" href="{% url 'team:roster' %}">/team/roster/</a>.
           </span>
         </div>
@@ -44,9 +44,159 @@
           {% endif %}
         </form>
 
+        {% comment %}
+          A <details> rather than a drawer component: it is one element, it works with no
+          JavaScript, it is keyboard-operable for free, and on a phone it keeps ten controls
+          out of the way until they are wanted. Open by default once a filter is on, so the
+          reason the roster looks short is never hidden.
+        {% endcomment %}
+        <details class="collapse collapse-arrow bg-base-100 mt-3" {% if filters.active %}open{% endif %}>
+          <summary class="collapse-title text-sm font-semibold">Filters and sorting</summary>
+          <div class="collapse-content">
+            <form method="get" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {% if query %}<input type="hidden" name="q" value="{{ query }}">{% endif %}
+
+              <div>
+                <label class="label py-1" for="f-category"><span class="label-text">Category</span></label>
+                <select class="select select-bordered w-full" id="f-category" name="category">
+                  <option value="">Any category</option>
+                  {% for value in options.categories %}
+                    <option value="{{ value }}" {% if filters.category == value %}selected{% endif %}>Cat {{ value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-zr"><span class="label-text">Zwift Racing tier</span></label>
+                <select class="select select-bordered w-full" id="f-zr" name="zr">
+                  <option value="">Any tier</option>
+                  {% for value in options.zr %}
+                    <option value="{{ value }}" {% if filters.zr == value %}selected{% endif %}>{{ value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-gender"><span class="label-text">Gender</span></label>
+                <select class="select select-bordered w-full" id="f-gender" name="gender">
+                  <option value="">Any</option>
+                  <option value="women" {% if filters.gender == "women" %}selected{% endif %}>Women</option>
+                  <option value="men" {% if filters.gender == "men" %}selected{% endif %}>Men</option>
+                  <option value="unknown" {% if filters.gender == "unknown" %}selected{% endif %}>Not recorded</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-phenotype"><span class="label-text">Phenotype</span></label>
+                <select class="select select-bordered w-full" id="f-phenotype" name="phenotype">
+                  <option value="">Any phenotype</option>
+                  {% for value in options.phenotypes %}
+                    <option value="{{ value }}" {% if filters.phenotype == value %}selected{% endif %}>{{ value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-age"><span class="label-text">Age bracket</span></label>
+                <select class="select select-bordered w-full" id="f-age" name="age">
+                  <option value="">Any age</option>
+                  {% for value in options.ages %}
+                    <option value="{{ value }}" {% if filters.age == value %}selected{% endif %}>{{ value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-verified"><span class="label-text">Race Verified</span></label>
+                <select class="select select-bordered w-full" id="f-verified" name="verified">
+                  <option value="">Any</option>
+                  <option value="verified" {% if filters.verified == "verified" %}selected{% endif %}>Race Verified</option>
+                  <option value="extra" {% if filters.verified == "extra" %}selected{% endif %}>Extra Verified</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-account"><span class="label-text">Account here</span></label>
+                <select class="select select-bordered w-full" id="f-account" name="account">
+                  <option value="">Everyone</option>
+                  <option value="yes" {% if filters.account == "yes" %}selected{% endif %}>Has an account</option>
+                  <option value="no" {% if filters.account == "no" %}selected{% endif %}>ZwiftPower only</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-wkg"><span class="label-text">Minimum 20-minute W/kg</span></label>
+                <select class="select select-bordered w-full" id="f-wkg" name="wkg">
+                  <option value="">Any</option>
+                  {% for value in wkg_steps %}
+                    <option value="{{ value }}" {% if filters.wkg == value %}selected{% endif %}>{{ value }} and up</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-ftp"><span class="label-text">Minimum FTP</span></label>
+                <select class="select select-bordered w-full" id="f-ftp" name="ftp">
+                  <option value="">Any</option>
+                  {% for value in ftp_steps %}
+                    <option value="{{ value }}" {% if filters.ftp == value %}selected{% endif %}>{{ value }} W and up</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-joined"><span class="label-text">Joined the Discord</span></label>
+                <select class="select select-bordered w-full" id="f-joined" name="joined">
+                  <option value="">Any time</option>
+                  {% for value in joined_windows %}
+                    <option value="{{ value }}" {% if filters.joined == value %}selected{% endif %}>In the last {{ value }} days</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-sort"><span class="label-text">Sort by</span></label>
+                <select class="select select-bordered w-full" id="f-sort" name="sort">
+                  {% for key, label in sorts %}
+                    <option value="{{ key }}" {% if sort == key %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-dir"><span class="label-text">Order</span></label>
+                <select class="select select-bordered w-full" id="f-dir" name="dir">
+                  <option value="">Default for this sort</option>
+                  <option value="asc" {% if direction == "asc" %}selected{% endif %}>Ascending</option>
+                  <option value="desc" {% if direction == "desc" %}selected{% endif %}>Descending</option>
+                </select>
+              </div>
+
+              <div class="sm:col-span-2 lg:col-span-3">
+                <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+              </div>
+            </form>
+          </div>
+        </details>
+
+        {% if chips %}
+          <ul class="mt-3 flex flex-wrap items-center gap-2 list-none p-0">
+            {% for chip in chips %}
+              <li>
+                <a class="badge badge-neutral gap-1 h-auto py-1"
+                   href="?{{ chip.without }}"
+                   aria-label="Remove the {{ chip.label }} filter, {{ chip.value }}">
+                  {{ chip.label }}: {{ chip.value }} <span aria-hidden="true">&times;</span>
+                </a>
+              </li>
+            {% endfor %}
+            <li><a class="link text-sm" href="{% url 'team:rosterv2' %}">Clear all</a></li>
+          </ul>
+        {% endif %}
+
         <p role="status" class="mt-2 text-sm text-base-content/70">
-          {% if query %}
-            {{ match_count }} of {{ rider_count }} rider{{ rider_count|pluralize }} match “{{ query }}”
+          {% if query or filters.active %}
+            Showing {{ match_count }} of {{ rider_count }} rider{{ rider_count|pluralize }}
           {% endif %}
         </p>
 
@@ -76,8 +226,8 @@
           {% endif %}
         {% else %}
           <p class="mt-6 text-center text-base-content/70">
-            {% if query %}
-              No riders match “{{ query }}”. <a class="link" href="{% url 'team:rosterv2' %}">Clear the search</a>.
+            {% if query or filters.active %}
+              No riders match. <a class="link" href="{% url 'team:rosterv2' %}">Clear the search and filters</a>.
             {% else %}
               No riders yet. Rider stats arrive with the profile sync.
             {% endif %}
