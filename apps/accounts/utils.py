@@ -7,6 +7,30 @@ import logfire
 from bs4 import BeautifulSoup
 
 
+def youtube_url_form(youtube_url: str) -> str:
+    """Name the shape of a YouTube channel URL without the part that identifies it.
+
+    The URL itself is personal data -- it names a rider's channel -- so it never reaches the
+    logs. Its shape still answers the triage question: one rider pasted something odd, or
+    every URL of a kind stopped resolving.
+
+    Args:
+        youtube_url: The YouTube channel URL.
+
+    Returns:
+        A coarse label: ``handle``, ``channel``, ``c``, ``user``, ``non_youtube`` or ``other``.
+
+    """
+    host_and_path = re.sub(r"^https?://", "", youtube_url.strip())
+    if not re.match(r"([\w-]+\.)*youtube\.com/.", host_and_path):
+        return "non_youtube"
+    path = host_and_path.split("/", 1)[1]
+    if path.startswith("@"):
+        return "handle"
+    first_segment = path.split("/", 1)[0]
+    return first_segment if first_segment in {"channel", "c", "user"} else "other"
+
+
 def extract_youtube_channel_id(youtube_url: str) -> str | None:
     """Extract YouTube channel ID from a YouTube channel URL.
 
@@ -35,15 +59,18 @@ def extract_youtube_channel_id(youtube_url: str) -> str | None:
 
     # For other URL formats, fetch the page and extract from HTML
     try:
-        response = httpx.get(
-            youtube_url,
-            follow_redirects=True,
-            timeout=10.0,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-        )
+        # instrument_httpx() records every request URL as a span attribute, and this one is
+        # the rider's channel. Suppress the span; the outcome is logged below without it.
+        with logfire.suppress_instrumentation():
+            response = httpx.get(
+                youtube_url,
+                follow_redirects=True,
+                timeout=10.0,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
+            )
         response.raise_for_status()
 
         html_content = response.text
@@ -59,7 +86,6 @@ def extract_youtube_channel_id(youtube_url: str) -> str | None:
             if channel_match:
                 logfire.debug(
                     "Extracted YouTube channel ID from canonical link",
-                    youtube_url=youtube_url,
                     channel_id=channel_match.group(1),
                 )
                 return channel_match.group(1)
@@ -71,7 +97,6 @@ def extract_youtube_channel_id(youtube_url: str) -> str | None:
             if channel_id.startswith("UC"):
                 logfire.debug(
                     "Extracted YouTube channel ID from meta tag",
-                    youtube_url=youtube_url,
                     channel_id=channel_id,
                 )
                 return channel_id
@@ -81,7 +106,6 @@ def extract_youtube_channel_id(youtube_url: str) -> str | None:
         if channel_match:
             logfire.debug(
                 "Extracted YouTube channel ID from JSON in HTML",
-                youtube_url=youtube_url,
                 channel_id=channel_match.group(1),
             )
             return channel_match.group(1)
@@ -91,28 +115,34 @@ def extract_youtube_channel_id(youtube_url: str) -> str | None:
         if external_match:
             logfire.debug(
                 "Extracted YouTube channel ID from externalId/browseId",
-                youtube_url=youtube_url,
                 channel_id=external_match.group(1),
             )
             return external_match.group(1)
 
         logfire.warning(
             "Could not extract YouTube channel ID",
-            youtube_url=youtube_url,
+            url_form=youtube_url_form(youtube_url),
         )
         return None
 
+    except httpx.HTTPStatusError as e:
+        # Not error=str(e): httpx quotes the failing request URL in its message.
+        logfire.error(
+            "YouTube refused a channel page",
+            status_code=e.response.status_code,
+            url_form=youtube_url_form(youtube_url),
+        )
+        return None
     except httpx.HTTPError as e:
         logfire.error(
             "HTTP error fetching YouTube page",
-            youtube_url=youtube_url,
-            error=str(e),
+            error_type=type(e).__name__,
+            url_form=youtube_url_form(youtube_url),
         )
         return None
     except Exception as e:
         logfire.error(
             "Error extracting YouTube channel ID",
-            youtube_url=youtube_url,
             error=str(e),
         )
         return None

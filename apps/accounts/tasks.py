@@ -660,7 +660,7 @@ def sync_youtube_channel_ids() -> dict:
         dict with sync results summary.
 
     """
-    from apps.accounts.utils import extract_youtube_channel_id
+    from apps.accounts.utils import extract_youtube_channel_id, youtube_url_form
 
     with logfire.span("sync_youtube_channel_ids"):
         # Find users with YouTube URL but no channel ID
@@ -690,7 +690,6 @@ def sync_youtube_channel_ids() -> dict:
                 logfire.debug(
                     "Extracted YouTube channel ID",
                     user_id=user.id,
-                    youtube_url=user.youtube_channel,
                     channel_id=channel_id,
                 )
             else:
@@ -698,7 +697,7 @@ def sync_youtube_channel_ids() -> dict:
                 logfire.warning(
                     "Failed to extract YouTube channel ID",
                     user_id=user.id,
-                    youtube_url=user.youtube_channel,
+                    url_form=youtube_url_form(user.youtube_channel),
                 )
 
             # Rate limit: avoid hammering YouTube

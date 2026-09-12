@@ -492,6 +492,8 @@ Add logfire logging for: API calls, error handlers, auth/permission checks, back
 
 Levels: `error` (failures/exceptions), `warning` (rate limits/fallbacks), `info` (operations/actions), `debug` (counts/diagnostics).
 
+**Two ways a URL leaks past the kwargs.** `instrument_httpx()` records every request URL as a span attribute, so fetching a page whose URL is itself personal data (a rider's YouTube channel) leaks it through tracing even when no kwarg carries it — wrap that one request in `logfire.suppress_instrumentation()`. And httpx quotes the failing URL in its own exception message, so the usual `error=str(e)` on an `httpx.HTTPError` re-leaks it — log `status_code` (off `HTTPStatusError.response`) or `type(e).__name__` instead. `apps/accounts/utils.py:extract_youtube_channel_id` does both, logging `apps/accounts/utils.py:youtube_url_form` (`handle` / `channel` / `c` / `user` / `non_youtube` / `other`) so a failure is still triageable; guarded by `apps/accounts/test_youtube_logging_privacy.py`.
+
 ## Guild Member Sync
 
 Syncs Discord guild members with Django to track membership status.
