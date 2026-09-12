@@ -9,7 +9,7 @@ import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Count, Max, Q
+from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -19,7 +19,6 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
-from apps.rider_data.models import RiderProfile
 from apps.team.forms import (
     JerseyCSVUploadForm,
     MembershipApplicationAdminForm,
@@ -28,6 +27,7 @@ from apps.team.forms import (
     TeamLinkForm,
 )
 from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView, RosterFilter, TeamLink
+from apps.team.rosterv2 import build_roster_index
 from apps.team.services import (
     ZP_DIV_TO_CATEGORY,
     can_view_verification_media,
@@ -498,18 +498,20 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
         request: The HTTP request.
 
     Returns:
-        The roster page. Cards land in a later step; for now the header, which is the part
-        that proves the gate and the cache are both wired up.
+        The roster page. The cards themselves land in a later step; the index is already
+        passed into the context so the tests that pin what may never reach a page have a
+        rendered page to assert against.
 
     """
-    stats = RiderProfile.objects.aggregate(riders=Count("zwid"), synced_at=Max("fetched_at"))
+    roster = build_roster_index()
 
     return render(
         request,
         "team/rosterv2.html",
         {
-            "rider_count": stats["riders"],
-            "stats_synced_at": stats["synced_at"],
+            "roster": roster,
+            "rider_count": roster.rider_count,
+            "stats_synced_at": roster.synced_at,
         },
     )
 

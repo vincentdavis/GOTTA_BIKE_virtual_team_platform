@@ -9,7 +9,7 @@
         <h1 class="card-title text-2xl">Team Roster</h1>
 
         <p class="text-sm text-base-content/70">
-          {{ rider_count }} rider{{ rider_count|pluralize }} cached ·
+          {{ rider_count }} rider{{ rider_count|pluralize }} ·
           {% if stats_synced_at %}
             stats synced {{ stats_synced_at|timesince }} ago
           {% else %}
