@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import logfire
 from django.contrib.auth.models import AbstractUser
-from django.db import models
+from django.db import models, transaction
 from django_countries.fields import CountryField
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from decimal import Decimal
 
     from django.db.models.manager import RelatedManager
@@ -419,6 +420,61 @@ class User(AbstractUser):
 
         """
         return f"{self.username}, Discord: {self.discord_username}"
+
+    def _youtube_channel_id_is_stale(self, update_fields: Iterable[str] | None) -> bool:
+        """Check whether the cached YouTube channel ID no longer matches the saved URL.
+
+        Args:
+            update_fields: The ``update_fields`` the caller passed to ``save``, if any.
+
+        Returns:
+            True if the stored channel ID belongs to a channel the user has moved away from.
+
+        """
+        if self.pk is None or not self.youtube_channel_id:
+            return False
+        if update_fields is not None and "youtube_channel" not in update_fields:
+            # The URL is not being written, so whatever it holds in memory is not persisted.
+            return False
+        stored = User.objects.filter(pk=self.pk).values("youtube_channel", "youtube_channel_id").first()
+        if stored is None or stored["youtube_channel"] == self.youtube_channel:
+            return False
+        # An explicit edit of the ID wins: the admin can change URL and ID in one save.
+        return self.youtube_channel_id == stored["youtube_channel_id"]
+
+    def save(self, **kwargs: Any) -> None:
+        """Save the user, discarding cached YouTube data when the channel URL changes.
+
+        ``youtube_channel_id`` is scraped from ``youtube_channel`` once by
+        ``sync_youtube_channel_ids`` and never re-checked, so a rider who switches channels
+        -- or removes their URL -- would otherwise keep feeding the old channel's videos to
+        their profile, the Team Feed and the bot. Clearing it here covers every writer (the
+        profile form, the admin, the shell) instead of asking each to remember, and the next
+        sync resolves the new channel. The already-fetched videos all belong to the old
+        channel and cannot be told apart from newer ones, so they go with it.
+
+        Args:
+            **kwargs: Passed through to ``Model.save`` (keyword-only since Django 6).
+
+        """
+        if not self._youtube_channel_id_is_stale(kwargs.get("update_fields")):
+            super().save(**kwargs)
+            return
+
+        self.youtube_channel_id = ""
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None:
+            kwargs["update_fields"] = {*update_fields, "youtube_channel_id"}
+
+        with transaction.atomic():
+            super().save(**kwargs)
+            deleted, _ = YouTubeVideo.objects.filter(user=self).delete()
+
+        logfire.info(
+            "YouTube channel URL changed, cleared cached channel ID and videos",
+            user_id=self.pk,
+            videos_deleted=deleted,
+        )
 
     def has_role(self, role: str) -> bool:
         """Check if user has a specific role.
