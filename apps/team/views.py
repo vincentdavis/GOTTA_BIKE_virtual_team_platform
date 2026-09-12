@@ -9,7 +9,7 @@ import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Count, Max, Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -19,6 +19,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
+from apps.rider_data.models import RiderProfile
 from apps.team.forms import (
     JerseyCSVUploadForm,
     MembershipApplicationAdminForm,
@@ -475,6 +476,40 @@ def filtered_roster_view(request: HttpRequest, filter_id: uuid.UUID) -> HttpResp
             "zr_categories": zr_categories,
             "sort_by": sort_by,
             "sort_dir": sort_dir,
+        },
+    )
+
+
+@login_required
+@team_member_required()
+@require_GET
+def rosterv2_view(request: HttpRequest) -> HttpResponse:
+    """Serve the card roster while it is being built, at a URL nothing links to yet.
+
+    Deliberately reachable only by typing it. The roster this replaces is the page the team
+    and the Discord bot use every day, so v2 gets to be wrong in public for a while first --
+    ``/team/roster/`` is untouched until cutover, and there is no sidebar entry.
+
+    Team members only, like the roster it will replace. The cache behind it holds riders who
+    never registered here (the ZwiftPower team page, the ZwiftRacing club), so this is not a
+    page to leave open while the field allow-list is still being written.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        The roster page. Cards land in a later step; for now the header, which is the part
+        that proves the gate and the cache are both wired up.
+
+    """
+    stats = RiderProfile.objects.aggregate(riders=Count("zwid"), synced_at=Max("fetched_at"))
+
+    return render(
+        request,
+        "team/rosterv2.html",
+        {
+            "rider_count": stats["riders"],
+            "stats_synced_at": stats["synced_at"],
         },
     )
 

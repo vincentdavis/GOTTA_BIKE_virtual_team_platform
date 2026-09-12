@@ -198,6 +198,102 @@ def zp_team_rider_factory(db):
 
 
 @pytest.fixture
+def rider_profile_factory(db):
+    """Build a RiderProfile from a realistic zauth document, the way the sync does.
+
+    Goes through ``services.store_profiles`` rather than ``objects.create`` so the columns and
+    the payload are filled by the same mapping production uses. A factory writing columns
+    directly keeps passing after that mapping moves, and the roster reads both halves.
+
+    Defaults describe a rider with data in every block, weight and height included -- the
+    roster must hold rows that HAVE those values and still never show them, so a factory that
+    left them blank would make the allow-list tests pass for the wrong reason.
+
+    Pass any zauth block by name to override or extend it (``identity={"name": "X"}``,
+    ``physical={}``); dicts merge one level deep, anything else replaces.
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from apps.rider_data import services
+    from apps.rider_data.models import RiderProfile
+
+    counter = {"n": 7_000_000}
+
+    def _make(
+        *,
+        zwid: int | None = None,
+        name: str = "Test Rider",
+        gender: str = "male",
+        country: str = "US",
+        age: str = "Vet",
+        category_open: str = "B",
+        category_women: str = "",
+        category_racing: str = "Gold",
+        phenotype: str = "Sprinter",
+        velo: float | None = 1580.0,
+        zwift_racing_score: float | None = 420.0,
+        ftp: float | None = 250.0,
+        weight_kg: float | None = 72.0,
+        height_cm: float | None = 178.0,
+        wkg_20min: float | None = 3.5,
+        wkg_1min: float | None = 5.6,
+        days_since_race: int | None = 2,
+        **blocks,
+    ):
+        if zwid is None:
+            counter["n"] += 1
+            zwid = counter["n"]
+
+        # last_race_at is DERIVED from clubs.known[].last_seen, so a test wanting a stale or
+        # never-raced rider says so here rather than writing the column afterwards.
+        known = []
+        if days_since_race is not None:
+            seen = (timezone.now() - timedelta(days=days_since_race)).date().isoformat()
+            known = [{"id": 77, "name": "The Coalition", "last_seen": seen, "race_count": 9}]
+
+        watts_20min = round(wkg_20min * weight_kg) if wkg_20min and weight_kg else None
+        doc = {
+            "zwid": zwid,
+            "zwift_user_id": f"uuid-{zwid}",
+            "identity": {"name": name, "gender": gender, "country": country, "age": age},
+            "physical": {"weight_kg": weight_kg, "height_cm": height_cm},
+            "power": {
+                "ftp": ftp,
+                "zftp": ftp,
+                # Curves are keyed by DURATION IN SECONDS -- "60" is a minute, "1200" twenty --
+                # and upstream builds them from the ZwiftRacing row only, so a rider with no ZR
+                # data has no curve at all rather than an empty one.
+                "curve_wkg": {"60": wkg_1min, "1200": wkg_20min},
+                "curve_w": {"1200": watts_20min},
+            },
+            "category": {"open": category_open, "women": category_women, "racing": category_racing},
+            "ratings": {
+                "velo": velo,
+                "zwift_racing_score": zwift_racing_score,
+                "rating_max30": None if velo is None else velo + 20,
+                "rating_max90": None if velo is None else velo + 60,
+            },
+            "phenotype": {"value": phenotype, "scores": {"sprinter": 80, "climber": 40}},
+            # distance_km is MISNAMED upstream and carries metres; the model converts it.
+            "totals": {"distance_km": 48_200_000, "climbed_m": 512_000},
+            "clubs": {"current": {"id": 77, "name": "The Coalition"}, "known": known},
+            "sources": {"zwiftpower": {"present": True, "fetched_at": "2026-09-01T10:00:00Z"}},
+            "has_account": {"zwift_api": True, "zwiftpower": True, "zwiftracing": True},
+        }
+
+        for key, value in blocks.items():
+            current = doc.get(key)
+            doc[key] = {**current, **value} if isinstance(current, dict) and isinstance(value, dict) else value
+
+        services.store_profiles([doc])
+        return RiderProfile.objects.get(zwid=zwid)
+
+    return _make
+
+
+@pytest.fixture
 def verification_factory(db):
     """Build a RaceReadyRecord for a given user.
 

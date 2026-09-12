@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Team Roster - The Coalition{% endblock %}
+
+{% block content %}
+  <div class="max-w-6xl mx-auto">
+    <div class="card bg-base-200 shadow-xl">
+      <div class="card-body">
+        <h1 class="card-title text-2xl">Team Roster</h1>
+
+        <p class="text-sm text-base-content/70">
+          {{ rider_count }} rider{{ rider_count|pluralize }} cached ·
+          {% if stats_synced_at %}
+            stats synced {{ stats_synced_at|timesince }} ago
+          {% else %}
+            no rider stats yet
+          {% endif %}
+        </p>
+
+        <div class="alert alert-warning mt-4">
+          <span>
+            <strong>Under construction.</strong> The rider cards are not built yet. The roster
+            everyone uses is still at <a class="link" href="{% url 'team:roster' %}">/team/roster/</a>.
+          </span>
+        </div>
+
+        <p class="mt-4 text-sm text-base-content/70">
+          Weight and exact age are never shown on this page.
+        </p>
+      </div>
+    </div>
+  </div>
+{% endblock %}

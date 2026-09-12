@@ -9,6 +9,8 @@ app_name = "team"
 urlpatterns = [
     path("roster/", views.team_roster_view, name="roster"),
     path("roster/f/<uuid:filter_id>/", views.filtered_roster_view, name="filtered_roster"),
+    # Card roster, under construction. Nothing links here yet -- see rosterv2_view.
+    path("rosterv2/", views.rosterv2_view, name="rosterv2"),
     path("links/", views.team_links_view, name="links"),
     path("links/submit/", views.submit_team_link_view, name="submit_link"),
     path("links/<int:pk>/edit/", views.edit_team_link_view, name="edit_link"),
