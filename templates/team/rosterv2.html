@@ -19,10 +19,36 @@
 
         <div class="alert alert-warning mt-4">
           <span>
-            <strong>Under construction.</strong> Search, filters and race counts are not built yet.
+            <strong>Under construction.</strong> Filters, sorts and race counts are not built yet.
             The roster everyone uses is still at <a class="link" href="{% url 'team:roster' %}">/team/roster/</a>.
           </span>
         </div>
+
+        {% comment %}
+          A plain GET form: the query lives in the URL, so a search can be bookmarked and
+          shared, and Back undoes it. The label is a real <label for>, unlike the search
+          inputs this page could have copied.
+        {% endcomment %}
+        <form method="get" role="search" class="mt-4 flex flex-wrap items-end gap-2">
+          <div class="flex-1 min-w-48">
+            <label class="label py-1" for="roster-search">
+              <span class="label-text">Search riders</span>
+            </label>
+            <input type="search" id="roster-search" name="q" value="{{ query }}"
+                   class="input input-bordered w-full"
+                   placeholder="Any name, or a Zwift ID">
+          </div>
+          <button type="submit" class="btn btn-primary">Search</button>
+          {% if query %}
+            <a class="btn btn-ghost" href="{% url 'team:rosterv2' %}">Clear</a>
+          {% endif %}
+        </form>
+
+        <p role="status" class="mt-2 text-sm text-base-content/70">
+          {% if query %}
+            {{ match_count }} of {{ rider_count }} rider{{ rider_count|pluralize }} match “{{ query }}”
+          {% endif %}
+        </p>
 
         {% if page_obj.object_list %}
           <ul class="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 list-none p-0">
@@ -35,14 +61,14 @@
             <nav class="mt-6 flex justify-center" aria-label="Roster pages">
               <div class="join">
                 {% if page_obj.has_previous %}
-                  <a class="join-item btn btn-sm" href="?page={{ page_obj.previous_page_number }}"
+                  <a class="join-item btn btn-sm" href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.previous_page_number }}"
                      aria-label="Go to the previous page of riders">«</a>
                 {% endif %}
                 <span class="join-item btn btn-sm btn-disabled" aria-current="page">
                   Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
                 </span>
                 {% if page_obj.has_next %}
-                  <a class="join-item btn btn-sm" href="?page={{ page_obj.next_page_number }}"
+                  <a class="join-item btn btn-sm" href="?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}"
                      aria-label="Go to the next page of riders">»</a>
                 {% endif %}
               </div>
@@ -50,7 +76,11 @@
           {% endif %}
         {% else %}
           <p class="mt-6 text-center text-base-content/70">
-            No riders yet. Rider stats arrive with the profile sync.
+            {% if query %}
+              No riders match “{{ query }}”. <a class="link" href="{% url 'team:rosterv2' %}">Clear the search</a>.
+            {% else %}
+              No riders yet. Rider stats arrive with the profile sync.
+            {% endif %}
           </p>
         {% endif %}
 

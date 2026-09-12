@@ -28,6 +28,7 @@ from apps.team.forms import (
 )
 from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView, RosterFilter, TeamLink
 from apps.team.rosterv2 import build_roster_index
+from apps.team.rosterv2 import search as roster_search
 from apps.team.services import (
     ZP_DIV_TO_CATEGORY,
     can_view_verification_media,
@@ -506,11 +507,17 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
 
     """
     roster = build_roster_index()
+    query = request.GET.get("q", "").strip()
+    rows = roster_search(roster.rows, query) if query else list(roster.rows)
 
     # 48 a page: enough to fill four columns twelve deep, and the reason the whole index is
     # never handed to the template. v1 sends ~450 KB of HTML for 100 rows.
-    paginator = Paginator(roster.rows, ROSTER_PAGE_SIZE)
+    paginator = Paginator(rows, ROSTER_PAGE_SIZE)
     page_obj = paginator.get_page(request.GET.get("page", "1"))
+
+    # The query text is NOT logged: it is rider-authored free text, and someone looking up a
+    # teammate by real name should not leave that in telemetry. The count is the useful part.
+    logfire.info("Roster viewed", user_id=request.user.pk, riders=roster.rider_count, matched=len(rows))
 
     return render(
         request,
@@ -518,8 +525,12 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
         {
             "roster": roster,
             "page_obj": page_obj,
+            "query": query,
+            "match_count": len(rows),
             "rider_count": roster.rider_count,
             "stats_synced_at": roster.synced_at,
+            # Paging has to carry the search, or page 2 of a search silently shows everyone.
+            "page_query": urlencode({"q": query}) if query else "",
         },
     )
 

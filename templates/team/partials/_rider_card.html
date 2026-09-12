@@ -26,6 +26,10 @@
             {{ row.card.name }}
           {% endif %}
         </h3>
+        {% if row.matched_as %}
+          {# Why this card came back for a query that does not appear on it. #}
+          <p class="text-xs text-base-content/70 break-words">matched: {{ row.matched_as }}</p>
+        {% endif %}
         <p class="text-xs text-base-content/70 break-words">
           {% if row.account %}
             {{ row.account.discord_name }}{% if row.account.member_since %} · member since {{ row.account.member_since|date:"M Y" }}{% endif %}

@@ -29,7 +29,10 @@ keeps the single-object case readable.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import html
+import re
+import unicodedata
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
 import logfire
@@ -72,9 +75,14 @@ CARD_COLUMNS = (
 # rider's real name yet, and the search box that will want one is a later step that has to
 # widen this list on purpose. discord_id IS here and IS published -- a Discord avatar URL
 # contains the snowflake, so choosing to show avatars is choosing to publish it.
+# first_name/last_name are here for the SEARCH INDEX only -- members look each other up by
+# real name, and both the v1 roster and the Discord bot's teammate search already allow it.
+# They are never put on a card: searchable and displayable are different permissions.
 ACCOUNT_COLUMNS = (
     "id",
     "zwid",
+    "first_name",
+    "last_name",
     "zwid_verified",
     "zwid_verification_method",
     "is_race_ready",
@@ -98,6 +106,66 @@ AGE_BRACKETS_SHOWN = frozenset({"Jnr", "U23", "Snr", "Vet", "Mas", "50+", "60+",
 # Duration keys on the zauth power curves, in SECONDS.
 _20_MINUTES = "1200"
 _1_MINUTE = "60"
+
+
+# Bracketed club tags: "Ada R [COALITION]", "Ada R (COALITION)". Roughly half of all names
+# carry one, and 643 of them literally say COALITION -- members search by club, so the
+# stripped form is an ADDITIONAL haystack entry, never a replacement.
+_CLUB_TAG = re.compile(r"[\[(][^\])]*[\])]")
+
+
+def fold(text: str) -> str:
+    """Reduce a name to the form both a query and a stored name are compared in.
+
+    Done in Python rather than with ``icontains`` because the database does not agree with
+    itself: SQLite's LIKE folds ASCII only (measured: ``'Ä' LIKE '%ä%'`` is false) while
+    Postgres wraps both sides in a locale-aware UPPER(). 156 names in the dev copy are
+    non-ASCII, so a case-insensitivity test could pass locally and behave differently on
+    Railway. It also lets the fold do things no lookup can: unescape the entities
+    ZwiftRacing stores raw, and strip the accents nobody types.
+
+    Args:
+        text: A stored name or a typed query.
+
+    Returns:
+        Unescaped, accent-stripped, case-folded, whitespace-collapsed text.
+
+    """
+    if not text:
+        return ""
+    plain = unicodedata.normalize("NFKD", html.unescape(text))
+    plain = "".join(char for char in plain if not unicodedata.combining(char))
+    return " ".join(plain.casefold().split())
+
+
+def without_club_tag(text: str) -> str:
+    """Return the name with any bracketed club tag removed.
+
+    Args:
+        text: A rider name.
+
+    Returns:
+        The name without its tag, or "" if the tag was the whole name.
+
+    """
+    return " ".join(_CLUB_TAG.sub(" ", text).split())
+
+
+def as_zwid(query: str) -> int | None:
+    """Parse a query that is entirely digits, the strict way.
+
+    ``int()`` alone accepts "1_2", "+12" and full-width digits, and ``str.isdigit()`` is true
+    for non-ASCII digits, so both are checked.
+
+    Args:
+        query: The raw search text.
+
+    Returns:
+        The zwid, or None when the query is not a plain run of ASCII digits.
+
+    """
+    text = query.strip()
+    return int(text) if text.isascii() and text.isdigit() else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,10 +256,24 @@ class AccountFacts:
 
 @dataclass(frozen=True, slots=True)
 class RosterRow:
-    """One card, with its account half when the rider has proved the zwid is theirs."""
+    """One card, with its account half when the rider has proved the zwid is theirs.
+
+    Attributes:
+        card: What may be shown.
+        account: The rider's account half, or None when no verified claim resolved.
+        _search: ``(folded, as written)`` for every name this rider is known by. Server-side
+            only, and ``repr=False`` for the same reason the zwid is: it holds real names,
+            which are searchable but never displayed. The first entry is always the card's
+            own name, which is how ``matched_as`` stays empty for the ordinary case.
+        matched_as: The name that matched the query, when it was NOT the name on the card --
+            "matched: Ada R [COALITION]". Empty otherwise.
+
+    """
 
     card: RiderCard
     account: AccountFacts | None = None
+    _search: tuple[tuple[str, str], ...] = field(default=(), repr=False)
+    matched_as: str = ""
 
     def __str__(self) -> str:
         """Return the rider's name, never the pair's repr.
@@ -371,6 +453,119 @@ def _verified_claimants(*, zauth_required: bool) -> dict[int, list[dict]]:
     return claimants
 
 
+def _zwift_names(roster_zwids: list[int]) -> dict[int, list[str]]:
+    """Collect the in-game names the cache does not keep, keyed by zwid.
+
+    zauth stores one merged name -- ``_first(Zwift, ZwiftPower, ZwiftRacing)`` -- so the
+    losing spelling is gone from ``RiderProfile``. A rider findable today by their
+    ZwiftRacing name would stop being findable if the index read the cache alone, and the
+    two columns really do disagree for hundreds of riders. Two cheap ``values_list`` reads,
+    measured at under 2 ms for 3,000 names.
+
+    Args:
+        roster_zwids: The riders on the roster.
+
+    Returns:
+        Extra names per zwid, in no particular order.
+
+    """
+    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftracing.models import ZRRider
+
+    names: dict[int, list[str]] = {}
+    for model in (ZPTeamRiders, ZRRider):
+        for zwid, name in model.objects.filter(zwid__in=roster_zwids).values_list("zwid", "name"):
+            if name:
+                names.setdefault(zwid, []).append(name)
+    return names
+
+
+def _haystack(
+    card: RiderCard, account: dict | None, guild: dict | None, extra: list[str]
+) -> tuple[tuple[str, str], ...]:
+    """Build every name this rider can be found by, folded, the card's own name first.
+
+    The account's names are only ever passed in for a card that JOINED that account. A
+    search for "Bob Smith" returning a card headed with somebody else's ZwiftPower name
+    would assert exactly the link the verification rule refuses to assert -- made through
+    the search box instead of the card body.
+
+    Real names go in here and never onto the card: findable and displayed are different
+    permissions, and this is the one place that distinction is enforced.
+
+    Args:
+        card: The rider's card, whose name leads the list.
+        account: The joined account's row, or None.
+        guild: That account's open guild membership, or None.
+        extra: In-game names from the per-source tables.
+
+    Returns:
+        ``(folded, as written)`` pairs, de-duplicated, card name first.
+
+    """
+    written = [card.name, *extra]
+    if account:
+        guild = guild or {}
+        written += [
+            guild.get("nickname") or "",
+            guild.get("display_name") or "",
+            guild.get("username") or "",
+            account.get("discord_username") or "",
+            account.get("first_name") or "",
+            account.get("last_name") or "",
+            f"{account.get('first_name') or ''} {account.get('last_name') or ''}",
+        ]
+
+    pairs: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for name in written:
+        for candidate in (name, without_club_tag(name)):
+            folded = fold(candidate)
+            if folded and folded not in seen:
+                seen.add(folded)
+                pairs.append((folded, name.strip()))
+    return tuple(pairs)
+
+
+def search(rows: tuple[RosterRow, ...], query: str) -> list[RosterRow]:
+    """Narrow the roster to the riders matching a typed query.
+
+    A run of digits is matched against the zwid EXACTLY, and OR-ed with the name search
+    rather than replacing it. Substring-matching the zwid -- what the roster this replaces
+    does -- turns the box into an oracle that narrows a rider's id a digit at a time, while
+    an exact match can only confirm a number the searcher already holds. The OR matters the
+    other way too: 110 names contain digits, so "202" has to keep finding "Team 202".
+
+    Args:
+        rows: The whole roster.
+        query: Raw text from the search box.
+
+    Returns:
+        The matching rows, each carrying ``matched_as`` when the hit was on a name the card
+        does not show.
+
+    """
+    folded = fold(query)
+    wanted_zwid = as_zwid(query)
+    if not folded and wanted_zwid is None:
+        return list(rows)
+
+    hits: list[RosterRow] = []
+    for row in rows:
+        if wanted_zwid is not None and row.card._zwid == wanted_zwid:
+            hits.append(row)
+            continue
+        if not folded:
+            continue
+        matched = next((written for name, written in row._search if folded in name), None)
+        if matched is None:
+            continue
+        # The first haystack entry is the card's own name, so "matched:" only appears when
+        # the rider was found by something the card does not show.
+        hits.append(row if matched == row.card.name else replace(row, matched_as=matched))
+    return hits
+
+
 def _guild_rows() -> dict[int, dict]:
     """Read current Discord memberships, keyed by user id.
 
@@ -437,8 +632,9 @@ def build_roster_index() -> RosterIndex:
     ``zwid_verified``. Fixing that is out of this module's hands; the duplicate rule caps the
     damage at losing an account half rather than taking one over.
 
-    Costs 8 queries, flat in the number of riders: three for the union, one Constance read for
-    the cutover policy, accounts, guild memberships, the cache, and the freshness stamp.
+    Costs 10 queries, flat in the number of riders: three for the union, one Constance read
+    for the cutover policy, accounts, guild memberships, the two per-source name tables, the
+    cache, and the freshness stamp.
 
     Returns:
         The roster, ordered by folded name with nameless riders last.
@@ -448,6 +644,7 @@ def build_roster_index() -> RosterIndex:
     zauth_required = config.ZAUTH_VERIFICATION_REQUIRED
     claimants = _verified_claimants(zauth_required=zauth_required)
     guild_rows = _guild_rows()
+    zwift_names = _zwift_names(roster_zwids)
 
     rows: list[RosterRow] = []
     joined = 0
@@ -462,8 +659,12 @@ def build_roster_index() -> RosterIndex:
 
         claims = claimants.get(card._zwid, ())
         account = None
+        claimed: dict | None = None
+        guild: dict | None = None
         if len(claims) == 1:
-            account = _account_facts(claims[0], guild_rows.get(claims[0]["id"]))
+            claimed = claims[0]
+            guild = guild_rows.get(claimed["id"])
+            account = _account_facts(claimed, guild)
             joined += 1
         elif len(claims) > 1:
             contested += 1
@@ -472,7 +673,15 @@ def build_roster_index() -> RosterIndex:
                 zwid=card._zwid,  # ids only, per the logging rule
                 user_ids=[claim["id"] for claim in claims],
             )
-        rows.append(RosterRow(card=card, account=account))
+        rows.append(
+            RosterRow(
+                card=card,
+                account=account,
+                # claimed is None unless the join fired, so an unverified claimant's real and
+                # Discord names never enter this rider's haystack.
+                _search=_haystack(card, claimed, guild, zwift_names.get(card._zwid, [])),
+            )
+        )
 
     # Folded, so case and the whitespace upstream does not strip cannot reorder the page;
     # the zwid tiebreak keeps two riders of the same name in the same order on every request,
