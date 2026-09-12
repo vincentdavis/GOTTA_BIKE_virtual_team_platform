@@ -44,6 +44,7 @@ from django.utils import timezone
 from apps.accounts.models import GuildMember, User
 from apps.rider_data.models import RiderProfile
 from apps.rider_data.services import zwids_to_refresh
+from apps.team.kits import current_kit
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -92,6 +93,7 @@ ACCOUNT_COLUMNS = (
     "discord_username",
     "discord_id",
     "discord_avatar",
+    "team_kit",
 )
 
 GUILD_COLUMNS = ("user_id", "joined_at", "nickname", "display_name", "username")
@@ -291,6 +293,12 @@ class AccountFacts:
         discord_name: Server nickname, else display name, else username.
         avatar_url: Built from the Discord snowflake and avatar hash; "" when either is blank.
         member_since: When their CURRENT Discord membership began, or None.
+        kit_status: The rider's stored status for the CURRENT kit, or "" when the team has
+            not asked them yet. Only riders with an account can have one, which is most of
+            why it lives on this half rather than on the card.
+        kit_label: That status in the team's own words.
+        kit_badge: The DaisyUI class the kit page already uses for it, so one status does
+            not look like two different things in two places.
 
     """
 
@@ -300,6 +308,9 @@ class AccountFacts:
     is_race_ready: bool = False
     is_extra_verified: bool = False
     member_since: datetime | None = None
+    kit_status: str = ""
+    kit_label: str = ""
+    kit_badge: str = ""
 
     def __str__(self) -> str:
         """Return the Discord name, so rendering the object never falls back to its repr.
@@ -1022,12 +1033,25 @@ def _guild_rows() -> dict[int, dict]:
     return {row["user_id"]: row for row in rows}
 
 
-def _account_facts(account: dict, guild: dict | None) -> AccountFacts:
+# The stored labels are written in the FIRST PERSON, for the rider's own profile: "I have
+# the kit", "I need the kit". A teammate's card is read in the third person, so it needs its
+# own wording -- "Kit: I have the kit" on somebody else's card reads as a mistake. The two
+# Zwift-side states are already neutral and are left exactly as the kit page words them.
+_KIT_CARD_LABELS = {
+    "need": "Needs kit",
+    "submitted": "Submitted to Zwift",
+    "completed": "Completed by Zwift",
+    "have": "Has the kit",
+}
+
+
+def _account_facts(account: dict, guild: dict | None, kit: object | None = None) -> AccountFacts:
     """Assemble the account half of a card.
 
     Args:
         account: An ``ACCOUNT_COLUMNS`` row whose verification has already been accepted.
         guild: That user's open ``GuildMember`` row, if they have one.
+        kit: The team's current kit, or None when none is set.
 
     Returns:
         The account facts.
@@ -1043,6 +1067,20 @@ def _account_facts(account: dict, guild: dict | None) -> AccountFacts:
     # rider next signs in.
     name = guild.get("nickname") or guild.get("display_name") or guild.get("username") or account["discord_username"]
 
+    # Read straight off the JSON column rather than through kits.status_for, which takes a
+    # User instance -- this half of the roster is .values() dicts by design. The default is
+    # deliberately blank rather than "unknown": a rider the team has never asked has no kit
+    # status to report, and a card saying "Unknown" on two thousand riders is noise, not news.
+    status, label, badge = "", "", ""
+    if kit is not None:
+        from apps.team.kits import BADGE_CLASSES, KitStatus
+
+        stored = (account.get("team_kit") or {}).get(kit.slug)
+        if stored in KitStatus.values and stored != KitStatus.UNKNOWN:
+            status = stored
+            label = _KIT_CARD_LABELS[stored]
+            badge = BADGE_CLASSES.get(stored, "badge-ghost")
+
     return AccountFacts(
         user_id=account["id"],
         discord_name=name or "",
@@ -1050,6 +1088,9 @@ def _account_facts(account: dict, guild: dict | None) -> AccountFacts:
         is_race_ready=bool(account["is_race_ready"]),
         is_extra_verified=bool(account["is_extra_verified"]),
         member_since=guild.get("joined_at"),
+        kit_status=status,
+        kit_label=label,
+        kit_badge=badge,
     )
 
 
@@ -1074,9 +1115,9 @@ def build_roster_index() -> RosterIndex:
     ``zwid_verified``. Fixing that is out of this module's hands; the duplicate rule caps the
     damage at losing an account half rather than taking one over.
 
-    Costs 12 queries, flat in the number of riders: three for the union, one Constance read
+    Costs 13 queries, flat in the number of riders: three for the union, one Constance read
     for the cutover policy, accounts, guild memberships, the two per-source name tables, two
-    for the race counts, the cache, and the freshness stamp.
+    for the race counts, the current kit, the cache, and the freshness stamp.
 
     Returns:
         The roster, ordered by folded name with nameless riders last.
@@ -1088,6 +1129,7 @@ def build_roster_index() -> RosterIndex:
     guild_rows = _guild_rows()
     zwift_names = _zwift_names(roster_zwids)
     records = race_records(roster_zwids)
+    kit = current_kit()
 
     rows: list[RosterRow] = []
     joined = 0
@@ -1107,7 +1149,7 @@ def build_roster_index() -> RosterIndex:
         if len(claims) == 1:
             claimed = claims[0]
             guild = guild_rows.get(claimed["id"])
-            account = _account_facts(claimed, guild)
+            account = _account_facts(claimed, guild, kit)
             joined += 1
         elif len(claims) > 1:
             contested += 1

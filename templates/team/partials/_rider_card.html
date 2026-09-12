@@ -155,5 +155,16 @@
       {% if row.card.last_race_at %}Last raced {{ row.card.last_race_at|date:"j M Y" }}{% else %}No race on record{% endif %}
       {% if row.card.distance_km is not None %} · {{ row.card.distance_km|floatformat:0|intcomma }} km lifetime{% endif %}
     </p>
+
+    {% if row.account.kit_label %}
+      {% comment %}
+        The current kit only, and only when the rider has actually told us where they stand.
+        A card reading "Unknown" for everybody the team has not asked yet would fill the
+        roster with a status nobody has given.
+      {% endcomment %}
+      <p class="mt-auto pt-1">
+        <span class="badge badge-sm {{ row.account.kit_badge }}">Kit: {{ row.account.kit_label }}</span>
+      </p>
+    {% endif %}
   </div>
 </li>

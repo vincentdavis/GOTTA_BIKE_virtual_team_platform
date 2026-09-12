@@ -251,3 +251,146 @@ def test_a_card_can_mix_icons_and_words(auth_client, roster_rider, settings, tmp
 
     assert 'alt="Zwift Racing Gold"' in card
     assert "Climber" in _text_of(card)
+
+
+# --- team kit status ------------------------------------------------------------------------
+
+
+def _kit(slug="2026-kit", *, current=True):
+    from apps.team.models import TeamKit
+
+    return TeamKit.objects.create(name="2026 Kit", slug=slug, active=True, is_current=current)
+
+
+def _kitted(user_model, username, zwid, status, slug="2026-kit"):
+    user = _member(user_model, username, zwid)
+    user.team_kit = {slug: status}
+    user.save(update_fields=["team_kit"])
+    return user
+
+
+@pytest.mark.django_db
+def test_a_riders_kit_status_shows_at_the_bottom_of_their_card(auth_client, roster_rider, user_model):
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "need")
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    assert "Kit: Needs kit" in card
+
+
+@pytest.mark.django_db
+def test_the_kit_badge_matches_the_colour_the_kit_page_uses(auth_client, roster_rider, user_model):
+    """One status must not look like two different things in two places."""
+    from apps.team.kits import BADGE_CLASSES
+
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "have")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert BADGE_CLASSES["have"] in card
+
+
+@pytest.mark.django_db
+def test_a_rider_the_team_has_not_asked_shows_no_kit_status(auth_client, roster_rider, user_model):
+    """"Unknown" on two thousand cards is a status nobody gave, not information."""
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "unknown")
+    roster_rider(zwid=4243, name="Bo Racer")
+    _member(user_model, "bo", 4243)
+
+    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+
+    assert "Kit:" not in _text_of(_card_for(body, "Ada Racer"))
+    assert "Kit:" not in _text_of(_card_for(body, "Bo Racer"))
+
+
+@pytest.mark.django_db
+def test_only_the_current_kit_is_shown(auth_client, roster_rider, user_model):
+    """A rider carries a status per kit; the card is about the one the team is in now."""
+    _kit(slug="old-kit", current=False)
+    _kit(slug="2026-kit", current=True)
+    roster_rider(zwid=4242, name="Ada Racer")
+    user = _kitted(user_model, "ada", 4242, "have", slug="old-kit")
+    user.team_kit = {"old-kit": "have", "2026-kit": "need"}
+    user.save(update_fields=["team_kit"])
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    assert "Kit: Needs kit" in card
+    assert "I have the kit" not in card
+
+
+@pytest.mark.django_db
+def test_a_rider_with_no_account_shows_no_kit_status(auth_client, roster_rider):
+    """Kit status lives on the account, and most of the roster has none."""
+    _kit()
+    roster_rider(zwid=4242, name="Scouted Rider")
+
+    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+
+    assert "Kit:" not in _text_of(_card_for(body, "Scouted Rider"))
+
+
+@pytest.mark.django_db
+def test_an_unverified_rider_lends_no_kit_status(roster_rider, user_model):
+    """Same gate as everything else on the account half: an unverified zwid joins nothing."""
+    from apps.team.rosterv2 import build_roster_index
+
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    user = _kitted(user_model, "impostor", 4242, "have")
+    user.zwid_verified = False
+    user.save(update_fields=["zwid_verified"])
+
+    assert build_roster_index().rows[0].account is None
+
+
+@pytest.mark.django_db
+def test_no_current_kit_means_no_kit_badge_anywhere(auth_client, roster_rider, user_model):
+    """Before a season's kit is made current there is nothing to report."""
+    _kit(current=False)
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "have")
+
+    assert "Kit:" not in _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+
+@pytest.mark.django_db
+def test_a_status_that_is_not_a_real_status_is_ignored_rather_than_raising(auth_client, roster_rider, user_model):
+    """team_kit is a JSONField, so its contents are not guaranteed to be a KitStatus.
+
+    The kits module says as much in its own docstring: a value edited by hand is treated as
+    the default rather than raising. Without the membership check here, KitStatus("banana")
+    raises ValueError and takes the whole roster down with it.
+    """
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "banana")
+
+    response = auth_client.get(reverse("team:rosterv2"))
+
+    assert response.status_code == 200
+    assert "Kit:" not in _text_of(_card_for(response.content.decode(), "Ada Racer"))
+    assert "banana" not in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_the_kit_wording_is_third_person_on_someone_elses_card(auth_client, roster_rider, user_model):
+    """The stored labels are written for the rider's own profile, in the first person.
+
+    "Kit: I have the kit" on a teammate's card reads as a mistake, so the card has its own
+    wording. Pinned because the obvious implementation reaches for KitStatus(...).label.
+    """
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "have")
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    assert "Kit: Has the kit" in card
+    assert "I have the kit" not in card
