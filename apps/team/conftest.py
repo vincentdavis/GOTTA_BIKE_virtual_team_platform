@@ -1,6 +1,22 @@
 """Shared fixtures for team tests."""
 
 import pytest
+from django.core.cache import cache
+
+
+@pytest.fixture(autouse=True)
+def _clear_site_settings_cache():
+    """Stop one test's SiteSettings from leaking into the next.
+
+    ``SiteSettings.get_settings()`` memoises the singleton in Django's cache, which is a
+    process-wide LocMemCache that pytest-django does not reset between tests. A test that
+    uploads an icon therefore hands that icon to every test after it -- which is how a card
+    test asserting a worded badge started failing with no code change in sight. CLAUDE.md
+    names this trap; this is the fixture it points at.
+    """
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture

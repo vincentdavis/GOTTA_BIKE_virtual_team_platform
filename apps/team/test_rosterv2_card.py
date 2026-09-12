@@ -194,38 +194,40 @@ def test_a_nonsense_page_number_lands_on_a_real_page(auth_client, roster_rider):
 
 
 @pytest.mark.django_db
-def test_an_uploaded_icon_appears_inside_the_badge_beside_its_label(auth_client, roster_rider, settings, tmp_path):
-    """The icon joins the words; it never replaces them.
+def test_an_uploaded_icon_replaces_the_badge_and_the_word(auth_client, roster_rider, settings, tmp_path):
+    """The owner's rule: where there is an icon, the icon IS the badge.
 
-    An icon standing alone would leave colour and shape carrying the meaning, which is the
-    thing every tag on this card is labelled in text to avoid. alt="" keeps a screen reader
-    from announcing the category twice.
+    The word does not disappear, it moves into the image. An icon carrying alt="" in place of
+    a label would delete the category outright for anyone not looking at the screen, which is
+    WCAG 1.1.1 -- so the accessible name has to say exactly what the badge used to.
     """
     from gotta_bike_platform.models import SiteSettings
 
     settings.MEDIA_ROOT = str(tmp_path)
     site = SiteSettings.get_settings()
     site.zr_gold_emoji.save("gold.png", ContentFile(b"not-a-real-png"), save=True)
-
-    # Two different kinds, so a tag that ignored `kind` and always read one map would fail.
+    # A second kind, so a tag that ignored `kind` and read one map would fail here.
     site.phenotype_sprinter_emoji.save("sprinter.png", ContentFile(b"not-a-real-png"), save=True)
 
     roster_rider(zwid=4242, name="Ada Racer", category_racing="Gold", phenotype="Sprinter")
 
     card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    text = _text_of(card)
 
-    # EVERY icon, not just one of them: asserting that alt="" appears somewhere passes while
-    # another icon on the same card announces its label a second time.
-    assert card.count("<img") == card.count('alt=""'), "every icon is decorative; the words are the label"
-    assert "gold" in card
-    assert "sprinter" in card
-    assert "ZR Gold" in _text_of(card), "the words must survive the icon"
-    assert "Sprinter" in _text_of(card)
+    assert 'alt="Zwift Racing Gold"' in card, "the icon has to say what it replaced"
+    assert 'alt="Sprinter"' in card
+    assert 'alt=""' not in card, "an icon standing in for a word is never decorative"
+    # Sized in em, so the icons grow with the reader's text-size setting. In fixed pixels a
+    # badge that is now a picture shrinks away at the largest step, taking the label with it.
+    assert 'class="h-[1.6em] w-[1.6em]"' in card
+    # The badge and its word are gone, replaced.
+    assert "ZR Gold" not in text
+    assert "Sprinter" not in text
 
 
 @pytest.mark.django_db
-def test_a_tier_with_no_uploaded_icon_still_reads(auth_client, roster_rider):
-    """Nothing uploaded is the normal case, and it must cost the reader nothing."""
+def test_a_value_with_no_icon_keeps_its_worded_badge(auth_client, roster_rider):
+    """Nothing uploaded is the normal case for most values, and it must still read."""
     roster_rider(zwid=4242, name="Ada Racer", category_racing="Copper", phenotype="Sprinter", category_open="B")
 
     card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
@@ -233,3 +235,19 @@ def test_a_tier_with_no_uploaded_icon_still_reads(auth_client, roster_rider):
     assert "ZR Copper" in card
     assert "Sprinter" in card
     assert "Cat B" in card
+
+
+@pytest.mark.django_db
+def test_a_card_can_mix_icons_and_words(auth_client, roster_rider, settings, tmp_path):
+    """One value has an icon and another does not -- both must still be readable."""
+    from gotta_bike_platform.models import SiteSettings
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    SiteSettings.get_settings().zr_gold_emoji.save("gold.png", ContentFile(b"not-a-real-png"), save=True)
+
+    roster_rider(zwid=4242, name="Ada Racer", category_racing="Gold", phenotype="Climber")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert 'alt="Zwift Racing Gold"' in card
+    assert "Climber" in _text_of(card)
