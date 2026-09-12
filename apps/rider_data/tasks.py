@@ -16,13 +16,19 @@ from gotta_bike_platform.config import settings as app_config
 def sync_rider_profiles() -> dict:
     """Refresh cached rider profiles from zauth.
 
-    Two populations, fetched together because they overlap and the service deduplicates by
-    zwid anyway:
+    Two populations, fetched in two calls and merged here:
 
-    * everyone registered here who has a Zwift id, which includes members who never linked
-      Zwift and therefore never appear in the connected set;
+    * everyone who races for the team -- members here, the ZwiftPower team page and the
+      ZwiftRacing club, see ``services.zwids_to_refresh``. That is roughly two thousand
+      riders, which the client sends in chunks of two hundred;
     * everyone linked to this app, resolved by the service from ``connected_app`` so we do
       not have to keep a local copy of that list in step.
+
+    They are two calls because the service **intersects** a zwid list with ``connected_app``
+    rather than unioning them (``riders_profiles_full`` in the zauth repo). Asking for both at
+    once would therefore return only riders who are both on our list and linked here -- which
+    would quietly drop every rider who races for the team without a linked account, the larger
+    part of the roster.
 
     Riders the service holds no data for are absent from the response rather than returned
     empty, so the stored count is legitimately lower than the requested count.
@@ -43,16 +49,29 @@ def sync_rider_profiles() -> dict:
 
     with logfire.span("sync_rider_profiles"):
         requested = services.zwids_to_refresh()
-        profiles = client.fetch_profiles(
-            requested,
-            connected_app=app_config.zwift_connected_app_name or None,
-        )
+        by_zwid: dict[int, dict] = {}
+        for profile in client.fetch_profiles(requested):
+            by_zwid[profile.get("zwid")] = profile
+
+        connected_app = app_config.zwift_connected_app_name or None
+        connected = client.fetch_profiles(connected_app=connected_app) if connected_app else []
+        for profile in connected:
+            by_zwid[profile.get("zwid")] = profile
+
+        profiles = list(by_zwid.values())
         result = services.store_profiles(profiles)
-        # Stamp everyone we asked about, including riders the service had nothing for.
-        # Without this they drift toward eviction because of a gap in upstream data rather
-        # than because they left the set we have a reason to hold.
+        # Stamp everyone we asked about, so riders the service had nothing for do not drift
+        # toward eviction over a gap in upstream data rather than over leaving the set we have
+        # reason to hold. Only the zwid list needs this: the riders resolved from
+        # ``connected_app`` are exactly the ones that came back, and storing a row stamps it.
         stamped = services.mark_requested(requested)
-        return {"fetched": len(profiles), "requested": len(requested), "stamped": stamped, **result}
+        return {
+            "fetched": len(profiles),
+            "requested": len(requested),
+            "connected": len(connected),
+            "stamped": stamped,
+            **result,
+        }
 
 
 @task
@@ -66,7 +85,8 @@ def purge_rider_profiles() -> dict:
     data rather than for leaving the set, which is the one thing this sweep is meant to mean.
 
     That works because the sync is not demand-driven. It asks about a defined set on a
-    schedule -- every registered user with a zwid, plus every rider linked to this app -- so a
+    schedule -- everyone who races for the team (``services.zwids_to_refresh``: members here,
+    the ZwiftPower team page and the ZwiftRacing club), plus every rider linked to this app -- so a
     member is stamped every cycle whether or not anybody opens their profile. A stale
     ``last_requested_at`` therefore does not mean "nobody looked at them", it means "we have
     stopped having a reason to ask", which is the population worth evicting.

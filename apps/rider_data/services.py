@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import logfire
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
 
 from apps.accounts.models import GuildMember, User
 from apps.rider_data.models import RiderProfile
+
+# How long a ZwiftRacing club row may go untouched before we stop treating the rider as in the
+# club. The club sync rewrites every rider it lists on each run, so an untouched row means the
+# club stopped listing them -- the only departure signal that table has, since ZRRider.date_left
+# lost its writer. Generous next to the sync's daily cadence, so an outage does not evict anyone.
+_ZR_SEEN_DAYS = 30
 
 
 def _as_datetime(value: object) -> datetime | None:
@@ -177,19 +184,50 @@ def mark_requested(zwids: list[int]) -> int:
 def zwids_to_refresh() -> list[int]:
     """Return the riders whose profiles we want kept current.
 
-    Everyone registered here who has a Zwift id. That is wider than the zauth-connected set
-    on purpose: a member who never linked Zwift still races, still appears on the roster, and
-    still needs a profile. It is narrower than "every rider the service knows about", which
-    is the point -- the cache should not accumulate people we have no reason to hold.
+    Everyone who races for the team, which is the union of three sets:
 
-    The connected set is fetched separately by ``connected_app`` and does not need listing
-    here, since the service resolves it.
+    - **Members here** -- every registered user with a Zwift id, connected or not. A member who
+      never linked Zwift still races and still needs a profile. Someone whose Discord
+      membership has closed drops out, so leaving the team eventually releases their cached
+      profile; an account with no guild row at all (a locally-created one, say) is kept.
+    - **The ZwiftPower team page** -- riders who have not left it. Most never registered here,
+      and for them this cache is the only place their racing data lives.
+    - **The ZwiftRacing club** -- the same, for the riders in the club but not on that page.
+      Judged by when the club sync last touched the row, not by ``ZRRider.date_left``: nothing
+      has written that field since it was deliberately dropped from the club sync, so it would
+      hold every rider who ever appeared in the club forever. The club sync rewrites each rider
+      it still sees, so a row untouched for ``_ZR_SEEN_DAYS`` is one the club no longer lists.
+
+    Riders connected to this app through zauth are deliberately absent: the service resolves
+    them from ``connected_app``, so it holds that set rather than us keeping a copy.
+
+    Dropping out of the request is what starts a rider's retention clock, since
+    ``mark_requested`` stamps only the riders we asked about: the ZwiftPower team page stamps
+    ``date_left`` when someone leaves, the club sync stops touching their row, and a member's
+    guild membership closes. A rider still in any one of the three stays, which is the point --
+    they still race for us.
+
+    It is still narrower than "every rider the service knows about": the cache holds the team,
+    not the platform.
 
     Returns:
         Distinct zwids, sorted.
 
     """
-    return sorted(User.objects.filter(zwid__isnull=False).values_list("zwid", flat=True).distinct())
+    from apps.zwiftpower.models import ZPTeamRiders
+    from apps.zwiftracing.models import ZRRider
+
+    members = (
+        User.objects.filter(zwid__isnull=False, zwid__gt=0)
+        .filter(Q(guild_member__isnull=True) | Q(guild_member__date_left__isnull=True))
+        .values_list("zwid", flat=True)
+    )
+    zp_team = ZPTeamRiders.objects.filter(date_left__isnull=True, zwid__gt=0).values_list("zwid", flat=True)
+    seen_since = timezone.now() - timedelta(days=_ZR_SEEN_DAYS)
+    zr_club = ZRRider.objects.filter(
+        date_left__isnull=True, zwid__gt=0, date_modified__gte=seen_since
+    ).values_list("zwid", flat=True)
+    return sorted({*members, *zp_team, *zr_club})
 
 
 def last_successful_sync() -> datetime | None:

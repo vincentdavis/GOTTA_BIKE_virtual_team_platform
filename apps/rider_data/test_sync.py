@@ -6,7 +6,7 @@ sync must not cross.
 """
 
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import pytest
 from constance.test import override_config
@@ -127,6 +127,228 @@ def test_the_sync_never_touches_verification_state(user_model):
     rider.refresh_from_db()
     assert rider.zwid_verified is True, "the sync must not write verification state"
     assert rider.zwid_verification_method == "zauth"
+
+
+# --- who gets asked about ------------------------------------------------------------
+
+
+def _zp(zwid, **over):
+    """Put a rider on the ZwiftPower team page.
+
+    Args:
+        zwid: Their Zwift id.
+        **over: Other fields, e.g. ``date_left``.
+
+    Returns:
+        The row.
+
+    """
+    from apps.zwiftpower.models import ZPTeamRiders
+
+    return ZPTeamRiders.objects.create(zwid=zwid, name=f"ZP {zwid}", **over)
+
+
+def _zr(zwid, **over):
+    """Put a rider in the ZwiftRacing club.
+
+    Args:
+        zwid: Their Zwift id.
+        **over: Other fields, e.g. ``date_left``.
+
+    Returns:
+        The row.
+
+    """
+    from apps.zwiftracing.models import ZRRider
+
+    return ZRRider.objects.create(zwid=zwid, name=f"ZR {zwid}", **over)
+
+
+@pytest.mark.django_db
+def test_everyone_who_races_for_the_team_is_requested(user_model):
+    """Members, the ZwiftPower team page and the ZwiftRacing club -- the roster's population."""
+    _make_user(user_model, username="member", zwid=111)
+    _zp(222)
+    _zr(333)
+
+    assert services.zwids_to_refresh() == [111, 222, 333]
+
+
+@pytest.mark.django_db
+def test_a_rider_in_several_sources_is_asked_about_once(user_model):
+    """The same rider on the team page, in the club and registered here is one request."""
+    _make_user(user_model, username="member", zwid=111)
+    _zp(111)
+    _zr(111)
+
+    assert services.zwids_to_refresh() == [111]
+
+
+@pytest.mark.django_db
+def test_a_club_row_the_sync_stopped_touching_is_no_longer_requested():
+    """ZRRider.date_left lost its writer, so "still listed by the club" is the real signal.
+
+    Without this the club arm would hold every rider who ever appeared in it, re-stamping
+    their retention clock nightly so the window could never be reached.
+    """
+    from apps.zwiftracing.models import ZRRider
+
+    _zr(333)
+    # update() rather than save(), so auto_now does not overwrite the date we are setting.
+    ZRRider.objects.filter(zwid=333).update(date_modified=timezone.now() - timedelta(days=31))
+
+    assert services.zwids_to_refresh() == []
+
+
+@pytest.mark.django_db
+def test_a_rider_the_club_still_lists_is_requested():
+    """The club sync rewrites every rider it lists, so a fresh row means they are still in it."""
+    from apps.zwiftracing.models import ZRRider
+
+    _zr(333)
+    ZRRider.objects.filter(zwid=333).update(date_modified=timezone.now() - timedelta(days=29))
+
+    assert services.zwids_to_refresh() == [333]
+
+
+@pytest.mark.django_db
+def test_leaving_the_team_page_releases_a_rider_the_club_also_dropped():
+    """The case the two signals have to agree on, or nobody is ever released."""
+    from apps.zwiftracing.models import ZRRider
+
+    _zp(444, date_left=timezone.now())
+    _zr(444)
+    ZRRider.objects.filter(zwid=444).update(date_modified=timezone.now() - timedelta(days=31))
+
+    assert services.zwids_to_refresh() == []
+
+
+@pytest.mark.django_db
+def test_a_rider_who_left_is_no_longer_requested():
+    """Dropping out of the request is what starts their retention clock."""
+    _zp(222, date_left=timezone.now())
+    _zr(333, date_left=timezone.now())
+
+    assert services.zwids_to_refresh() == []
+
+
+@pytest.mark.django_db
+def test_a_member_who_left_the_team_page_is_still_requested(user_model):
+    """They still have a card here, so their profile is still wanted."""
+    _make_user(user_model, username="member", zwid=222)
+    _zp(222, date_left=timezone.now())
+
+    assert services.zwids_to_refresh() == [222]
+
+
+@pytest.mark.django_db
+def test_a_member_who_left_the_discord_is_no_longer_requested(user_model):
+    """Otherwise leaving the team would never release their cached Zwift profile."""
+    from apps.accounts.models import GuildMember
+
+    gone = _make_user(user_model, username="gone", zwid=111, discord_id="d-gone")
+    GuildMember.objects.create(discord_id="d-gone", username="gone", user=gone, date_left=timezone.now())
+    staying = _make_user(user_model, username="staying", zwid=222, discord_id="d-stay")
+    GuildMember.objects.create(discord_id="d-stay", username="staying", user=staying)
+    _make_user(user_model, username="no-guild-row", zwid=333)
+
+    # 333 has no guild membership at all -- an account we have no leaving signal for.
+    assert services.zwids_to_refresh() == [222, 333]
+
+
+@pytest.mark.django_db
+def test_a_departed_member_still_on_the_team_page_is_requested(user_model):
+    """They are still racing for us, which is what the request set is about."""
+    from apps.accounts.models import GuildMember
+
+    gone = _make_user(user_model, username="gone", zwid=111, discord_id="d-gone")
+    GuildMember.objects.create(discord_id="d-gone", username="gone", user=gone, date_left=timezone.now())
+    _zp(111)
+
+    assert services.zwids_to_refresh() == [111]
+
+
+@pytest.mark.django_db
+def test_riders_without_a_zwift_id_are_skipped(user_model):
+    """A member who never gave one, and any row left at zero, are nothing to ask about."""
+    _make_user(user_model, username="no-zwid", zwid=None)
+    _make_user(user_model, username="zero-zwid", zwid=0)
+    _zp(0)
+
+    assert services.zwids_to_refresh() == []
+
+
+@pytest.mark.django_db
+def test_the_team_and_the_connected_set_are_asked_for_separately(user_model):
+    """The service INTERSECTS a zwid list with connected_app instead of unioning them.
+
+    Asking for both at once would return only riders who are both on our list and linked
+    here, dropping every rider who races for the team without a linked account.
+    """
+    _make_user(user_model, username="member", zwid=111)
+    _zp(222)
+
+    with (
+        patch.object(client, "is_configured", return_value=True),
+        patch.object(client, "fetch_profiles", return_value=[]) as fetch,
+        patch("apps.rider_data.tasks.app_config") as app_config,
+    ):
+        app_config.zwift_connected_app_name = "coalition"
+        sync_rider_profiles.func()
+
+    assert fetch.call_args_list == [call([111, 222]), call(connected_app="coalition")]
+
+
+@pytest.mark.django_db
+def test_a_linked_rider_is_cached_even_when_they_race_for_nobody_here(user_model):
+    """The connected call is the only way we hear about them, and it must reach the cache."""
+    with (
+        patch.object(client, "is_configured", return_value=True),
+        patch.object(client, "fetch_profiles", side_effect=[[], [_doc(zwid=4004)]]),
+        patch("apps.rider_data.tasks.app_config") as app_config,
+    ):
+        app_config.zwift_connected_app_name = "coalition"
+        result = sync_rider_profiles.func()
+
+    assert RiderProfile.objects.filter(zwid=4004).exists()
+    assert result["connected"] == 1
+    # Storing the row anchors their retention clock, which is why the connected zwids need no
+    # separate stamping pass -- the ones we hear about are the ones we write.
+    assert RiderProfile.objects.get(zwid=4004).last_requested_at is not None
+
+
+@pytest.mark.django_db
+def test_a_rider_in_both_calls_is_stored_once(user_model):
+    """A linked member comes back from both, and the row must not be written twice."""
+    _make_user(user_model, username="member", zwid=1001)
+
+    with (
+        patch.object(client, "is_configured", return_value=True),
+        patch.object(client, "fetch_profiles", side_effect=[[_doc(zwid=1001)], [_doc(zwid=1001)]]),
+        patch("apps.rider_data.tasks.app_config") as app_config,
+    ):
+        app_config.zwift_connected_app_name = "coalition"
+        result = sync_rider_profiles.func()
+
+    assert result["fetched"] == 1
+    assert result["created"] == 1
+    assert RiderProfile.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_without_a_connected_app_only_the_team_is_asked_for(user_model):
+    """No app name configured means no second call, rather than one that fetches everyone."""
+    _make_user(user_model, username="member", zwid=111)
+
+    with (
+        patch.object(client, "is_configured", return_value=True),
+        patch.object(client, "fetch_profiles", return_value=[]) as fetch,
+        patch("apps.rider_data.tasks.app_config") as app_config,
+    ):
+        app_config.zwift_connected_app_name = ""
+        sync_rider_profiles.func()
+
+    assert fetch.call_args_list == [call([111])]
 
 
 # --- fetching ------------------------------------------------------------------------
