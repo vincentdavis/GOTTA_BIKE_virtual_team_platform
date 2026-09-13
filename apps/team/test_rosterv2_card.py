@@ -253,7 +253,11 @@ def test_a_tier_icon_stands_alone_and_keeps_the_tier_in_its_accessible_name(
     card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
 
     assert 'alt="Zwift Racing Bronze"' in card
-    assert 'title="Zwift Racing Bronze"' in card
+    # Both halves: data-tip alone renders nothing without the tooltip class that reads it.
+    assert '<li class="tooltip" data-tip="Zwift Racing Bronze">' in card
+    # Not title as well, or the browser draws its own tooltip over DaisyUI's. Scoped to this
+    # icon's text: the worded age badge keeps a title, which is a different situation.
+    assert 'title="Zwift Racing Bronze"' not in card
     assert "ZR Bronze" not in _text_of(card)
 
 

@@ -61,9 +61,14 @@
     {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.phenotype or row.card.age_bracket or row.card.country %}
       {# Every tag says in words what it is. Colour alone would carry the meaning otherwise. #}
       {% comment %}
-        Where an icon is uploaded it stands alone -- no badge, no word. The word moves into
-        the image: alt and title carry it, so a screen reader still says "Zwift Racing Bronze"
-        and hovering names an unfamiliar gem.
+        Where an icon is uploaded it stands alone -- no badge, no word. The word is carried
+        three ways instead: alt for assistive tech, data-tip for a hover tooltip, and the
+        same text on both so they cannot drift. title is deliberately NOT also set -- the
+        browser would draw its own tooltip on top of DaisyUI's.
+
+        The tooltip fires on :hover and on :has(:focus-visible). A phone has neither, so it
+        is a convenience for mouse users rather than the way the label is conveyed; alt is
+        what actually carries it.
 
         Worth knowing, since it was measured rather than assumed: the ten tier files are ONE
         shape in ten colours (diamond.svg and ruby.svg have byte-identical path geometry), and
@@ -79,8 +84,9 @@
         {% if row.card.category_open %}
           {% site_icon_url "category" row.card.category_open as cat_icon %}
           {% if cat_icon %}
-            <li><img src="{{ cat_icon }}" alt="Category {{ row.card.category_open }}"
-                     title="Category {{ row.card.category_open }}" class="h-[2em] w-[2em]"></li>
+            <li class="tooltip" data-tip="Category {{ row.card.category_open }}">
+              <img src="{{ cat_icon }}" alt="Category {{ row.card.category_open }}" class="h-[2em] w-[2em]">
+            </li>
           {% else %}
             <li class="badge badge-sm badge-neutral">Cat {{ row.card.category_open }}</li>
           {% endif %}
@@ -88,9 +94,10 @@
         {% if row.card.category_women %}
           {% site_icon_url "category" row.card.category_women as wcat_icon %}
           {% if wcat_icon %}
-            <li><img src="{{ wcat_icon }}" alt="Women's category {{ row.card.category_women }}"
-                     title="Women's category {{ row.card.category_women }}"
-                     class="h-[2em] w-[2em] rounded-full ring-2 ring-pink-400"></li>
+            <li class="tooltip" data-tip="Women's category {{ row.card.category_women }}">
+              <img src="{{ wcat_icon }}" alt="Women's category {{ row.card.category_women }}"
+                   class="h-[2em] w-[2em] rounded-full ring-2 ring-pink-400">
+            </li>
           {% else %}
             <li class="badge badge-sm badge-neutral">Women's Cat {{ row.card.category_women }}</li>
           {% endif %}
@@ -98,8 +105,9 @@
         {% if row.card.category_racing %}
           {% site_icon_url "zr" row.card.category_racing as zr_icon %}
           {% if zr_icon %}
-            <li><img src="{{ zr_icon }}" alt="Zwift Racing {{ row.card.category_racing }}"
-                     title="Zwift Racing {{ row.card.category_racing }}" class="h-[2em] w-[2em]"></li>
+            <li class="tooltip" data-tip="Zwift Racing {{ row.card.category_racing }}">
+              <img src="{{ zr_icon }}" alt="Zwift Racing {{ row.card.category_racing }}" class="h-[2em] w-[2em]">
+            </li>
           {% else %}
             <li class="badge badge-sm badge-outline">ZR {{ row.card.category_racing }}</li>
           {% endif %}
@@ -107,8 +115,9 @@
         {% if row.card.phenotype %}
           {% site_icon_url "phenotype" row.card.phenotype as ph_icon %}
           {% if ph_icon %}
-            <li><img src="{{ ph_icon }}" alt="{{ row.card.phenotype }}"
-                     title="{{ row.card.phenotype }}" class="h-[2em] w-[2em]"></li>
+            <li class="tooltip" data-tip="{{ row.card.phenotype }}">
+              <img src="{{ ph_icon }}" alt="{{ row.card.phenotype }}" class="h-[2em] w-[2em]">
+            </li>
           {% else %}
             <li class="badge badge-sm badge-outline">{{ row.card.phenotype }}</li>
           {% endif %}
