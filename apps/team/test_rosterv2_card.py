@@ -133,9 +133,10 @@ def test_a_hidden_age_bracket_leaves_no_trace_on_the_card(auth_client, roster_ri
 
     body = auth_client.get(reverse("team:rosterv2")).content.decode()
 
-    # Asserted on the title, which is the only place the word "Age" now appears -- so this
-    # cannot pass merely because the visible prefix was dropped.
-    assert 'title="Age bracket' not in _card_for(body, "Ada Racer")
+    card = _card_for(body, "Ada Racer")
+
+    assert "/accounts/age/" not in card
+    assert "Age" not in _text_of(card)
 
 
 @pytest.mark.django_db
@@ -144,9 +145,8 @@ def test_a_junior_bracket_is_shown_because_that_is_the_owners_call(auth_client, 
 
     card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
 
-    # The bracket alone, no "Age" prefix; the title still says what kind of label it is.
-    assert 'title="Age bracket Jnr"' in card
-    assert "Age Jnr" not in _text_of(card)
+    assert 'alt="Age Jnr"' in card
+    assert "age-jnr.svg" in card
 
 
 # --- paging and the empty state -----------------------------------------------------------
@@ -510,3 +510,73 @@ def test_the_flag_lookup_is_case_insensitive(auth_client, roster_rider):
 
     assert "/flags/us.gif" in _card_for(body, "Ada Racer")
     assert "/flags/us.gif" in _card_for(body, "Bo Racer")
+
+
+# --- age bracket icons, which ship a default set -----------------------------------------------
+
+
+@pytest.mark.django_db
+def test_every_shown_age_bracket_has_bundled_artwork(auth_client, roster_rider):
+    """Age is the one family that ships its own icons, so no bracket falls back to text."""
+    from apps.accounts.templatetags.accounts_tags import AGE_DEFAULT_ICONS
+    from apps.team.rosterv2 import AGE_BRACKETS_ORDER
+
+    assert set(AGE_DEFAULT_ICONS) == set(AGE_BRACKETS_ORDER)
+
+    for zwid, bracket in enumerate(AGE_BRACKETS_ORDER, start=4200):
+        roster_rider(zwid=zwid, name=f"Rider {bracket}", age=bracket)
+
+    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+
+    for bracket in AGE_BRACKETS_ORDER:
+        card = _card_for(body, f"Rider {bracket}")
+        assert f'alt="Age {bracket}"' in card, f"{bracket} has no icon"
+        assert "badge-outline\">" + bracket not in card, f"{bracket} fell back to a text badge"
+        # A served URL, not the bare storage path: skipping static() yields a relative src
+        # that resolves against whatever page it is on, and breaks under hashed filenames.
+        assert 'src="/static/accounts/age/' in card, f"{bracket}'s icon is not a static URL"
+
+
+@pytest.mark.django_db
+def test_the_bundled_files_are_really_there():
+    """A missing default would render a broken image on every card carrying that bracket."""
+    from django.contrib.staticfiles import finders
+
+    from apps.accounts.templatetags.accounts_tags import AGE_DEFAULT_ICONS
+
+    for bracket, path in AGE_DEFAULT_ICONS.items():
+        assert finders.find(path), f"{bracket}: {path} is not on the static path"
+
+
+@pytest.mark.django_db
+def test_an_uploaded_icon_replaces_the_bundled_one(auth_client, roster_rider, settings, tmp_path):
+    from gotta_bike_platform.models import SiteSettings
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    SiteSettings.get_settings().age_vet_emoji.save("custom-vet.png", ContentFile(b"x"), save=True)
+
+    roster_rider(zwid=4242, name="Ada Racer", age="Vet")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert "custom-vet" in card
+    assert "age-vet.svg" not in card, "the upload must win over the bundled default"
+
+
+@pytest.mark.django_db
+def test_uploading_one_bracket_leaves_the_others_on_their_defaults(
+    auth_client, roster_rider, settings, tmp_path
+):
+    """The override is per bracket, not a switch that turns the whole bundled set off."""
+    from gotta_bike_platform.models import SiteSettings
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    SiteSettings.get_settings().age_vet_emoji.save("custom-vet.png", ContentFile(b"x"), save=True)
+
+    roster_rider(zwid=4242, name="Vet Rider", age="Vet")
+    roster_rider(zwid=4243, name="Mas Rider", age="Mas")
+
+    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+
+    assert "custom-vet" in _card_for(body, "Vet Rider")
+    assert "age-mas.svg" in _card_for(body, "Mas Rider")

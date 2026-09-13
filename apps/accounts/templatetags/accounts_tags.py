@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import markdown
 from django import template
+from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 
 from apps.accounts.permission_registry import get_permission_help
@@ -34,6 +35,30 @@ ZR_CATEGORY_EMOJI_FIELDS = {
     "Silver": "zr_silver_emoji",
     "Bronze": "zr_bronze_emoji",
     "Copper": "zr_copper_emoji",
+}
+
+AGE_EMOJI_FIELDS = {
+    "Jnr": "age_jnr_emoji",
+    "U23": "age_u23_emoji",
+    "Snr": "age_snr_emoji",
+    "Vet": "age_vet_emoji",
+    "Mas": "age_mas_emoji",
+    "50+": "age_50plus_emoji",
+    "60+": "age_60plus_emoji",
+    "70+": "age_70plus_emoji",
+}
+
+# The bundled artwork behind each bracket. Age is the only family that ships its own set, so
+# a rider always gets a mark; an upload for that bracket simply takes precedence.
+AGE_DEFAULT_ICONS = {
+    "Jnr": "accounts/age/age-jnr.svg",
+    "U23": "accounts/age/age-u23.svg",
+    "Snr": "accounts/age/age-snr.svg",
+    "Vet": "accounts/age/age-vet.svg",
+    "Mas": "accounts/age/age-mas.svg",
+    "50+": "accounts/age/age-50plus.svg",
+    "60+": "accounts/age/age-60plus.svg",
+    "70+": "accounts/age/age-70plus.svg",
 }
 
 PHENOTYPE_EMOJI_FIELDS = {
@@ -360,7 +385,11 @@ _ICON_MAPS = {
     "category": ZP_CATEGORY_EMOJI_FIELDS,
     "zr": ZR_CATEGORY_EMOJI_FIELDS,
     "phenotype": PHENOTYPE_EMOJI_FIELDS,
+    "age": AGE_EMOJI_FIELDS,
 }
+
+# Kinds that ship artwork of their own, used when nothing has been uploaded.
+_DEFAULT_ICONS = {"age": AGE_DEFAULT_ICONS}
 
 
 @register.simple_tag(takes_context=True)
@@ -379,17 +408,23 @@ def site_icon_url(context, kind: str, value: str) -> str:
         value: The category, tier or phenotype name.
 
     Returns:
-        The icon's URL, or "" when nothing is uploaded for it.
+        The uploaded icon's URL, else the bundled default for kinds that ship one, else "".
 
     """
+    if not value:
+        return ""
+
     site_settings = context.get("site_settings")
-    if not value or not site_settings:
-        return ""
     field_name = _ICON_MAPS.get(kind, {}).get(value)
-    if not field_name:
-        return ""
-    icon = getattr(site_settings, field_name, None)
-    return icon.url if icon else ""
+    if site_settings and field_name:
+        icon = getattr(site_settings, field_name, None)
+        if icon:
+            return icon.url
+
+    # No upload: fall back to bundled artwork where the kind ships some. Resolved through
+    # static() rather than hardcoded, so it survives WhiteNoise's hashed filenames.
+    bundled = _DEFAULT_ICONS.get(kind, {}).get(value)
+    return static(bundled) if bundled else ""
 
 
 # ZwiftPower sends a few ISO 3166-2 subdivisions where everything else is ISO 3166-1, and

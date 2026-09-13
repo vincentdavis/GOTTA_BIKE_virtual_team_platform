@@ -123,12 +123,20 @@
           {% endif %}
         {% endif %}
         {% comment %}
-          The bracket alone -- "Vet", not "Age Vet". It is ZwiftPower's own vocabulary and the
-          team reads it at a glance; the title says what kind of label it is for anyone who
-          does not, without spending a word on every card.
+          Age is the one family with BUNDLED artwork, so it shows an icon whether or not
+          anything has been uploaded; an upload for a bracket replaces the default. The text
+          badge remains for a bracket with neither, which the allow-list should prevent but
+          which costs nothing to keep.
         {% endcomment %}
         {% if row.card.age_bracket %}
-          <li class="badge badge-sm badge-outline" title="Age bracket {{ row.card.age_bracket }}">{{ row.card.age_bracket }}</li>
+          {% site_icon_url "age" row.card.age_bracket as age_icon %}
+          {% if age_icon %}
+            <li class="tooltip" data-tip="Age {{ row.card.age_bracket }}">
+              <img src="{{ age_icon }}" alt="Age {{ row.card.age_bracket }}" class="h-[2em] w-[2em]">
+            </li>
+          {% else %}
+            <li class="badge badge-sm badge-outline" title="Age bracket {{ row.card.age_bracket }}">{{ row.card.age_bracket }}</li>
+          {% endif %}
         {% endif %}
         {% comment %}
           A flag rather than "GB-WLS". The ring matters: several flags are mostly white, and
