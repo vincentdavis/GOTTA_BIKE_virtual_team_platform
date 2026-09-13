@@ -106,7 +106,14 @@
             <li class="badge badge-sm badge-outline">{{ row.card.phenotype }}</li>
           {% endif %}
         {% endif %}
-        {% if row.card.age_bracket %}<li class="badge badge-sm badge-outline">Age {{ row.card.age_bracket }}</li>{% endif %}
+        {% comment %}
+          The bracket alone -- "Vet", not "Age Vet". It is ZwiftPower's own vocabulary and
+          the team reads it at a glance; the title says what kind of label it is for anyone
+          who does not, without spending a word on every card.
+        {% endcomment %}
+        {% if row.card.age_bracket %}
+          <li class="badge badge-sm badge-outline" title="Age bracket {{ row.card.age_bracket }}">{{ row.card.age_bracket }}</li>
+        {% endif %}
         {% if row.card.country %}<li class="badge badge-sm badge-outline">{{ row.card.country|upper }}</li>{% endif %}
       </ul>
     {% endif %}

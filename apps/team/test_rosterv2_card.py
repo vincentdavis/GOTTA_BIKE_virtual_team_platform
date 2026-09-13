@@ -133,15 +133,20 @@ def test_a_hidden_age_bracket_leaves_no_trace_on_the_card(auth_client, roster_ri
 
     body = auth_client.get(reverse("team:rosterv2")).content.decode()
 
-    assert "Age -" not in body
-    assert "Age" not in _card_for(body, "Ada Racer")
+    # Asserted on the title, which is the only place the word "Age" now appears -- so this
+    # cannot pass merely because the visible prefix was dropped.
+    assert 'title="Age bracket' not in _card_for(body, "Ada Racer")
 
 
 @pytest.mark.django_db
 def test_a_junior_bracket_is_shown_because_that_is_the_owners_call(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer", age="Jnr")
 
-    assert "Age Jnr" in auth_client.get(reverse("team:rosterv2")).content.decode()
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    # The bracket alone, no "Age" prefix; the title still says what kind of label it is.
+    assert 'title="Age bracket Jnr"' in card
+    assert "Age Jnr" not in _text_of(card)
 
 
 # --- paging and the empty state -----------------------------------------------------------
