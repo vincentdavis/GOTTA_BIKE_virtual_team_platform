@@ -233,40 +233,54 @@ def test_an_icon_that_identifies_the_value_replaces_the_badge_and_the_word(
 
 
 @pytest.mark.django_db
-def test_a_tier_icon_never_replaces_its_word(auth_client, roster_rider, settings, tmp_path):
-    """Ten tiers, one shape, ten colours -- so the word has to stay.
+def test_a_tier_icon_stands_alone_and_keeps_the_tier_in_its_accessible_name(
+    auth_client, roster_rider, settings, tmp_path
+):
+    """Vincent's call, made knowing the trade-off, so the name is what has to hold.
 
-    Measured from the uploaded artwork: diamond.svg and ruby.svg have byte-identical path
-    geometry and differ only in two gradient stops, and the tier name is drawn inside as SVG
-    text landing at 2.4-4.2px in a 19px box. Icon-only would leave colour as the only thing
-    telling Diamond from Ruby, which is WCAG 1.4.1 and the thing every other tag here avoids.
+    The ten tier files are one shape in ten colours -- diamond.svg and ruby.svg have
+    byte-identical path geometry -- and the tier name drawn inside the art lands at 2.4-4.2px
+    at this size. On screen the tiers are therefore told apart by colour; alt is the only
+    thing that still says "Bronze" to anyone the colour does not reach, so it must not go.
     """
     from gotta_bike_platform.models import SiteSettings
 
     settings.MEDIA_ROOT = str(tmp_path)
-    SiteSettings.get_settings().zr_gold_emoji.save("gold.png", ContentFile(b"not-a-real-png"), save=True)
+    SiteSettings.get_settings().zr_bronze_emoji.save("bronze.png", ContentFile(b"x"), save=True)
 
-    roster_rider(zwid=4242, name="Ada Racer", category_racing="Gold")
+    roster_rider(zwid=4242, name="Ada Racer", category_racing="Bronze")
 
     card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
 
-    assert "ZR Gold" in _text_of(card), "the tier must stay readable as a word"
-    assert "gold" in card, "and the icon still shows beside it"
+    assert 'alt="Zwift Racing Bronze"' in card
+    assert 'title="Zwift Racing Bronze"' in card
+    assert "ZR Bronze" not in _text_of(card)
 
 
 @pytest.mark.django_db
-def test_a_womens_category_icon_never_replaces_its_word(auth_client, roster_rider, settings, tmp_path):
-    """The women's category reuses the OPEN category artwork, so an icon alone is ambiguous."""
+def test_the_womens_category_icon_is_ringed_so_it_differs_from_the_open_one(
+    auth_client, roster_rider, settings, tmp_path
+):
+    """The ring is what separates the two icons on screen.
+
+    One icon map serves both categories, so without it a rider holding both shows two
+    identical hexagons and nothing visible says which is which.
+    """
     from gotta_bike_platform.models import SiteSettings
 
     settings.MEDIA_ROOT = str(tmp_path)
-    SiteSettings.get_settings().zp_b_emoji.save("cat-b.png", ContentFile(b"not-a-real-png"), save=True)
+    site = SiteSettings.get_settings()
+    site.zp_d_emoji.save("cat-d.png", ContentFile(b"x"), save=True)
 
-    roster_rider(zwid=4242, name="Ada Racer", category_open="C", category_women="B")
+    roster_rider(zwid=4242, name="Ada Racer", category_open="D", category_women="D")
 
-    text = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
 
-    assert "Women's Cat B" in text
+    assert 'alt="Category D"' in card
+    assert 'alt="Women\'s category D"' in card
+    # The ring is the only thing separating the two on screen, so it is pinned.
+    assert "ring-pink-400" in card
+    assert card.count("ring-pink-400") == 1, "only the women's icon is ringed"
 
 
 @pytest.mark.django_db

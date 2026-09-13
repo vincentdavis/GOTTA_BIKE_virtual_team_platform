@@ -61,19 +61,19 @@
     {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.phenotype or row.card.age_bracket or row.card.country %}
       {# Every tag says in words what it is. Colour alone would carry the meaning otherwise. #}
       {% comment %}
-        An icon replaces the word only where the artwork identifies the value ON ITS OWN.
-        Measured against the files actually uploaded here, that is true for phenotype and for
-        the open category, and false for the other two:
+        Where an icon is uploaded it stands alone -- no badge, no word. The word moves into
+        the image: alt and title carry it, so a screen reader still says "Zwift Racing Bronze"
+        and hovering names an unfamiliar gem.
 
-        * ZR tiers are ONE shape in ten colours -- diamond.svg and ruby.svg have byte-identical
-          path geometry -- and the tier name is drawn inside the art as SVG text that lands at
-          2.4-4.2px in a 19px box. Icon-only would leave colour as the sole difference between
-          ten values, which is the one thing every tag on this card is worded to avoid.
-        * The women's category reuses the OPEN category artwork, so icon-only renders two
-          identical hexagons for a rider who has both.
+        Worth knowing, since it was measured rather than assumed: the ten tier files are ONE
+        shape in ten colours (diamond.svg and ruby.svg have byte-identical path geometry), and
+        the tier name drawn inside the art lands at 2.4-4.2px here, so on screen the tiers are
+        told apart by colour. Vincent's call, made knowing that; the accessible name is what
+        keeps the tier available to anyone the colour does not reach.
 
-        Where the icon does stand alone, the word moves into it: alt and title carry exactly
-        what the badge said. Sized in em so it grows with the reader's text-size setting.
+        The women's category reuses the OPEN category artwork, so it gets a pink ring -- that
+        ring is the only thing separating "Cat D" from "Women's Cat D" on a rider who has both,
+        which is why it is on the image rather than being left to the title.
       {% endcomment %}
       <ul class="flex flex-wrap items-center gap-1 text-xs">
         {% if row.card.category_open %}
@@ -87,15 +87,22 @@
         {% endif %}
         {% if row.card.category_women %}
           {% site_icon_url "category" row.card.category_women as wcat_icon %}
-          <li class="badge badge-sm badge-neutral gap-1">
-            {% if wcat_icon %}<img src="{{ wcat_icon }}" alt="" class="h-[1.6em] w-[1.6em]">{% endif %}Women's Cat {{ row.card.category_women }}
-          </li>
+          {% if wcat_icon %}
+            <li><img src="{{ wcat_icon }}" alt="Women's category {{ row.card.category_women }}"
+                     title="Women's category {{ row.card.category_women }}"
+                     class="h-[2em] w-[2em] rounded-full ring-2 ring-pink-400"></li>
+          {% else %}
+            <li class="badge badge-sm badge-neutral">Women's Cat {{ row.card.category_women }}</li>
+          {% endif %}
         {% endif %}
         {% if row.card.category_racing %}
           {% site_icon_url "zr" row.card.category_racing as zr_icon %}
-          <li class="badge badge-sm badge-outline gap-1">
-            {% if zr_icon %}<img src="{{ zr_icon }}" alt="" class="h-[1.6em] w-[1.6em]">{% endif %}ZR {{ row.card.category_racing }}
-          </li>
+          {% if zr_icon %}
+            <li><img src="{{ zr_icon }}" alt="Zwift Racing {{ row.card.category_racing }}"
+                     title="Zwift Racing {{ row.card.category_racing }}" class="h-[2em] w-[2em]"></li>
+          {% else %}
+            <li class="badge badge-sm badge-outline">ZR {{ row.card.category_racing }}</li>
+          {% endif %}
         {% endif %}
         {% if row.card.phenotype %}
           {% site_icon_url "phenotype" row.card.phenotype as ph_icon %}
@@ -107,9 +114,9 @@
           {% endif %}
         {% endif %}
         {% comment %}
-          The bracket alone -- "Vet", not "Age Vet". It is ZwiftPower's own vocabulary and
-          the team reads it at a glance; the title says what kind of label it is for anyone
-          who does not, without spending a word on every card.
+          The bracket alone -- "Vet", not "Age Vet". It is ZwiftPower's own vocabulary and the
+          team reads it at a glance; the title says what kind of label it is for anyone who
+          does not, without spending a word on every card.
         {% endcomment %}
         {% if row.card.age_bracket %}
           <li class="badge badge-sm badge-outline" title="Age bracket {{ row.card.age_bracket }}">{{ row.card.age_bracket }}</li>
