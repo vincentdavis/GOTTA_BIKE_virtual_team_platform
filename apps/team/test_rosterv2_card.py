@@ -456,3 +456,57 @@ def test_the_kit_wording_is_third_person_on_someone_elses_card(auth_client, rost
 
     assert "Kit: Has the kit" in card
     assert "I have the kit" not in card
+
+
+# --- country flags ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_country_shows_as_a_flag_not_an_abbreviation(auth_client, roster_rider):
+    roster_rider(zwid=4242, name="Ada Racer", country="fr")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert "/flags/fr.gif" in card
+    assert 'alt="France"' in card
+    assert '<li class="tooltip" data-tip="France">' in card
+    assert "FR" not in _text_of(card)
+
+
+@pytest.mark.django_db
+def test_a_uk_subdivision_flies_the_parent_flag_and_keeps_its_own_name(auth_client, roster_rider):
+    """ZwiftPower sends ISO 3166-2 for the UK nations; django_countries knows only 3166-1.
+
+    Country(code).flag builds a URL without checking the country exists, so an unvalidated
+    implementation links /static/flags/gb-wls.gif -- an image that is not there.
+    """
+    roster_rider(zwid=4242, name="Ada Racer", country="gb-wls")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert "/flags/gb.gif" in card
+    assert "gb-wls.gif" not in card
+    assert 'data-tip="Wales"' in card
+
+
+@pytest.mark.django_db
+def test_an_unknown_country_code_keeps_its_abbreviation(auth_client, roster_rider):
+    """Degrade to what the card showed before, never to a broken image."""
+    roster_rider(zwid=4242, name="Ada Racer", country="zzz")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert "ZZZ" in _text_of(card)
+    assert "/flags/zzz.gif" not in card
+
+
+@pytest.mark.django_db
+def test_the_flag_lookup_is_case_insensitive(auth_client, roster_rider):
+    """Upstream stores lowercase; django_countries keys on uppercase."""
+    roster_rider(zwid=4242, name="Ada Racer", country="US")
+    roster_rider(zwid=4243, name="Bo Racer", country="us")
+
+    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+
+    assert "/flags/us.gif" in _card_for(body, "Ada Racer")
+    assert "/flags/us.gif" in _card_for(body, "Bo Racer")

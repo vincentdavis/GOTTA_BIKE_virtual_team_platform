@@ -130,7 +130,22 @@
         {% if row.card.age_bracket %}
           <li class="badge badge-sm badge-outline" title="Age bracket {{ row.card.age_bracket }}">{{ row.card.age_bracket }}</li>
         {% endif %}
-        {% if row.card.country %}<li class="badge badge-sm badge-outline">{{ row.card.country|upper }}</li>{% endif %}
+        {% comment %}
+          A flag rather than "GB-WLS". The ring matters: several flags are mostly white, and
+          without an edge they dissolve into the card. Codes django_countries does not know
+          keep the abbreviation, so an unrecognised one degrades to today's behaviour instead
+          of a broken image.
+        {% endcomment %}
+        {% if row.card.country %}
+          {% country_flag row.card.country as flag %}
+          {% if flag.url %}
+            <li class="tooltip" data-tip="{{ flag.name }}">
+              <img src="{{ flag.url }}" alt="{{ flag.name }}" class="h-[1.2em] w-auto ring-1 ring-base-300">
+            </li>
+          {% else %}
+            <li class="badge badge-sm badge-outline">{{ row.card.country|upper }}</li>
+          {% endif %}
+        {% endif %}
       </ul>
     {% endif %}
 
