@@ -198,7 +198,8 @@ def test_the_counts_reach_the_card(auth_client, roster_rider):
     body = auth_client.get(reverse("team:rosterv2")).content.decode()
     card = body.split('class="card bg-base-100', 1)[1]
 
-    assert "Races 30d" in card
+    # Derived from the constant, so widening the window does not leave the tile lying.
+    assert f"Races {RACE_WINDOW_DAYS}d" in card
     assert "+1 ride" in card
     assert "1 podium" in card
 
@@ -304,3 +305,22 @@ def test_counting_races_costs_the_same_however_many_riders(roster_rider):
         build_roster_index()
 
     assert len(many) == len(few)
+
+
+def test_the_counting_window_is_ninety_days():
+    """The agreed window, pinned so changing it is a decision rather than a drive-by edit.
+
+    It was 30 until Vincent widened it. Everything downstream -- the tile label, the sort
+    labels, the cutoff -- reads this constant, so this is the only place the number appears.
+    """
+    assert RACE_WINDOW_DAYS == 90
+
+
+@pytest.mark.django_db
+def test_the_sort_option_names_the_window(auth_client, roster_rider):
+    """Otherwise the page offers "Team races" and never says over what period."""
+    roster_rider(zwid=1001, name="Ada Racer")
+
+    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+
+    assert f"Team races ({RACE_WINDOW_DAYS} days)" in body

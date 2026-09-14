@@ -191,6 +191,14 @@ _MEN = frozenset({"m", "male", "men"})
 
 # Coarse on purpose. Fine-grained power steps narrow the weight recoverable from
 # zFTP over W/kg, and nobody browses a roster by the watt.
+# How far back the card's counts look. Ninety days is wide enough to catch a rider between
+# blocks without reaching back to a season that no longer says anything about their form.
+#
+# The number lives ONLY here. Nothing downstream repeats it -- not a field name, not a tile
+# label, not a sort label -- because a field called races_30d holding ninety days of racing
+# is a lie that reads as documentation.
+RACE_WINDOW_DAYS = 90
+
 WKG_STEPS = (2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
 FTP_STEPS = (150, 200, 250, 300, 350, 400)
 JOINED_WINDOWS = (30, 90)
@@ -256,21 +264,21 @@ class RiderCard:
     climbed_m: float | None = None
     club_name: str = ""
     last_race_at: datetime | None = None
-    races_30d: int = 0
-    time_trials_30d: int = 0
-    rides_30d: int = 0
-    podiums_30d: int = 0
-    wins_30d: int = 0
+    races_recent: int = 0
+    time_trials_recent: int = 0
+    rides_recent: int = 0
+    podiums_recent: int = 0
+    wins_recent: int = 0
 
     @property
-    def competitive_30d(self) -> int:
+    def competitive_recent(self) -> int:
         """Races and time trials in the window, which is what the roster ranks on.
 
         Returns:
             Competitive starts; group rides are counted separately and never ranked.
 
         """
-        return self.races_30d + self.time_trials_30d
+        return self.races_recent + self.time_trials_recent
 
     def __str__(self) -> str:
         """Return the rider's name, so rendering a card never falls back to its repr.
@@ -492,11 +500,11 @@ def _card(row: dict, payload: dict, record: RaceRecord | None = None) -> RiderCa
         # date only moves when somebody presses Update. The cached one is still the fallback,
         # because results exist for well under half the roster and a date we hold beats none.
         last_race_at=record.last_result_at or row["last_race_at"],
-        races_30d=record.races,
-        time_trials_30d=record.time_trials,
-        rides_30d=record.rides,
-        podiums_30d=record.podiums,
-        wins_30d=record.wins,
+        races_recent=record.races,
+        time_trials_recent=record.time_trials,
+        rides_recent=record.rides,
+        podiums_recent=record.podiums,
+        wins_recent=record.wins,
     )
 
 
@@ -650,8 +658,8 @@ def search(rows: tuple[RosterRow, ...], query: str) -> list[RosterRow]:
 # LAST regardless of direction -- a descending sort that leads with every rider we know
 # nothing about is the opposite of what the reader asked for.
 SORTS = {
-    "races": ("Team races (30 days)", lambda row: row.card.competitive_30d),
-    "podiums": ("Podiums (30 days)", lambda row: row.card.podiums_30d),
+    "races": (f"Team races ({RACE_WINDOW_DAYS} days)", lambda row: row.card.competitive_recent),
+    "podiums": (f"Podiums ({RACE_WINDOW_DAYS} days)", lambda row: row.card.podiums_recent),
     "name": ("Name", lambda row: row.card.name.casefold()),
     "velo": ("vELO", lambda row: row.card.velo),
     "ftp": ("FTP", lambda row: row.card.zftp),
@@ -916,10 +924,6 @@ def sort_rows(rows: list[RosterRow], sort: str, direction: str) -> list[RosterRo
     present.sort(key=key, reverse=descending)
     return present + missing
 
-
-# How far back the card's counts look. Thirty days is the window Vincent asked for, and it
-# is short enough that "races recently" means something on a page people check weekly.
-RACE_WINDOW_DAYS = 30
 
 # ZwiftPower's f_t is a SPACE-SEPARATED SET OF FLAGS, not a type: "TYPE_RACE TYPE_WOMENS",
 # "TYPE_TEAM_TIME_TRIAL TYPE_RACE". Three consequences, each of which is a live bug

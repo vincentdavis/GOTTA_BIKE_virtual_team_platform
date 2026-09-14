@@ -184,14 +184,15 @@
         <dd class="font-semibold tabular-nums">{% if row.card.wkg_20min is not None %}{{ row.card.wkg_20min|floatformat:1 }}<span class="text-xs font-normal"> w/kg</span>{% else %}—{% endif %}</dd>
       </div>
       <div class="rounded border border-base-300 px-1 py-2">
-        <dt class="text-xs text-base-content/70">Races 30d</dt>
-        <dd class="font-semibold tabular-nums">{{ row.card.competitive_30d }}</dd>
-        {% if row.card.rides_30d %}
+        {# The window comes from RACE_WINDOW_DAYS, so the label cannot outlive a change to it. #}
+        <dt class="text-xs text-base-content/70">Races {{ race_window_days }}d</dt>
+        <dd class="font-semibold tabular-nums">{{ row.card.competitive_recent }}</dd>
+        {% if row.card.rides_recent %}
           {# Counted, never ranked: a group ride is not racing. #}
-          <dd class="text-xs text-base-content/70 tabular-nums">+{{ row.card.rides_30d }} ride{{ row.card.rides_30d|pluralize }}</dd>
+          <dd class="text-xs text-base-content/70 tabular-nums">+{{ row.card.rides_recent }} ride{{ row.card.rides_recent|pluralize }}</dd>
         {% endif %}
-        {% if row.card.podiums_30d %}
-          <dd class="text-xs text-base-content/70 tabular-nums">{{ row.card.podiums_30d }} podium{{ row.card.podiums_30d|pluralize }}</dd>
+        {% if row.card.podiums_recent %}
+          <dd class="text-xs text-base-content/70 tabular-nums">{{ row.card.podiums_recent }} podium{{ row.card.podiums_recent|pluralize }}</dd>
         {% endif %}
       </div>
     </dl>

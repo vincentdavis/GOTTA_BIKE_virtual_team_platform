@@ -32,6 +32,7 @@ from apps.team.rosterv2 import (
     DEFAULT_SORT,
     FTP_STEPS,
     JOINED_WINDOWS,
+    RACE_WINDOW_DAYS,
     SORTS,
     WKG_STEPS,
     apply_filters,
@@ -611,6 +612,7 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
             "joined_windows": JOINED_WINDOWS,
             "chips": _roster_chips(request),
             "sorts": [(key, label) for key, (label, _) in SORTS.items()],
+            "race_window_days": RACE_WINDOW_DAYS,
             "sort": sort,
             "direction": direction,
             # Paging has to carry every control, or page 2 of a filtered search silently

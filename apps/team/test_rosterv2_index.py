@@ -61,11 +61,11 @@ EXPECTED_CARD_FIELDS = (
     "climbed_m",
     "club_name",
     "last_race_at",
-    "races_30d",
-    "time_trials_30d",
-    "rides_30d",
-    "podiums_30d",
-    "wins_30d",
+    "races_recent",
+    "time_trials_recent",
+    "rides_recent",
+    "podiums_recent",
+    "wins_recent",
 )
 
 FORBIDDEN = ("weight_kg", "height_cm", "birth_year", "email", "payload")
