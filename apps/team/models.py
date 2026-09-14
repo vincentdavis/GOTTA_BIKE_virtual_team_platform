@@ -37,6 +37,8 @@ class RaceReadyRecord(models.Model):
            Rejected records keep their evidence for a grace period, then the same
            sweep strips those too. Media on a pending or currently-valid record is
            kept -- it is the evidence for a live claim.
+        6. Deleting a record at any point deletes its uploaded file with it, whatever
+           its status -- see ``delete``.
 
     Attributes:
         user: The team member this record belongs to.
@@ -187,6 +189,48 @@ class RaceReadyRecord(models.Model):
         super().clean()
         if not self.media_file and not self.url:
             raise ValidationError("You must provide either a file upload or a URL (or both).")
+
+    def delete(self, *args, **kwargs):
+        """Delete the record, and take its evidence file with it.
+
+        Django never removes FileField storage on delete. Left to itself the row goes and
+        the photograph stays in the bucket -- and it stays there permanently, because every
+        sweep that strips media works from the rows, so a file whose row is gone is
+        unreachable except by enumerating the storage prefix. Body photography is exactly
+        the thing that must not outlive the record it belongs to.
+
+        A file that cannot be deleted does not stop the row going. That is the rule the
+        rider's own delete already follows (``services.delete_verification_records``): the
+        deletion was asked for, and refusing on a storage error would leave the asker stuck
+        with the record. The path is logged so it can be swept by hand.
+
+        This fires for a per-instance delete -- the review page's Delete button, the Django
+        admin's, the shell. It does **not** fire for a cascade or a queryset delete, where
+        Django's Collector bulk-deletes without instantiating; those paths strip the media
+        themselves first (``purge_user_verification_media``, ``delete_verification_records``).
+
+        Args:
+            *args: Passed through to ``Model.delete``.
+            **kwargs: Passed through to ``Model.delete``.
+
+        Returns:
+            What ``Model.delete`` returns: the total deleted and the per-model breakdown.
+
+        """
+        file_name = self.media_file.name if self.media_file else ""
+        try:
+            self.delete_media_file()
+        except Exception as e:
+            # delete_media_file has logged the storage error itself; what it cannot say is
+            # that the row went anyway, which is what makes this file an orphan.
+            logfire.error(
+                "Verification record deleted but its media file could not be",
+                record_id=self.id,
+                user_id=self.user_id,
+                orphaned_file=file_name,
+                error=str(e),
+            )
+        return super().delete(*args, **kwargs)
 
     def delete_media_file(self) -> bool:
         """Delete the uploaded media file if it exists.
