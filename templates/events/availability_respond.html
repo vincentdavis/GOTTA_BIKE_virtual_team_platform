@@ -146,7 +146,7 @@
   {% if grid.description or grid.website_url or grid.course_url or grid.recon_url or grid.invite_url %}
   <div class="card bg-base-200 shadow-md mb-4 p-4">
     {% if grid.description %}
-    <div class="prose prose-sm max-w-none mb-3">{{ grid.description|render_markdown }}</div>
+    <div class="prose prose-sm max-w-none mb-3">{{ grid.description|render_markdown_untrusted }}</div>
     {% endif %}
     {% if grid.website_url or grid.course_url or grid.recon_url or grid.invite_url %}
     <div class="flex flex-wrap gap-2">

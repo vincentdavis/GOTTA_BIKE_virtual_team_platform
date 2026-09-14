@@ -1428,6 +1428,8 @@ class AvailabilityGrid(models.Model):
         default=False,
         help_text="Show the description and links below to riders filling in this grid",
     )
+    # Rendered with `render_markdown_untrusted`, not `render_markdown`: a squad captain
+    # is a rider with a Discord role, not a site admin, and event admins read these grids.
     description = models.TextField(
         blank=True,
         help_text="Markdown shown above the grid. Captain-authored, so markdown is rendered.",

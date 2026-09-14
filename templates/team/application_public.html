@@ -540,7 +540,7 @@
             <div class="text-xs text-base-content/60 mb-1">
               {{ msg.author_name }} · {{ msg.created_at }}
             </div>
-            <div class="prose prose-sm max-w-none">{{ msg.message|render_markdown }}</div>
+            <div class="prose prose-sm max-w-none">{{ msg.message|render_markdown_untrusted }}</div>
           </div>
           {% endfor %}
         </div>

@@ -7,6 +7,7 @@ import markdown
 from django import template
 from django.utils.safestring import mark_safe
 
+from apps.accounts.markdown_safe import render_untrusted_markdown
 from apps.accounts.permission_registry import get_permission_help
 
 if TYPE_CHECKING:
@@ -83,6 +84,26 @@ def render_markdown(value: str) -> str:
         ],
     )
     return mark_safe(html)  # noqa: S308  # trusted admin-authored markdown (CMS/announcements)
+
+
+@register.filter
+def render_markdown_untrusted(value: str) -> str:
+    """Render markdown written by an ordinary user, sanitising the HTML it produces.
+
+    Use this -- never :func:`render_markdown` -- for any text a rider can type
+    (ticket details and resolutions, membership-application messages,
+    availability-grid descriptions). Python-Markdown passes raw HTML straight
+    through, so the unsanitised filter would let a rider store a script in a page
+    an admin later opens. See :mod:`apps.accounts.markdown_safe` for the allowlist.
+
+    Args:
+        value: Markdown text to render.
+
+    Returns:
+        Sanitised HTML marked as safe.
+
+    """
+    return mark_safe(render_untrusted_markdown(value))  # noqa: S308  # sanitised by markdown_safe allowlist
 
 
 @register.filter
