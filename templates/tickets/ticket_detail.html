@@ -35,13 +35,13 @@
       </div>
 
       <div class="card bg-base-300 p-4 mb-4">
-        <div class="prose prose-sm max-w-none">{{ ticket.details|render_markdown }}</div>
+        <div class="prose prose-sm max-w-none">{{ ticket.details|render_markdown_untrusted }}</div>
       </div>
 
       {% if ticket.resolution %}
       <div class="card bg-base-300 p-4 mb-4 border-l-4 border-success">
         <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50 mb-1">Resolution</p>
-        <div class="prose prose-sm max-w-none">{{ ticket.resolution|render_markdown }}</div>
+        <div class="prose prose-sm max-w-none">{{ ticket.resolution|render_markdown_untrusted }}</div>
       </div>
       {% endif %}
 

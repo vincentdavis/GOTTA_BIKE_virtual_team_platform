@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
@@ -1657,6 +1658,7 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "zp_emoji_items": _build_zp_emoji_items(site_settings_obj),
                 "zr_emoji_items": _build_zr_emoji_items(site_settings_obj),
                 "phenotype_emoji_items": _build_phenotype_emoji_items(site_settings_obj),
+                "age_emoji_items": _build_age_emoji_items(site_settings_obj),
                 "available_roles": [],
             },
         )
@@ -1982,6 +1984,43 @@ def _build_phenotype_emoji_items(site_settings_obj) -> list[dict]:
     return items
 
 
+def _build_age_emoji_items(site_settings_obj) -> list[dict]:
+    """Build the age bracket icon rows for the site images page.
+
+    Unlike the other families these SHIP a default, so each row reports whether it is showing
+    bundled artwork or an upload -- otherwise an empty slot reads as "missing" when it is in
+    fact the normal, working state.
+
+    Args:
+        site_settings_obj: The SiteSettings singleton.
+
+    Returns:
+        One dict per bracket with field_name, label, file and default_url.
+
+    """
+    from apps.accounts.templatetags.accounts_tags import AGE_DEFAULT_ICONS
+
+    items = []
+    for field_name, label in [
+        ("age_jnr_emoji", "Jnr"),
+        ("age_u23_emoji", "U23"),
+        ("age_snr_emoji", "Snr"),
+        ("age_vet_emoji", "Vet"),
+        ("age_mas_emoji", "Mas"),
+        ("age_50plus_emoji", "50+"),
+        ("age_60plus_emoji", "60+"),
+        ("age_70plus_emoji", "70+"),
+    ]:
+        file_field = getattr(site_settings_obj, field_name, None)
+        items.append({
+            "field_name": field_name,
+            "label": label,
+            "file": file_field if file_field else None,
+            "default_url": static(AGE_DEFAULT_ICONS[label]),
+        })
+    return items
+
+
 @login_required
 @require_POST
 def config_site_images_update(request: HttpRequest) -> HttpResponse:
@@ -2127,6 +2166,14 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
         ("zp_c_emoji", "ZP C Category Emoji"),
         ("zp_d_emoji", "ZP D Category Emoji"),
         ("zp_e_emoji", "ZP E Category Emoji"),
+        ("age_jnr_emoji", "Age Jnr Icon"),
+        ("age_u23_emoji", "Age U23 Icon"),
+        ("age_snr_emoji", "Age Snr Icon"),
+        ("age_vet_emoji", "Age Vet Icon"),
+        ("age_mas_emoji", "Age Mas Icon"),
+        ("age_50plus_emoji", "Age 50+ Icon"),
+        ("age_60plus_emoji", "Age 60+ Icon"),
+        ("age_70plus_emoji", "Age 70+ Icon"),
         ("zr_diamond_emoji", "ZR Diamond Emoji"),
         ("zr_ruby_emoji", "ZR Ruby Emoji"),
         ("zr_emerald_emoji", "ZR Emerald Emoji"),
@@ -2179,6 +2226,7 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
             "zp_emoji_items": _build_zp_emoji_items(site_settings_obj),
             "zr_emoji_items": _build_zr_emoji_items(site_settings_obj),
             "phenotype_emoji_items": _build_phenotype_emoji_items(site_settings_obj),
+            "age_emoji_items": _build_age_emoji_items(site_settings_obj),
             "success": success,
             "errors": errors,
         },

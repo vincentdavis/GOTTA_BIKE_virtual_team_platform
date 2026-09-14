@@ -219,7 +219,7 @@ def test_a_departed_rider_is_not_offered_for_a_race_slot(client, event_admin, us
     _answer(grid, leaves)
     _leave(squad, leaves)
 
-    cell_users = json.loads(_results(client, event_admin, grid).context["utc_cell_users_json"])
+    cell_users = _results(client, event_admin, grid).context["utc_cell_users_json"]
 
     assert cell_users[f"{CELL['date']}|{CELL['time']}"] == [stays.pk]
 

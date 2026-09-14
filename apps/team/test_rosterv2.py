@@ -43,22 +43,34 @@ def test_a_team_member_gets_the_page(auth_client):
 
 
 @pytest.mark.django_db
-def test_the_header_counts_cached_riders_and_dates_the_sync(auth_client, rider_profile_factory):
-    rider_profile_factory(zwid=1001, name="Ada Racer")
-    rider_profile_factory(zwid=1002, name="Bo Racer")
+def test_the_header_counts_the_riders_on_the_roster_and_dates_the_sync(auth_client, roster_rider):
+    roster_rider(zwid=1001, name="Ada Racer")
+    roster_rider(zwid=1002, name="Bo Racer")
 
     body = auth_client.get(reverse("team:rosterv2")).content.decode()
 
-    assert "2 riders cached" in body
+    assert "2 riders" in body
     assert "stats synced" in body
 
 
 @pytest.mark.django_db
-def test_an_empty_cache_says_so_rather_than_claiming_a_sync(auth_client):
+def test_the_header_counts_riders_not_cached_rows(auth_client, roster_rider, rider_profile_factory):
+    """Nothing purges the cache, so it keeps riders who left. The header must not count them."""
+    roster_rider(zwid=1001, name="Ada Racer")
+    rider_profile_factory(zwid=1002, name="Departed Rider")
+
+    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+
+    assert "1 rider " in body
+    assert "Departed Rider" not in body
+
+
+@pytest.mark.django_db
+def test_an_empty_roster_says_so_rather_than_claiming_a_sync(auth_client):
     """Zero riders with a 'synced just now' line would read as a working sync with no team."""
     body = auth_client.get(reverse("team:rosterv2")).content.decode()
 
-    assert "0 riders cached" in body
+    assert "0 riders" in body
     assert "no rider stats yet" in body
     assert "stats synced" not in body
 

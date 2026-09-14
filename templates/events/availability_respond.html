@@ -146,7 +146,7 @@
   {% if grid.description or grid.website_url or grid.course_url or grid.recon_url or grid.invite_url %}
   <div class="card bg-base-200 shadow-md mb-4 p-4">
     {% if grid.description %}
-    <div class="prose prose-sm max-w-none mb-3">{{ grid.description|render_markdown }}</div>
+    <div class="prose prose-sm max-w-none mb-3">{{ grid.description|render_markdown_untrusted }}</div>
     {% endif %}
     {% if grid.website_url or grid.course_url or grid.recon_url or grid.invite_url %}
     <div class="flex flex-wrap gap-2">
@@ -254,17 +254,23 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ display_dates_json|json_script:"display-dates" }}
+{{ display_time_slots_json|json_script:"display-time-slots" }}
+{{ display_blocked_json|json_script:"display-blocked" }}
+{{ existing_local_keys_json|json_script:"existing-local-keys" }}
+{{ cell_utc_map_json|json_script:"cell-utc-map" }}
+{{ valid_cells_json|json_script:"valid-cells" }}
 <script>
 (function() {
   var CSRF_TOKEN = '{{ csrf_token }}';
   var EVENT_DETAIL_URL = '{% url "events:event_detail" event.pk %}';
   var RACE_VERIFIED_BLOCKED = {% if race_verified_required and not user_is_race_ready %}true{% else %}false{% endif %};
-  var dates = {{ display_dates_json|safe }};
-  var timeSlots = {{ display_time_slots_json|safe }};
-  var blockedKeys = {{ display_blocked_json|safe }};
-  var existingLocalKeys = {{ existing_local_keys_json|safe }};
-  var cellUtcMap = {{ cell_utc_map_json|safe }};
-  var validCellsList = {{ valid_cells_json|safe }};
+  var dates = JSON.parse(document.getElementById('display-dates').textContent);
+  var timeSlots = JSON.parse(document.getElementById('display-time-slots').textContent);
+  var blockedKeys = JSON.parse(document.getElementById('display-blocked').textContent);
+  var existingLocalKeys = JSON.parse(document.getElementById('existing-local-keys').textContent);
+  var cellUtcMap = JSON.parse(document.getElementById('cell-utc-map').textContent);
+  var validCellsList = JSON.parse(document.getElementById('valid-cells').textContent);
   var displayTimezone = '{{ display_timezone }}';
 
   var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

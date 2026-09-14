@@ -256,14 +256,19 @@
 {% block extra_js %}
 {{ grid_event_defaults|json_script:"grid-event-defaults" }}
 {{ grid_enforced|json_script:"grid-enforced" }}
+{{ timezone_choices_json|json_script:"timezone-choices" }}
+{# json_script rather than |safe: INITIAL_GRID carries the captain-authored grid description. #}
+{% if initial_grid_json %}{{ initial_grid_json|json_script:"initial-grid" }}{% endif %}
 <script>
 (function() {
   var EVENT_ID = {{ event.pk }};
   var SQUAD_NAME = "{{ squad.name|escapejs }}";
   var SQUAD_ID = {{ squad.pk }};
-  var TIMEZONE_CHOICES = {{ timezone_choices_json|safe }};
+  var TIMEZONE_CHOICES = JSON.parse(document.getElementById('timezone-choices').textContent);
   var USER_TIMEZONE = '{{ user_timezone }}';
-  var INITIAL_GRID = {% if initial_grid_json %}{{ initial_grid_json|safe }}{% else %}null{% endif %};
+  // Absent on the create page, where there is no grid to edit yet.
+  var initialGridEl = document.getElementById('initial-grid');
+  var INITIAL_GRID = initialGridEl ? JSON.parse(initialGridEl.textContent) : null;
   var EVENT_REQUIRES_RACE_VERIFIED = {% if event_requires_race_verified %}true{% else %}false{% endif %};
   // Riders have answered, so the fields deciding which cells exist are frozen.
   // The server refuses them regardless; this is so the captain can see why.

@@ -1,5 +1,6 @@
 """Discord Bot API endpoints."""
 
+import hmac
 from datetime import timedelta
 
 import logfire
@@ -203,8 +204,12 @@ class DBotAuth(APIKeyHeader):
             Dict with auth info if valid, None otherwise.
 
         """
-        # Verify API key
-        if not constance_config.DBOT_AUTH_KEY or key != constance_config.DBOT_AUTH_KEY:
+        # Verify API key. Constant-time: a plain `!=` returns as soon as two bytes
+        # differ, which leaks the shared secret a character at a time to anyone who
+        # can time the responses. The empty-key refusal stays -- an unconfigured
+        # DBOT_AUTH_KEY must not authenticate a caller who also sends nothing.
+        expected_key = constance_config.DBOT_AUTH_KEY
+        if not expected_key or not key or not hmac.compare_digest(key.encode(), expected_key.encode()):
             logfire.warning(
                 "Discord bot API auth failed: invalid API key",
                 path=request.path,

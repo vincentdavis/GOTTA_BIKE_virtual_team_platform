@@ -5,8 +5,10 @@ from typing import TYPE_CHECKING
 
 import markdown
 from django import template
+from django.templatetags.static import static
 from django.utils.safestring import mark_safe
 
+from apps.accounts.markdown_safe import render_untrusted_markdown
 from apps.accounts.permission_registry import get_permission_help
 
 if TYPE_CHECKING:
@@ -34,6 +36,30 @@ ZR_CATEGORY_EMOJI_FIELDS = {
     "Silver": "zr_silver_emoji",
     "Bronze": "zr_bronze_emoji",
     "Copper": "zr_copper_emoji",
+}
+
+AGE_EMOJI_FIELDS = {
+    "Jnr": "age_jnr_emoji",
+    "U23": "age_u23_emoji",
+    "Snr": "age_snr_emoji",
+    "Vet": "age_vet_emoji",
+    "Mas": "age_mas_emoji",
+    "50+": "age_50plus_emoji",
+    "60+": "age_60plus_emoji",
+    "70+": "age_70plus_emoji",
+}
+
+# The bundled artwork behind each bracket. Age is the only family that ships its own set, so
+# a rider always gets a mark; an upload for that bracket simply takes precedence.
+AGE_DEFAULT_ICONS = {
+    "Jnr": "accounts/age/age-jnr.svg",
+    "U23": "accounts/age/age-u23.svg",
+    "Snr": "accounts/age/age-snr.svg",
+    "Vet": "accounts/age/age-vet.svg",
+    "Mas": "accounts/age/age-mas.svg",
+    "50+": "accounts/age/age-50plus.svg",
+    "60+": "accounts/age/age-60plus.svg",
+    "70+": "accounts/age/age-70plus.svg",
 }
 
 PHENOTYPE_EMOJI_FIELDS = {
@@ -83,6 +109,26 @@ def render_markdown(value: str) -> str:
         ],
     )
     return mark_safe(html)  # noqa: S308  # trusted admin-authored markdown (CMS/announcements)
+
+
+@register.filter
+def render_markdown_untrusted(value: str) -> str:
+    """Render markdown written by an ordinary user, sanitising the HTML it produces.
+
+    Use this -- never :func:`render_markdown` -- for any text a rider can type
+    (ticket details and resolutions, membership-application messages,
+    availability-grid descriptions). Python-Markdown passes raw HTML straight
+    through, so the unsanitised filter would let a rider store a script in a page
+    an admin later opens. See :mod:`apps.accounts.markdown_safe` for the allowlist.
+
+    Args:
+        value: Markdown text to render.
+
+    Returns:
+        Sanitised HTML marked as safe.
+
+    """
+    return mark_safe(render_untrusted_markdown(value))  # noqa: S308  # sanitised by markdown_safe allowlist
 
 
 @register.filter
@@ -353,6 +399,96 @@ def phenotype_icon(context, phenotype):
         f'<img src="{escape(emoji_file.url)}" alt="{escape(phenotype)}" '
         f'class="h-5 w-5" title="{escape(phenotype)}">'
     )
+
+
+# The three maps above, keyed so one tag can serve all of them.
+_ICON_MAPS = {
+    "category": ZP_CATEGORY_EMOJI_FIELDS,
+    "zr": ZR_CATEGORY_EMOJI_FIELDS,
+    "phenotype": PHENOTYPE_EMOJI_FIELDS,
+    "age": AGE_EMOJI_FIELDS,
+}
+
+# Kinds that ship artwork of their own, used when nothing has been uploaded.
+_DEFAULT_ICONS = {"age": AGE_DEFAULT_ICONS}
+
+
+@register.simple_tag(takes_context=True)
+def site_icon_url(context, kind: str, value: str) -> str:
+    """Return the URL of the uploaded icon for a category, tier or phenotype.
+
+    The URL rather than an ``<img>``, unlike the three badge tags beside it, so a caller can
+    put the icon INSIDE its own badge next to the text label. That matters twice over: the
+    badge tags' fallback uses ``badge-secondary`` and ``badge-primary``, which this project's
+    own accessibility notes record as failing contrast, and an icon that replaces the label
+    rather than joining it leaves colour carrying the meaning on its own.
+
+    Args:
+        context: Template context, for ``site_settings``.
+        kind: "category", "zr" or "phenotype".
+        value: The category, tier or phenotype name.
+
+    Returns:
+        The uploaded icon's URL, else the bundled default for kinds that ship one, else "".
+
+    """
+    if not value:
+        return ""
+
+    site_settings = context.get("site_settings")
+    field_name = _ICON_MAPS.get(kind, {}).get(value)
+    if site_settings and field_name:
+        icon = getattr(site_settings, field_name, None)
+        if icon:
+            return icon.url
+
+    # No upload: fall back to bundled artwork where the kind ships some. Resolved through
+    # static() rather than hardcoded, so it survives WhiteNoise's hashed filenames.
+    bundled = _DEFAULT_ICONS.get(kind, {}).get(value)
+    return static(bundled) if bundled else ""
+
+
+# ZwiftPower sends a few ISO 3166-2 subdivisions where everything else is ISO 3166-1, and
+# django_countries knows nothing about them. They are mapped to the parent country's flag,
+# with the nation's own name kept as the label -- so a Welsh rider shows the Union Flag and
+# reads "Wales", rather than showing a broken image or losing the detail entirely.
+_SUBDIVISIONS = {
+    "GB-ENG": ("GB", "England"),
+    "GB-WLS": ("GB", "Wales"),
+    "GB-SCT": ("GB", "Scotland"),
+    "GB-NIR": ("GB", "Northern Ireland"),
+}
+
+
+@register.simple_tag
+def country_flag(code: str) -> dict:
+    """Resolve an upstream country code to a flag image and a readable name.
+
+    ``Country(code).flag`` builds a URL from the string it is given WITHOUT checking that the
+    country exists, so an unrecognised code yields a link to a missing image rather than an
+    error. Everything here is therefore validated against the real country list first, and a
+    code that is not one falls back to showing the code itself.
+
+    Args:
+        code: The country code as stored, in whatever case upstream used.
+
+    Returns:
+        ``url`` and ``name`` for a known country, or an empty dict.
+
+    """
+    from django_countries import countries
+    from django_countries.fields import Country
+
+    raw = (code or "").strip().upper()
+    if not raw:
+        return {}
+
+    country_code, name = _SUBDIVISIONS.get(raw, (raw, ""))
+    if country_code not in countries:
+        return {}
+
+    country = Country(country_code)
+    return {"url": country.flag, "name": name or country.name}
 
 
 @register.simple_tag
