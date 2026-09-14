@@ -119,12 +119,50 @@ def test_a_real_zero_is_printed_as_zero_not_as_missing(auth_client, roster_rider
 
 
 @pytest.mark.django_db
-def test_a_rider_with_no_race_on_record_says_so(auth_client, roster_rider):
+def test_the_card_does_not_date_a_riders_last_race(auth_client, roster_rider):
+    """Vincent's call: "Races 90d" above already answers whether somebody is riding.
+
+    The value is still on the card object -- the "Last raced" sort and the quiet-rider filter
+    read it -- so this is about what is drawn, not about what is known.
+    """
+    roster_rider(zwid=4242, name="Ada Racer", days_since_race=3)
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    assert "Last raced" not in card
+    assert "No race on record" not in card
+
+
+@pytest.mark.django_db
+def test_a_rider_with_no_race_on_record_says_nothing_about_it(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer", days_since_race=None)
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
 
-    assert "No race on record" in body
+    assert "No race on record" not in card
+
+
+@pytest.mark.django_db
+def test_lifetime_distance_survives_the_date_going(auth_client, roster_rider):
+    """It shared the line with the date, so removing one had to not take the other."""
+    # Lifetime distance rides in the payload's totals block, in METRES -- and it is misnamed
+    # distance_km upstream, which is exactly why a test passing distance_km=41234 to the
+    # factory sets nothing at all.
+    roster_rider(zwid=4242, name="Ada Racer", totals={"distance_km": 41_234_000})
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    assert "41,234 km lifetime" in card
+
+
+@pytest.mark.django_db
+def test_a_rider_with_no_distance_gets_no_lifetime_line(auth_client, roster_rider):
+    """The line used to always render, because the date half always had something to say."""
+    roster_rider(zwid=4242, name="Ada Racer", totals={"distance_km": None})
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    assert "km lifetime" not in card
 
 
 @pytest.mark.django_db
@@ -688,7 +726,7 @@ def _guild_member(user, joined):
 
 
 @pytest.mark.django_db
-def test_membership_is_dated_to_the_year_not_the_month(auth_client, roster_rider, user_model):
+def test_membership_reads_as_joined_and_a_year(auth_client, roster_rider, user_model):
     """The month was noise: nobody reads a roster to learn somebody joined in March."""
     from datetime import UTC, datetime
 
@@ -697,7 +735,8 @@ def test_membership_is_dated_to_the_year_not_the_month(auth_client, roster_rider
 
     card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
 
-    assert "member since 2022" in card
+    assert "Joined 2022" in card
+    assert "member since" not in card
     assert "Mar" not in card
 
 

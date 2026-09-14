@@ -1,8 +1,8 @@
 {% load humanize accounts_tags %}
 {% comment %}
   One rider's card. Everything it can render comes off `row`, which apps/team/rosterv2.py
-  built -- never off a model, and never off anything that carries weight, height, birth year
-  or the zwid. If a value is not on the card object, it is not meant to be here.
+  built -- never off a model, and never off anything that carries weight, height or birth
+  year. If a value is not on the card object, it is not meant to be here.
 
   Two halves: the racing half always renders, the account half only when the rider proved the
   Zwift id is theirs. A missing value is an em dash, never a zero -- "we have no figure" and
@@ -32,7 +32,7 @@
         {% endif %}
         <p class="text-xs text-base-content/70 break-words">
           {% if row.account %}
-            {{ row.account.discord_name }}{% if row.account.member_since %} · member since {{ row.account.member_since|date:"Y" }}{% endif %}
+            {{ row.account.discord_name }}{% if row.account.member_since %} · Joined {{ row.account.member_since|date:"Y" }}{% endif %}
           {% else %}
             No account here
           {% endif %}
@@ -217,10 +217,18 @@
       </div>
     </dl>
 
-    <p class="text-xs text-base-content/70">
-      {% if row.card.last_race_at %}Last raced {{ row.card.last_race_at|date:"j M Y" }}{% else %}No race on record{% endif %}
-      {% if row.card.distance_km is not None %} · {{ row.card.distance_km|floatformat:0|intcomma }} km lifetime{% endif %}
-    </p>
+    {% comment %}
+      The last-raced date is gone from the card; "Races 90d" above already answers whether
+      somebody is riding. `last_race_at` itself stays on the card object -- the "Last raced"
+      sort and the quiet-rider filter both read it, and both are about ordering and selecting
+      rather than telling you a date.
+
+      `is not None` rather than truthiness, as with the tiles: a rider with zero kilometres
+      logged has a figure, and `{% if %}` would drop it as though we had none.
+    {% endcomment %}
+    {% if row.card.distance_km is not None %}
+      <p class="text-xs text-base-content/70">{{ row.card.distance_km|floatformat:0|intcomma }} km lifetime</p>
+    {% endif %}
 
     {% if row.account.events %}
       {% comment %}
