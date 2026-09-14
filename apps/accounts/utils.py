@@ -6,6 +6,54 @@ import httpx
 import logfire
 from bs4 import BeautifulSoup
 
+# ``User.zwid`` is a PositiveIntegerField, i.e. a 32-bit ``integer`` column on PostgreSQL:
+# a larger value raises DataError on save rather than storing. (``apps.zwift.verification``
+# applies the same bound to the zwid the zauth service reports.)
+MAX_ZWID = 2147483647
+
+# ``[0-9]`` rather than ``\d``, which also matches "\u0663" and friends: int() reads those
+# as ordinary digits, so a URL carrying them would resolve to some other rider's ZWID.
+_ZWIFTPOWER_PROFILE = re.compile(r"zwiftpower\.com/profile\.php\?z=([0-9]+)")
+_ASCII_DIGITS = re.compile(r"[0-9]+")
+
+
+def parse_zwid_input(raw: str) -> tuple[int | None, str]:
+    """Read a rider-entered ZwiftPower profile URL or bare Zwift ID.
+
+    Shared by the rider's own verification page and the public membership-registration
+    form so the two cannot drift apart on what they accept.
+
+    The text is rider-entered free text, so it never reaches the logs -- the returned
+    shape goes instead, which still separates "one rider pasted something odd" from
+    "every ZwiftPower URL stopped parsing" while quoting nobody.
+
+    Rejects what the column cannot hold: ``str.isdigit()`` is true of "\u00b2" (``int()``
+    raises) and of "\u0663" (``int()`` yields 3, a real rider's ZWID), and a value above
+    :data:`MAX_ZWID` raises DataError on save.
+
+    Args:
+        raw: Whatever the rider typed.
+
+    Returns:
+        The ZWID, or None when the input is unusable, plus a coarse label for its shape:
+        ``zwiftpower_url``, ``digits``, ``url``, ``empty`` or ``other``.
+
+    """
+    text = raw.strip()
+    if not text:
+        return None, "empty"
+
+    match = _ZWIFTPOWER_PROFILE.search(text)
+    if match:
+        zwid = int(match.group(1))
+        return (zwid if 0 < zwid <= MAX_ZWID else None), "zwiftpower_url"
+
+    if _ASCII_DIGITS.fullmatch(text):
+        zwid = int(text)
+        return (zwid if 0 < zwid <= MAX_ZWID else None), "digits"
+
+    return None, "url" if "://" in text or text.startswith("www.") else "other"
+
 
 def youtube_url_form(youtube_url: str) -> str:
     """Name the shape of a YouTube channel URL without the part that identifies it.

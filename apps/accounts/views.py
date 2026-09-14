@@ -22,6 +22,7 @@ from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm
 from apps.accounts.models import BlockedDiscordId, User
 from apps.accounts.services import delete_user_account
+from apps.accounts.utils import parse_zwid_input
 from apps.rider_data.models import RiderProfile
 from apps.rider_data.tasks import request_profile_refresh
 from apps.team.forms import RaceReadyRecordForm
@@ -1043,19 +1044,9 @@ def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
         Rendered manual verification modal partial.
 
     """
-    import re
-
     error = None
     if request.method == "POST":
-        raw_input = request.POST.get("zwiftpower_url", "").strip()
-        zwid = None
-
-        # Try to extract ZWID from ZwiftPower URL
-        match = re.search(r"zwiftpower\.com/profile\.php\?z=(\d+)", raw_input)
-        if match:
-            zwid = int(match.group(1))
-        elif raw_input.isdigit() and int(raw_input) > 0:
-            zwid = int(raw_input)
+        zwid, input_form = parse_zwid_input(request.POST.get("zwiftpower_url", ""))
 
         if zwid:
             zwid_changed = request.user.zwid != zwid
@@ -1096,7 +1087,8 @@ def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
         logfire.warning(
             "Invalid manual ZWID input",
             user_id=request.user.id,
-            raw_input=raw_input,
+            # The shape, never the text: what a rider types here is free text.
+            input_form=input_form,
         )
 
     return render(
@@ -1139,6 +1131,9 @@ def unverify_zwift(request: HttpRequest) -> HttpResponse:
     review page displays "verified at" next to the status, so a stale timestamp reads
     as a verification the rider has actually removed.
 
+    Dropping the ZWID also changes which verifications race-ready requires, so the cached
+    flag is recomputed and the Discord role moved with it.
+
     This does not sever the zauth connection, so for a connected rider the hourly
     reconcile re-grants it -- deliberate, and unchanged here.
 
@@ -1149,16 +1144,41 @@ def unverify_zwift(request: HttpRequest) -> HttpResponse:
         Rendered Zwift status partial for HTMX requests.
 
     """
+    # Read the live value, not the cached column: a verification that expired since the last
+    # refresh_all_race_ready sweep would otherwise make this look like the cause of a status
+    # loss it had nothing to do with.
+    was_race_ready = request.user.calculate_race_ready()
+
     request.user.zwid = None
     request.user.zwid_verified = False
     request.user.zwid_verification_method = ""
     request.user.zwid_verified_at = None
     request.user.save(update_fields=["zwid", "zwid_verified", "zwid_verification_method", "zwid_verified_at"])
-    # Required verification types are keyed on zwid (ZPTeamRiders -> ZP category), so
-    # dropping it falls back to the default requirements and can move race-ready status
-    # in either direction. is_race_ready is a cache with no signal behind it; the Discord
-    # role sweep reads that cache, so refresh it rather than leaving it wrong for 6 hours.
-    request.user.refresh_race_ready()
+    # Required verification types are keyed on zwid (ZPTeamRiders -> ZP category), so dropping
+    # it falls back to the default requirements. is_race_ready is a cache with no signal behind
+    # it, so refresh it rather than leaving it wrong until the next sweep.
+    is_race_ready, _ = request.user.refresh_race_ready()
+
+    if is_race_ready != was_race_ready:
+        # Move the Discord race-ready role now rather than leaving the rider wearing (or
+        # missing) it until the 6-hourly sync_race_ready_roles sweep notices. Unlike deleting
+        # records, this can go either way: losing the ZP category can as easily drop a rider
+        # into the default requirements they already meet as out of ones they did.
+        from apps.team.tasks import notify_race_ready_change
+
+        notify_race_ready_change.enqueue(
+            user_id=request.user.pk,
+            is_now_race_ready=is_race_ready,
+            changed_by_user_id=request.user.pk,
+        )
+
+    logfire.info(
+        "Rider removed their own Zwift verification",
+        user_id=request.user.pk,
+        discord_id=request.user.discord_id,
+        was_race_ready=was_race_ready,
+        is_race_ready=is_race_ready,
+    )
 
     return render(
         request,

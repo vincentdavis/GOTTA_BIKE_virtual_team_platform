@@ -19,6 +19,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
+from apps.accounts.utils import parse_zwid_input
 from apps.rider_data.models import RiderProfile
 from apps.team.forms import (
     JerseyCSVUploadForm,
@@ -2496,8 +2497,6 @@ def application_manual_zwift_verify(request: HttpRequest, pk: uuid.UUID) -> Http
         Rendered manual verification modal partial.
 
     """
-    import re
-
     application = get_object_or_404(MembershipApplication, pk=pk)
 
     if not application.is_editable:
@@ -2509,14 +2508,7 @@ def application_manual_zwift_verify(request: HttpRequest, pk: uuid.UUID) -> Http
 
     error = None
     if request.method == "POST":
-        raw_input = request.POST.get("zwiftpower_url", "").strip()
-        zwid = None
-
-        match = re.search(r"zwiftpower\.com/profile\.php\?z=(\d+)", raw_input)
-        if match:
-            zwid = int(match.group(1))
-        elif raw_input.isdigit() and int(raw_input) > 0:
-            zwid = int(raw_input)
+        zwid, input_form = parse_zwid_input(request.POST.get("zwiftpower_url", ""))
 
         if zwid:
             application.zwift_id = zwid
@@ -2536,7 +2528,9 @@ def application_manual_zwift_verify(request: HttpRequest, pk: uuid.UUID) -> Http
         logfire.warning(
             "Invalid manual ZWID input for application",
             application_id=str(pk),
-            raw_input=raw_input,
+            # The shape, never the text: this form is public, and what an applicant
+            # types into it is free text.
+            input_form=input_form,
         )
 
     return render(

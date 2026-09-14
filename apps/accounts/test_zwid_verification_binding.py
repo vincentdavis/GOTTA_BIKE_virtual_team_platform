@@ -12,8 +12,11 @@ The two self-service paths must keep ``zwid`` and the verification fields in ste
   that no longer exists.
 
 Both change ``zwid``, which selects the required verification types, so both must
-also refresh the ``is_race_ready`` cache.
+also refresh the ``is_race_ready`` cache -- and the removal, which is a deliberate rider
+action rather than a correction, moves the Discord role with it.
 """
+
+from unittest.mock import patch
 
 import pytest
 from django.urls import reverse
@@ -122,3 +125,50 @@ def test_removing_the_zwid_refreshes_the_race_ready_cache(
     # No ZP category any more, so the default weight_light + height applies.
     assert verified_rider.zwid is None
     assert verified_rider.is_race_ready is False
+
+
+@pytest.mark.django_db
+def test_losing_the_status_moves_the_discord_role_immediately(
+    client, verified_rider, zp_team_rider_factory, verification_factory
+):
+    """Otherwise the rider keeps the race-ready role until the 6-hourly sweep notices."""
+    zp_team_rider_factory(zwid=111111, div=20)  # A-C: weight_full + height
+    verification_factory(verified_rider, "weight_full")
+    verification_factory(verified_rider, "height")
+    verified_rider.refresh_race_ready()
+    client.force_login(verified_rider)
+
+    with patch("apps.team.tasks.notify_race_ready_change") as task:
+        client.post(reverse("accounts:unverify_zwift"))
+
+    task.enqueue.assert_called_once()
+    assert task.enqueue.call_args[1]["is_now_race_ready"] is False
+
+
+@pytest.mark.django_db
+def test_gaining_the_status_moves_the_role_too(client, verified_rider, zp_team_rider_factory, verification_factory):
+    """Dropping the ZWID drops the ZP category, which can leave a rider meeting the default."""
+    zp_team_rider_factory(zwid=111111, div=10)  # A-C: weight_full + height, which they lack
+    verification_factory(verified_rider, "weight_light")
+    verification_factory(verified_rider, "height")
+    assert verified_rider.refresh_race_ready()[0] is False
+    client.force_login(verified_rider)
+
+    with patch("apps.team.tasks.notify_race_ready_change") as task:
+        client.post(reverse("accounts:unverify_zwift"))
+
+    verified_rider.refresh_from_db()
+    assert verified_rider.is_race_ready is True  # default weight_light + height
+    task.enqueue.assert_called_once()
+    assert task.enqueue.call_args[1]["is_now_race_ready"] is True
+
+
+@pytest.mark.django_db
+def test_no_role_churn_when_the_status_did_not_change(client, verified_rider):
+    """A rider who was never race verified should not trigger a Discord write."""
+    client.force_login(verified_rider)
+
+    with patch("apps.team.tasks.notify_race_ready_change") as task:
+        client.post(reverse("accounts:unverify_zwift"))
+
+    task.enqueue.assert_not_called()
