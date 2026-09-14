@@ -141,10 +141,10 @@ def zauth_verified_q() -> Q:
     - ``zwid_verification_method == "zauth"``. Legacy (Sauce mod) and admin verifications are
       still accepted elsewhere, but they are what the zauth migration is replacing, and a kit
       goes to the Zwift account zauth vouches for.
-    - ``zwid_verified``. The method alone is not enough: a rider removing their own
-      verification (``unverify_zwift``) clears ``zwid_verified`` but leaves the method at
-      "zauth". ``User.is_zauth_verified`` applies the same two-field rule; this is its
-      queryset form.
+    - ``zwid_verified``. The method alone is not enough: it records where a verification
+      came from, not that one still stands, and the two fields are separately editable in
+      the Django admin. ``User.is_zauth_verified`` applies the same two-field rule; this is
+      its queryset form.
 
     Never the live zauth connection, nor ``has_account``: the platform records the
     verification (``apps.zwift.verification`` keeps it in step with the service), and asking

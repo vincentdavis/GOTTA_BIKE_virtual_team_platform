@@ -907,11 +907,11 @@ class User(AbstractUser):
         nothing per request. Legacy and admin verifications return False: they are
         still accepted today, but they are what the zauth migration is replacing.
 
-        ``zwid_verified`` is checked too, not just the method: ``unverify_zwift``
-        clears the flag but leaves the method at "zauth" until the hourly reconcile
-        clears it -- and indefinitely if that reconcile aborts because the service is
-        down. Without it, a rider who removed their own verification would still pass
-        a squad's ``require_zauth`` gate.
+        ``zwid_verified`` is checked too, not just the method. Every code path now
+        clears the two together, but the pair is still separable -- both fields are
+        editable in the Django admin, and a half-written row would otherwise pass a
+        squad's ``require_zauth`` gate on provenance alone. The flag is the assertion;
+        the method only says where it came from.
 
         Returns:
             True if the account is verified and that verification came from Zwift OAuth.

@@ -1029,6 +1029,13 @@ def import_application_view(request: HttpRequest, application_id: str) -> HttpRe
 def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
     """Allow user to set their ZWID via ZwiftPower profile URL without marking as verified.
 
+    A rider who changes their ZWID here loses any existing verification: the flag
+    asserts that *this* Zwift ID was checked, so it cannot survive being repointed
+    at a different one (a verified rider could otherwise claim a teammate's zwid and
+    have their racing data show under their own identity). For a zauth-connected
+    rider the clear is temporary -- the hourly reconcile re-grants verification and
+    restores the official zwid, which is the intended self-heal.
+
     Args:
         request: The HTTP request.
 
@@ -1051,13 +1058,34 @@ def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
             zwid = int(raw_input)
 
         if zwid:
+            zwid_changed = request.user.zwid != zwid
+            cleared_method = request.user.zwid_verification_method if zwid_changed else ""
+            cleared_verification = zwid_changed and request.user.zwid_verified
             request.user.zwid = zwid
-            request.user.save(update_fields=["zwid"])
+            update_fields = ["zwid"]
+            if zwid_changed:
+                # The verification is bound to the zwid it checked, so a new zwid
+                # invalidates it. Written in the same save as the zwid itself: the
+                # two must never be observable out of step.
+                request.user.zwid_verified = False
+                request.user.zwid_verification_method = ""
+                request.user.zwid_verified_at = None
+                update_fields += ["zwid_verified", "zwid_verification_method", "zwid_verified_at"]
+            request.user.save(update_fields=update_fields)
+            if zwid_changed:
+                # Required verification types are keyed on zwid (ZPTeamRiders -> ZP
+                # category), so a new zwid can change race-ready status. is_race_ready
+                # is a cache with no signal behind it, so refresh it here rather than
+                # leaving it stale until the next sweep.
+                request.user.refresh_race_ready()
             logfire.info(
                 "Manual ZWID set via verification page",
                 user_id=request.user.id,
                 discord_id=request.user.discord_id,
                 zwid=zwid,
+                zwid_changed=zwid_changed,
+                verification_cleared=cleared_verification,
+                cleared_method=cleared_method,
             )
             return render(
                 request,
@@ -1106,6 +1134,14 @@ def dismiss_zauth_banner(request: HttpRequest) -> HttpResponse:
 def unverify_zwift(request: HttpRequest) -> HttpResponse:
     """Remove Zwift verification from user's account.
 
+    Clears the provenance (``zwid_verification_method`` / ``zwid_verified_at``) along
+    with the flag: they describe a verification that no longer exists, and the ZWID
+    review page displays "verified at" next to the status, so a stale timestamp reads
+    as a verification the rider has actually removed.
+
+    This does not sever the zauth connection, so for a connected rider the hourly
+    reconcile re-grants it -- deliberate, and unchanged here.
+
     Args:
         request: The HTTP request.
 
@@ -1115,7 +1151,14 @@ def unverify_zwift(request: HttpRequest) -> HttpResponse:
     """
     request.user.zwid = None
     request.user.zwid_verified = False
-    request.user.save(update_fields=["zwid", "zwid_verified"])
+    request.user.zwid_verification_method = ""
+    request.user.zwid_verified_at = None
+    request.user.save(update_fields=["zwid", "zwid_verified", "zwid_verification_method", "zwid_verified_at"])
+    # Required verification types are keyed on zwid (ZPTeamRiders -> ZP category), so
+    # dropping it falls back to the default requirements and can move race-ready status
+    # in either direction. is_race_ready is a cache with no signal behind it; the Discord
+    # role sweep reads that cache, so refresh it rather than leaving it wrong for 6 hours.
+    request.user.refresh_race_ready()
 
     return render(
         request,

@@ -319,12 +319,12 @@ def test_export_downloads_the_list_on_screen(client, app_admin, user_model, kits
         (True, "legacy", "no", "legacy"),
         (True, "admin", "no", "admin"),
         (True, "", "no", "other"),
-        # What unverify_zwift leaves behind: the flag cleared, the method still "zauth" until
-        # the reconcile runs. Not zauth-verified -- the method alone must never count.
+        # A half-written row (both fields are editable in the Django admin).
+        # Not zauth-verified -- the method alone must never count.
         (False, "zauth", "no", ""),
         (False, "", "no", ""),
     ],
-    ids=["zauth", "legacy", "admin", "verified-no-method", "zauth-method-left-behind", "never-verified"],
+    ids=["zauth", "legacy", "admin", "verified-no-method", "method-without-the-flag", "never-verified"],
 )
 def test_export_verification_columns_follow_the_page_rule(
     client, app_admin, user_model, kits, verified, method, zauth_cell, method_cell

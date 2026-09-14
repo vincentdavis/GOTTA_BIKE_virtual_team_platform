@@ -40,11 +40,12 @@ def legacy_client(client, user_model):
         (True, "legacy", False),
         (True, "admin", False),
         (True, "", False),
-        # What unverify_zwift leaves behind until the reconcile clears the method.
+        # A half-written row (both fields are editable in the Django admin): provenance
+        # without the flag is not a verification.
         (False, "zauth", False),
         (False, "", False),
     ],
-    ids=["zauth", "legacy", "admin", "verified-no-method", "zauth-method-left-behind", "never-verified"],
+    ids=["zauth", "legacy", "admin", "verified-no-method", "method-without-the-flag", "never-verified"],
 )
 def test_is_zauth_verified_needs_the_flag_and_the_method(user_model, verified, method, expected):
     user = _member(user_model, "u", zwid_verified=verified, zwid_verification_method=method)
@@ -53,10 +54,11 @@ def test_is_zauth_verified_needs_the_flag_and_the_method(user_model, verified, m
 
 @pytest.mark.django_db
 def test_removing_your_own_verification_ends_zauth_verified(client, user_model):
-    """unverify_zwift clears zwid_verified but leaves the method for the hourly reconcile.
+    """unverify_zwift clears the whole verification, provenance included.
 
-    The property must not wait for that reconcile: it aborts while the zauth service is
-    down, so the method can stay "zauth" indefinitely.
+    Leaving the method and timestamp behind would describe a verification that no longer
+    exists -- and waiting for the hourly reconcile to tidy them is not an option: it aborts
+    while the zauth service is down, so they could stay indefinitely.
     """
     user = _member(user_model, "z", zwid_verified=True, zwid_verification_method="zauth", zwid=99)
     client.force_login(user)
@@ -64,7 +66,10 @@ def test_removing_your_own_verification_ends_zauth_verified(client, user_model):
     client.post(reverse("accounts:unverify_zwift"))
     user.refresh_from_db()
 
-    assert user.zwid_verification_method == "zauth"  # the leftover this guards against
+    assert user.zwid is None
+    assert user.zwid_verified is False
+    assert user.zwid_verification_method == ""
+    assert user.zwid_verified_at is None
     assert user.is_zauth_verified is False
 
 

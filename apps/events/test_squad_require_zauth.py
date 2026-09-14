@@ -80,8 +80,8 @@ def test_assign_is_blocked_end_to_end(client, event, user_model, event_admin) ->
 
 
 @pytest.mark.django_db
-def test_assign_is_blocked_after_the_rider_removed_their_verification(client, event, user_model, event_admin) -> None:
-    """unverify_zwift leaves the method at "zauth"; the cleared flag must still close the gate."""
+def test_assign_is_blocked_when_only_the_method_remains(client, event, user_model, event_admin) -> None:
+    """Provenance without the flag is not a verification; the gate must close on it."""
     squad = Squad.objects.create(event=event, name="Synthesis", require_zauth=True)
     rider = user_model.objects.create_user(
         username="gone", email="g@example.test",

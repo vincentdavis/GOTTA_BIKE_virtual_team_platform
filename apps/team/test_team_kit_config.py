@@ -500,8 +500,9 @@ VERIFICATION_STATES = [
     pytest.param(True, "legacy", False, "Legacy (Sauce mod)", id="legacy"),
     pytest.param(True, "admin", False, "Admin (manual)", id="admin"),
     pytest.param(True, "", False, "Other", id="verified-no-method"),
-    # What unverify_zwift leaves behind: the method stays "zauth", the verification is gone.
-    pytest.param(False, "zauth", False, "Not verified", id="zauth-method-left-behind"),
+    # A half-written row (both fields are editable in the Django admin): the method
+    # records where a verification came from, never that one still stands.
+    pytest.param(False, "zauth", False, "Not verified", id="method-without-the-flag"),
     pytest.param(False, "", False, "Not verified", id="never-verified"),
 ]
 
