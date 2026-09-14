@@ -145,6 +145,16 @@
               </div>
 
               <div>
+                <label class="label py-1" for="f-country"><span class="label-text">Country</span></label>
+                <select class="select select-bordered w-full" id="f-country" name="country">
+                  <option value="">Anywhere</option>
+                  {% for code, name in options.countries %}
+                    <option value="{{ code }}" {% if filters.country == code %}selected{% endif %}>{{ name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
                 <label class="label py-1" for="f-racing"><span class="label-text">Racing</span></label>
                 <select class="select select-bordered w-full" id="f-racing" name="racing">
                   <option value="">Any</option>

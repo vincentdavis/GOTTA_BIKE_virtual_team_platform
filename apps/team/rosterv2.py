@@ -40,8 +40,10 @@ import logfire
 from constance import config
 from django.db.models import Count, Max, Q
 from django.utils import timezone
+from django_countries.fields import Country
 
 from apps.accounts.models import GuildMember, User
+from apps.accounts.utils import resolve_country
 from apps.rider_data.models import RiderProfile
 from apps.rider_data.services import zwids_to_refresh
 from apps.team.kits import current_kit
@@ -683,6 +685,9 @@ class RosterFilters:
         joined: Days since joining the Discord, 30 or 90.
         racing: "30" or "90" for a rider who raced that recently, "quiet" for one who has
             not raced in 60 days -- including one who has never raced at all.
+        country: An ISO 3166-1 alpha-2 code. Subdivisions resolve to their parent, so
+            picking "United Kingdom" finds the Welsh and Scottish riders too -- which is
+            what the card promises, since it flies the Union Flag for all of them.
 
     """
 
@@ -697,6 +702,7 @@ class RosterFilters:
     ftp: int | None = None
     joined: int | None = None
     racing: str = ""
+    country: str = ""
 
     @property
     def active(self) -> bool:
@@ -709,6 +715,7 @@ class RosterFilters:
         return any(value not in ("", None) for value in (
             self.category, self.zr, self.gender, self.phenotype,
             self.verified, self.age, self.account, self.wkg, self.ftp, self.joined, self.racing,
+            self.country,
         ))
 
 
@@ -776,6 +783,7 @@ def parse_filters(params, rows: tuple[RosterRow, ...]) -> RosterFilters:
         ftp=_number_choice(params, "ftp", FTP_STEPS),
         joined=_number_choice(params, "joined", JOINED_WINDOWS),
         racing=_one_of(params, "racing", ("30", "90", "quiet")),
+        country=_one_of(params, "country", [code for code, _ in options["countries"]]),
     )
 
 
@@ -793,11 +801,19 @@ def filter_options(rows: tuple[RosterRow, ...]) -> dict[str, list]:
     zr = {row.card.category_racing for row in rows}
     phenotypes = {row.card.phenotype for row in rows}
     ages = {row.card.age_bracket for row in rows}
+    # Keyed by the resolved code so the four UK subdivisions collapse into one option, and
+    # labelled with the country name because nobody scans a roster for "GB-WLS".
+    countries: dict[str, str] = {}
+    for row in rows:
+        code, _ = resolve_country(row.card.country)
+        if code and code not in countries:
+            countries[code] = Country(code).name
     return {
         "categories": [c for c in CATEGORY_ORDER if c in categories],
         "zr": [c for c in ZR_CATEGORY_ORDER if c in zr],
         "phenotypes": sorted(p for p in phenotypes if p),
         "ages": [a for a in AGE_BRACKETS_ORDER if a in ages],
+        "countries": sorted(countries.items(), key=lambda pair: pair[1]),
     }
 
 
@@ -842,6 +858,8 @@ def apply_filters(rows: list[RosterRow], filters: RosterFilters) -> list[RosterR
         if filters.ftp is not None and (card.zftp is None or card.zftp < filters.ftp):
             return False
         if filters.racing and not _raced(card, filters.racing, now):
+            return False
+        if filters.country and resolve_country(card.country)[0] != filters.country:
             return False
         return not (cutoff and not (account and account.member_since and account.member_since >= cutoff))
 

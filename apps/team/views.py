@@ -19,7 +19,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
-from apps.accounts.utils import parse_zwid_input
+from apps.accounts.utils import parse_zwid_input, resolve_country
 from apps.team.forms import (
     JerseyCSVUploadForm,
     MembershipApplicationAdminForm,
@@ -509,6 +509,7 @@ _CHIP_LABELS = {
     "ftp": "Min FTP",
     "joined": "Joined within",
     "racing": "Racing",
+    "country": "Country",
 }
 
 
@@ -542,8 +543,13 @@ def _roster_chips(request: HttpRequest) -> list[dict]:
     chips = []
     for name, label in _CHIP_LABELS.items():
         value = (request.GET.get(name) or "").strip()
-        if value:
-            chips.append({"label": label, "value": value, "without": _query_without(request, name, "page")})
+        if not value:
+            continue
+        shown = value
+        if name == "country":
+            # "Country: GB" tells a reader nothing; the chip says what the dropdown said.
+            shown = resolve_country(value)[1] or value
+        chips.append({"label": label, "value": shown, "without": _query_without(request, name, "page")})
     return chips
 
 

@@ -448,26 +448,13 @@ def site_icon_url(context, kind: str, value: str) -> str:
     return static(bundled) if bundled else ""
 
 
-# ZwiftPower sends a few ISO 3166-2 subdivisions where everything else is ISO 3166-1, and
-# django_countries knows nothing about them. They are mapped to the parent country's flag,
-# with the nation's own name kept as the label -- so a Welsh rider shows the Union Flag and
-# reads "Wales", rather than showing a broken image or losing the detail entirely.
-_SUBDIVISIONS = {
-    "GB-ENG": ("GB", "England"),
-    "GB-WLS": ("GB", "Wales"),
-    "GB-SCT": ("GB", "Scotland"),
-    "GB-NIR": ("GB", "Northern Ireland"),
-}
-
-
 @register.simple_tag
 def country_flag(code: str) -> dict:
     """Resolve an upstream country code to a flag image and a readable name.
 
-    ``Country(code).flag`` builds a URL from the string it is given WITHOUT checking that the
-    country exists, so an unrecognised code yields a link to a missing image rather than an
-    error. Everything here is therefore validated against the real country list first, and a
-    code that is not one falls back to showing the code itself.
+    The resolution itself lives in ``apps.accounts.utils.resolve_country`` because the roster's
+    country FILTER has to agree with it exactly -- a rider flying the Union Flag who does not
+    appear under "United Kingdom" is worse than either behaviour on its own.
 
     Args:
         code: The country code as stored, in whatever case upstream used.
@@ -476,19 +463,14 @@ def country_flag(code: str) -> dict:
         ``url`` and ``name`` for a known country, or an empty dict.
 
     """
-    from django_countries import countries
     from django_countries.fields import Country
 
-    raw = (code or "").strip().upper()
-    if not raw:
-        return {}
+    from apps.accounts.utils import resolve_country
 
-    country_code, name = _SUBDIVISIONS.get(raw, (raw, ""))
-    if country_code not in countries:
+    country_code, label = resolve_country(code)
+    if not country_code:
         return {}
-
-    country = Country(country_code)
-    return {"url": country.flag, "name": name or country.name}
+    return {"url": Country(country_code).flag, "name": label}
 
 
 @register.simple_tag

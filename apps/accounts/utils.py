@@ -55,6 +55,49 @@ def _read_digits(text: str) -> tuple[int | None, int | None]:
     return (entered if 0 < entered <= MAX_ZWID else None), entered
 
 
+# ZwiftPower sends a few ISO 3166-2 subdivisions where everything else is ISO 3166-1, and
+# django_countries knows only the latter. Each maps to its parent country -- which is the flag
+# that gets flown -- while keeping its own name for display.
+_COUNTRY_SUBDIVISIONS = {
+    "GB-ENG": ("GB", "England"),
+    "GB-WLS": ("GB", "Wales"),
+    "GB-SCT": ("GB", "Scotland"),
+    "GB-NIR": ("GB", "Northern Ireland"),
+}
+
+
+def resolve_country(raw: str) -> tuple[str, str]:
+    """Resolve an upstream country code to a real country and the label to show for it.
+
+    ``Country(code).flag`` builds a URL from whatever string it is given WITHOUT checking the
+    country exists, so an unvalidated code yields a link to a missing image. Everything is
+    therefore checked against the real country list here, once, for every caller.
+
+    The two halves are deliberately different for a subdivision: a Welsh rider resolves to
+    ("GB", "Wales"), so they fly the Union Flag and read "Wales". Anything grouping riders --
+    a country filter, say -- keys on the CODE, which is what keeps that rider inside "United
+    Kingdom" rather than stranded in a nation nobody thought to offer.
+
+    Args:
+        raw: The country code as stored, in whatever case upstream used.
+
+    Returns:
+        ``(alpha-2 code, label)``, or ``("", "")`` when the code is not a country.
+
+    """
+    from django_countries import countries
+    from django_countries.fields import Country
+
+    text = (raw or "").strip().upper()
+    if not text:
+        return "", ""
+
+    code, label = _COUNTRY_SUBDIVISIONS.get(text, (text, ""))
+    if code not in countries:
+        return "", ""
+    return code, label or Country(code).name
+
+
 def parse_zwid_input(raw: str) -> ZwidInput:
     """Read a rider-entered ZwiftPower profile URL or bare Zwift ID.
 

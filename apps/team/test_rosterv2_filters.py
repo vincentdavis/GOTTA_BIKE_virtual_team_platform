@@ -313,6 +313,75 @@ def test_every_control_has_a_real_label(auth_client, roster_rider):
     body = auth_client.get(reverse("team:rosterv2")).content.decode()
 
     for control in ("f-category", "f-zr", "f-gender", "f-phenotype", "f-age", "f-verified",
-                    "f-account", "f-wkg", "f-ftp", "f-joined", "f-sort", "f-dir", "roster-search"):
+                    "f-account", "f-wkg", "f-ftp", "f-joined", "f-racing", "f-country",
+                    "f-sort", "f-dir", "roster-search"):
         assert f'for="{control}"' in body, f"{control} has no label"
         assert f'id="{control}"' in body, f"{control} is not there"
+
+
+# --- country ------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_riders_can_be_narrowed_to_one_country(roster_rider):
+    roster_rider(zwid=1001, name="American", country="us")
+    roster_rider(zwid=1002, name="French", country="fr")
+
+    assert _names(_rows(country="US")) == ["American"]
+    assert _names(_rows(country="FR")) == ["French"]
+
+
+@pytest.mark.django_db
+def test_the_uk_nations_are_found_under_the_flag_they_fly(roster_rider):
+    """The card shows the Union Flag for a Welsh rider, so "United Kingdom" must find them.
+
+    Filtering on the raw code would strand four nations' riders in options nobody thought to
+    offer, while their cards visibly fly a flag the filter denies.
+    """
+    roster_rider(zwid=1001, name="Welsh", country="gb-wls")
+    roster_rider(zwid=1002, name="Scottish", country="gb-sct")
+    roster_rider(zwid=1003, name="Plain British", country="gb")
+    roster_rider(zwid=1004, name="French", country="fr")
+
+    assert sorted(_names(_rows(country="GB"))) == ["Plain British", "Scottish", "Welsh"]
+
+
+@pytest.mark.django_db
+def test_the_country_options_are_the_countries_present_named_and_alphabetical(roster_rider):
+    roster_rider(zwid=1001, name="A", country="us")
+    roster_rider(zwid=1002, name="B", country="fr")
+    roster_rider(zwid=1003, name="C", country="gb-wls")
+    roster_rider(zwid=1004, name="D", country="gb")
+
+    options = filter_options(build_roster_index().rows)["countries"]
+
+    # Wales and plain GB collapse to one option, labelled by name and sorted by it.
+    assert options == [("FR", "France"), ("GB", "United Kingdom"), ("US", "United States of America")]
+
+
+@pytest.mark.django_db
+def test_an_unknown_country_code_is_not_offered_and_narrows_nothing(roster_rider):
+    """A code django_countries does not know has no flag either, so it has nothing to filter on."""
+    roster_rider(zwid=1001, name="Mystery", country="zzz")
+    roster_rider(zwid=1002, name="Known", country="fr")
+
+    assert filter_options(build_roster_index().rows)["countries"] == [("FR", "France")]
+    assert sorted(_names(_rows(country="ZZZ"))) == ["Known", "Mystery"]
+
+
+@pytest.mark.django_db
+def test_a_rider_with_no_country_is_excluded_by_a_country_filter(roster_rider):
+    roster_rider(zwid=1001, name="Somewhere", country="fr")
+    roster_rider(zwid=1002, name="Nowhere", country="")
+
+    assert _names(_rows(country="FR")) == ["Somewhere"]
+
+
+@pytest.mark.django_db
+def test_the_country_chip_names_the_country_rather_than_its_code(auth_client, roster_rider):
+    roster_rider(zwid=1001, name="Welsh Rider", country="gb-wls")
+
+    body = auth_client.get(reverse("team:rosterv2") + "?country=GB").content.decode()
+
+    assert "Country: United Kingdom" in body
+    assert "Country: GB" not in body
