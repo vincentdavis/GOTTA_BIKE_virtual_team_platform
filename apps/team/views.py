@@ -576,7 +576,7 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
         carry -- the index decides that, not the template.
 
     """
-    roster = build_roster_index()
+    roster = build_roster_index(viewer_id=request.user.pk)
     query = request.GET.get("q", "").strip()
     rows = roster_search(roster.rows, query) if query else list(roster.rows)
 

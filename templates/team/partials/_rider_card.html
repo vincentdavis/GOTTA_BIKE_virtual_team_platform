@@ -202,6 +202,18 @@
       {% if row.card.distance_km is not None %} · {{ row.card.distance_km|floatformat:0|intcomma }} km lifetime{% endif %}
     </p>
 
+    {% if row.account.events %}
+      {% comment %}
+        Only the events this reader is allowed to know about -- see rosterv2.event_chips. An
+        event whose signup list its own page withholds does not appear here either.
+      {% endcomment %}
+      <ul class="flex flex-wrap gap-1 text-xs list-none p-0">
+        {% for event in row.account.events %}
+          <li><a class="badge badge-sm badge-info" href="{{ event.url }}">{{ event.name }}</a></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+
     {% if row.account.kit_label %}
       {% comment %}
         The current kit only, and only when the rider has actually told us where they stand.

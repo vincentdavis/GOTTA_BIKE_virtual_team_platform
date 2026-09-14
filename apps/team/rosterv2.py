@@ -39,6 +39,7 @@ from typing import TYPE_CHECKING
 import logfire
 from constance import config
 from django.db.models import Count, Max, Q
+from django.urls import reverse
 from django.utils import timezone
 from django_countries.fields import Country
 
@@ -309,6 +310,8 @@ class AccountFacts:
         kit_label: That status in the team's own words.
         kit_badge: The DaisyUI class the kit page already uses for it, so one status does
             not look like two different things in two places.
+        events: Upcoming events this rider has signed up for and the reader may know about --
+            see ``event_chips`` for which those are.
 
     """
 
@@ -321,6 +324,7 @@ class AccountFacts:
     kit_status: str = ""
     kit_label: str = ""
     kit_badge: str = ""
+    events: tuple[EventChip, ...] = ()
 
     def __str__(self) -> str:
         """Return the Discord name, so rendering the object never falls back to its repr.
@@ -1041,6 +1045,91 @@ def race_records(roster_zwids: list[int], *, now: datetime | None = None) -> dic
     return {zwid: RaceRecord(**values) for zwid, values in records.items()}
 
 
+@dataclass(frozen=True, slots=True)
+class EventChip:
+    """One upcoming event a rider has signed up for.
+
+    Attributes:
+        name: The event's title, which is admin-authored rather than rider-authored.
+        url: Its page.
+        start_date: Used only to order the chips; the card shows the name.
+
+    """
+
+    name: str
+    url: str
+    start_date: object = None
+
+    def __str__(self) -> str:
+        """Return the event name, never the repr.
+
+        Returns:
+            The event's name.
+
+        """
+        return self.name
+
+
+def event_chips(user_ids: list[int], *, viewer_id: int | None = None) -> dict[int, tuple[EventChip, ...]]:
+    """Find the upcoming events these riders have signed up for, in one query.
+
+    **Who may see this is not the roster's decision to make.** An ordinary member can see who
+    signed up for an event only when that event has ``show_signups`` on -- the event page
+    gates its own list that way (``apps/events/views.py``: ``can_view_signups =
+    can_view_signup_table or event.show_signups``), and the flag defaults to OFF. Putting
+    every signup on the roster would hand every team member a list the event's own page
+    deliberately withholds, for every event at once.
+
+    So a chip appears only where all four hold:
+
+    * the signup is REGISTERED -- a withdrawal must not linger on a card;
+    * the event is ``visible``;
+    * the event has not finished;
+    * the event shows its signups **or** the card is the viewer's own, because nobody needs
+      permission to be told what they themselves signed up for.
+
+    Args:
+        user_ids: The accounts joined to roster cards.
+        viewer_id: The signed-in reader, whose own signups are always their own business.
+
+    Returns:
+        Chips per user id, soonest first.
+
+    """
+    from apps.events.models import EventSignup
+
+    if not user_ids:
+        return {}
+
+    today = timezone.now().date()
+    shown = Q(event__show_signups=True)
+    if viewer_id is not None:
+        shown |= Q(user_id=viewer_id)
+
+    rows = (
+        EventSignup.objects.filter(
+            status=EventSignup.Status.REGISTERED,
+            user_id__in=user_ids,
+            event__visible=True,
+            event__end_date__gte=today,
+        )
+        .filter(shown)
+        .order_by("event__start_date")
+        .values_list("user_id", "event__id", "event__title", "event__start_date")
+    )
+
+    chips: dict[int, list[EventChip]] = {}
+    for user_id, event_id, title, start_date in rows:
+        chips.setdefault(user_id, []).append(
+            EventChip(
+                name=title or "Event",
+                url=reverse("events:event_detail", args=[event_id]),
+                start_date=start_date,
+            )
+        )
+    return {user_id: tuple(items) for user_id, items in chips.items()}
+
+
 def _guild_rows() -> dict[int, dict]:
     """Read current Discord memberships, keyed by user id.
 
@@ -1067,13 +1156,16 @@ _KIT_CARD_LABELS = {
 }
 
 
-def _account_facts(account: dict, guild: dict | None, kit: object | None = None) -> AccountFacts:
+def _account_facts(
+    account: dict, guild: dict | None, kit: object | None = None, events: tuple[EventChip, ...] = ()
+) -> AccountFacts:
     """Assemble the account half of a card.
 
     Args:
         account: An ``ACCOUNT_COLUMNS`` row whose verification has already been accepted.
         guild: That user's open ``GuildMember`` row, if they have one.
         kit: The team's current kit, or None when none is set.
+        events: That rider's visible upcoming signups.
 
     Returns:
         The account facts.
@@ -1113,10 +1205,11 @@ def _account_facts(account: dict, guild: dict | None, kit: object | None = None)
         kit_status=status,
         kit_label=label,
         kit_badge=badge,
+        events=events,
     )
 
 
-def build_roster_index() -> RosterIndex:
+def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
     """Build the whole roster: who is on it, what may be shown, and whose account is whose.
 
     **Who is on it** is ``zwids_to_refresh()`` -- the same union that decides whose profile we
@@ -1137,9 +1230,15 @@ def build_roster_index() -> RosterIndex:
     ``zwid_verified``. Fixing that is out of this module's hands; the duplicate rule caps the
     damage at losing an account half rather than taking one over.
 
-    Costs 13 queries, flat in the number of riders: three for the union, one Constance read
+    Costs 14 queries, flat in the number of riders: three for the union, one Constance read
     for the cutover policy, accounts, guild memberships, the two per-source name tables, two
-    for the race counts, the current kit, the cache, and the freshness stamp.
+    for the race counts, the current kit, the event signups, the cache, and the freshness
+    stamp.
+
+    Args:
+        viewer_id: The signed-in reader. Only affects which of their OWN event signups show
+            on their own card -- see ``event_chips``. Everything else is the same for
+            everyone, which is what keeps the index shareable.
 
     Returns:
         The roster, ordered by folded name with nameless riders last.
@@ -1152,6 +1251,7 @@ def build_roster_index() -> RosterIndex:
     zwift_names = _zwift_names(roster_zwids)
     records = race_records(roster_zwids)
     kit = current_kit()
+    chips = event_chips([claim["id"] for claims in claimants.values() for claim in claims], viewer_id=viewer_id)
 
     rows: list[RosterRow] = []
     joined = 0
@@ -1171,7 +1271,7 @@ def build_roster_index() -> RosterIndex:
         if len(claims) == 1:
             claimed = claims[0]
             guild = guild_rows.get(claimed["id"])
-            account = _account_facts(claimed, guild, kit)
+            account = _account_facts(claimed, guild, kit, chips.get(claimed["id"], ()))
             joined += 1
         elif len(claims) > 1:
             contested += 1
