@@ -339,14 +339,26 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "scheduled": True,
         "hours_setting": "SCHEDULER_SYNC_RIDER_PROFILES_HOURS",
     },
-    # Deliberately manual for now. The model landed before any consumer, so nothing has yet
-    # validated that last_race_at is populated correctly -- scheduling a delete against an
-    # anchor nobody has checked is how you lose data quietly. Register it as schedulable once
-    # the sync has run for a while and the values look right.
+    # Deliberately manual. NOT a leftover -- Vincent declined scheduling it again on
+    # 2026-09-12, having deferred it once before, and this is the only irreversible task in
+    # the app. Do not add "scheduled": True without asking him.
+    #
+    # The original reason no longer applies and is not the reason it stays manual: the anchor
+    # was last_race_at, which nothing had validated, and it is now last_requested_at, which
+    # records our own behaviour rather than upstream data quality. What has NOT been shown is
+    # that the request set is stable -- zwids_to_refresh() was widened to ~2,000 riders in
+    # a005ad5, and a bug there is exactly what makes rows drop out of the set and age toward
+    # eviction. RIDER_PROFILE_PURGE_MAX_FRACTION would refuse a mass sweep, not a slow drip.
+    #
+    # Consequence, stated plainly because the Compliance page does not say it:
+    # RIDER_PROFILE_MAX_DAYS renders there as a retention window and nothing enforces it.
     "purge_rider_profiles": {
         "task": purge_rider_profiles,
         "group": "local",
-        "description": "Delete cached rider profiles whose last known race is outside the retention window",
+        "description": (
+            "Delete cached rider profiles we have stopped asking about, "
+            "RIDER_PROFILE_MAX_DAYS after they last appeared in a sync batch"
+        ),
     },
     "purge_expired_api_keys": {
         "task": purge_expired_api_keys,

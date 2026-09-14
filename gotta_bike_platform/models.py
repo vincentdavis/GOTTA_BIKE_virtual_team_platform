@@ -163,6 +163,58 @@ class SiteSettings(models.Model):
         blank=True,
         help_text="Emoji/icon for Zwift Racing Copper category (recommended: 64x64 PNG)",
     )
+    # Age brackets are the one icon family that SHIPS a default set (see
+    # apps/accounts/static/accounts/age/). An upload here replaces the bundled artwork for
+    # that bracket; leaving it empty is the normal case, not a gap to be filled.
+    age_jnr_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for the Jnr age bracket. Leave empty to use the bundled default",
+    )
+    age_u23_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for the U23 age bracket. Leave empty to use the bundled default",
+    )
+    age_snr_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for the Snr age bracket. Leave empty to use the bundled default",
+    )
+    age_vet_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for the Vet age bracket. Leave empty to use the bundled default",
+    )
+    age_mas_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for the Mas age bracket. Leave empty to use the bundled default",
+    )
+    age_50plus_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for the 50+ age bracket. Leave empty to use the bundled default",
+    )
+    age_60plus_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for the 60+ age bracket. Leave empty to use the bundled default",
+    )
+    age_70plus_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for the 70+ age bracket. Leave empty to use the bundled default",
+    )
+
     phenotype_allrounder_emoji = models.ImageField(
         upload_to="site/",
         null=True,
