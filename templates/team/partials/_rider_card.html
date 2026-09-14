@@ -215,19 +215,21 @@
         can be square or a long wordmark, and stretching either to a fixed box would distort
         artwork the event owns.
 
-        Captaincy stays in words beside the logo. It is the one thing on this chip a logo
-        cannot say, and it is why the chip was worth adding for captains at all.
+        Captaincy is NOT drawn beside the logo: a badge sitting next to one logo reads as a
+        chip of its own, so a rider with three events looked like a rider with four. It rides
+        on the logo instead -- in the alt, which is the link's accessible name, and in the
+        hover tip. A chip with no logo has room for the word and still prints it.
       {% endcomment %}
       <ul class="flex flex-wrap items-center gap-1 text-xs list-none p-0">
         {% for event in row.account.events %}
           <li>
             {% if event.logo_url %}
-              <a class="tooltip inline-flex items-center gap-1 align-middle rounded border border-base-300 px-1 py-0.5"
+              <a class="tooltip inline-flex items-center align-middle rounded border border-base-300 px-1 py-0.5"
                  data-tip="{{ event.name }}{% if event.role %} · {{ event.role }}{% endif %}"
                  href="{{ event.url }}">
-                <img src="{{ event.logo_url }}" alt="{{ event.name }}"
+                <img src="{{ event.logo_url }}"
+                     alt="{{ event.name }}{% if event.role %} · {{ event.role }}{% endif %}"
                      class="h-8 w-auto max-w-[9rem] object-contain rounded" loading="lazy">
-                {% if event.role %}<span class="badge badge-xs badge-info">{{ event.role }}</span>{% endif %}
               </a>
             {% else %}
               <a class="badge badge-sm badge-info gap-1" href="{{ event.url }}">

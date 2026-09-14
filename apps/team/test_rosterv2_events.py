@@ -495,8 +495,14 @@ def test_an_event_with_no_logo_still_says_its_name(auth_client, roster_rider, us
 
 
 @pytest.mark.django_db
-def test_captaincy_survives_the_logo(auth_client, roster_rider, user_model, settings, tmp_path):
-    """The one thing on the chip a logo cannot say."""
+def test_captaincy_rides_on_the_logo_rather_than_beside_it(
+    auth_client, roster_rider, user_model, settings, tmp_path
+):
+    """A badge next to one logo read as a chip of its own, so it moved onto the logo.
+
+    It is not dropped: the alt is the link's accessible name, so a screen reader still hears
+    it, and it is the hover tip. What it no longer does is take a slot in the row.
+    """
     settings.MEDIA_ROOT = str(tmp_path)
     roster_rider(zwid=4242, name="Ada Racer")
     ada = _member(user_model, "ada", 4242)
@@ -506,8 +512,22 @@ def test_captaincy_survives_the_logo(auth_client, roster_rider, user_model, sett
 
     chip = _chip_row(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
 
-    # The visible text, not the markup: data-tip repeats the role, so asserting against the
-    # raw chip passes with the badge deleted.
+    assert 'alt="Tour de Coalition · Captain"' in chip
+    # Nothing drawn: the visible text is where the extra chip used to appear.
+    assert "Captain" not in _visible_text(chip)
+
+
+@pytest.mark.django_db
+def test_a_chip_with_no_logo_still_prints_the_role(auth_client, roster_rider, user_model):
+    """Room for the word, so it keeps it -- the badge only crowded the logo."""
+    roster_rider(zwid=4242, name="Ada Racer")
+    ada = _member(user_model, "ada", 4242)
+    event = _event("Club Handicap")
+    _signup(event, ada)
+    _squad(event, captains=[ada])
+
+    chip = _chip_row(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
     assert "Captain" in _visible_text(chip)
 
 
