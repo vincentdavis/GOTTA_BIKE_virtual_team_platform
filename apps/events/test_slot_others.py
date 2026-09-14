@@ -62,10 +62,10 @@ def test_roster_json_includes_members_captains_and_vice_captains(auth_client, gr
     roster = resp.context["squad_roster_ids_json"]
 
     assert resp.status_code == 200
-    assert str(member.pk) in roster
-    assert str(vice.pk) in roster
-    assert str(team_member.pk) in roster  # the captain
-    assert str(outsider.pk) not in roster
+    assert member.pk in roster
+    assert vice.pk in roster
+    assert team_member.pk in roster  # the captain
+    assert outsider.pk not in roster
 
 
 @pytest.mark.django_db
@@ -77,8 +77,9 @@ def test_roster_members_have_display_data_even_without_a_response(auth_client, g
 
     resp = auth_client.get(_results_url(event, squad, grid))
 
-    assert f'"{member.pk}"' in resp.context["user_data_json"]
-    assert "Never Responded" in resp.context["user_data_json"]
+    user_data = resp.context["user_data_json"]
+    assert member.pk in user_data
+    assert user_data[member.pk]["display_name"] == "Never Responded"
 
 
 @pytest.mark.django_db
@@ -89,7 +90,7 @@ def test_a_pending_squad_membership_is_not_offered(auth_client, grid_setup, user
 
     resp = auth_client.get(_results_url(event, squad, grid))
 
-    assert str(pending.pk) not in resp.context["squad_roster_ids_json"]
+    assert pending.pk not in resp.context["squad_roster_ids_json"]
 
 
 @pytest.mark.django_db

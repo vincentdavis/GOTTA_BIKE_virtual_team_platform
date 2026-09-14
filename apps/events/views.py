@@ -4277,7 +4277,7 @@ def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int)
         {
             "event": event,
             "squad": squad,
-            "timezone_choices_json": json.dumps(TIMEZONE_CHOICES),
+            "timezone_choices_json": TIMEZONE_CHOICES,
             "user_timezone": user_tz,
             "event_requires_race_verified": bool(event.require_race_verified_availability),
             "grid_event_defaults": grid_defaults.initial_values(event),
@@ -4392,9 +4392,10 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         {
             "event": event,
             "squad": squad,
-            "timezone_choices_json": json.dumps(TIMEZONE_CHOICES),
+            "timezone_choices_json": TIMEZONE_CHOICES,
             "user_timezone": user_tz,
-            "initial_grid_json": json.dumps(initial_grid),
+            # |json_script, not json.dumps + |safe: initial_grid carries grid.description.
+            "initial_grid_json": initial_grid,
             "page_heading": "Edit Availability Grid",
             "event_requires_race_verified": bool(event.require_race_verified_availability),
             "grid_event_defaults": grid_defaults.initial_values(event),
@@ -5657,13 +5658,13 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
             "event": event,
             "squad": squad,
             "grid": grid,
-            "display_dates_json": json.dumps(grid_data["display_dates"]),
-            "display_time_slots_json": json.dumps(grid_data["display_time_slots"]),
+            "display_dates_json": grid_data["display_dates"],
+            "display_time_slots_json": grid_data["display_time_slots"],
             "single_slot_label": single_slot_label,
-            "display_blocked_json": json.dumps(sorted(grid_data["display_blocked"])),
-            "existing_local_keys_json": json.dumps(existing_local_keys),
-            "cell_utc_map_json": json.dumps(grid_data["cell_map"]),
-            "valid_cells_json": json.dumps(sorted(grid_data["valid_cells"])),
+            "display_blocked_json": sorted(grid_data["display_blocked"]),
+            "existing_local_keys_json": existing_local_keys,
+            "cell_utc_map_json": grid_data["cell_map"],
+            "valid_cells_json": sorted(grid_data["valid_cells"]),
             "display_timezone": display_tz,
             "tz_is_default": tz_is_default,
             "existing_max_races": existing_response.max_races if existing_response else None,
@@ -5983,10 +5984,15 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "tz_is_default": tz_is_default,
             "is_event_admin": is_event_admin,
             "slot_selections_enriched": enriched_selections,
-            "utc_cell_users_json": json.dumps(utc_cell_users_json),
-            "user_data_json": json.dumps(user_data_json),
-            "squad_roster_ids_json": json.dumps(squad_roster_ids_json),
-            "selections_json": json.dumps(selections_json),
+            # Rendered with |json_script, not json.dumps + |safe: `user_data_json` carries
+            # rider display names and `selections_json` captain-entered race names and URLs.
+            # json.dumps does not escape "<", and an HTML parser ends a <script> at the first
+            # "</script" whatever the JS quoting, so a rider named "</script><img onerror=...>"
+            # got script execution in their captain's session.
+            "utc_cell_users_json": utc_cell_users_json,
+            "user_data_json": user_data_json,
+            "squad_roster_ids_json": squad_roster_ids_json,
+            "selections_json": selections_json,
             "powerup_choices": _powerup_choices(),
         },
     )

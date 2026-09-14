@@ -1590,7 +1590,7 @@ def test_respond_hides_fully_blocked_day_when_flag_on(auth_client) -> None:
 
     response = auth_client.get(reverse("events:availability_respond", args=[event.pk, squad.pk, grid.id]))
     assert response.status_code == 200
-    assert 'var dates = ["2026-06-16"];' in response.content.decode()  # Jun 15 dropped
+    assert response.context["display_dates_json"] == ["2026-06-16"]  # Jun 15 dropped
 
 
 @pytest.mark.django_db
@@ -1602,7 +1602,7 @@ def test_respond_shows_all_days_when_flag_off(auth_client) -> None:
 
     response = auth_client.get(reverse("events:availability_respond", args=[event.pk, squad.pk, grid.id]))
     assert response.status_code == 200
-    assert 'var dates = ["2026-06-15", "2026-06-16"];' in response.content.decode()
+    assert response.context["display_dates_json"] == ["2026-06-15", "2026-06-16"]
 
 
 @pytest.mark.django_db

@@ -817,12 +817,17 @@
   <form method="dialog" class="modal-backdrop"><button>close</button></form>
 </dialog>
 
-<!-- JS data for modal -->
+<!-- JS data for modal. json_script, not |safe: userData carries rider display names and
+     existingSelections captain-entered race names and URLs, and json.dumps does not escape "<". -->
+{{ utc_cell_users_json|json_script:"utc-cell-users-data" }}
+{{ user_data_json|json_script:"user-data" }}
+{{ squad_roster_ids_json|json_script:"squad-roster-ids-data" }}
+{{ selections_json|json_script:"selections-data" }}
 <script>
-  const utcCellUsers = {{ utc_cell_users_json|safe }};
-  const userData = {{ user_data_json|safe }};
-  const squadRosterIds = {{ squad_roster_ids_json|default:"[]"|safe }};
-  const existingSelections = {{ selections_json|safe }};
+  const utcCellUsers = JSON.parse(document.getElementById('utc-cell-users-data').textContent);
+  const userData = JSON.parse(document.getElementById('user-data').textContent);
+  const squadRosterIds = JSON.parse(document.getElementById('squad-roster-ids-data').textContent) || [];
+  const existingSelections = JSON.parse(document.getElementById('selections-data').textContent);
   const createUrl = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}";
   const updateUrlBase = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}".replace(/slots\/$/, "slots/");
   const squadDiscordChannelId = {{ squad.discord_channel_id|default:0 }};
