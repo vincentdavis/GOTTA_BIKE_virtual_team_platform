@@ -1046,10 +1046,12 @@ def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
     """
     error = None
     if request.method == "POST":
-        zwid, input_form = parse_zwid_input(request.POST.get("zwiftpower_url", ""))
+        entry = parse_zwid_input(request.POST.get("zwiftpower_url", ""))
+        zwid = entry.zwid
 
         if zwid:
             zwid_changed = request.user.zwid != zwid
+            previous_zwid = request.user.zwid if zwid_changed else None
             cleared_method = request.user.zwid_verification_method if zwid_changed else ""
             cleared_verification = zwid_changed and request.user.zwid_verified
             request.user.zwid = zwid
@@ -1075,6 +1077,9 @@ def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
                 discord_id=request.user.discord_id,
                 zwid=zwid,
                 zwid_changed=zwid_changed,
+                # Both ends of the move. One zwid alone cannot answer "whose results did
+                # this account show before?", which is the question this path invites.
+                previous_zwid=previous_zwid,
                 verification_cleared=cleared_verification,
                 cleared_method=cleared_method,
             )
@@ -1087,8 +1092,11 @@ def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
         logfire.warning(
             "Invalid manual ZWID input",
             user_id=request.user.id,
-            # The shape, never the text: what a rider types here is free text.
-            input_form=input_form,
+            # The ZWID they entered, rejected or not -- it is an id, and it is what answers
+            # "it would not take my ID". The shape stands in when they entered no number:
+            # the box takes anything, and the rest of what they type is free text.
+            entered_zwid=entry.entered,
+            input_form=entry.form,
         )
 
     return render(
@@ -1148,6 +1156,7 @@ def unverify_zwift(request: HttpRequest) -> HttpResponse:
     # refresh_all_race_ready sweep would otherwise make this look like the cause of a status
     # loss it had nothing to do with.
     was_race_ready = request.user.calculate_race_ready()
+    old_zwid = request.user.zwid
 
     request.user.zwid = None
     request.user.zwid_verified = False
@@ -1176,6 +1185,7 @@ def unverify_zwift(request: HttpRequest) -> HttpResponse:
         "Rider removed their own Zwift verification",
         user_id=request.user.pk,
         discord_id=request.user.discord_id,
+        old_zwid=old_zwid,
         was_race_ready=was_race_ready,
         is_race_ready=is_race_ready,
     )

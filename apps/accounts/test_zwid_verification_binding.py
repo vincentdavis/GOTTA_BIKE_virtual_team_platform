@@ -172,3 +172,26 @@ def test_no_role_churn_when_the_status_did_not_change(client, verified_rider):
         client.post(reverse("accounts:unverify_zwift"))
 
     task.enqueue.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_both_ends_of_a_zwid_change_are_logged(client, verified_rider):
+    """One zwid alone cannot answer whose results the account showed before the move."""
+    client.force_login(verified_rider)
+
+    with patch("apps.accounts.views.logfire") as fake_logfire:
+        client.post(URL, {"zwiftpower_url": "222222"})
+
+    kwargs = fake_logfire.info.call_args[1]
+    assert kwargs["zwid"] == 222222
+    assert kwargs["previous_zwid"] == 111111
+
+
+@pytest.mark.django_db
+def test_the_dropped_zwid_is_logged_on_removal(client, verified_rider):
+    client.force_login(verified_rider)
+
+    with patch("apps.accounts.views.logfire") as fake_logfire:
+        client.post(reverse("accounts:unverify_zwift"))
+
+    assert fake_logfire.info.call_args[1]["old_zwid"] == 111111

@@ -1,9 +1,10 @@
-"""What a rider types into the ZWID boxes must not reach Logfire, and must not 500.
+"""The ZWID a rider enters reaches Logfire; the rest of what they type does not.
 
 The two manual-verification forms -- the rider's own verification page and the *public*
-membership-registration form -- log their invalid-input path. They used to log the raw
-text, which is rider-entered free text and so falls under the "ids only" rule in
-CLAUDE.md; the shape of the input goes instead.
+membership-registration form -- log their invalid-input path. The number a rider entered
+belongs there even when it is rejected: it is an id, and it is what answers an "it would
+not take my ID" report. What used to be logged was the raw text, which is whatever they
+typed, so an entry carrying no number is now reported by its shape instead.
 
 They also parsed with ``str.isdigit()``, which is true of characters ``int()`` either
 refuses or reads as a different number, and neither checked the column's range.
@@ -45,24 +46,27 @@ def _logged_values(fake_logfire) -> list[str]:
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
-        (PROFILE_URL, (4242, "zwiftpower_url")),
-        ("  4242  ", (4242, "digits")),
-        ("http://www.zwiftpower.com/profile.php?z=4242", (4242, "zwiftpower_url")),
-        ("", (None, "empty")),
-        ("   ", (None, "empty")),
-        ("0", (None, "digits")),
-        ("https://zwiftpower.com/profile.php", (None, "url")),
-        ("www.zwift.com/me", (None, "url")),
-        (PERSONAL_TEXT, (None, "other")),
+        (PROFILE_URL, (4242, "zwiftpower_url", 4242)),
+        ("  4242  ", (4242, "digits", 4242)),
+        ("http://www.zwiftpower.com/profile.php?z=4242", (4242, "zwiftpower_url", 4242)),
+        ("", (None, "empty", None)),
+        ("   ", (None, "empty", None)),
+        ("0", (None, "digits", 0)),
+        ("https://zwiftpower.com/profile.php", (None, "url", None)),
+        ("www.zwift.com/me", (None, "url", None)),
+        (PERSONAL_TEXT, (None, "other", None)),
         # isdigit() is true of both: int() raises on the first, and reads the second as 3.
-        ("²", (None, "other")),
-        ("٣", (None, "other")),
-        ("٣" * 4, (None, "other")),
+        ("\u00b2", (None, "other", None)),
+        ("\u0663", (None, "other", None)),
+        ("\u0663" * 4, (None, "other", None)),
         # PositiveIntegerField is a 32-bit column; a bigger value is a DataError on save.
-        (str(MAX_ZWID), (MAX_ZWID, "digits")),
-        (str(MAX_ZWID + 1), (None, "digits")),
-        ("9" * 40, (None, "digits")),
-        (f"https://zwiftpower.com/profile.php?z={MAX_ZWID + 1}", (None, "zwiftpower_url")),
+        # Rejected, but still the ZWID the rider meant, so it is still reported.
+        (str(MAX_ZWID), (MAX_ZWID, "digits", MAX_ZWID)),
+        (str(MAX_ZWID + 1), (None, "digits", MAX_ZWID + 1)),
+        (f"https://zwiftpower.com/profile.php?z={MAX_ZWID + 1}", (None, "zwiftpower_url", MAX_ZWID + 1)),
+        # Past 10 digits nothing is a mistyped ZWID, and int() refuses over 4300 outright.
+        ("9" * 40, (None, "digits", None)),
+        ("9" * 5000, (None, "digits", None)),
     ],
 )
 def test_parse_zwid_input(raw, expected):
@@ -131,3 +135,51 @@ def test_a_hand_crafted_application_zwid_is_rejected_not_crashed_on(client, appl
     assert resp.status_code == 200
     application.refresh_from_db()
     assert application.zwift_id == ""
+
+
+@pytest.mark.django_db
+def test_a_rejected_zwid_is_still_reported(client, user):
+    """The rider entered a ZWID; it not being storable is exactly what needs explaining."""
+    client.force_login(user)
+
+    with patch("apps.accounts.views.logfire") as fake_logfire:
+        client.post(reverse("accounts:manual_zwift_verify"), {"zwiftpower_url": str(MAX_ZWID + 1)})
+
+    kwargs = fake_logfire.warning.call_args[1]
+    assert kwargs["entered_zwid"] == MAX_ZWID + 1
+    assert kwargs["input_form"] == "digits"
+
+
+@pytest.mark.django_db
+def test_a_rejected_application_zwid_is_still_reported(client, application):
+    url = reverse("team:application_manual_zwift_verify", args=[application.pk])
+
+    with patch("apps.team.views.logfire") as fake_logfire:
+        client.post(url, {"zwiftpower_url": f"https://zwiftpower.com/profile.php?z={MAX_ZWID + 1}"})
+
+    kwargs = fake_logfire.warning.call_args[1]
+    assert kwargs["entered_zwid"] == MAX_ZWID + 1
+    assert kwargs["input_form"] == "zwiftpower_url"
+
+
+@pytest.mark.django_db
+def test_an_entry_carrying_no_number_reports_only_its_shape(client, user):
+    client.force_login(user)
+
+    with patch("apps.accounts.views.logfire") as fake_logfire:
+        client.post(reverse("accounts:manual_zwift_verify"), {"zwiftpower_url": PERSONAL_TEXT})
+
+    kwargs = fake_logfire.warning.call_args[1]
+    assert kwargs["entered_zwid"] is None
+    assert kwargs["input_form"] == "other"
+
+
+@pytest.mark.django_db
+def test_a_digit_string_too_long_for_int_is_rejected_not_crashed_on(client, user):
+    """int() refuses a string of more than 4300 digits, so the conversion cannot be blind."""
+    client.force_login(user)
+
+    resp = client.post(reverse("accounts:manual_zwift_verify"), {"zwiftpower_url": "9" * 5000})
+
+    assert resp.status_code == 200
+    assert b"valid ZwiftPower profile URL" in resp.content

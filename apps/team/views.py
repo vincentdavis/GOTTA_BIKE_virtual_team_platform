@@ -2508,7 +2508,8 @@ def application_manual_zwift_verify(request: HttpRequest, pk: uuid.UUID) -> Http
 
     error = None
     if request.method == "POST":
-        zwid, input_form = parse_zwid_input(request.POST.get("zwiftpower_url", ""))
+        entry = parse_zwid_input(request.POST.get("zwiftpower_url", ""))
+        zwid = entry.zwid
 
         if zwid:
             application.zwift_id = zwid
@@ -2528,9 +2529,11 @@ def application_manual_zwift_verify(request: HttpRequest, pk: uuid.UUID) -> Http
         logfire.warning(
             "Invalid manual ZWID input for application",
             application_id=str(pk),
-            # The shape, never the text: this form is public, and what an applicant
-            # types into it is free text.
-            input_form=input_form,
+            # The ZWID they entered, rejected or not -- it is an id, and it is what answers
+            # "it would not take my ID". The shape stands in when they entered no number:
+            # this form is public, and the rest of what they type is free text.
+            entered_zwid=entry.entered,
+            input_form=entry.form,
         )
 
     return render(
