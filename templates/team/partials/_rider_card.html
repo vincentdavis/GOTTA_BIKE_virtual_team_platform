@@ -206,13 +206,34 @@
       {% comment %}
         Only the events this reader is allowed to know about -- see rosterv2.event_chips. An
         event whose signup list its own page withholds does not appear here either.
+
+        The event's own logo where it has one, the title where it does not. A logo is the
+        thing a rider recognises at a glance, and a row of them says "these are the three
+        things this rider is riding" in less space than the titles do. The title is not lost
+        with it: it is the image's alt, so it is what assistive tech and a failed image both
+        read, and it is the hover tip. Heights are capped, widths are not -- an event badge
+        can be square or a long wordmark, and stretching either to a fixed box would distort
+        artwork the event owns.
+
+        Captaincy stays in words beside the logo. It is the one thing on this chip a logo
+        cannot say, and it is why the chip was worth adding for captains at all.
       {% endcomment %}
-      <ul class="flex flex-wrap gap-1 text-xs list-none p-0">
+      <ul class="flex flex-wrap items-center gap-1 text-xs list-none p-0">
         {% for event in row.account.events %}
           <li>
-            <a class="badge badge-sm badge-info gap-1" href="{{ event.url }}">
-              {{ event.name }}{% if event.role %} <span class="font-semibold">· {{ event.role }}</span>{% endif %}
-            </a>
+            {% if event.logo_url %}
+              <a class="tooltip inline-flex items-center gap-1 align-middle rounded border border-base-300 px-1 py-0.5"
+                 data-tip="{{ event.name }}{% if event.role %} · {{ event.role }}{% endif %}"
+                 href="{{ event.url }}">
+                <img src="{{ event.logo_url }}" alt="{{ event.name }}"
+                     class="h-8 w-auto max-w-[9rem] object-contain rounded" loading="lazy">
+                {% if event.role %}<span class="badge badge-xs badge-info">{{ event.role }}</span>{% endif %}
+              </a>
+            {% else %}
+              <a class="badge badge-sm badge-info gap-1" href="{{ event.url }}">
+                {{ event.name }}{% if event.role %} <span class="font-semibold">· {{ event.role }}</span>{% endif %}
+              </a>
+            {% endif %}
           </li>
         {% endfor %}
       </ul>

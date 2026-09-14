@@ -38,6 +38,7 @@ from typing import TYPE_CHECKING
 
 import logfire
 from constance import config
+from django.core.exceptions import SuspiciousOperation
 from django.db.models import Count, Max, Q
 from django.urls import reverse
 from django.utils import timezone
@@ -1056,6 +1057,9 @@ class EventChip:
         role: "Captain" or "Vice-captain" when the rider leads a squad in this event, else "".
             Per event, never global -- captaincy is held on a squad, and a rider can captain
             one event's squad while just riding in another.
+        logo_url: The event's own logo, when it has one. The name still travels with it: it
+            is the image's accessible name, and the chip falls back to it entirely when an
+            event has no logo.
 
     """
 
@@ -1063,6 +1067,7 @@ class EventChip:
     url: str
     start_date: object = None
     role: str = ""
+    logo_url: str = ""
 
     def __str__(self) -> str:
         """Return the event name, never the repr.
@@ -1119,23 +1124,53 @@ def event_chips(user_ids: list[int], *, viewer_id: int | None = None) -> dict[in
         )
         .filter(shown)
         .order_by("event__start_date", "event__title")
-        .values_list("user_id", "event__id", "event__title", "event__start_date")
+        .values_list("user_id", "event__id", "event__title", "event__start_date", "event__logo")
     )
 
     rows = list(rows)
-    roles = _squad_roles({event_id for _, event_id, _, _ in rows})
+    roles = _squad_roles({event_id for _, event_id, _, _, _ in rows})
 
     chips: dict[int, list[EventChip]] = {}
-    for user_id, event_id, title, start_date in rows:
+    for user_id, event_id, title, start_date, logo in rows:
         chips.setdefault(user_id, []).append(
             EventChip(
                 name=title or "Event",
                 url=reverse("events:event_detail", args=[event_id]),
                 start_date=start_date,
                 role=roles.get((event_id, user_id), ""),
+                logo_url=_logo_url(logo),
             )
         )
     return {user_id: tuple(items) for user_id, items in chips.items()}
+
+
+def _logo_url(name: str | None) -> str:
+    """Turn a stored image name into a URL the card can use.
+
+    ``.values_list()`` hands back the stored NAME, not the ``FieldFile`` a model instance
+    would carry, so there is no ``.url`` to read -- which is the whole reason this exists
+    rather than the template asking the object. Resolved through the field's own storage, so
+    it is the bucket's URL in production and the media folder locally, exactly as a model
+    instance would have produced.
+
+    Args:
+        name: The stored file name, blank or None when the event has no logo.
+
+    Returns:
+        The URL, or "" when there is no logo or the storage cannot name one.
+
+    """
+    if not name:
+        return ""
+    from apps.events.models import Event
+
+    try:
+        return Event._meta.get_field("logo").storage.url(name)
+    except (ValueError, NotImplementedError, SuspiciousOperation):
+        # A storage that refuses to name the file (an unset MEDIA_URL, a path it reads as
+        # escaping the root) must cost the card its logo, not the whole roster.
+        logfire.warning("Event logo could not be resolved to a URL")
+        return ""
 
 
 def _squad_roles(event_ids: set[int]) -> dict[tuple[int, int], str]:

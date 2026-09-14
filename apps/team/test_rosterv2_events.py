@@ -386,3 +386,154 @@ def test_captaincy_costs_the_same_however_many_riders(roster_rider, user_model):
         build_roster_index()
 
     assert len(many) == len(few)
+
+
+# --- the event's own logo ------------------------------------------------------------------
+
+
+def _card_for(body, name):
+    """Return just one rider's card markup.
+
+    Splitting on "</li>" does not work here either: the chips are list items too.
+
+    Returns:
+        The markup of the card carrying that name.
+
+    """
+    return next(chunk for chunk in body.split('class="card bg-base-100') if name in chunk)
+
+
+def _chip_row(card):
+    """Return just the event chip list from a card.
+
+    Returns:
+        The markup between the chip list's class and its close.
+
+    """
+    return card.split("list-none p-0", 1)[1].split("</ul>", 1)[0]
+
+
+def _visible_text(markup):
+    """Return the words a reader actually sees, with tags and their attributes removed.
+
+    Load-bearing here: the chip carries the event name and the role inside ``alt`` and
+    ``data-tip`` as well, so an assertion against raw markup passes with the visible thing
+    deleted.
+
+    Returns:
+        The visible text, whitespace collapsed.
+
+    """
+    import re
+
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", markup)).strip()
+
+
+def _logo(event, filename="tour.png"):
+    """Give an event a logo file.
+
+    Returns:
+        The same event, now with a logo.
+
+    """
+    from django.core.files.base import ContentFile
+
+    event.logo.save(filename, ContentFile(b"x"), save=True)
+    return event
+
+
+@pytest.mark.django_db
+def test_an_event_with_a_logo_shows_it_instead_of_the_title(auth_client, roster_rider, user_model, settings, tmp_path):
+    settings.MEDIA_ROOT = str(tmp_path)
+    roster_rider(zwid=4242, name="Ada Racer")
+    event = _logo(_event("Tour de Coalition"))
+    _signup(event, _member(user_model, "ada", 4242))
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert event.logo.url in card
+    # Replaced, not joined -- the title is the image's name now, not text beside it.
+    assert ">Tour de Coalition<" not in card
+
+
+@pytest.mark.django_db
+def test_the_logo_still_carries_the_events_name(auth_client, roster_rider, user_model, settings, tmp_path):
+    """A picture of a logo names nothing on its own: alt is what a reader without it gets."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    roster_rider(zwid=4242, name="Ada Racer")
+    _signup(_logo(_event("Tour de Coalition")), _member(user_model, "ada", 4242))
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert 'alt="Tour de Coalition"' in card
+    assert 'data-tip="Tour de Coalition"' in card
+
+
+@pytest.mark.django_db
+def test_the_logo_links_to_the_event(auth_client, roster_rider, user_model, settings, tmp_path):
+    settings.MEDIA_ROOT = str(tmp_path)
+    roster_rider(zwid=4242, name="Ada Racer")
+    event = _logo(_event("Tour de Coalition"))
+    _signup(event, _member(user_model, "ada", 4242))
+
+    chip = _chip_row(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    logo_link = next(part for part in chip.split("<a ")[1:] if "<img" in part)
+
+    assert f'href="{reverse("events:event_detail", args=[event.pk])}"' in logo_link
+
+
+@pytest.mark.django_db
+def test_an_event_with_no_logo_still_says_its_name(auth_client, roster_rider, user_model):
+    """Most events have no logo, and a blank chip would be worse than a worded one."""
+    roster_rider(zwid=4242, name="Ada Racer")
+    _signup(_event("Tour de Coalition"), _member(user_model, "ada", 4242))
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert "Tour de Coalition" in card
+    assert "<img" not in _chip_row(card)
+
+
+@pytest.mark.django_db
+def test_captaincy_survives_the_logo(auth_client, roster_rider, user_model, settings, tmp_path):
+    """The one thing on the chip a logo cannot say."""
+    settings.MEDIA_ROOT = str(tmp_path)
+    roster_rider(zwid=4242, name="Ada Racer")
+    ada = _member(user_model, "ada", 4242)
+    event = _logo(_event("Tour de Coalition"))
+    _signup(event, ada)
+    _squad(event, captains=[ada])
+
+    chip = _chip_row(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    # The visible text, not the markup: data-tip repeats the role, so asserting against the
+    # raw chip passes with the badge deleted.
+    assert "Captain" in _visible_text(chip)
+
+
+@pytest.mark.django_db
+def test_a_logo_that_storage_cannot_name_costs_the_chip_its_picture_not_the_page(
+    auth_client, roster_rider, user_model, settings, tmp_path, monkeypatch
+):
+    """One unnameable file must not take the whole roster down with it.
+
+    Local storage happily names anything, so the refusal is injected: it is the object store
+    that can decline (no MEDIA_URL, no bucket), and that is where this runs in production.
+    """
+    settings.MEDIA_ROOT = str(tmp_path)
+    roster_rider(zwid=4242, name="Ada Racer")
+    event = _logo(_event("Tour de Coalition"))
+    _signup(event, _member(user_model, "ada", 4242))
+
+    def _refuse(_name):
+        raise ValueError("no base URL")
+
+    monkeypatch.setattr(Event._meta.get_field("logo").storage, "url", _refuse)
+
+    response = auth_client.get(reverse("team:rosterv2"))
+
+    assert response.status_code == 200
+    # Falls all the way back to the worded chip -- not a broken image, and not a blank one.
+    chip = _chip_row(_card_for(response.content.decode(), "Ada Racer"))
+    assert "<img" not in chip
+    assert "Tour de Coalition" in chip
