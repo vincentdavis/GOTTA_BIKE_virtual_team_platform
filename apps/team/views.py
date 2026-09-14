@@ -593,7 +593,15 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
 
     # The query text is NOT logged: it is rider-authored free text, and someone looking up a
     # teammate by real name should not leave that in telemetry. The count is the useful part.
-    logfire.info("Roster viewed", user_id=request.user.pk, riders=roster.rider_count, matched=len(rows))
+    logfire.info(
+        "Roster viewed",
+        user_id=request.user.pk,
+        riders=roster.rider_count,
+        matched=len(rows),
+        # A roster that is thin because the stats cache is behind looks, from the outside,
+        # exactly like a team that shrank. The number says which.
+        unstatted=roster.unstatted_count,
+    )
 
     return render(
         request,
@@ -604,6 +612,8 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
             "query": query,
             "match_count": len(rows),
             "rider_count": roster.rider_count,
+            "unstatted_count": roster.unstatted_count,
+            "team_size": roster.team_size,
             "stats_synced_at": roster.synced_at,
             "filters": filters,
             "options": filter_options(roster.rows),

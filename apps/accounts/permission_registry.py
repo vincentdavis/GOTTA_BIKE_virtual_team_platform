@@ -65,8 +65,8 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "name": "Team Member",
         "description": "Required for most pages - basic team access",
         "views": [
-            "/team/roster/ - Team roster",
-            "/team/rosterv2/ - Card roster (under construction; not linked anywhere)",
+            "/team/roster/ - Team roster (cards)",
+            "/team/roster/table/ - Team roster, table view with the distribution charts",
             "/team/links/ - Team links",
             "/team/links/submit/ - Submit new team link",
             "/team/links/{id}/edit/ - Edit team link",

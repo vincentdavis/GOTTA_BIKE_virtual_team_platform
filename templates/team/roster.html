@@ -7,8 +7,12 @@
   <div class="max-w-6xl mx-auto">
     <div class="card bg-base-200 shadow-xl">
       <div class="card-body">
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="card-title text-2xl">Team Roster</h2>
+        <div class="flex flex-wrap justify-between items-center gap-2 mb-4">
+          <h2 class="card-title text-2xl">Team Roster{% if not roster_filter %} &mdash; table view{% endif %}</h2>
+          {% if not roster_filter %}
+            {# The cards are the roster now; this page is the table and its charts. #}
+            <a class="link text-sm" href="{% url 'team:roster' %}">Back to the card roster</a>
+          {% endif %}
         </div>
 
         <details class="collapse collapse-arrow bg-base-100 mb-6">
@@ -237,7 +241,7 @@
               </div>
 
               <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-              <a href="{% url 'team:roster' %}" class="btn btn-ghost btn-sm">Reset</a>
+              <a href="{% url 'team:roster_table' %}" class="btn btn-ghost btn-sm">Reset</a>
             </div>
           </form>
         {% endif %}

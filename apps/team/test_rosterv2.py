@@ -14,7 +14,7 @@ from conftest import _make_user
 
 @pytest.mark.django_db
 def test_a_signed_out_visitor_is_sent_to_login(client):
-    response = client.get(reverse("team:rosterv2"))
+    response = client.get(reverse("team:roster"))
 
     assert response.status_code == 302
     assert "/accounts/login/" in response["Location"]
@@ -25,21 +25,38 @@ def test_a_signed_in_non_member_is_refused(client, user_model):
     """Not a redirect: team_member is the same gate the roster it replaces uses."""
     client.force_login(_make_user(user_model, username="outsider"))
 
-    assert client.get(reverse("team:rosterv2")).status_code == 403
+    assert client.get(reverse("team:roster")).status_code == 403
 
 
 @pytest.mark.django_db
 def test_a_team_member_gets_the_page(auth_client):
-    response = auth_client.get(reverse("team:rosterv2"))
-    body = response.content.decode()
+    response = auth_client.get(reverse("team:roster"))
 
     assert response.status_code == 200
-    assert "Team Roster" in body
-    # Scoped to the notice, and to the href rather than the URL anywhere: the sidebar links the
-    # real roster on every page, and the link's own label is that path, so both looser forms of
-    # this assertion pass with the link broken.
-    notice = body.split("Under construction.", 1)[1].split("</div>", 1)[0]
-    assert f'href="{reverse("team:roster")}"' in notice
+    assert "Team Roster" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_the_page_offers_the_table_it_replaced(auth_client):
+    """The table still holds the distribution charts, so it must stay one click away.
+
+    Asserted on the href rather than the word: the sidebar and the page both say "roster",
+    so a looser assertion passes with the link missing.
+    """
+    body = auth_client.get(reverse("team:roster")).content.decode()
+
+    assert f'href="{reverse("team:roster_table")}"' in body
+
+
+@pytest.mark.django_db
+def test_the_address_the_cards_were_built_at_still_leads_here(client, team_member):
+    """The link was handed round while this was under construction."""
+    client.force_login(team_member)
+
+    response = client.get(reverse("team:rosterv2"))
+
+    assert response.status_code == 301
+    assert response["Location"] == reverse("team:roster")
 
 
 @pytest.mark.django_db
@@ -47,7 +64,7 @@ def test_the_header_counts_the_riders_on_the_roster_and_dates_the_sync(auth_clie
     roster_rider(zwid=1001, name="Ada Racer")
     roster_rider(zwid=1002, name="Bo Racer")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "2 riders" in body
     assert "stats synced" in body
@@ -59,7 +76,7 @@ def test_the_header_counts_riders_not_cached_rows(auth_client, roster_rider, rid
     roster_rider(zwid=1001, name="Ada Racer")
     rider_profile_factory(zwid=1002, name="Departed Rider")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "1 rider " in body
     assert "Departed Rider" not in body
@@ -68,7 +85,7 @@ def test_the_header_counts_riders_not_cached_rows(auth_client, roster_rider, rid
 @pytest.mark.django_db
 def test_an_empty_roster_says_so_rather_than_claiming_a_sync(auth_client):
     """Zero riders with a 'synced just now' line would read as a working sync with no team."""
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "0 riders" in body
     assert "no rider stats yet" in body
@@ -91,3 +108,50 @@ def test_the_factory_builds_a_row_through_the_real_mapping(rider_profile_factory
     # Present in the row, so the allow-list tests later have something real to hold back.
     assert rider.weight_kg == pytest.approx(72.0)
     assert rider.height_cm == pytest.approx(178.0)
+
+
+# --- when the stats cache is behind the team ------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_rider_with_no_cached_stats_is_counted_even_though_they_have_no_card(
+    auth_client, roster_rider, zp_team_rider_factory
+):
+    """The failure this exists to catch is silent: a roster that looks fine and is not.
+
+    A card needs cached stats AND a place on the team. If the stats sync has not reached a
+    rider, they simply are not on the page -- so a roster showing five of two thousand riders
+    reads as a team of five. The header says both numbers instead.
+    """
+    roster_rider(zwid=1001, name="Ada Racer")
+    zp_team_rider_factory(zwid=1002, name="Not Yet Synced")
+
+    body = auth_client.get(reverse("team:roster")).content.decode()
+
+    assert "1 of 2 riders" in body
+    assert "no stats yet" in body
+    assert "Not Yet Synced" not in body
+
+
+@pytest.mark.django_db
+def test_a_complete_roster_does_not_explain_itself(auth_client, roster_rider):
+    """The sentence is for a gap. With no gap it would be noise on every page load."""
+    roster_rider(zwid=1001, name="Ada Racer")
+
+    body = auth_client.get(reverse("team:roster")).content.decode()
+
+    assert "1 rider " in body
+    assert "no stats yet" not in body
+    assert "of 1 riders" not in body
+
+
+@pytest.mark.django_db
+def test_the_gap_offers_the_table_which_does_list_everyone(auth_client, roster_rider, zp_team_rider_factory):
+    """The two pages read different sources, which is exactly why the table is the answer here."""
+    roster_rider(zwid=1001, name="Ada Racer")
+    zp_team_rider_factory(zwid=1002, name="Not Yet Synced")
+
+    body = auth_client.get(reverse("team:roster")).content.decode()
+    gap = body.split("no stats yet", 1)[1].split("</p>", 1)[0]
+
+    assert f'href="{reverse("team:roster_table")}"' in gap

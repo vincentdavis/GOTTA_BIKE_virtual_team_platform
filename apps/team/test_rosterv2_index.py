@@ -106,7 +106,7 @@ def test_weight_and_height_never_reach_the_page(auth_client, roster_rider):
     """The end-to-end version: a rider whose row really does carry both."""
     roster_rider(zwid=4242, name="Ada Racer", weight_kg=91.7, height_cm=203.4)
 
-    response = auth_client.get(reverse("team:rosterv2"))
+    response = auth_client.get(reverse("team:roster"))
     body = response.content.decode()
     rendered_context = repr(response.context["roster"])
 
@@ -183,7 +183,7 @@ def test_the_page_prints_the_zwid(auth_client, roster_rider):
     """Vincent's call, and consistent with the roster this page replaces, which prints it too."""
     roster_rider(zwid=8675309, name="Ada Racer")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "8675309" in body
 
@@ -374,7 +374,7 @@ def test_an_unverified_rider_lends_no_avatar_or_discord_name_to_the_page(auth_cl
     roster_rider(zwid=4242, name="Ada Racer")
     _member(user_model, "impostor", 4242, verified=False)
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "cdn.discordapp.com" not in body
     assert "impostor" not in body

@@ -1,16 +1,22 @@
 """URL patterns for team app."""
 
 from django.urls import path
+from django.views.generic import RedirectView
 
 from apps.team import views
 
 app_name = "team"
 
 urlpatterns = [
-    path("roster/", views.team_roster_view, name="roster"),
+    # The card roster is THE roster. The table it replaced is still here, one click away:
+    # it carries the category, FTP and W/kg distribution charts, which the cards do not,
+    # and the Discord bot's filtered-channel link renders through the same template.
+    path("roster/", views.rosterv2_view, name="roster"),
+    path("roster/table/", views.team_roster_view, name="roster_table"),
     path("roster/f/<uuid:filter_id>/", views.filtered_roster_view, name="filtered_roster"),
-    # Card roster, under construction. Nothing links here yet -- see rosterv2_view.
-    path("rosterv2/", views.rosterv2_view, name="rosterv2"),
+    # Where the card roster lived while it was being built. Kept as a redirect rather than
+    # deleted: the link was handed round while it was under construction.
+    path("rosterv2/", RedirectView.as_view(pattern_name="team:roster", permanent=True), name="rosterv2"),
     path("links/", views.team_links_view, name="links"),
     path("links/submit/", views.submit_team_link_view, name="submit_link"),
     path("links/<int:pk>/edit/", views.edit_team_link_view, name="edit_link"),

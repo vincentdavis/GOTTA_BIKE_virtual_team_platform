@@ -195,7 +195,7 @@ def test_the_counts_reach_the_card(auth_client, roster_rider):
     _result(4242, "TYPE_RIDE")
     _result(4242, "TYPE_RACE", position_in_cat=1)
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
     card = body.split('class="card bg-base-100', 1)[1]
 
     # Derived from the constant, so widening the window does not leave the tile lying.
@@ -251,7 +251,7 @@ def test_the_page_with_no_sort_chosen_leads_with_the_racers(auth_client, roster_
     for _ in range(4):
         _result(1002, "TYPE_RACE")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert body.index("Zoe Busy") < body.index("Ada Quiet")
 
@@ -321,6 +321,6 @@ def test_the_sort_option_names_the_window(auth_client, roster_rider):
     """Otherwise the page offers "Team races" and never says over what period."""
     roster_rider(zwid=1001, name="Ada Racer")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert f"Team races ({RACE_WINDOW_DAYS} days)" in body

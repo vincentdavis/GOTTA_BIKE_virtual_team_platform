@@ -140,7 +140,7 @@ def test_a_real_name_is_searchable_but_never_rendered(auth_client, roster_rider,
     roster_rider(zwid=4242, name="Zwift Handle")
     _member(user_model, "ada_discord", 4242, first_name="Ada", last_name="Lovelace")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "Lovelace" not in body
     assert "Zwift Handle" in body
@@ -211,7 +211,7 @@ def test_finding_a_rider_by_zwid_prints_it_back_on_the_card(auth_client, roster_
     """
     roster_rider(zwid=8675309, name="Ada Racer")
 
-    body = auth_client.get(reverse("team:rosterv2") + "?q=8675309").content.decode()
+    body = auth_client.get(reverse("team:roster") + "?q=8675309").content.decode()
 
     # Scoped to the card: the query echoes in the search box and its chip regardless, so a
     # whole-page assertion would pass with the card printing nothing.
@@ -235,7 +235,7 @@ def test_a_hit_on_another_name_says_which(auth_client, roster_rider, user_model)
     roster_rider(zwid=4242, name="Zwift Handle")
     _member(user_model, "ada_discord", 4242, first_name="Ada", last_name="Lovelace")
 
-    body = auth_client.get(reverse("team:rosterv2") + "?q=lovelace").content.decode()
+    body = auth_client.get(reverse("team:roster") + "?q=lovelace").content.decode()
 
     assert "matched:" in body
 
@@ -251,10 +251,10 @@ def test_the_search_survives_paging(auth_client, roster_rider):
     for n in range(5):
         roster_rider(zwid=7000 + n, name=f"Climber {n:03d}")
 
-    first = auth_client.get(reverse("team:rosterv2") + "?q=sprinter").content.decode()
+    first = auth_client.get(reverse("team:roster") + "?q=sprinter").content.decode()
 
     assert "q=sprinter" in first
-    second = auth_client.get(reverse("team:rosterv2") + "?q=sprinter&page=2").content.decode()
+    second = auth_client.get(reverse("team:roster") + "?q=sprinter&page=2").content.decode()
     assert "Climber" not in second
     assert "Showing 60 of 65 riders" in first
 
@@ -263,7 +263,7 @@ def test_the_search_survives_paging(auth_client, roster_rider):
 def test_no_match_says_so_and_offers_a_way_back(auth_client, roster_rider):
     roster_rider(zwid=1001, name="Ada Racer")
 
-    body = auth_client.get(reverse("team:rosterv2") + "?q=nobody").content.decode()
+    body = auth_client.get(reverse("team:roster") + "?q=nobody").content.decode()
 
     assert "No riders match" in body
     assert "Clear the search" in body
@@ -274,9 +274,12 @@ def test_an_empty_query_shows_everyone(auth_client, roster_rider):
     roster_rider(zwid=1001, name="Ada Racer")
 
     for query in ("", "   "):
-        body = auth_client.get(reverse("team:rosterv2") + f"?q={query}").content.decode()
+        body = auth_client.get(reverse("team:roster") + f"?q={query}").content.decode()
         assert "Ada Racer" in body
-        assert "match" not in body.split("Under construction", 1)[1].split("<ul", 1)[0]
+        # Everything between the search box and the first card: the chips and the count live
+        # there, and an empty query must claim neither a filter nor a narrowed result.
+        above_the_cards = body.split('id="roster-search"', 1)[1].split('class="card bg-base-100', 1)[0]
+        assert "match" not in above_the_cards
 
 
 @pytest.mark.django_db
@@ -287,7 +290,7 @@ def test_the_search_text_is_not_logged(auth_client, roster_rider):
     roster_rider(zwid=1001, name="Ada Racer")
 
     with patch("apps.team.views.logfire.info") as info:
-        auth_client.get(reverse("team:rosterv2") + "?q=Ada+Lovelace")
+        auth_client.get(reverse("team:roster") + "?q=Ada+Lovelace")
 
     logged = " ".join(str(call) for call in info.call_args_list)
     assert "Lovelace" not in logged

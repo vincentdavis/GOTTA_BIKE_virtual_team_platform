@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load humanize %}
 
 {% block title %}Team Roster - The Coalition{% endblock %}
 
@@ -8,21 +9,41 @@
       <div class="card-body">
         <h1 class="card-title text-2xl">Team Roster</h1>
 
+        {% comment %}
+          Both numbers whenever they differ. A card needs cached stats as well as a place on
+          the team, so a roster can be missing most of the team while looking perfectly
+          healthy -- "5 riders" reads as a team of five, not as a sync that has not run. This
+          is the first thing to look at after a deploy.
+        {% endcomment %}
         <p class="text-sm text-base-content/70">
-          {{ rider_count }} rider{{ rider_count|pluralize }} ·
+          {% if unstatted_count %}
+            {{ rider_count|intcomma }} of {{ team_size|intcomma }} riders ·
+          {% else %}
+            {{ rider_count }} rider{{ rider_count|pluralize }} ·
+          {% endif %}
           {% if stats_synced_at %}
             stats synced {{ stats_synced_at|timesince }} ago
           {% else %}
             no rider stats yet
           {% endif %}
         </p>
+        {% if unstatted_count %}
+          <p class="text-sm text-base-content/70">
+            {{ unstatted_count|intcomma }} rider{{ unstatted_count|pluralize }} on the team ha{{ unstatted_count|pluralize:"s,ve" }}
+            no stats yet, so {{ unstatted_count|pluralize:"it has,they have" }} no card here.
+            {% if team_size %}The <a class="link" href="{% url 'team:roster_table' %}">table view</a> lists everyone.{% endif %}
+          </p>
+        {% endif %}
 
-        <div class="alert alert-warning mt-4">
-          <span>
-            <strong>Under construction.</strong> Videos and event chips are not built yet.
-            The roster everyone uses is still at <a class="link" href="{% url 'team:roster' %}">/team/roster/</a>.
-          </span>
-        </div>
+        {% comment %}
+          The table this page replaced is still one click away, and the link is not
+          nostalgia: the table carries the category, FTP and W/kg distribution charts, which
+          the cards do not, and the Discord bot's channel-filtered link renders through it.
+        {% endcomment %}
+        <p class="text-sm text-base-content/70">
+          <a class="link" href="{% url 'team:roster_table' %}">Table view</a>, with the
+          category, FTP and W/kg distribution charts.
+        </p>
 
         {% comment %}
           A plain GET form: the query lives in the URL, so a search can be bookmarked and
@@ -40,7 +61,7 @@
           </div>
           <button type="submit" class="btn btn-primary">Search</button>
           {% if query %}
-            <a class="btn btn-ghost" href="{% url 'team:rosterv2' %}">Clear</a>
+            <a class="btn btn-ghost" href="{% url 'team:roster' %}">Clear</a>
           {% endif %}
         </form>
 
@@ -210,7 +231,7 @@
                 </a>
               </li>
             {% endfor %}
-            <li><a class="link text-sm" href="{% url 'team:rosterv2' %}">Clear all</a></li>
+            <li><a class="link text-sm" href="{% url 'team:roster' %}">Clear all</a></li>
           </ul>
         {% endif %}
 
@@ -247,7 +268,7 @@
         {% else %}
           <p class="mt-6 text-center text-base-content/70">
             {% if query or filters.active %}
-              No riders match. <a class="link" href="{% url 'team:rosterv2' %}">Clear the search and filters</a>.
+              No riders match. <a class="link" href="{% url 'team:roster' %}">Clear the search and filters</a>.
             {% else %}
               No riders yet. Rider stats arrive with the profile sync.
             {% endif %}

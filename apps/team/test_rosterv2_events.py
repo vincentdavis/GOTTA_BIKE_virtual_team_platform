@@ -80,7 +80,7 @@ def test_the_chip_links_to_the_event(auth_client, roster_rider, user_model):
     event = _event("Tour de Coalition")
     _signup(event, _member(user_model, "ada", 4242))
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert reverse("events:event_detail", args=[event.pk]) in body
     assert "Tour de Coalition" in body
@@ -230,7 +230,7 @@ def test_the_page_shows_the_reader_their_own_private_signup(client, roster_rider
     _signup(_event("Private Selection", show_signups=False), ada)
     client.force_login(ada)
 
-    body = client.get(reverse("team:rosterv2")).content.decode()
+    body = client.get(reverse("team:roster")).content.decode()
 
     assert "Private Selection" in body
 
@@ -244,7 +244,7 @@ def test_the_page_does_not_show_a_teammates_private_signup(client, roster_rider,
     bo = _member(user_model, "bo", 9999)
     client.force_login(bo)
 
-    body = client.get(reverse("team:rosterv2")).content.decode()
+    body = client.get(reverse("team:roster")).content.decode()
 
     assert "Ada Racer" in body
     assert "Private Selection" not in body
@@ -278,7 +278,7 @@ def test_a_squad_captain_is_marked_on_that_events_chip(auth_client, roster_rider
     assert _roles()["Ada Racer"] == ["Captain"]
     # Scoped to the chip: the sidebar has a "Captains" heading on every page, so asserting
     # the word against the whole body passes with the badge deleted.
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
     chip = body.split('class="badge badge-sm badge-info', 1)[1].split("</a>", 1)[0]
     assert "Captain" in chip
 
@@ -449,7 +449,7 @@ def test_an_event_with_a_logo_shows_it_instead_of_the_title(auth_client, roster_
     event = _logo(_event("Tour de Coalition"))
     _signup(event, _member(user_model, "ada", 4242))
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert event.logo.url in card
     # Replaced, not joined -- the title is the image's name now, not text beside it.
@@ -463,7 +463,7 @@ def test_the_logo_still_carries_the_events_name(auth_client, roster_rider, user_
     roster_rider(zwid=4242, name="Ada Racer")
     _signup(_logo(_event("Tour de Coalition")), _member(user_model, "ada", 4242))
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert 'alt="Tour de Coalition"' in card
     assert 'data-tip="Tour de Coalition"' in card
@@ -476,7 +476,7 @@ def test_the_logo_links_to_the_event(auth_client, roster_rider, user_model, sett
     event = _logo(_event("Tour de Coalition"))
     _signup(event, _member(user_model, "ada", 4242))
 
-    chip = _chip_row(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    chip = _chip_row(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
     logo_link = next(part for part in chip.split("<a ")[1:] if "<img" in part)
 
     assert f'href="{reverse("events:event_detail", args=[event.pk])}"' in logo_link
@@ -488,7 +488,7 @@ def test_an_event_with_no_logo_still_says_its_name(auth_client, roster_rider, us
     roster_rider(zwid=4242, name="Ada Racer")
     _signup(_event("Tour de Coalition"), _member(user_model, "ada", 4242))
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert "Tour de Coalition" in card
     assert "<img" not in _chip_row(card)
@@ -510,7 +510,7 @@ def test_captaincy_rides_on_the_logo_rather_than_beside_it(
     _signup(event, ada)
     _squad(event, captains=[ada])
 
-    chip = _chip_row(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    chip = _chip_row(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert 'alt="Tour de Coalition · Captain"' in chip
     # Nothing drawn: the visible text is where the extra chip used to appear.
@@ -526,7 +526,7 @@ def test_a_chip_with_no_logo_still_prints_the_role(auth_client, roster_rider, us
     _signup(event, ada)
     _squad(event, captains=[ada])
 
-    chip = _chip_row(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    chip = _chip_row(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "Captain" in _visible_text(chip)
 
@@ -550,7 +550,7 @@ def test_a_logo_that_storage_cannot_name_costs_the_chip_its_picture_not_the_page
 
     monkeypatch.setattr(Event._meta.get_field("logo").storage, "url", _refuse)
 
-    response = auth_client.get(reverse("team:rosterv2"))
+    response = auth_client.get(reverse("team:roster"))
 
     assert response.status_code == 200
     # Falls all the way back to the worded chip -- not a broken image, and not a blank one.

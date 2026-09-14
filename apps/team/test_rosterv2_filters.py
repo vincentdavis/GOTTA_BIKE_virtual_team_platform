@@ -267,7 +267,7 @@ def test_an_active_filter_shows_a_chip_that_removes_it(auth_client, roster_rider
     roster_rider(zwid=1001, name="Gold Rider", category_racing="Gold")
     roster_rider(zwid=1002, name="Copper Rider", category_racing="Copper")
 
-    body = auth_client.get(reverse("team:rosterv2") + "?zr=Gold").content.decode()
+    body = auth_client.get(reverse("team:roster") + "?zr=Gold").content.decode()
 
     assert "Zwift Racing: Gold" in body
     assert "Copper Rider" not in body
@@ -284,8 +284,8 @@ def test_filtering_and_paging_keep_each_other(auth_client, roster_rider):
         roster_rider(zwid=6000 + n, name=f"Gold {n:03d}", category_racing="Gold")
     roster_rider(zwid=7000, name="Copper One", category_racing="Copper")
 
-    first = auth_client.get(reverse("team:rosterv2") + "?zr=Gold").content.decode()
-    second = auth_client.get(reverse("team:rosterv2") + "?zr=Gold&page=2").content.decode()
+    first = auth_client.get(reverse("team:roster") + "?zr=Gold").content.decode()
+    second = auth_client.get(reverse("team:roster") + "?zr=Gold&page=2").content.decode()
 
     assert "Showing 55 of 56 riders" in first
     assert "zr=Gold" in first
@@ -298,8 +298,8 @@ def test_the_filter_panel_opens_itself_when_a_filter_is_on(auth_client, roster_r
     """Otherwise the reason the roster looks short is hidden behind a closed summary."""
     roster_rider(zwid=1001, name="Ada Racer", category_racing="Gold")
 
-    closed = auth_client.get(reverse("team:rosterv2")).content.decode()
-    opened = auth_client.get(reverse("team:rosterv2") + "?zr=Gold").content.decode()
+    closed = auth_client.get(reverse("team:roster")).content.decode()
+    opened = auth_client.get(reverse("team:roster") + "?zr=Gold").content.decode()
 
     assert '" open>' not in closed
     assert '" open>' in opened
@@ -310,7 +310,7 @@ def test_every_control_has_a_real_label(auth_client, roster_rider):
     """Both control strips this could have been copied from ship unlabelled inputs."""
     roster_rider(zwid=1001, name="Ada Racer")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     for control in ("f-category", "f-zr", "f-gender", "f-phenotype", "f-age", "f-verified",
                     "f-account", "f-wkg", "f-ftp", "f-joined", "f-racing", "f-country",
@@ -381,7 +381,7 @@ def test_a_rider_with_no_country_is_excluded_by_a_country_filter(roster_rider):
 def test_the_country_chip_names_the_country_rather_than_its_code(auth_client, roster_rider):
     roster_rider(zwid=1001, name="Welsh Rider", country="gb-wls")
 
-    body = auth_client.get(reverse("team:rosterv2") + "?country=GB").content.decode()
+    body = auth_client.get(reverse("team:roster") + "?country=GB").content.decode()
 
     assert "Country: United Kingdom" in body
     assert "Country: GB" not in body

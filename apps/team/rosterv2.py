@@ -387,6 +387,11 @@ class RosterIndex:
         joined_count: How many cards carry an account half.
         contested_count: Zwids claimed by more than one verified account. Those cards get no
             account half at all, so the number is worth surfacing rather than swallowing.
+        team_size: How many riders count as racing for the team at all -- the population the
+            cards are drawn FROM. A card needs a cached ``RiderProfile`` as well, so this is
+            always >= the number of rows, and the difference is riders nothing has fetched
+            stats for yet. The page states both, because a roster quietly showing a third of
+            the team looks like a team that shrank.
 
     """
 
@@ -394,6 +399,7 @@ class RosterIndex:
     synced_at: datetime | None = None
     joined_count: int = 0
     contested_count: int = 0
+    team_size: int = 0
 
     def __str__(self) -> str:
         """Return a count, never the repr of every row.
@@ -413,6 +419,16 @@ class RosterIndex:
 
         """
         return len(self.rows)
+
+    @property
+    def unstatted_count(self) -> int:
+        """Riders on the team that nothing has fetched stats for, so they have no card.
+
+        Returns:
+            How many of the team are missing from the page.
+
+        """
+        return max(self.team_size - len(self.rows), 0)
 
 
 def _number(value: object) -> float | None:
@@ -1397,4 +1413,5 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
         synced_at=RiderProfile.objects.aggregate(synced_at=Max("fetched_at"))["synced_at"],
         joined_count=joined,
         contested_count=contested,
+        team_size=len(roster_zwids),
     )

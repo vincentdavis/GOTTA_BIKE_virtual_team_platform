@@ -56,7 +56,7 @@ def _member(user_model, username, zwid, **extra):
 def test_a_card_shows_the_riders_racing(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer", velo=1642.0, ftp=286.0, wkg_20min=4.1, category_open="B")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "Ada Racer" in body
     assert "1642" in body  # vELO
@@ -70,7 +70,7 @@ def test_a_joined_card_links_to_the_profile_and_names_the_rider(auth_client, ros
     roster_rider(zwid=4242, name="Ada Racer")
     user = _member(user_model, "ada_discord", 4242)
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert reverse("accounts:public_profile", args=[user.pk]) in body
     assert "ada_discord" in body
@@ -84,7 +84,7 @@ def test_an_unjoined_card_says_so_and_links_nowhere(auth_client, roster_rider, u
     user.zwid_verified = False
     user.save()
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "No account here" in body
     assert reverse("accounts:public_profile", args=[user.pk]) not in body
@@ -96,7 +96,7 @@ def test_an_unjoined_card_says_so_and_links_nowhere(auth_client, roster_rider, u
 def test_a_missing_figure_is_an_em_dash(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer", velo=None, ftp=None, wkg_20min=None)
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert _text_of(_card_for(body, "Ada Racer")).count("—") == 3
 
@@ -110,7 +110,7 @@ def test_a_real_zero_is_printed_as_zero_not_as_missing(auth_client, roster_rider
     """
     roster_rider(zwid=4242, name="Zero Rider", velo=0.0, ftp=0.0, wkg_20min=0.0)
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
     card = _text_of(_card_for(body, "Zero Rider"))
 
     assert "—" not in card
@@ -127,7 +127,7 @@ def test_the_card_does_not_date_a_riders_last_race(auth_client, roster_rider):
     """
     roster_rider(zwid=4242, name="Ada Racer", days_since_race=3)
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "Last raced" not in card
     assert "No race on record" not in card
@@ -137,7 +137,7 @@ def test_the_card_does_not_date_a_riders_last_race(auth_client, roster_rider):
 def test_a_rider_with_no_race_on_record_says_nothing_about_it(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer", days_since_race=None)
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "No race on record" not in card
 
@@ -150,7 +150,7 @@ def test_lifetime_distance_survives_the_date_going(auth_client, roster_rider):
     # factory sets nothing at all.
     roster_rider(zwid=4242, name="Ada Racer", totals={"distance_km": 41_234_000})
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "41,234 km lifetime" in card
 
@@ -160,7 +160,7 @@ def test_a_rider_with_no_distance_gets_no_lifetime_line(auth_client, roster_ride
     """The line used to always render, because the date half always had something to say."""
     roster_rider(zwid=4242, name="Ada Racer", totals={"distance_km": None})
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "km lifetime" not in card
 
@@ -169,7 +169,7 @@ def test_a_rider_with_no_distance_gets_no_lifetime_line(auth_client, roster_ride
 def test_a_hidden_age_bracket_leaves_no_trace_on_the_card(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer", age="-")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     card = _card_for(body, "Ada Racer")
 
@@ -181,7 +181,7 @@ def test_a_hidden_age_bracket_leaves_no_trace_on_the_card(auth_client, roster_ri
 def test_a_junior_bracket_is_shown_because_that_is_the_owners_call(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer", age="Jnr")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert 'alt="Age Jnr"' in card
     assert "age-jnr.svg" in card
@@ -192,7 +192,7 @@ def test_a_junior_bracket_is_shown_because_that_is_the_owners_call(auth_client, 
 
 @pytest.mark.django_db
 def test_an_empty_roster_shows_a_sentence_not_an_empty_grid(auth_client):
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "No riders yet" in body
     assert "Roster pages" not in body
@@ -202,7 +202,7 @@ def test_an_empty_roster_shows_a_sentence_not_an_empty_grid(auth_client):
 def test_one_page_of_riders_needs_no_paging_controls(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "Roster pages" not in body
 
@@ -213,8 +213,8 @@ def test_a_long_roster_is_paged_rather_than_sent_whole(auth_client, roster_rider
     for n in range(ROSTER_PAGE_SIZE + 5):
         roster_rider(zwid=5000 + n, name=f"Rider {n:03d}")
 
-    first = auth_client.get(reverse("team:rosterv2")).content.decode()
-    second = auth_client.get(reverse("team:rosterv2") + "?page=2").content.decode()
+    first = auth_client.get(reverse("team:roster")).content.decode()
+    second = auth_client.get(reverse("team:roster") + "?page=2").content.decode()
 
     assert first.count('class="card bg-base-100') == ROSTER_PAGE_SIZE
     assert second.count('class="card bg-base-100') == 5
@@ -230,7 +230,7 @@ def test_a_nonsense_page_number_lands_on_a_real_page(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer")
 
     for query in ("?page=99", "?page=banana"):
-        assert auth_client.get(reverse("team:rosterv2") + query).status_code == 200
+        assert auth_client.get(reverse("team:roster") + query).status_code == 200
 
 
 # --- the uploaded category / tier / phenotype icons ---------------------------------------
@@ -255,7 +255,7 @@ def test_an_icon_that_identifies_the_value_replaces_the_badge_and_the_word(
 
     roster_rider(zwid=4242, name="Ada Racer", category_open="B", phenotype="Sprinter")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
     text = _text_of(card)
     tags = card.split("<ul", 1)[1].split("</ul>", 1)[0]
 
@@ -288,7 +288,7 @@ def test_a_tier_icon_stands_alone_and_keeps_the_tier_in_its_accessible_name(
 
     roster_rider(zwid=4242, name="Ada Racer", category_racing="Bronze")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert 'alt="Zwift Racing Bronze"' in card
     # Both halves: data-tip alone renders nothing without the tooltip class that reads it.
@@ -316,7 +316,7 @@ def test_the_womens_category_icon_is_ringed_so_it_differs_from_the_open_one(
 
     roster_rider(zwid=4242, name="Ada Racer", category_open="D", category_women="D")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert 'alt="Category D"' in card
     assert 'alt="Women\'s category D"' in card
@@ -330,7 +330,7 @@ def test_a_value_with_no_icon_keeps_its_worded_badge(auth_client, roster_rider):
     """Nothing uploaded is the normal case for most values, and it must still read."""
     roster_rider(zwid=4242, name="Ada Racer", category_racing="Copper", phenotype="Sprinter", category_open="B")
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "ZR Copper" in card
     assert "Sprinter" in card
@@ -347,7 +347,7 @@ def test_a_card_can_mix_icons_and_words(auth_client, roster_rider, settings, tmp
 
     roster_rider(zwid=4242, name="Ada Racer", category_racing="Gold", phenotype="Climber")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert 'alt="Climber"' in card
     assert "ZR Gold" in _text_of(card)
@@ -375,7 +375,7 @@ def test_a_riders_kit_status_shows_at_the_bottom_of_their_card(auth_client, rost
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "need")
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "Kit: Needs kit" in card
 
@@ -393,7 +393,7 @@ def test_the_kit_badge_matches_the_colour_the_kit_page_uses(auth_client, roster_
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "need")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert BADGE_CLASSES["need"] in card
 
@@ -407,7 +407,7 @@ def test_a_rider_the_team_has_not_asked_shows_no_kit_status(auth_client, roster_
     roster_rider(zwid=4243, name="Bo Racer")
     _member(user_model, "bo", 4243)
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "Kit:" not in _text_of(_card_for(body, "Ada Racer"))
     assert "Kit:" not in _text_of(_card_for(body, "Bo Racer"))
@@ -423,7 +423,7 @@ def test_only_the_current_kit_is_shown(auth_client, roster_rider, user_model):
     user.team_kit = {"old-kit": "have", "2026-kit": "need"}
     user.save(update_fields=["team_kit"])
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "Kit: Needs kit" in card
     assert "I have the kit" not in card
@@ -435,7 +435,7 @@ def test_a_rider_with_no_account_shows_no_kit_status(auth_client, roster_rider):
     _kit()
     roster_rider(zwid=4242, name="Scouted Rider")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "Kit:" not in _text_of(_card_for(body, "Scouted Rider"))
 
@@ -461,7 +461,7 @@ def test_no_current_kit_means_no_kit_badge_anywhere(auth_client, roster_rider, u
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "have")
 
-    assert "Kit:" not in _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    assert "Kit:" not in _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
 
 @pytest.mark.django_db
@@ -476,7 +476,7 @@ def test_a_status_that_is_not_a_real_status_is_ignored_rather_than_raising(auth_
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "banana")
 
-    response = auth_client.get(reverse("team:rosterv2"))
+    response = auth_client.get(reverse("team:roster"))
 
     assert response.status_code == 200
     assert "Kit:" not in _text_of(_card_for(response.content.decode(), "Ada Racer"))
@@ -496,7 +496,7 @@ def test_the_kit_wording_is_third_person_on_someone_elses_card(auth_client, rost
 
     # "have" draws the jersey, so the wording is now the icon's accessible name rather
     # than visible text -- which is exactly where a first-person label would still be wrong.
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert 'alt="Kit: Has the kit"' in card
     assert "I have the kit" not in card
@@ -509,7 +509,7 @@ def test_the_kit_wording_is_third_person_on_someone_elses_card(auth_client, rost
 def test_a_country_shows_as_a_flag_not_an_abbreviation(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer", country="fr")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert "/flags/fr.gif" in card
     assert 'alt="France"' in card
@@ -526,7 +526,7 @@ def test_a_uk_subdivision_flies_the_parent_flag_and_keeps_its_own_name(auth_clie
     """
     roster_rider(zwid=4242, name="Ada Racer", country="gb-wls")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert "/flags/gb.gif" in card
     assert "gb-wls.gif" not in card
@@ -538,7 +538,7 @@ def test_an_unknown_country_code_keeps_its_abbreviation(auth_client, roster_ride
     """Degrade to what the card showed before, never to a broken image."""
     roster_rider(zwid=4242, name="Ada Racer", country="zzz")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert "ZZZ" in _text_of(card)
     assert "/flags/zzz.gif" not in card
@@ -550,7 +550,7 @@ def test_the_flag_lookup_is_case_insensitive(auth_client, roster_rider):
     roster_rider(zwid=4242, name="Ada Racer", country="US")
     roster_rider(zwid=4243, name="Bo Racer", country="us")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "/flags/us.gif" in _card_for(body, "Ada Racer")
     assert "/flags/us.gif" in _card_for(body, "Bo Racer")
@@ -570,7 +570,7 @@ def test_every_shown_age_bracket_has_bundled_artwork(auth_client, roster_rider):
     for zwid, bracket in enumerate(AGE_BRACKETS_ORDER, start=4200):
         roster_rider(zwid=zwid, name=f"Rider {bracket}", age=bracket)
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     for bracket in AGE_BRACKETS_ORDER:
         card = _card_for(body, f"Rider {bracket}")
@@ -601,7 +601,7 @@ def test_an_uploaded_icon_replaces_the_bundled_one(auth_client, roster_rider, se
 
     roster_rider(zwid=4242, name="Ada Racer", age="Vet")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert "custom-vet" in card
     assert "age-vet.svg" not in card, "the upload must win over the bundled default"
@@ -620,7 +620,7 @@ def test_uploading_one_bracket_leaves_the_others_on_their_defaults(
     roster_rider(zwid=4242, name="Vet Rider", age="Vet")
     roster_rider(zwid=4243, name="Mas Rider", age="Mas")
 
-    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "custom-vet" in _card_for(body, "Vet Rider")
     assert "age-mas.svg" in _card_for(body, "Mas Rider")
@@ -636,7 +636,7 @@ def test_a_rider_who_has_the_kit_shows_the_jersey_not_the_words(auth_client, ros
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "have")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert "accounts/kit/kit.svg" in card
     # The badge is gone, not merely joined -- otherwise this passes with both on the card.
@@ -650,7 +650,7 @@ def test_a_completed_zwift_order_shows_the_same_jersey(auth_client, roster_rider
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "completed")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert "accounts/kit/kit.svg" in card
     assert 'alt="Kit: Completed by Zwift"' in card
@@ -664,7 +664,7 @@ def test_a_kit_still_being_chased_keeps_its_words(auth_client, roster_rider, use
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, status)
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert "accounts/kit/kit.svg" not in card
     assert words in _text_of(card)
@@ -677,7 +677,7 @@ def test_the_kit_icons_hover_text_and_alt_cannot_drift(auth_client, roster_rider
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "have")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert 'data-tip="Kit: Has the kit"' in card
     assert 'alt="Kit: Has the kit"' in card
@@ -696,7 +696,7 @@ def test_an_uploaded_kit_icon_replaces_the_bundled_one(auth_client, roster_rider
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "have")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert site_settings.kit_emoji.url in card
     assert "accounts/kit/kit.svg" not in card
@@ -709,7 +709,7 @@ def test_a_rider_the_team_has_not_asked_gets_no_jersey(auth_client, roster_rider
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "unknown")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert "accounts/kit/kit.svg" not in card
 
@@ -733,7 +733,7 @@ def test_membership_reads_as_joined_and_a_year(auth_client, roster_rider, user_m
     roster_rider(zwid=4242, name="Ada Racer")
     _guild_member(_member(user_model, "ada", 4242), datetime(2022, 3, 14, tzinfo=UTC))
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "Joined 2022" in card
     assert "member since" not in card
@@ -747,7 +747,7 @@ def test_the_kit_jersey_sits_immediately_left_of_the_flag(auth_client, roster_ri
     roster_rider(zwid=4242, name="Ada Racer", country="us")
     _kitted(user_model, "ada", 4242, "have")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
     badges = card.split("<ul", 1)[1].split("</ul>", 1)[0]
 
     assert badges.index("accounts/kit/kit.svg") < badges.index("flags"), "the kit belongs before the flag"
@@ -763,7 +763,7 @@ def test_a_settled_kit_leaves_no_badge_at_the_foot_of_the_card(auth_client, rost
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "have")
 
-    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
 
     assert card.count("accounts/kit/kit.svg") == 1
     assert "Kit: Has the kit" not in _text_of(card)
@@ -774,7 +774,7 @@ def test_a_card_shows_the_riders_zwift_id(auth_client, roster_rider):
     """The id you quote when asking anyone else about this rider."""
     roster_rider(zwid=8675309, name="Ada Racer")
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
 
     assert "ZWID 8675309" in card
 
@@ -784,6 +784,6 @@ def test_a_rider_with_no_account_still_shows_their_zwift_id(auth_client, roster_
     """Most of the roster never registered here, and the id is how they are identified at all."""
     roster_rider(zwid=8675309, name="Scouted Rider")
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Scouted Rider"))
+    card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Scouted Rider"))
 
     assert "ZWID 8675309" in card
