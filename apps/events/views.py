@@ -243,6 +243,50 @@ def _can_view_v_report(user: User, event: Event) -> bool:
     return event.squads.filter(Q(captains=user) | Q(vice_captains=user)).exists()
 
 
+def _can_view_event(user: User, event: Event) -> bool:
+    """Check whether an event may be shown to a user at all.
+
+    ``Event.visible`` is the team-wide switch, and its help text says so in as many words:
+    an event with it off is not meant to be seen by team members. That has to mean
+    everywhere -- its own page, any listing, and a scheduled race of its borrowed onto
+    another event's page -- or the switch only hides the front door. A race card is the
+    leakiest of those: it names the event, the race, and every rider selected for it.
+
+    The people organising the event still need it, or a draft could not be built before it
+    is announced, so the exception is exactly the set that already sees the event's
+    internals (``_can_view_v_report``): event admins, superusers, holders of the head
+    captain or coordinator roles, and the captains/vice-captains of any of its squads.
+
+    Args:
+        user: The requesting user.
+        event: The event to check.
+
+    Returns:
+        True if the event may be shown to this user.
+
+    """
+    return event.visible or _can_view_v_report(user, event)
+
+
+def _events_hidden_from(user: User, events) -> set[int]:
+    """Return the ids of ``events`` this user must not be shown.
+
+    For the pages that list rows belonging to many events. Give it the events those rows
+    reference -- as a subquery, so nothing is fetched twice -- and it narrows to the
+    hidden ones before doing any per-event role check. An event nobody has hidden costs
+    nothing, which is the normal case.
+
+    Args:
+        user: The requesting user.
+        events: An ``Event`` queryset covering the rows about to be listed.
+
+    Returns:
+        The ids to drop from the listing.
+
+    """
+    return {event.pk for event in events.filter(visible=False) if not _can_view_v_report(user, event)}
+
+
 def _assign_discord_role(user, role_id: int, role_display_name: str, *, admin_user_id: int) -> bool | None:
     """Add a Discord role to a user, updating their local discord_roles cache.
 
@@ -975,6 +1019,18 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
         .select_related("squad", "squad__event")
         .prefetch_related("squad__captains", "squad__vice_captains")
     )
+    # Being signed up is not a way round the hidden switch -- and the event page these
+    # rows link to now answers 404, so leaving them here would only offer dead links.
+    hidden_event_ids = _events_hidden_from(
+        request.user,
+        Event.objects.filter(
+            Q(pk__in=signups.values("event_id")) | Q(pk__in=squad_memberships.values("squad__event_id"))
+        ),
+    )
+    if hidden_event_ids:
+        signups = signups.exclude(event_id__in=hidden_event_ids)
+        squad_memberships = squad_memberships.exclude(squad__event_id__in=hidden_event_ids)
+
     squads_by_event: dict[int, list] = {}
     for sm in squad_memberships:
         squads_by_event.setdefault(sm.squad.event_id, []).append(sm.squad)
@@ -1243,8 +1299,17 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     Returns:
         Rendered event detail page.
 
+    Raises:
+        Http404: If the event is hidden from this viewer.
+
     """
     event = get_object_or_404(Event, pk=pk)
+    # A hidden event is not merely absent from the list: this page is the whole event,
+    # signup table included, and it answers to any id a member cares to type. 404 rather
+    # than 403 so the reply does not confirm the id belongs to an event at all.
+    if not _can_view_event(request.user, event):
+        logfire.info("Hidden event detail withheld", event_id=event.pk, user_id=request.user.id)
+        raise Http404
     races = event.races.all()
     squads = list(
         event.squads.prefetch_related("captains", "vice_captains").annotate(member_count=Count("squad_members")).all()
@@ -2485,8 +2550,14 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     Returns:
         Rendered all-races page.
 
+    Raises:
+        Http404: If the event is hidden from this viewer.
+
     """
     event = get_object_or_404(Event, pk=event_pk)
+    if not _can_view_event(request.user, event):
+        logfire.info("Hidden event races withheld", event_id=event.pk, user_id=request.user.id)
+        raise Http404
 
     user_tz = getattr(request.user, "timezone", "") or ""
     now_utc = timezone.now()
@@ -2579,6 +2650,14 @@ def all_scheduled_races_view(request: HttpRequest) -> HttpResponse:
         .prefetch_related("selected_users", "grid__squad__captains", "grid__squad__vice_captains")
         .order_by("slot_date", "slot_time", "grid__squad__event__title", "grid__squad__name")
     )
+    # An event nobody is meant to see does not get to show its races here. This page is
+    # where a hidden event leaked furthest: a race card names the event, the race, and
+    # every rider selected for it, down to their zwid.
+    hidden_event_ids = _events_hidden_from(
+        request.user, Event.objects.filter(pk__in=base_qs.values("grid__squad__event_id"))
+    )
+    if hidden_event_ids:
+        base_qs = base_qs.exclude(grid__squad__event_id__in=hidden_event_ids)
 
     # Section 1: races the viewer is personally selected in.
     my_selections = list(base_qs.filter(selected_users=request.user))
