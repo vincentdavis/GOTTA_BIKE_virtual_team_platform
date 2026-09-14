@@ -674,3 +674,77 @@ def test_a_rider_the_team_has_not_asked_gets_no_jersey(auth_client, roster_rider
     card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
 
     assert "accounts/kit/kit.svg" not in card
+
+
+# --- where the card puts things -------------------------------------------------------------
+
+
+def _guild_member(user, joined):
+    from apps.accounts.models import GuildMember
+
+    return GuildMember.objects.create(
+        discord_id=user.discord_id, username=user.discord_username, user=user, joined_at=joined
+    )
+
+
+@pytest.mark.django_db
+def test_membership_is_dated_to_the_year_not_the_month(auth_client, roster_rider, user_model):
+    """The month was noise: nobody reads a roster to learn somebody joined in March."""
+    from datetime import UTC, datetime
+
+    roster_rider(zwid=4242, name="Ada Racer")
+    _guild_member(_member(user_model, "ada", 4242), datetime(2022, 3, 14, tzinfo=UTC))
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    assert "member since 2022" in card
+    assert "Mar" not in card
+
+
+@pytest.mark.django_db
+def test_the_kit_jersey_sits_immediately_left_of_the_flag(auth_client, roster_rider, user_model):
+    """Vincent's placement. Both are about who the rider is to us rather than how they race."""
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer", country="us")
+    _kitted(user_model, "ada", 4242, "have")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+    badges = card.split("<ul", 1)[1].split("</ul>", 1)[0]
+
+    assert badges.index("accounts/kit/kit.svg") < badges.index("flags"), "the kit belongs before the flag"
+    # And nothing between them: they read as one pair.
+    between = badges[badges.index("accounts/kit/kit.svg") : badges.index("flags")]
+    assert between.count("<img") == 1
+
+
+@pytest.mark.django_db
+def test_a_settled_kit_leaves_no_badge_at_the_foot_of_the_card(auth_client, roster_rider, user_model):
+    """It moved up; it did not multiply."""
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "have")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert card.count("accounts/kit/kit.svg") == 1
+    assert "Kit: Has the kit" not in _text_of(card)
+
+
+@pytest.mark.django_db
+def test_a_card_shows_the_riders_zwift_id(auth_client, roster_rider):
+    """The id you quote when asking anyone else about this rider."""
+    roster_rider(zwid=8675309, name="Ada Racer")
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+
+    assert "ZWID 8675309" in card
+
+
+@pytest.mark.django_db
+def test_a_rider_with_no_account_still_shows_their_zwift_id(auth_client, roster_rider):
+    """Most of the roster never registered here, and the id is how they are identified at all."""
+    roster_rider(zwid=8675309, name="Scouted Rider")
+
+    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Scouted Rider"))
+
+    assert "ZWID 8675309" in card

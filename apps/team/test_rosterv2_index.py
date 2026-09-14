@@ -40,7 +40,7 @@ from conftest import _make_user
 # --- the allow-list --------------------------------------------------------------------
 
 EXPECTED_CARD_FIELDS = (
-    "_zwid",
+    "zwid",
     "name",
     "gender",
     "country",
@@ -119,7 +119,7 @@ def test_weight_and_height_never_reach_the_page(auth_client, roster_rider):
 @pytest.mark.django_db
 def test_a_card_cannot_be_given_a_field_it_does_not_declare():
     """Frozen and slotted, so "just attach one more value for the template" is not available."""
-    card = RiderCard(_zwid=1, name="Ada")
+    card = RiderCard(zwid=1, name="Ada")
 
     with pytest.raises((TypeError, AttributeError)):
         card.weight_kg = 91.7
@@ -130,54 +130,62 @@ def test_a_card_cannot_be_given_a_field_it_does_not_declare():
         card.name = "someone else"
 
 
-# --- the zwid: usable here, unrenderable there -------------------------------------------
+# --- the search haystack: usable here, unrenderable there ---------------------------------
+#
+# The zwid used to live under this heading. It is shown now -- Zwift's public id for a rider,
+# printed by the roster this page replaces and accepted by the search box above these cards.
+# The haystack still needs hiding: it is every name a rider is known by, their legal name and
+# Discord handle included, gathered so a search can match on a name the card never displays.
 
 
 @pytest.mark.django_db
-def test_a_template_cannot_look_the_zwid_up_by_name():
-    card = RiderCard(_zwid=8675309, name="Ada")
+def test_a_template_cannot_look_the_search_haystack_up_by_name():
+    row = RosterRow(card=RiderCard(zwid=8675309, name="Ada"), _search=(("ada r", "Ada R"),))
 
     with pytest.raises(TemplateSyntaxError):
-        Template("{{ card._zwid }}").render(TemplateContext({"card": card}))
+        Template("{{ row._search }}").render(TemplateContext({"row": row}))
 
 
 @pytest.mark.django_db
-def test_rendering_a_card_or_a_list_of_them_never_prints_the_zwid():
+def test_rendering_a_row_or_a_list_of_them_never_prints_the_haystack():
     """The leading underscore alone does NOT do this, which is why repr=False is on the field.
 
     Django refuses attribute lookup by name, but a container renders each element's repr --
-    measured: a frozen dataclass without repr=False renders [Card(_zwid=8675309, ...)] even
+    measured: a frozen dataclass without repr=False renders [Row(_search=[...], ...)] even
     with __str__ defined, because list.__repr__ does not consult it.
     """
-    card = RiderCard(_zwid=8675309, name="Ada")
-    row = RosterRow(card=card, account=AccountFacts(user_id=7, discord_name="ada"))
+    card = RiderCard(zwid=8675309, name="Ada")
+    row = RosterRow(
+        card=card,
+        account=AccountFacts(user_id=7, discord_name="ada"),
+        _search=(("ada lovelace", "Ada Lovelace"),),
+    )
     index = RosterIndex(rows=(row,))
 
     for template, context in (
-        ("{{ card }}", {"card": card}),
-        ("{{ cards }}", {"cards": [card]}),
-        ("{{ card|pprint }}", {"card": card}),
         ("{{ row }}", {"row": row}),
         ("{{ rows }}", {"rows": [row]}),
+        ("{{ row|pprint }}", {"row": row}),
         ("{{ index }}", {"index": index}),
         ("{{ index.rows }}", {"index": index}),
     ):
         rendered = Template(template).render(TemplateContext(context))
-        assert "8675309" not in rendered, f"{template} leaked the zwid: {rendered}"
+        assert "Lovelace" not in rendered, f"{template} leaked the haystack: {rendered}"
 
-    # repr=False is what hides the zwid; __str__ is what makes the visible half a name rather
-    # than a dump of the whole card. Both are load-bearing, so both are pinned.
+    # repr=False is what hides the haystack; __str__ is what makes the visible half a name
+    # rather than a dump of the whole row. Both are load-bearing, so both are pinned.
     assert Template("{{ card }}").render(TemplateContext({"card": card})) == "Ada"
     assert Template("{{ row }}").render(TemplateContext({"row": row})) == "Ada"
 
 
 @pytest.mark.django_db
-def test_the_page_prints_no_zwid(auth_client, roster_rider):
+def test_the_page_prints_the_zwid(auth_client, roster_rider):
+    """Vincent's call, and consistent with the roster this page replaces, which prints it too."""
     roster_rider(zwid=8675309, name="Ada Racer")
 
     body = auth_client.get(reverse("team:rosterv2")).content.decode()
 
-    assert "8675309" not in body
+    assert "8675309" in body
 
 
 # --- who is on the roster -----------------------------------------------------------------

@@ -32,11 +32,18 @@
         {% endif %}
         <p class="text-xs text-base-content/70 break-words">
           {% if row.account %}
-            {{ row.account.discord_name }}{% if row.account.member_since %} · member since {{ row.account.member_since|date:"M Y" }}{% endif %}
+            {{ row.account.discord_name }}{% if row.account.member_since %} · member since {{ row.account.member_since|date:"Y" }}{% endif %}
           {% else %}
             No account here
           {% endif %}
         </p>
+        {% comment %}
+          Zwift's own id for the rider. Not a secret: the roster this page replaces prints it
+          for everyone, ZwiftPower's public profile is keyed on it, and the search box above
+          these cards takes one -- so a teammate could already turn a number into this rider.
+          It is here because it is the id you quote when asking anyone else about them.
+        {% endcomment %}
+        <p class="text-xs text-base-content/60 font-mono tabular-nums">ZWID {{ row.card.zwid }}</p>
       </div>
 
       {% if row.account %}
@@ -58,7 +65,8 @@
       {% endif %}
     </div>
 
-    {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.phenotype or row.card.age_bracket or row.card.country %}
+    {% site_icon_url "kit" row.account.kit_status as kit_icon %}
+    {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.phenotype or row.card.age_bracket or kit_icon or row.card.country %}
       {# Every tag says in words what it is. Colour alone would carry the meaning otherwise. #}
       {% comment %}
         Where an icon is uploaded it stands alone -- no badge, no word. The word is carried
@@ -137,6 +145,18 @@
           {% else %}
             <li class="badge badge-sm badge-outline" title="Age bracket {{ row.card.age_bracket }}">{{ row.card.age_bracket }}</li>
           {% endif %}
+        {% endif %}
+        {% comment %}
+          The kit, immediately left of the flag. It is the one mark here that is about the
+          team rather than the rider's racing, so it sits at the end of the row rather than
+          among the categories -- and next to the flag, where it reads as part of the same
+          "who they are to us" group. Only the settled statuses have an icon; a kit still
+          being chased keeps its worded badge at the foot of the card.
+        {% endcomment %}
+        {% if kit_icon %}
+          <li class="tooltip" data-tip="Kit: {{ row.account.kit_label }}">
+            <img src="{{ kit_icon }}" alt="Kit: {{ row.account.kit_label }}" class="h-[2em] w-[2em]">
+          </li>
         {% endif %}
         {% comment %}
           A flag rather than "GB-WLS". The ring matters: several flags are mostly white, and
@@ -241,29 +261,19 @@
       </ul>
     {% endif %}
 
-    {% if row.account.kit_label %}
+    {% if row.account.kit_label and not kit_icon %}
       {% comment %}
         The current kit only, and only when the rider has actually told us where they stand.
         A card reading "Unknown" for everybody the team has not asked yet would fill the
         roster with a status nobody has given.
 
-        Once the kit is settled -- the team completed the Zwift order, or the rider says it
-        arrived -- the icon replaces the worded badge, as everywhere else on this card. Both
-        of those statuses share one drawing, so the wording is the only thing telling them
-        apart: alt carries it to assistive tech and data-tip draws it on hover, from the same
-        string so the two cannot drift. A status still in motion ("Needs kit", "Submitted to
-        Zwift") has no icon and keeps its badge -- which is the distinction worth having at a
-        glance across a page of cards: a jersey means there is nothing left to chase.
+        This is the half with no icon -- a kit still being chased ("Needs kit", "Submitted to
+        Zwift"), which is exactly the half worth spelling out, because it is an open question
+        rather than a fact. The settled statuses went up to the icon row beside the flag,
+        where a jersey says "nothing left to chase" without costing a line.
       {% endcomment %}
-      {% site_icon_url "kit" row.account.kit_status as kit_icon %}
       <p class="mt-auto pt-1">
-        {% if kit_icon %}
-          <span class="tooltip" data-tip="Kit: {{ row.account.kit_label }}">
-            <img src="{{ kit_icon }}" alt="Kit: {{ row.account.kit_label }}" class="h-[2em] w-[2em]">
-          </span>
-        {% else %}
-          <span class="badge badge-sm {{ row.account.kit_badge }}">Kit: {{ row.account.kit_label }}</span>
-        {% endif %}
+        <span class="badge badge-sm {{ row.account.kit_badge }}">Kit: {{ row.account.kit_label }}</span>
       </p>
     {% endif %}
   </div>

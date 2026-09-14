@@ -202,17 +202,22 @@ def test_digits_still_match_a_name_that_contains_them(roster_rider):
 
 
 @pytest.mark.django_db
-def test_finding_a_rider_by_zwid_does_not_print_it_back(auth_client, roster_rider):
+def test_finding_a_rider_by_zwid_prints_it_back_on_the_card(auth_client, roster_rider):
+    """Searching by id and being shown the id is how you confirm you found the right rider.
+
+    This test used to assert the opposite. The card was built without the zwid, then Vincent
+    asked for it -- Zwift's public id, printed by the roster this page replaces, and the thing
+    you quote when asking anyone else about a rider.
+    """
     roster_rider(zwid=8675309, name="Ada Racer")
 
     body = auth_client.get(reverse("team:rosterv2") + "?q=8675309").content.decode()
 
-    assert "Ada Racer" in body
-    # The query necessarily echoes in the search box and its chip -- the reader typed it.
-    # The claim is narrower and more important: no CARD carries the id.
+    # Scoped to the card: the query echoes in the search box and its chip regardless, so a
+    # whole-page assertion would pass with the card printing nothing.
     cards = body.split('class="card bg-base-100')[1:]
     assert cards, "expected the rider's card to render"
-    assert not [card for card in cards if "8675309" in card]
+    assert [card for card in cards if "8675309" in card and "Ada Racer" in card]
 
 
 # --- "matched:" -------------------------------------------------------------------------

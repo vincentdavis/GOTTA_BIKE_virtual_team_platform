@@ -18,10 +18,16 @@ W/kg is inside it, and it is the one thing here that really does carry weight an
 is popped off the row and dropped before anything else happens, and no card holds a reference
 to it.
 
-The zwid is carried as ``_zwid`` with ``repr=False``. Both halves are needed. Django refuses
-template variables beginning with an underscore, so ``{{ card._zwid }}`` is a compile-time
-error -- but that guards attribute lookup by NAME only, and ``{{ cards }}`` renders each
-element's repr. Measured: a plain frozen dataclass renders ``[Card(_zwid=8675309, ...)]``
+The zwid is renderable, and deliberately so: the roster this page replaces already prints
+"ZWID: ..." for every rider in its tooltip, alongside ZwiftPower and ZwiftRacing links, and
+this page's own search box takes one. It is Zwift's public id for a rider, not a secret we
+hold. It was carried as ``_zwid`` while the card was being built, which is why the trick
+below is worth keeping written down for the fields that still use it.
+
+``_search`` on ``RosterRow`` is such a field, and it needs BOTH halves. Django refuses
+template variables beginning with an underscore, so ``{{ row._search }}`` is a compile-time
+error -- but that guards attribute lookup by NAME only, and ``{{ rows }}`` renders each
+element's repr. Measured: a plain frozen dataclass renders ``[Card(zwid=8675309, ...)]``
 from a template even with ``__str__`` defined, because the list's repr does not use it.
 ``repr=False`` is what actually closes it; ``__str__`` on every class in the chain is what
 keeps the single-object case readable.
@@ -228,11 +234,13 @@ def gender_bucket(raw: str) -> str:
 class RiderCard:
     """What the page may know about one rider's racing.
 
-    Every field here is renderable. The zwid is not: it is the join key and, later, an exact
-    search term, and it is the one value on this object that must never reach the browser.
+    Every field here is renderable, the zwid included: it is Zwift's public id for a rider,
+    the old roster prints it for everyone, and the search box above these cards takes one.
+    What stays out is the measurement -- weight, height, birth year -- and the allow-list is
+    what keeps it out.
 
     Attributes:
-        _zwid: Zwift id. ``repr=False`` plus the leading underscore keep it out of templates.
+        zwid: Zwift id. Also the join key, and an exact search term.
         name: The rider's Zwift name, or "Unknown rider" -- never their zwid as a name.
         gender: "male", "female" or "" -- three states. Blank is never rounded up to male.
         country: The raw upstream flag string, which includes subdivisions like "gb-wls".
@@ -245,7 +253,7 @@ class RiderCard:
 
     """
 
-    _zwid: int = field(repr=False)
+    zwid: int
     name: str = "Unknown rider"
     gender: str = ""
     country: str = ""
@@ -345,9 +353,10 @@ class RosterRow:
         card: What may be shown.
         account: The rider's account half, or None when no verified claim resolved.
         _search: ``(folded, as written)`` for every name this rider is known by. Server-side
-            only, and ``repr=False`` for the same reason the zwid is: it holds real names,
-            which are searchable but never displayed. The first entry is always the card's
-            own name, which is how ``matched_as`` stays empty for the ordinary case.
+            only, and ``repr=False`` because it holds real names -- a rider's legal name and
+            their Discord handle among them -- which are searchable but never displayed. The
+            first entry is always the card's own name, which is how ``matched_as`` stays
+            empty for the ordinary case.
         matched_as: The name that matched the query, when it was NOT the name on the card --
             "matched: Ada R [COALITION]". Empty otherwise.
 
@@ -480,7 +489,7 @@ def _card(row: dict, payload: dict, record: RaceRecord | None = None) -> RiderCa
     metres = _number(totals.get("distance_km"))  # MISNAMED upstream: the value is metres.
 
     return RiderCard(
-        _zwid=row["zwid"],
+        zwid=row["zwid"],
         # Never f"Rider {zwid}", the v1 fallback, which prints the zwid as a name.
         name=row["name"] or "Unknown rider",
         gender=row["gender"] or "",
@@ -645,7 +654,7 @@ def search(rows: tuple[RosterRow, ...], query: str) -> list[RosterRow]:
 
     hits: list[RosterRow] = []
     for row in rows:
-        if wanted_zwid is not None and row.card._zwid == wanted_zwid:
+        if wanted_zwid is not None and row.card.zwid == wanted_zwid:
             hits.append(row)
             continue
         if not folded:
@@ -1344,7 +1353,7 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
         payload = row.pop("payload") or {}
         card = _card(row, payload, records.get(row["zwid"]))
 
-        claims = claimants.get(card._zwid, ())
+        claims = claimants.get(card.zwid, ())
         account = None
         claimed: dict | None = None
         guild: dict | None = None
@@ -1357,7 +1366,7 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
             contested += 1
             logfire.error(
                 "Roster zwid claimed by more than one verified account",
-                zwid=card._zwid,  # ids only, per the logging rule
+                zwid=card.zwid,  # ids only, per the logging rule
                 user_ids=[claim["id"] for claim in claims],
             )
         rows.append(
@@ -1366,7 +1375,7 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
                 account=account,
                 # claimed is None unless the join fired, so an unverified claimant's real and
                 # Discord names never enter this rider's haystack.
-                _search=_haystack(card, claimed, guild, zwift_names.get(card._zwid, [])),
+                _search=_haystack(card, claimed, guild, zwift_names.get(card.zwid, [])),
             )
         )
 
@@ -1374,7 +1383,7 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
     # the zwid tiebreak keeps two riders of the same name in the same order on every request,
     # which is what stops paging showing one of them twice. Which values sort LAST is a
     # question for the sort controls, not for the index.
-    rows.sort(key=lambda row: (row.card.name.casefold(), row.card._zwid))
+    rows.sort(key=lambda row: (row.card.name.casefold(), row.card.zwid))
 
     logfire.info(
         "Built roster index",
