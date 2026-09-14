@@ -248,3 +248,141 @@ def test_the_page_does_not_show_a_teammates_private_signup(client, roster_rider,
 
     assert "Ada Racer" in body
     assert "Private Selection" not in body
+
+
+# --- captaincy ----------------------------------------------------------------------------------
+
+
+def _squad(event, *, captains=(), vice_captains=(), name="Alpha"):
+    from apps.events.models import Squad
+
+    squad = Squad.objects.create(event=event, name=name)
+    squad.captains.set(captains)
+    squad.vice_captains.set(vice_captains)
+    return squad
+
+
+def _roles(viewer_id=None):
+    rows = build_roster_index(viewer_id=viewer_id).rows
+    return {row.card.name: [chip.role for chip in (row.account.events if row.account else ())] for row in rows}
+
+
+@pytest.mark.django_db
+def test_a_squad_captain_is_marked_on_that_events_chip(auth_client, roster_rider, user_model):
+    roster_rider(zwid=4242, name="Ada Racer")
+    ada = _member(user_model, "ada", 4242)
+    event = _event("Tour de Coalition")
+    _signup(event, ada)
+    _squad(event, captains=[ada])
+
+    assert _roles()["Ada Racer"] == ["Captain"]
+    # Scoped to the chip: the sidebar has a "Captains" heading on every page, so asserting
+    # the word against the whole body passes with the badge deleted.
+    body = auth_client.get(reverse("team:rosterv2")).content.decode()
+    chip = body.split('class="badge badge-sm badge-info', 1)[1].split("</a>", 1)[0]
+    assert "Captain" in chip
+
+
+@pytest.mark.django_db
+def test_a_vice_captain_is_marked_as_one(roster_rider, user_model):
+    roster_rider(zwid=4242, name="Ada Racer")
+    ada = _member(user_model, "ada", 4242)
+    event = _event()
+    _signup(event, ada)
+    _squad(event, vice_captains=[ada])
+
+    assert _roles()["Ada Racer"] == ["Vice-captain"]
+
+
+@pytest.mark.django_db
+def test_holding_both_roles_reads_as_captain(roster_rider, user_model):
+    """The stronger of the two, rather than whichever query happened to run last."""
+    roster_rider(zwid=4242, name="Ada Racer")
+    ada = _member(user_model, "ada", 4242)
+    event = _event()
+    _signup(event, ada)
+    _squad(event, captains=[ada], vice_captains=[ada])
+
+    assert _roles()["Ada Racer"] == ["Captain"]
+
+
+@pytest.mark.django_db
+def test_a_rider_who_just_races_gets_no_role(roster_rider, user_model):
+    roster_rider(zwid=4242, name="Ada Racer")
+    ada = _member(user_model, "ada", 4242)
+    event = _event()
+    _signup(event, ada)
+    _squad(event, captains=[])
+
+    assert _roles()["Ada Racer"] == [""]
+
+
+@pytest.mark.django_db
+def test_captaincy_is_per_event_not_global(roster_rider, user_model):
+    """A rider can lead one event's squad and merely ride in another."""
+    roster_rider(zwid=4242, name="Ada Racer")
+    ada = _member(user_model, "ada", 4242)
+    led = _event("Led Event", days_out=3)
+    ridden = _event("Ridden Event", days_out=10)
+    _signup(led, ada)
+    _signup(ridden, ada)
+    _squad(led, captains=[ada])
+
+    assert _roles()["Ada Racer"] == ["Captain", ""]
+
+
+@pytest.mark.django_db
+def test_somebody_elses_captaincy_is_not_borrowed(roster_rider, user_model):
+    """The role must key on (event, rider), not on the event alone."""
+    roster_rider(zwid=4242, name="Ada Racer")
+    roster_rider(zwid=4243, name="Bo Racer")
+    ada = _member(user_model, "ada", 4242)
+    bo = _member(user_model, "bo", 4243)
+    event = _event()
+    _signup(event, ada)
+    _signup(event, bo)
+    _squad(event, captains=[ada])
+
+    roles = _roles()
+
+    assert roles["Ada Racer"] == ["Captain"]
+    assert roles["Bo Racer"] == [""]
+
+
+@pytest.mark.django_db
+def test_captaincy_of_an_event_that_is_not_chipped_says_nothing(roster_rider, user_model):
+    """No chip, no role -- the badge must not name an event the reader is not being shown."""
+    roster_rider(zwid=4242, name="Ada Racer")
+    ada = _member(user_model, "ada", 4242)
+    private = _event("Private Selection", show_signups=False)
+    _signup(private, ada)
+    _squad(private, captains=[ada])
+
+    assert _roles()["Ada Racer"] == []
+
+
+@pytest.mark.django_db
+def test_captaincy_costs_the_same_however_many_riders(roster_rider, user_model):
+    event = _event()
+    squad_members = []
+    for n in range(3):
+        roster_rider(zwid=1000 + n, name=f"Rider {n}")
+        user = _member(user_model, f"r{n}", 1000 + n)
+        _signup(event, user)
+        squad_members.append(user)
+    _squad(event, captains=squad_members)
+    build_roster_index()
+    with CaptureQueriesContext(connection) as few:
+        build_roster_index()
+
+    more = []
+    for n in range(3, 20):
+        roster_rider(zwid=1000 + n, name=f"Rider {n}")
+        user = _member(user_model, f"r{n}", 1000 + n)
+        _signup(event, user)
+        more.append(user)
+    _squad(event, captains=squad_members + more, name="Beta")
+    with CaptureQueriesContext(connection) as many:
+        build_roster_index()
+
+    assert len(many) == len(few)

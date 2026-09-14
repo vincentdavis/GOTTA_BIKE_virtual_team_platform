@@ -1053,12 +1053,16 @@ class EventChip:
         name: The event's title, which is admin-authored rather than rider-authored.
         url: Its page.
         start_date: Used only to order the chips; the card shows the name.
+        role: "Captain" or "Vice-captain" when the rider leads a squad in this event, else "".
+            Per event, never global -- captaincy is held on a squad, and a rider can captain
+            one event's squad while just riding in another.
 
     """
 
     name: str
     url: str
     start_date: object = None
+    role: str = ""
 
     def __str__(self) -> str:
         """Return the event name, never the repr.
@@ -1114,9 +1118,12 @@ def event_chips(user_ids: list[int], *, viewer_id: int | None = None) -> dict[in
             event__end_date__gte=today,
         )
         .filter(shown)
-        .order_by("event__start_date")
+        .order_by("event__start_date", "event__title")
         .values_list("user_id", "event__id", "event__title", "event__start_date")
     )
+
+    rows = list(rows)
+    roles = _squad_roles({event_id for _, event_id, _, _ in rows})
 
     chips: dict[int, list[EventChip]] = {}
     for user_id, event_id, title, start_date in rows:
@@ -1125,9 +1132,47 @@ def event_chips(user_ids: list[int], *, viewer_id: int | None = None) -> dict[in
                 name=title or "Event",
                 url=reverse("events:event_detail", args=[event_id]),
                 start_date=start_date,
+                role=roles.get((event_id, user_id), ""),
             )
         )
     return {user_id: tuple(items) for user_id, items in chips.items()}
+
+
+def _squad_roles(event_ids: set[int]) -> dict[tuple[int, int], str]:
+    """Find who leads a squad in each of these events.
+
+    Two queries rather than one: captains and vice-captains are separate many-to-many
+    relations, and selecting both in a single ``values_list`` makes the join a cross product
+    of the two, inventing pairs that do not exist.
+
+    Only events already being chipped are asked about, so this says nothing about an event
+    the reader could not otherwise see. Captaincy itself is not a secret -- squad rosters
+    render to any team member on the event page -- but attaching it to an event the reader
+    is not being shown would still name the event.
+
+    Args:
+        event_ids: The events whose chips are being built.
+
+    Returns:
+        ``(event_id, user_id) -> role label``, captain winning where a rider is both.
+
+    """
+    from apps.events.models import Squad
+
+    if not event_ids:
+        return {}
+
+    roles: dict[tuple[int, int], str] = {}
+    # Vice-captains first, so a rider holding both roles in one event reads as Captain.
+    for relation, label in (("vice_captains", "Vice-captain"), ("captains", "Captain")):
+        pairs = (
+            Squad.objects.filter(event_id__in=event_ids, **{f"{relation}__isnull": False})
+            .values_list("event_id", f"{relation}__id")
+            .distinct()
+        )
+        for event_id, user_id in pairs:
+            roles[event_id, user_id] = label
+    return roles
 
 
 def _guild_rows() -> dict[int, dict]:
@@ -1230,10 +1275,10 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
     ``zwid_verified``. Fixing that is out of this module's hands; the duplicate rule caps the
     damage at losing an account half rather than taking one over.
 
-    Costs 14 queries, flat in the number of riders: three for the union, one Constance read
+    Costs 16 queries, flat in the number of riders: three for the union, one Constance read
     for the cutover policy, accounts, guild memberships, the two per-source name tables, two
-    for the race counts, the current kit, the event signups, the cache, and the freshness
-    stamp.
+    for the race counts, the current kit, the event signups, two for squad captaincy, the
+    cache, and the freshness stamp.
 
     Args:
         viewer_id: The signed-in reader. Only affects which of their OWN event signups show
