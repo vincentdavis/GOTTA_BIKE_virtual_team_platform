@@ -62,6 +62,22 @@ AGE_DEFAULT_ICONS = {
     "70+": "accounts/age/age-70plus.svg",
 }
 
+# Keyed on the STORED kit status, not its label, so a reworded label cannot silently
+# unhook the icon. Only the two statuses meaning the kit is sorted are here: "need" and
+# "submitted" are open business and keep their worded badge, and "unknown" is a rider
+# nobody has asked, which the card says nothing about at all.
+KIT_EMOJI_FIELDS = {
+    "completed": "kit_emoji",
+    "have": "kit_emoji",
+}
+
+# One drawing for both, as above. Bundled like the age set, so the roster shows it out of
+# the box; an upload to `kit_emoji` replaces it for both statuses at once.
+KIT_DEFAULT_ICONS = {
+    "completed": "accounts/kit/kit.svg",
+    "have": "accounts/kit/kit.svg",
+}
+
 PHENOTYPE_EMOJI_FIELDS = {
     "All-Rounder": "phenotype_allrounder_emoji",
     "Climber": "phenotype_climber_emoji",
@@ -407,10 +423,11 @@ _ICON_MAPS = {
     "zr": ZR_CATEGORY_EMOJI_FIELDS,
     "phenotype": PHENOTYPE_EMOJI_FIELDS,
     "age": AGE_EMOJI_FIELDS,
+    "kit": KIT_EMOJI_FIELDS,
 }
 
 # Kinds that ship artwork of their own, used when nothing has been uploaded.
-_DEFAULT_ICONS = {"age": AGE_DEFAULT_ICONS}
+_DEFAULT_ICONS = {"age": AGE_DEFAULT_ICONS, "kit": KIT_DEFAULT_ICONS}
 
 
 @register.simple_tag(takes_context=True)
@@ -425,8 +442,8 @@ def site_icon_url(context, kind: str, value: str) -> str:
 
     Args:
         context: Template context, for ``site_settings``.
-        kind: "category", "zr" or "phenotype".
-        value: The category, tier or phenotype name.
+        kind: "category", "zr", "phenotype", "age" or "kit".
+        value: The category, tier, phenotype, age bracket or stored kit status.
 
     Returns:
         The uploaded icon's URL, else the bundled default for kinds that ship one, else "".

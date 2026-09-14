@@ -215,6 +215,17 @@ class SiteSettings(models.Model):
         help_text="Icon for the 70+ age bracket. Leave empty to use the bundled default",
     )
 
+    # One icon for "the kit is sorted" -- the two stored statuses that mean it (the team
+    # completed the Zwift order, or the rider says it arrived) read the same from across a
+    # roster, and the wording that separates them rides on the alt text. Ships a default,
+    # like the age brackets, so the roster shows it without anyone uploading anything.
+    kit_emoji = models.ImageField(
+        upload_to="site/",
+        null=True,
+        blank=True,
+        help_text="Icon for a rider who has the team kit. Leave empty to use the bundled default",
+    )
+
     phenotype_allrounder_emoji = models.ImageField(
         upload_to="site/",
         null=True,

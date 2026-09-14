@@ -305,6 +305,46 @@
     </div>
     {% endfor %}
 
+    <!-- Team Kit Icon -->
+    <div class="divider">Team kit</div>
+    <p class="text-sm text-base-content/70 mb-4">
+        Shown on a rider's roster card once they have the kit -- both when the team has
+        completed the Zwift order and when the rider says it arrived. One icon covers both;
+        the card's tooltip says which. This ships with a default, so uploading replaces it
+        and deleting puts it back.
+    </p>
+
+    <div class="form-control">
+        <label class="label">
+            <span class="label-text font-medium">{{ kit_emoji_item.label }}</span>
+        </label>
+        <div class="flex items-start gap-4">
+            <div class="relative">
+                {% if kit_emoji_item.file %}
+                <img src="{{ kit_emoji_item.file.url }}" alt="{{ kit_emoji_item.label }}" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
+                <button aria-label="Delete the team kit icon and restore the default" type="submit" name="delete_{{ kit_emoji_item.field_name }}" value="true" class="btn btn-circle btn-xs btn-error absolute -top-2 -right-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+                {% else %}
+                <img src="{{ kit_emoji_item.default_url }}" alt="The bundled default team kit icon" class="h-12 w-12 object-contain bg-base-300 rounded p-1">
+                {% endif %}
+            </div>
+            <div class="flex-1">
+                <input type="file"
+                       name="{{ kit_emoji_item.field_name }}"
+                       accept="image/*"
+                       class="file-input file-input-bordered w-full">
+                <label class="label">
+                    <span class="label-text-alt">
+                        {% if kit_emoji_item.file %}Custom icon uploaded{% else %}Showing the bundled default{% endif %}
+                    </span>
+                </label>
+            </div>
+        </div>
+    </div>
+
     <!-- Phenotype Emojis -->
     <div class="divider">Phenotypes</div>
     <p class="text-sm text-base-content/70 mb-4">When uploaded, these replace the default text for Zwift Racing phenotypes.</p>

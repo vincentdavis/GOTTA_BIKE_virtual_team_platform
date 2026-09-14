@@ -344,16 +344,20 @@ def test_a_riders_kit_status_shows_at_the_bottom_of_their_card(auth_client, rost
 
 @pytest.mark.django_db
 def test_the_kit_badge_matches_the_colour_the_kit_page_uses(auth_client, roster_rider, user_model):
-    """One status must not look like two different things in two places."""
+    """One status must not look like two different things in two places.
+
+    Asked of a status that still wears a badge: the two settled ones now show the jersey
+    instead, and have no colour of their own left to disagree about.
+    """
     from apps.team.kits import BADGE_CLASSES
 
     _kit()
     roster_rider(zwid=4242, name="Ada Racer")
-    _kitted(user_model, "ada", 4242, "have")
+    _kitted(user_model, "ada", 4242, "need")
 
     card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
 
-    assert BADGE_CLASSES["have"] in card
+    assert BADGE_CLASSES["need"] in card
 
 
 @pytest.mark.django_db
@@ -452,9 +456,11 @@ def test_the_kit_wording_is_third_person_on_someone_elses_card(auth_client, rost
     roster_rider(zwid=4242, name="Ada Racer")
     _kitted(user_model, "ada", 4242, "have")
 
-    card = _text_of(_card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer"))
+    # "have" draws the jersey, so the wording is now the icon's accessible name rather
+    # than visible text -- which is exactly where a first-person label would still be wrong.
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
 
-    assert "Kit: Has the kit" in card
+    assert 'alt="Kit: Has the kit"' in card
     assert "I have the kit" not in card
 
 
@@ -580,3 +586,91 @@ def test_uploading_one_bracket_leaves_the_others_on_their_defaults(
 
     assert "custom-vet" in _card_for(body, "Vet Rider")
     assert "age-mas.svg" in _card_for(body, "Mas Rider")
+
+
+# --- the kit icon ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_rider_who_has_the_kit_shows_the_jersey_not_the_words(auth_client, roster_rider, user_model):
+    """A settled kit is a glance, not a sentence: the icon replaces the badge."""
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "have")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert "accounts/kit/kit.svg" in card
+    # The badge is gone, not merely joined -- otherwise this passes with both on the card.
+    assert "Kit: Has the kit" not in _text_of(card)
+
+
+@pytest.mark.django_db
+def test_a_completed_zwift_order_shows_the_same_jersey(auth_client, roster_rider, user_model):
+    """The other settled status. One drawing, its own wording."""
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "completed")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert "accounts/kit/kit.svg" in card
+    assert 'alt="Kit: Completed by Zwift"' in card
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("status", "words"), [("need", "Kit: Needs kit"), ("submitted", "Kit: Submitted to Zwift")])
+def test_a_kit_still_being_chased_keeps_its_words(auth_client, roster_rider, user_model, status, words):
+    """The icon means done. A kit still in motion says so in words, or it reads as settled."""
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, status)
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert "accounts/kit/kit.svg" not in card
+    assert words in _text_of(card)
+
+
+@pytest.mark.django_db
+def test_the_kit_icons_hover_text_and_alt_cannot_drift(auth_client, roster_rider, user_model):
+    """Two ways of carrying the same word, so they are built from one string."""
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "have")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert 'data-tip="Kit: Has the kit"' in card
+    assert 'alt="Kit: Has the kit"' in card
+
+
+@pytest.mark.django_db
+def test_an_uploaded_kit_icon_replaces_the_bundled_one(auth_client, roster_rider, user_model, settings, tmp_path):
+    """The default is a starting point, not the only option."""
+    from gotta_bike_platform.models import SiteSettings
+
+    settings.MEDIA_ROOT = str(tmp_path)
+    site_settings = SiteSettings.get_settings()
+    site_settings.kit_emoji.save("teamjersey.png", ContentFile(b"x"), save=True)
+
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "have")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert site_settings.kit_emoji.url in card
+    assert "accounts/kit/kit.svg" not in card
+
+
+@pytest.mark.django_db
+def test_a_rider_the_team_has_not_asked_gets_no_jersey(auth_client, roster_rider, user_model):
+    """No status is not a settled status."""
+    _kit()
+    roster_rider(zwid=4242, name="Ada Racer")
+    _kitted(user_model, "ada", 4242, "unknown")
+
+    card = _card_for(auth_client.get(reverse("team:rosterv2")).content.decode(), "Ada Racer")
+
+    assert "accounts/kit/kit.svg" not in card

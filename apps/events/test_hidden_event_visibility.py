@@ -26,7 +26,12 @@ TODAY = date.today()
 
 
 def _event_with_race(user, *, visible: bool, title: str = "Secret Squirrel Cup"):
-    """Build an event holding one scheduled race with ``user`` selected for it."""
+    """Build an event holding one scheduled race with ``user`` selected for it.
+
+    Returns:
+        The event and its squad.
+
+    """
     event = Event.objects.create(
         title=title,
         start_date=TODAY,
@@ -56,7 +61,12 @@ def _event_with_race(user, *, visible: bool, title: str = "Secret Squirrel Cup")
 
 @pytest.fixture
 def selected_rider(user_model, db):
-    """A rider picked for a race, with a name and a zwid a card would print."""
+    """Make a rider picked for a race, with a name and a zwid a card would print.
+
+    Returns:
+        The rider.
+
+    """
     return user_model.objects.create_user(
         username="selected_rider",
         password="pw",  # noqa: S106

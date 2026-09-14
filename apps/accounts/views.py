@@ -1659,6 +1659,7 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "zr_emoji_items": _build_zr_emoji_items(site_settings_obj),
                 "phenotype_emoji_items": _build_phenotype_emoji_items(site_settings_obj),
                 "age_emoji_items": _build_age_emoji_items(site_settings_obj),
+                "kit_emoji_item": _build_kit_emoji_item(site_settings_obj),
                 "available_roles": [],
             },
         )
@@ -2021,6 +2022,31 @@ def _build_age_emoji_items(site_settings_obj) -> list[dict]:
     return items
 
 
+def _build_kit_emoji_item(site_settings_obj) -> dict:
+    """Build the team kit icon row for the site images page.
+
+    One row, not one per status: the same drawing stands for both statuses that mean the
+    kit is sorted, so there is a single slot to upload to. Like the age brackets it ships
+    a default, so the row reports which of the two it is showing.
+
+    Args:
+        site_settings_obj: The SiteSettings singleton.
+
+    Returns:
+        A dict with field_name, label, file and default_url.
+
+    """
+    from apps.accounts.templatetags.accounts_tags import KIT_DEFAULT_ICONS
+
+    file_field = getattr(site_settings_obj, "kit_emoji", None)
+    return {
+        "field_name": "kit_emoji",
+        "label": "Has the kit",
+        "file": file_field if file_field else None,
+        "default_url": static(KIT_DEFAULT_ICONS["have"]),
+    }
+
+
 @login_required
 @require_POST
 def config_site_images_update(request: HttpRequest) -> HttpResponse:
@@ -2174,6 +2200,7 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
         ("age_50plus_emoji", "Age 50+ Icon"),
         ("age_60plus_emoji", "Age 60+ Icon"),
         ("age_70plus_emoji", "Age 70+ Icon"),
+        ("kit_emoji", "Team Kit Icon"),
         ("zr_diamond_emoji", "ZR Diamond Emoji"),
         ("zr_ruby_emoji", "ZR Ruby Emoji"),
         ("zr_emerald_emoji", "ZR Emerald Emoji"),
@@ -2227,6 +2254,7 @@ def config_site_images_update(request: HttpRequest) -> HttpResponse:
             "zr_emoji_items": _build_zr_emoji_items(site_settings_obj),
             "phenotype_emoji_items": _build_phenotype_emoji_items(site_settings_obj),
             "age_emoji_items": _build_age_emoji_items(site_settings_obj),
+            "kit_emoji_item": _build_kit_emoji_item(site_settings_obj),
             "success": success,
             "errors": errors,
         },
