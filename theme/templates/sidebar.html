@@ -170,7 +170,10 @@
         {% endif %}
 
         <!-- Membership Section (conditional) -->
-        {% if user.is_membership_admin or user.is_any_captain %}
+        {# Every view in this section requires membership_admin and raises 403, so captains #}
+        {# must not be offered it: the old condition drew the whole menu for a captain #}
+        {# and every link in it refused them. #}
+        {% if user.is_membership_admin %}
         <li class="menu-title mt-4">Membership</li>
         <li>
             <a href="{% url 'team:application_list' %}" {% if request.resolver_match.url_name == 'application_list' %}class="menu-active" aria-current="page"{% endif %}>
@@ -196,7 +199,6 @@
                 Discord Review
             </a>
         </li>
-        {% if user.is_membership_admin %}
         <li>
             <a href="{% url 'team:zwift_connections' %}" {% if request.resolver_match.url_name == 'zwift_connections' %}class="menu-active" aria-current="page"{% endif %}>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -215,7 +217,6 @@
                 Team Kit
             </a>
         </li>
-        {% endif %}
         {% endif %}
 
         <!-- Team Performance Section (conditional) -->
