@@ -35,11 +35,17 @@ class UserAdmin(BaseUserAdmin):
         "date_joined",
         "birth_year",
         "is_staff",
+        "has_jersey",
     )
+    # has_jersey is editable straight from the changelist because the bulk CSV on
+    # /team/membership-review/ was its only writer anywhere in the app, and that page is
+    # going away. Without this the field would be read by three surfaces and set by nobody.
+    list_editable = ("has_jersey",)
     list_filter = (
         *BaseUserAdmin.list_filter,
         "is_race_ready",
         "is_extra_verified",
+        "has_jersey",
     )
     search_fields = (
         *BaseUserAdmin.search_fields,
@@ -177,10 +183,13 @@ class UserAdmin(BaseUserAdmin):
 
         """
         fieldsets = super().get_fieldsets(request, obj)
-        kits = active_kits() if obj is not None else []
-        if not kits:
+        if obj is None:
             return fieldsets
-        return (*fieldsets, ("Team kit", {"fields": tuple(field_name(kit) for kit in kits)}))
+        # has_jersey rides along here rather than in its own section: it answers the same
+        # question the per-kit selects answer, less precisely, and seeing them together is
+        # what tells an admin which one to trust. It is listed last for the same reason.
+        kit_fields = (*(field_name(kit) for kit in active_kits()), "has_jersey")
+        return (*fieldsets, ("Team kit", {"fields": kit_fields}))
 
     def get_form(self, request: HttpRequest, obj: User | None = None, change: bool = False, **kwargs: Any):
         """Declare the kit selects on the admin form class.
