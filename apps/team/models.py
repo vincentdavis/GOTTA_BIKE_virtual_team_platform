@@ -1355,6 +1355,15 @@ class TeamKit(models.Model):
         help_text="Permanent key for this kit in each rider's record. Cannot be changed after creation.",
     )
     description = models.TextField(blank=True, help_text="Optional detail shown to riders")
+    # The kit's own artwork, shown on the roster card of every rider who has it. Per kit
+    # rather than site-wide because the kit is the thing being pictured: a new kit each year
+    # gets its own image, and the previous one keeps the artwork riders earned it in.
+    # Empty falls back to the site-wide kit icon, and then to the bundled jersey.
+    icon = models.ImageField(
+        upload_to="kit_icons/",
+        blank=True,
+        help_text="Shown on the roster card of riders who have this kit. Leave empty to use the site-wide icon.",
+    )
     active = models.BooleanField(
         default=True,
         help_text="Inactive kits are hidden and not offered, but riders' statuses for them are kept",

@@ -75,7 +75,7 @@ class TeamKitForm(forms.ModelForm):
         """Form metadata."""
 
         model = TeamKit
-        fields: ClassVar[list[str]] = ["name", "slug", "description", "sort_order"]
+        fields: ClassVar[list[str]] = ["name", "slug", "description", "sort_order", "icon"]
 
     def __init__(self, *args, **kwargs) -> None:
         """Make the slug optional on add and absent on edit.
@@ -140,7 +140,7 @@ def team_kit_add(request: HttpRequest) -> HttpResponse:
 
     """
     _require_config_access(request)
-    form = TeamKitForm(request.POST)
+    form = TeamKitForm(request.POST, request.FILES)
     if not form.is_valid():
         messages.error(request, f"Kit not added: {_form_error_message(form)}")
         return _back()
@@ -177,7 +177,9 @@ def team_kit_edit(request: HttpRequest, pk: int) -> HttpResponse:
     """
     _require_config_access(request)
     kit = get_object_or_404(TeamKit, pk=pk)
-    form = TeamKitForm(request.POST, instance=kit)
+    # request.FILES as well as POST: without it the icon input posts and is dropped, and the
+    # "icon-clear" checkbox ModelForm looks for never gets a chance to remove one either.
+    form = TeamKitForm(request.POST, request.FILES, instance=kit)
     if not form.is_valid():
         messages.error(request, f'"{kit.name}" not saved: {_form_error_message(form)}')
         return _back()

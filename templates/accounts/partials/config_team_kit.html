@@ -52,7 +52,7 @@
 <dialog id="kit-add-dialog" class="modal" aria-labelledby="kit-add-title">
   <div class="modal-box max-w-2xl">
     <h3 id="kit-add-title" class="font-semibold text-lg mb-3">Add a kit</h3>
-    <form method="post" action="{% url 'team_kit_add' %}" class="space-y-3">
+    <form method="post" action="{% url 'team_kit_add' %}" class="space-y-3" enctype="multipart/form-data">
       {% csrf_token %}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label class="form-control w-full">
@@ -70,6 +70,13 @@
         <span class="label-text mb-1">Description</span>
         <input type="text" name="description" class="input input-bordered w-full"
                placeholder="Shown to riders under the kit's name (optional)">
+      </label>
+      <label class="form-control w-full">
+        <span class="label-text mb-1">Icon</span>
+        <input type="file" name="icon" accept="image/*" class="file-input file-input-bordered w-full">
+        <span class="label-text-alt mt-1 text-base-content/70">
+          Shown on the roster card of riders who have this kit. Leave empty to use the site-wide icon.
+        </span>
       </label>
       <div class="flex flex-wrap items-end gap-4">
         <label class="form-control w-32">
@@ -142,7 +149,7 @@
 
     <details class="mt-3">
       <summary class="text-sm link link-hover w-fit">Edit</summary>
-      <form method="post" action="{% url 'team_kit_edit' kit.pk %}" class="space-y-3 mt-3">
+      <form method="post" action="{% url 'team_kit_edit' kit.pk %}" class="space-y-3 mt-3" enctype="multipart/form-data">
         {% csrf_token %}
         <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label class="form-control w-full md:col-span-2">
@@ -158,6 +165,26 @@
           <span class="label-text mb-1">Description</span>
           <input type="text" name="description" value="{{ kit.description }}" class="input input-bordered input-sm w-full">
         </label>
+        {% comment %}
+          "icon-clear" is the name Django's own ClearableFileInput looks for, so removing an
+          icon works through the form rather than needing a route of its own.
+        {% endcomment %}
+        <div class="flex flex-wrap items-end gap-3">
+          {% if kit.icon %}
+            <img src="{{ kit.icon.url }}" alt="Current icon for {{ kit.name }}"
+                 class="h-12 w-12 object-contain bg-base-300 rounded p-1">
+          {% endif %}
+          <label class="form-control flex-1 min-w-48">
+            <span class="label-text mb-1">{% if kit.icon %}Replace icon{% else %}Icon{% endif %}</span>
+            <input type="file" name="icon" accept="image/*" class="file-input file-input-bordered file-input-sm w-full">
+          </label>
+          {% if kit.icon %}
+            <label class="label cursor-pointer justify-start gap-2 pb-2">
+              <input type="checkbox" name="icon-clear" value="1" class="checkbox checkbox-sm">
+              <span class="label-text">Remove icon</span>
+            </label>
+          {% endif %}
+        </div>
         <button type="submit" class="btn btn-primary btn-sm">Save</button>
       </form>
     </details>

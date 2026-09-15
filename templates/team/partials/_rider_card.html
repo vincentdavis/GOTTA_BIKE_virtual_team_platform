@@ -65,7 +65,15 @@
       {% endif %}
     </div>
 
-    {% site_icon_url "kit" row.account.kit_status as kit_icon %}
+    {% comment %}
+      Three sources, narrowest first: the CURRENT kit's own uploaded artwork, then the
+      site-wide kit icon, then the bundled jersey. Only the first is per kit, which is the
+      point of it -- a new kit each year can carry its own picture while the previous one
+      keeps the artwork riders earned it in. rosterv2 has already limited the kit's own icon
+      to riders whose kit is settled, so this cannot put a jersey next to "Needs kit".
+    {% endcomment %}
+    {% site_icon_url "kit" row.account.kit_status as site_kit_icon %}
+    {% firstof row.account.kit_icon_url site_kit_icon "" as kit_icon %}
     {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.phenotype or row.card.age_bracket or kit_icon or row.card.country %}
       {# Every tag says in words what it is. Colour alone would carry the meaning otherwise. #}
       {% comment %}

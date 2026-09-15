@@ -319,6 +319,10 @@ class AccountFacts:
         kit_label: That status in the team's own words.
         kit_badge: The DaisyUI class the kit page already uses for it, so one status does
             not look like two different things in two places.
+        kit_icon_url: The CURRENT kit's own uploaded artwork, and only for a rider whose kit
+            is settled -- a jersey against "Needs kit" would say the opposite of the words
+            beside it. Blank falls the card back to the site-wide icon and then to the
+            bundled one, so this is an override rather than the only source.
         events: Upcoming events this rider has signed up for and the reader may know about --
             see ``event_chips`` for which those are.
 
@@ -333,6 +337,7 @@ class AccountFacts:
     kit_status: str = ""
     kit_label: str = ""
     kit_badge: str = ""
+    kit_icon_url: str = ""
     events: tuple[EventChip, ...] = ()
 
     def __str__(self) -> str:
@@ -1261,8 +1266,45 @@ _KIT_CARD_LABELS = {
 }
 
 
+# The two stored statuses that mean there is nothing left to chase. The card draws a jersey
+# for these and words for the rest -- see templates/team/partials/_rider_card.html. Kept
+# beside the code that reads it; a test pins it against the template tag's own map so the two
+# cannot drift into disagreeing about which statuses earn an icon.
+SETTLED_KIT_STATUSES = frozenset({"completed", "have"})
+
+
+def _kit_icon_url(kit: object | None) -> str:
+    """Resolve the current kit's own artwork once, for the whole page.
+
+    Once, not per rider: media here is served from object storage, where every URL is
+    freshly SIGNED, so asking two thousand cards for the same file would mint two thousand
+    signatures for one image.
+
+    Args:
+        kit: The team's current kit, or None when none is set.
+
+    Returns:
+        The icon's URL, or "" when the kit has none or storage will not name it.
+
+    """
+    icon = getattr(kit, "icon", None)
+    if not icon:
+        return ""
+    try:
+        return icon.url
+    except (ValueError, NotImplementedError, SuspiciousOperation):
+        # A storage that refuses to name the file costs the cards their kit icon, not the
+        # roster -- the same rule the event logos follow.
+        logfire.warning("Team kit icon could not be resolved to a URL")
+        return ""
+
+
 def _account_facts(
-    account: dict, guild: dict | None, kit: object | None = None, events: tuple[EventChip, ...] = ()
+    account: dict,
+    guild: dict | None,
+    kit: object | None = None,
+    events: tuple[EventChip, ...] = (),
+    kit_icon_url: str = "",
 ) -> AccountFacts:
     """Assemble the account half of a card.
 
@@ -1271,6 +1313,7 @@ def _account_facts(
         guild: That user's open ``GuildMember`` row, if they have one.
         kit: The team's current kit, or None when none is set.
         events: That rider's visible upcoming signups.
+        kit_icon_url: The current kit's artwork, already resolved by ``_kit_icon_url``.
 
     Returns:
         The account facts.
@@ -1310,6 +1353,9 @@ def _account_facts(
         kit_status=status,
         kit_label=label,
         kit_badge=badge,
+        # Settled only. The icon means "nothing left to chase", so putting it beside "Needs
+        # kit" would have the picture and the words saying opposite things.
+        kit_icon_url=kit_icon_url if status in SETTLED_KIT_STATUSES else "",
         events=events,
     )
 
@@ -1356,6 +1402,7 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
     zwift_names = _zwift_names(roster_zwids)
     records = race_records(roster_zwids)
     kit = current_kit()
+    kit_icon_url = _kit_icon_url(kit)
     chips = event_chips([claim["id"] for claims in claimants.values() for claim in claims], viewer_id=viewer_id)
 
     rows: list[RosterRow] = []
@@ -1376,7 +1423,9 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
         if len(claims) == 1:
             claimed = claims[0]
             guild = guild_rows.get(claimed["id"])
-            account = _account_facts(claimed, guild, kit, chips.get(claimed["id"], ()))
+            account = _account_facts(
+                claimed, guild, kit, chips.get(claimed["id"], ()), kit_icon_url=kit_icon_url
+            )
             joined += 1
         elif len(claims) > 1:
             contested += 1
