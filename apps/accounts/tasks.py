@@ -168,6 +168,31 @@ def guild_member_sync_status() -> dict:
         return status
 
 
+def _users_in_the_guild():
+    """Users whose Discord roles are worth syncing: linked, and not known to have left.
+
+    Discord answers 404 Unknown Member for anyone who is no longer in the server, so every
+    role call for a departed rider is a wasted round trip, a logged error, and -- in the ZR
+    sync -- half a second of sleep. Worse than the noise, the ZR sync goes on to post an
+    upgrade announcement for them, naming and @-mentioning somebody who left.
+
+    A rider with NO ``GuildMember`` row is deliberately kept. The row is created by the guild
+    sync, so its absence means "never seen by that sync", not "gone" -- excluding them would
+    quietly stop role management for anyone the sync has not reached yet. Only a stamped
+    ``date_left``, which the sync sets when a previously-active member disappears, counts as
+    having left.
+
+    Returns:
+        The queryset of users to sync roles for.
+
+    """
+    return (
+        User.objects.exclude(discord_id="")
+        .exclude(discord_id__isnull=True)
+        .exclude(guild_member__date_left__isnull=False)
+    )
+
+
 @task
 def sync_race_ready_roles() -> dict:
     """Sync race ready Discord roles for all users.
@@ -188,8 +213,8 @@ def sync_race_ready_roles() -> dict:
 
         role_id_str = str(race_ready_role_id)
 
-        # Get all users with Discord IDs
-        users_with_discord = User.objects.exclude(discord_id="").exclude(discord_id__isnull=True)
+        # Everyone linked to Discord who has not left the guild -- see _users_in_the_guild.
+        users_with_discord = _users_in_the_guild()
         total_users = users_with_discord.count()
 
         logfire.info("Starting race ready role sync", total_users=total_users)
@@ -416,7 +441,9 @@ def sync_zr_category_roles() -> dict:
         # Build ZRRider lookup by zwid
         suffix = config.ZR_CATEGORY_SUFFIX or ""
 
-        users_with_discord = User.objects.exclude(discord_id="").exclude(discord_id__isnull=True)
+        # Everyone linked to Discord who has not left the guild -- see _users_in_the_guild.
+        # Without this the sync 404s on departed riders and, worse, announces their "upgrade".
+        users_with_discord = _users_in_the_guild()
         total_users = users_with_discord.count()
 
         logfire.info("Starting ZR category role sync", total_users=total_users, configured_roles=len(role_config))
