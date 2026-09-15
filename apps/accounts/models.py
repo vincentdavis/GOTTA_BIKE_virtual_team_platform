@@ -354,11 +354,6 @@ class User(AbstractUser):
         default="",
         help_text="Heart rate monitor brand (options from HEARTRATE_MONITOR_OPTIONS)",
     )
-    has_jersey = models.BooleanField(
-        default=False,
-        help_text="User has a team jersey",
-    )
-
     # Emergency Contact
     emergency_contact_name = models.CharField(
         max_length=255,

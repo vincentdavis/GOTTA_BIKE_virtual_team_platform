@@ -60,9 +60,9 @@
 ### Testing (no test coverage exists)
 
 - [x] Set up pytest config (conftest.py, fixtures, pytest settings in pyproject.toml)
-- [ ] Fix latent fresh-DB bug in `apps/accounts/migrations/0013_add_is_race_ready_cached_field.py` — the
-  data migration imports the live `User` model, so a fresh `migrate` fails with `no such column:
-  accounts_user.has_jersey` (added later in 0017). Pytest currently bypasses this via `--no-migrations`.
+- [x] Fix latent fresh-DB bug in `apps/accounts/migrations/0013_add_is_race_ready_cached_field.py` —
+  fixed in d5c3653 (it uses `apps.get_model` now), and the column it tripped on, `has_jersey`, was
+  retired in 0023. A fresh `migrate` from zero replays clean; `--no-migrations` now only saves time.
 - [ ] Permission system tests (has_permission, decorators, role checks)
 - [x] Race ready verification logic tests (expiration, category requirements, is_race_ready)
 - [ ] Membership application workflow tests (status transitions, form validation)
