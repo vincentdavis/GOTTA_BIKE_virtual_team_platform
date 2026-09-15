@@ -7665,6 +7665,19 @@ def slot_selection_create_view(
     if not name or not slot_date or not slot_time:
         return HttpResponse("Name, date, and time are required.", status=400)
 
+    # Parsed here rather than handed to the ORM as the string it arrives as. Django converts
+    # it on the way INTO the database, but Model.__init__ does not touch the attribute -- so
+    # on update_or_create's CREATE branch the row is right while the instance it returns still
+    # holds a str, and the first thing to do date arithmetic on it raises. That was a live 500:
+    # "Save & Create Thread" on a new cell reached _slot_thread_name with a string slot_date,
+    # while the UPDATE branch, which re-reads the row, was fine. Parsing also closes the hole
+    # the emptiness check above leaves: "2026-02-31" is truthy, and without this it reaches the
+    # database driver and 500s there instead of being refused here.
+    try:
+        slot_date = date.fromisoformat(slot_date)
+    except ValueError:
+        return HttpResponse("Date must be in YYYY-MM-DD format.", status=400)
+
     selection, created = AvailabilitySlotSelection.objects.update_or_create(
         grid=grid,
         slot_date=slot_date,
