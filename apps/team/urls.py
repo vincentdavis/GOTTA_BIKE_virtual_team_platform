@@ -48,12 +48,6 @@ urlpatterns = [
     path("discord-review/export/", views.discord_review_export_csv, name="discord_review_export"),
     path("zwift-connections/", views.zwift_connections_view, name="zwift_connections"),
     path("membership-review/", views.membership_review_view, name="membership_review"),
-    path("membership-review/jersey-upload/", views.membership_jersey_csv_upload, name="membership_jersey_csv_upload"),
-    path(
-        "membership-review/jersey-confirm/",
-        views.membership_jersey_csv_confirm,
-        name="membership_jersey_csv_confirm",
-    ),
     path("applications/", views.membership_application_list_view, name="application_list"),
     path("applications/<uuid:pk>/", views.membership_application_admin_view, name="application_admin"),
     path("applications/<uuid:pk>/delete/", views.membership_application_delete_view, name="application_delete"),

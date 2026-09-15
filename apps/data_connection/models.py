@@ -199,7 +199,6 @@ class DataConnection(models.Model):
         ("verified_weight", "Verified Weight"),
         ("verified_height", "Verified Height"),
         ("verified_power", "Verified Power"),
-        ("has_jersey", "Has Jersey"),
         ("guild_join_date", "Guild Join Date"),
         ("youtube_channel", "YouTube Channel"),
     ]

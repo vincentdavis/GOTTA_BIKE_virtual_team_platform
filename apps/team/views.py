@@ -21,7 +21,6 @@ from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
 from apps.accounts.utils import parse_zwid_input, resolve_country
 from apps.team.forms import (
-    JerseyCSVUploadForm,
     MembershipApplicationAdminForm,
     MembershipApplicationApplicantForm,
     TeamLinkEditForm,
@@ -1809,7 +1808,6 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
     country_filter = request.GET.get("country", "")
     status_filter = request.GET.get("status", "active")  # Default to showing active members
     guild_duration_filter = request.GET.get("guild_duration", "")
-    jersey_filter = request.GET.get("jersey", "")
 
     # Get sort parameters (default: name ascending)
     sort_by = request.GET.get("sort", "name")
@@ -1884,12 +1882,6 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
             and (max_days is None or r.guild_membership_days < max_days)
         ]
 
-    # Apply jersey filter
-    if jersey_filter == "yes":
-        riders = [r for r in riders if r.has_jersey]
-    elif jersey_filter == "no":
-        riders = [r for r in riders if not r.has_jersey]
-
     # Apply sorting
     reverse = sort_dir == "desc"
     sort_keys = {
@@ -1910,7 +1902,6 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
         "timezone": lambda r: r.timezone.lower(),
         "birth_year": lambda r: r.birth_year or 0,
         "trainer": lambda r: r.trainer.lower(),
-        "jersey": lambda r: r.has_jersey,
         "zp_left": lambda r: r.zp_date_left or datetime(1970, 1, 1, tzinfo=UTC),
         "guild_nickname": lambda r: r.guild_nickname.lower(),
         "guild_duration": lambda r: r.guild_membership_days if r.guild_membership_days is not None else -1,
@@ -1929,240 +1920,12 @@ def membership_review_view(request: HttpRequest) -> HttpResponse:
             "country_filter": country_filter,
             "status_filter": status_filter,
             "guild_duration_filter": guild_duration_filter,
-            "jersey_filter": jersey_filter,
             "zp_categories": zp_categories,
             "countries": countries_present,
             "sort_by": sort_by,
             "sort_dir": sort_dir,
             "current_view": current_view,
         },
-    )
-
-
-_JERSEY_TRUTHY = {"1", "true", "yes"}
-_JERSEY_FALSY = {"0", "false", "no"}
-
-
-def _parse_has_jersey(value: str) -> bool | None:
-    """Parse has_jersey CSV value.
-
-    Returns:
-        True, False, or None (skip).
-
-    """
-    v = value.strip().lower()
-    if not v:
-        return None
-    if v in _JERSEY_TRUTHY:
-        return True
-    if v in _JERSEY_FALSY:
-        return False
-    return None
-
-
-@login_required
-@discord_permission_required("membership_admin", raise_exception=True)
-@require_POST
-def membership_jersey_csv_upload(request: HttpRequest) -> HttpResponse:
-    """Parse uploaded CSV and return a preview of jersey changes.
-
-    Args:
-        request: The HTTP request with CSV file.
-
-    Returns:
-        Rendered preview partial for HTMX.
-
-    """
-    import csv
-    import io
-
-    form = JerseyCSVUploadForm(request.POST, request.FILES)
-    if not form.is_valid():
-        return render(request, "team/partials/_jersey_csv_preview.html", {"error": "Please select a valid CSV file."})
-
-    csv_file = request.FILES["csv_file"]
-    if csv_file.size > 1_048_576:
-        return render(request, "team/partials/_jersey_csv_preview.html", {"error": "File too large (max 1MB)."})
-
-    try:
-        text_file = io.TextIOWrapper(csv_file, encoding="utf-8-sig")
-        reader = csv.DictReader(text_file)
-        fieldnames = [f.strip().lower() for f in (reader.fieldnames or [])]
-    except Exception:
-        return render(request, "team/partials/_jersey_csv_preview.html", {"error": "Could not read CSV file."})
-
-    if "zwid" not in fieldnames or "has_jersey" not in fieldnames:
-        missing = [c for c in ("zwid", "has_jersey") if c not in fieldnames]
-        return render(
-            request,
-            "team/partials/_jersey_csv_preview.html",
-            {"error": f"Missing required column(s): {', '.join(missing)}"},
-        )
-
-    # Build a mapping from the CSV: normalize header keys
-    header_map = {f.strip().lower(): f for f in (reader.fieldnames or [])}
-    zwid_col = header_map["zwid"]
-    jersey_col = header_map["has_jersey"]
-
-    parsed_rows: list[tuple[int, bool]] = []
-    invalid_rows: list[dict] = []
-    for row_num, row in enumerate(reader, start=2):
-        raw_zwid = (row.get(zwid_col) or "").strip()
-        raw_jersey = (row.get(jersey_col) or "").strip()
-
-        if not raw_zwid:
-            continue
-
-        try:
-            zwid = int(raw_zwid)
-        except ValueError:
-            invalid_rows.append({"row": row_num, "zwid": raw_zwid, "reason": "Invalid ZWID"})
-            continue
-
-        new_val = _parse_has_jersey(raw_jersey)
-        if new_val is None and raw_jersey:
-            invalid_rows.append({
-                "row": row_num,
-                "zwid": raw_zwid,
-                "reason": f"Invalid has_jersey value: '{raw_jersey}'",
-            })
-            continue
-        if new_val is None:
-            continue
-
-        parsed_rows.append((zwid, new_val))
-
-    if not parsed_rows:
-        return render(
-            request,
-            "team/partials/_jersey_csv_preview.html",
-            {"error": "No valid rows found in CSV.", "invalid_rows": invalid_rows},
-        )
-
-    # Look up users and related data
-    from apps.accounts.models import GuildMember
-
-    zwid_list = [z for z, _ in parsed_rows]
-    users_by_zwid = {
-        u.zwid: u
-        for u in User.objects.filter(zwid__in=zwid_list).only(
-            "id",
-            "zwid",
-            "first_name",
-            "last_name",
-            "discord_id",
-            "discord_nickname",
-            "discord_avatar",
-            "has_jersey",
-            "is_race_ready",
-            "is_extra_verified",
-        )
-    }
-
-    # Look up guild join dates by discord_id
-    discord_ids = [u.discord_id for u in users_by_zwid.values() if u.discord_id]
-    guild_by_discord_id = {
-        gm["discord_id"]: gm["joined_at"]
-        for gm in GuildMember.objects.filter(discord_id__in=discord_ids).values("discord_id", "joined_at")
-    }
-
-    # Look up ZP/ZR data for tooltips
-    zp_by_zwid = {r["zwid"]: r for r in ZPTeamRiders.objects.filter(zwid__in=zwid_list).values("zwid", "div", "divw")}
-    zr_by_zwid = {r["zwid"]: r for r in ZRRider.objects.filter(zwid__in=zwid_list).values("zwid", "phenotype_value")}
-
-    changes: list[dict] = []
-    unmatched_zwids: list[int] = []
-    for zwid, new_val in parsed_rows:
-        user = users_by_zwid.get(zwid)
-        if not user:
-            unmatched_zwids.append(zwid)
-            continue
-        if user.has_jersey != new_val:
-            display_name = f"{user.first_name} {user.last_name}".strip() or user.discord_nickname or f"User #{user.id}"
-            guild_joined = guild_by_discord_id.get(user.discord_id)
-            avatar_url = ""
-            if user.discord_id and user.discord_avatar:
-                avatar_url = f"https://cdn.discordapp.com/avatars/{user.discord_id}/{user.discord_avatar}.png"
-            zp = zp_by_zwid.get(zwid, {})
-            zr = zr_by_zwid.get(zwid, {})
-            zp_cat = ZP_DIV_TO_CATEGORY.get(zp.get("div", 0), "")
-            zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.get("divw", 0), "") if zp.get("divw") else ""
-            changes.append({
-                "user_id": user.id,
-                "zwid": zwid,
-                "username": display_name,
-                "discord_nickname": user.discord_nickname or "",
-                "discord_id": user.discord_id or "",
-                "discord_avatar_url": avatar_url,
-                "guild_joined": guild_joined.strftime("%Y-%m-%d") if guild_joined else "",
-                "is_race_ready": user.is_race_ready,
-                "is_extra_verified": user.is_extra_verified,
-                "in_zwiftpower": bool(zp),
-                "in_zwiftracing": bool(zr),
-                "zp_category": zp_cat,
-                "zp_category_w": zp_cat_w,
-                "zr_phenotype": zr.get("phenotype_value", ""),
-                "current": user.has_jersey,
-                "new": new_val,
-            })
-
-    # Store minimal data in session for confirm step
-    request.session["jersey_csv_preview"] = [{"user_id": c["user_id"], "new": c["new"]} for c in changes]
-
-    return render(
-        request,
-        "team/partials/_jersey_csv_preview.html",
-        {
-            "changes": changes,
-            "unmatched_zwids": unmatched_zwids,
-            "invalid_rows": invalid_rows,
-            "no_changes": not changes and not unmatched_zwids and not invalid_rows,
-        },
-    )
-
-
-@login_required
-@discord_permission_required("membership_admin", raise_exception=True)
-@require_POST
-def membership_jersey_csv_confirm(request: HttpRequest) -> HttpResponse:
-    """Apply jersey changes from the session preview data.
-
-    Args:
-        request: The HTTP request.
-
-    Returns:
-        Rendered result partial for HTMX.
-
-    """
-    changes = request.session.pop("jersey_csv_preview", None)
-    if not changes:
-        return render(
-            request,
-            "team/partials/_jersey_csv_preview.html",
-            {"error": "No pending changes found. Please re-upload the CSV."},
-        )
-
-    set_true_ids = [c["user_id"] for c in changes if c["new"] is True]
-    set_false_ids = [c["user_id"] for c in changes if c["new"] is False]
-
-    updated = 0
-    if set_true_ids:
-        updated += User.objects.filter(id__in=set_true_ids).update(has_jersey=True)
-    if set_false_ids:
-        updated += User.objects.filter(id__in=set_false_ids).update(has_jersey=False)
-
-    logfire.info(
-        "Bulk jersey update applied",
-        updated_count=updated,
-        admin_user_id=request.user.id,
-        set_true=len(set_true_ids),
-        set_false=len(set_false_ids),
-    )
-
-    return render(
-        request,
-        "team/partials/_jersey_csv_preview.html",
-        {"result": {"updated": updated}},
     )
 
 
@@ -2686,7 +2449,6 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
     role_filters = request.GET.getlist("role")
     exclude_roles = request.GET.getlist("exclude_roles")
     account_status = request.GET.get("account_status", "")
-    has_jersey_filter = request.GET.get("has_jersey", "")
     sort_by = request.GET.get("sort", "joined_at")
     sort_dir = request.GET.get("dir", "desc")
 
@@ -2726,11 +2488,6 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
         members = members.filter(user__isnull=False)
     elif account_status == "unlinked":
         members = members.filter(user__isnull=True)
-
-    if has_jersey_filter == "yes":
-        members = members.filter(user__has_jersey=True)
-    elif has_jersey_filter == "no":
-        members = members.filter(user__has_jersey=False)
 
     if role_filters:
         role_q = Q()
@@ -2829,7 +2586,6 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
         "left_status": left_status,
         "is_bot_filter": is_bot_filter,
         "account_status": account_status,
-        "has_jersey_filter": has_jersey_filter,
         "role_filters": role_filters,
         "exclude_roles": exclude_roles,
         "all_roles": all_roles.order_by("position"),
@@ -2864,7 +2620,6 @@ def discord_review_view(request: HttpRequest) -> HttpResponse:
             "left_status": context["left_status"],
             "is_bot": context["is_bot_filter"],
             "account_status": context["account_status"],
-            "has_jersey": context["has_jersey_filter"],
             "roles": context["role_filters"],
             "exclude_roles": context["exclude_roles"],
         },
@@ -3133,7 +2888,6 @@ def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
         "ZR Category",
         "ZR Rating",
         "ZR Phenotype",
-        "Has Jersey",
     ])
 
     for member in members_list:
@@ -3149,10 +2903,6 @@ def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
                 race_verified = "Yes"
             else:
                 race_verified = "No"
-
-        has_jersey = ""
-        if member.user:
-            has_jersey = "Yes" if member.user.has_jersey else "No"
 
         writer.writerow([
             member.username,
@@ -3172,7 +2922,6 @@ def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
             getattr(member, "tooltip_zr_category", ""),
             getattr(member, "tooltip_zr_rating", ""),
             getattr(member, "tooltip_zr_phenotype", ""),
-            has_jersey,
         ])
 
     logfire.info(
