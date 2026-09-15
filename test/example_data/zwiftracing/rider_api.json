@@ -1,93 +1,93 @@
 {
-  "riderId": 87402,
-  "name": "Vincent Davis  [COALITION]",
+  "riderId": 9000004,
+  "name": "Test Rider 4",
   "gender": "M",
-  "country": "us",
-  "age": "50+",
-  "height": 170,
-  "weight": 60.8,
-  "zpCategory": "B",
-  "zpFTP": 238,
+  "country": "de",
+  "age": "Mas",
+  "height": 175,
+  "weight": 68.5,
+  "zpCategory": "D",
+  "zpFTP": 180,
   "power": {
-    "wkg5": 12.6202,
-    "wkg15": 11.6584,
-    "wkg30": 9.6875,
-    "wkg60": 7.782037149767197,
-    "wkg120": 5.904605263157895,
-    "wkg300": 4.621710526315789,
-    "wkg1200": 4.046052631578948,
-    "w5": 761,
-    "w15": 703,
-    "w30": 589,
-    "w60": 473,
-    "w120": 359,
-    "w300": 281,
-    "w1200": 246,
-    "CP": 233.72888859768773,
-    "AWC": 14825.0193922551,
-    "compoundScore": 1333.1576557668652
+    "wkg5": 9.4599,
+    "wkg15": 7.6204,
+    "wkg30": 6.0438,
+    "wkg60": 4.8613,
+    "wkg120": 4.073,
+    "wkg300": 3.5474,
+    "wkg1200": 2.7591,
+    "w5": 648,
+    "w15": 522,
+    "w30": 414,
+    "w60": 333,
+    "w120": 279,
+    "w300": 243,
+    "w1200": 189,
+    "CP": 185.0,
+    "AWC": 18500.5,
+    "compoundScore": 1250.5
   },
   "race": {
     "last": {
-      "rating": 1516.0539503628117,
-      "date": 1766536200,
+      "rating": 1516.0539,
+      "date": 1735689600,
       "mixed": {
         "category": "Sapphire",
         "number": 4
       }
     },
     "current": {
-      "rating": 1516.0539503628117,
-      "date": 1766536200,
+      "rating": 1516.0539,
+      "date": 1735776000,
       "mixed": {
         "category": "Sapphire",
         "number": 4
       }
     },
     "max30": {
-      "rating": 1534.9230109906518,
-      "date": 1764529200,
-      "expires": 1769128200,
+      "rating": 1528.8039,
+      "date": 1735689600,
+      "expires": 1738368000,
       "mixed": {
         "category": "Sapphire",
         "number": 4
       }
     },
     "max90": {
-      "rating": 1573.3835258988343,
-      "date": 1762477200,
-      "expires": 1774312200,
+      "rating": 1536.3039,
+      "date": 1730419200,
+      "expires": 1743465600,
       "mixed": {
         "category": "Sapphire",
         "number": 4
       }
     },
-    "finishes": 18,
-    "dnfs": 0,
+    "finishes": 31,
+    "dnfs": 3,
     "wins": 2,
     "podiums": 7
   },
   "handicaps": {
     "profile": {
-      "flat": 50.99328033308271,
-      "rolling": 29.996047254754657,
-      "hilly": -22.330390734094767,
-      "mountainous": -61.44523635429465
+      "flat": -1.5,
+      "rolling": -2.25,
+      "hilly": -3.0,
+      "mountainous": -4.75
     }
   },
   "phenotype": {
     "scores": {
-      "sprinter": 89.3,
-      "puncheur": 98.6,
-      "pursuiter": 88.9,
-      "climber": 89,
-      "tt": 56.1
+      "sprinter": 3.5,
+      "puncheur": 2.75,
+      "pursuiter": 4.25,
+      "climber": 3,
+      "tt": 2.5
     },
-    "value": "Puncheur",
-    "bias": 7.150000000000006
+    "value": "Pursuiter",
+    "bias": 6.75
   },
   "club": {
-    "id": 11991,
-    "name": "COALITION"
+    "id": 99999,
+    "name": "TEST CLUB"
   }
 }
