@@ -1,0 +1,51 @@
+{% comment %}
+  One person who has no card. A <li> in a grid rather than a table row: these lists are read
+  as a worklist, one entry at a time, and a table would need Pattern B's card treatment on
+  mobile anyway -- which is what this already is.
+{% endcomment %}
+<li class="card bg-base-100 border border-base-300">
+  <div class="card-body p-4 gap-2">
+    <div class="flex items-start gap-3">
+      {% if row.avatar_url %}
+        <img src="{{ row.avatar_url }}" alt="" width="40" height="40" class="rounded-full shrink-0" loading="lazy">
+      {% else %}
+        <div class="w-10 h-10 rounded-full bg-base-300 shrink-0" aria-hidden="true"></div>
+      {% endif %}
+      <div class="min-w-0 flex-1">
+        <h3 class="font-medium truncate">{{ row.name }}</h3>
+        {% if row.discord_handle %}
+          <p class="text-sm text-base-content/70 truncate">{{ row.discord_handle }}</p>
+        {% endif %}
+        {% if row.matched_as %}
+          <p class="text-sm text-base-content/70 truncate">matched: {{ row.matched_as }}</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <dl class="text-sm text-base-content/70 grid grid-cols-[auto,1fr] gap-x-2">
+      {% if row.joined_at %}
+        <dt>Joined</dt><dd>{{ row.joined_at|date:"j M Y" }}</dd>
+      {% endif %}
+      {% if row.zwid %}
+        <dt>ZWID</dt><dd class="font-mono">{{ row.zwid }}</dd>
+      {% endif %}
+    </dl>
+
+    <div class="flex flex-wrap gap-2 mt-1">
+      {% if row.discord_id %}
+        <a class="btn btn-xs" href="https://discord.com/users/{{ row.discord_id }}"
+           rel="noopener" target="_blank"
+           aria-label="Message {{ row.name }} on Discord">Discord</a>
+      {% endif %}
+      {% if row.user_id %}
+        <a class="btn btn-xs" href="{% url 'accounts:public_profile' row.user_id %}"
+           aria-label="Open {{ row.name }}'s profile">Profile</a>
+      {% endif %}
+      {% if row.zwid %}
+        <a class="btn btn-xs" href="https://zwiftpower.com/profile.php?z={{ row.zwid }}"
+           rel="noopener" target="_blank"
+           aria-label="Open {{ row.name }} on ZwiftPower">ZwiftPower</a>
+      {% endif %}
+    </div>
+  </div>
+</li>

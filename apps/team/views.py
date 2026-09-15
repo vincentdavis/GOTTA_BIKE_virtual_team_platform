@@ -1,6 +1,7 @@
 """Views for team app."""
 
 import csv
+from dataclasses import replace
 from datetime import datetime
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
@@ -20,6 +21,7 @@ from apps.accounts.decorators import discord_permission_required, team_member_re
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
 from apps.accounts.utils import parse_zwid_input, resolve_country
+from apps.rider_data.services import last_successful_sync
 from apps.team.forms import (
     MembershipApplicationAdminForm,
     MembershipApplicationApplicantForm,
@@ -31,13 +33,20 @@ from apps.team.rosterv2 import (
     DEFAULT_SORT,
     FTP_STEPS,
     JOINED_WINDOWS,
+    LINK_LABELS,
+    LINK_NOUNS,
+    LINK_VALUES,
     RACE_WINDOW_DAYS,
     SORTS,
     WKG_STEPS,
     apply_filters,
+    build_link_rows,
     build_roster_index,
     filter_options,
+    link_counts,
     parse_filters,
+    search_link_rows,
+    sort_link_rows,
     sort_rows,
 )
 from apps.team.rosterv2 import search as roster_search
@@ -509,6 +518,7 @@ _CHIP_LABELS = {
     "joined": "Joined within",
     "racing": "Racing",
     "country": "Country",
+    "link": "Not linked",
 }
 
 
@@ -529,22 +539,38 @@ def _query_without(request: HttpRequest, *drop: str) -> str:
     return params.urlencode()
 
 
-def _roster_chips(request: HttpRequest) -> list[dict]:
+def _roster_chips(request: HttpRequest, *, link: str = "") -> list[dict]:
     """Describe each active control as a chip that can be taken off.
+
+    Takes the EFFECTIVE link value rather than reading it back off the querystring. This
+    function works in raw ``request.GET``, so it is the one place that cannot see a filter
+    the view declined to apply -- and a chip asserting a filter the page did not use is
+    worse than no chip, because the chip is what a reader trusts to tell them why the list
+    looks the way it does.
 
     Args:
         request: The HTTP request.
+        link: The not-linked population actually in force, empty when none is.
 
     Returns:
         One entry per active control, with the querystring that removes it.
 
     """
     chips = []
+    # The other half of the clear-the-stat-filters rule: without this guard,
+    # ?wkg=4.5&link=no_stats renders a removable "Min W/kg: 4.5" chip over a list where W/kg
+    # does not exist, asserting the opposite of what the panel below it shows.
+    on_link = bool(link)
     for name, label in _CHIP_LABELS.items():
-        value = (request.GET.get(name) or "").strip()
+        if on_link and name not in ("link", "q"):
+            continue
+        value = link if name == "link" else (request.GET.get(name) or "").strip()
         if not value:
             continue
         shown = value
+        if name == "link":
+            # "Not linked: no_stats" names a database value at the reader.
+            shown = LINK_LABELS.get(value, value)
         if name == "country":
             # "Country: GB" tells a reader nothing; the chip says what the dropdown said.
             shown = resolve_country(value)[1] or value
@@ -556,33 +582,48 @@ def _roster_chips(request: HttpRequest) -> list[dict]:
 @team_member_required()
 @require_GET
 def rosterv2_view(request: HttpRequest) -> HttpResponse:
-    """Serve the card roster while it is being built, at a URL nothing links to yet.
+    """Serve the card roster: one page of cards, or one of the not-linked worklists.
 
-    Deliberately reachable only by typing it. The roster this replaces is the page the team
-    and the Discord bot use every day, so v2 gets to be wrong in public for a while first --
-    ``/team/roster/`` is untouched until cutover, and there is no sidebar entry.
+    Team members only. The cache behind it holds riders who never registered here (the
+    ZwiftPower team page, the ZwiftRacing club), which is what the field allow-list in
+    ``apps.team.rosterv2`` exists to bound.
 
-    Team members only, like the roster it will replace. The cache behind it holds riders who
-    never registered here (the ZwiftPower team page, the ZwiftRacing club), so this is not a
-    page to leave open while the field allow-list is still being written.
+    ``?link=`` swaps the whole body for a list of people who have NO card -- and the branch
+    has to happen before ``search``, ``apply_filters`` and ``sort_rows``, every one of which
+    dereferences ``row.card`` unconditionally. Handing them link rows is an AttributeError on
+    a live page, not an empty one. The toggle itself is membership-admin only: the same
+    population is already listed at /team/discord-review/ behind that permission, and the
+    roster is open to every team member.
 
     Args:
         request: The HTTP request.
 
     Returns:
-        The roster page: one page of cards, the header counts, and nothing a card may not
-        carry -- the index decides that, not the template.
+        The roster page, in whichever of its two modes the querystring asked for.
 
     """
     roster = build_roster_index(viewer_id=request.user.pk)
     query = request.GET.get("q", "").strip()
-    rows = roster_search(roster.rows, query) if query else list(roster.rows)
+    direction = request.GET.get("dir", "")
+    may_see_gaps = request.user.has_permission("membership_admin")
+    counts = link_counts() if may_see_gaps else {}
 
     filters = parse_filters(request.GET, roster.rows)
-    rows = apply_filters(rows, filters)
-    sort = request.GET.get("sort", "") if request.GET.get("sort", "") in SORTS else DEFAULT_SORT
-    direction = request.GET.get("dir", "")
-    rows = sort_rows(rows, sort, direction)
+    if filters.link and not may_see_gaps:
+        filters = replace(filters, link="")
+
+    sort = DEFAULT_SORT
+    link_total = 0
+    if filters.link:
+        link_rows = build_link_rows(filters.link)
+        link_total = len(link_rows)
+        rows = search_link_rows(link_rows, query) if query else link_rows
+        rows = sort_link_rows(rows, direction)
+    else:
+        rows = roster_search(roster.rows, query) if query else list(roster.rows)
+        rows = apply_filters(rows, filters)
+        sort = request.GET.get("sort", "") if request.GET.get("sort", "") in SORTS else DEFAULT_SORT
+        rows = sort_rows(rows, sort, direction)
 
     # 48 a page: enough to fill four columns twelve deep, and the reason the whole index is
     # never handed to the template. v1 sends ~450 KB of HTML for 100 rows.
@@ -618,7 +659,20 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
             "wkg_steps": WKG_STEPS,
             "ftp_steps": FTP_STEPS,
             "joined_windows": JOINED_WINDOWS,
-            "chips": _roster_chips(request),
+            "chips": _roster_chips(request, link=filters.link),
+            "may_see_gaps": may_see_gaps,
+            # Counted whoever is looking, so the labels can state a size before anybody
+            # opens a list -- which is the whole point of putting the number in the label.
+            "link_options": [
+                {"value": value, "label": LINK_LABELS[value], "count": counts[value]}
+                for value in LINK_VALUES
+            ] if may_see_gaps else [],
+            "link_label": LINK_LABELS.get(filters.link, ""),
+            "link_noun": (
+                LINK_NOUNS[filters.link][0 if link_total == 1 else 1] if filters.link else ""
+            ),
+            "link_total": link_total,
+            "last_profile_sync": last_successful_sync() if filters.link == "no_stats" else None,
             "sorts": [(key, label) for key, (label, _) in SORTS.items()],
             "race_window_days": RACE_WINDOW_DAYS,
             "sort": sort,

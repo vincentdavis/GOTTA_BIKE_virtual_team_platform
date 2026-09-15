@@ -108,6 +108,13 @@ ACCOUNT_COLUMNS = (
 
 GUILD_COLUMNS = ("user_id", "joined_at", "nickname", "display_name", "username")
 
+# The same table read from the other side: members with no user row at all, who are invisible
+# to GUILD_COLUMNS' consumer because it joins on user_id. discord_id is here for the same
+# reason it is in ACCOUNT_COLUMNS -- the avatar URL contains the snowflake, so showing an
+# avatar is already publishing it -- and avatar_hash because GuildMember.avatar_url is a model
+# property, and this module works in .values() dicts by design.
+GUILD_GAP_COLUMNS = ("discord_id", "username", "display_name", "nickname", "avatar_hash", "joined_at")
+
 # An ALLOW-list, so a bracket zauth invents later is hidden until somebody decides to show it.
 # A deny-list fails the other way. The real vocabulary upstream is
 # Snr / Jnr / U23 / Vet / Mas / 50+ / 60+ / 70+ / "-" / "", so what this hides is "-" and "".
@@ -708,6 +715,291 @@ DEFAULT_SORT = "races"
 _DESCENDING_BY_DEFAULT = frozenset({"races", "podiums", "velo", "ftp", "wkg", "last_raced", "newest"})
 
 
+# The three ways a person on this team can have no card. One filter, three values: they are
+# three states of one question, not three questions.
+LINK_VALUES = ("no_account", "no_zwid", "no_stats")
+# "Members, no stats" rather than "No stats yet" on purpose: the header a few lines above
+# states the WIDER number -- every rider on the team the cache is behind on, most of whom
+# never registered here -- and two different counts of "no stats" on one screen read as the
+# page contradicting itself. This label says which population it means.
+LINK_LABELS = {
+    "no_account": "No account here",
+    "no_zwid": "No Zwift ID",
+    "no_stats": "Members, no stats",
+}
+# What to call them in a sentence, singular and plural. A no_account row is not a rider -- we
+# have no idea whether they ride -- and calling them one in the copy is how a worklist starts
+# overclaiming. Both forms because these lists reach one deliberately: the last person who has
+# not signed in is exactly when someone reads the sentence closely.
+LINK_NOUNS = {
+    "no_account": ("person", "people"),
+    "no_zwid": ("member", "members"),
+    "no_stats": ("rider", "riders"),
+}
+
+
+@dataclass(frozen=True, slots=True)
+class LinkRow:
+    """One person who has no card, and enough to go and ask them about it.
+
+    Deliberately thinner than ``RosterRow``: these people have no stats by definition, so
+    there is nothing to rank them by and no reason to carry anything that could be. The same
+    two rules apply -- a frozen slots class with a pinned field set, and ``_search``
+    carrying real names under both an underscore and ``repr=False``.
+
+    Attributes:
+        name: What to head the row with.
+        discord_id: The snowflake, for the DM link. Empty when we hold no Discord row.
+        discord_handle: The @name under the title, when it differs from ``name``.
+        avatar_url: Built here rather than read off the model, since this module works in
+            ``.values()`` dicts.
+        user_id: Set only when an account here resolved, which is what decides whether a
+            profile link is offered.
+        zwid: Set only for ``no_stats``; the other two populations have none by definition.
+        joined_at: When they joined the Discord. Nullable upstream and often absent.
+        _search: ``(folded, as written)`` per name, server-side only.
+        matched_as: The name that matched, when it was not the one shown.
+
+    """
+
+    name: str
+    discord_id: str = ""
+    discord_handle: str = ""
+    avatar_url: str = ""
+    user_id: int | None = None
+    zwid: int | None = None
+    joined_at: datetime | None = None
+    _search: tuple[tuple[str, str], ...] = field(default=(), repr=False)
+    matched_as: str = ""
+
+    def __str__(self) -> str:
+        """Return the person's name, never the row's repr.
+
+        Returns:
+            The name.
+
+        """
+        return self.name
+
+
+def _no_account_qs():
+    """Guild members with no account here.
+
+    Every clause is load-bearing. ``user__isnull`` is the population; ``date_left__isnull``
+    keeps people who have left out of a list of people to chase; ``is_bot`` keeps the bots
+    out. The ``discord_id`` exclusion is the subtle one: the guild sync runs every six hours,
+    so a member who signed in ten minutes ago still has ``user=None`` on their cached row, and
+    without it this list accuses them of not having done the thing they just did.
+
+    Returns:
+        The queryset.
+
+    """
+    linked = User.objects.exclude(discord_id="").exclude(discord_id__isnull=True).values("discord_id")
+    return GuildMember.objects.filter(
+        user__isnull=True, date_left__isnull=True, is_bot=False
+    ).exclude(discord_id__in=linked)
+
+
+def _no_zwid_qs():
+    """Members who signed in but never connected Zwift.
+
+    ``zwid=0`` matters as much as ``zwid IS NULL``: 0 is the "no zwid" sentinel the roster
+    index already excludes, so a query testing only for null silently misses everyone stored
+    the other way. The guild-membership clause is what keeps the list to current members --
+    without it the first row is the bootstrap superuser, which has no Discord at all.
+
+    Returns:
+        The queryset.
+
+    """
+    return User.objects.filter(is_active=True).filter(Q(zwid__isnull=True) | Q(zwid=0)).filter(
+        guild_member__isnull=False, guild_member__date_left__isnull=True, guild_member__is_bot=False
+    )
+
+
+def _no_stats_qs():
+    """Our riders with a zwid that no cached profile exists for.
+
+    Scoped to people with an account HERE on purpose. The roster is built from a union that
+    includes the whole ZwiftPower team page, so the unscoped version of this question is
+    dominated by riders who never registered and have no relationship to the app -- a list
+    nobody can act on. ``RosterIndex.unstatted_count`` still states that wider number, which
+    is a different fact and is worded as one.
+
+    Returns:
+        The queryset.
+
+    """
+    return User.objects.filter(is_active=True, zwid__isnull=False, zwid__gt=0).filter(
+        guild_member__isnull=False, guild_member__date_left__isnull=True, guild_member__is_bot=False
+    ).exclude(zwid__in=RiderProfile.objects.values("zwid"))
+
+
+def link_counts() -> dict[str, int]:
+    """Count all three populations, for the toggle's own labels.
+
+    Three flat aggregates and no per-row work, so the page can state the size of a list
+    before anybody opens it -- which is the whole point of putting the number in the label.
+
+    Returns:
+        One count per value in ``LINK_VALUES``.
+
+    """
+    return {
+        "no_account": _no_account_qs().count(),
+        "no_zwid": _no_zwid_qs().count(),
+        "no_stats": _no_stats_qs().count(),
+    }
+
+
+def _link_row(*, name, discord_id="", handle="", avatar_hash="", user_id=None, zwid=None,
+              joined_at=None, extra_names=()):
+    """Assemble one row, folding every name it is known by into the haystack.
+
+    Args:
+        name: The name to head the row with.
+        discord_id: The Discord snowflake, when we hold one.
+        handle: The Discord @name, shown only when it differs from ``name``.
+        avatar_hash: Discord's avatar hash, for the CDN URL.
+        user_id: The account here, when one resolved.
+        zwid: The rider's Zwift id, for the ``no_stats`` population.
+        joined_at: When they joined the Discord.
+        extra_names: Other names they are known by -- searchable, never shown.
+
+    Returns:
+        The row.
+
+    """
+    avatar = ""
+    if discord_id and avatar_hash:
+        avatar = f"https://cdn.discordapp.com/avatars/{discord_id}/{avatar_hash}.png"
+    # The shown name leads, so matched_as stays empty for the ordinary case -- the same rule
+    # the card's haystack follows.
+    names = [name, *(n for n in extra_names if n)]
+    return LinkRow(
+        name=name,
+        discord_id=str(discord_id or ""),
+        discord_handle=handle if handle and handle != name else "",
+        avatar_url=avatar,
+        user_id=user_id,
+        zwid=zwid,
+        joined_at=joined_at,
+        _search=tuple((fold(n), n) for n in names if n),
+    )
+
+
+def build_link_rows(kind: str) -> list[LinkRow]:
+    """Build the list for one of the three populations, ordered by folded name.
+
+    Name order rather than join date, because the join date is nullable upstream and mostly
+    absent, so ordering on it puts most of the list in an arbitrary bucket. The sort control
+    reorders from here, and relies on arriving sorted for its own missing bucket.
+
+    Args:
+        kind: One of ``LINK_VALUES``.
+
+    Returns:
+        The rows, or an empty list for an unrecognised kind.
+
+    """
+    rows: list[LinkRow] = []
+    if kind == "no_account":
+        for row in _no_account_qs().values(*GUILD_GAP_COLUMNS).iterator(chunk_size=500):
+            shown = row["nickname"] or row["display_name"] or row["username"] or "Unknown member"
+            rows.append(_link_row(
+                name=shown,
+                discord_id=row["discord_id"],
+                handle=row["username"] or "",
+                avatar_hash=row["avatar_hash"] or "",
+                joined_at=row["joined_at"],
+                extra_names=(row["display_name"], row["username"], row["nickname"]),
+            ))
+    elif kind in ("no_zwid", "no_stats"):
+        qs = _no_zwid_qs() if kind == "no_zwid" else _no_stats_qs()
+        columns = (
+            "id", "zwid", "first_name", "last_name", "discord_id", "discord_avatar",
+            "discord_username", "guild_member__nickname", "guild_member__display_name",
+            "guild_member__username", "guild_member__joined_at",
+        )
+        for row in qs.values(*columns).iterator(chunk_size=500):
+            shown = (
+                row["guild_member__nickname"]
+                or row["guild_member__display_name"]
+                or row["guild_member__username"]
+                or row["discord_username"]
+                or "Unknown member"
+            )
+            real = f"{row['first_name'] or ''} {row['last_name'] or ''}".strip()
+            rows.append(_link_row(
+                name=shown,
+                discord_id=row["discord_id"] or "",
+                handle=row["discord_username"] or "",
+                avatar_hash=row["discord_avatar"] or "",
+                user_id=row["id"],
+                zwid=row["zwid"] if kind == "no_stats" else None,
+                joined_at=row["guild_member__joined_at"],
+                # Real names are searchable and never shown, exactly as on a card.
+                extra_names=(real, row["discord_username"], row["guild_member__display_name"]),
+            ))
+    rows.sort(key=lambda r: (fold(r.name), r.discord_id))
+    return rows
+
+
+def search_link_rows(rows: list[LinkRow], query: str) -> list[LinkRow]:
+    """Narrow a link list by a typed query, on the same terms as the card search.
+
+    A digit run matches the zwid exactly and is OR-ed with the name search, for the reason
+    :func:`search` gives: substring-matching an id turns the box into an oracle.
+
+    Args:
+        rows: The population.
+        query: Raw text from the search box.
+
+    Returns:
+        The matching rows, carrying ``matched_as`` when the hit was on a hidden name.
+
+    """
+    folded = fold(query)
+    wanted_zwid = as_zwid(query)
+    if not folded and wanted_zwid is None:
+        return list(rows)
+
+    hits: list[LinkRow] = []
+    for row in rows:
+        if wanted_zwid is not None and row.zwid == wanted_zwid:
+            hits.append(row)
+            continue
+        if not folded:
+            continue
+        matched = next((written for name, written in row._search if folded in name), None)
+        if matched is None:
+            continue
+        hits.append(row if matched == row.name else replace(row, matched_as=matched))
+    return hits
+
+
+def sort_link_rows(rows: list[LinkRow], direction: str) -> list[LinkRow]:
+    """Order a link list by join date, keeping rows with no date last either way.
+
+    ``GuildMember.joined_at`` is nullable and the sync leaves it None whenever Discord's
+    timestamp will not parse, so a plain sort would lead a descending list with everyone we
+    hold no date for. Rows arrive name-sorted, which is what orders that bucket.
+
+    Args:
+        rows: The population.
+        direction: "asc" for oldest first; anything else is newest first.
+
+    Returns:
+        The ordered rows.
+
+    """
+    present = [r for r in rows if r.joined_at is not None]
+    missing = [r for r in rows if r.joined_at is None]
+    present.sort(key=lambda r: r.joined_at, reverse=direction != "asc")
+    return present + missing
+
+
 @dataclass(frozen=True, slots=True)
 class RosterFilters:
     """What the reader asked the roster to narrow to.
@@ -731,6 +1023,10 @@ class RosterFilters:
         country: An ISO 3166-1 alpha-2 code. Subdivisions resolve to their parent, so
             picking "United Kingdom" finds the Welsh and Scottish riders too -- which is
             what the card promises, since it flies the Union Flag for all of them.
+        link: One of ``LINK_VALUES``. Unlike every other field here it does not narrow the
+            roster -- it selects a different list entirely, of people who have no card at
+            all. Setting it clears the rest, because a stat filter over people with no
+            stats returns nothing and reads as a broken page.
 
     """
 
@@ -746,6 +1042,7 @@ class RosterFilters:
     joined: int | None = None
     racing: str = ""
     country: str = ""
+    link: str = ""
 
     @property
     def active(self) -> bool:
@@ -758,7 +1055,7 @@ class RosterFilters:
         return any(value not in ("", None) for value in (
             self.category, self.zr, self.gender, self.phenotype,
             self.verified, self.age, self.account, self.wkg, self.ftp, self.joined, self.racing,
-            self.country,
+            self.country, self.link,
         ))
 
 
@@ -813,6 +1110,13 @@ def parse_filters(params, rows: tuple[RosterRow, ...]) -> RosterFilters:
         The filters to apply.
 
     """
+    # Rule made structural rather than remembered: on the not-linked lists every stat field
+    # is blank by construction, so a hand-edited ?wkg=4.5&link=no_stats narrows nothing, the
+    # panel's selects fall back to "Any", and apply_filters is never reached at all.
+    link = _one_of(params, "link", LINK_VALUES)
+    if link:
+        return RosterFilters(link=link)
+
     options = filter_options(rows)
     return RosterFilters(
         category=_one_of(params, "category", options["categories"]),
