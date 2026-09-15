@@ -514,7 +514,11 @@ def test_a_country_shows_as_a_flag_not_an_abbreviation(auth_client, roster_rider
     assert "/flags/fr.gif" in card
     assert 'alt="France"' in card
     assert '<li class="tooltip" data-tip="France">' in card
-    assert "FR" not in _text_of(card)
+    # The fallback badge renders the code as element text, so that is what to look for. The
+    # earlier form -- "FR" nowhere in the card's visible text -- asserted far more than it
+    # meant: two uppercase letters against every word on a card that has since grown a zwid,
+    # a join year and event chips, any of which could contain them innocently.
+    assert ">FR<" not in card
 
 
 @pytest.mark.django_db
