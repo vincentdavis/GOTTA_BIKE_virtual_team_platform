@@ -718,14 +718,15 @@ _DESCENDING_BY_DEFAULT = frozenset({"races", "podiums", "velo", "ftp", "wkg", "l
 # The three ways a person on this team can have no card. One filter, three values: they are
 # three states of one question, not three questions.
 LINK_VALUES = ("no_account", "no_zwid", "no_stats")
-# "Members, no stats" rather than "No stats yet" on purpose: the header a few lines above
-# states the WIDER number -- every rider on the team the cache is behind on, most of whom
-# never registered here -- and two different counts of "no stats" on one screen read as the
-# page contradicting itself. This label says which population it means.
+# The list behind "No stats yet" is narrower than the phrase sounds: riders with an account
+# HERE and no cached profile, not every rider on the team the cache is behind on. The header
+# used to state that wider number two lines above, which is why this option was once worded
+# "Members, no stats"; that sentence is gone, so the plain wording reads correctly again. The
+# heading on the list itself is what says which population it means.
 LINK_LABELS = {
     "no_account": "No account here",
     "no_zwid": "No Zwift ID",
-    "no_stats": "Members, no stats",
+    "no_stats": "No stats yet",
 }
 # What to call them in a sentence, singular and plural. A no_account row is not a rider -- we
 # have no idea whether they ride -- and calling them one in the copy is how a worklist starts

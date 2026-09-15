@@ -138,7 +138,7 @@ def test_a_membership_admin_is_offered_the_control(client, membership_admin):
 
     assert 'id="f-link"' in body
     assert "No account here" in body
-    assert "Members, no stats" in body
+    assert "No stats yet" in body
 
 
 @pytest.mark.django_db
