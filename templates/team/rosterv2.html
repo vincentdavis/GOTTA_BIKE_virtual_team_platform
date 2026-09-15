@@ -35,30 +35,6 @@
           </p>
         {% endif %}
 
-        {% if may_see_gaps %}
-          {% comment %}
-            Outside the filter collapse on purpose. Every other control lives inside the
-            <details>, which is shut unless a filter is already on -- and a count hidden
-            behind a closed summary is exactly the weakness putting the number in the label
-            was meant to fix. Plain links, so each state is bookmarkable and keyboard-
-            operable with no script, and so the entry URL carries no stat filter in.
-          {% endcomment %}
-          <nav class="mt-3 flex flex-wrap items-center gap-2" aria-label="Team members who have no card">
-            <span class="text-sm text-base-content/70">Not linked:</span>
-            {% for opt in link_options %}
-              <a class="btn btn-sm {% if filters.link == opt.value %}btn-neutral{% else %}btn-outline{% endif %}"
-                 href="?link={{ opt.value }}"
-                 {% if filters.link == opt.value %}aria-current="page"{% endif %}>
-                {% if filters.link == opt.value %}<span aria-hidden="true">&check;</span>{% endif %}
-                {{ opt.label }} ({{ opt.count }})
-              </a>
-            {% endfor %}
-            {% if filters.link %}
-              <a class="btn btn-sm btn-ghost" href="{% url 'team:roster' %}">Back to the cards</a>
-            {% endif %}
-          </nav>
-        {% endif %}
-
         {% comment %}
           The table this page replaced is still one click away, and the link is not
           nostalgia: the table carries the category, FTP and W/kg distribution charts, which
@@ -96,7 +72,6 @@
           out of the way until they are wanted. Open by default once a filter is on, so the
           reason the roster looks short is never hidden.
         {% endcomment %}
-        {% if not filters.link %}
         <details class="collapse collapse-arrow bg-base-100 mt-3" {% if filters.active %}open{% endif %}>
           <summary class="collapse-title text-sm font-semibold">Filters and sorting</summary>
           <div class="collapse-content">
@@ -201,6 +176,24 @@
                 </select>
               </div>
 
+              {% if may_see_gaps %}
+                {% comment %}
+                  Unlike its neighbours this does not narrow the cards -- it replaces them
+                  with people who have no card at all, so picking one clears the rest. The
+                  other selects fall back to "Any" on the way back, which is what they now
+                  mean.
+                {% endcomment %}
+                <div>
+                  <label class="label py-1" for="f-link"><span class="label-text">Not linked</span></label>
+                  <select class="select select-bordered w-full" id="f-link" name="link">
+                    <option value="">Any</option>
+                    {% for opt in link_options %}
+                      <option value="{{ opt.value }}" {% if filters.link == opt.value %}selected{% endif %}>{{ opt.label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              {% endif %}
+
               <div>
                 <label class="label py-1" for="f-racing"><span class="label-text">Racing</span></label>
                 <select class="select select-bordered w-full" id="f-racing" name="racing">
@@ -221,21 +214,33 @@
                 </select>
               </div>
 
-              <div>
-                <label class="label py-1" for="f-sort"><span class="label-text">Sort by</span></label>
-                <select class="select select-bordered w-full" id="f-sort" name="sort">
-                  {% for key, label in sorts %}
-                    <option value="{{ key }}" {% if sort == key %}selected{% endif %}>{{ label }}</option>
-                  {% endfor %}
-                </select>
-              </div>
+              {% comment %}
+                Every sort keys off a stat, so on a not-linked list there is nothing to sort
+                by -- those rows are ordered by join date. Rendering the control anyway would
+                leave a select that visibly does nothing.
+              {% endcomment %}
+              {% if not filters.link %}
+                <div>
+                  <label class="label py-1" for="f-sort"><span class="label-text">Sort by</span></label>
+                  <select class="select select-bordered w-full" id="f-sort" name="sort">
+                    {% for key, label in sorts %}
+                      <option value="{{ key }}" {% if sort == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              {% endif %}
 
               <div>
                 <label class="label py-1" for="f-dir"><span class="label-text">Order</span></label>
                 <select class="select select-bordered w-full" id="f-dir" name="dir">
-                  <option value="">Default for this sort</option>
-                  <option value="asc" {% if direction == "asc" %}selected{% endif %}>Ascending</option>
-                  <option value="desc" {% if direction == "desc" %}selected{% endif %}>Descending</option>
+                  {% if filters.link %}
+                    <option value="">Newest first</option>
+                    <option value="asc" {% if direction == "asc" %}selected{% endif %}>Oldest first</option>
+                  {% else %}
+                    <option value="">Default for this sort</option>
+                    <option value="asc" {% if direction == "asc" %}selected{% endif %}>Ascending</option>
+                    <option value="desc" {% if direction == "desc" %}selected{% endif %}>Descending</option>
+                  {% endif %}
                 </select>
               </div>
 
@@ -245,7 +250,6 @@
             </form>
           </div>
         </details>
-        {% endif %}
 
         {% if chips %}
           <ul class="mt-3 flex flex-wrap items-center gap-2 list-none p-0">

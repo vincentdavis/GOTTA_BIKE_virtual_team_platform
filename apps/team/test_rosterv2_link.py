@@ -11,7 +11,7 @@ import pytest
 from django.urls import reverse
 
 from apps.accounts.models import GuildMember, User
-from apps.team.rosterv2 import GUILD_GAP_COLUMNS, LinkRow, build_link_rows, link_counts
+from apps.team.rosterv2 import GUILD_GAP_COLUMNS, LinkRow, build_link_rows
 
 EXPECTED_LINK_ROW_FIELDS = (
     "name", "discord_id", "discord_handle", "avatar_url",
@@ -69,7 +69,6 @@ def test_a_bot_is_not_somebody_to_chase():
     GuildMember.objects.create(discord_id="8001", username="a-bot", user=None, is_bot=True)
 
     assert build_link_rows("no_account") == []
-    assert link_counts()["no_account"] == 0
 
 
 @pytest.mark.django_db
@@ -80,7 +79,6 @@ def test_somebody_who_left_is_not_somebody_to_chase():
     )
 
     assert build_link_rows("no_account") == []
-    assert link_counts()["no_account"] == 0
 
 
 @pytest.mark.django_db
@@ -124,22 +122,34 @@ def test_the_toggle_is_membership_admin_only(client, team_member, user_model):
 
     body = client.get(reverse("team:roster") + "?link=no_account").content.decode()
 
-    assert "Team members who have no card" not in body
+    assert 'id="f-link"' not in body
     assert "never signed in here" not in body
     # And the chip must not claim a filter the page declined to apply.
     assert "No account here" not in body
 
 
 @pytest.mark.django_db
-def test_a_membership_admin_gets_the_list_and_its_count(client, membership_admin):
-    """The count is in the toggle's own label, so it is readable without opening anything."""
+def test_a_membership_admin_is_offered_the_control(client, membership_admin):
+    """It sits with the other filters, as one select rather than three buttons."""
     GuildMember.objects.create(discord_id="8006", username="stranger", user=None, is_bot=False)
     client.force_login(membership_admin)
 
     body = client.get(reverse("team:roster")).content.decode()
 
-    assert "Team members who have no card" in body
-    assert "No account here (1)" in body
+    assert 'id="f-link"' in body
+    assert "No account here" in body
+    assert "Members, no stats" in body
+
+
+@pytest.mark.django_db
+def test_the_panel_stays_reachable_while_a_population_is_showing(client, membership_admin):
+    """The control lives in the panel, so hiding the panel would strand the reader in it."""
+    GuildMember.objects.create(discord_id="8012", username="stranger", user=None, is_bot=False)
+    client.force_login(membership_admin)
+
+    body = client.get(reverse("team:roster") + "?link=no_account").content.decode()
+
+    assert 'id="f-link"' in body
 
 
 @pytest.mark.django_db
@@ -193,3 +203,18 @@ def test_the_copy_agrees_with_a_count_of_several(client, membership_admin):
 
     assert "3 people are in the Discord" in body
     assert "have never signed in here" in body
+
+
+@pytest.mark.django_db
+def test_the_sort_control_is_not_offered_on_a_worklist(client, membership_admin):
+    """Every sort keys off a stat, so it would be a select that visibly does nothing."""
+    GuildMember.objects.create(discord_id="8013", username="stranger", user=None, is_bot=False)
+    client.force_login(membership_admin)
+
+    cards = client.get(reverse("team:roster")).content.decode()
+    worklist = client.get(reverse("team:roster") + "?link=no_account").content.decode()
+
+    assert 'id="f-sort"' in cards
+    assert 'id="f-sort"' not in worklist
+    # Order survives, because join date really does have two directions.
+    assert "Oldest first" in worklist

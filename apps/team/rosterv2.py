@@ -836,23 +836,6 @@ def _no_stats_qs():
     ).exclude(zwid__in=RiderProfile.objects.values("zwid"))
 
 
-def link_counts() -> dict[str, int]:
-    """Count all three populations, for the toggle's own labels.
-
-    Three flat aggregates and no per-row work, so the page can state the size of a list
-    before anybody opens it -- which is the whole point of putting the number in the label.
-
-    Returns:
-        One count per value in ``LINK_VALUES``.
-
-    """
-    return {
-        "no_account": _no_account_qs().count(),
-        "no_zwid": _no_zwid_qs().count(),
-        "no_stats": _no_stats_qs().count(),
-    }
-
-
 def _link_row(*, name, discord_id="", handle="", avatar_hash="", user_id=None, zwid=None,
               joined_at=None, extra_names=()):
     """Assemble one row, folding every name it is known by into the haystack.

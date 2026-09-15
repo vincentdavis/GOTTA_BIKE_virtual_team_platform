@@ -43,7 +43,6 @@ from apps.team.rosterv2 import (
     build_link_rows,
     build_roster_index,
     filter_options,
-    link_counts,
     parse_filters,
     search_link_rows,
     sort_link_rows,
@@ -606,7 +605,6 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     direction = request.GET.get("dir", "")
     may_see_gaps = request.user.has_permission("membership_admin")
-    counts = link_counts() if may_see_gaps else {}
 
     filters = parse_filters(request.GET, roster.rows)
     if filters.link and not may_see_gaps:
@@ -661,11 +659,8 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
             "joined_windows": JOINED_WINDOWS,
             "chips": _roster_chips(request, link=filters.link),
             "may_see_gaps": may_see_gaps,
-            # Counted whoever is looking, so the labels can state a size before anybody
-            # opens a list -- which is the whole point of putting the number in the label.
             "link_options": [
-                {"value": value, "label": LINK_LABELS[value], "count": counts[value]}
-                for value in LINK_VALUES
+                {"value": value, "label": LINK_LABELS[value]} for value in LINK_VALUES
             ] if may_see_gaps else [],
             "link_label": LINK_LABELS.get(filters.link, ""),
             "link_noun": (
