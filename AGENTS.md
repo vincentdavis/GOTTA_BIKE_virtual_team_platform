@@ -141,7 +141,7 @@ Public profiles at `/user/profile/<user_id>/` (requires `team_member` permission
 
 **Privacy**: Never expose `birth_year`, `email`, or emergency contact fields on public profiles. See `public_profile_view` in `apps/accounts/views.py`.
 
-User names link to public profiles in roster and membership review tables.
+User names link to public profiles in the roster tables.
 
 ### Discord Role-Based Permissions (`apps/accounts/models.py`)
 

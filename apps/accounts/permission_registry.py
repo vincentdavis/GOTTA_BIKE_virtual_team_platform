@@ -43,7 +43,6 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "name": "Membership Admin",
         "description": "Review and manage membership applications",
         "views": [
-            "/team/membership-review/ - Membership review dashboard",
             "/team/applications/ - Membership application list",
             "/team/applications/{uuid}/ - Individual application review",
             "/team/applications/{uuid}/zwid-action/ - Verify/reject ZWID on membership application",

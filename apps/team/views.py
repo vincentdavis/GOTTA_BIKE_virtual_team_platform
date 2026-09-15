@@ -1,7 +1,7 @@
 """Views for team app."""
 
 import csv
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
@@ -44,7 +44,6 @@ from apps.team.rosterv2 import search as roster_search
 from apps.team.services import (
     ZP_DIV_TO_CATEGORY,
     can_view_verification_media,
-    get_membership_review_data,
     get_performance_review_data,
     get_unified_team_roster,
     log_record_view,
@@ -1779,154 +1778,6 @@ def performance_review_view(request: HttpRequest) -> HttpResponse:
 # =============================================================================
 # Membership Application Views
 # =============================================================================
-
-
-@login_required
-@discord_permission_required("membership_admin", raise_exception=True)
-@require_GET
-def membership_review_view(request: HttpRequest) -> HttpResponse:
-    """Display membership review showing all users with their ZP/ZR data.
-
-    Args:
-        request: The HTTP request.
-
-    Returns:
-        Rendered membership review page.
-
-    """
-    riders = get_membership_review_data()
-
-    # Get view toggle parameter (race or member)
-    current_view = request.GET.get("view", "race")
-    if current_view not in ("race", "member"):
-        current_view = "race"
-
-    # Get filter parameters
-    search_query = request.GET.get("q", "").strip()
-    gender_filter = request.GET.get("gender", "")
-    zp_category_filter = request.GET.get("zp_category", "")
-    country_filter = request.GET.get("country", "")
-    status_filter = request.GET.get("status", "active")  # Default to showing active members
-    guild_duration_filter = request.GET.get("guild_duration", "")
-
-    # Get sort parameters (default: name ascending)
-    sort_by = request.GET.get("sort", "name")
-    sort_dir = request.GET.get("dir", "asc")
-
-    # Collect unique values for filter dropdowns (before filtering)
-    zp_divs_present = sorted({r.zp_div for r in riders if r.zp_div})
-    zp_categories = [(div, ZP_DIV_TO_CATEGORY.get(div, str(div))) for div in zp_divs_present]
-
-    # Collect unique countries (code, name) tuples sorted by name
-    countries_present = sorted(
-        {(r.country, r.country_name) for r in riders if r.country and r.country_name},
-        key=lambda x: x[1],  # Sort by country name
-    )
-
-    # Apply search filter (by name, discord nickname, or zwid)
-    if search_query:
-        search_lower = search_query.lower()
-        riders = [
-            r
-            for r in riders
-            if search_lower in r.full_name.lower()
-            or search_lower in r.discord_nickname.lower()
-            or search_lower in r.zp_name.lower()
-            or search_lower in r.zr_name.lower()
-            or search_query in str(r.zwid)
-        ]
-
-    # Apply gender filter
-    if gender_filter:
-        riders = [r for r in riders if r.gender == gender_filter]
-
-    # Apply country filter
-    if country_filter:
-        riders = [r for r in riders if r.country == country_filter]
-
-    # Apply ZwiftPower category filter
-    if zp_category_filter:
-        try:
-            div_value = int(zp_category_filter)
-            riders = [r for r in riders if r.zp_div == div_value]
-        except ValueError:
-            pass
-
-    # Apply status filter
-    if status_filter == "active":
-        riders = [r for r in riders if r.is_active_member]
-    elif status_filter == "guild_only":
-        riders = [r for r in riders if r.in_guild and not r.in_zwiftpower and not r.in_zwiftracing and r.zwid == 0]
-    elif status_filter in ("both", "zp_only", "zr_only", "left", "none"):
-        riders = [r for r in riders if r.membership_status == status_filter]
-
-    # Apply guild duration filter
-    guild_duration_bounds = {
-        "lt30": (None, 30),
-        "lt60": (None, 60),
-        "lt90": (None, 90),
-        "lt120": (None, 120),
-        "lt1y": (None, 365),
-        "gt1y": (365, None),
-        "gt2y": (730, None),
-        "gt3y": (1095, None),
-        "gt4y": (1460, None),
-    }
-    if guild_duration_filter in guild_duration_bounds:
-        min_days, max_days = guild_duration_bounds[guild_duration_filter]
-        riders = [
-            r
-            for r in riders
-            if r.guild_membership_days is not None
-            and (min_days is None or r.guild_membership_days >= min_days)
-            and (max_days is None or r.guild_membership_days < max_days)
-        ]
-
-    # Apply sorting
-    reverse = sort_dir == "desc"
-    sort_keys = {
-        # Race profile sort keys
-        "name": lambda r: (r.full_name or r.discord_nickname).lower(),
-        "discord": lambda r: r.discord_nickname.lower(),
-        "zp_name": lambda r: r.zp_name.lower(),
-        "zr_name": lambda r: r.zr_name.lower(),
-        "zwid": lambda r: r.zwid,
-        "gender": lambda r: r.gender or "",
-        "verified": lambda r: r.zwid_verified,
-        "category": lambda r: r.zp_div or 0,
-        "results": lambda r: r.result_count,
-        "days": lambda r: r.days_since_result if r.days_since_result is not None else 9999,
-        # Member profile sort keys
-        "country": lambda r: r.country_name.lower(),
-        "city": lambda r: r.city.lower(),
-        "timezone": lambda r: r.timezone.lower(),
-        "birth_year": lambda r: r.birth_year or 0,
-        "trainer": lambda r: r.trainer.lower(),
-        "zp_left": lambda r: r.zp_date_left or datetime(1970, 1, 1, tzinfo=UTC),
-        "guild_nickname": lambda r: r.guild_nickname.lower(),
-        "guild_duration": lambda r: r.guild_membership_days if r.guild_membership_days is not None else -1,
-    }
-    if sort_by in sort_keys:
-        riders = sorted(riders, key=sort_keys[sort_by], reverse=reverse)
-
-    return render(
-        request,
-        "team/membership_review.html",
-        {
-            "riders": riders,
-            "search_query": search_query,
-            "gender_filter": gender_filter,
-            "zp_category_filter": zp_category_filter,
-            "country_filter": country_filter,
-            "status_filter": status_filter,
-            "guild_duration_filter": guild_duration_filter,
-            "zp_categories": zp_categories,
-            "countries": countries_present,
-            "sort_by": sort_by,
-            "sort_dir": sort_dir,
-            "current_view": current_view,
-        },
-    )
 
 
 @login_required

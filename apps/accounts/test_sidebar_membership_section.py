@@ -1,8 +1,8 @@
 """The Membership sidebar section must only be offered to people its pages accept.
 
-Every view it links to -- Registrations, Membership Review, Discord Review, Zwift Connections
-and Team Kit -- is ``@discord_permission_required("membership_admin", raise_exception=True)``,
-which 403s rather than redirecting. The section's condition was
+Every view it links to -- Registrations, Discord Review, Zwift Connections and Team Kit --
+is ``@discord_permission_required("membership_admin", raise_exception=True)``, which 403s
+rather than redirecting. The section's condition was
 ``is_membership_admin or is_any_captain``, so a team captain who was not also a membership
 admin was shown the whole menu and refused by every link in it.
 """
@@ -12,7 +12,6 @@ from django.urls import reverse
 
 SECTION_LINKS = (
     "team:application_list",
-    "team:membership_review",
     "team:discord_review",
     "team:zwift_connections",
 )
@@ -35,7 +34,7 @@ def _sidebar(client, user):
 
 @pytest.mark.django_db
 def test_a_captain_is_not_offered_the_membership_section(client, user_model):
-    """The bug: a captain saw five links and every one of them 403d."""
+    """The bug: a captain saw every link in this section and was refused by all of them."""
     captain = user_model.objects.create_user(
         username="captain",
         email="captain@example.test",

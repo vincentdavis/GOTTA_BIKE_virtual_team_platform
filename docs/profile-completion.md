@@ -117,6 +117,5 @@ Team members can view each other's profiles at `/user/profile/<user_id>/`. This 
 User names are clickable links to public profiles in:
 
 - Team roster page (`/team/roster/`)
-- Membership review tables (both race and member views)
 
 This allows team members to quickly look up information about their teammates from the roster.
