@@ -129,29 +129,15 @@ def test_a_rider_with_no_cached_stats_is_counted_even_though_they_have_no_card(
     body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "1 of 2 riders" in body
-    assert "no stats yet" in body
     assert "Not Yet Synced" not in body
 
 
 @pytest.mark.django_db
 def test_a_complete_roster_does_not_explain_itself(auth_client, roster_rider):
-    """The sentence is for a gap. With no gap it would be noise on every page load."""
+    """With nothing missing the header states one number, not two."""
     roster_rider(zwid=1001, name="Ada Racer")
 
     body = auth_client.get(reverse("team:roster")).content.decode()
 
     assert "1 rider " in body
-    assert "no stats yet" not in body
     assert "of 1 riders" not in body
-
-
-@pytest.mark.django_db
-def test_the_gap_offers_the_table_which_does_list_everyone(auth_client, roster_rider, zp_team_rider_factory):
-    """The two pages read different sources, which is exactly why the table is the answer here."""
-    roster_rider(zwid=1001, name="Ada Racer")
-    zp_team_rider_factory(zwid=1002, name="Not Yet Synced")
-
-    body = auth_client.get(reverse("team:roster")).content.decode()
-    gap = body.split("no stats yet", 1)[1].split("</p>", 1)[0]
-
-    assert f'href="{reverse("team:roster_table")}"' in gap

@@ -27,14 +27,6 @@
             no rider stats yet
           {% endif %}
         </p>
-        {% if unstatted_count %}
-          <p class="text-sm text-base-content/70">
-            {{ unstatted_count|intcomma }} rider{{ unstatted_count|pluralize }} on the team ha{{ unstatted_count|pluralize:"s,ve" }}
-            no stats yet, so {{ unstatted_count|pluralize:"it has,they have" }} no card here.
-            {% if team_size %}The <a class="link" href="{% url 'team:roster_table' %}">table view</a> lists everyone.{% endif %}
-          </p>
-        {% endif %}
-
         {% comment %}
           The table this page replaced is still one click away, and the link is not
           nostalgia: the table carries the category, FTP and W/kg distribution charts, which
