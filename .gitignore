@@ -176,3 +176,4 @@ cython_debug/
 .ai
 .junie
 apps/zwift/zwift_api_docs
+.mcp.json
