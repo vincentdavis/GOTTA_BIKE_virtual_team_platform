@@ -43,6 +43,15 @@ uv run ruff format .                           # Format code
 uv run granian gotta_bike_platform.wsgi:application --interface wsgi --host :: --port "${PORT:-8000}" --workers "${WEB_WORKERS:-2}" --blocking-threads "${WEB_BLOCKING_THREADS:-2}"
 ```
 
+## Git Remotes
+
+Two remotes, and only one of them deploys.
+
+- **`origin`** (`GOTTA_BIKE_virtual_team_platform`) — the working remote. Push here freely when asked.
+- **`THE_COALITION`** (`THE_COALITION_TEAM_APP`) — **what Railway deploys from.** Vincent pushes to it **manually, always**. Never push to it, and never delete the remote. A push here runs migrations against the production database, so the timing is his to choose, not something to fold into a catch-up push.
+
+The practical consequence: **pushing to `origin` deploys nothing.** Work can be committed, pushed and merged while production stays on whatever `THE_COALITION` last received — so "pushed" and "live" are different claims, and the remotes drift apart by design. Before saying a fix is in production, check `THE_COALITION/<branch>` rather than `origin/<branch>`, or confirm it in Logfire.
+
 ## Architecture
 
 ### Configuration
