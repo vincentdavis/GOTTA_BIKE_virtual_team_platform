@@ -168,7 +168,8 @@ class RaceReadyRecordForm(forms.ModelForm):
     #
     # Weight Light is a photo because it is the lightweight check; the others need something a
     # still image cannot prove. "Other" is open to all four, for evidence that is none of the
-    # named kinds -- it is still a file or a link, and still reviewed like the rest.
+    # named kinds -- neither a file nor a link; the rider describes it in the notes, and
+    # only an Admin may decide it (apps.team.services.review_requirements).
     MEDIA_TYPES_BY_VERIFY_TYPE: ClassVar[dict[str, tuple[str, ...]]] = {
         "weight_full": ("video", "link", "other"),
         "weight_light": ("photo", "other"),
@@ -351,27 +352,23 @@ class RaceReadyRecordForm(forms.ModelForm):
     def clean(self):
         """Validate form data.
 
+        Which evidence a record needs -- a file or a link, or for "Other" neither and a note
+        instead -- is ``RaceReadyRecord.clean()``, which this ModelForm runs straight after this
+        method, so the admin enforces the same rule. It used to be checked here as well, which
+        showed riders the same "provide a file or a URL" message twice on every refusal.
+
         Returns:
             The cleaned data.
 
-        Raises:
-            ValidationError: If validation fails.
-
         """
         cleaned_data = super().clean()
-        media_file = cleaned_data.get("media_file")
-        url = cleaned_data.get("url")
         verify_type = cleaned_data.get("verify_type")
+        media_type = cleaned_data.get("media_type")
         weight = cleaned_data.get("weight")
         height = cleaned_data.get("height")
 
-        # Require file or URL
-        if not media_file and not url:
-            raise forms.ValidationError("You must provide either a file upload or a URL (or both).")
-
         # The evidence must be a kind this verification accepts. Checked here, not just
         # narrowed in the picker, because the picker is JavaScript and the POST is not.
-        media_type = cleaned_data.get("media_type")
         allowed_media = self.MEDIA_TYPES_BY_VERIFY_TYPE.get(verify_type, ())
         if verify_type and media_type and media_type not in allowed_media:
             media_labels = dict(self.fields["media_type"].choices)

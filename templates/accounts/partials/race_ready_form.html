@@ -207,8 +207,17 @@
       </label>
     </div>
 
+    {% comment %}
+      "Other" is evidence that is neither a file nor a link, so choosing it hides the two
+      fields below and makes the note the evidence. The script also DISABLES them, so a file
+      picked before switching is not sent; the server refuses one regardless.
+    {% endcomment %}
+    <div id="other-evidence-hint" class="alert alert-info hidden" role="status">
+      <span>Other evidence isn't uploaded or linked. Describe it in the notes below &mdash; what it is and how a reviewer can check it.</span>
+    </div>
+
     <!-- Media File -->
-    <div class="form-control w-full">
+    <div id="media-file-field" class="form-control w-full">
       <label class="label" for="id_media_file">
         <span class="label-text">Upload File (optional)</span>
       </label>
@@ -242,7 +251,7 @@
     </div>
 
     <!-- URL -->
-    <div class="form-control w-full">
+    <div id="url-field" class="form-control w-full">
       <label class="label" for="id_url">
         <span class="label-text">URL (optional)</span>
       </label>
@@ -260,7 +269,9 @@
     <!-- Notes -->
     <div class="form-control w-full">
       <label class="label" for="id_notes">
-        <span class="label-text">Notes (optional)</span>
+        {# The script swaps these two when Other is chosen: the note is required then. #}
+        <span class="label-text" id="notes-label-optional">Notes (optional)</span>
+        <span class="label-text hidden" id="notes-label-required">Notes <span class="text-error">*</span></span>
       </label>
       {{ race_ready_form.notes }}
       {% if race_ready_form.notes.errors %}
@@ -364,6 +375,7 @@
               if (!allowedOptions.some(o => o.value === currentMediaValue)) {
                   mediaTypeSelect.value = allowedOptions[0]?.value || '';
               }
+              toggleEvidenceFields();
 
               // Show appropriate field and instructions based on selection
               if (value === 'weight_full' || value === 'weight_light') {
@@ -409,9 +421,39 @@
               }
           }
 
+          // "Other" evidence is neither a file nor a link: hide and DISABLE those two -- a disabled
+          // input is not submitted, so a file picked before switching never goes -- and make the
+          // note the evidence. Values are kept, so switching back restores what was there.
+          const mediaFileField = document.getElementById('media-file-field');
+          const urlField = document.getElementById('url-field');
+          const otherHint = document.getElementById('other-evidence-hint');
+          const notesInput = document.getElementById('id_notes');
+          const notesOptional = document.getElementById('notes-label-optional');
+          const notesRequired = document.getElementById('notes-label-required');
+
+          function toggleEvidenceFields() {
+              const isOther = mediaTypeSelect.value === 'other';
+              [mediaFileField, urlField].forEach(field => {
+                  if (!field) return;
+                  field.classList.toggle('hidden', isOther);
+                  field.querySelectorAll('input').forEach(input => { input.disabled = isOther; });
+              });
+              if (otherHint) otherHint.classList.toggle('hidden', !isOther);
+              if (notesInput) notesInput.required = isOther;
+              if (notesOptional) notesOptional.classList.toggle('hidden', isOther);
+              if (notesRequired) notesRequired.classList.toggle('hidden', !isOther);
+              // Re-run the size check below against the new state. An oversized file disables
+              // Submit; once Other has set that file aside, the rider must not be left stuck --
+              // and switching back must bring the check back. Dispatched rather than called,
+              // because that code is declared further down the script.
+              const fileInputEl = document.getElementById('id_media_file');
+              if (fileInputEl) fileInputEl.dispatchEvent(new Event('change'));
+          }
+
           // Run on page load and on change
           toggleFields();
           verifyTypeRadios.forEach(r => r.addEventListener('change', toggleFields));
+          mediaTypeSelect.addEventListener('change', toggleEvidenceFields);
 
           // Add input listeners for preview
           if (weightInput) {
@@ -463,7 +505,8 @@
                   clearBanner(submitError);
                   setSubmitEnabled(true);
 
-                  if (!(this.files && this.files[0])) {
+                  // A disabled input (evidence type "Other") is not sent, so it has no size to check.
+                  if (this.disabled || !(this.files && this.files[0])) {
                       fileInfo.classList.add('hidden');
                       return;
                   }

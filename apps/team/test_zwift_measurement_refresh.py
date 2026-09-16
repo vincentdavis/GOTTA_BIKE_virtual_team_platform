@@ -222,12 +222,12 @@ def _submit(client_, verify_type: str):
         The response.
 
     """
-    # A link where the verification takes one, else "Other" -- Weight Light is a photo or
-    # Other, never a link, and the form refuses a kind the verification does not accept.
+    # A link where the verification takes one, else a photo given by URL -- Weight Light is a
+    # photo or Other, never a link. Not Other: that carries no link at all, only a note.
     accepted = RaceReadyRecordForm.MEDIA_TYPES_BY_VERIFY_TYPE[verify_type]
     data = {
         "verify_type": verify_type,
-        "media_type": "link" if "link" in accepted else "other",
+        "media_type": "link" if "link" in accepted else "photo",
         "url": "https://example.test/evidence",
         "record_date": "2026-09-01",
     }

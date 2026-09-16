@@ -80,9 +80,9 @@ class RaceReadyRecord(models.Model):
             ("video", "Video"),
             ("photo", "Photo"),
             ("link", "Link"),
-            # Evidence that is none of the above -- another app's screen, a scale's own
-            # export. Still a file or a URL like the rest; which types each verification may
-            # use is RaceReadyRecordForm.MEDIA_TYPES_BY_VERIFY_TYPE.
+            # Evidence that is none of the above, and neither a file nor a link: the rider
+            # describes it in the notes (see clean()). Which types each verification may use
+            # is RaceReadyRecordForm.MEDIA_TYPES_BY_VERIFY_TYPE.
             ("other", "Other"),
         ],
         help_text="Type of media",
@@ -184,13 +184,32 @@ class RaceReadyRecord(models.Model):
         return f"{self.user.username} - {self.verify_type} ({self.date_created:%Y-%m-%d})"
 
     def clean(self) -> None:
-        """Validate that at least one of media_file or url is provided.
+        """Validate the evidence against its media type.
+
+        "Other" is evidence that is neither a file nor a link -- so it carries neither, and the
+        note is what the reviewer has to go on. Every other type needs a file or a link.
+
+        Only runs on a full clean (forms, the admin); a plain ``save()`` skips it, so rows
+        written before this rule are not broken by it -- though editing one in the admin will
+        ask for it to be put right.
 
         Raises:
-            ValidationError: If neither media_file nor url is provided.
+            ValidationError: For Other with a file, a link or no note; for any other type
+                with neither a file nor a link.
 
         """
         super().clean()
+        if self.media_type == "other":
+            errors = {}
+            if self.media_file:
+                errors["media_file"] = "Other evidence isn't uploaded. Describe it in the notes instead."
+            if self.url:
+                errors["url"] = "Other evidence isn't linked. Describe it in the notes instead."
+            if not (self.notes or "").strip():
+                errors["notes"] = "Describe the evidence. With no file or link, the note is what the reviewer goes on."
+            if errors:
+                raise ValidationError(errors)
+            return
         if not self.media_file and not self.url:
             raise ValidationError("You must provide either a file upload or a URL (or both).")
 
