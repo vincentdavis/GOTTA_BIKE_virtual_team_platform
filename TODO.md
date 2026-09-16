@@ -160,10 +160,23 @@
     "Remove" buttons in `zwift_status.html` / `application_zwift_status.html` are live UI — deleting them
     would have removed a working capability with nothing to replace it. They are not part of the flow that
     made this urgent.
-  - `manual_zwift_verify` / `application_manual_zwift_verify` kept as planned — the admin-reviewed fallback.
-- [ ] A membership application's zauth connection is keyed by the application UUID, so it does **not** carry
-  over to the User account created at first login (the reconcile ignores non-numeric ids by design). New
-  members currently have to connect again from their profile — decide whether to re-key on approval or leave as is.
+  - `manual_zwift_verify` / `application_manual_zwift_verify` were kept at the time as the admin-reviewed
+    fallback. *(Since removed — see the zauth-only item below.)*
+- [x] **Zwift verification is zauth-only.** The manual paths are gone: `manual_zwift_verify`,
+  `application_manual_zwift_verify`, the reviewer's "Pending ZWID Verifications" queue
+  (`zwid_verification_action_view`) and the registration staff grant (`application_zwid_admin_action_view`),
+  with their URLs, templates, registry entries and `apps.accounts.utils.parse_zwid_input`. Riders who cannot
+  connect are told to ask a team admin in Discord. The Django admin shows the Zwift verification fields
+  read-only. The profile "Remove" now disconnects zauth, so it sticks. Existing typed, never-verified zwids
+  were left as they are, and `User.VerificationMethod.ADMIN` stays for the rows that carry it.
+- [x] A membership application's zauth connection is keyed by the application UUID. *(Done — importing an
+  approved registration moves the link to the member through the service's `POST /api/zwift/oauth/relink`
+  (`apps.zwift.client.relink_connection`, `apps.accounts.services.carry_over_zwift_link`) and verifies them
+  with the service's zwid at once; the member's own link wins a conflict. Deleting a registration drops its
+  link first (`apps.team.services.release_application_zwift_links`).)*
+- [ ] **No staff tool revokes a rider's Zwift verification.** With the reviewer reject gone and the admin
+  fields read-only, a zauth verification only ends through the rider's own "Remove", account deletion, or a
+  disconnect made directly in the zauth service. Decide whether staff need a "disconnect this rider" action.
 
 ### Privacy & Data Protection (`/user/profile/mydata`)
 

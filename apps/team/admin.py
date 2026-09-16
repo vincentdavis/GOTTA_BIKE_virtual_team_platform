@@ -1,5 +1,6 @@
 """Admin configuration for team app."""
 
+import logfire
 from django.contrib import admin, messages
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
@@ -13,7 +14,11 @@ from apps.team.models import (
     TeamKit,
     TeamLink,
 )
-from apps.team.services import get_unified_team_roster
+from apps.team.services import (
+    ZWIFT_LINK_NOT_RELEASED_MESSAGE,
+    get_unified_team_roster,
+    release_application_zwift_links,
+)
 from apps.team.tasks import sync_discord_channels
 
 
@@ -331,6 +336,49 @@ class MembershipApplicationAdmin(admin.ModelAdmin):
 
         """
         return obj.is_complete
+
+    # A registration's Zwift link lives in the zauth service under the registration's UUID,
+    # and is unreachable once the row is gone -- so both delete paths drop it first.
+
+    def delete_model(self, request: HttpRequest, obj: MembershipApplication) -> None:
+        """Drop the registration's Zwift link, then delete it.
+
+        Args:
+            request: The HTTP request.
+            obj: The registration being deleted.
+
+        """
+        links = release_application_zwift_links(MembershipApplication.objects.filter(pk=obj.pk))
+        logfire.info(
+            "Membership application deleted in admin",
+            application_id=str(obj.pk),
+            deleted_by_id=request.user.pk,
+            zwift_link_removed=bool(links["removed"]),
+            zwift_link_failed=bool(links["failed"]),
+        )
+        if links["failed"]:
+            self.message_user(request, ZWIFT_LINK_NOT_RELEASED_MESSAGE, messages.WARNING)
+        super().delete_model(request, obj)
+
+    def delete_queryset(self, request: HttpRequest, queryset) -> None:
+        """Drop the Zwift links of the selected registrations, then delete them.
+
+        Args:
+            request: The HTTP request.
+            queryset: The registrations being deleted.
+
+        """
+        links = release_application_zwift_links(queryset)
+        logfire.info(
+            "Membership applications bulk deleted in admin",
+            count=queryset.count(),
+            deleted_by_id=request.user.pk,
+            zwift_links_removed=links["removed"],
+            zwift_links_failed=links["failed"],
+        )
+        if links["failed"]:
+            self.message_user(request, ZWIFT_LINK_NOT_RELEASED_MESSAGE, messages.WARNING)
+        super().delete_queryset(request, queryset)
 
 
 @admin.register(TeamKit)

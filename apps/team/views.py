@@ -20,7 +20,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
-from apps.accounts.utils import parse_zwid_input, resolve_country
+from apps.accounts.utils import resolve_country
 from apps.rider_data.services import last_successful_sync
 from apps.rider_data.tasks import refresh_zwift_profile
 from apps.team.forms import (
@@ -52,12 +52,14 @@ from apps.team.rosterv2 import (
 from apps.team.rosterv2 import search as roster_search
 from apps.team.services import (
     ZP_DIV_TO_CATEGORY,
+    ZWIFT_LINK_NOT_RELEASED_MESSAGE,
     can_view_verification_media,
     get_performance_review_data,
     get_unified_team_roster,
     log_record_view,
     purge_expired_verification_media,
     purge_rejected_verification_media,
+    release_application_zwift_links,
     squad_expiring_summary,
     verification_media_url,
 )
@@ -935,14 +937,6 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
         messages.error(request, "You don't have permission to view verification records.")
         return redirect("home")
 
-    # Query users with pending ZWID verification (zwid set but not verified)
-    pending_zwid_users = (
-        User.objects
-        .filter(zwid__isnull=False, zwid_verified=False)
-        .exclude(zwid=0)
-        .order_by("discord_username", "username")
-    )
-
     records = RaceReadyRecord.objects.select_related("user", "reviewed_by")
 
     # Get filter parameters
@@ -1053,84 +1047,8 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
             "status_choices": status_choices,
             "gender_choices": gender_choices,
             "can_verify": can_verify,
-            "pending_zwid_users": pending_zwid_users,
         },
     )
-
-
-@login_required
-@team_member_required()
-@require_POST
-def zwid_verification_action_view(request: HttpRequest, user_id: int) -> HttpResponse:
-    """Verify or reject a pending ZWID verification.
-
-    Args:
-        request: The HTTP request.
-        user_id: The ID of the user whose ZWID to verify/reject.
-
-    Returns:
-        Empty HttpResponse for HTMX row removal.
-
-    """
-    if not request.user.can_approve_verification and not request.user.is_superuser:
-        logfire.warning(
-            "Unauthorized ZWID verification action attempt",
-            user_id=request.user.id,
-            username=request.user.username,
-            target_user_id=user_id,
-        )
-        return HttpResponse(status=403)
-
-    target_user = get_object_or_404(User, pk=user_id)
-    action = request.POST.get("action")
-
-    if action == "verify":
-        # Allow admin to edit ZWID before verifying
-        edited_zwid = request.POST.get("zwid", "").strip()
-        if edited_zwid and edited_zwid.isdigit() and int(edited_zwid) > 0:
-            target_user.zwid = int(edited_zwid)
-        target_user.zwid_verified = True
-        target_user.zwid_verification_method = User.VerificationMethod.ADMIN
-        target_user.zwid_verified_at = timezone.now()
-        target_user.save(update_fields=["zwid", "zwid_verified", "zwid_verification_method", "zwid_verified_at"])
-        logfire.info(
-            "ZWID verified by admin",
-            admin_id=request.user.id,
-            admin_username=request.user.username,
-            target_user_id=target_user.id,
-            target_username=target_user.username,
-            zwid=target_user.zwid,
-        )
-    elif action == "reject":
-        old_zwid = target_user.zwid
-        old_method = target_user.zwid_verification_method
-        # Sever the zauth link first. Clearing the local fields alone is not
-        # enough: the hourly reconcile grants verification to every user the
-        # service still reports as connected, which would undo this rejection.
-        disconnected = zwift_client.disconnect(str(target_user.pk))
-        target_user.zwid = None
-        target_user.zwid_verified = False
-        target_user.zwid_verification_method = ""
-        target_user.zwid_verified_at = None
-        target_user.save(update_fields=["zwid", "zwid_verified", "zwid_verification_method", "zwid_verified_at"])
-        logfire.info(
-            "ZWID rejected by admin",
-            admin_id=request.user.id,
-            admin_username=request.user.username,
-            target_user_id=target_user.id,
-            target_username=target_user.username,
-            old_zwid=old_zwid,
-            old_method=old_method,
-            zauth_disconnected=disconnected,
-        )
-        if old_method == User.VerificationMethod.ZAUTH and not disconnected:
-            logfire.warning(
-                "ZWID rejected but the zauth link was not confirmed disconnected; "
-                "the reconcile task may re-verify this user",
-                target_user_id=target_user.id,
-            )
-
-    return HttpResponse("")
 
 
 @login_required
@@ -1967,9 +1885,7 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
                     "Admin message added to application",
                     application_id=str(pk),
                     applicant_discord_id=application.discord_id,
-                    applicant_name=application.display_name,
                     admin_id=request.user.id,
-                    admin_username=request.user.username,
                 )
                 messages.success(request, "Message sent to applicant.")
             else:
@@ -1988,11 +1904,9 @@ def membership_application_admin_view(request: HttpRequest, pk: uuid.UUID) -> Ht
                 "Membership application updated by admin",
                 application_id=str(pk),
                 applicant_discord_id=application.discord_id,
-                applicant_name=application.display_name,
                 old_status=old_status,
                 new_status=app.status,
                 admin_id=request.user.id,
-                admin_username=request.user.username,
             )
 
             # Send Discord notification based on what changed
@@ -2050,16 +1964,21 @@ def membership_application_delete_view(request: HttpRequest, pk: uuid.UUID) -> H
     """
     application = get_object_or_404(MembershipApplication, pk=pk)
     display_name = application.display_name
+    # The registration's Zwift link is keyed by its UUID in the zauth service, and nothing
+    # can reach it once this row is gone.
+    links = release_application_zwift_links(MembershipApplication.objects.filter(pk=application.pk))
     logfire.info(
         "Membership application deleted",
         application_id=str(pk),
         applicant_discord_id=application.discord_id,
-        applicant_name=display_name,
         deleted_by_id=request.user.id,
-        deleted_by_username=request.user.username,
+        zwift_link_removed=bool(links["removed"]),
+        zwift_link_failed=bool(links["failed"]),
     )
     application.delete()
     messages.success(request, f"Registration for {display_name} has been deleted.")
+    if links["failed"]:
+        messages.warning(request, ZWIFT_LINK_NOT_RELEASED_MESSAGE)
     return redirect("team:application_list")
 
 
@@ -2083,15 +2002,20 @@ def membership_application_bulk_delete_view(request: HttpRequest) -> HttpRespons
 
     applications = MembershipApplication.objects.filter(pk__in=selected_ids)
     count = applications.count()
+    # Only the registrations that can hold a Zwift link are asked about (see the helper).
+    links = release_application_zwift_links(applications)
     logfire.info(
         "Bulk delete membership applications",
         count=count,
         application_ids=selected_ids,
         deleted_by_id=request.user.id,
-        deleted_by_username=request.user.username,
+        zwift_links_removed=links["removed"],
+        zwift_links_failed=links["failed"],
     )
     applications.delete()
     messages.success(request, f"Deleted {count} registration{'' if count == 1 else 's'}.")
+    if links["failed"]:
+        messages.warning(request, ZWIFT_LINK_NOT_RELEASED_MESSAGE)
     return redirect("team:application_list")
 
 
@@ -2166,7 +2090,6 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
                 "Membership application updated by applicant",
                 application_id=str(pk),
                 applicant_discord_id=application.discord_id,
-                applicant_name=application.display_name,
                 is_complete=application.is_complete,
                 changed_field_count=len(changed_fields),
             )
@@ -2191,6 +2114,9 @@ def membership_application_public_view(request: HttpRequest, pk: uuid.UUID) -> H
     # the service. Skipped once verified so the public page isn't making a service
     # call on every load.
     if not application.zwift_verified:
+        if request.GET.get("status"):
+            # Back from Zwift's consent page: read afresh even if a read failed moments ago.
+            zwift_client.forget_status_failure(str(application.pk))
         _sync_application_zauth(application)
 
     return render(
@@ -2280,66 +2206,6 @@ def application_zauth_connect(request: HttpRequest, pk: uuid.UUID) -> HttpRespon
         messages.error(request, "Could not start the Zwift connection right now. Please try again later.")
         return redirect("team:application_public", pk=pk)
     return redirect(authorize_url)
-
-
-@require_http_methods(["GET", "POST"])
-def application_manual_zwift_verify(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
-    """Set Zwift ID on a membership application via ZwiftPower URL without marking as verified.
-
-    Auth is based on knowing the application UUID (no login required).
-
-    Args:
-        request: The HTTP request.
-        pk: UUID of the MembershipApplication.
-
-    Returns:
-        Rendered manual verification modal partial.
-
-    """
-    application = get_object_or_404(MembershipApplication, pk=pk)
-
-    if not application.is_editable:
-        return render(
-            request,
-            "team/partials/application_manual_zwift_verify_modal.html",
-            {"application": application, "error": "Application is no longer editable."},
-        )
-
-    error = None
-    if request.method == "POST":
-        entry = parse_zwid_input(request.POST.get("zwiftpower_url", ""))
-        zwid = entry.zwid
-
-        if zwid:
-            application.zwift_id = zwid
-            application.save(update_fields=["zwift_id"])
-            logfire.info(
-                "Manual ZWID set for membership application",
-                application_id=str(pk),
-                applicant_discord_id=application.discord_id,
-                zwid=zwid,
-            )
-            return render(
-                request,
-                "team/partials/application_manual_zwift_verify_modal.html",
-                {"application": application, "success": True, "zwid": zwid},
-            )
-        error = "Please enter a valid ZwiftPower profile URL or numeric Zwift ID."
-        logfire.warning(
-            "Invalid manual ZWID input for application",
-            application_id=str(pk),
-            # The ZWID they entered, rejected or not -- it is an id, and it is what answers
-            # "it would not take my ID". The shape stands in when they entered no number:
-            # this form is public, and the rest of what they type is free text.
-            entered_zwid=entry.entered,
-            input_form=entry.form,
-        )
-
-    return render(
-        request,
-        "team/partials/application_manual_zwift_verify_modal.html",
-        {"application": application, "error": error},
-    )
 
 
 def _get_filtered_guild_members(request: HttpRequest) -> dict:
@@ -2856,6 +2722,14 @@ def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
 def application_unverify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
     """Remove Zwift verification from a membership application.
 
+    Severs the registration's zauth link first: the public page re-reads the service on
+    every load while the registration is unverified, so clearing the local fields alone
+    would be undone the next time the page opened.
+
+    The local fields are only cleared once the service has confirmed there is no link
+    left. They are what tells a later deletion that this registration may hold one, so
+    clearing them while the link survived would leave it behind when the row goes.
+
     Args:
         request: The HTTP request.
         pk: UUID of the MembershipApplication.
@@ -2874,6 +2748,23 @@ def application_unverify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpRespo
             {"application": application},
         )
 
+    link = zwift_client.disconnect_link(str(application.pk))
+    if link not in (zwift_client.DisconnectOutcome.REMOVED, zwift_client.DisconnectOutcome.NO_LINK):
+        logfire.warning(
+            "Zwift removal refused for application: the link could not be confirmed removed",
+            application_id=str(pk),
+            applicant_discord_id=application.discord_id,
+            zwift_link_outcome=str(link),
+        )
+        return render(
+            request,
+            "team/partials/application_zwift_status.html",
+            {
+                "application": application,
+                "zwift_remove_error": "We couldn't reach Zwift to disconnect your account. Please try again later.",
+            },
+        )
+
     old_zwift_id = application.zwift_id
     application.zwift_id = ""
     application.zwift_verified = False
@@ -2883,63 +2774,12 @@ def application_unverify_zwift(request: HttpRequest, pk: uuid.UUID) -> HttpRespo
         application_id=str(pk),
         applicant_discord_id=application.discord_id,
         old_zwift_id=old_zwift_id,
+        zwift_link_removed=link is zwift_client.DisconnectOutcome.REMOVED,
     )
 
     return render(
         request,
         "team/partials/application_zwift_status.html",
-        {"application": application},
-    )
-
-
-@login_required
-@discord_permission_required("membership_admin", raise_exception=True)
-@require_POST
-def application_zwid_admin_action_view(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
-    """Verify or reject a pending ZWID on a membership application.
-
-    Args:
-        request: The HTTP request.
-        pk: UUID of the MembershipApplication.
-
-    Returns:
-        Rendered partial showing the updated ZWID status.
-
-    """
-    application = get_object_or_404(MembershipApplication, pk=pk)
-    action = request.POST.get("action")
-
-    if action == "verify":
-        edited_zwid = request.POST.get("zwift_id", "").strip()
-        if edited_zwid and edited_zwid.isdigit() and int(edited_zwid) > 0:
-            application.zwift_id = edited_zwid
-        application.zwift_verified = True
-        application.save(update_fields=["zwift_id", "zwift_verified"])
-        logfire.info(
-            "Application ZWID verified by admin",
-            application_id=str(pk),
-            admin_id=request.user.id,
-            admin_username=request.user.username,
-            discord_username=application.discord_username,
-            zwift_id=application.zwift_id,
-        )
-    elif action == "reject":
-        old_zwid = application.zwift_id
-        application.zwift_id = ""
-        application.zwift_verified = False
-        application.save(update_fields=["zwift_id", "zwift_verified"])
-        logfire.info(
-            "Application ZWID rejected by admin",
-            application_id=str(pk),
-            admin_id=request.user.id,
-            admin_username=request.user.username,
-            discord_username=application.discord_username,
-            old_zwid=old_zwid,
-        )
-
-    return render(
-        request,
-        "team/partials/application_zwid_status.html",
         {"application": application},
     )
 

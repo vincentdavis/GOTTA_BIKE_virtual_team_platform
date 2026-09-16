@@ -498,5 +498,5 @@ with grep during verification.
 | moderate | medium | Squad panel actions replace the whole panel via outerHTML from a control inside it — focus lost, outcome silent | `templates/events/_squad_manage_panel.html:46` | 4.1.3 Status Messages (AA) | 3 templates, 10 self-destroying controls |
 | moderate | trivial | Slot-modal server errors are written into a hidden div with no role=alert | `templates/events/availability_results.html:775` | 4.1.3 Status Messages (AA) | 1 file |
 | moderate | small | copyAsImage signals success/failure only by swapping an icon and a colour class, and disables the button mid-operation | `templates/shared/_copy_image_script.html:27` | 4.1.3 Status Messages (AA) | 1 shared partial, 2 call sites |
-| moderate | small | Verify/Reject ZWID swaps the row containing the button away to an empty response — focus destroyed, outcome never announced | `templates/team/partials/zwid_pending_section.html:65` | 4.1.3 Status Messages (AA) | 2 templates:… |
+| moderate | small | ~~Verify/Reject ZWID swaps the row containing the button away to an empty response — focus destroyed, outcome never announced~~ **Moot: the pending-ZWID queue and its partial were removed when Zwift verification became Zwift Link only.** | ~~`templates/team/partials/zwid_pending_section.html:65`~~ (deleted) | 4.1.3 Status Messages (AA) | 2 templates:… |
 

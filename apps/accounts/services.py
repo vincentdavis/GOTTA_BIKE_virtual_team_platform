@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -47,12 +48,15 @@ def get_approved_application(discord_id: str) -> MembershipApplication | None:
 
 # Field mapping from MembershipApplication to User
 # Format: (application_field, user_field, label, transform_func)
+#
+# The Zwift ID is deliberately absent. A registration's zwid is only worth anything as part
+# of its zauth link, so the link itself is moved (carry_over_zwift_link) and the member's
+# zwid then comes from the service. Copying the number across would either put an
+# unconfirmed claim on the account or stamp a verification this platform never made.
 FIELD_MAPPING: list[tuple[str, str, str, Callable | None]] = [
     ("first_name", "first_name", "First Name", None),
     ("last_name", "last_name", "Last Name", None),
     ("email", "email", "Email", None),
-    ("zwift_id", "zwid", "Zwift ID", lambda v: int(v) if v else None),
-    ("zwift_verified", "zwid_verified", "Zwift Verified", None),
     ("country", "country", "Country", None),
     ("timezone", "timezone", "Timezone", None),
     ("birth_year", "birth_year", "Birth Year", None),
@@ -65,6 +69,9 @@ FIELD_MAPPING: list[tuple[str, str, str, Callable | None]] = [
     ("strava_profile", "strava_url", "Strava Profile", None),
     ("tpv_profile_url", "tpv_profile_url", "TPV Profile URL", None),
 ]
+
+# The get_importable_fields key for the Zwift carry-over row. Not a field on either model.
+ZWIFT_LINK_KEY = "zwift_link"
 
 
 def _format_display_value(value: Any, field_name: str) -> str:
@@ -88,14 +95,177 @@ def _format_display_value(value: Any, field_name: str) -> str:
     return str(value)
 
 
-def get_importable_fields(application: MembershipApplication) -> dict[str, dict]:
-    """Return importable fields from application with their values.
+def _user_has_value(user: User, user_field: str) -> bool:
+    """Whether the member already has an answer that the import must not overwrite.
+
+    ``False`` is an answer ("No"): the only boolean imported, ``dual_recording``, is
+    nullable, so ``None`` is what unanswered looks like. Counting ``False`` as blank kept
+    re-offering -- and re-importing -- a "No" the member had already given, so the banner
+    never went away. A blank ``Country`` compares equal to ``""``, so it counts as
+    unanswered.
+
+    Args:
+        user: The member.
+        user_field: The User field to check.
+
+    Returns:
+        True when the field holds a value.
+
+    """
+    value = getattr(user, user_field, None)
+    return value is not None and value != ""
+
+
+# How long "this registration holds no Zwift link" is remembered. An approved registration
+# cannot connect (the connect view refuses once it is locked), so the answer does not go
+# stale in practice; the cache only spares the profile page a service call on every load for
+# members whose registration was verified by a retired path. A "yes" is never cached: the
+# import moves the link away, and the next check has to see that.
+REGISTRATION_NO_LINK_CACHE_SECONDS = 3600
+
+
+def _registration_link_cache_key(application: MembershipApplication) -> str:
+    """Build the cache key for a registration's "no Zwift link" answer.
+
+    Args:
+        application: The registration.
+
+    Returns:
+        The cache key.
+
+    """
+    return f"registration-zwift-link:v1:{application.pk}"
+
+
+def registration_zwift_link(application: MembershipApplication) -> str | None:
+    """Ask the service whether the registration holds a Zwift link, and for which zwid.
+
+    ``zwift_verified`` alone does not say so: registrations verified by the retired Sauce
+    password flow or by the retired staff grant carry the flag with no link behind it.
+
+    Args:
+        application: The registration.
+
+    Returns:
+        The linked zwid, ``""`` when linked but the service reported no zwid, or None when
+        there is no link -- or when the service could not say (unconfigured, unreachable),
+        since nothing can be moved then either.
+
+    """
+    from django.core.cache import cache
+
+    from apps.zwift import client as zwift_client
+
+    key = _registration_link_cache_key(application)
+    if cache.get(key) is False:
+        return None
+    status = zwift_client.get_connection_status(str(application.pk))
+    if status is None:
+        return None
+    if not status.get("connected"):
+        cache.set(key, False, REGISTRATION_NO_LINK_CACHE_SECONDS)
+        return None
+    return str(status.get("zwid") or "")
+
+
+def _logged_in_as_registrant(user: User, application: MembershipApplication) -> bool:
+    """Whether the member's account holds the Discord login that made the registration.
+
+    ``User.discord_id`` alone is not enough: it is editable in the Django admin (it is how an
+    account is moved to a rider's new Discord login), so a staff user could point their own
+    account at a registrant and collect that registrant's Zwift verification. The Discord
+    ``SocialAccount`` is written by the OAuth login and is read-only in the Django admin
+    (``SocialAccountAdmin`` in ``apps/accounts/admin.py``), so it is much harder to repoint.
+
+    What this does not prove: that the login in use right now is that Discord account (a
+    ``SocialAccount`` outlives the session that wrote it), or anything against somebody with
+    shell or database access, who can write the row directly.
+
+    Args:
+        user: The member.
+        application: The registration.
+
+    Returns:
+        True when the member's Discord social account has the registration's Discord ID.
+
+    """
+    from allauth.socialaccount.models import SocialAccount
+
+    if not application.discord_id:
+        return False
+    return SocialAccount.objects.filter(user=user, provider="discord", uid=application.discord_id).exists()
+
+
+def _carry_over_allowed(user: User, application: MembershipApplication) -> bool:
+    """Run the carry-over checks that need no call to the Zwift service.
+
+    Args:
+        user: The member.
+        application: Their approved registration.
+
+    Returns:
+        True when the registration is verified, the member is not zauth-verified, and the
+        member's account holds the registration's Discord login.
+
+    """
+    # A member who is already zauth-verified has their own link, and theirs always wins.
+    # Tying the offer to that is also what lets the import banner go away once they are.
+    if not application.zwift_verified or user.is_zauth_verified:
+        return False
+    return _logged_in_as_registrant(user, application)
+
+
+def _carry_over_zwid(user: User, application: MembershipApplication) -> str | None:
+    """Return the registration link's zwid when the import should move that link.
+
+    Args:
+        user: The member.
+        application: Their approved registration.
+
+    Returns:
+        The zwid (``""`` if the service reported none) when the carry-over is on offer,
+        otherwise None.
+
+    """
+    if not _carry_over_allowed(user, application):
+        return None
+    return registration_zwift_link(application)
+
+
+def can_carry_over_zwift(user: User, application: MembershipApplication) -> bool:
+    """Whether the registration holds a Zwift link worth moving to this member.
+
+    Offered only when the registration is verified, the service confirms it holds a link,
+    the member is not already zauth-verified, and the member's account holds the Discord
+    login that made the registration (see :func:`_logged_in_as_registrant` for what that
+    does and does not prove).
+
+    Args:
+        user: The member.
+        application: Their approved registration.
+
+    Returns:
+        True when the import should try to move the link.
+
+    """
+    return _carry_over_zwid(user, application) is not None
+
+
+def get_importable_fields(application: MembershipApplication, user: User) -> dict[str, dict]:
+    """Return what importing this registration would change on the member's profile.
+
+    Only fields the member has left blank are listed, because the import never overwrites.
+    The list therefore empties once everything has been imported, and the banner offering
+    the import goes with it.
 
     Args:
         application: The MembershipApplication to extract fields from.
+        user: The member the import would write to.
 
     Returns:
-        Dictionary mapping field names to {label, value, display_value, user_field}.
+        Dictionary mapping field names to {label, value, display_value, user_field}. The
+        Zwift carry-over, when offered, is the :data:`ZWIFT_LINK_KEY` entry; its
+        ``user_field`` is empty because it moves a link rather than copying a value.
 
     """
     result = {}
@@ -105,6 +275,8 @@ def get_importable_fields(application: MembershipApplication) -> dict[str, dict]
 
         # Skip empty values
         if value is None or value == "":
+            continue
+        if _user_has_value(user, user_field):
             continue
 
         # Transform the value if needed
@@ -121,11 +293,22 @@ def get_importable_fields(application: MembershipApplication) -> dict[str, dict]
             "user_field": user_field,
         }
 
+    link_zwid = _carry_over_zwid(user, application)
+    if link_zwid is not None:
+        result[ZWIFT_LINK_KEY] = {
+            "label": "Zwift Account",
+            "value": link_zwid,
+            "display_value": f"Connected, Zwift ID {link_zwid}" if link_zwid else "Connected",
+            "user_field": "",
+        }
+
     return result
 
 
 def import_application_to_user(user: User, application: MembershipApplication) -> list[str]:
     """Copy fields from application to user.
+
+    Never touches the Zwift fields; :func:`carry_over_zwift_link` deals with those.
 
     Args:
         user: The User to update.
@@ -145,16 +328,9 @@ def import_application_to_user(user: User, application: MembershipApplication) -
         if app_value is None or app_value == "":
             continue
 
-        # Get current user value
-        user_value = getattr(user, user_field, None)
-
         # Skip if user already has a value (don't overwrite)
-        if user_value is not None and user_value != "" and user_value is not False:
-            # Special handling for boolean fields - False is a valid value
-            if isinstance(user_value, bool) and user_value is False:
-                pass  # Continue to potentially overwrite
-            else:
-                continue
+        if _user_has_value(user, user_field):
+            continue
 
         # Transform the value if needed
         final_value = transform(app_value) if transform else app_value
@@ -179,6 +355,113 @@ def import_application_to_user(user: User, application: MembershipApplication) -
         )
 
     return imported_fields
+
+
+@dataclass(frozen=True)
+class ZwiftCarryOver:
+    """What :func:`carry_over_zwift_link` did.
+
+    Attributes:
+        outcome: ``"skipped"`` when there was nothing to move, otherwise the
+            :class:`apps.zwift.client.RelinkOutcome` value (``moved``, ``not_found``,
+            ``conflict``, ``error`` or ``unconfigured``).
+        verified: Whether the member is zauth-verified afterwards.
+        zwid: The member's zwid afterwards, when they are zauth-verified.
+
+    """
+
+    outcome: str
+    verified: bool = False
+    zwid: int | None = None
+
+
+def carry_over_zwift_link(
+    user: User, application: MembershipApplication, *, offered: bool | None = None
+) -> ZwiftCarryOver:
+    """Move the registration's Zwift link onto the member's account and verify them by it.
+
+    The service holds the link under the registration's UUID, because the registration came
+    before the account. This asks the service to re-key it to the member, then reads the
+    member's status back and applies it exactly as the ``/user/zauth/`` page does, so the
+    member is verified with the service's zwid straight away rather than at the next hourly
+    reconcile.
+
+    On a conflict the member's own link wins: the registration's link can never be used, so
+    it is dropped, and the member's own status is applied instead.
+
+    After an error or a "no link to move", the member's status is read back too. Both can
+    follow a move that did happen -- a response lost after the service committed it, or a
+    second submit finding the link already moved by the first -- and the read is what tells
+    the two apart. It never revokes on an unanswered read (``apply_status`` skips None).
+
+    Args:
+        user: The member.
+        application: Their approved registration.
+        offered: Whether the service confirmed, earlier in this request, that the registration
+            holds a link (``ZWIFT_LINK_KEY in get_importable_fields(...)``). Passing it saves a
+            second service call; the checks that need no call are made again regardless. When
+            None, the service is asked.
+
+    Returns:
+        A :class:`ZwiftCarryOver`.
+
+    """
+    from apps.zwift import client as zwift_client
+    from apps.zwift import verification
+
+    if offered is None:
+        offered = can_carry_over_zwift(user, application)
+    else:
+        offered = offered and _carry_over_allowed(user, application)
+    if not offered:
+        return ZwiftCarryOver("skipped", verified=user.is_zauth_verified)
+
+    if user.is_staff:
+        # The ownership check rests on a SocialAccount row, which staff with database or shell
+        # access can still write. A staff account collecting a registration's Zwift link is
+        # rare enough to be worth a look every time.
+        logfire.warning(
+            "Registration Zwift link carry-over for a staff account",
+            user_id=user.pk,
+            discord_id=user.discord_id,
+            application_id=str(application.pk),
+        )
+
+    result = zwift_client.relink_connection(str(application.pk), str(user.pk))
+    applied = ""
+    link_removed = None
+
+    if result.outcome in (zwift_client.RelinkOutcome.MOVED, zwift_client.RelinkOutcome.NOT_FOUND):
+        # The service just answered, and the member's link may be new, so a read that failed a
+        # moment ago must not stand in for the answer.
+        zwift_client.forget_status_failure(str(user.pk))
+
+    if result.outcome == zwift_client.RelinkOutcome.MOVED:
+        status = zwift_client.get_connection_status(str(user.pk))
+        if status is None and result.zwid:
+            # The relink response is the service's own statement that the link is now this
+            # member's, so it stands in when the status read straight after it fails.
+            status = {"connected": True, "zwid": result.zwid}
+        applied = verification.apply_status(user, status)
+    elif result.outcome == zwift_client.RelinkOutcome.CONFLICT:
+        link_removed = zwift_client.disconnect(str(application.pk))
+        applied = verification.sync_user_verification(user)
+    elif result.outcome in (zwift_client.RelinkOutcome.ERROR, zwift_client.RelinkOutcome.NOT_FOUND):
+        applied = verification.sync_user_verification(user)
+
+    verified = user.is_zauth_verified
+    logfire.info(
+        "Registration Zwift link carry-over",
+        user_id=user.pk,
+        discord_id=user.discord_id,
+        application_id=str(application.pk),
+        outcome=str(result.outcome),
+        verification_outcome=applied,
+        zwift_link_removed=link_removed,
+        verified=verified,
+        zwid=user.zwid if verified else None,
+    )
+    return ZwiftCarryOver(str(result.outcome), verified=verified, zwid=user.zwid if verified else None)
 
 
 def fetch_guild_members_from_discord(guild_id: str | int, bot_token: str) -> list[dict[str, Any]]:
@@ -329,7 +612,7 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
 
     from apps.accounts.models import GuildMember
     from apps.team.models import MembershipApplication
-    from apps.team.services import purge_user_verification_media
+    from apps.team.services import purge_user_verification_media, release_application_zwift_links
     from apps.zwift import client as zwift_client
 
     media = purge_user_verification_media(user)
@@ -338,16 +621,26 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
     # database can reach it once the row is gone.
     zauth_disconnected = None
     zauth_error = None
-    if zwift_client.is_configured():
-        try:
-            # False here means there was no link to remove, which is the ordinary case for a
-            # rider who never connected Zwift. Only the exception below is a failure -- do not
-            # collapse the two, or every such deletion reports itself as unfinished.
-            zauth_disconnected = bool(zwift_client.disconnect(str(user.pk)))
-        except Exception as exc:
-            zauth_disconnected = False
-            zauth_error = str(exc)
-            logfire.error("Could not disconnect Zwift on account deletion", user_id=user.pk, error=str(exc))
+    try:
+        link = zwift_client.disconnect_link(str(user.pk))
+    except Exception as exc:
+        link = zwift_client.DisconnectOutcome.FAILED
+        logfire.error("Could not disconnect Zwift on account deletion", user_id=user.pk, error=type(exc).__name__)
+    # NO_LINK is the ordinary case for a rider who never connected Zwift, not a failure -- do
+    # not collapse it into FAILED, or every such deletion reports itself as unfinished.
+    if link is zwift_client.DisconnectOutcome.REMOVED:
+        zauth_disconnected = True
+    elif link is zwift_client.DisconnectOutcome.NO_LINK:
+        zauth_disconnected = False
+    elif link is zwift_client.DisconnectOutcome.FAILED:
+        zauth_disconnected = False
+        zauth_error = "the Zwift service could not be reached"
+    elif user.zwid_verification_method == user.VerificationMethod.ZAUTH:
+        # Not configured here, yet the account says it was verified through a link, so a
+        # link probably exists in the service and nothing could ask for it to go.
+        zauth_error = "the Zwift service is not configured"
+    if zauth_error:
+        logfire.error("Could not disconnect Zwift on account deletion", user_id=user.pk, reason=zauth_error)
 
     # Neither of these is reached by the cascade. MembershipApplication has no FK to User
     # at all -- it is keyed by discord_id, and holds a complete second copy of the profile
@@ -356,10 +649,19 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
     # identity. Both are matched on discord_id as well as the FK, so an account that moved
     # to a new Discord login takes its older record with it.
     applications_deleted = 0
+    application_ids: list[str] = []
     guild_members_deleted = 0
+    application_links = {"attempted": 0, "removed": 0, "failed": 0}
     if user.discord_id:
-        applications_deleted = MembershipApplication.objects.filter(discord_id=user.discord_id).count()
-        MembershipApplication.objects.filter(discord_id=user.discord_id).delete()
+        applications = MembershipApplication.objects.filter(discord_id=user.discord_id)
+        # Kept for the audit: once the row is gone, its id is the only key to a link the
+        # service may still hold for it.
+        application_ids = sorted(str(pk) for pk in applications.values_list("pk", flat=True))
+        # A registration connects Zwift under its own UUID, so its link is separate from the
+        # account's and has to be dropped before the row that names it is gone.
+        application_links = release_application_zwift_links(applications)
+        applications_deleted = applications.count()
+        applications.delete()
         stale_members = GuildMember.objects.filter(Q(user=user) | Q(discord_id=user.discord_id))
     else:
         stale_members = GuildMember.objects.filter(user=user)
@@ -373,6 +675,9 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
         "verification_records": user.race_ready_records.count(),
         "event_signups": user.event_signups.count(),
         "membership_applications_deleted": applications_deleted,
+        # discord_id is unique on MembershipApplication, so this is at most one id: the one to
+        # look up in the Zwift service when application_zwift_links_failed is set.
+        "membership_application_ids": application_ids,
         "guild_members_deleted": guild_members_deleted,
         "media_purged": media["purged"],
         # Anything that failed is now genuinely orphaned, so the path is the only trace
@@ -380,6 +685,10 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
         "media_purge_failed": media["failed"],
         "orphaned_media_files": media["failed_files"],
         "zauth_disconnected": zauth_disconnected,
+        # Whether the account's own link may still be in the service, under user_id.
+        "account_zwift_link_failed": bool(zauth_error),
+        "application_zwift_links_removed": application_links["removed"],
+        "application_zwift_links_failed": application_links["failed"],
         "deleted_by_id": getattr(deleted_by, "pk", None),
         "self_serve": deleted_by is None or deleted_by.pk == user.pk,
     }
@@ -398,6 +707,8 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
         incomplete.append(f"{media['failed']} verification file(s) still in storage")
     if zauth_error:
         incomplete.append("the upstream Zwift link could not be dropped")
+    if application_links["failed"]:
+        incomplete.append("the Zwift link made from the membership registration could not be dropped")
     audit["complete"] = not incomplete
     audit["incomplete_reasons"] = incomplete
 

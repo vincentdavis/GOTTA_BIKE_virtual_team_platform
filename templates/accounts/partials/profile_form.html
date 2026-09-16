@@ -29,7 +29,7 @@
             </div>
         </div>
 
-        {% if user.zwid_verified and user.zwid %}
+        {% if user.has_accepted_zwid_verification and user.zwid %}
         <!-- Zwift Info -->
         <div class="border-t border-base-content/10 mt-4 pt-4">
             <div class="grid grid-cols-3 gap-4 text-sm">
@@ -294,7 +294,7 @@
         </button>
     </div>
 
-    {% if not user.zwid_verified %}
+    {% if not user.has_accepted_zwid_verification %}
     <!-- Zwift Verification Prompt -->
     <div class="alert alert-warning mt-4">
         <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">

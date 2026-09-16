@@ -3,6 +3,7 @@
 import json
 from collections import Counter
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 import logfire
 from constance import config
@@ -18,12 +19,12 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django_countries.fields import Country
+from django_htmx.http import HttpResponseClientRedirect
 
 from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm
 from apps.accounts.models import BlockedDiscordId, User
-from apps.accounts.services import delete_user_account
-from apps.accounts.utils import parse_zwid_input
+from apps.accounts.services import ZWIFT_LINK_KEY, delete_user_account
 from apps.rider_data.models import RiderProfile
 from apps.rider_data.tasks import refresh_zwift_profile, request_profile_refresh
 from apps.team.forms import RaceReadyRecordForm
@@ -36,6 +37,7 @@ from apps.team.services import (
     media_retention_rules,
     record_view_trail,
 )
+from apps.zwift import client as zwift_client
 from apps.zwift import profile_fields
 
 # How recently the Zwift Racing data must have been fetched before the profile
@@ -96,7 +98,7 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
     zr_data = None
     zr_last_updated = None
     zr_can_refresh = False
-    if user.zwid_verified and user.zwid:
+    if user.has_accepted_zwid_verification and user.zwid:
         zp_rider = ZPTeamRiders.objects.filter(zwid=user.zwid).first()
         if zp_rider:
             # Use divw for females, div for everyone else
@@ -128,13 +130,6 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
             # No record yet — allow an initial fetch.
             zr_can_refresh = True
 
-    # Official Zwift OAuth (zauth) connection status — independent of zwid_verified.
-    from apps.zwift import client as zwift_client
-
-    zauth_configured = zwift_client.is_configured()
-    zauth = zwift_client.get_connection_status(str(user.pk)) if zauth_configured else None
-    zauth_uuid = (zauth or {}).get("zwift_user_id") or ""
-
     return {
         "user": user,
         "zp_data": zp_data,
@@ -142,7 +137,33 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
         "zr_last_updated": zr_last_updated,
         "zr_can_refresh": zr_can_refresh,
         "zr_refresh_error": zr_refresh_error,
+        **_zauth_status_context(user),
+    }
+
+
+def _zauth_status_context(user: User) -> dict:
+    """Build the Zwift Link (zauth) part of the ``zwift_status.html`` context.
+
+    Split out so the profile edit page can show the connection without also taking the
+    ZwiftPower / Zwift Racing cards, which it has never shown (its "Your Racing Data" card
+    covers them).
+
+    Args:
+        user: The profile owner (the requesting user).
+
+    Returns:
+        The ``zauth_*`` context keys.
+
+    """
+    # The live service view of the Zwift OAuth (zauth) connection, which is what verification
+    # is now made from. Read separately because the stored flag can lag it by up to an hour.
+    zauth_configured = zwift_client.is_configured()
+    zauth = zwift_client.get_connection_status(str(user.pk)) if zauth_configured else None
+    zauth_uuid = (zauth or {}).get("zwift_user_id") or ""
+    return {
         "zauth_configured": zauth_configured,
+        # A failed read is not "not connected": the block says it could not check instead.
+        "zauth_status_unknown": zauth_configured and zauth is None,
         "zauth_connected": bool(zauth and zauth.get("connected")),
         "zauth_zwid": (zauth or {}).get("zwid"),
         "zauth_connected_at": (zauth or {}).get("connected_at"),
@@ -153,9 +174,10 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
 def _rider_profile_for(profile_user):
     """Return the cached RiderProfile backing the consolidated card, or None.
 
-    Gated on the SAME verification state the ZwiftPower and ZwiftRacing cards used, and
-    deliberately not on anything in the profile itself. RiderProfile carries no verification
-    state by design, and ``payload["zwift_connection"]["status"]`` is not a stand-in for it:
+    Gated on the SAME verification state the ZwiftPower and ZwiftRacing cards used (read
+    through the cutover policy), and deliberately not on anything in the profile itself.
+    RiderProfile carries no verification state by design, and
+    ``payload["zwift_connection"]["status"]`` is not a stand-in for it:
     it reports whether a Zwift account exists service-wide, not whether this rider is linked
     to us. Reading it here would show a card for someone who had disconnected.
 
@@ -172,7 +194,7 @@ def _rider_profile_for(profile_user):
         been synced yet.
 
     """
-    if not (profile_user.zwid_verified and profile_user.zwid):
+    if not (profile_user.has_accepted_zwid_verification and profile_user.zwid):
         return None
     return RiderProfile.objects.filter(zwid=profile_user.zwid).first()
 
@@ -251,7 +273,7 @@ def refresh_rider_data(request: HttpRequest, user_id: int) -> HttpResponse:
         context = _rider_card_context(profile_user, check=check)
         return render(request, "accounts/partials/rider_profile_card.html", context)
 
-    if not (profile_user.zwid_verified and profile_user.zwid):
+    if not (profile_user.has_accepted_zwid_verification and profile_user.zwid):
         # No button is rendered in this state, so this is a tampered or stale POST. Say so
         # plainly rather than triggering a refresh for a zwid nobody has confirmed.
         return render(
@@ -469,7 +491,7 @@ def refresh_zr(request: HttpRequest) -> HttpResponse:
 
     user = request.user
     refresh_error = False
-    if user.zwid_verified and user.zwid:
+    if user.has_accepted_zwid_verification and user.zwid:
         zr_rider = ZRRider.objects.filter(zwid=user.zwid).first()
         recently_updated = zr_rider is not None and (timezone.now() - zr_rider.date_modified) < ZR_REFRESH_MIN_AGE
         if not recently_updated:
@@ -750,7 +772,7 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
     # Recent results still come from ZwiftPower: they are race records, not rider attributes,
     # so the consolidated RiderProfile card cannot supply them and this query stays.
     recent_results = []
-    if profile_user.zwid_verified and profile_user.zwid:
+    if profile_user.has_accepted_zwid_verification and profile_user.zwid:
         recent_results = ZPRiderResults.objects.filter(zwid=profile_user.zwid).select_related("event")[:5]
 
     # Get YouTube videos from database (synced via background task)
@@ -850,14 +872,15 @@ def profile_edit(request: HttpRequest) -> HttpResponse:
     else:
         form = ProfileForm(instance=request.user)
 
-    # Check for approved MembershipApplication to import
+    # Check for approved MembershipApplication to import. The banner only shows while the
+    # import would still change something -- a blank field to fill, or a Zwift link to move
+    # to a member who is not yet zauth-verified -- so it does not stay up for good.
     pending_application = None
     importable_fields = None
     if request.user.discord_id:
         pending_application = get_approved_application(request.user.discord_id)
         if pending_application:
-            importable_fields = get_importable_fields(pending_application)
-            # Only show import banner if there are fields to import
+            importable_fields = get_importable_fields(pending_application, request.user)
             if not importable_fields:
                 pending_application = None
 
@@ -865,6 +888,7 @@ def profile_edit(request: HttpRequest) -> HttpResponse:
         "form": form,
         "pending_application": pending_application,
         "importable_fields": importable_fields,
+        **_carry_over_flags(importable_fields),
         # The same cached row the public profile shows, so a rider can see what the rest of
         # the team sees about them. Read-only: nothing on this page edits it, and the sync
         # would overwrite an edit on its next run anyway.
@@ -875,7 +899,30 @@ def profile_edit(request: HttpRequest) -> HttpResponse:
         template = "accounts/partials/profile_form.html"
     else:
         template = "accounts/profile_edit.html"
+        # The full page includes the Zwift status partial. It gets the Zwift Link block the
+        # "Remove" swap renders too, but not the rating cards, which this page never showed.
+        context = {**_zauth_status_context(request.user), **context}
     return render(request, template, context)
+
+
+def _carry_over_flags(importable_fields: dict | None) -> dict:
+    """Say whether an import would move the registration's Zwift link, and whether that is all.
+
+    The import banner and the confirmation page word themselves by this: "auto-fill your
+    profile" is wrong when the Zwift link is the only thing left to import.
+
+    Args:
+        importable_fields: The :func:`get_importable_fields` result, or None.
+
+    Returns:
+        ``offers_zwift_carry_over`` and ``offers_only_zwift_carry_over``.
+
+    """
+    offers = bool(importable_fields and ZWIFT_LINK_KEY in importable_fields)
+    return {
+        "offers_zwift_carry_over": offers,
+        "offers_only_zwift_carry_over": offers and len(importable_fields) == 1,
+    }
 
 
 @login_required
@@ -956,7 +1003,7 @@ def import_application_view(request: HttpRequest, application_id: str) -> HttpRe
 
     from django.shortcuts import get_object_or_404
 
-    from apps.accounts.services import get_importable_fields, import_application_to_user
+    from apps.accounts.services import carry_over_zwift_link, get_importable_fields, import_application_to_user
     from apps.team.models import MembershipApplication
 
     # Parse UUID
@@ -974,8 +1021,9 @@ def import_application_view(request: HttpRequest, application_id: str) -> HttpRe
     # Get the application
     application = get_object_or_404(MembershipApplication, pk=app_uuid)
 
-    # Security check: verify application belongs to this user
-    if application.discord_id != request.user.discord_id:
+    # Security check: verify application belongs to this user. A blank discord_id on both
+    # sides (an account without Discord, a registration added in the admin) is not a match.
+    if not request.user.discord_id or application.discord_id != request.user.discord_id:
         logfire.warning(
             "User attempted to import application belonging to another user",
             user_id=request.user.id,
@@ -997,21 +1045,36 @@ def import_application_view(request: HttpRequest, application_id: str) -> HttpRe
         return redirect("accounts:profile_edit")
 
     # Get importable fields
-    importable_fields = get_importable_fields(application)
+    importable_fields = get_importable_fields(application, request.user)
 
     if not importable_fields:
         messages.info(request, "No new data to import from your registration.")
         return redirect("accounts:profile_edit")
 
+    carry_over = _carry_over_flags(importable_fields)
+
     if request.method == "POST":
         # Perform the import
         imported_fields = import_application_to_user(request.user, application)
+        # The offer was decided a moment ago by get_importable_fields, which asked the service;
+        # passing it on saves asking again while the member waits.
+        zwift = carry_over_zwift_link(request.user, application, offered=carry_over["offers_zwift_carry_over"])
 
         if imported_fields:
             field_list = ", ".join(imported_fields)
             messages.success(request, f"Successfully imported: {field_list}")
-        else:
+        elif zwift.outcome == "skipped":
             messages.info(request, "No new data was imported (fields already filled).")
+
+        zwift_message = _ZWIFT_CARRY_OVER_MESSAGES.get(zwift.outcome)
+        if zwift.verified and zwift.outcome in _VERIFIED_MEANS_MOVED:
+            # Said from where the member ended up, not from the relink's answer: a response lost
+            # after the service moved the link, or a second submit finding it already gone,
+            # reads as a failure but leaves the member verified.
+            messages.success(request, f"Your Zwift account (Zwift ID {zwift.zwid}) is now linked to your profile.")
+        elif zwift_message:
+            level, text = zwift_message
+            messages.add_message(request, level, text)
 
         return redirect("accounts:profile_edit")
 
@@ -1022,89 +1085,44 @@ def import_application_view(request: HttpRequest, application_id: str) -> HttpRe
         {
             "application": application,
             "importable_fields": importable_fields,
+            **carry_over,
         },
     )
 
 
-@login_required
-@require_http_methods(["GET", "POST"])
-def manual_zwift_verify(request: HttpRequest) -> HttpResponse:
-    """Allow user to set their ZWID via ZwiftPower profile URL without marking as verified.
+# The relink outcomes after which a verified member got there through the registration's link.
+# A conflict is not one of them: the member was verified by their own, different, account.
+_VERIFIED_MEANS_MOVED = frozenset({"moved", "not_found", "error"})
 
-    A rider who changes their ZWID here loses any existing verification: the flag
-    asserts that *this* Zwift ID was checked, so it cannot survive being repointed
-    at a different one (a verified rider could otherwise claim a teammate's zwid and
-    have their racing data show under their own identity). For a zauth-connected
-    rider the clear is temporary -- the hourly reconcile re-grants verification and
-    restores the official zwid, which is the intended self-heal.
-
-    Args:
-        request: The HTTP request.
-
-    Returns:
-        Rendered manual verification modal partial.
-
-    """
-    error = None
-    if request.method == "POST":
-        entry = parse_zwid_input(request.POST.get("zwiftpower_url", ""))
-        zwid = entry.zwid
-
-        if zwid:
-            zwid_changed = request.user.zwid != zwid
-            previous_zwid = request.user.zwid if zwid_changed else None
-            cleared_method = request.user.zwid_verification_method if zwid_changed else ""
-            cleared_verification = zwid_changed and request.user.zwid_verified
-            request.user.zwid = zwid
-            update_fields = ["zwid"]
-            if zwid_changed:
-                # The verification is bound to the zwid it checked, so a new zwid
-                # invalidates it. Written in the same save as the zwid itself: the
-                # two must never be observable out of step.
-                request.user.zwid_verified = False
-                request.user.zwid_verification_method = ""
-                request.user.zwid_verified_at = None
-                update_fields += ["zwid_verified", "zwid_verification_method", "zwid_verified_at"]
-            request.user.save(update_fields=update_fields)
-            if zwid_changed:
-                # Required verification types are keyed on zwid (ZPTeamRiders -> ZP
-                # category), so a new zwid can change race-ready status. is_race_ready
-                # is a cache with no signal behind it, so refresh it here rather than
-                # leaving it stale until the next sweep.
-                request.user.refresh_race_ready()
-            logfire.info(
-                "Manual ZWID set via verification page",
-                user_id=request.user.id,
-                discord_id=request.user.discord_id,
-                zwid=zwid,
-                zwid_changed=zwid_changed,
-                # Both ends of the move. One zwid alone cannot answer "whose results did
-                # this account show before?", which is the question this path invites.
-                previous_zwid=previous_zwid,
-                verification_cleared=cleared_verification,
-                cleared_method=cleared_method,
-            )
-            return render(
-                request,
-                "accounts/partials/manual_zwift_verify_modal.html",
-                {"success": True, "zwid": zwid},
-            )
-        error = "Please enter a valid ZwiftPower profile URL or numeric Zwift ID."
-        logfire.warning(
-            "Invalid manual ZWID input",
-            user_id=request.user.id,
-            # The ZWID they entered, rejected or not -- it is an id, and it is what answers
-            # "it would not take my ID". The shape stands in when they entered no number:
-            # the box takes anything, and the rest of what they type is free text.
-            entered_zwid=entry.entered,
-            input_form=entry.form,
-        )
-
-    return render(
-        request,
-        "accounts/partials/manual_zwift_verify_modal.html",
-        {"error": error},
-    )
+# What the member is told after the import tried to move their registration's Zwift link, when
+# they did not end up verified by it; that case names the zwid and is written in the view.
+_ZWIFT_CARRY_OVER_MESSAGES = {
+    "moved": (
+        messages.INFO,
+        "Your registration's Zwift connection was moved to your account. "
+        "Your profile will show it as verified once the Zwift service confirms it.",
+    ),
+    "conflict": (
+        messages.WARNING,
+        "Your account is already linked to a different Zwift account, "
+        "so the Zwift connection on your registration was not used.",
+    ),
+    # The offer was only made after the service confirmed the link, so this is either a race
+    # or a zauth deploy that predates the relink endpoint (which answers 404 too). The member's
+    # way forward is the same for both.
+    "not_found": (
+        messages.WARNING,
+        "We couldn't find the Zwift connection on your registration to move. Please connect Zwift from your profile.",
+    ),
+    "error": (
+        messages.WARNING,
+        "We couldn't move the Zwift connection from your registration. Please connect Zwift from your profile.",
+    ),
+    "unconfigured": (
+        messages.WARNING,
+        "We couldn't move the Zwift connection from your registration. Please connect Zwift from your profile.",
+    ),
+}
 
 
 ZAUTH_BANNER_DISMISSED_KEY = "zauth_banner_dismissed"
@@ -1135,16 +1153,23 @@ def dismiss_zauth_banner(request: HttpRequest) -> HttpResponse:
 def unverify_zwift(request: HttpRequest) -> HttpResponse:
     """Remove Zwift verification from user's account.
 
+    Severs the zauth connection first. Verification now only comes from that connection,
+    and the hourly reconcile (and every ``/user/zauth/`` visit) re-grants it to anyone the
+    service still reports as connected, so clearing the local fields alone would not stick.
+
+    So nothing is cleared unless the service has confirmed there is no link left: when it
+    could not be reached -- or is not configured here and the verification came from a
+    link -- the rider is told to try again and keeps the verification. Clearing it anyway
+    would show them "removed" while the link, and the reconcile re-granting from it, stayed.
+    The registration's own "Remove" (``application_unverify_zwift``) refuses the same way.
+
     Clears the provenance (``zwid_verification_method`` / ``zwid_verified_at``) along
-    with the flag: they describe a verification that no longer exists, and the ZWID
-    review page displays "verified at" next to the status, so a stale timestamp reads
+    with the flag: they describe a verification that no longer exists, and the Zwift
+    connections report shows "verified on" next to the method, so a stale timestamp reads
     as a verification the rider has actually removed.
 
     Dropping the ZWID also changes which verifications race-ready requires, so the cached
     flag is recomputed and the Discord role moved with it.
-
-    This does not sever the zauth connection, so for a connected rider the hourly
-    reconcile re-grants it -- deliberate, and unchanged here.
 
     Args:
         request: The HTTP request.
@@ -1158,6 +1183,27 @@ def unverify_zwift(request: HttpRequest) -> HttpResponse:
     # loss it had nothing to do with.
     was_race_ready = request.user.calculate_race_ready()
     old_zwid = request.user.zwid
+    # A boolean rather than the method itself: production Logfire scrubs any value containing
+    # "auth", which is the one method this log exists to count.
+    verified_by_zwift_link = request.user.zwid_verification_method == User.VerificationMethod.ZAUTH
+
+    link = zwift_client.disconnect_link(str(request.user.pk))
+    link_unconfirmed = link is zwift_client.DisconnectOutcome.FAILED or (
+        link is zwift_client.DisconnectOutcome.UNCONFIGURED and verified_by_zwift_link
+    )
+    if link_unconfirmed:
+        logfire.warning(
+            "Zwift verification removal refused: the Zwift link could not be confirmed removed",
+            user_id=request.user.pk,
+            zwift_link_outcome=str(link),
+            verified_by_zwift_link=verified_by_zwift_link,
+        )
+        context = _zwift_status_swap_context(request)
+        context["zwift_remove_error"] = (
+            "We couldn't reach Zwift to disconnect your account, so your verification has not "
+            "been removed. Please try again later."
+        )
+        return render(request, "accounts/partials/zwift_status.html", context)
 
     request.user.zwid = None
     request.user.zwid_verified = False
@@ -1187,15 +1233,37 @@ def unverify_zwift(request: HttpRequest) -> HttpResponse:
         user_id=request.user.pk,
         discord_id=request.user.discord_id,
         old_zwid=old_zwid,
+        verified_by_zwift_link=verified_by_zwift_link,
+        zwift_link_removed=link is zwift_client.DisconnectOutcome.REMOVED,
+        zwift_link_outcome=str(link),
         was_race_ready=was_race_ready,
         is_race_ready=is_race_ready,
     )
 
-    return render(
-        request,
-        "accounts/partials/zwift_status.html",
-        {"user": request.user},
-    )
+    context = _zwift_status_swap_context(request)
+    # The swap replaces the button that had focus, so say what happened (role="status").
+    context["zwift_removed"] = True
+    return render(request, "accounts/partials/zwift_status.html", context)
+
+
+def _zwift_status_swap_context(request: HttpRequest) -> dict:
+    """Build the context for re-rendering ``zwift_status.html`` in place after a "Remove".
+
+    The partial is on two pages. The profile shows the ZwiftPower / Zwift Racing cards in it;
+    the edit page never has (its "Your Racing Data" card covers them), so a swap there gets the
+    Zwift Link block only, as the edit page itself does.
+
+    Args:
+        request: The HTMX request; its ``HX-Current-URL`` says which page it came from.
+
+    Returns:
+        The partial's context.
+
+    """
+    current_path = urlsplit(getattr(getattr(request, "htmx", None), "current_url_abs_path", None) or "").path
+    if current_path == reverse("accounts:profile_edit"):
+        return {"user": request.user, **_zauth_status_context(request.user)}
+    return _build_zwift_status_context(request.user)
 
 
 @login_required
@@ -1210,12 +1278,20 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
         Redirect to profile or rendered partial for HTMX.
 
     """
+    if not request.user.has_accepted_zwid_verification:
+        # The page hides the form in this state, so this is a stale tab or a hand-made POST.
+        # The records are evidence about a Zwift account, and there is none confirmed yet.
+        logfire.warning("Race ready submission refused: Zwift account not verified", user_id=request.user.id)
+        messages.error(request, "Connect your Zwift account before submitting a verification record.")
+        if request.headers.get("HX-Request"):
+            return HttpResponseClientRedirect(reverse("accounts:verification"))
+        return redirect("accounts:verification")
+
     # Get allowed verification types to validate and filter form choices
     allowed_types = get_user_verification_types(request.user)
     logfire.info(
         "Race ready form submission attempt",
         user_id=request.user.id,
-        discord_username=request.user.discord_username,
         verify_type=request.POST.get("verify_type"),
         has_media_file=bool(request.FILES.get("media_file")),
         has_url=bool(request.POST.get("url")),
@@ -1234,7 +1310,6 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
         logfire.info(
             "Race ready record created",
             user_id=request.user.id,
-            discord_username=request.user.discord_username,
             record_id=record.id,
             verify_type=record.verify_type,
         )
@@ -1289,7 +1364,6 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
     logfire.warning(
         "Race ready form validation failed",
         user_id=request.user.id,
-        discord_username=request.user.discord_username,
         verify_type=request.POST.get("verify_type"),
         form_errors=dict(form.errors),
     )
@@ -1586,10 +1660,39 @@ def compliance_delete_user(request: HttpRequest) -> HttpResponse:
         messages.warning(
             request,
             f"Deleted the account for {label}, but the erasure did not finish: "
-            f"{'; '.join(result['incomplete_reasons'])}. This needs finishing by hand — "
-            f"the file paths are in the deletion log entry.",
+            f"{'; '.join(result['incomplete_reasons'])}. This needs finishing by hand. "
+            f"{_erasure_follow_up(result)}",
         )
     return redirect("config_section_page", section_key="compliance")
+
+
+# The Logfire entry delete_user_account writes when an erasure did not finish.
+_UNFINISHED_ERASURE_LOG = "User account deleted, but the erasure did not finish"
+
+
+def _erasure_follow_up(result: dict) -> str:
+    """Say what to look up to finish an unfinished erasure, reason by reason.
+
+    A single fixed pointer ("the file paths are in the deletion log entry") was wrong for
+    everything but the files: a Zwift link left in the service is found by an id, not a path.
+
+    Args:
+        result: The :func:`delete_user_account` audit.
+
+    Returns:
+        A sentence naming, for each thing left behind, what identifies it and where.
+
+    """
+    where = []
+    if result.get("media_purge_failed"):
+        where.append("the file paths are under orphaned_media_files")
+    if result.get("account_zwift_link_failed"):
+        where.append(f"the account's Zwift link is held in the Zwift service under user id {result['user_id']}")
+    if result.get("application_zwift_links_failed"):
+        ids = ", ".join(result.get("membership_application_ids") or []) or "(see membership_application_ids)"
+        where.append(f"the registration's Zwift link is held in the Zwift service under registration id {ids}")
+    details = "; ".join(where) or "the details are there"
+    return f'The Logfire error "{_UNFINISHED_ERASURE_LOG}" records it: {details}.'
 
 
 @login_required

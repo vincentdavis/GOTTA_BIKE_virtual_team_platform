@@ -12,7 +12,15 @@
         </svg>
         <div>
             <h3 class="font-bold">Import Registration Data</h3>
+            {% if offers_only_zwift_carry_over %}
+            {# Nothing is left to fill, so "auto-fill your profile" would promise nothing. #}
+            <p class="text-sm">Your approved registration is connected to Zwift. Import it to move that connection to your account.</p>
+            {% else %}
             <p class="text-sm">We found your approved membership registration. Import this data to auto-fill your profile.</p>
+            {% if offers_zwift_carry_over %}
+            <p class="text-sm">It also moves your registration's Zwift connection to your account.</p>
+            {% endif %}
+            {% endif %}
         </div>
         <a href="{% url 'accounts:import_application' pending_application.pk %}" class="btn btn-sm btn-primary">
             Review & Import

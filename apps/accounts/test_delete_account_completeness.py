@@ -13,11 +13,29 @@ that the shortfall is visible, which is what these tests hold in place.
 
 from unittest.mock import patch
 
+import httpx
 import pytest
 from django.contrib.messages import get_messages
 from django.urls import reverse
 
 from apps.accounts.services import delete_user_account
+from gotta_bike_platform.config import settings as config
+
+DISCONNECT_URL = "http://svc.internal:8000/api/zwift/oauth/disconnect"
+
+
+@pytest.fixture
+def configured(monkeypatch):
+    """Configure the real zauth client; each test patches ``httpx.post`` to answer."""
+    monkeypatch.setattr(config, "zwift_api_base_url", "http://svc.internal:8000")
+    monkeypatch.setattr(config, "zwift_app_api_key", "app-key-123")
+
+
+def _disconnect_response(status_code, body=None):
+    request = httpx.Request("POST", DISCONNECT_URL)
+    if body is None:
+        return httpx.Response(status_code, request=request)
+    return httpx.Response(status_code, json=body, request=request)
 
 
 @pytest.fixture
@@ -40,20 +58,30 @@ def test_a_clean_deletion_reports_complete(rider):
 
 
 @pytest.mark.django_db
-def test_a_rider_who_never_connected_zwift_is_not_reported_incomplete(rider):
-    """disconnect() returning False means there was no link -- the ordinary case, not a failure.
+def test_a_rider_who_never_connected_zwift_is_not_reported_incomplete(rider, configured):
+    """The service answering "no link" is the ordinary case, not a failure.
 
     Treating that as a failure would mark almost every deletion unfinished and make the
     signal worthless.
     """
     with (
         patch("apps.team.services.purge_user_verification_media", return_value=_purge_result()),
-        patch("apps.zwift.client.is_configured", return_value=True),
-        patch("apps.zwift.client.disconnect", return_value=False),
+        patch("apps.zwift.client.httpx.post", return_value=_disconnect_response(200, {"disconnected": False})),
     ):
         audit = delete_user_account(rider)
     assert audit["zauth_disconnected"] is False
     assert audit["complete"] is True, "no link to remove is not a failed removal"
+
+
+@pytest.mark.django_db
+def test_a_removed_link_is_recorded(rider, configured):
+    with (
+        patch("apps.team.services.purge_user_verification_media", return_value=_purge_result()),
+        patch("apps.zwift.client.httpx.post", return_value=_disconnect_response(200, {"disconnected": True})),
+    ):
+        audit = delete_user_account(rider)
+    assert audit["zauth_disconnected"] is True
+    assert audit["complete"] is True
 
 
 @pytest.mark.django_db
@@ -69,13 +97,55 @@ def test_unpurgeable_media_marks_the_erasure_incomplete(rider):
 
 
 @pytest.mark.django_db
-def test_a_zauth_outage_marks_the_erasure_incomplete(rider):
+@pytest.mark.parametrize(
+    "failure",
+    [
+        pytest.param({"side_effect": httpx.ConnectError("service down")}, id="unreachable"),
+        pytest.param({"side_effect": httpx.ReadTimeout("slow")}, id="timeout"),
+        pytest.param({"return_value": _disconnect_response(500)}, id="server-error"),
+        pytest.param({"return_value": _disconnect_response(401, {"detail": "bad key"})}, id="refused"),
+    ],
+)
+def test_a_zauth_outage_marks_the_erasure_incomplete(rider, configured, failure):
+    """The client swallows these as HTTP errors, so the outcome has to carry them instead."""
     with (
         patch("apps.team.services.purge_user_verification_media", return_value=_purge_result()),
-        patch("apps.zwift.client.is_configured", return_value=True),
-        patch("apps.zwift.client.disconnect", side_effect=RuntimeError("service down")),
+        patch("apps.zwift.client.httpx.post", **failure),
     ):
         audit = delete_user_account(rider)
+    assert audit["zauth_disconnected"] is False
+    assert audit["complete"] is False
+    assert any("Zwift link" in r for r in audit["incomplete_reasons"])
+
+
+@pytest.mark.django_db
+def test_an_unexpected_exception_still_marks_the_erasure_incomplete(rider):
+    with (
+        patch("apps.team.services.purge_user_verification_media", return_value=_purge_result()),
+        patch("apps.zwift.client.disconnect_link", side_effect=RuntimeError("bug")),
+    ):
+        audit = delete_user_account(rider)
+    assert audit["complete"] is False
+
+
+@pytest.mark.django_db
+def test_an_unconfigured_service_is_only_a_failure_for_a_linked_account(rider, monkeypatch):
+    """Without the service nothing can be asked; that only matters if the account had a link."""
+    monkeypatch.setattr(config, "zwift_api_base_url", None)
+    with patch("apps.team.services.purge_user_verification_media", return_value=_purge_result()):
+        audit = delete_user_account(rider)
+    assert audit["zauth_disconnected"] is None
+    assert audit["complete"] is True
+
+
+@pytest.mark.django_db
+def test_an_unconfigured_service_leaves_a_zauth_verified_account_incomplete(user_model, monkeypatch):
+    linked = user_model.objects.create_user(
+        username="linked_rider", discord_id="43", zwid=4343, zwid_verified=True, zwid_verification_method="zauth"
+    )
+    monkeypatch.setattr(config, "zwift_api_base_url", None)
+    with patch("apps.team.services.purge_user_verification_media", return_value=_purge_result()):
+        audit = delete_user_account(linked)
     assert audit["complete"] is False
     assert any("Zwift link" in r for r in audit["incomplete_reasons"])
 

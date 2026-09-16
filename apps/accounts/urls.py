@@ -18,7 +18,6 @@ urlpatterns = [
     path("profile/import/<uuid:application_id>/", views.import_application_view, name="import_application"),
     path("profile/delete/", views.profile_delete_confirm, name="profile_delete_confirm"),
     path("profile/delete/confirm/", views.profile_delete, name="profile_delete"),
-    path("profile/manual-zwift-verify/", views.manual_zwift_verify, name="manual_zwift_verify"),
     path("profile/unverify-zwift/", views.unverify_zwift, name="unverify_zwift"),
     path("dismiss-zauth-banner/", views.dismiss_zauth_banner, name="dismiss_zauth_banner"),
     path("profile/refresh-zr/", views.refresh_zr, name="refresh_zr"),

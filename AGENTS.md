@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **This is an older copy of `CLAUDE.md` and is not kept in step with it. Read `CLAUDE.md` first; where the two disagree, `CLAUDE.md` wins.** Only the Zwift verification rules below have been brought up to date, because the old text described a retired flow (a credential-based Zwift lookup) that must not come back.
+
 ## Project Overview
 
 Django 6.0 application for The Coalition Zwift racing team. Integrates with ZwiftPower and Zwift Racing APIs to manage
@@ -66,8 +68,8 @@ Read each app's `models.py` for full field lists. Bullets below capture purpose 
 
 - `accounts` - Custom User model (Discord/Zwift fields), django-allauth adapters, role-based permissions. Key entry points: `decorators.py` (`discord_permission_required`, `team_member_required`), `GuildMember` (Discord member tracking — see Guild Member Sync), `YouTubeVideo` (RSS-fetched videos for Team Feed)
 - `team` - Core team management. Models: `RaceReadyRecord` (see Race Ready Verification), `TeamLink`, `RosterFilter` (**5-min expiration**), `MembershipApplication` (see Membership Registration), `DiscordRole` / `DiscordChannel` (synced from server, used as Select dropdown choices in Event/Squad forms). Services: `get_unified_team_roster()` merges ZP + ZR + User data; `get_user_verification_types(user)` returns required verification types per ZP category
-- `zwift` - Zwift integration. `utils.fetch_zwift_id(username, password)` calls the Sauce mod API to resolve a Zwift account to a `zwid` (used during onboarding/profile linking); models/views are stubs.
-- `zwiftpower` - ZwiftPower API integration. Models: `ZPTeamRiders`, `ZPEvent`, `ZPRiderResults`. Client in `zp_client.py` (session-based, requires Zwift OAuth login)
+- `zwift` - Zwift integration, entirely OAuth-based through the private zauth service (mounted at `/user/zauth/`). `client.py` talks to zauth (connect / disconnect / status / relink / racing profile), `verification.py` reconciles `zwid_verified` from it, `profile_fields.py` fills blank country/gender from the Zwift profile. **Verification is zauth-only**: no manual path, no staff grant, no reviewer queue, and no typed-zwid or credential-based lookup — do not reintroduce one (the retired Sauce-mod flow sent Zwift passwords as URL query parameters to a third party, one caller being the unauthenticated registration form). A rider who cannot connect asks a team admin in Discord. The Django admin shows `zwid`, `zwid_verified`, `zwid_verification_method` and `zwid_verified_at` read-only. **The zauth connection wins**: `verification.reconcile_all` (hourly) and every `/user/zauth/` visit re-grant `zwid_verified` to anyone the service reports connected, so un-verifying needs `apps.zwift.client.disconnect(str(user.pk))` first (the profile's "Remove" does that). A registration connects under its own UUID; for carrying that link over on import and releasing it on deletion, see the `zwift` bullet in `CLAUDE.md`
+- `zwiftpower` - ZwiftPower API integration. Models: `ZPTeamRiders`, `ZPEvent`, `ZPRiderResults`. Client in `zp_client.py` (session-based; logs in by posting the team account's constance `ZWIFT_USERNAME`/`ZWIFT_PASSWORD` to Zwift's SSO form — the one sanctioned credential login, unrelated to zauth)
 - `zwiftracing` - Zwift Racing API integration. `ZRRider` stores per-discipline `seed_*` and `velo_*` rating fields. Client in `zr_client.py` returns `(status_code, json)` tuples; 429s return data with `retryAfter` instead of raising
 - `analytics` - Server-side page-visit tracking enriched by a client-side JS snippet in `base.html`. Dashboard at `/analytics/` (`app_admin` only). Tracking endpoint: `POST /api/analytics/track/` (Django Ninja)
 - `club_strava` - Strava club activity sync. See Strava Integration section
@@ -130,7 +132,7 @@ Required fields for profile completion:
 - `country` - Country of residence (uses `django-countries` CountryField with ISO 2-letter codes, rendered as dropdown)
 - `trainer` - Smart trainer type (required for racing)
 - `heartrate_monitor` - Heart rate monitor type (required for racing)
-- `zwid_verified` - Zwift account verification status
+- `zwid_verified` - Zwift verification, counted via `User.has_accepted_zwid_verification` (equals `zwid_verified` until Constance `ZAUTH_VERIFICATION_REQUIRED` is on; then only zauth verifications count)
 
 Properties: `user.is_profile_complete` (bool), `user.profile_completion_status` (dict of field→bool).
 Incomplete profiles show a red warning banner in `base.html` (not blocking, just a warning).
@@ -222,7 +224,7 @@ Uses Django 6.0's built-in `django-tasks` with database backend. Define with `@t
 
 ### External API Clients
 
-- `apps/zwiftpower/zp_client.py` - ZwiftPower session-based client using httpx (requires Zwift OAuth login)
+- `apps/zwiftpower/zp_client.py` - ZwiftPower session-based client using httpx (logs in with the team account's constance Zwift credentials — see the `zwiftpower` bullet; unrelated to zauth)
 - `apps/zwiftracing/zr_client.py` - Zwift Racing API client using httpx
     - All methods return `(status_code, response_json)` tuple
     - 429 rate limit errors return the response without raising (contains `retryAfter` seconds)
@@ -269,6 +271,7 @@ Mount points — read each app's `urls.py` for the full pattern list:
 - `/strava/`, `/zp/`, `/analytics/`, `/data-connections/` — feature apps
 - `/api/dbot/`, `/api/user/`, `/api/analytics/` — Django Ninja APIs
 - `/m/` — magic links (legacy — see Apps section)
+- `/user/zauth/` — `apps.zwift.urls` (Zwift OAuth connect/disconnect)
 
 Non-obvious gates / behavior not visible from the URL pattern alone:
 
@@ -531,7 +534,7 @@ user-facing terminology should be "Registration" or "Membership Registration". T
 3. User receives DM with UUID link to complete registration
 4. User fills out required fields (name, agreements, profile info)
 5. Membership admin reviews and approves/rejects
-6. If approved, user can login via Discord OAuth
+6. If approved, user can login via Discord OAuth and import the registration onto their profile (`/user/profile/import/<uuid>/` — blank fields only, plus the registration's Zwift link, see the `zwift` bullet)
 
 ### MembershipApplication Model (`apps/team/models.py`)
 

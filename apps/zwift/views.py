@@ -3,8 +3,8 @@
 The ``/user/zauth`` page lets a user connect (or disconnect) their official
 Zwift account via the GOTTA_BIKE Zwift API service. Tokens never touch this
 platform — the service is the source of truth, queried live through
-``apps.zwift.client``. Not linked from any menu yet (pending official Zwift API
-credentials to test with).
+``apps.zwift.client``. It is the only way a rider's Zwift account gets verified,
+so the profile, the verification page and the zauth banner all link here.
 """
 
 from __future__ import annotations
@@ -47,6 +47,10 @@ def zauth_view(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Zwift connection was cancelled or failed. Please try again.")
 
     configured = client.is_configured()
+    if configured and callback_status:
+        # Back from consent: the answer this page exists to show must not be hidden by a read
+        # that failed moments before the rider left for Zwift.
+        client.forget_status_failure(str(request.user.pk))
     status = client.get_connection_status(str(request.user.pk)) if configured else None
     service_error = configured and status is None
 
@@ -112,6 +116,10 @@ def zauth_connect(request: HttpRequest) -> HttpResponse:
 def zauth_disconnect(request: HttpRequest) -> HttpResponse:
     """Disconnect the user's Zwift account link and return to the status page.
 
+    Only a call the service answered is reported as done. When the service could not be
+    asked, the rider is told so and nothing here changes: the link may still be there, and
+    the hourly reconcile would keep verifying them by it.
+
     Args:
         request: The HTTP request.
 
@@ -119,8 +127,19 @@ def zauth_disconnect(request: HttpRequest) -> HttpResponse:
         A redirect back to the status page with a result message.
 
     """
-    if client.disconnect(str(request.user.pk)):
+    outcome = client.disconnect_link(str(request.user.pk))
+    if outcome is client.DisconnectOutcome.REMOVED:
         messages.success(request, "Your Zwift account was disconnected.")
-    else:
+    elif outcome is client.DisconnectOutcome.NO_LINK:
         messages.info(request, "No connected Zwift account was found to disconnect.")
+    elif outcome is client.DisconnectOutcome.FAILED:
+        messages.error(request, "We couldn't reach Zwift to disconnect your account. Please try again later.")
+    else:
+        messages.error(request, "Zwift Link isn't configured right now, so nothing was disconnected.")
+
+    if outcome in (client.DisconnectOutcome.REMOVED, client.DisconnectOutcome.NO_LINK):
+        # The service has just said there is no link, which is a real status. Applying it here
+        # means the verification goes now, even if the status read on the next page fails.
+        verification.apply_status(request.user, {"connected": False})
+    logfire.info("Rider disconnected Zwift from the connection page", user_id=request.user.pk, outcome=str(outcome))
     return redirect("zwift:zauth")

@@ -13,11 +13,11 @@ import logfire
 from constance import config
 from django.conf import settings
 from django.core.cache import cache
-from django.db.models import Count, F, Max, Min, OuterRef, Q, Subquery
+from django.db.models import Count, F, Max, Min, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.accounts.models import GuildMember, User
-from apps.team.models import RaceReadyRecord, RecordView
+from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView
 from apps.zwiftpower.models import ZPRiderResults, ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
 
@@ -579,6 +579,97 @@ def purge_rejected_verification_media(older_than_days: int = 30) -> dict[str, in
     result = _strip_media(stale, reason="rejected")
     logfire.info("Purged rejected verification media", older_than_days=older_than_days, **result)
     return result
+
+
+# Shown to whoever deleted registrations when a Zwift link could not be confirmed dropped.
+# The ids are in the error log, which is where the follow-up starts.
+ZWIFT_LINK_NOT_RELEASED_MESSAGE = (
+    "The Zwift connection of a deleted registration could not be confirmed removed, because the "
+    "Zwift service could not be reached or is not configured here. The registration ids are in the "
+    "error log; the connection needs removing in the Zwift service by hand."
+)
+
+
+def release_application_zwift_links(applications: QuerySet[MembershipApplication]) -> dict[str, int]:
+    """Drop the zauth link each registration may hold, before the rows are deleted.
+
+    The zauth service keys a registration's link by the registration's UUID and knows
+    nothing about this table, so deleting the row alone would leave the link -- a Zwift
+    account tied to somebody who is being forgotten -- behind in the service, unreachable.
+
+    Which registrations hold a link is asked of the service once, from its connections
+    list, and only those are disconnected. The local flags are not enough on their own: a
+    registration can hold a link while showing none (consent finished but the page was
+    never reloaded to record it, or the service reported an unusable zwid). And asking row
+    by row would turn a bulk delete of hundreds of never-connected registrations into
+    hundreds of calls that remove nothing.
+
+    When the service cannot be asked -- unreachable, or not configured here -- nothing can
+    be confirmed, so every registration showing a sign of a link (verified, or carrying a
+    zwid) is counted as failed and its id logged, so the link can still be found in the
+    service later. No per-row calls are made then; they would only repeat the failure, a
+    timeout each. A registration with no sign of a link is assumed clean in that case: the
+    one gap left, and it needs the service to be down as well.
+
+    Never raises. A failure is counted, logged and left for the caller to report; blocking
+    an erasure on another service being down is the worse outcome.
+
+    Args:
+        applications: The registrations about to be deleted.
+
+    Returns:
+        ``{"attempted", "removed", "failed"}`` counts. ``attempted`` is the disconnect calls
+        made, ``removed`` the links the service confirmed removing, and ``failed`` the links
+        that may still be there.
+
+    """
+    from apps.zwift import client as zwift_client
+
+    rows = list(applications.values_list("pk", "zwift_verified", "zwift_id"))
+    if not rows:
+        return {"attempted": 0, "removed": 0, "failed": 0}
+    ids = {str(pk) for pk, _verified, _zwift_id in rows}
+
+    try:
+        connections = zwift_client.list_connections()
+    except Exception as exc:
+        logfire.error("Zwift connections list raised", error=type(exc).__name__)
+        connections = None
+    if connections is None:
+        unconfirmed = sorted(str(pk) for pk, verified, zwift_id in rows if verified or zwift_id)
+        if unconfirmed:
+            logfire.error(
+                "Could not check registrations' Zwift links before deleting them",
+                application_ids=unconfirmed,
+                configured=zwift_client.is_configured(),
+            )
+        return {"attempted": 0, "removed": 0, "failed": len(unconfirmed)}
+
+    linked = sorted(ids & {str(row.get("user_id")) for row in connections if isinstance(row, dict)})
+    removed = 0
+    failed_ids = []
+    for application_id in linked:
+        try:
+            outcome = zwift_client.disconnect_link(application_id)
+        except Exception as exc:
+            logfire.error("Zwift disconnect raised", application_id=application_id, error=type(exc).__name__)
+            outcome = zwift_client.DisconnectOutcome.FAILED
+        if outcome is zwift_client.DisconnectOutcome.REMOVED:
+            removed += 1
+        elif outcome is not zwift_client.DisconnectOutcome.NO_LINK:
+            # NO_LINK here means it went between the list and the call, which is fine.
+            failed_ids.append(application_id)
+
+    counts = {"attempted": len(linked), "removed": removed, "failed": len(failed_ids)}
+    if failed_ids:
+        logfire.error(
+            "Could not drop a registration's Zwift link before deleting it",
+            application_ids=failed_ids,
+            **counts,
+        )
+    elif linked:
+        logfire.info("Registration Zwift links released before deletion", **counts)
+    return counts
 
 
 # How long a minted verification-media URL stays valid. Deliberately short: the URL is a

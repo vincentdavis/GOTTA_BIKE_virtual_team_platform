@@ -5,6 +5,8 @@ import json
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import logfire
+from allauth.socialaccount.admin import SocialAccountAdmin as BaseSocialAccountAdmin
+from allauth.socialaccount.models import SocialAccount
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.http import HttpRequest, HttpResponse
@@ -152,11 +154,35 @@ class UserAdmin(BaseUserAdmin):
                     "discord_id",
                     "discord_username",
                     "discord_nickname",
-                    "zwid",
                 ),
             },
         ),
     )
+
+    # Zwift verification only comes from the zauth connection now, so none of it is typed in
+    # here: an admin-set zwid or flag is exactly the staff grant that was retired, and for a
+    # connected rider the hourly reconcile would put it back anyway. A zauth verification ends
+    # when the link does (the rider's own "Remove", or a disconnect in the service); the
+    # reconcile then clears the flag and method, leaving zwid and zwid_verified_at. A legacy
+    # or admin verification is never touched by the reconcile and only ends with the rider's
+    # "Remove" or account deletion.
+    ZWIFT_VERIFICATION_FIELDS = ("zwid", "zwid_verified", "zwid_verification_method", "zwid_verified_at")
+
+    def get_readonly_fields(self, request: HttpRequest, obj: User | None = None) -> tuple:
+        """Show the Zwift verification fields on the change form without letting them change.
+
+        Args:
+            request: The HTTP request.
+            obj: The user being edited, or None when adding.
+
+        Returns:
+            The read-only field names.
+
+        """
+        readonly = tuple(super().get_readonly_fields(request, obj))
+        if obj is None:
+            return readonly
+        return (*readonly, *self.ZWIFT_VERIFICATION_FIELDS)
 
     # --- team kit -------------------------------------------------------------------------
     #
@@ -570,3 +596,37 @@ class BlockedDiscordIdAdmin(admin.ModelAdmin):
     search_fields = ("discord_id", "note")
     readonly_fields = ("created_at",)
     autocomplete_fields = ("blocked_by",)
+
+
+class SocialAccountAdmin(BaseSocialAccountAdmin):
+    """allauth's social account admin, with the login's identity read-only.
+
+    The Zwift carry-over (``apps.accounts.services._logged_in_as_registrant``) trusts this
+    row to say which Discord login an account holds, because ``User.discord_id`` is editable
+    here. With ``user`` and ``uid`` editable too, a staff user could point their own row at a
+    registrant's Discord ID just as easily, and collect that registrant's Zwift link. Rows are
+    written by the Discord login alone, so adding one here is refused as well.
+
+    Deleting a row is still allowed: it is how staff let a rider's next Discord login
+    reconnect to their account by ``discord_id`` (see ``pre_social_login``).
+    """
+
+    readonly_fields = ("user", "provider", "uid", "extra_data")
+
+    def has_add_permission(self, request: HttpRequest) -> bool:
+        """Refuse adding social accounts by hand.
+
+        Args:
+            request: The admin request.
+
+        Returns:
+            Always False.
+
+        """
+        return False
+
+
+# allauth.socialaccount comes before this app in INSTALLED_APPS, so its admin is registered by now.
+if admin.site.is_registered(SocialAccount):
+    admin.site.unregister(SocialAccount)
+admin.site.register(SocialAccount, SocialAccountAdmin)

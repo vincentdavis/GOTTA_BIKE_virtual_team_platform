@@ -30,7 +30,8 @@ The custom User model stores Discord-specific data:
 | `discord_avatar` | Discord avatar hash |
 | `discord_roles` | JSON mapping of `{role_id: role_name}` |
 | `zwid` | Zwift user ID |
-| `zwid_verified` | Whether Zwift account has been verified |
+| `zwid_verified` | Whether the Zwift account has been verified. New verifications come only from the Zwift OAuth connection (zauth) at `/user/zauth/` |
+| `zwid_verification_method` | How the current verification was obtained: `zauth` (the only way now), or the historical `legacy` and `admin` |
 
 ## Custom Adapter
 

@@ -1,4 +1,8 @@
-{% if user.zwid_verified %}
+{% if zwift_removed %}
+{# Only after "Remove": the swap replaces the button that had focus, so this says what happened. #}
+<p class="text-sm mb-2" role="status">Zwift verification removed.</p>
+{% endif %}
+{% if user.has_accepted_zwid_verification %}
 <!-- Verified State -->
 <div class="p-4 bg-success/10 rounded-lg border border-success/30">
     <div class="flex items-center justify-between mb-3">
@@ -16,7 +20,7 @@
         <button hx-post="{% url 'accounts:unverify_zwift' %}"
                 hx-target="#zwift-status-container"
                 hx-swap="innerHTML"
-                hx-confirm="Are you sure you want to remove your Zwift verification?"
+                hx-confirm="Remove your Zwift verification? This also disconnects your Zwift account from the team, so you would need to connect it again."
                 class="btn btn-ghost btn-sm text-error">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -137,8 +141,11 @@
 
 </div>
 {% endif %}
+{% if zwift_remove_error %}
+<p class="text-sm text-base-content mt-2" role="alert">{{ zwift_remove_error }}</p>
+{% endif %}
 
-{# Official Zwift OAuth (Zwift Link / zauth) status — separate from the Sauce-based zwid verification above. #}
+{# The live Zwift OAuth (Zwift Link / zauth) connection, read from the service. Verification above is made from it, but is stored and reconciled hourly, so the two can briefly disagree. #}
 {% if zauth_configured %}
 <div class="mt-3 p-3 rounded-lg border {% if zauth_connected %}border-success/30 bg-success/10{% else %}border-base-300 bg-base-300{% endif %} flex items-center justify-between gap-3">
     <div class="flex items-center gap-3 min-w-0">
@@ -146,7 +153,7 @@
         <div class="min-w-0">
             <p class="text-sm font-medium">
                 Zwift Official Auth
-                {% if zauth_connected %}<span class="text-success">· Verified</span>{% else %}<span class="text-base-content/50">· Not connected</span>{% endif %}
+                {% if zauth_connected %}<span class="text-success">· Verified</span>{% elif zauth_status_unknown %}<span class="text-base-content/70">· Couldn't check</span>{% else %}<span class="text-base-content/50">· Not connected</span>{% endif %}
             </p>
             {% if zauth_connected %}
             <p class="text-xs text-base-content/60 truncate">
@@ -154,12 +161,15 @@
                 {% if zauth_uuid_tail %} · UUID …<span class="font-mono">{{ zauth_uuid_tail }}</span>{% endif %}
                 {% if zauth_connected_at %} · since {{ zauth_connected_at|slice:":10" }}{% endif %}
             </p>
+            {% elif zauth_status_unknown %}
+            {# A failed read is not "not connected", and offering Connect would suggest it was. #}
+            <p class="text-xs text-base-content/70">We couldn't reach the Zwift service to check your connection. Please try again later.</p>
             {% else %}
             <p class="text-xs text-base-content/60">Connect your official Zwift account via Zwift Link.</p>
             {% endif %}
         </div>
     </div>
-    {% if not zauth_connected %}
+    {% if not zauth_connected and not zauth_status_unknown %}
     <a href="{% url 'zwift:zauth' %}" class="btn btn-primary btn-xs shrink-0">Connect</a>
     {% endif %}
 </div>

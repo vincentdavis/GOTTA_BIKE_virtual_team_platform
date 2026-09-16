@@ -205,7 +205,7 @@
       Updated {{ rider_profile.fetched_at|date:"Y-m-d" }}{% if rider_profile.is_stale %} &middot; refresh pending{% endif %}
     </p>
 
-  {% elif profile_user.zwid_verified and profile_user.zwid %}
+  {% elif profile_user.has_accepted_zwid_verification and profile_user.zwid %}
     <p class="text-base-content/60 text-sm">No profile data yet &mdash; this rider has not been synced.</p>
   {% else %}
     <p class="text-base-content/60 text-sm">Zwift account not verified.</p>
@@ -217,13 +217,14 @@
     could still be looked up at the source. Keeping that inside the data branch would make the
     "not synced" state a dead end.
 
-    Gated on zwid_verified, as the replaced cards were: an unverified zwid is a number the
-    rider typed, so linking it out would assert an identity nobody has confirmed.
+    Gated on the verification, read through the cutover policy, as the replaced cards were:
+    an unverified zwid is a number the rider typed, so linking it out would assert an
+    identity nobody has confirmed.
 
     The zwift.com link needs zwift_user_id, which only the cached row carries -- so it appears
     only once the rider has been synced, while the other two need just the zwid.
   {% endcomment %}
-  {% if profile_user.zwid_verified and profile_user.zwid %}
+  {% if profile_user.has_accepted_zwid_verification and profile_user.zwid %}
     <div class="flex flex-wrap gap-1 mt-3">
       {% if rider_profile.zwift_user_id %}
         <a href="https://www.zwift.com/uk/athlete/{{ rider_profile.zwift_user_id }}"

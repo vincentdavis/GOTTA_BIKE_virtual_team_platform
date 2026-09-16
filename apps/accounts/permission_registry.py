@@ -45,7 +45,6 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "views": [
             "/team/applications/ - Membership application list",
             "/team/applications/{uuid}/ - Individual application review",
-            "/team/applications/{uuid}/zwid-action/ - Verify/reject ZWID on membership application",
             "/team/discord-review/ - Discord guild member review",
             "/team/zwift-connections/ - Zwift account connections (Zwift Link) list",
             "/site/config/team_kit/ - Team kits: add kits, choose the current one, see who needs it",
@@ -95,7 +94,6 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "description": "Can approve or reject verification records",
         "views": [
             "/team/verification/{id}/ - Approve/reject verification submissions",
-            "/team/verification/zwid-action/{user_id}/ - Verify/reject pending ZWID verifications",
         ],
     },
     Permissions.DATA_CONNECTION: {

@@ -12,14 +12,19 @@ See the service's endpoints:
 - ``POST /api/zwift/oauth/authorize-url`` -> ``{authorize_url}``
 - ``GET  /api/zwift/oauth/status?user_id=`` -> ``{connected, zwid, connected_at}``
 - ``POST /api/zwift/oauth/disconnect`` -> ``{disconnected}``
+- ``POST /api/zwift/oauth/relink`` -> ``{relinked, zwid, connected_at}`` (moves a link between ids)
 - ``GET  /api/zwift/users/<id>/profile-stats`` -> windowed metric min/max
 - ``POST /api/zwift/users/<id>/profile/refresh`` -> the profile, re-read from Zwift now
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import StrEnum
+
 import httpx
 import logfire
+from django.core.cache import cache
 
 from gotta_bike_platform.config import settings as config
 
@@ -28,6 +33,17 @@ _TIMEOUT = 15.0
 # The refresh reads Zwift inside the service's request, so it can take longer than the stored-copy
 # reads above. It only runs from a background task, so nobody is waiting on the page.
 _REFRESH_TIMEOUT = 30.0
+
+# Every status read happens while somebody waits for a page: the profile and its edit page, the
+# import page and its POST, the registration page, a verification record. The web tier has only a
+# handful of threads (WEB_WORKERS x WEB_BLOCKING_THREADS), so a hung service must cost a rider a few
+# seconds rather than hold a thread for the full _TIMEOUT.
+STATUS_TIMEOUT = httpx.Timeout(3.0, connect=1.0)
+
+# After a failed status read the same id is not asked again for this long, so a hung service is
+# not re-asked on every page load. Only failures are remembered: a real answer can change at any
+# moment (a rider finishing consent in another tab), and callers rely on seeing that at once.
+STATUS_UNAVAILABLE_SECONDS = 60
 
 
 def is_configured() -> bool:
@@ -63,31 +79,87 @@ def _headers() -> dict[str, str]:
     return {"X-API-Key": config.zwift_app_api_key or ""}
 
 
-def get_connection_status(user_id: str) -> dict | None:
+def _status_unavailable_key(user_id: str) -> str:
+    """Build the cache key that marks a recent failed status read for an id.
+
+    Args:
+        user_id: The platform user identifier (a user's primary key, or a registration's UUID).
+
+    Returns:
+        The cache key.
+
+    """
+    return f"zwift-status-unavailable:v1:{user_id}"
+
+
+def forget_status_failure(user_id: str) -> None:
+    """Let the next status read for an id ask the service, even after a recent failure.
+
+    For the moments a fresh answer matters more than sparing a slow service: a rider coming
+    back from Zwift's consent page, or a link the service has just moved. Without this, a read
+    that failed a few seconds earlier would hide the new connection for up to
+    :data:`STATUS_UNAVAILABLE_SECONDS`.
+
+    Args:
+        user_id: The platform user identifier (a user's primary key, or a registration's UUID).
+
+    """
+    cache.delete(_status_unavailable_key(user_id))
+
+
+def get_connection_status(user_id: str, *, timeout: float | httpx.Timeout = STATUS_TIMEOUT) -> dict | None:
     """Fetch a user's Zwift connection status from the service.
+
+    The default timeout is the short :data:`STATUS_TIMEOUT`, because every current caller is
+    rendering a page. A background caller that can afford to wait passes a longer one.
+
+    A failed read is remembered for :data:`STATUS_UNAVAILABLE_SECONDS`; until then the id is
+    answered with None without asking. None already means "unknown" to every caller (nothing
+    revokes on it), so this only saves the wait.
 
     Args:
         user_id: The platform user identifier (stable primary key) to look up.
+        timeout: The httpx timeout for this read.
 
     Returns:
         A dict ``{"connected": bool, "zwid": str | None, "connected_at": str | None}``,
-        or None if the service is unconfigured or the call failed.
+        or None if the service is unconfigured or the call failed (now or moments ago).
 
     """
     if not is_configured():
+        return None
+    unavailable_key = _status_unavailable_key(user_id)
+    if cache.get(unavailable_key):
+        logfire.debug("Zwift status read skipped: it failed moments ago", user_id=user_id)
         return None
     try:
         response = httpx.get(
             _url("/api/zwift/oauth/status"),
             params={"user_id": user_id},
             headers=_headers(),
-            timeout=_TIMEOUT,
+            timeout=timeout,
         )
         response.raise_for_status()
-        return response.json()
+        body = response.json()
+    except httpx.HTTPStatusError as e:
+        # The status code, not str(e): httpx quotes the URL in its message, and a 401's
+        # "Unauthorized" would have the whole value scrubbed in production.
+        logfire.error("Zwift status fetch failed", user_id=user_id, status_code=e.response.status_code)
+        body = None
     except httpx.HTTPError as e:
-        logfire.error("Zwift status fetch failed", user_id=user_id, error=str(e))
-        return None
+        logfire.error("Zwift status fetch failed", user_id=user_id, error=type(e).__name__)
+        body = None
+    except ValueError:
+        # A 200 that is not JSON used to escape as an exception and fail the whole page.
+        logfire.error("Zwift status fetch returned a body that is not JSON", user_id=user_id)
+        body = None
+
+    if isinstance(body, dict):
+        return body
+    if body is not None:
+        logfire.error("Zwift status fetch returned an unexpected body", user_id=user_id)
+    cache.set(unavailable_key, True, STATUS_UNAVAILABLE_SECONDS)
+    return None
 
 
 def get_authorize_url(user_id: str, return_url: str, *, prompt_login: bool = False) -> str | None:
@@ -287,8 +359,67 @@ def list_connections() -> list[dict] | None:
         return None
 
 
+class DisconnectOutcome(StrEnum):
+    """What a :func:`disconnect_link` call did."""
+
+    # The service had a link for this id and removed it.
+    REMOVED = "removed"
+    # The service answered that there was no link to remove.
+    NO_LINK = "no_link"
+    # The call failed (service down, refused, an unexpected answer): whether a link is
+    # still there is unknown.
+    FAILED = "failed"
+    # The service connection is not configured, so nothing was asked.
+    UNCONFIGURED = "unconfigured"
+
+
+def disconnect_link(user_id: str) -> DisconnectOutcome:
+    """Disconnect a user's Zwift account link in the service, saying what happened.
+
+    Unlike :func:`disconnect`, this keeps "there was no link" apart from "the call
+    failed". An erasure needs that: only the second leaves a link behind.
+
+    Never raises.
+
+    Args:
+        user_id: The platform user identifier (a user's primary key, or a registration's UUID).
+
+    Returns:
+        A :class:`DisconnectOutcome`.
+
+    """
+    if not is_configured():
+        return DisconnectOutcome.UNCONFIGURED
+    try:
+        response = httpx.post(
+            _url("/api/zwift/oauth/disconnect"),
+            json={"user_id": user_id},
+            headers=_headers(),
+            timeout=_TIMEOUT,
+        )
+    except httpx.HTTPError as e:
+        # type(e) rather than str(e): httpx quotes the request URL in its message.
+        logfire.error("Zwift disconnect failed", user_id=user_id, error=type(e).__name__)
+        return DisconnectOutcome.FAILED
+
+    if not response.is_success:
+        logfire.error("Zwift disconnect failed", user_id=user_id, status_code=response.status_code)
+        return DisconnectOutcome.FAILED
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict) or "disconnected" not in body:
+        logfire.error("Zwift disconnect returned an unexpected body", user_id=user_id)
+        return DisconnectOutcome.FAILED
+    return DisconnectOutcome.REMOVED if body["disconnected"] else DisconnectOutcome.NO_LINK
+
+
 def disconnect(user_id: str) -> bool:
     """Disconnect a user's Zwift account link in the service.
+
+    For callers that only care whether a link was removed. An erasure, which must also
+    know when the call failed, uses :func:`disconnect_link`.
 
     Args:
         user_id: The platform user identifier (stable primary key).
@@ -297,17 +428,90 @@ def disconnect(user_id: str) -> bool:
         True if a link existed and was removed, False otherwise (or on error).
 
     """
+    return disconnect_link(user_id) is DisconnectOutcome.REMOVED
+
+
+class RelinkOutcome(StrEnum):
+    """What a :func:`relink_connection` call did."""
+
+    # The link now belongs to the target (or the target already held the same Zwift account).
+    MOVED = "moved"
+    # The source holds no link. An older service without the endpoint answers the same way.
+    NOT_FOUND = "not_found"
+    # The target is linked to a different Zwift account; nothing changed.
+    CONFLICT = "conflict"
+    # The call failed or was refused (bad ids, bad key, service down).
+    ERROR = "error"
+    # The service connection is not configured, so nothing was asked.
+    UNCONFIGURED = "unconfigured"
+
+
+@dataclass(frozen=True)
+class RelinkResult:
+    """The outcome of a relink, plus the zwid the service reported on success."""
+
+    outcome: RelinkOutcome
+    zwid: str | None = None
+
+
+def relink_connection(from_user_id: str, to_user_id: str) -> RelinkResult:
+    """Move a Zwift account link from one platform id to another in the service.
+
+    A membership registration connects Zwift under its own UUID, because no User exists
+    yet. This hands that link to the member's account without another trip through
+    Zwift's consent page.
+
+    Never raises: every failure comes back as an outcome, so an import cannot be broken
+    by the service being down.
+
+    Args:
+        from_user_id: The id currently holding the link (a registration's UUID).
+        to_user_id: The id that should hold it (the member's primary key).
+
+    Returns:
+        A :class:`RelinkResult`. ``zwid`` is set only on ``MOVED``.
+
+    """
     if not is_configured():
-        return False
+        return RelinkResult(RelinkOutcome.UNCONFIGURED)
     try:
         response = httpx.post(
-            _url("/api/zwift/oauth/disconnect"),
-            json={"user_id": user_id},
+            _url("/api/zwift/oauth/relink"),
+            json={"from_user_id": from_user_id, "to_user_id": to_user_id},
             headers=_headers(),
             timeout=_TIMEOUT,
         )
-        response.raise_for_status()
-        return bool(response.json().get("disconnected"))
     except httpx.HTTPError as e:
-        logfire.error("Zwift disconnect failed", user_id=user_id, error=str(e))
-        return False
+        # type(e) rather than str(e): httpx quotes the request URL in its message.
+        logfire.error(
+            "Zwift relink failed",
+            from_user_id=from_user_id,
+            to_user_id=to_user_id,
+            error=type(e).__name__,
+        )
+        return RelinkResult(RelinkOutcome.ERROR)
+
+    status_code = response.status_code
+    ids = {"from_user_id": from_user_id, "to_user_id": to_user_id, "status_code": status_code}
+    if status_code == 404:
+        logfire.info("Zwift relink found no link to move", **ids)
+        return RelinkResult(RelinkOutcome.NOT_FOUND)
+    if status_code == 409:
+        logfire.warning("Zwift relink refused: target is linked to a different Zwift account", **ids)
+        return RelinkResult(RelinkOutcome.CONFLICT)
+    if status_code != 200:
+        # 400 (ids equal) and 401 (bad key) are both our mistakes, so they are errors, not outcomes.
+        logfire.error("Zwift relink failed", **ids)
+        return RelinkResult(RelinkOutcome.ERROR)
+
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict) or not body.get("relinked"):
+        logfire.error("Zwift relink returned an unexpected body", **ids)
+        return RelinkResult(RelinkOutcome.ERROR)
+
+    zwid = body.get("zwid")
+    logfire.info("Zwift link relinked", **ids)
+    return RelinkResult(RelinkOutcome.MOVED, zwid=str(zwid) if zwid is not None else None)

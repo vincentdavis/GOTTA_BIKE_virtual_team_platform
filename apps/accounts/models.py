@@ -130,8 +130,10 @@ class User(AbstractUser):
         """How a user's Zwift account verification was obtained.
 
         ``LEGACY`` is the old Sauce-mod email/password flow (grandfathered);
-        ``ZAUTH`` is the official Zwift OAuth via the zauth service; ``ADMIN`` is
-        a manual staff verification. Blank means never verified.
+        ``ZAUTH`` is the official Zwift OAuth via the zauth service, and the only way a
+        verification is made now; ``ADMIN`` is a manual staff verification, no longer
+        granted but kept for the rows that carry it and the verification report. Blank
+        means never verified.
         """
 
         LEGACY = "legacy", "Legacy (Sauce mod)"
@@ -902,11 +904,11 @@ class User(AbstractUser):
         nothing per request. Legacy and admin verifications return False: they are
         still accepted today, but they are what the zauth migration is replacing.
 
-        ``zwid_verified`` is checked too, not just the method. Every code path now
-        clears the two together, but the pair is still separable -- both fields are
-        editable in the Django admin, and a half-written row would otherwise pass a
-        squad's ``require_zauth`` gate on provenance alone. The flag is the assertion;
-        the method only says where it came from.
+        ``zwid_verified`` is checked too, not just the method. Every code path writes
+        the two together (the Django admin shows them read-only), but the pair is still
+        separable by a raw database or shell write, and a half-written row would
+        otherwise pass a squad's ``require_zauth`` gate on provenance alone. The flag is
+        the assertion; the method only says where it came from.
 
         Returns:
             True if the account is verified and that verification came from Zwift OAuth.
@@ -964,7 +966,8 @@ class User(AbstractUser):
 
         Use this for anything that *decides* or *displays* whether someone is verified.
         Read ``zwid_verified`` directly only where the raw stored fact is wanted — the
-        admin ZWID review queue and the verification report both do that deliberately.
+        Zwift verification report does that deliberately, since it exists to show the
+        legacy verifications this policy stops counting.
 
         Returns:
             True if the stored verification is accepted under the active policy.

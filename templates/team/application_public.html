@@ -111,7 +111,7 @@
       </div>
       {% endif %}
 
-      <form method="post" class="space-y-4">
+      <form method="post" id="registration-form" class="space-y-4">
         {% csrf_token %}
 
         <!-- About You Section -->
@@ -557,6 +557,11 @@
         </div>
       </form>
 
+      {# The Zwift section's Connect button submits this through form="...": it cannot sit inside the registration form above. #}
+      <form id="application-zauth-connect-form" method="post"
+            action="{% url 'team:application_zauth_connect' application.pk %}" hidden>
+        {% csrf_token %}
+      </form>
 
       <p class="text-sm text-base-content/50"><span class="text-error">*</span> Required fields</p>
       {% endif %}

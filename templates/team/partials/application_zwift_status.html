@@ -13,10 +13,12 @@
         </div>
     </div>
     {% if application.is_editable %}
-    <button hx-post="{% url 'team:application_unverify_zwift' application.pk %}"
+    {# type="button": this sits inside the registration form ahead of Save, so a submit button here would be the one Enter presses. #}
+    <button type="button"
+            hx-post="{% url 'team:application_unverify_zwift' application.pk %}"
             hx-target="#zwift-status-container"
             hx-swap="innerHTML"
-            hx-confirm="Are you sure you want to remove your Zwift verification?"
+            hx-confirm="Remove your Zwift verification? This also disconnects your Zwift account from this registration."
             class="btn btn-ghost btn-sm text-error">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -25,6 +27,9 @@
     </button>
     {% endif %}
 </div>
+{% if zwift_remove_error %}
+<p class="text-sm text-base-content mt-2" role="alert">{{ zwift_remove_error }}</p>
+{% endif %}
 {% else %}
 <!-- Unverified State -->
 <div class="flex items-center justify-between p-4 bg-base-300 rounded-lg">
@@ -40,14 +45,22 @@
         </div>
     </div>
     {% if application.is_editable %}
-    <form method="post" action="{% url 'team:application_zauth_connect' application.pk %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-primary btn-sm">
-            <span class="px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary/60 rounded shrink-0">Z</span>
-            Connect Zwift
-        </button>
-    </form>
+    {% comment %}
+      This partial renders inside the registration <form>, and forms cannot nest: the parser
+      drops the inner start tag, the inner end tag closes the registration form, and this
+      button ends up saving the registration. So the button submits a separate form, rendered
+      by the page after the registration form closes, through the form attribute.
+    {% endcomment %}
+    <button type="submit" form="application-zauth-connect-form" class="btn btn-primary btn-sm">
+        <span class="px-1.5 py-0.5 text-xs font-bold text-primary-content bg-primary/60 rounded shrink-0">Z</span>
+        Connect Zwift
+    </button>
     {% endif %}
 
 </div>
+{% if application.is_editable %}
+<p class="text-sm text-base-content/70 mt-2">
+    Connecting takes you to Zwift, so save any changes first. Can't connect? Ask a team admin in Discord.
+</p>
+{% endif %}
 {% endif %}

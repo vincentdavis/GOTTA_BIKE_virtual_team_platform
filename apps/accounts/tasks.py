@@ -872,7 +872,9 @@ def refresh_zwift_racing_metrics() -> dict:
     now = timezone.now()
     for conn in connections:
         user_id = str(conn.get("user_id") or "")
-        if not user_id:
+        # A membership registration connects under its UUID, which is not a User pk and
+        # would make the lookup below raise ValueError, ending the whole sweep.
+        if not (user_id.isascii() and user_id.isdigit()):
             skipped += 1
             continue
         user = User.objects.filter(pk=user_id).first()

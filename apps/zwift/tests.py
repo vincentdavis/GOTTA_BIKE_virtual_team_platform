@@ -82,6 +82,43 @@ def test_zauth_shows_service_error(logged_in_client, monkeypatch):
     assert b"couldn&#x27;t reach the Zwift service" in resp.content.lower() or b"try again" in resp.content
 
 
+FALLBACK = "Can't connect? Ask a team admin in Discord."
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("configured", "status"),
+    [
+        (False, None),  # not configured
+        (True, None),  # service unreachable
+        (True, {"connected": False, "zwid": None, "connected_at": None}),  # consent failed or not tried
+    ],
+    ids=["not-configured", "unreachable", "not-connected"],
+)
+def test_riders_who_cannot_connect_are_told_where_to_go(logged_in_client, monkeypatch, configured, status):
+    """Zwift Link is the only way to verify, so every dead end names the fallback."""
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: configured)
+    monkeypatch.setattr("apps.zwift.client.get_connection_status", lambda user_id: status)
+
+    body = logged_in_client.get(reverse("zwift:zauth")).content.decode()
+
+    assert FALLBACK in body
+
+
+@pytest.mark.django_db
+def test_a_connected_rider_is_not_shown_the_fallback(logged_in_client, monkeypatch):
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    monkeypatch.setattr(
+        "apps.zwift.client.get_connection_status",
+        lambda user_id: {"connected": True, "zwid": "12345", "connected_at": None},
+    )
+    monkeypatch.setattr("apps.zwift.client.get_racing_profile", lambda user_id: None)
+
+    body = logged_in_client.get(reverse("zwift:zauth")).content.decode()
+
+    assert FALLBACK not in body
+
+
 @pytest.mark.django_db
 def test_connect_redirects_to_authorize_url(logged_in_client, user, monkeypatch):
     captured = {}
@@ -117,10 +154,12 @@ def test_connect_requires_post(logged_in_client, monkeypatch):
 
 @pytest.mark.django_db
 def test_disconnect_calls_service_and_redirects(logged_in_client, user, monkeypatch):
+    from apps.zwift.client import DisconnectOutcome
+
     captured = {}
     monkeypatch.setattr(
-        "apps.zwift.client.disconnect",
-        lambda user_id: captured.setdefault("user_id", user_id) or True,
+        "apps.zwift.client.disconnect_link",
+        lambda user_id: captured.setdefault("user_id", user_id) and DisconnectOutcome.REMOVED,
     )
     resp = logged_in_client.post(reverse("zwift:zauth_disconnect"))
     assert resp.status_code == 302

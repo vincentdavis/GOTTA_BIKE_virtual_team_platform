@@ -5,6 +5,8 @@ the profile-incomplete banner, which only flags never-verified members and so
 leaves the legacy/admin cohort — the actual migration backlog — with no signal.
 """
 
+from unittest.mock import patch
+
 import pytest
 from constance.test import override_config
 from django.urls import reverse
@@ -60,10 +62,14 @@ def test_removing_your_own_verification_ends_zauth_verified(client, user_model):
     exists -- and waiting for the hourly reconcile to tidy them is not an option: it aborts
     while the zauth service is down, so they could stay indefinitely.
     """
+    from apps.zwift.client import DisconnectOutcome
+
     user = _member(user_model, "z", zwid_verified=True, zwid_verification_method="zauth", zwid=99)
     client.force_login(user)
 
-    client.post(reverse("accounts:unverify_zwift"))
+    # The service confirms the link is gone; without that the removal is refused.
+    with patch("apps.zwift.client.disconnect_link", return_value=DisconnectOutcome.REMOVED):
+        client.post(reverse("accounts:unverify_zwift"))
     user.refresh_from_db()
 
     assert user.zwid is None

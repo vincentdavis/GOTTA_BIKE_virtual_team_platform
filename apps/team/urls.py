@@ -34,11 +34,6 @@ urlpatterns = [
         views.verification_record_media_view,
         name="verification_record_media",
     ),
-    path(
-        "verification/zwid-action/<int:user_id>/",
-        views.zwid_verification_action_view,
-        name="zwid_verification_action",
-    ),
     path("verification/delete-expired-media/", views.delete_expired_media_view, name="delete_expired_media"),
     path("verification/delete-rejected-media/", views.delete_rejected_media_view, name="delete_rejected_media"),
     path("performance-review/", views.performance_review_view, name="performance_review"),
@@ -52,16 +47,6 @@ urlpatterns = [
     path("applications/<uuid:pk>/delete/", views.membership_application_delete_view, name="application_delete"),
     path("applications/bulk-delete/", views.membership_application_bulk_delete_view, name="application_bulk_delete"),
     path("apply/<uuid:pk>/", views.membership_application_public_view, name="application_public"),
-    path(
-        "apply/<uuid:pk>/manual-zwift-verify/",
-        views.application_manual_zwift_verify,
-        name="application_manual_zwift_verify",
-    ),
     path("apply/<uuid:pk>/unverify-zwift/", views.application_unverify_zwift, name="application_unverify_zwift"),
     path("apply/<uuid:pk>/zauth-connect/", views.application_zauth_connect, name="application_zauth_connect"),
-    path(
-        "applications/<uuid:pk>/zwid-action/",
-        views.application_zwid_admin_action_view,
-        name="application_zwid_admin_action",
-    ),
 ]

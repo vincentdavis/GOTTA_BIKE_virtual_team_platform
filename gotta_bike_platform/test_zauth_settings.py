@@ -35,7 +35,15 @@ def test_the_cutover_flag_is_grouped_with_the_banner_settings():
     assert "ZAUTH_BANNER_ENABLED" in group
 
 
-def test_the_cutover_flag_advertises_that_it_is_inert():
-    """It is registered ahead of the gating, so the description has to say so."""
+def test_the_cutover_flag_describes_what_it_actually_does():
+    """The flag is enforced now, so the description must no longer call it inert.
+
+    It must also say what it leaves alone -- Race Verified and roles -- and that it is
+    reversible, since those are what an admin needs to know before switching it on.
+    """
     _default, description, _field_type = settings.CONSTANCE_CONFIG["ZAUTH_VERIFICATION_REQUIRED"]
-    assert "NOT YET ENFORCED" in description
+    assert "NOT YET ENFORCED" not in description
+    for phrase in ("legacy, admin and no-method", "profile completeness", "event signup", "rosters", "Discord bot"):
+        assert phrase in description
+    assert "does not change the Race Verified" in description
+    assert "turning it off restores everyone" in description

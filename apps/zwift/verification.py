@@ -9,8 +9,10 @@ the account is no longer connected.
 Two invariants (see project memory ``zauth-verification-migration``):
 
 1. **Revocation is scoped to ``method='zauth'`` users only.** Legacy/admin
-   verifications are never touched here — they are grandfathered and only change
-   via the eventual cutover flag or an admin.
+   verifications are never touched here. They are grandfathered: they end only
+   through the rider's own "Remove" or account deletion (no staff tool changes
+   them any more), and ``ZAUTH_VERIFICATION_REQUIRED`` only stops them counting
+   without editing the stored rows.
 2. **A failed/unavailable service call never revokes anyone.** ``None`` from the
    client means "unknown", not "nobody connected", so we skip rather than wipe.
 """

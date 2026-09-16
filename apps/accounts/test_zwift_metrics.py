@@ -135,3 +135,26 @@ def test_an_all_null_bulk_row_leaves_the_last_known_values(user, monkeypatch) ->
     assert result["skipped"] == 1
     assert result["per_user_fetches"] == 0   # key present -> never falls back
     assert user.z_ftp == Decimal("300.0")
+
+
+@pytest.mark.django_db
+def test_a_registration_connection_is_skipped_not_fatal(user, monkeypatch) -> None:
+    """A membership registration connects under its UUID, which is not a User pk.
+
+    Looking it up as one raised ValueError and ended the sweep for everyone after it.
+    """
+    monkeypatch.setattr("apps.zwift.client.is_configured", lambda: True)
+    # A UUID, and an Arabic-Indic digit, which isdigit() accepts and int() reads as 3.
+    rows = [
+        {"user_id": "5f0c1f0e-7d36-4a55-9d0e-1f2a3b4c5d6e", "z_ftp": 200.0, "z_map": 300.0, "weight_in_grams": 1},
+        {"user_id": chr(0x0663), "z_ftp": 200.0, "z_map": 300.0, "weight_in_grams": 1},
+        {"user_id": str(user.pk), "z_ftp": 248.0, "z_map": 340.0, "weight_in_grams": 66000},
+    ]
+    monkeypatch.setattr("apps.zwift.client.list_connections", lambda: rows)
+
+    result = refresh_zwift_racing_metrics.func()
+    user.refresh_from_db()
+
+    assert result["skipped"] == 2
+    assert result["updated"] == 1
+    assert user.z_ftp == Decimal("248.0")

@@ -1664,10 +1664,12 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
     somebody typed -- attaching an account to it would put one rider's results under another
     rider's name and face.
 
-    Note the gate answers "has this account been verified", which is weaker than "does this
-    account own this zwid": ``manual_zwift_verify`` rewrites ``User.zwid`` without clearing
-    ``zwid_verified``. Fixing that is out of this module's hands; the duplicate rule caps the
-    damage at losing an account half rather than taking one over.
+    Note the gate answers "has this account been verified", which is only as strong as "does
+    this account own this zwid" for a zauth verification: that zwid is the one the service
+    reports, and nothing else can write it now. A legacy or admin verification predates that,
+    and some were left pointing at a zwid the rider later typed in by hand. Cleaning those up is
+    out of this module's hands (the cutover flag stops them counting); the duplicate rule caps
+    the damage at losing an account half rather than taking one over.
 
     Costs 16 queries, flat in the number of riders: three for the union, one Constance read
     for the cutover policy, accounts, guild memberships, the two per-source name tables, two

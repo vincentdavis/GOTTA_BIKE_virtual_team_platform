@@ -103,7 +103,7 @@
             <div class="space-y-2">
               <div class="flex items-center justify-between">
                 <span class="text-base-content/70">Zwift Verified</span>
-                {% if profile_user.zwid_verified %}
+                {% if profile_user.has_accepted_zwid_verification %}
                   <span class="badge badge-success badge-sm">Yes</span>
                 {% else %}
                   <span class="badge badge-ghost badge-sm">No</span>

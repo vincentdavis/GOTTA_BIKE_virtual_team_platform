@@ -1,59 +1,10 @@
 """Utility functions for accounts app."""
 
 import re
-from typing import NamedTuple
 
 import httpx
 import logfire
 from bs4 import BeautifulSoup
-
-# ``User.zwid`` is a PositiveIntegerField, i.e. a 32-bit ``integer`` column on PostgreSQL:
-# a larger value raises DataError on save rather than storing. (``apps.zwift.verification``
-# applies the same bound to the zwid the zauth service reports.)
-MAX_ZWID = 2147483647
-_MAX_ZWID_DIGITS = len(str(MAX_ZWID))
-
-# ``[0-9]`` rather than ``\d``, which also matches "\u0663" and friends: int() reads those
-# as ordinary digits, so a URL carrying them would resolve to some other rider's ZWID.
-_ZWIFTPOWER_PROFILE = re.compile(r"zwiftpower\.com/profile\.php\?z=([0-9]+)")
-_ASCII_DIGITS = re.compile(r"[0-9]+")
-
-
-class ZwidInput(NamedTuple):
-    """What a rider's ZWID entry parsed to.
-
-    Attributes:
-        zwid: The ZWID to store, or None when the input is unusable.
-        form: A coarse label for the shape of the entry -- ``zwiftpower_url``, ``digits``,
-            ``url``, ``empty`` or ``other``. Safe to log for any input.
-        entered: The number the rider actually typed, whether or not it is usable, so a
-            rejected entry is still traceable to the ZWID they meant. None when they typed
-            no number, or one too long to convert (see :func:`parse_zwid_input`).
-
-    """
-
-    zwid: int | None
-    form: str
-    entered: int | None
-
-
-def _read_digits(text: str) -> tuple[int | None, int | None]:
-    """Convert a run of ASCII digits into (storable zwid, the number as entered).
-
-    Args:
-        text: A non-empty run of ASCII digits.
-
-    Returns:
-        The value if the column can hold it else None, and the value as entered -- which is
-        also None past :data:`_MAX_ZWID_DIGITS`, because int() refuses a string of more than
-        4300 digits outright and nothing that long is a mistyped ZWID anyway.
-
-    """
-    if len(text) > _MAX_ZWID_DIGITS:
-        return None, None
-    entered = int(text)
-    return (entered if 0 < entered <= MAX_ZWID else None), entered
-
 
 # ZwiftPower sends a few ISO 3166-2 subdivisions where everything else is ISO 3166-1, and
 # django_countries knows only the latter. Each maps to its parent country -- which is the flag
@@ -96,44 +47,6 @@ def resolve_country(raw: str) -> tuple[str, str]:
     if code not in countries:
         return "", ""
     return code, label or Country(code).name
-
-
-def parse_zwid_input(raw: str) -> ZwidInput:
-    """Read a rider-entered ZwiftPower profile URL or bare Zwift ID.
-
-    Shared by the rider's own verification page and the public membership-registration
-    form so the two cannot drift apart on what they accept.
-
-    The ZWID a rider entered is an id and belongs in the logs even when it is rejected --
-    that is how a "it would not take my ID" report gets answered. The rest of what they
-    typed does not: the box takes anything, so ``form`` is what names an entry that
-    carried no number.
-
-    Rejects what the column cannot hold: ``str.isdigit()`` is true of "\u00b2" (``int()``
-    raises) and of "\u0663" (``int()`` yields 3, a real rider's ZWID), and a value above
-    :data:`MAX_ZWID` raises DataError on save.
-
-    Args:
-        raw: Whatever the rider typed.
-
-    Returns:
-        A :class:`ZwidInput`.
-
-    """
-    text = raw.strip()
-    if not text:
-        return ZwidInput(None, "empty", None)
-
-    match = _ZWIFTPOWER_PROFILE.search(text)
-    if match:
-        zwid, entered = _read_digits(match.group(1))
-        return ZwidInput(zwid, "zwiftpower_url", entered)
-
-    if _ASCII_DIGITS.fullmatch(text):
-        zwid, entered = _read_digits(text)
-        return ZwidInput(zwid, "digits", entered)
-
-    return ZwidInput(None, "url" if "://" in text or text.startswith("www.") else "other", None)
 
 
 def youtube_url_form(youtube_url: str) -> str:

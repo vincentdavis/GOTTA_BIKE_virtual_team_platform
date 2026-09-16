@@ -14,7 +14,15 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <div>
-                    <p>The following data from your membership registration will be imported to your profile. Fields you've already filled in will not be overwritten.</p>
+                    {% if offers_only_zwift_carry_over %}
+                    {# Every profile field is already filled, so only the connection would move. #}
+                    <p>Your membership registration is connected to Zwift. Importing it moves that connection to your account; your profile fields are already filled and will not change.</p>
+                    {% else %}
+                    <p>The following data from your membership registration will be imported to your profile. Profile fields you've already filled in will not be overwritten.</p>
+                    {% if offers_zwift_carry_over %}
+                    <p>The Zwift connection works differently: it replaces the Zwift ID on your profile. See below.</p>
+                    {% endif %}
+                    {% endif %}
                 </div>
             </div>
 
@@ -71,6 +79,16 @@
                 </table>
             </div>
 
+            {% if offers_zwift_carry_over %}
+            {# Before the button: moving the link cannot be undone from this page. #}
+            <p class="text-sm mb-6">
+                Your registration is connected to Zwift. Importing moves that connection to your
+                account and verifies it with the Zwift ID Zwift reports, which replaces any Zwift ID
+                already on your profile. If your account is already connected to a different Zwift
+                account, yours is kept and the registration's connection is removed.
+            </p>
+            {% endif %}
+
             <!-- Action Buttons -->
             <form method="post" class="flex gap-4">
                 {% csrf_token %}
@@ -83,9 +101,12 @@
                 <a href="{% url 'accounts:profile_edit' %}" class="btn btn-ghost">Cancel</a>
             </form>
 
+            {% if not offers_only_zwift_carry_over %}
             <p class="text-sm text-base-content/50 mt-4">
-                Note: Only empty fields in your profile will be filled. Existing data will not be changed.
+                Note: Only empty profile fields will be filled; the profile data you already have will not be changed.
+                {% if offers_zwift_carry_over %}The Zwift connection is the exception: it replaces your profile's Zwift ID.{% endif %}
             </p>
+            {% endif %}
         </div>
     </div>
 </div>

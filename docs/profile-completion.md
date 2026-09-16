@@ -65,13 +65,26 @@ The profile edit page (`/user/profile/edit/`) shows:
 
 ## Zwift Verification
 
-Users must verify their Zwift account by:
+Zwift verification comes only from connecting the rider's official Zwift account (Zwift Link,
+the zauth OAuth service):
 
-1. Clicking "Verify Zwift Account" on the profile edit page
-2. Entering their Zwift email and password
-3. The system fetches their Zwift ID and marks the account as verified
+1. The rider clicks "Connect Zwift" on the profile edit page, the profile page or the
+   verification page, which leads to `/user/zauth/`
+2. Zwift's own consent page asks them to sign in and approve the connection; the platform never
+   sees their Zwift password
+3. On the way back, the platform reads the connection from the service and marks the account
+   verified with the Zwift ID Zwift reports (`zwid_verification_method = "zauth"`). An hourly
+   task reconciles every account against the service
 
-**Note**: Zwift credentials are not stored. They are only used once to fetch the Zwift ID.
+There is no manual or staff-granted verification. Riders who cannot connect are told:
+"Can't connect? Ask a team admin in Discord."
+
+A rider who connected Zwift on their membership registration has that connection moved to their
+account when they import the registration (see `apps/accounts/services.py:carry_over_zwift_link`).
+
+Legacy verifications made by the retired methods still count until the
+`ZAUTH_VERIFICATION_REQUIRED` setting is turned on; `User.has_accepted_zwid_verification` is the
+property that applies that rule.
 
 ## Form Validation
 

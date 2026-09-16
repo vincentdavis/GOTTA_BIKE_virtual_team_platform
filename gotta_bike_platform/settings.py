@@ -711,10 +711,14 @@ CONSTANCE_CONFIG = {
     ),
     "ZAUTH_VERIFICATION_REQUIRED": (
         False,
-        "NOT YET ENFORCED — the cutover switch for Zwift OAuth. When it is wired up, turning "
-        "this on will make legacy and admin verifications count as unverified for gating, so "
-        "only Zwift OAuth counts. Leave off until the Zwift Verification report shows the "
-        "legacy and not-verified counts at or near zero.",
+        "The cutover switch for Zwift OAuth. When on, only a Zwift OAuth (Zwift Link) "
+        "verification counts: legacy, admin and no-method verifications all read as not "
+        "verified. That affects profile completeness (and so event signup), the rosters, "
+        "the Discord bot's profile payload, the Zwift sections of profile pages and who may "
+        "submit new race verification records. It does not change the Race Verified status "
+        "records already earn, or any Discord role, and it never edits the stored "
+        "verification, so turning it off restores everyone. Leave off until the Zwift "
+        "Verification report shows the legacy and not-verified counts at or near zero.",
         bool,
     ),
     # Verification instructions
