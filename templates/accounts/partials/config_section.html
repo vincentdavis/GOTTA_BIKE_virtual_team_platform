@@ -48,9 +48,10 @@
         </legend>
     {% endif %}
     <div class="form-control">
-        <label class="label" for="id_{{ setting.key }}">
-            <span class="label-text font-medium flex items-center gap-1">
-                {{ setting.key }}
+        <label class="label max-w-full" for="id_{{ setting.key }}">
+            <span class="label-text font-medium flex items-center gap-1 min-w-0">
+                {# Keys are long unbroken words; at large text sizes they must break or the page scrolls sideways. #}
+                <span class="whitespace-normal break-all">{{ setting.key }}</span>
                 {% with help=setting.key|permission_help %}
                 {% if help %}
                 <div class="dropdown dropdown-hover dropdown-right">

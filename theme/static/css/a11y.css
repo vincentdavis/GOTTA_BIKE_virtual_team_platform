@@ -96,3 +96,27 @@
 :root[data-text-size="large"] { font-size: 112.5%; }   /* 18px */
 :root[data-text-size="larger"] { font-size: 125%; }    /* 20px */
 :root[data-text-size="largest"] { font-size: 150%; }   /* 24px */
+
+/*
+ * Keep hidden tooltips out of the layout.
+ * --------------------------------------
+ * daisyUI hides a tooltip bubble with `opacity: 0` only. The bubble is still laid out -- up to
+ * 20rem wide (`width: max-content`) and centred on its trigger -- so a trigger near the right
+ * edge of a phone made .drawer-content wider than the screen and the whole page scrolled
+ * sideways (WCAG 1.4.10 Reflow). Measured at 375px: 194px on the profile page, 41px on a
+ * verification record, 21px on the verification page at the largest text size; 0 on every
+ * page once the hidden bubbles were taken out of layout.
+ *
+ * So a bubble is `display: none` except in the three states daisyUI itself shows it in:
+ * `.tooltip-open`, `:hover`, and `:has(:focus-visible)`. The selectors mirror daisyUI's so
+ * the two can never disagree about when a tooltip is visible. The cost is daisyUI's fade-in,
+ * which cannot run from `display: none` -- the bubble now appears at once.
+ *
+ * This does not make the text reachable on a phone (there is no hover), which is the separate
+ * data-tip backlog item in docs/accessibility.md.
+ */
+.tooltip:not(.tooltip-open):not(:hover):not(:has(:focus-visible))[data-tip]::before,
+.tooltip:not(.tooltip-open):not(:hover):not(:has(:focus-visible))::after,
+.tooltip:not(.tooltip-open):not(:hover):not(:has(:focus-visible)) > .tooltip-content {
+  display: none;
+}

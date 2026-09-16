@@ -39,7 +39,7 @@
           {% endif %}
           {% if record.user.zwid %}
           <div class="text-sm text-base-content/70 mt-1">ZWID: {{ record.user.zwid }}</div>
-          <div class="flex gap-2 mt-2">
+          <div class="flex flex-wrap gap-2 mt-2">
             <a href="https://zwiftpower.com/profile.php?z={{ record.user.zwid }}" target="_blank" rel="noopener" class="btn btn-xs btn-outline">
               ZwiftPower
               <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
@@ -455,7 +455,7 @@
           <span>This record is pending review. Review the media before verifying or rejecting.</span>
         </div>
         <p class="text-sm text-base-content/70 mb-4">The team member will be sent a DM with the review status change. You can add an optional note with your review.</p>
-        <div class="flex gap-4">
+        <div class="flex flex-wrap gap-4">
           {% if record.user == user %}
           <div class="tooltip" data-tip="You cannot approve your own record">
             <button type="button" class="btn btn-success btn-disabled" disabled>

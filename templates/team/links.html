@@ -66,7 +66,7 @@
         {% for link in links %}
         <div class="card bg-base-300">
           <div class="card-body p-4">
-            <div class="flex justify-between items-start">
+            <div class="flex flex-wrap justify-between items-start gap-x-4 gap-y-2">
               <div class="flex-1">
                 <h3 class="font-semibold text-lg flex items-center gap-2">
                   <a href="{{ link.url }}" target="_blank" rel="noopener" class="link link-primary hover:link-hover">
@@ -93,7 +93,7 @@
                 <p class="text-sm text-base-content/70 mt-1">{{ link.description }}</p>
                 {% endif %}
               </div>
-              <div class="flex flex-wrap gap-1 ml-4">
+              <div class="flex flex-wrap gap-1">
                 {% for type_value in link.link_types %}
                 <span class="badge badge-sm {{ type_value|link_type_badge_class }}">{{ type_value }}</span>
                 {% empty %}

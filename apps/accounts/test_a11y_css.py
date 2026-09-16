@@ -57,3 +57,18 @@ def test_reduced_motion_keeps_spinners_moving():
     assert ".loading," in css and ".htmx-indicator" in css
     # Durations go to ~0 rather than `animation: none`, so transitionend still fires.
     assert "animation-duration: 0.01ms !important" in css
+
+
+def test_hidden_tooltips_are_out_of_the_layout():
+    """A hidden daisyUI tooltip was still laid out, so it widened phone pages.
+
+    The rule must keep all three of daisyUI's "shown" states -- ``.tooltip-open``, ``:hover``
+    and ``:has(:focus-visible)`` -- or a tooltip would stop appearing at all, and it must cover
+    both the ``data-tip`` bubble and the ``.tooltip-content`` element form, plus the arrow.
+    """
+    rules = re.sub(r"/\*.*?\*/", "", _CSS.read_text(), flags=re.S)
+    block = re.search(r"([^{}]*)\{\s*display:\s*none;\s*\}", rules)
+    assert block, "no display:none rule for hidden tooltips"
+    selectors = [s.strip() for s in block.group(1).split(",")]
+    hidden = ".tooltip:not(.tooltip-open):not(:hover):not(:has(:focus-visible))"
+    assert selectors == [f"{hidden}[data-tip]::before", f"{hidden}::after", f"{hidden} > .tooltip-content"]
