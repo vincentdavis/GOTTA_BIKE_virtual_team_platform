@@ -154,7 +154,9 @@ def test_a_file_larger_than_djangos_body_cap_still_uploads(client, user_model):
         reverse("accounts:submit_race_ready"),
         {
             "verify_type": "height",
-            "media_type": "photo",
+            # "video", matching the clip.mp4 being sent. This said "photo", which Height has
+            # never offered and the form now refuses -- see test_verification_media_types.py.
+            "media_type": "video",
             "record_date": "2026-09-01",
             "height": "180",
             "media_file": upload,

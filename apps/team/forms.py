@@ -161,6 +161,21 @@ class RaceReadyRecordForm(forms.ModelForm):
         ("power", "Power"),
     ]
 
+    # Which evidence each verification may be submitted with. The ONE definition: clean()
+    # enforces it and the form's own script reads it, so the picker and the check cannot come
+    # to disagree. The picker used to be the only place this rule lived -- a request that
+    # skipped the page's JavaScript could file a Weight Light as a video.
+    #
+    # Weight Light is a photo because it is the lightweight check; the others need something a
+    # still image cannot prove. "Other" is open to all four, for evidence that is none of the
+    # named kinds -- it is still a file or a link, and still reviewed like the rest.
+    MEDIA_TYPES_BY_VERIFY_TYPE: ClassVar[dict[str, tuple[str, ...]]] = {
+        "weight_full": ("video", "link", "other"),
+        "weight_light": ("photo", "other"),
+        "height": ("video", "link", "other"),
+        "power": ("video", "link", "other"),
+    }
+
     class Meta:
         """Meta options for RaceReadyRecordForm."""
 
@@ -353,6 +368,25 @@ class RaceReadyRecordForm(forms.ModelForm):
         # Require file or URL
         if not media_file and not url:
             raise forms.ValidationError("You must provide either a file upload or a URL (or both).")
+
+        # The evidence must be a kind this verification accepts. Checked here, not just
+        # narrowed in the picker, because the picker is JavaScript and the POST is not.
+        media_type = cleaned_data.get("media_type")
+        allowed_media = self.MEDIA_TYPES_BY_VERIFY_TYPE.get(verify_type, ())
+        if verify_type and media_type and media_type not in allowed_media:
+            media_labels = dict(self.fields["media_type"].choices)
+            verify_label = dict(self.ALL_VERIFY_TYPE_CHOICES).get(verify_type, verify_type)
+            self.add_error(
+                "media_type",
+                f"{verify_label} can be submitted as "
+                + ", ".join(str(media_labels.get(m, m)) for m in allowed_media)
+                + ".",
+            )
+            logfire.warning(
+                "RaceReadyRecordForm media type not allowed for verification",
+                verify_type=verify_type,
+                media_type=media_type,
+            )
 
         # Require appropriate measurement field based on verify_type
         missing_fields = []

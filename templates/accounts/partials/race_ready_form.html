@@ -302,9 +302,18 @@
     </div>
   </form>
 
+  {% comment %}
+    The evidence each verification accepts, from the form itself -- the same map clean()
+    enforces, so the picker cannot offer something the server will refuse, or hide something
+    it would take. json_script, not string interpolation, so the values arrive as data.
+  {% endcomment %}
+  {{ race_ready_form.MEDIA_TYPES_BY_VERIFY_TYPE|json_script:"media-types-by-verify-type" }}
   <script>
       (function () {
           const unitPreference = '{{ unit_preference|default:"metric" }}';
+          const mediaTypesByVerifyType = JSON.parse(
+              document.getElementById('media-types-by-verify-type').textContent
+          );
           const verifyTypeRadios = Array.from(document.querySelectorAll('input[name="verify_type"]'));
           const getVerifyType = () => (verifyTypeRadios.find(r => r.checked) || {}).value || '';
           const mediaTypeSelect = document.getElementById('id_media_type');
@@ -337,12 +346,13 @@
               if (weightInstructions) weightInstructions.classList.add('hidden');
               if (heightInstructions) heightInstructions.classList.add('hidden');
 
-              // Filter media type options: weight_light only allows photo, others exclude photo
+              // Offer only the evidence this verification accepts (see the json_script above).
+              // Filtered from allMediaOptions rather than rebuilt from the map, so the options
+              // keep the model's order and each type keeps the same default it always had.
               const currentMediaValue = mediaTypeSelect.value;
               mediaTypeSelect.innerHTML = '';
-              const allowedOptions = value === 'weight_light'
-                  ? allMediaOptions.filter(o => o.value === 'photo')
-                  : allMediaOptions.filter(o => o.value !== 'photo');
+              const accepted = mediaTypesByVerifyType[value] || allMediaOptions.map(o => o.value);
+              const allowedOptions = allMediaOptions.filter(o => accepted.includes(o.value));
               allowedOptions.forEach(o => {
                   const opt = document.createElement('option');
                   opt.value = o.value;

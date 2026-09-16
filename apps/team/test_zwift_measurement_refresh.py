@@ -17,6 +17,7 @@ from django.apps import apps as django_apps
 from django.urls import reverse
 
 from apps.rider_data import tasks
+from apps.team.forms import RaceReadyRecordForm
 from apps.team.models import RaceReadyRecord
 from apps.zwift import client
 
@@ -221,9 +222,12 @@ def _submit(client_, verify_type: str):
         The response.
 
     """
+    # A link where the verification takes one, else "Other" -- Weight Light is a photo or
+    # Other, never a link, and the form refuses a kind the verification does not accept.
+    accepted = RaceReadyRecordForm.MEDIA_TYPES_BY_VERIFY_TYPE[verify_type]
     data = {
         "verify_type": verify_type,
-        "media_type": "link",
+        "media_type": "link" if "link" in accepted else "other",
         "url": "https://example.test/evidence",
         "record_date": "2026-09-01",
     }

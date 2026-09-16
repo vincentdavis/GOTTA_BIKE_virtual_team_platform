@@ -80,6 +80,10 @@ class RaceReadyRecord(models.Model):
             ("video", "Video"),
             ("photo", "Photo"),
             ("link", "Link"),
+            # Evidence that is none of the above -- another app's screen, a scale's own
+            # export. Still a file or a URL like the rest; which types each verification may
+            # use is RaceReadyRecordForm.MEDIA_TYPES_BY_VERIFY_TYPE.
+            ("other", "Other"),
         ],
         help_text="Type of media",
     )
