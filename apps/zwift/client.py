@@ -13,6 +13,7 @@ See the service's endpoints:
 - ``GET  /api/zwift/oauth/status?user_id=`` -> ``{connected, zwid, connected_at}``
 - ``POST /api/zwift/oauth/disconnect`` -> ``{disconnected}``
 - ``GET  /api/zwift/users/<id>/profile-stats`` -> windowed metric min/max
+- ``POST /api/zwift/users/<id>/profile/refresh`` -> the profile, re-read from Zwift now
 """
 
 from __future__ import annotations
@@ -23,6 +24,10 @@ import logfire
 from gotta_bike_platform.config import settings as config
 
 _TIMEOUT = 15.0
+
+# The refresh reads Zwift inside the service's request, so it can take longer than the stored-copy
+# reads above. It only runs from a background task, so nobody is waiting on the page.
+_REFRESH_TIMEOUT = 30.0
 
 
 def is_configured() -> bool:
@@ -141,6 +146,55 @@ def get_racing_profile(user_id: str) -> dict | None:
         return response.json()
     except httpx.HTTPError as e:
         logfire.error("Zwift racing profile fetch failed", user_id=user_id, error=str(e))
+        return None
+
+
+def refresh_racing_profile(user_id: str) -> dict | None:
+    """Have the service re-read a connected user's racing profile from Zwift, now.
+
+    Unlike ``get_racing_profile``, which serves the service's stored copy, this makes the
+    service call Zwift during the request and store the result, so the weight and height a
+    rider has just changed in Zwift are in the response. The service throttles it: a profile
+    fetched in the last 60 seconds comes back as stored, with ``refreshed: false``.
+
+    On any error the service leaves its stored profile as it was, so a failed refresh loses
+    nothing; the next scheduled read picks the change up instead.
+
+    Args:
+        user_id: The platform user identifier (stable primary key).
+
+    Returns:
+        The racing-profile dict (as ``get_racing_profile``) plus ``refreshed``, or None if the
+        service is unconfigured, the user isn't connected, or the call failed. A 404 means
+        either that the user isn't connected or that Zwift has no profile for them; the
+        service passes Zwift's 404 through unchanged.
+
+    """
+    if not is_configured():
+        return None
+    try:
+        response = httpx.post(
+            _url(f"/api/zwift/users/{user_id}/profile/refresh"),
+            headers=_headers(),
+            timeout=_REFRESH_TIMEOUT,
+        )
+    except httpx.HTTPError as e:
+        logfire.error("Zwift profile refresh failed", user_id=user_id, error=type(e).__name__)
+        return None
+
+    if response.status_code == 404:
+        logfire.info("Zwift profile refresh found no profile: not connected, or none on Zwift", user_id=user_id)
+        return None
+    if response.status_code == 429:
+        logfire.warning("Zwift profile refresh rate limited by Zwift", user_id=user_id)
+        return None
+    if not response.is_success:
+        logfire.error("Zwift profile refresh failed", user_id=user_id, status_code=response.status_code)
+        return None
+    try:
+        return response.json()
+    except ValueError:
+        logfire.error("Zwift profile refresh returned a body that is not JSON", user_id=user_id)
         return None
 
 

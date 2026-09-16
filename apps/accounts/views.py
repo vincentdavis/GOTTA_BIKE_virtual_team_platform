@@ -25,7 +25,7 @@ from apps.accounts.models import BlockedDiscordId, User
 from apps.accounts.services import delete_user_account
 from apps.accounts.utils import parse_zwid_input
 from apps.rider_data.models import RiderProfile
-from apps.rider_data.tasks import request_profile_refresh
+from apps.rider_data.tasks import refresh_zwift_profile, request_profile_refresh
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import (
     build_verify_type_options,
@@ -1248,6 +1248,11 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
             record_id=record.id,
             notification_type="submitted",
         )
+
+        # Re-read the rider's Zwift weight and height now, so the reviewer compares the claim
+        # with what is set in Zwift at submission rather than at the last scheduled read.
+        if record.is_body_measurement:
+            refresh_zwift_profile.enqueue(user_id=request.user.id)
 
         # Notify the performance verification team when a power record is submitted
         if record.verify_type == "power":

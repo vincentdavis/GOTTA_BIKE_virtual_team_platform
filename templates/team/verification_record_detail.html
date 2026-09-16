@@ -147,6 +147,13 @@
           {% if zauth.verified_via_zauth %}
           <span class="badge badge-success badge-outline badge-sm">Verified via Zwift Auth</span>
           {% endif %}
+          {% if zauth.connected and record.is_body_measurement %}
+          <form method="post" class="ml-auto">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="refresh_zwift_profile">
+            <button type="submit" class="btn btn-xs btn-outline h-auto py-1">Refresh height and weight</button>
+          </form>
+          {% endif %}
         </div>
 
         {% if zauth.connected %}
@@ -210,15 +217,6 @@
             {% endif %}
           </div>
           <div>
-            <div class="text-base-content/60 text-xs tooltip tooltip-bottom cursor-help" data-tip="Range of the racing-metrics weight over the last 90 days of recorded changes.">Weight 90d range</div>
-            {% if zauth.weight_90d_min %}
-            <div class="font-mono">{{ zauth.weight_90d_min }} &ndash; {{ zauth.weight_90d_max }} kg</div>
-            <div class="text-base-content/40 text-xs">{{ zauth.weight_90d_count }} reading{{ zauth.weight_90d_count|pluralize }}</div>
-            {% else %}
-            <div class="text-base-content/40" title="No snapshot history in this window yet">&mdash;</div>
-            {% endif %}
-          </div>
-          <div>
             <div class="text-base-content/60 text-xs">Height 90d range</div>
             {% if zauth.height_90d_min %}
             <div class="font-mono">{{ zauth.height_90d_min }} &ndash; {{ zauth.height_90d_max }} cm</div>
@@ -227,12 +225,33 @@
             <div class="text-base-content/40" title="Height was added to the snapshot history later, so older snapshots lack it">&mdash;</div>
             {% endif %}
           </div>
+          <!-- Two weight ranges on purpose: the racing-metrics weight is what Zwift categorised
+               the rider at (the anti-sandbagging signal); the profile weight is what they have set. -->
           <div>
-            <div class="text-base-content/60 text-xs">Weight swing</div>
+            <div class="text-base-content/60 text-xs tooltip tooltip-bottom cursor-help" data-tip="Range of the racing-metrics weight (the weight Zwift raced and categorised the rider at) over the last 90 days of recorded changes.">Metrics weight 90d range</div>
+            {% if zauth.weight_90d_min %}
+            <div class="font-mono">{{ zauth.weight_90d_min }} &ndash; {{ zauth.weight_90d_max }} kg</div>
+            <div class="text-base-content/40 text-xs">{{ zauth.weight_90d_count }} reading{{ zauth.weight_90d_count|pluralize }}</div>
             {% if zauth.weight_90d_swing is not None %}
-            <div class="font-mono {% if zauth.weight_90d_swing_high %}text-warning{% endif %}">{{ zauth.weight_90d_swing|floatformat:1 }} kg</div>
+            <div class="text-xs font-mono {% if zauth.weight_90d_swing_high %}text-warning font-semibold{% else %}text-base-content/60{% endif %}">swing {{ zauth.weight_90d_swing|floatformat:1 }} kg</div>
+            {% endif %}
             {% else %}
-            <div class="text-base-content/40">&mdash;</div>
+            <div class="text-base-content/40" title="No snapshot history in this window yet">&mdash;</div>
+            {% endif %}
+          </div>
+          <div>
+            <div class="text-base-content/60 text-xs tooltip tooltip-bottom cursor-help" data-tip="Range of the rider's live Zwift profile weight over the last 90 days of recorded changes. It moves as soon as the rider edits their weight, even without racing.">Profile weight 90d range</div>
+            {% if zauth.profile_weight_90d_min %}
+            <div class="font-mono">{{ zauth.profile_weight_90d_min }} &ndash; {{ zauth.profile_weight_90d_max }} kg</div>
+            <div class="text-base-content/40 text-xs">{{ zauth.profile_weight_90d_count }} reading{{ zauth.profile_weight_90d_count|pluralize }}</div>
+            {% if zauth.profile_weight_90d_swing is not None %}
+            <div class="text-xs font-mono {% if zauth.profile_weight_90d_swing_high %}text-warning font-semibold{% else %}text-base-content/60{% endif %}">swing {{ zauth.profile_weight_90d_swing|floatformat:1 }} kg</div>
+            {% endif %}
+            {% else %}
+            <div class="text-base-content/40" title="No profile-weight history in this window yet">&mdash;</div>
+            {% endif %}
+            {% if zauth.profile_weight_history_since %}
+            <div class="text-base-content/40 text-xs">recorded since {{ zauth.profile_weight_history_since|date:"M j, Y" }}</div>
             {% endif %}
           </div>
         </div>

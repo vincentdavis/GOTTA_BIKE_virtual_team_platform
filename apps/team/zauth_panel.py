@@ -13,16 +13,19 @@ latest** racing-profile snapshot. From that we can show:
 - the current weight, with the timestamp of the snapshot it came from.
 
 Height and the 90-day ranges come from the service's ``profile-stats`` endpoint, which
-summarizes its deduped ``ZwiftRacingProfileSnapshot`` history. Two things to keep in mind
+summarizes its deduped ``ZwiftRacingProfileSnapshot`` history. Things to keep in mind
 when reading those numbers:
 
-- **The windowed weight is the competition-metrics weight**, not the live profile weight
-  shown at the top of the card — it is the series of values Zwift actually raced and
-  categorised the rider at, which is the useful anti-sandbagging signal but is a
-  different quantity from the one the rider edits.
+- **There are two weight ranges, for two different quantities.** ``weight_90d_*`` is the
+  competition-metrics weight: the series of values Zwift actually raced and categorised
+  the rider at, which is the useful anti-sandbagging signal. ``profile_weight_90d_*`` is
+  the live profile weight the rider edits, which moves even when they don't race. Neither
+  replaces the other.
 - **The window is only as deep as the history.** Snapshots are deduped on change and only
   reach back to when snapshotting was deployed (height later still), so a "90-day" range
-  can rest on very few points. ``count`` is surfaced so the page can say how many.
+  can rest on very few points. ``count`` is surfaced so the page can say how many. The
+  profile weight has only been recorded since :data:`PROFILE_WEIGHT_HISTORY_SINCE`, which
+  the page shows until that range has had 90 days to fill.
 
 Anything the service cannot supply is reported as explicitly unavailable rather than
 blank or zero, because a blank reads as "the rider is 0 kg" and a reviewer would act on
@@ -31,9 +34,11 @@ it. ``UNAVAILABLE_REASON`` is the single place the UI explains a gap.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import logfire
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from apps.zwift import client as zwift_client
@@ -48,6 +53,17 @@ UNAVAILABLE_REASON = "Not published by the Zwift service yet"
 #: A 90-day weight swing at or above this is highlighted for the reviewer. Not a verdict —
 #: riders legitimately fluctuate — just the threshold where it is worth a second look.
 SWING_ATTENTION_KG = 2.0
+
+#: The day the zauth service started recording the live profile weight in its snapshot
+#: history (``profile_weight_in_grams``). Before then only the metrics weight was kept, so
+#: until 90 days have passed the profile-weight "90-day" range is shorter than its label.
+PROFILE_WEIGHT_HISTORY_SINCE = date(2026, 9, 16)
+
+#: The two weight series summarized over 90 days: panel key prefix -> profile-stats field.
+_WEIGHT_WINDOWS = (
+    ("weight_90d", "weight_in_grams"),
+    ("profile_weight_90d", "profile_weight_in_grams"),
+)
 
 
 def _dt(value: object):
@@ -173,6 +189,31 @@ def _window(stats: dict | None, field: str, *, days: int = 90) -> dict | None:
     return entry if isinstance(entry, dict) else None
 
 
+def _weight_range(stats: dict | None, field: str) -> dict:
+    """Summarize one weight series' 90-day window for the panel.
+
+    Args:
+        stats: The service's profile-stats payload, or None.
+        field: The snapshot field holding the weight in grams.
+
+    Returns:
+        ``min``/``max`` in kg and ``count``, plus ``swing`` (max minus min) and
+        ``swing_high`` when both ends are known; empty when the window has no data.
+
+    """
+    window = _window(stats, field)
+    if not window:
+        return {}
+    low, high = _kg(window.get("min")), _kg(window.get("max"))
+    summary: dict = {"min": low, "max": high, "count": window.get("count") or 0}
+    if low is not None and high is not None:
+        summary["swing"] = round(high - low, 1)
+        # A couple of kilos inside a 90-day window is the thing a reviewer should look at
+        # twice; it can move a rider across a racing category boundary.
+        summary["swing_high"] = summary["swing"] >= SWING_ATTENTION_KG
+    return summary
+
+
 def build_zauth_panel(user: User) -> dict:
     """Assemble the Zwift Auth panel context for one rider.
 
@@ -206,6 +247,11 @@ def build_zauth_panel(user: User) -> dict:
           on, so the page can show that a range is thin rather than implying confidence.
         - ``weight_90d_swing`` / ``weight_90d_swing_high``: max minus min, and whether it
           crosses :data:`SWING_ATTENTION_KG`.
+        - ``profile_weight_90d_min`` / ``_max`` / ``_count`` / ``_swing`` / ``_swing_high``:
+          the same summary for the live profile weight. The ``weight_90d_*`` keys above
+          stay the racing-metrics weight.
+        - ``profile_weight_history_since``: :data:`PROFILE_WEIGHT_HISTORY_SINCE` while the
+          profile-weight history is younger than 90 days, else None.
         - ``unavailable_reason``: shown against anything still None.
 
     """
@@ -230,6 +276,16 @@ def build_zauth_panel(user: User) -> dict:
         "weight_90d_count": 0,
         "weight_90d_swing": None,
         "weight_90d_swing_high": False,
+        "profile_weight_90d_min": None,
+        "profile_weight_90d_max": None,
+        "profile_weight_90d_count": 0,
+        "profile_weight_90d_swing": None,
+        "profile_weight_90d_swing_high": False,
+        "profile_weight_history_since": (
+            PROFILE_WEIGHT_HISTORY_SINCE
+            if timezone.localdate() < PROFILE_WEIGHT_HISTORY_SINCE + timedelta(days=90)
+            else None
+        ),
         "height_90d_min": None,
         "height_90d_max": None,
         "height_90d_count": 0,
@@ -262,17 +318,9 @@ def build_zauth_panel(user: User) -> dict:
     current = (stats or {}).get("current")
     if isinstance(current, dict):
         panel["height_cm"] = _cm(current.get("height_in_millimeters"))
-    weight_window = _window(stats, "weight_in_grams")
-    if weight_window:
-        panel["weight_90d_min"] = _kg(weight_window.get("min"))
-        panel["weight_90d_max"] = _kg(weight_window.get("max"))
-        panel["weight_90d_count"] = weight_window.get("count") or 0
-        if panel["weight_90d_min"] is not None and panel["weight_90d_max"] is not None:
-            swing = round(panel["weight_90d_max"] - panel["weight_90d_min"], 1)
-            panel["weight_90d_swing"] = swing
-            # A couple of kilos inside a 90-day window is the thing a reviewer should
-            # look at twice; it can move a rider across a racing category boundary.
-            panel["weight_90d_swing_high"] = swing >= SWING_ATTENTION_KG
+    for prefix, field in _WEIGHT_WINDOWS:
+        for key, value in _weight_range(stats, field).items():
+            panel[f"{prefix}_{key}"] = value
     height_window = _window(stats, "height_in_millimeters")
     if height_window:
         panel["height_90d_min"] = _cm(height_window.get("min"))

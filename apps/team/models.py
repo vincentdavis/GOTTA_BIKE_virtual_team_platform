@@ -283,6 +283,15 @@ class RaceReadyRecord(models.Model):
         return self.status == self.Status.PENDING
 
     @property
+    def is_body_measurement(self) -> bool:
+        """Whether the record claims a weight or a height.
+
+        Those are the two values a rider also sets in their Zwift profile, so these are the
+        records worth re-reading Zwift for (``refresh_zwift_profile``). Power is not on it.
+        """
+        return self.verify_type in {"weight_full", "weight_light", "height"}
+
+    @property
     def url_type(self) -> str:
         """Determine the type of URL for display purposes.
 

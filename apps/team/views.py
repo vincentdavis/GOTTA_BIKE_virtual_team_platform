@@ -22,6 +22,7 @@ from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
 from apps.accounts.utils import parse_zwid_input, resolve_country
 from apps.rider_data.services import last_successful_sync
+from apps.rider_data.tasks import refresh_zwift_profile
 from apps.team.forms import (
     MembershipApplicationAdminForm,
     MembershipApplicationApplicantForm,
@@ -1278,6 +1279,24 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     can_view_media = can_view_verification_media(request.user, record)
     # Submitted values/ZP data: hide on reviewed records unless own record or PVT member
     can_view_values = record.is_pending or is_own_record or is_pvt
+
+    # Re-read the rider's height and weight from Zwift. Open to anyone who can see this page:
+    # it changes nothing but the Zwift Auth panel's numbers, and the service throttles repeats.
+    if request.method == "POST" and request.POST.get("action") == "refresh_zwift_profile":
+        if record.is_body_measurement:
+            refresh_zwift_profile.enqueue(user_id=record.user_id)
+            logfire.info(
+                "Zwift profile refresh requested from verification review",
+                record_id=pk,
+                target_user_id=record.user_id,
+                requested_by_id=request.user.id,
+            )
+            messages.info(
+                request,
+                "Asking Zwift for this rider's current height and weight. It can take a minute "
+                "to finish, so reload this page in a moment to see the new values.",
+            )
+        return redirect("team:verification_record_detail", pk=pk)
 
     # Handle weight edit action (PVT only, weight verifications, any status)
     if (

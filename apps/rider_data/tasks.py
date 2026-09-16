@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from apps.rider_data import client, services
 from apps.rider_data.models import RiderProfile
+from apps.zwift import client as zwift_client
 from gotta_bike_platform.config import settings as app_config
 
 
@@ -252,6 +253,50 @@ def pull_rider_profile(
 
     logfire.info("Pulled rider profile", zwid=zwid, attempt=attempt, landed=landed, stored=len(profiles))
     return {"landed": landed, "attempt": attempt, "stored": len(profiles), **result}
+
+
+@task
+def refresh_zwift_profile(user_id: int) -> dict:
+    """Re-read a connected rider's Zwift profile now, then bring our cached copy up to date.
+
+    Run when a rider submits a weight or height verification, and from the review page's
+    "Refresh height and weight" button, so the reviewer compares the submission with what
+    the rider has set in Zwift today rather than with the last scheduled read.
+
+    Two halves, as with ``request_profile_refresh``, but a different endpoint. This one is
+    app-scoped (our key, our user id) and only covers the Zwift API profile, where weight and
+    height live. It is also synchronous: the service has read Zwift and stored the result by
+    the time it answers. The review page's Zwift Auth panel reads that stored copy directly,
+    so it is current as soon as this returns. The pull is for ``RiderProfile``, which the
+    service builds from its stored rows on every request, so it can be enqueued straight away
+    rather than retried on a timer.
+
+    A throttled answer (``refreshed: false``, profile read under a minute ago) still pulls,
+    because our cache can be older than the service's copy. A failed one does not: the
+    service kept its stored profile, so there is nothing new to bring over.
+
+    Args:
+        user_id: The platform user's primary key.
+
+    Returns:
+        Whether the service ``reached`` us with a profile, whether it ``refreshed`` it from
+        Zwift, and the ``zwid`` pulled into the cache (None when nothing was pulled).
+
+    """
+    profile = zwift_client.refresh_racing_profile(str(user_id))
+    if profile is None:
+        # The client has logged why: not connected, rate limited, or unreachable.
+        return {"reached": False, "refreshed": False, "zwid": None}
+
+    refreshed = bool(profile.get("refreshed"))
+    raw_zwid = str(profile.get("zwid") or "")
+    # isascii as well: "٣".isdigit() is True and int() reads it as 3.
+    zwid = int(raw_zwid) if raw_zwid.isascii() and raw_zwid.isdigit() else None
+    if zwid:
+        pull_rider_profile.enqueue(zwid)
+
+    logfire.info("Refreshed Zwift profile on request", user_id=user_id, zwid=zwid, refreshed=refreshed)
+    return {"reached": True, "refreshed": refreshed, "zwid": zwid or None}
 
 
 def request_profile_refresh(zwid: int) -> dict:

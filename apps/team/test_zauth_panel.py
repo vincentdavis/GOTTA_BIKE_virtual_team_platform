@@ -4,10 +4,13 @@ The zauth service is patched at the ``apps.zwift.client`` boundary, so no test h
 makes a real HTTP call.
 """
 
+from datetime import timedelta
+
 import pytest
 from django.urls import reverse
 
-from apps.team.zauth_panel import UNAVAILABLE_REASON, build_zauth_panel
+from apps.team import zauth_panel
+from apps.team.zauth_panel import PROFILE_WEIGHT_HISTORY_SINCE, UNAVAILABLE_REASON, build_zauth_panel
 
 _STATUS = {"connected": True, "zwid": "555", "connected_at": "2026-05-01T09:30:00Z"}
 # Both weights present and disagreeing, as Zwift really returns them: the live
@@ -23,6 +26,8 @@ _STATS = {
     "current": {"height_in_millimeters": 1750, "weight_in_grams": 76260},
     "windows": {"90d": {
         "weight_in_grams": {"min": 74800, "max": 77100, "first": 76000, "last": 76260, "count": 7},
+        # The live profile weight: its own, shorter series (recorded since 2026-09-16).
+        "profile_weight_in_grams": {"min": 75900, "max": 76300, "first": 76300, "last": 76203, "count": 2},
         "height_in_millimeters": {"min": 1750, "max": 1750, "first": 1750, "last": 1750, "count": 3},
     }},
 }
@@ -69,8 +74,13 @@ def test_metrics_the_service_cannot_supply_are_none_not_zero(user, connected) ->
     """A blank or zero would read as a real measurement to a reviewer."""
     panel = build_zauth_panel(user)
 
-    for key in ("height_cm", "weight_90d_min", "weight_90d_max", "height_90d_min", "height_90d_max"):
+    for key in (
+        "height_cm", "weight_90d_min", "weight_90d_max", "height_90d_min", "height_90d_max",
+        "profile_weight_90d_min", "profile_weight_90d_max", "profile_weight_90d_swing",
+    ):
         assert panel[key] is None
+    assert panel["profile_weight_90d_count"] == 0
+    assert panel["profile_weight_90d_swing_high"] is False
     assert panel["unavailable_reason"] == UNAVAILABLE_REASON
 
 
@@ -207,9 +217,11 @@ def test_card_renders_on_the_review_page(client, verification_factory, user_mode
     # That the profile row uses the live weight rather than the metrics one is pinned by
     # test_never_falls_back_to_the_competition_metrics_weight; the metrics weight now has
     # its own row, so its absence from the page is no longer the right assertion.
-    # Labels changed when the ranges became real; this test has no snapshot history, so
-    # the range cells show their em dash.
-    assert "Weight 90d range" in body
+    # Labels changed when the ranges became real, and again when the weight range split
+    # into metrics and profile; this test has no snapshot history, so the range cells show
+    # their em dash.
+    assert "Metrics weight 90d range" in body
+    assert "Profile weight 90d range" in body
     assert "Height 90d range" in body
 
 
@@ -294,6 +306,30 @@ def test_both_weights_render_as_separate_rows(client, verification_factory, user
 
 
 @pytest.mark.django_db
+def test_both_weight_ranges_render_with_their_swings(
+    client, verification_factory, user_model, with_history, monkeypatch
+) -> None:
+    monkeypatch.setattr(zauth_panel.timezone, "localdate", lambda: PROFILE_WEIGHT_HISTORY_SINCE)
+    reviewer = user_model.objects.create_user(
+        username="rev4", email="rev4@example.test",
+        permission_overrides={"team_member": True, "approve_verification": True},
+    )
+    rider = user_model.objects.create_user(username="rider4", email="rider4@example.test")
+    record = verification_factory(rider, "weight_full", weight=76.5)
+    client.force_login(reviewer)
+
+    body = client.get(reverse("team:verification_record_detail", args=[record.pk])).content.decode()
+
+    assert "Metrics weight 90d range" in body
+    assert "74.8 &ndash; 77.1 kg" in body
+    assert "swing 2.3 kg" in body
+    assert "Profile weight 90d range" in body
+    assert "75.9 &ndash; 76.3 kg" in body
+    assert "swing 0.4 kg" in body
+    assert "recorded since Sep 16, 2026" in body
+
+
+@pytest.mark.django_db
 def test_height_and_ranges_come_from_the_snapshot_history(user, with_history) -> None:
     panel = build_zauth_panel(user)
 
@@ -304,6 +340,65 @@ def test_height_and_ranges_come_from_the_snapshot_history(user, with_history) ->
     assert panel["height_90d_min"] == pytest.approx(175.0)
     assert panel["height_90d_max"] == pytest.approx(175.0)
     assert panel["height_90d_count"] == 3
+
+
+@pytest.mark.django_db
+def test_each_weight_range_reads_its_own_series(user, with_history) -> None:
+    """The metrics range stays the raced-at weight; the profile range is the live one."""
+    panel = build_zauth_panel(user)
+
+    assert panel["weight_90d_min"] == pytest.approx(74.8)  # weight_in_grams (metrics)
+    assert panel["weight_90d_max"] == pytest.approx(77.1)
+    assert panel["profile_weight_90d_min"] == pytest.approx(75.9)  # profile_weight_in_grams
+    assert panel["profile_weight_90d_max"] == pytest.approx(76.3)
+    assert panel["profile_weight_90d_count"] == 2
+    assert panel["profile_weight_90d_swing"] == pytest.approx(0.4)
+    assert panel["profile_weight_90d_swing_high"] is False
+
+
+@pytest.mark.django_db
+def test_a_big_profile_weight_swing_is_flagged_on_its_own(user, connected, monkeypatch) -> None:
+    """A rider can edit their weight a lot without racing, so the metrics range stays flat."""
+    monkeypatch.setattr("apps.zwift.client.get_profile_stats", lambda uid: {
+        "windows": {"90d": {
+            "weight_in_grams": {"min": 76100, "max": 76400, "count": 2},
+            "profile_weight_in_grams": {"min": 72000, "max": 76400, "count": 4},
+        }},
+    })
+
+    panel = build_zauth_panel(user)
+
+    assert panel["weight_90d_swing_high"] is False
+    assert panel["profile_weight_90d_swing"] == pytest.approx(4.4)
+    assert panel["profile_weight_90d_swing_high"] is True
+
+
+@pytest.mark.django_db
+def test_no_profile_history_leaves_only_the_metrics_range(user, connected, monkeypatch) -> None:
+    """An older zauth, or a rider not re-fetched since the profile weight was added."""
+    monkeypatch.setattr("apps.zwift.client.get_profile_stats", lambda uid: {
+        "windows": {"90d": {"weight_in_grams": {"min": 74800, "max": 77100, "count": 7}}},
+    })
+
+    panel = build_zauth_panel(user)
+
+    assert panel["weight_90d_swing"] == pytest.approx(2.3)
+    assert panel["profile_weight_90d_min"] is None
+    assert panel["profile_weight_90d_swing"] is None
+    assert panel["profile_weight_90d_count"] == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("days_after", "shown"), [(0, True), (89, True), (90, False), (400, False)])
+def test_history_start_is_shown_until_the_profile_range_is_90_days_deep(
+    user, connected, monkeypatch, days_after, shown
+) -> None:
+    today = PROFILE_WEIGHT_HISTORY_SINCE + timedelta(days=days_after)
+    monkeypatch.setattr(zauth_panel.timezone, "localdate", lambda: today)
+
+    since = build_zauth_panel(user)["profile_weight_history_since"]
+
+    assert since == (PROFILE_WEIGHT_HISTORY_SINCE if shown else None)
 
 
 @pytest.mark.django_db
