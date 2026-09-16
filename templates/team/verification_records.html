@@ -6,8 +6,20 @@
 <div class="max-w-6xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <div class="flex justify-between items-center mb-6">
+      <div class="flex flex-wrap justify-between items-center gap-2 mb-6">
         <h2 class="card-title text-2xl">Verification Records</h2>
+        {% if admin_queue_count %}
+          {% comment %}
+            Only admins see this: pending Other records are a queue nobody else can clear, so
+            the count is theirs, and it links straight to it.
+          {% endcomment %}
+          <a href="?reviewer=admin&status=pending" class="badge badge-neutral gap-1 py-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            {{ admin_queue_count }} waiting on an admin
+          </a>
+        {% endif %}
       </div>
 
       <!-- Filters -->
@@ -67,6 +79,18 @@
             </select>
           </div>
 
+          <div class="form-control">
+            <label class="label" for="reviewer-filter">
+              <span class="label-text">Reviewer</span>
+            </label>
+            <select name="reviewer" id="reviewer-filter" class="select select-bordered select-sm">
+              <option value="">Any</option>
+              {% for value, label in reviewer_choices %}
+                <option value="{{ value }}" {% if reviewer_filter == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
           <button type="submit" class="btn btn-primary btn-sm">Filter</button>
           <a href="{% url 'team:verification_records' %}" class="btn btn-ghost btn-sm">Reset</a>
         </div>
@@ -108,8 +132,9 @@
             </tr>
           </thead>
           <tbody>
-            {% for record, can_review in records_with_review_status %}
-            <tr class="{% if not can_review %}opacity-50{% endif %}">
+            {% for row in records_with_review_status %}
+            {% with record=row.record %}
+            <tr>
               <td class="font-medium">
                 {% include "accounts/_user_tooltip.html" with display_name=record.user.get_full_name|default:record.user.discord_username user_id=record.user.pk discord_id=record.user.discord_id discord_avatar_url=record.user.discord_avatar_url zwid=record.user.zwid zp_category=record.tt_zp_category zp_category_w=record.tt_zp_category_w zr_category=record.tt_zr_category zr_rating=record.tt_zr_rating zr_phenotype=record.tt_zr_phenotype is_race_ready=record.user.is_race_ready is_extra_verified=record.user.is_extra_verified in_zwiftpower=record.tt_in_zwiftpower in_zwiftracing=record.tt_in_zwiftracing %}
               </td>
@@ -133,13 +158,14 @@
                 {% else %}
                 <span class="badge badge-warning badge-sm">Pending</span>
                 {% endif %}
-                {% if record.same_gender %}
-                <span class="badge badge-info badge-sm ml-1" title="Requires same-gender reviewer">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </span>
-                {% endif %}
+                {% comment %}
+                  Who may review it, in words -- see services.review_requirements. Solid
+                  neutral rather than a coloured outline: it passes contrast in both themes,
+                  and it is a fact about the record, not a warning.
+                {% endcomment %}
+                {% for requirement in row.requirements %}
+                <span class="badge badge-neutral badge-sm ml-1 whitespace-nowrap">{{ requirement.label }}</span>
+                {% endfor %}
               </td>
               <td data-label="Expiry">
                 {% if record.is_verified %}
@@ -157,20 +183,31 @@
                 {% endif %}
               </td>
               <td class="cell-actions">
-                {% if can_review %}
+                {% if row.can_open %}
                 <a href="{% url 'team:verification_record_detail' record.pk %}" class="btn btn-ghost btn-xs">
                   View
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
                   </svg>
                 </a>
-                {% else %}
-                <span class="btn btn-ghost btn-xs btn-disabled cursor-not-allowed" title="Same-gender reviewer required">
-                  Restricted
-                </span>
+                {% endif %}
+                {% if not row.can_open or not row.can_decide and record.is_pending %}
+                  {% comment %}
+                    Visible text, not a tooltip. A record they cannot open gets the reason in
+                    place of View, whatever its status; one they can open but not decide (Other,
+                    for a reviewer who is not an admin) gets View with the reason beside it --
+                    while it is pending, which is when the decision is still to be made.
+                  {% endcomment %}
+                  <span class="text-xs whitespace-nowrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="inline h-3 w-3 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    {{ row.unmet.0.only_label }}
+                  </span>
                 {% endif %}
               </td>
             </tr>
+            {% endwith %}
             {% empty %}
             <tr>
               <td colspan="8" class="text-center py-8 text-base-content/50">
@@ -190,7 +227,7 @@
         {% if page_obj.paginator.num_pages > 1 %}
         <div class="join">
           {% if page_obj.has_previous %}
-            <a aria-label="Go to previous page of verification records" href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ page_obj.previous_page_number }}" class="join-item btn btn-sm">«</a>
+            <a aria-label="Go to previous page of verification records" href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&reviewer={{ reviewer_filter }}&page={{ page_obj.previous_page_number }}" class="join-item btn btn-sm">«</a>
           {% else %}
             <span class="join-item btn btn-sm btn-disabled">«</span>
           {% endif %}
@@ -198,13 +235,13 @@
             {% if num == page_obj.number %}
               <span class="join-item btn btn-sm btn-active">{{ num }}</span>
             {% elif num == 1 or num == page_obj.paginator.num_pages or num >= page_obj.number|add:"-2" and num <= page_obj.number|add:"2" %}
-              <a href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ num }}" class="join-item btn btn-sm">{{ num }}</a>
+              <a href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&reviewer={{ reviewer_filter }}&page={{ num }}" class="join-item btn btn-sm">{{ num }}</a>
             {% elif num == page_obj.number|add:"-3" or num == page_obj.number|add:"3" %}
               <span class="join-item btn btn-sm btn-disabled">…</span>
             {% endif %}
           {% endfor %}
           {% if page_obj.has_next %}
-            <a aria-label="Go to next page of verification records" href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&page={{ page_obj.next_page_number }}" class="join-item btn btn-sm">»</a>
+            <a aria-label="Go to next page of verification records" href="?q={{ search_query }}&type={{ type_filter }}&status={{ status_filter }}&gender={{ gender_filter }}&reviewer={{ reviewer_filter }}&page={{ page_obj.next_page_number }}" class="join-item btn btn-sm">»</a>
           {% else %}
             <span class="join-item btn btn-sm btn-disabled">»</span>
           {% endif %}

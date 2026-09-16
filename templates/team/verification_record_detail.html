@@ -347,6 +347,25 @@
       </div>
       {% endif %}
 
+      {% comment %}
+        Who may decide this record, for everyone who opens it -- an admin should see why an
+        Other record came to them as clearly as a reviewer sees why it did not. From
+        services.review_requirements, the rule the list and the decision POST also use.
+      {% endcomment %}
+      {% if review_requirements %}
+      <div class="alert alert-info mb-6" role="note">
+        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        <div>
+          <div class="font-medium">Who can decide this record</div>
+          <ul class="text-sm list-disc ms-5">
+            {% for requirement in review_requirements %}<li>{{ requirement.explanation }}</li>{% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Verification Status -->
       {% if record.is_verified %}
       <div class="bg-success/10 border border-success rounded-lg p-4 mb-6">
@@ -526,8 +545,17 @@
       </script>
       {% else %}
       <div class="alert mb-6">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-        <span>This record is pending review. Only Team Captains can verify or reject records.</span>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+        {% if unmet_requirements %}
+        {% comment %}
+          What the banner above means for this reviewer. The reason itself is in that banner,
+          which always lists every requirement -- repeating it here put the same sentence on
+          the page twice, back to back.
+        {% endcomment %}
+        <span>This record is pending review. You can look at the evidence, but the decision belongs to the people named above.</span>
+        {% else %}
+        <span>This record is pending review. Only verification reviewers can verify or reject it.</span>
+        {% endif %}
       </div>
       {% endif %}
 

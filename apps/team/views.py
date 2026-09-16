@@ -53,14 +53,19 @@ from apps.team.rosterv2 import search as roster_search
 from apps.team.services import (
     ZP_DIV_TO_CATEGORY,
     ZWIFT_LINK_NOT_RELEASED_MESSAGE,
+    can_decide_verification_record,
+    can_open_verification_record,
     can_view_verification_media,
     get_performance_review_data,
     get_unified_team_roster,
     log_record_view,
     purge_expired_verification_media,
     purge_rejected_verification_media,
+    records_decidable_by,
     release_application_zwift_links,
+    review_requirements,
     squad_expiring_summary,
+    unmet_review_requirements,
     verification_media_url,
 )
 from apps.team.tasks import notify_application_update, notify_captains_verification, notify_race_ready_change
@@ -945,6 +950,7 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     type_filter = request.GET.get("type", "")
     status_filter = request.GET.get("status", "")
     gender_filter = request.GET.get("gender", "")
+    reviewer_filter = request.GET.get("reviewer", "")
 
     # Get choices for filter dropdowns
     verify_type_choices = RaceReadyRecord._meta.get_field("verify_type").choices
@@ -973,6 +979,23 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     if gender_filter:
         records = records.filter(user__gender=gender_filter)
 
+    # Apply reviewer filter. "mine" is the one a reviewer reaches for -- what can I act on --
+    # and it asks the same rule the rows below do, in the database.
+    if reviewer_filter == "mine":
+        records = records_decidable_by(request.user, records)
+    elif reviewer_filter == "admin":
+        records = records.filter(media_type="other")
+    elif reviewer_filter == "same_gender":
+        records = records.filter(same_gender=True)
+
+    # Pending Other records are a queue only admins can clear, so say how long it is -- to
+    # them, as the way into it. Counted before the other filters so the number is the queue.
+    admin_queue_count = (
+        RaceReadyRecord.objects.filter(status=RaceReadyRecord.Status.PENDING, media_type="other").count()
+        if request.user.is_app_admin
+        else 0
+    )
+
     # Sort by status (pending first), then newest within each status
     from django.db.models import Case, IntegerField, Value, When
 
@@ -996,27 +1019,20 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     # Check if user can verify records (has permission)
     can_verify = request.user.can_approve_verification or request.user.is_superuser
 
-    # Add can_review flag to each record based on same_gender preference
-    def user_can_review_record(record: RaceReadyRecord) -> bool:
-        """Check if the current user can review a specific record.
-
-        Superusers can always review. If same_gender is False, anyone with
-        permission can review. If same_gender is True, only same-gender
-        reviewers can review.
-
-        Returns:
-            True if the user can review this record, False otherwise.
-
-        """
-        if request.user.is_superuser:
-            return True
-        if not record.same_gender:
-            return True
-        return record.user.gender == request.user.gender
-
-    # Create list of (record, can_review) tuples for template
+    # What each row may do for this reviewer, from the one rule the review page also uses.
+    # "can_open" decides whether the row links anywhere; "unmet" names the reason when it
+    # does not -- or when it links to a record they can look at but not decide.
     records_list = list(page_obj)
-    records_with_review_status = [(record, user_can_review_record(record)) for record in records_list]
+    records_with_review_status = [
+        {
+            "record": record,
+            "can_open": can_open_verification_record(request.user, record),
+            "can_decide": can_decide_verification_record(request.user, record),
+            "requirements": review_requirements(record),
+            "unmet": unmet_review_requirements(request.user, record),
+        }
+        for record in records_list
+    ]
 
     # Batch-fetch ZP/ZR data for user tooltip display
     zwids = [r.user.zwid for r in records_list if r.user.zwid]
@@ -1044,6 +1060,13 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
             "type_filter": type_filter,
             "status_filter": status_filter,
             "gender_filter": gender_filter,
+            "reviewer_filter": reviewer_filter,
+            "reviewer_choices": [
+                ("mine", "Ones I can decide"),
+                ("admin", "Needs admin review"),
+                ("same_gender", "Same gender only"),
+            ],
+            "admin_queue_count": admin_queue_count,
             "verify_type_choices": verify_type_choices,
             "status_choices": status_choices,
             "gender_choices": gender_choices,
@@ -1159,8 +1182,9 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     # Check if user can verify records (has permission)
     has_permission = request.user.can_approve_verification or request.user.is_superuser
 
-    # Check same_gender restriction: if set, only same-gender reviewers can access (superusers bypass)
-    if record.same_gender and not request.user.is_superuser and record.user.gender != request.user.gender:
+    # Requirements that block even opening the record -- today only same-gender, which the
+    # rider asked for. Superusers bypass it. See services.review_requirements.
+    if not can_open_verification_record(request.user, record):
         logfire.info(
             "Same-gender restriction blocked verification review",
             record_id=pk,
@@ -1171,21 +1195,13 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         messages.warning(request, "This record requires a same-gender reviewer.")
         return redirect("team:verification_records")
 
-    # User can review if they have permission and pass same_gender check (already checked above)
-    # Power records require PVT permission when POWER_REQUIRES_PER_VER is enabled
-    from constance import config
-
+    # Whether this reviewer may approve or reject: the Power rule and the Other rule both live
+    # in services.review_requirements now, so the list and this page cannot disagree.
     from apps.accounts.models import Permissions
 
-    if (
-        record.verify_type == "power"
-        and config.POWER_REQUIRES_PER_VER
-        and not request.user.is_superuser
-        and not request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
-    ):
-        can_review = False
-    else:
-        can_review = has_permission
+    unmet_requirements = unmet_review_requirements(request.user, record)
+    can_decide = can_decide_verification_record(request.user, record)
+    can_review = has_permission and can_decide
 
     # Media visibility: pending records visible to all reviewers, approved/rejected only to verification team
 
@@ -1193,7 +1209,10 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     is_pvt = request.user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
     is_app_admin = request.user.has_permission(Permissions.APP_ADMIN)
     can_delete = is_pvt or is_app_admin or request.user.is_superuser
-    can_change_status = is_pvt or is_app_admin or request.user.is_superuser
+    # Changing a decided record's status is the team's and the admins' -- but still within the
+    # record's requirements. Without that, a team member who is not an admin could approve an
+    # Other record through this path while the Approve button told them they could not.
+    can_change_status = (is_pvt or is_app_admin or request.user.is_superuser) and can_decide
     can_edit_weight = is_pvt or request.user.is_superuser
     can_view_media = can_view_verification_media(request.user, record)
     # Submitted values/ZP data: hide on reviewed records unless own record or PVT member
@@ -1478,6 +1497,10 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
         {
             "record": record,
             "can_review": can_review,
+            # Every requirement the record carries (for the banner), and which of them this
+            # reviewer does not meet (for saying why the decision is not theirs).
+            "review_requirements": review_requirements(record),
+            "unmet_requirements": unmet_requirements,
             "can_view_media": can_view_media,
             "can_view_values": can_view_values,
             "can_change_status": can_change_status,

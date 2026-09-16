@@ -4,14 +4,16 @@ from typing import TYPE_CHECKING
 
 import logfire
 from django.core.cache import cache
-from django.db.models import Q
 
 from apps.team.models import RaceReadyRecord
+from apps.team.services import records_decidable_by
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-PENDING_VERIFICATION_CACHE_PREFIX = "pending_verification_count:v1"
+# v2: counts only records the reviewer may DECIDE (Other needs an admin, Power may need the team),
+# not every record they may open. A new meaning, so a new key.
+PENDING_VERIFICATION_CACHE_PREFIX = "pending_verification_count:v2"
 PENDING_VERIFICATION_CACHE_TIMEOUT = 60  # seconds
 
 EXPIRING_VERIFICATION_CACHE_PREFIX = "expiring_verifications:v1"
@@ -22,11 +24,12 @@ SQUAD_EXPIRING_CACHE_TIMEOUT = 360  # seconds
 
 
 def pending_verification_count(request: HttpRequest) -> dict[str, int]:
-    """Expose the count of pending verification records the user can review.
+    """Expose the count of pending verification records the user can decide.
 
-    Mirrors the same-gender gate enforced by ``verification_records_view``: a
-    record flagged ``same_gender=True`` is only counted for reviewers whose
-    gender matches the record owner. Superusers see every pending record.
+    A badge is a request to act, so it counts only what this reviewer can clear: the rule is
+    ``services.records_decidable_by`` -- same-gender, Other (admins) and Power (the team, when
+    ``POWER_REQUIRES_PER_VER`` is on). Counting records they may open but not decide would
+    hand reviewers a number they can never bring down. Superusers see every pending record.
 
     Returns 0 (and skips the database query) for anonymous users and users
     without ``approve_verification`` permission, so the cost is zero on the
@@ -53,9 +56,7 @@ def pending_verification_count(request: HttpRequest) -> dict[str, int]:
 
     with logfire.span("pending_verification_count", user_id=user.pk):
         qs = RaceReadyRecord.objects.filter(status=RaceReadyRecord.Status.PENDING)
-        if not user.is_superuser:
-            qs = qs.filter(Q(same_gender=False) | Q(same_gender=True, user__gender=user.gender))
-        count = qs.count()
+        count = records_decidable_by(user, qs).count()
 
     cache.set(cache_key, count, PENDING_VERIFICATION_CACHE_TIMEOUT)
     logfire.debug("pending_verification_count computed", user_id=user.pk, count=count)

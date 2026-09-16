@@ -790,6 +790,206 @@ def media_retention_rules(record: RaceReadyRecord) -> list[MediaRetentionRule]:
     return sorted(rules, key=lambda rule: (rule.due is None, rule.due))
 
 
+# --- who may review a verification record ---------------------------------------------------
+#
+# The single definition. Before this, the same-gender rule was hand-copied into the list, the
+# review page, the media gate and the sidebar badge, and the Power rule lived in the review page
+# alone -- so the list offered "View" on Power records the page then refused to let anyone
+# decide. Every one of those now asks the functions below.
+
+
+@dataclass(frozen=True)
+class ReviewRequirement:
+    """One condition a reviewer must meet before acting on a verification record.
+
+    Attributes:
+        key: Stable identifier, for templates and tests.
+        label: The chip on the list -- what the requirement is.
+        only_label: What the list says to someone who does not meet it, in place of "View".
+        explanation: The review page's sentence about it.
+        blocks_opening: True when a reviewer who does not meet it may not even open the
+            record. Same-gender is the only one: the rider asked who may SEE their evidence.
+            The others restrict the decision and leave the evidence open to reviewers, so one
+            can still look, flag a problem, or leave a note.
+
+    """
+
+    key: str
+    label: str
+    only_label: str
+    explanation: str
+    blocks_opening: bool
+
+
+SAME_GENDER_REVIEW = ReviewRequirement(
+    key="same_gender",
+    label="Same gender",
+    only_label="Same gender only",
+    explanation="The rider asked for a reviewer of the same gender.",
+    blocks_opening=True,
+)
+ADMIN_REVIEW = ReviewRequirement(
+    key="admin",
+    label="Admin review",
+    only_label="Admins only",
+    explanation="Submitted as Other, so an Admin or Super Admin has to approve or reject it.",
+    blocks_opening=False,
+)
+PERFORMANCE_TEAM_REVIEW = ReviewRequirement(
+    key="performance_team",
+    label="Performance team",
+    only_label="Performance team only",
+    explanation="Power records are decided by the performance verification team.",
+    blocks_opening=False,
+)
+
+
+def review_requirements(record: RaceReadyRecord) -> list[ReviewRequirement]:
+    """List every reviewer requirement this record carries, in display order.
+
+    Args:
+        record: The verification record.
+
+    Returns:
+        The requirements; empty when any reviewer may decide it.
+
+    """
+    requirements = []
+    if record.same_gender:
+        requirements.append(SAME_GENDER_REVIEW)
+    # Evidence that is none of the named kinds is the one the team wants senior eyes on.
+    if record.media_type == "other":
+        requirements.append(ADMIN_REVIEW)
+    if record.verify_type == "power" and config.POWER_REQUIRES_PER_VER:
+        requirements.append(PERFORMANCE_TEAM_REVIEW)
+    return requirements
+
+
+def _meets_requirement(user: User, record: RaceReadyRecord, requirement: ReviewRequirement) -> bool:
+    """Report whether ``user`` satisfies one requirement on ``record``.
+
+    Superusers satisfy all of them, as they always have for same-gender.
+
+    Admin review is ``app_admin``, which comes from the Discord roles in PERM_APP_ADMIN_ROLES --
+    so the Discord Admin role is configured there, not here. The Performance Verification Team
+    does NOT satisfy it: that is the point of the requirement.
+
+    The Power requirement also counts ``app_admin``. The review page's status-change path
+    already let admins decide Power records whatever the setting said; counting them here keeps
+    that exactly as it was rather than quietly taking it away.
+
+    Args:
+        user: The reviewer.
+        record: The record.
+        requirement: The requirement to test.
+
+    Returns:
+        True if the requirement is met.
+
+    """
+    from apps.accounts.models import Permissions
+
+    if user.is_superuser:
+        return True
+    if requirement is SAME_GENDER_REVIEW:
+        return record.user.gender == user.gender
+    if requirement is ADMIN_REVIEW:
+        return user.is_app_admin
+    if requirement is PERFORMANCE_TEAM_REVIEW:
+        return user.is_app_admin or user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
+    return False
+
+
+def unmet_review_requirements(user: User, record: RaceReadyRecord) -> list[ReviewRequirement]:
+    """List the requirements on ``record`` that ``user`` does not meet.
+
+    Args:
+        user: The reviewer.
+        record: The record.
+
+    Returns:
+        The unmet requirements, in display order.
+
+    """
+    return [req for req in review_requirements(record) if not _meets_requirement(user, record, req)]
+
+
+def is_verification_reviewer(user: User) -> bool:
+    """Report whether ``user`` reviews verifications at all.
+
+    Being an Admin is not enough on its own: the queue needs ``approve_verification``. Widening
+    it to every admin would widen who sees body photographs, which is not this rule's call.
+
+    Args:
+        user: The person asking.
+
+    Returns:
+        True for superusers and holders of ``approve_verification``.
+
+    """
+    return user.is_superuser or user.can_approve_verification
+
+
+def can_open_verification_record(user: User, record: RaceReadyRecord) -> bool:
+    """Report whether ``user`` may open ``record``'s review page.
+
+    Args:
+        user: The reviewer.
+        record: The record.
+
+    Returns:
+        True unless they are not a reviewer, or a requirement that blocks opening is unmet.
+
+    """
+    if not is_verification_reviewer(user):
+        return False
+    return not any(req.blocks_opening for req in unmet_review_requirements(user, record))
+
+
+def can_decide_verification_record(user: User, record: RaceReadyRecord) -> bool:
+    """Report whether ``user`` may approve or reject ``record``.
+
+    This is the gate on the review page's decision POST -- every path that can mark a record
+    verified or rejected -- not only on the buttons.
+
+    Args:
+        user: The reviewer.
+        record: The record.
+
+    Returns:
+        True only for a reviewer who meets every requirement on the record.
+
+    """
+    return is_verification_reviewer(user) and not unmet_review_requirements(user, record)
+
+
+def records_decidable_by(user: User, records: QuerySet) -> QuerySet:
+    """Narrow ``records`` to those ``user`` may decide, in the database.
+
+    The queryset twin of :func:`can_decide_verification_record`, for counting without loading
+    rows. A test holds the two to the same answer for every combination, since this one cannot
+    call the other.
+
+    Args:
+        user: The reviewer, already known to be one.
+        records: A ``RaceReadyRecord`` queryset.
+
+    Returns:
+        The narrowed queryset.
+
+    """
+    from apps.accounts.models import Permissions
+
+    if user.is_superuser:
+        return records
+    records = records.filter(Q(same_gender=False) | Q(same_gender=True, user__gender=user.gender))
+    if not user.is_app_admin:
+        records = records.exclude(media_type="other")
+        if config.POWER_REQUIRES_PER_VER and not user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM):
+            records = records.exclude(verify_type="power")
+    return records
+
+
 def can_view_verification_media(user: User, record: RaceReadyRecord) -> bool:
     """Report whether ``user`` may see ``record``'s uploaded evidence.
 
@@ -816,10 +1016,8 @@ def can_view_verification_media(user: User, record: RaceReadyRecord) -> bool:
     """
     from apps.accounts.models import Permissions
 
-    if not (user.can_approve_verification or user.is_superuser):
-        return False
-
-    if record.same_gender and not user.is_superuser and record.user.gender != user.gender:
+    # Conditions 1 and 2 -- a reviewer, past any requirement that blocks opening the record.
+    if not can_open_verification_record(user, record):
         return False
 
     return record.is_pending or user.has_permission(Permissions.PERFORMANCE_VERIFICATION_TEAM)
