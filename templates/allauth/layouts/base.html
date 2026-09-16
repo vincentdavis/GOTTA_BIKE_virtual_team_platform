@@ -1,0 +1,89 @@
+{% comment %}
+allauth's own layout (django-allauth 65.19.2), with two deviations to keep when re-diffing
+against the installed copy on an allauth upgrade:
+
+- No "Change Email" or "Change Password" menu entries. Those routes are closed
+  (gotta_bike_platform/urls.py) but their URL names still reverse, so allauth's layout kept
+  offering them as links to a 404.
+- <html> carries the page language. allauth's copy has none, which fails WCAG 3.1.1 (Language
+  of Page): a screen reader may read the page with the wrong voice. The site's own shell
+  (theme/templates/base.html) declares it too.
+
+Used by every allauth page the site does not restyle (account connections, the sign-up-closed
+page, and so on).
+{% endcomment %}
+{% load i18n %}{% get_current_language as LANGUAGE_CODE %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>
+            {% block head_title %}
+            {% endblock head_title %}
+        </title>
+        {% block extra_head %}
+        {% endblock extra_head %}
+    </head>
+    <body>
+        {% block body %}
+            {% if messages %}
+                <div>
+                    <strong>{% trans "Messages:" %}</strong>
+                    <ul>
+                        {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+                    </ul>
+                </div>
+            {% endif %}
+            <div>
+                <strong>{% trans "Menu:" %}</strong>
+                <ul>
+                    {% if user.is_authenticated %}
+                        {% url 'socialaccount_connections' as connections_url_ %}
+                        {% if connections_url_ %}
+                            <li>
+                                <a href="{{ connections_url_ }}">{% trans "Account Connections" %}</a>
+                            </li>
+                        {% endif %}
+                        {% url 'mfa_index' as mfa_url_ %}
+                        {% if mfa_url_ %}
+                            <li>
+                                <a href="{{ mfa_url_ }}">{% trans "Two-Factor Authentication" %}</a>
+                            </li>
+                        {% endif %}
+                        {% url 'usersessions_list' as usersessions_list_url_ %}
+                        {% if usersessions_list_url_ %}
+                            <li>
+                                <a href="{{ usersessions_list_url_ }}">{% trans "Sessions" %}</a>
+                            </li>
+                        {% endif %}
+                        {% url 'account_logout' as logout_url_ %}
+                        {% if logout_url_ %}
+                            <li>
+                                <a href="{{ logout_url_ }}">{% trans "Sign Out" %}</a>
+                            </li>
+                        {% endif %}
+                    {% else %}
+                        {% url 'account_login' as login_url_ %}
+                        {% if login_url_ %}
+                            <li>
+                                <a href="{{ login_url_ }}">{% trans "Sign In" %}</a>
+                            </li>
+                        {% endif %}
+                        {% url 'account_signup' as signup_url_ %}
+                        {% if signup_url_ %}
+                            <li>
+                                <a href="{{ signup_url_ }}">{% trans "Sign Up" %}</a>
+                            </li>
+                        {% endif %}
+                    {% endif %}
+                </ul>
+            </div>
+            {% block content %}
+            {% endblock content %}
+        {% endblock body %}
+        {% block extra_body %}
+        {% endblock extra_body %}
+    </body>
+</html>

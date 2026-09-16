@@ -13,6 +13,7 @@
     <strong>Guild Only:</strong> {{ guild_only_count }} |
     <strong>Linked:</strong> {{ linked_count }} |
     <strong>Left Guild:</strong> {{ left_count }} |
+    <strong>Never Seen in the Server:</strong> {{ never_seen_count }} |
     <strong>Discord Users (No Guild):</strong> {{ discord_users_no_guild_count }}
   </div>
 
@@ -23,13 +24,14 @@
       <option value="guild_only" {% if filter_status == 'guild_only' %}selected{% endif %}>Guild Only (No Account)</option>
       <option value="linked" {% if filter_status == 'linked' %}selected{% endif %}>Linked (Has Account)</option>
       <option value="left" {% if filter_status == 'left' %}selected{% endif %}>Left Guild (Has Account)</option>
+      <option value="never_seen" {% if filter_status == 'never_seen' %}selected{% endif %}>Never Seen in the Server (Has Account)</option>
       <option value="discord_no_guild" {% if filter_status == 'discord_no_guild' %}selected{% endif %}>Discord Users (No Guild Record)</option>
     </select>
   </div>
 
   {% if filter_status == 'discord_no_guild' %}
     <h2>Discord OAuth Users Without Guild Member Record</h2>
-    <p>These users logged in via Discord OAuth but have no corresponding GuildMember record. They may have left the guild before the first sync, or need a new sync.</p>
+    <p>These users logged in via Discord OAuth but have no corresponding GuildMember record yet. The next guild sync records each one: as a member if Discord lists them, otherwise under "Never Seen in the Server", which signs them out.</p>
     <table id="result_list">
       <thead>
         <tr>
@@ -55,6 +57,11 @@
       </tbody>
     </table>
   {% else %}
+    {% if filter_status == 'left' %}
+      <p>Accounts whose Discord ID the sync saw in the server and later marked as left. Matched by Discord ID, so an account appears here even when the row is not linked to it.</p>
+    {% elif filter_status == 'never_seen' %}
+      <p>Accounts whose Discord ID no guild sync has ever listed. The sync recorded them as departed (they are signed out) without filing a member-left ticket, because nobody saw them in the server. A Discord login that passes the live guild check, or a later sync that lists them, clears this.</p>
+    {% endif %}
     <table id="result_list">
       <thead>
         <tr>
@@ -75,13 +82,18 @@
             <td>
               {% if member.user %}
                 <span style="color: green;">{{ member.user.username }}</span>
+              {% elif member.account_username %}
+                {{ member.account_username }}
+                {% if member.account_count > 1 %}<em>(and {{ member.account_count|add:"-1" }} more sharing this Discord ID; not linked)</em>{% else %}<em>(not linked)</em>{% endif %}
               {% else %}
                 <span style="color: #999;">-</span>
               {% endif %}
             </td>
             <td>{{ member.joined_at|date:"Y-m-d"|default:"-" }}</td>
             <td>
-              {% if member.date_left %}
+              {% if member.never_seen %}
+                <span>Never seen in the server (recorded {{ member.date_left|date:"Y-m-d" }})</span>
+              {% elif member.date_left %}
                 <span style="color: red;">Left {{ member.date_left|date:"Y-m-d" }}</span>
               {% else %}
                 <span style="color: green;">Active</span>

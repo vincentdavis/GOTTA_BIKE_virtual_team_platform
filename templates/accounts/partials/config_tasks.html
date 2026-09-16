@@ -48,7 +48,12 @@
             {% for task_name, task_info in group.tasks.items %}
             <tr>
                 <td class="font-mono text-sm">{{ task_name }}</td>
-                <td class="text-base-content/70">{{ task_info.description }}</td>
+                <td class="text-base-content/70">
+                    {{ task_info.description }}
+                    {% if task_info.last_failure_note %}
+                    <p class="text-sm text-base-content mt-1"><span class="font-semibold">Last run held back sign-outs:</span> {{ task_info.last_failure_note }}</p>
+                    {% endif %}
+                </td>
                 <td class="text-sm text-base-content/70 whitespace-nowrap">{{ task_info.time_since_last_run }}</td>
                 <td class="text-sm">
                     {% if task_info.last_status == "SUCCESSFUL" %}

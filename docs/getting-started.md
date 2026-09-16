@@ -69,9 +69,9 @@ Most settings are configured via Django admin at `/admin/constance/config/`:
 
 | Setting | Description |
 |---------|-------------|
-| `GUILD_ID` | Discord guild/server ID (required for login) |
+| `GUILD_ID` | Discord guild/server ID (required for login; `0` refuses every Discord login) |
 | `GUILD_NAME` | Discord server name (shown in error messages) |
-| `DISCORD_URL` | Discord invite link (users redirected here if not in guild) |
+| `DISCORD_URL` | Discord invite link, offered as "Join here" on the login page to riders refused for not being in the server (only an `http(s)` URL is linked; the default `#` shows none) |
 | `ZWIFTPOWER_TEAM_ID` | ZwiftPower team ID |
 | `ZWIFT_USERNAME` | Zwift account email for API access |
 | `ZWIFT_PASSWORD` | Zwift account password for API access |
@@ -83,7 +83,7 @@ Most settings are configured via Django admin at `/admin/constance/config/`:
 | `GOOGLE_SERVICE_ACCOUNT_EMAIL` | Google service account email for Sheets API |
 | `GOOGLE_DRIVE_FOLDER_ID` | Shared folder ID where spreadsheets are created |
 
-**Note**: Users must be a member of the Discord server specified by `GUILD_ID` to sign up or log in. If `GUILD_ID` is 0 or not set, the membership check is skipped.
+**Note**: Users must be a member of the Discord server specified by `GUILD_ID` to sign up or log in. It defaults to The Coalition's server, so change it for any other server. Setting it to `0` does not skip the check: it refuses every Discord login ("Sign-in is unavailable because the team's Discord server is not configured"), which leaves only the `/admin/` username/password login (a `createsuperuser` account) working. The bot's magic links do not help: the bot API refuses any request whose guild ID does not match `GUILD_ID`. A refused rider returns to the login page with an error; one who is not in the server also gets a "Join here" link to `DISCORD_URL`. See [Authentication](authentication.md).
 
 ## Commands
 

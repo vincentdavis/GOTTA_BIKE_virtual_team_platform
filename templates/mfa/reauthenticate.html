@@ -1,0 +1,55 @@
+{% extends "account/base.html" %}
+{% comment %}
+Replaces allauth's page, which rendered in allauth's own layout -- and that layout's menu links
+to Change Email and Change Password, routes that are closed (gotta_bike_platform/urls.py). A
+Discord rider with TOTP lands here when a security change (disabling TOTP, new recovery codes)
+needs a fresh check. allauth's form takes a TOTP code or a recovery code in the one field.
+{% endcomment %}
+
+{% block title %}Confirm Access - The Coalition{% endblock %}
+
+{% block card_title %}
+<h2 class="card-title justify-center text-2xl">Confirm Access</h2>
+<p class="text-center text-base-content/70">Enter a code from your authenticator app, or a recovery code, to continue.</p>
+{% endblock %}
+
+{% block card_content %}
+<form method="post" action="{% url 'mfa_reauthenticate' %}" class="mt-6">
+    {% csrf_token %}
+    {{ redirect_field }}
+    {% if form.non_field_errors %}
+    <div role="alert" class="alert alert-error mb-4">
+        <span>{{ form.non_field_errors.0 }}</span>
+    </div>
+    {% endif %}
+    <div class="form-control">
+        <label class="label" for="id_code">
+            <span class="label-text">Code</span>
+        </label>
+        <input type="text" name="code" id="id_code"
+               class="input input-bordered w-full text-center text-2xl tracking-widest"
+               autocomplete="one-time-code" autocapitalize="off" spellcheck="false"
+               autofocus required
+               {% if form.code.errors %}aria-invalid="true" aria-describedby="id_code_error"{% endif %}>
+        {% if form.code.errors %}
+        <div id="id_code_error" role="alert" class="alert alert-error mt-2">
+            <span>{{ form.code.errors.0 }}</span>
+        </div>
+        {% endif %}
+    </div>
+    <div class="form-control mt-6">
+        <button type="submit" class="btn btn-primary">Confirm</button>
+    </div>
+</form>
+{% if reauthentication_alternatives %}
+<div class="divider">OR</div>
+<div class="flex flex-col gap-2">
+    {% for alt in reauthentication_alternatives %}
+    <a href="{{ alt.url }}" class="btn btn-outline">{{ alt.description }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+<div class="text-center mt-4">
+    <a href="{% url 'mfa_index' %}" class="btn btn-ghost">Cancel</a>
+</div>
+{% endblock %}

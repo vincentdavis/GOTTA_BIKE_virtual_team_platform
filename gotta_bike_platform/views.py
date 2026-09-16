@@ -2,9 +2,10 @@
 
 import logfire
 import markdown
+from allauth.account.views import login as allauth_login
 from constance import config
 from django.contrib import messages
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
@@ -130,6 +131,56 @@ def block_social_signup(request):
         "Please click 'Sign in with Discord' to log in or create an account.",
     )
     return redirect("account_login")
+
+
+def closed_account_route(request, *args, route: str = "", **kwargs):
+    """404 for the allauth routes that would let somebody in without Discord.
+
+    With ``ACCOUNT_LOGIN_METHODS = {"email"}`` and no password field, allauth treats an
+    email address as enough to start a login by emailed code, and its password reset and
+    password set pages would give a password to an account that was only ever meant to sign
+    in through Discord. Any of those skips the block list and the guild check in
+    ``DiscordSocialAccountAdapter.pre_social_login``. Mounted ahead of the allauth include in
+    ``gotta_bike_platform/urls.py``, the same way ``block_social_signup`` shadows the social
+    signup page. ``SOCIALACCOUNT_ONLY`` would remove these routes itself, but allauth refuses
+    it alongside ``allauth.mfa``.
+
+    Args:
+        request: The HTTP request.
+        *args: Positional URL arguments (ignored).
+        route: Label of the closed route family, for the log.
+        **kwargs: Keyword URL arguments (ignored).
+
+    Raises:
+        Http404: Always.
+
+    """
+    # The label, not request.path: a password-reset path carries the reset key.
+    logfire.info("Refused a closed allauth route", route=route, method=request.method)
+    raise Http404
+
+
+def discord_only_login(request, *args, **kwargs):
+    """Serve allauth's login page for GET only: the page offers Discord and nothing else.
+
+    ``templates/account/login.html`` has no form; its only control links to the Discord
+    provider (``/accounts/discord/login/``, a different route). A POST here can only be a
+    hand-made one, and allauth would read its email address as a request to email a login
+    code -- a way in that never touches Discord. It is sent back to the page as a GET.
+
+    Args:
+        request: The HTTP request.
+        *args: Positional URL arguments, passed through.
+        **kwargs: Keyword URL arguments, passed through.
+
+    Returns:
+        allauth's login response for GET/HEAD, otherwise a redirect to the same page.
+
+    """
+    if request.method not in {"GET", "HEAD"}:
+        logfire.warning("Refused a non-GET request to the login page", method=request.method)
+        return redirect(request.get_full_path())
+    return allauth_login(request, *args, **kwargs)
 
 
 @require_GET

@@ -18,7 +18,7 @@ Including another URLconf
 
 from django.conf import settings
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 
 from apps.accounts.views import (
     compliance_block_add,
@@ -44,7 +44,15 @@ from apps.team.kit_views import (
     team_kit_toggle_active,
 )
 from apps.user_api.api import api as user_api
-from gotta_bike_platform.views import about, block_social_signup, healthz, home, robots_txt
+from gotta_bike_platform.views import (
+    about,
+    block_social_signup,
+    closed_account_route,
+    discord_only_login,
+    healthz,
+    home,
+    robots_txt,
+)
 
 urlpatterns = [
     path("", home, name="home"),
@@ -56,6 +64,14 @@ urlpatterns = [
     path("api/dbot/", dbot_api.urls),
     path("api/user/", user_api.urls),
     path("accounts/3rdparty/signup/", block_social_signup, name="block_social_signup"),
+    # Discord is the only way in. These shadow allauth's email- and password-based routes
+    # (every sub-path) so none of them can sign anybody in or hand out a password; see
+    # closed_account_route. allauth's own URL names still reverse, the pages just 404.
+    path("accounts/login/", discord_only_login, name="discord_only_login"),
+    re_path(r"^accounts/login/code/", closed_account_route, {"route": "login_code"}),
+    re_path(r"^accounts/password/", closed_account_route, {"route": "password"}),
+    re_path(r"^accounts/email/", closed_account_route, {"route": "email"}),
+    re_path(r"^accounts/confirm-email/", closed_account_route, {"route": "confirm_email"}),
     path("accounts/", include("allauth.urls")),
     path("user/", include("apps.accounts.urls")),
     path("user/api-keys/", include("apps.user_api.urls")),

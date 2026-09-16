@@ -172,6 +172,9 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "simple_history.middleware.HistoryRequestMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # Signs out a rider the guild sync has marked as having left the Discord server. Needs
+    # the session, the user and the message store, so it sits after all three.
+    "apps.accounts.middleware.DepartedMemberLogoutMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
 ]

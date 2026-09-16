@@ -89,7 +89,7 @@ def clear_expired_sessions() -> dict:
 
 
 @task
-def sync_guild_members() -> dict:
+def sync_guild_members(allow_mass_departure: bool = False) -> dict:
     """Fetch the full guild roster from Discord and reconcile GuildMember.
 
     Replaces the bot-side polling job: the platform calls the Discord REST API
@@ -98,12 +98,32 @@ def sync_guild_members() -> dict:
     :func:`apps.accounts.services.apply_guild_member_sync`. Members who fell
     out of the roster have ``date_left`` stamped and a Membership ticket filed.
 
+    This is the only driver whose list decides who has left: the fetch is paginated and
+    raises rather than return a list missing a page. The bot's push is not trusted for
+    that (see ``apps.dbot_api.api.sync_guild_members``).
+
+    Args:
+        allow_mass_departure: Sign members out even when more than the sync's sanity limit
+            would go at once -- for a real purge, confirmed by an admin from the Run Now
+            page. The scheduled run never sets it.
+
     Returns:
-        dict with sync results, or ``{"status": "skipped", "reason": ...}`` if
-        ``DISCORD_BOT_TOKEN`` or ``GUILD_ID`` is unset.
+        dict with sync results and ``status`` ``"ok"``, or ``{"status": "skipped",
+        "reason": ...}`` if ``DISCORD_BOT_TOKEN`` or ``GUILD_ID`` is unset.
+
+    Raises:
+        GuildSyncRefusedError: The sanity limit held departures or never-listed accounts
+            back. Raised after the members received are saved, so the run is recorded as
+            failed -- a refusal repeats on every run until an admin acts on it, and the
+            ticket it opens is otherwise the only sign of it outside Logfire.
 
     """
-    from apps.accounts.services import apply_guild_member_sync, fetch_guild_members_from_discord
+    from apps.accounts.services import (
+        GuildSyncRefusedError,
+        apply_guild_member_sync,
+        describe_sync_refusal,
+        fetch_guild_members_from_discord,
+    )
 
     with logfire.span("sync_guild_members"):
         bot_token = config.DISCORD_BOT_TOKEN
@@ -116,8 +136,21 @@ def sync_guild_members() -> dict:
             logfire.warning("GUILD_ID not configured, skipping guild member sync")
             return {"status": "skipped", "reason": "guild_id_not_configured"}
 
+        # Taken before the fetch: an account that signs in while it runs has passed a
+        # newer, live guild check than the list, so the sync must not overrule it.
+        observed_at = timezone.now()
         members = fetch_guild_members_from_discord(guild_id, bot_token)
-        result = apply_guild_member_sync(members, source="discord_api")
+        result = apply_guild_member_sync(
+            members,
+            source="discord_api",
+            authoritative=True,
+            allow_mass_departure=allow_mass_departure,
+            observed_at=observed_at,
+        )
+        # The worker runs a task outside any transaction, so the upserts above are already
+        # committed; raising only changes how the run is recorded.
+        if result["departures_refused"] or result["unseen_refused"]:
+            raise GuildSyncRefusedError(describe_sync_refusal(result))
         return {"status": "ok", **result}
 
 
@@ -132,13 +165,18 @@ def guild_member_sync_status() -> dict:
         dict with sync status and statistics.
 
     """
+    from apps.accounts.services import never_seen_in_guild
+
     with logfire.span("guild_member_sync_status"):
         now = timezone.now()
 
         # Get counts
         total_members = GuildMember.objects.count()
         active_members = GuildMember.objects.filter(date_left__isnull=True).count()
-        left_members = GuildMember.objects.filter(date_left__isnull=False).count()
+        # Rows recorded for accounts no sync has ever listed are not departures; counting them
+        # as such would inflate "left" by every one of them after the first sweep.
+        never_seen = GuildMember.objects.filter(never_seen_in_guild()).count()
+        left_members = GuildMember.objects.filter(date_left__isnull=False).count() - never_seen
         linked_members = GuildMember.objects.filter(user__isnull=False, date_left__isnull=True).count()
         bot_members = GuildMember.objects.filter(is_bot=True, date_left__isnull=True).count()
 
@@ -155,6 +193,7 @@ def guild_member_sync_status() -> dict:
             "total_records": total_members,
             "active_members": active_members,
             "left_members": left_members,
+            "never_seen_members": never_seen,
             "linked_to_users": linked_members,
             "bot_accounts": bot_members,
             "last_sync": last_modified.isoformat() if last_modified else None,
@@ -179,8 +218,8 @@ def _users_in_the_guild():
     A rider with NO ``GuildMember`` row is deliberately kept. The row is created by the guild
     sync, so its absence means "never seen by that sync", not "gone" -- excluding them would
     quietly stop role management for anyone the sync has not reached yet. Only a stamped
-    ``date_left``, which the sync sets when a previously-active member disappears, counts as
-    having left.
+    ``date_left``, which the sync sets when a previously-active member disappears (or, on a
+    new departed row, for an account it has never listed), counts as having left.
 
     Returns:
         The queryset of users to sync roles for.

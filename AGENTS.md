@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> **This is an older copy of `CLAUDE.md` and is not kept in step with it. Read `CLAUDE.md` first; where the two disagree, `CLAUDE.md` wins.** Only the Zwift verification rules below have been brought up to date, because the old text described a retired flow (a credential-based Zwift lookup) that must not come back.
+> **This is an older copy of `CLAUDE.md` and is not kept in step with it. Read `CLAUDE.md` first; where the two disagree, `CLAUDE.md` wins.** Only the Zwift verification and login rules below have been brought up to date, because the old text described retired flows (a credential-based Zwift lookup, an open login when `GUILD_ID` was unset) that must not come back.
 
 ## Project Overview
 
@@ -23,7 +23,7 @@ uv run python manage.py check                  # Validate config
 uv run python manage.py makemigrations         # Create migrations
 uv run python manage.py migrate                # Apply migrations
 uv run python manage.py createsuperuser        # Create admin user
-uv run python manage.py ensuresuperuser        # Idempotent bootstrap: no-op if a superuser exists, otherwise creates one from SUPERUSER_USERNAME / SUPERUSER_PASSWORD / SUPERUSER_EMAIL env vars (used on Railway deploys)
+uv run python manage.py ensuresuperuser        # Idempotent bootstrap: no-op if a superuser exists, otherwise creates one from SUPERUSER_USERNAME / SUPERUSER_PASSWORD / SUPERUSER_EMAIL env vars. Not run on deploy (commented out in entrypoint.sh) — run by hand
 
 # Background Tasks (Django 6.0 built-in)
 uv run python manage.py db_worker              # Run task worker
@@ -53,7 +53,7 @@ uv run granian gotta_bike_platform.wsgi:application --interface wsgi
 - Required env vars: `SECRET_KEY`, `DATABASE_URL` (defaults exist for local dev only — must be set in production)
 - Optional env vars: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` (OAuth)
 - Optional env vars: `LOGFIRE_TOKEN`, `LOGFIRE_ENVIRONMENT` (observability)
-- Optional env vars: `SUPERUSER_USERNAME`, `SUPERUSER_PASSWORD`, `SUPERUSER_EMAIL` (read by `manage.py ensuresuperuser` for first-deploy bootstrap)
+- Optional env vars: `SUPERUSER_USERNAME`, `SUPERUSER_PASSWORD`, `SUPERUSER_EMAIL` (read only by a hand-run `manage.py ensuresuperuser`)
 - Runtime settings (via constance): API credentials and team settings (see Dynamic Settings below). **Note**: code that does `from constance import config` (e.g. `config.DISCORD_BOT_TOKEN`, `config.GUILD_ID`) reads from constance, *not* from `gotta_bike_platform/config.py` — the two `config` objects are unrelated.
 
 ### Static Files & Storage
@@ -76,8 +76,8 @@ Read each app's `models.py` for full field lists. Bullets below capture purpose 
 - `dbot_api` - Discord bot REST API using Django Ninja (see Discord Bot API section). The task registry it used to host has moved to `gotta_bike_platform/task_registry.py`.
 - `data_connection` - Configurable Google Sheets exports via service account. Field selection across User/ZP/ZR, filters by gender/division/rating/phenotype. **Manual sync clears the sheet and rewrites all data**
 - `events` - Event management with squads, signups, availability grids, scheduled races, and Discord thread integration. See Event Permission Gates below for the load-bearing behavior
-- `magic_links` - Passwordless authentication (legacy — kept so old DMed links still resolve at `/m/`; do not extend)
-- `user_api` - Per-user API keys with bearer auth (Django Ninja). `ApiKey`: 30-day default expiry, hashed at rest, scoped to one user. `purge_expired_api_keys` scheduled task hard-deletes keys expired > 90 days
+- `magic_links` - Single-use passwordless login links (5 min). Still live: `GET /api/dbot/team_links` mints one for the bot's `/team_links` command, so `/m/` must stay; don't extend it to new flows. Deliberately outside the guild rule (see Authentication)
+- `user_api` - Per-user API keys with bearer auth (Django Ninja). `UserApiKey`: 30-day default expiry, hashed at rest, scoped to one user. `purge_expired_api_keys` scheduled task hard-deletes keys expired > 90 days. A key stops working when its owner leaves the Discord server (see Authentication)
 - `tickets` - **Internal only** (sidebar link intentionally disabled). Member-support / team-management ticket queue. Non-obvious: `Ticket.closed_at` is auto-managed by `save()` on status transitions to/from `closed`; `apps/tickets/services.py:create_member_left_ticket` fires from the guild-member sync when `date_left` is freshly stamped (idempotent while a non-closed ticket exists for that `GuildMember`). Gated by `team_member_required`; no finer-grained permissions yet
 - `cms` - Dynamic CMS pages (`Page` model) with markdown body, draft/published workflow, sidebar/user-menu placement (`nav_location` = `main_nav` or `user_menu`), per-page `require_login` / `require_team_member`. Context processor exposes `cms_nav_pages` + `cms_user_menu_pages`
 
@@ -96,15 +96,20 @@ Read these helpers before touching event/squad views — most non-trivial behavi
 
 ### Authentication (django-allauth)
 
-- Discord OAuth only (no username/password)
+- Discord OAuth is the rider login; `/admin/` also accepts username/password (`ModelBackend`) for staff such as the `ensuresuperuser` account
+- **allauth's own signup is closed** (`NoLocalSignupAccountAdapter.is_open_for_signup` → False, wired as `ACCOUNT_ADAPTER`), so an account can only come from a Discord login. `DiscordSocialAccountAdapter.is_open_for_signup` returns True to keep Discord signup open — removing it shuts new riders out
 - **Guild membership required**: Users must be a member of the configured Discord server (`GUILD_ID`) to sign up or log
-  in
+  in. The check is live, with the rider's own token, and fails closed: **`GUILD_ID=0` refuses every Discord login** rather than skipping the check, and a Discord error, timeout or 429 refuses without a 500
+- **Leaving the server ends access on the next request** — `apps/accounts/middleware.py:DepartedMemberLogoutMiddleware` logs out a signed-in user the guild sync has marked as departed (rule: `apps/accounts/membership.py:is_departed_member` — a `GuildMember` row for the user's current `discord_id` with `date_left` set). Source is the scheduled guild sync, so the lag is up to `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS`. **Exempt: staff and superusers.** Users with no `GuildMember` row are allowed (local accounts always; a Discord-linked account until the next guild sync writes a row for it). A Discord login that passes the live check clears a stale `date_left`
+- **User API keys follow the same rule** — `apps/user_api/services.py:user_can_use_api` refuses a departed non-staff user on every bearer request
+- **The email- and password-based allauth routes are closed** — `gotta_bike_platform/urls.py` 404s `accounts/login/code/`, `accounts/password/`, `accounts/email/` and `accounts/confirm-email/` (every sub-path) and serves `accounts/login/` for GET only, because each was a way in with no block list or guild check. `templates/allauth/layouts/base.html` is a copy of allauth's layout without the links to them (re-diff it on an allauth upgrade). `NoLocalSignupAccountAdapter.pre_login` also refuses any allauth login that is not a Discord social login
+- **Deliberately outside the guild rule, by owner decision:** the `/admin/` username/password login and magic links (`/m/`)
 - Custom User model fields: `discord_id`, `discord_username`, `discord_nickname`, `zwid`,
   social fields (`strava_url`, `youtube_channel`, `youtube_channel_id`, `twitch_channel`, `instagram_url`,
   `facebook_url`, `twitter_url`, `tiktok_url`, `bluesky_url`, `mastodon_url`, `garmin_url`, `tpv_profile_url`),
   equipment fields (`trainer`, `powermeter`, `dual_recording`, `heartrate_monitor`)
 - TOTP two-factor authentication via `allauth.mfa`
-- Custom adapter at `apps/accounts/adapters.py` verifies guild membership, syncs Discord profile data, redirects rejected users to `DISCORD_URL` — see "Discord OAuth Adapter" below for the load-bearing gotchas
+- Custom adapter at `apps/accounts/adapters.py` verifies guild membership and syncs Discord profile data. Rejected users (not in the guild, blocked, unverified email, Discord API errors) go back to `account_login` with an error message — never to `DISCORD_URL`, which only adds a "Join here" link when it is an http(s) URL. See "Discord OAuth Adapter" below for the load-bearing gotchas
 - OAuth scopes: `identify`, `email`, `guilds`
 - URLs at `/accounts/` (login, logout, 2fa management)
 
@@ -112,9 +117,10 @@ Read these helpers before touching event/squad views — most non-trivial behavi
 
 **Critical gotchas:**
 
-- `pre_social_login` reconnects existing users by `discord_id` if SocialAccount was lost — prevents profile data loss
+- `pre_social_login` runs every check — block list, live guild check, verified email — **before it writes anything**; keep new checks ahead of the writes
+- `pre_social_login` reconnects existing users by `discord_id` if SocialAccount was lost — prevents profile data loss. Refused if more than one `User` holds the id
 - `pre_social_login` only updates Discord fields, **never** profile fields (`first_name`, `last_name`, `birth_year`, etc.)
-- `populate_user` and `save_user` are only called for NEW users
+- `save_user` is only called for NEW users; `populate_user` runs on **every** Discord callback, so keep it side-effect free
 - **Always use `update_fields`** when saving User in adapter code: `user.save(update_fields=['discord_id', ...])` — bare `user.save()` overwrites profile data
 
 ### Profile Completion
@@ -270,7 +276,7 @@ Mount points — read each app's `urls.py` for the full pattern list:
 - `/team/`, `/events/`, `/tickets/`, `/page/<slug>/` — feature apps (`tickets` is **internal only**, sidebar link disabled)
 - `/strava/`, `/zp/`, `/analytics/`, `/data-connections/` — feature apps
 - `/api/dbot/`, `/api/user/`, `/api/analytics/` — Django Ninja APIs
-- `/m/` — magic links (legacy — see Apps section)
+- `/m/` — single-use magic login links (see Apps section)
 - `/user/zauth/` — `apps.zwift.urls` (Zwift OAuth connect/disconnect)
 
 Non-obvious gates / behavior not visible from the URL pattern alone:
@@ -283,6 +289,8 @@ Non-obvious gates / behavior not visible from the URL pattern alone:
 - `/events/<id>/manage-roles/` — `assign_roles` or event head captain only
 - `/analytics/` — `app_admin` only
 - `/robots.txt` — dynamic (rendered by `gotta_bike_platform/views.py`)
+- `/accounts/3rdparty/signup/` — shadowed by `block_social_signup` (redirects to login), ahead of the allauth include
+- `/accounts/login/code/`, `/accounts/password/`, `/accounts/email/`, `/accounts/confirm-email/` (all sub-paths) — 404 by `closed_account_route`; `/accounts/login/` accepts GET only (`discord_only_login`). See Authentication
 
 ### Frontend
 
@@ -423,9 +431,9 @@ Syncs Discord guild members with Django to track membership status.
 **Sync drivers** (both go through `apps/accounts/services.py:apply_guild_member_sync`, which owns the upsert/depart logic):
 
 - **Primary**: `sync_guild_members` background task (`apps/accounts/tasks.py`) calls Discord's REST API directly via `apps/accounts/services.py:fetch_guild_members_from_discord` (paginated, 429-aware). Scheduled by the in-process APScheduler — cadence is `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS` Constance setting (default 6h). Also triggerable manually from `/site/config/background_tasks/`.
-- **Fallback**: `POST /api/dbot/sync_guild_members` — Discord-bot push, accepts the same normalized payload and delegates to the same service.
+- **Fallback**: `POST /api/dbot/sync_guild_members` — Discord-bot push, accepts the same normalized payload and delegates to the same service, but is **not trusted with departures**: it upserts and clears `date_left` for members it lists and never marks anyone as left (its list comes from the bot's gateway cache, which can be partial).
 
-When a previously-active member is missing from a sync, `date_left` is stamped and `apps/tickets/services.py:create_member_left_ticket` files a low-priority Membership ticket (idempotent while a non-closed ticket exists for that member). See the `tickets` app section.
+When a previously-active member is missing from a scheduled (REST) sync, `date_left` is stamped and `apps/tickets/services.py:create_member_left_ticket` files a low-priority Membership ticket (idempotent while a non-closed ticket exists for that member). See the `tickets` app section. The stamp also ends that rider's session on their next request and disables their API keys (see Authentication); a later Discord login that passes the live guild check clears it again. Because a stamp cuts access, the sync refuses to stamp departures from an empty or implausibly short member list, and records every Discord-linked account its list has never included as departed — see Guild Member Sync in `CLAUDE.md`.
 
 **Important**: Only affects Discord OAuth users — regular Django accounts without `discord_id` are not modified.
 
@@ -534,7 +542,7 @@ user-facing terminology should be "Registration" or "Membership Registration". T
 3. User receives DM with UUID link to complete registration
 4. User fills out required fields (name, agreements, profile info)
 5. Membership admin reviews and approves/rejects
-6. If approved, user can login via Discord OAuth and import the registration onto their profile (`/user/profile/import/<uuid>/` — blank fields only, plus the registration's Zwift link, see the `zwift` bullet)
+6. Approval does **not** gate login — any member of the `GUILD_ID` server with a verified Discord email who isn't blocked can sign in. Approval locks the registration against edits, posts a status notification, and lets the rider import it onto their profile (`/user/profile/import/<uuid>/` — blank fields only, plus the registration's Zwift link, see the `zwift` bullet); page access still comes from the `team_member` Discord role
 
 ### MembershipApplication Model (`apps/team/models.py`)
 

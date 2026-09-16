@@ -136,7 +136,11 @@ Sync all Discord roles to Django.
 
 #### POST /api/dbot/sync_guild_members
 
-Sync all guild members to Django. See [Guild Sync](guild-sync.md) for details.
+Push the bot's view of the guild members to Django. See [Guild Sync](guild-sync.md) for details.
+This push upserts members and clears departures for members it lists, but **never marks anyone as
+left** (`left` is always 0 and `departures_evaluated` is `false`): the bot's list comes from its
+gateway cache, which can be partial after a restart, so only the platform's scheduled REST sync
+decides departures.
 
 **Body:**
 ```json
@@ -150,7 +154,14 @@ Sync all guild members to Django. See [Guild Sync](guild-sync.md) for details.
 {
   "created": 5,
   "updated": 10,
-  "marked_left": 2
+  "rejoined": 1,
+  "left": 0,
+  "linked": 2,
+  "departures_evaluated": false,
+  "departures_refused": "",
+  "departures_skipped": 0,
+  "total_received": 1145,
+  "total_active": 1150
 }
 ```
 

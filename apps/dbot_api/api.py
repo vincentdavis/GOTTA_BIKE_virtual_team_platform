@@ -605,10 +605,15 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
     """Sync all guild members from the Discord bot's webhook push.
 
     Most of the work is delegated to :func:`apps.accounts.services.apply_guild_member_sync`;
-    the platform can also drive the same reconciliation directly via the
-    ``sync_guild_members`` background task without involving the bot. Members
-    not present in the payload are marked left and a low-priority Membership
-    ticket is filed for each departure.
+    the platform drives the full reconciliation itself via the ``sync_guild_members``
+    background task. This push only refreshes the members it lists (and clears the
+    departure stamp of any who are back); it never marks anybody as left or records
+    accounts it has not listed, so ``left`` is always 0 and ``departures_evaluated`` is
+    false. The payload comes from the bot's gateway cache, which can be missing member
+    chunks after a restart, and a departure signs the rider out -- so only the paginated
+    REST fetch, which fails rather than return a list missing a page, may decide that.
+    ``departures_refused`` and ``departures_skipped`` stay in the response for the bot
+    and are always empty here.
 
     NOTE: This only affects GuildMember records and links to User accounts
     that have a discord_id. Regular Django accounts (staff, admin) without
@@ -637,7 +642,7 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
         }
         for m in payload.members
     ]
-    result = apply_guild_member_sync(members, source="bot_webhook")
+    result = apply_guild_member_sync(members, source="bot_webhook", authoritative=False)
     logfire.debug(
         "Bot-driven guild_members sync completed",
         discord_user_id=request.auth["discord_user_id"],  # ty:ignore[unresolved-attribute]
@@ -649,6 +654,9 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
         "rejoined": result["rejoined"],
         "left": result["left"],
         "linked": result["linked"],
+        "departures_evaluated": result["departures_evaluated"],
+        "departures_refused": result["departures_refused"],
+        "departures_skipped": result["departures_skipped"],
         "total_received": result["total_received"],
         "total_active": result["total_active"],
     }

@@ -10,16 +10,39 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 import logfire
+from django.db.models import BooleanField, ExpressionWrapper, F, Q
 from django.utils import timezone
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from apps.accounts.models import User
+    from django.db.models import QuerySet
+
+    from apps.accounts.models import GuildMember, User
     from apps.team.models import MembershipApplication
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
 GUILD_MEMBER_PAGE_SIZE = 1000
+
+# Access hangs on GuildMember.date_left (apps.accounts.membership), so a member list that comes
+# back short must not be read as a mass departure: every rider it leaves out would be signed out
+# and lose their API keys until the next good sync. Past this many departures in one run, and
+# this share of the active rows, none are stamped until an admin confirms them with the
+# ``allow_mass_departure`` option on the sync_guild_members task. A normal run sees a handful.
+# The same limit, measured against the Discord-linked accounts, holds back the sweep that
+# records accounts no sync has ever listed (_record_unseen_accounts).
+MASS_DEPARTURE_FLOOR = 10
+MASS_DEPARTURE_SHARE = 0.05
+
+
+class GuildSyncRefusedError(RuntimeError):
+    """A guild member sync saved the members it received but refused to sign anybody out.
+
+    Raised by the ``sync_guild_members`` task once ``apply_guild_member_sync`` has returned,
+    so the upserts are already committed. It exists to make the task record read "Failed":
+    a returned dict reads as a success on the Run Now page, and a refusal repeats on every
+    run until an admin acts on it.
+    """
 
 
 def get_approved_application(discord_id: str) -> MembershipApplication | None:
@@ -481,6 +504,10 @@ def fetch_guild_members_from_discord(guild_id: str | int, bot_token: str) -> lis
         List of normalized member dicts. Raises ``httpx.HTTPStatusError`` on
         any non-429 error response from Discord.
 
+    Raises:
+        ValueError: If a full page carries no member id to page on from, so the
+            list would be incomplete.
+
     """
     headers = {"Authorization": f"Bot {bot_token}"}
     members: list[dict[str, Any]] = []
@@ -529,9 +556,13 @@ def fetch_guild_members_from_discord(guild_id: str | int, bot_token: str) -> lis
 
             if len(page) < GUILD_MEMBER_PAGE_SIZE:
                 break
-            after = str(page[-1].get("user", {}).get("id", ""))
+            after = str((page[-1].get("user") or {}).get("id", ""))
             if not after:
-                break
+                # A full page with no cursor means members are missing, and a short list now
+                # signs riders out (see apply_guild_member_sync). Fail the run instead.
+                logfire.error("Discord guild member page had no cursor", fetched_so_far=len(members))
+                msg = "Discord returned a full guild member page without a user id to page from"
+                raise ValueError(msg)
 
     return members
 
@@ -722,29 +753,60 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
     return audit
 
 
-def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unknown") -> dict[str, int]:
-    """Reconcile the GuildMember table against an authoritative member list.
+def apply_guild_member_sync(
+    members: list[dict[str, Any]],
+    *,
+    source: str = "unknown",
+    authoritative: bool = False,
+    allow_mass_departure: bool = False,
+    observed_at: datetime | None = None,
+) -> dict[str, Any]:
+    """Reconcile the GuildMember table against a Discord member list.
 
     Members present in ``members`` are upserted (and linked to a ``User`` by
-    ``discord_id`` when possible); members previously active but missing from
-    the input are marked left and trigger a low-priority Membership ticket via
-    :func:`apps.tickets.services.create_member_left_ticket`. Idempotent: re-running
-    with the same input is a no-op apart from refreshing ``date_modified``.
+    ``discord_id`` when possible), which also clears the departure stamp of anyone listed.
+    Idempotent: re-running with the same input is a no-op apart from refreshing
+    ``date_modified``.
+
+    Only an ``authoritative`` list is also used to decide who has gone, because a departure
+    ends that rider's access (``apps.accounts.membership``). For such a list, members
+    previously active but missing from it are marked left, each with a low-priority
+    Membership ticket (:func:`apps.tickets.services.create_member_left_ticket`), and then
+    every Discord-linked account no sync has ever listed is recorded as departed
+    (:func:`_record_unseen_accounts`). Each step is held back when the list does not look
+    whole: always for an empty list, and when the step would take more than
+    ``MASS_DEPARTURE_FLOOR`` accounts and ``MASS_DEPARTURE_SHARE`` of its population at
+    once, unless ``allow_mass_departure`` says an admin has confirmed it. A refused step
+    keeps the upserts, logs an error and opens (or refreshes) one Membership ticket that
+    tells an admin what to do (:func:`apps.tickets.services.open_sync_refusal_ticket`).
 
     Args:
         members: Normalized list of member dicts (see :func:`fetch_guild_members_from_discord`).
         source: Free-form label captured in the audit log to identify which
             caller drove the sync (``"discord_api"``, ``"bot_webhook"``, etc.).
+        authoritative: ``members`` is the guild's complete member list, so anyone it leaves
+            out has left -- true of the paginated REST fetch, which raises rather than
+            return a list missing a page. Leave it False for a list that may be partial,
+            such as the bot's gateway cache, which can miss member chunks after a restart.
+        allow_mass_departure: Act on an authoritative list even past the mass-departure
+            limit. Does not apply to an empty list, which is never acted on.
+        observed_at: When ``members`` was read from Discord; defaults to now. A row changed,
+            or an account created or signed in, at or after it is left for the next run.
 
     Returns:
         Dict with ``created``, ``updated``, ``rejoined``, ``left``, ``linked``,
-        ``total_received``, and ``total_active`` counts.
+        ``relinked``, ``failed``, ``unseen_recorded``, ``departures_skipped``,
+        ``departures_deferred``, ``unseen_skipped``, ``total_received`` and
+        ``total_active`` counts; ``departures_evaluated``, whether the list was used to
+        decide who has gone; and ``departures_refused`` and ``unseen_refused``, each
+        ``"empty_member_list"``, ``"mass_departure"``, or ``""`` when that step was not
+        held back.
 
     """
     # Local imports avoid a circular dependency at module import time.
     from apps.accounts.models import GuildMember, User
-    from apps.tickets.services import create_member_left_ticket
 
+    observed_at = observed_at or timezone.now()
     received_discord_ids = {m["discord_id"] for m in members if m.get("discord_id")}
     existing_discord_ids = set(
         GuildMember.objects.filter(date_left__isnull=True).values_list("discord_id", flat=True)
@@ -820,32 +882,75 @@ def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unk
                 error=str(exc),
             )
 
-    # Mark members not in payload as left. Iterate so we can generate a ticket
-    # for each freshly-departed member; a bulk UPDATE would skip the audit trail
-    # admins rely on.
-    members_to_mark_left = existing_discord_ids - received_discord_ids
     left = 0
-    if members_to_mark_left:
-        now = timezone.now()
-        departed = list(
-            GuildMember.objects.filter(
-                discord_id__in=members_to_mark_left,
-                date_left__isnull=True,
-            )
+    departures_refused = ""
+    departures_skipped = 0
+    departures_deferred = 0
+    unseen_recorded = 0
+    unseen_refused = ""
+    unseen_skipped = 0
+    if authoritative:
+        departing = GuildMember.objects.filter(
+            discord_id__in=existing_discord_ids - received_discord_ids,
+            date_left__isnull=True,
         )
-        for gm in departed:
-            gm.date_left = now
-            gm.save(update_fields=["date_left", "date_modified"])
-            try:
-                create_member_left_ticket(gm)
-            except Exception as exc:
+        # A row changed since the list was read carries newer news than the list: a rider
+        # who rejoined and signed in meanwhile (clear_departure stamps date_modified), or a
+        # member the bot push added. Stamping it would sign that rider straight back out,
+        # so the next run judges it against a newer list.
+        departures_deferred = departing.filter(date_modified__gte=observed_at).count()
+        departed = list(departing.filter(date_modified__lt=observed_at))
+        departures_refused = _departure_refusal(
+            received=len(received_discord_ids),
+            departing=len(departed),
+            active=len(existing_discord_ids),
+            allow_mass_departure=allow_mass_departure,
+        )
+        if departures_refused:
+            departures_skipped = len(departed)
+            logfire.error(
+                "Guild member sync refused to stamp departures",
+                source=source,
+                reason=departures_refused,
+                departing=departures_skipped,
+                active_before=len(existing_discord_ids),
+                total_received=len(members),
+            )
+        else:
+            left = _stamp_departures(departed, observed_at=observed_at)
+            # Only reached once the list has passed the departure check: a list too short to
+            # trust for departures is too short to say who was never in the server.
+            unseen = _unseen_accounts(received_discord_ids, observed_at=observed_at)
+            # Measured against the Discord-linked accounts, not the active rows: those are
+            # the population this step signs out, and a sparse GuildMember table (a fresh or
+            # restored database, rows deleted in the admin) would make the active count
+            # meaningless.
+            unseen_refused = _departure_refusal(
+                received=len(received_discord_ids),
+                departing=len(unseen),
+                active=User.objects.exclude(discord_id="").count(),
+                allow_mass_departure=allow_mass_departure,
+            )
+            if unseen_refused:
+                unseen_skipped = len(unseen)
                 logfire.error(
-                    "Failed to create member-left ticket",
-                    guild_member_id=gm.pk,
-                    discord_id=gm.discord_id,
-                    error=str(exc),
+                    "Guild member sync refused to record accounts it has never listed",
+                    source=source,
+                    reason=unseen_refused,
+                    unseen=unseen_skipped,
+                    total_received=len(members),
                 )
-        left = len(departed)
+            else:
+                unseen_recorded = _record_unseen_accounts(unseen)
+        if departures_refused or unseen_refused:
+            _report_sync_refusal(
+                departures_refused=departures_refused,
+                departures_skipped=departures_skipped,
+                unseen_refused=unseen_refused,
+                unseen_skipped=unseen_skipped,
+                total_received=len(received_discord_ids),
+                active_before=len(existing_discord_ids),
+            )
 
     total_active = GuildMember.objects.filter(date_left__isnull=True).count()
 
@@ -859,6 +964,13 @@ def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unk
         linked=linked,
         relinked=relinked,
         failed=failed,
+        unseen_recorded=unseen_recorded,
+        departures_evaluated=authoritative,
+        departures_refused=departures_refused,
+        departures_skipped=departures_skipped,
+        departures_deferred=departures_deferred,
+        unseen_refused=unseen_refused,
+        unseen_skipped=unseen_skipped,
         total_received=len(members),
         total_active=total_active,
     )
@@ -871,6 +983,275 @@ def apply_guild_member_sync(members: list[dict[str, Any]], *, source: str = "unk
         "linked": linked,
         "relinked": relinked,
         "failed": failed,
+        "unseen_recorded": unseen_recorded,
+        "departures_evaluated": authoritative,
+        "departures_refused": departures_refused,
+        "departures_skipped": departures_skipped,
+        "departures_deferred": departures_deferred,
+        "unseen_refused": unseen_refused,
+        "unseen_skipped": unseen_skipped,
         "total_received": len(members),
         "total_active": total_active,
     }
+
+
+def _departure_refusal(*, received: int, departing: int, active: int, allow_mass_departure: bool) -> str:
+    """Say why a sync must not sign these accounts out, if it must not.
+
+    Used for both steps that sign people out: stamping departures and recording accounts no
+    sync has ever listed.
+
+    Args:
+        received: Distinct Discord ids in the member list.
+        departing: Accounts the step would sign out.
+        active: The population they come from -- active rows before the sync, or
+            Discord-linked accounts.
+        allow_mass_departure: An admin has confirmed that a large departure is real.
+
+    Returns:
+        ``"empty_member_list"`` or ``"mass_departure"``, or ``""`` if the step may go ahead.
+
+    """
+    # Never real: the bot the list comes from is itself a member, so no confirmation makes
+    # an empty list whole -- and it would sign out every rider at once.
+    if received == 0:
+        return "empty_member_list"
+    if not allow_mass_departure and departing > max(MASS_DEPARTURE_FLOOR, active * MASS_DEPARTURE_SHARE):
+        return "mass_departure"
+    return ""
+
+
+def _stamp_departures(rows: list, *, observed_at: datetime) -> int:
+    """Mark these GuildMember rows as departed and file a member-left ticket for each.
+
+    Iterates rather than bulk-updating so each departure gets the ticket admins follow up.
+    Each stamp is conditional: a row that came back, or was touched, since it was read
+    (``clear_departure`` after a live login) is left for the next run.
+
+    Args:
+        rows: Active rows the member list left out, read before the stamp.
+        observed_at: When the member list was read.
+
+    Returns:
+        The number of rows stamped.
+
+    """
+    from apps.accounts.models import GuildMember
+    from apps.tickets.services import create_member_left_ticket
+
+    now = timezone.now()
+    stamped = 0
+    for gm in rows:
+        changed = GuildMember.objects.filter(
+            pk=gm.pk,
+            date_left__isnull=True,
+            date_modified__lt=observed_at,
+        ).update(date_left=now, date_modified=now)
+        if not changed:
+            continue
+        stamped += 1
+        gm.date_left = now
+        gm.date_modified = now
+        try:
+            create_member_left_ticket(gm)
+        except Exception as exc:
+            logfire.error(
+                "Failed to create member-left ticket",
+                guild_member_id=gm.pk,
+                discord_id=gm.discord_id,
+                error=str(exc),
+            )
+    return stamped
+
+
+def _report_sync_refusal(**counts: Any) -> None:
+    """Open or refresh the ticket that tells an admin the sync held sign-outs back.
+
+    A failure here must not undo the sync, which has already saved what it received.
+
+    Args:
+        **counts: Passed to :func:`apps.tickets.services.open_sync_refusal_ticket`.
+
+    """
+    from apps.tickets.services import open_sync_refusal_ticket
+
+    try:
+        open_sync_refusal_ticket(**counts)
+    except Exception as exc:
+        logfire.error("Failed to open the guild sync refusal ticket", error=str(exc))
+
+
+def describe_sync_refusal(result: dict[str, Any]) -> str:
+    """Say what a refused guild sync held back and what an admin should do about it.
+
+    Args:
+        result: The dict :func:`apply_guild_member_sync` returned.
+
+    Returns:
+        One or two sentences, or ``""`` if nothing was refused.
+
+    """
+    if result.get("departures_refused") == "empty_member_list":
+        return (
+            "Guild member sync got an empty member list from Discord and marked nobody as left. "
+            "Accepting a mass departure does not apply to an empty list: check DISCORD_BOT_TOKEN, "
+            "GUILD_ID and the bot's Server Members intent."
+        )
+    held = []
+    if result.get("departures_refused"):
+        held.append(f"{result['departures_skipped']} departure(s)")
+    if result.get("unseen_refused"):
+        held.append(f"{result['unseen_skipped']} account(s) no sync has ever listed")
+    if not held:
+        return ""
+    return (
+        f"Guild member sync held back {' and '.join(held)}: more than its limit at once. "
+        f"The {result['total_received']} members it received were saved. If this is real, run "
+        "sync_guild_members from /site/config/background_tasks/ with 'Accept a mass departure' ticked."
+    )
+
+
+def never_seen_in_guild() -> Q:
+    """Match the GuildMember rows recorded for an account no guild sync has ever listed.
+
+    :func:`_record_unseen_accounts` creates those rows already departed, with ``date_left``
+    copied from ``date_created``. A real departure is stamped on a row an earlier sync
+    created as active, so its ``date_left`` is always later. Once such an account turns up
+    in a sync, or passes a live login check, the stamp is cleared, and a later departure is
+    a real one.
+
+    Returns:
+        A filter for ``GuildMember`` querysets.
+
+    """
+    return Q(date_left__isnull=False, date_left=F("date_created"))
+
+
+def is_never_seen(member: GuildMember) -> bool:
+    """Say whether one GuildMember row is a never-seen record (see :func:`never_seen_in_guild`).
+
+    Args:
+        member: The row.
+
+    Returns:
+        True for a row recorded for an account no guild sync has ever listed.
+
+    """
+    return member.date_left is not None and member.date_left == member.date_created
+
+
+def annotate_never_seen(queryset: QuerySet) -> QuerySet:
+    """Add a ``never_seen`` flag (see :func:`never_seen_in_guild`) to GuildMember rows.
+
+    Args:
+        queryset: A ``GuildMember`` queryset.
+
+    Returns:
+        The queryset, each row carrying ``never_seen``.
+
+    """
+    return queryset.annotate(never_seen=ExpressionWrapper(never_seen_in_guild(), output_field=BooleanField()))
+
+
+def _unseen_accounts(received_discord_ids: set[str], *, observed_at: datetime) -> list[tuple[int, str, str, bool]]:
+    """List the Discord-linked accounts that no guild sync has ever listed.
+
+    Skips accounts created or signed in at or after ``observed_at``: that login's live guild
+    check is newer than the list. Skips ids in this list too -- they got a row above unless
+    their upsert failed, which is not a departure.
+
+    Args:
+        received_discord_ids: The Discord ids in this sync's member list.
+        observed_at: When the member list was read.
+
+    Returns:
+        ``(user_id, discord_id, discord_username, already_linked)`` per account, by pk.
+
+    """
+    from django.db.models import Exists, OuterRef
+
+    from apps.accounts.models import GuildMember, User
+
+    candidates = (
+        User.objects
+        .exclude(discord_id="")
+        .exclude(Exists(GuildMember.objects.filter(discord_id=OuterRef("discord_id"))))
+        .exclude(date_joined__gte=observed_at)
+        .exclude(last_login__gte=observed_at)
+        .annotate(already_linked=Exists(GuildMember.objects.filter(user=OuterRef("pk"))))
+        .order_by("pk")
+        .values_list("pk", "discord_id", "discord_username", "already_linked")
+    )
+    return [row for row in candidates if row[1] not in received_discord_ids]
+
+
+def _record_unseen_accounts(accounts: list[tuple[int, str, str, bool]]) -> int:
+    """Record as departed every Discord-linked account that no guild sync has ever listed.
+
+    ``has_left_guild`` reads "no row" as "no verdict yet", but the sweep only creates rows for
+    members it receives and only stamps rows it already has. Somebody who signed in and left
+    the server before a sync saw them -- or whose ``discord_id`` moved to a Discord account
+    that left before then -- would otherwise never get a row, and keep their access and API
+    keys for good. A departed row closes that. No ticket is filed: nobody saw them as a
+    member, so there is no departure to follow up, and the first run after this shipped
+    would otherwise file one for every such account at once.
+
+    Each row is created already departed, ``date_left`` equal to ``date_created``, which is
+    how :func:`never_seen_in_guild` tells these rows from real departures.
+
+    Only called for an authoritative member list that has passed ``_departure_refusal``,
+    for both its departures and these accounts.
+
+    Args:
+        accounts: What :func:`_unseen_accounts` returned.
+
+    Returns:
+        The number of rows created.
+
+    """
+    from collections import Counter
+
+    from django.db import IntegrityError, transaction
+
+    from apps.accounts.models import GuildMember
+
+    # User.discord_id is not unique. The row is still recorded (the rule reads it by id), but
+    # linked to nobody rather than to a guess.
+    holders = Counter(discord_id for _, discord_id, _, _ in accounts)
+    recorded: list[int] = []
+    done: set[str] = set()
+    for user_id, discord_id, discord_username, already_linked in accounts:
+        if discord_id in done:
+            continue
+        done.add(discord_id)
+        link = None if already_linked or holders[discord_id] > 1 else user_id
+        try:
+            # A savepoint, so a clash with a concurrent sync (every web replica runs a
+            # scheduler) cannot break an enclosing transaction; it also keeps the row from
+            # being seen before its marker is set.
+            with transaction.atomic():
+                row = GuildMember.objects.create(
+                    discord_id=discord_id,
+                    username=discord_username or "",
+                    user_id=link,
+                    date_left=timezone.now(),
+                )
+                # date_created is auto_now_add, so it cannot be passed in; copy it instead.
+                GuildMember.objects.filter(pk=row.pk).update(date_left=F("date_created"))
+        except IntegrityError as exc:
+            logfire.warning(
+                "Could not record an account no guild sync has listed",
+                user_id=user_id,
+                discord_id=discord_id,
+                error=str(exc),
+            )
+            continue
+        recorded.append(user_id)
+
+    if recorded:
+        logfire.info(
+            "Recorded accounts no guild sync has listed as departed",
+            count=len(recorded),
+            user_ids=recorded[:100],
+        )
+    return len(recorded)

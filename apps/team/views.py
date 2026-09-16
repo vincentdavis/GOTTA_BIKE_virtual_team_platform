@@ -68,6 +68,7 @@ from apps.team.zauth_panel import build_zauth_panel
 from apps.zwift import client as zwift_client
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
+from gotta_bike_platform.csv_utils import csv_safe
 
 if TYPE_CHECKING:
     import uuid
@@ -2219,9 +2220,12 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
 
     """
     from apps.accounts.models import GuildMember
+    from apps.accounts.services import annotate_never_seen, never_seen_in_guild
     from apps.team.models import DiscordRole
 
-    members = GuildMember.objects.select_related("user").all()
+    # never_seen marks the departed rows the sync wrote for accounts it has never listed, which
+    # are not departures and must not read as "Left" here or in the CSV.
+    members = annotate_never_seen(GuildMember.objects.select_related("user").all())
 
     all_roles = DiscordRole.objects.all()
     role_lookup = {role.role_id: role for role in all_roles}
@@ -2262,7 +2266,9 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
     if left_status == "active":
         members = members.filter(date_left__isnull=True)
     elif left_status == "left":
-        members = members.filter(date_left__isnull=False)
+        members = members.filter(date_left__isnull=False).exclude(never_seen_in_guild())
+    elif left_status == "never_seen":
+        members = members.filter(never_seen_in_guild())
 
     if is_bot_filter == "yes":
         members = members.filter(is_bot=True)
@@ -2676,7 +2682,12 @@ def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
     ])
 
     for member in members_list:
-        status = "Left" if member.date_left else "Active"
+        if member.never_seen:
+            status = "Never seen in the server"
+        elif member.date_left:
+            status = "Left"
+        else:
+            status = "Active"
         member_type = "Bot" if member.is_bot else "User"
         account_name = getattr(member, "tooltip_display_name", "") if member.user else ""
         zwid = getattr(member, "tooltip_zwid", "") or ""
@@ -2690,16 +2701,16 @@ def discord_review_export_csv(request: HttpRequest) -> HttpResponse:
                 race_verified = "No"
 
         writer.writerow([
-            member.username,
-            member.display_name,
-            member.nickname,
+            csv_safe(member.username),
+            csv_safe(member.display_name),
+            csv_safe(member.nickname),
             member.discord_id,
             member.joined_at.strftime("%Y-%m-%d") if member.joined_at else "",
             status,
             member.date_left.strftime("%Y-%m-%d") if member.date_left else "",
             member_type,
-            member.role_names_display,
-            account_name,
+            csv_safe(member.role_names_display),
+            csv_safe(account_name),
             zwid,
             race_verified,
             getattr(member, "tooltip_zp_category", ""),

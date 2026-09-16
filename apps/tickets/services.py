@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import logfire
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.tickets.models import Ticket
 
@@ -111,5 +112,156 @@ def create_member_left_ticket(guild_member: GuildMember) -> Ticket | None:
         guild_member_id=guild_member.pk,
         discord_id=guild_member.discord_id,
         had_linked_user=linked_user is not None,
+    )
+    return ticket
+
+
+# The open refusal ticket is found by this title (plus: Membership, system-generated, about no
+# particular member), so there is one per incident rather than one per scheduled run.
+SYNC_REFUSAL_TICKET_TITLE = "Guild member sync is holding back sign-outs"
+
+_REFUSAL_REASONS = {
+    "empty_member_list": "Discord returned an empty member list",
+    "mass_departure": "more than the sync's limit at once",
+}
+
+
+def _sync_refusal_details(
+    *,
+    departures_refused: str,
+    departures_skipped: int,
+    unseen_refused: str,
+    unseen_skipped: int,
+    total_received: int,
+    active_before: int,
+) -> str:
+    """Write the body of the sync refusal ticket.
+
+    Args:
+        departures_refused: Why departures were held back, or ``""``.
+        departures_skipped: Departures held back.
+        unseen_refused: Why never-listed accounts were held back, or ``""``.
+        unseen_skipped: Never-listed accounts held back.
+        total_received: Distinct members in the list.
+        active_before: Active members before the sync.
+
+    Returns:
+        Markdown.
+
+    """
+    tasks_url = reverse("config_section_page", args=["background_tasks"])
+    lines = [
+        "The guild member sync saved the members Discord listed, but refused to sign anybody "
+        "out, because the list did not look complete. Until this is resolved, nobody who "
+        "leaves the Discord server loses their site access or API keys, and every later run is "
+        "refused the same way.",
+        "",
+    ]
+    if departures_refused:
+        reason = _REFUSAL_REASONS.get(departures_refused, departures_refused)
+        lines.append(f"- **Departures held back:** {departures_skipped} ({reason})")
+    if unseen_refused:
+        reason = _REFUSAL_REASONS.get(unseen_refused, unseen_refused)
+        lines.append(f"- **Accounts never seen in the server, held back:** {unseen_skipped} ({reason})")
+    lines.append(f"- **Members in Discord's list:** {total_received}")
+    lines.append(f"- **Active members before the sync:** {active_before}")
+    lines.append(f"- **Last refused run:** {timezone.now().strftime('%Y-%m-%d %H:%M UTC')}")
+    lines.append("")
+    if departures_refused == "empty_member_list":
+        lines.append(
+            "An empty list is never acted on, even when confirmed. Check `DISCORD_BOT_TOKEN`, "
+            "`GUILD_ID` and the bot's Server Members intent, then run `sync_guild_members` again "
+            f"from [Background Tasks]({tasks_url})."
+        )
+    else:
+        lines.append(
+            "**If these numbers are real** (for example, members were pruned in Discord): open "
+            f"[Background Tasks]({tasks_url}), tick **Accept a mass departure** on "
+            "`sync_guild_members` and run it."
+        )
+        lines.append("")
+        lines.append(
+            "**If they are not** (Discord returned a short list): run `sync_guild_members` again "
+            "without ticking the box. Each refused run shows as Failed on that page."
+        )
+    lines.append("")
+    lines.append("Close this ticket once a run finishes without being refused.")
+    return "\n".join(lines)
+
+
+def open_sync_refusal_ticket(
+    *,
+    departures_refused: str,
+    departures_skipped: int,
+    unseen_refused: str,
+    unseen_skipped: int,
+    total_received: int,
+    active_before: int,
+) -> Ticket:
+    """Open, or refresh, the one ticket saying the guild sync refused to sign anybody out.
+
+    A refusal otherwise shows only in Logfire, and it repeats on every run until an admin
+    confirms the departures -- so nobody who leaves in the meantime is signed out. While a
+    ticket is open (new or in progress) each refused run rewrites its details with the
+    latest counts instead of filing another; once it is closed, the next refusal opens a
+    fresh one.
+
+    Args:
+        departures_refused: Why departures were held back, or ``""``.
+        departures_skipped: Departures held back.
+        unseen_refused: Why never-listed accounts were held back, or ``""``.
+        unseen_skipped: Never-listed accounts held back.
+        total_received: Distinct members in the list.
+        active_before: Active members before the sync.
+
+    Returns:
+        The open ticket.
+
+    """
+    details = _sync_refusal_details(
+        departures_refused=departures_refused,
+        departures_skipped=departures_skipped,
+        unseen_refused=unseen_refused,
+        unseen_skipped=unseen_skipped,
+        total_received=total_received,
+        active_before=active_before,
+    )
+    ticket = (
+        Ticket.objects
+        .filter(
+            title=SYNC_REFUSAL_TICKET_TITLE,
+            category=Ticket.Category.MEMBERSHIP,
+            guild_member__isnull=True,
+            submitted_by__isnull=True,
+            status__in=[Ticket.Status.NEW, Ticket.Status.IN_PROGRESS],
+        )
+        .order_by("created_at")
+        .first()
+    )
+    if ticket is not None:
+        # Priority and assignee are left as an admin set them; only the facts are refreshed.
+        ticket.details = details
+        ticket.save()
+        logfire.info(
+            "Guild sync refusal ticket refreshed",
+            ticket_id=ticket.pk,
+            departures_skipped=departures_skipped,
+            unseen_skipped=unseen_skipped,
+        )
+        return ticket
+
+    ticket = Ticket.objects.create(
+        title=SYNC_REFUSAL_TICKET_TITLE,
+        details=details,
+        status=Ticket.Status.NEW,
+        category=Ticket.Category.MEMBERSHIP,
+        # Not low like a single departure: every departure is on hold until someone acts.
+        priority=Ticket.Priority.HIGH,
+    )
+    logfire.info(
+        "Guild sync refusal ticket created",
+        ticket_id=ticket.pk,
+        departures_skipped=departures_skipped,
+        unseen_skipped=unseen_skipped,
     )
     return ticket

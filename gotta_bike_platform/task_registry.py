@@ -215,6 +215,17 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Fetch Discord guild members and sync to database (files ticket on departure)",
         "scheduled": True,
         "hours_setting": "SCHEDULER_SYNC_GUILD_MEMBERS_HOURS",
+        # A departure signs the rider out, so the sync holds back an unusually large one
+        # (apps.accounts.services.MASS_DEPARTURE_*). Tick this only after checking in Discord
+        # that the members really are gone, e.g. after a prune.
+        "params": [
+            {
+                "name": "allow_mass_departure",
+                "type": "checkbox",
+                "label": "Accept a mass departure",
+                "default": False,
+            },
+        ],
     },
     "guild_member_sync_status": {
         "task": guild_member_sync_status,

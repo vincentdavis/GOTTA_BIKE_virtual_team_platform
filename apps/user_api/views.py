@@ -22,9 +22,10 @@ from apps.user_api.services import issue_api_key, user_can_use_api
 def _api_use_required(view_func):
     """Reject users who do not satisfy ``user_can_use_api``.
 
-    Enforces the AND gate documented on ``PERM_ROLES_REQUIRED_USE_API``:
-    user is active, has the ``team_member`` permission, and holds every
-    Discord role configured in the setting (or none if the list is empty).
+    Enforces the AND gate documented on ``user_can_use_api``: user is active,
+    has not left the team's Discord server (staff and superusers exempt), has
+    the ``team_member`` permission, and holds every Discord role configured in
+    ``PERM_ROLES_REQUIRED_USE_API`` (or none if the list is empty).
 
     Stack after ``@team_member_required()`` — the team-member redirect fires
     first for non-members; this decorator catches the missing-role case.

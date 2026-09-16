@@ -55,6 +55,7 @@
                 <option value="">All</option>
                 <option value="active" {% if left_status == "active" %}selected{% endif %}>Active</option>
                 <option value="left" {% if left_status == "left" %}selected{% endif %}>Left</option>
+                <option value="never_seen" {% if left_status == "never_seen" %}selected{% endif %}>Never seen in the server</option>
               </select>
             </div>
 
@@ -150,6 +151,10 @@
           </div>
         </form>
 
+        <p class="text-sm text-base-content/70 mb-2">
+          <strong>Never seen in the server</strong> marks a site account whose Discord ID no guild sync has ever listed.
+          It is signed out like a departed member, but nobody saw it in the server, so it is not a departure and has no member-left ticket.
+        </p>
         <div class="mb-4 flex items-center justify-between">
           <span class="text-sm text-base-content/70">
             Showing {{ members|length }} member{{ members|length|pluralize }}
@@ -334,7 +339,10 @@
                     {% endif %}
                   </td>
                   <td>
-                    {% if member.date_left %}
+                    {% if member.never_seen %}
+                      <span class="badge badge-neutral badge-sm whitespace-nowrap">Never seen in the server</span>
+                      <div class="text-xs text-base-content/70">Recorded {{ member.date_left|date:"M d, Y" }}</div>
+                    {% elif member.date_left %}
                       <span class="text-error">{{ member.date_left|date:"M d, Y" }}</span>
                     {% else %}
                       <span class="badge badge-success badge-sm">Active</span>

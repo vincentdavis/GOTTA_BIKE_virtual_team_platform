@@ -13,6 +13,7 @@ from django_ratelimit.exceptions import Ratelimited
 from ninja import NinjaAPI
 from ninja.security import HttpBearer
 
+from apps.accounts.membership import is_departed_member
 from apps.user_api.models import UserApiKey
 from apps.user_api.services import auth_ip_rate_key, lookup_active_key, user_api_rate_key, user_can_use_api
 from apps.zwiftracing.models import ZRRider
@@ -69,14 +70,18 @@ class UserApiKeyAuth(HttpBearer):
             return None
 
         # Re-check the same gate the management page enforces, so losing a
-        # required role (or losing team_member) instantly disables every key
-        # the user holds without needing to revoke them one by one.
+        # required role (or losing team_member) instantly disables every key the
+        # user holds without needing to revoke them one by one. Leaving the
+        # Discord server does the same once the guild sync has recorded the
+        # departure (up to SCHEDULER_SYNC_GUILD_MEMBERS_HOURS later).
         if not user_can_use_api(key.user):
             logfire.warning(
                 "user api key rejected: owner no longer meets use requirements",
                 path=request.path,
                 key_id=key.pk,
                 user_id=key.user_id,
+                # Re-asked only on this refusal path, to tell a departure from a lost role.
+                left_guild=is_departed_member(key.user),
             )
             return None
 

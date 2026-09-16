@@ -2398,6 +2398,31 @@ def _grouped_tasks(tasks: dict) -> list:
     return grouped_tasks(tasks)
 
 
+# A refused guild sync is recorded as a failure on purpose (see GuildSyncRefusedError), and the
+# page is where an admin confirms it, so it says why rather than showing a bare "Failed".
+REFUSED_SYNC_EXCEPTION = "apps.accounts.services.GuildSyncRefusedError"
+
+
+def _refused_sync_note(last_run: dict) -> str:
+    """Pull a refused guild sync's explanation out of its task record.
+
+    Only that exception's message is shown: it is written for admins and holds counts only,
+    while other tasks' exception text can quote URLs or data that should not be on the page.
+
+    Args:
+        last_run: The ``DBTaskResult`` values for the task's latest finished run.
+
+    Returns:
+        The message, or ``""`` for any other run.
+
+    """
+    if last_run.get("exception_class_path") != REFUSED_SYNC_EXCEPTION:
+        return ""
+    prefix = f"{REFUSED_SYNC_EXCEPTION}: "
+    lines = [line for line in (last_run.get("traceback") or "").splitlines() if line.startswith(prefix)]
+    return lines[-1][len(prefix) :].strip() if lines else ""
+
+
 def _enrich_tasks_with_last_run(tasks: dict) -> None:
     """Add last_run info to each task in the registry.
 
@@ -2424,12 +2449,14 @@ def _enrich_tasks_with_last_run(tasks: dict) -> None:
                 finished_at__isnull=False,
             )
             .order_by("-finished_at")
-            .values("status", "finished_at")
+            .values("status", "finished_at", "exception_class_path", "traceback")
             .first()
         )
 
+        task_info["last_failure_note"] = ""
         if last_run and last_run["finished_at"]:
             task_info["last_status"] = last_run["status"]
+            task_info["last_failure_note"] = _refused_sync_note(last_run)
             task_info["last_finished_at"] = last_run["finished_at"]
             delta = timezone.now() - last_run["finished_at"]
             total_minutes = int(delta.total_seconds() // 60)

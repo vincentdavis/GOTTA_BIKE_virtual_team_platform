@@ -12,6 +12,7 @@ import logfire
 from constance import config
 from django.utils import timezone
 
+from apps.accounts.membership import is_departed_member
 from apps.accounts.models import Permissions
 from apps.user_api.models import UserApiKey
 
@@ -80,6 +81,8 @@ def user_can_use_api(user: User) -> bool:
     Required gates (all must hold):
 
     - ``user.is_active`` is True.
+    - The user has not left the team's Discord server
+      (``apps.accounts.membership.is_departed_member``; staff and superusers are exempt).
     - ``user.has_permission(Permissions.TEAM_MEMBER)`` is True.
     - User holds **every** Discord role ID listed in the
       ``PERM_ROLES_REQUIRED_USE_API`` Constance setting. Empty list means no
@@ -93,6 +96,10 @@ def user_can_use_api(user: User) -> bool:
 
     """
     if not getattr(user, "is_authenticated", False) or not user.is_active:
+        return False
+    # Checked before the role gates: the role syncs skip riders who have left the server, so
+    # their stored ``discord_roles`` -- team_member included -- stay as they were on leaving.
+    if is_departed_member(user):
         return False
     if not user.has_permission(Permissions.TEAM_MEMBER):
         return False

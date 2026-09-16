@@ -16,6 +16,7 @@ from django.utils.html import format_html
 
 from apps.accounts.models import BlockedDiscordId, GuildMember, Permissions, User, YouTubeVideo
 from apps.team.kits import active_kits, apply_kit_fields, build_kit_fields, field_name
+from gotta_bike_platform.csv_utils import csv_safe
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -333,6 +334,23 @@ class UserAdmin(BaseUserAdmin):
         return render(request, "admin/accounts/permission_mappings.html", context)
 
 
+def _guild_member_status(member: GuildMember) -> str:
+    """Label a GuildMember row for the admin list and its CSV.
+
+    Args:
+        member: The row.
+
+    Returns:
+        "Never seen in the server", "Left" or "Active".
+
+    """
+    from apps.accounts.services import is_never_seen
+
+    if is_never_seen(member):
+        return "Never seen in the server"
+    return "Left" if member.date_left else "Active"
+
+
 @admin.register(GuildMember)
 class GuildMemberAdmin(admin.ModelAdmin):
     """Admin configuration for GuildMember model."""
@@ -421,12 +439,11 @@ class GuildMemberAdmin(admin.ModelAdmin):
             obj: The GuildMember instance.
 
         Returns:
-            'Left' if member has left, 'Active' otherwise.
+            'Never seen in the server' for a row recorded for an account no sync has listed,
+            'Left' if the member has left, 'Active' otherwise.
 
         """
-        if obj.date_left:
-            return "Left"
-        return "Active"
+        return _guild_member_status(obj)
 
     status_display.short_description = "Status"  # type: ignore[attr-defined]
 
@@ -447,13 +464,13 @@ class GuildMemberAdmin(admin.ModelAdmin):
         for obj in queryset.select_related("user").order_by("username"):
             writer.writerow([
                 obj.discord_id,
-                obj.username,
-                obj.display_name,
-                obj.nickname,
-                obj.user.username if obj.user else "",
+                csv_safe(obj.username),
+                csv_safe(obj.display_name),
+                csv_safe(obj.nickname),
+                csv_safe(obj.user.username) if obj.user else "",
                 obj.is_bot,
                 obj.joined_at.strftime("%Y-%m-%d %H:%M") if obj.joined_at else "",
-                "Left" if obj.date_left else "Active",
+                _guild_member_status(obj),
                 obj.date_left.strftime("%Y-%m-%d %H:%M") if obj.date_left else "",
             ])
         return response
@@ -485,6 +502,10 @@ class GuildMemberAdmin(admin.ModelAdmin):
             Rendered comparison template.
 
         """
+        from django.db.models import Count, Exists, OuterRef, Subquery
+
+        from apps.accounts.services import annotate_never_seen, never_seen_in_guild
+
         # Get filter from query params
         filter_status = request.GET.get("status", "all")
 
@@ -500,12 +521,27 @@ class GuildMemberAdmin(admin.ModelAdmin):
         # Guild members with user accounts
         guild_and_user = active_members.filter(user__isnull=False)
 
-        # Users who left the guild (have user but date_left is set)
-        left_guild = GuildMember.objects.filter(
-            is_bot=False,
-            date_left__isnull=False,
-            user__isnull=False,
-        ).select_related("user")
+        # Departed rows are matched to accounts by discord_id, as the access rule reads them
+        # (apps.accounts.membership.has_left_guild), not through the user link: the sync
+        # leaves a row unlinked when several accounts share the id or the account is already
+        # linked to an older row, and those are the accounts an admin most needs to find.
+        accounts_with_id = User.objects.filter(discord_id=OuterRef("discord_id"))
+        departed_accounts = annotate_never_seen(
+            GuildMember.objects
+            .filter(is_bot=False, date_left__isnull=False)
+            .filter(Exists(accounts_with_id))
+            .annotate(
+                account_username=Subquery(accounts_with_id.order_by("pk").values("username")[:1]),
+                account_count=Subquery(
+                    accounts_with_id.order_by().values("discord_id").annotate(n=Count("pk")).values("n")[:1]
+                ),
+            )
+            .select_related("user")
+        )
+        # Rows the sync wrote for accounts it has never listed are not departures: nobody
+        # saw them in the server. Kept apart so "Left Guild" means somebody left.
+        left_guild = departed_accounts.exclude(never_seen_in_guild())
+        never_seen = departed_accounts.filter(never_seen_in_guild())
 
         # Discord OAuth users with no GuildMember record
         # NOTE: Only considers users who logged in via Discord OAuth (have discord_id).
@@ -525,6 +561,8 @@ class GuildMemberAdmin(admin.ModelAdmin):
             display_members = guild_and_user
         elif filter_status == "left":
             display_members = left_guild
+        elif filter_status == "never_seen":
+            display_members = never_seen
         else:
             display_members = active_members
 
@@ -536,6 +574,7 @@ class GuildMemberAdmin(admin.ModelAdmin):
             "guild_only_count": guild_only.count(),
             "linked_count": guild_and_user.count(),
             "left_count": left_guild.count(),
+            "never_seen_count": never_seen.count(),
             "discord_users_no_guild_count": discord_users_without_member.count(),
             "discord_users_no_guild": discord_users_without_member if filter_status == "discord_no_guild" else [],
             "total_active": active_members.count(),
