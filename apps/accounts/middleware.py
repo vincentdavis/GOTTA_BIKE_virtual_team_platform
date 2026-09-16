@@ -27,8 +27,10 @@ class DepartedMemberLogoutMiddleware:
     """End the session of a rider the guild sync has marked as having left the server.
 
     A Discord login checks guild membership live, but the session it creates outlives
-    the check. This closes that gap on the rider's next request after the scheduled guild
-    sync stamps ``GuildMember.date_left``, so the lag is at most the sync's interval
+    the check. This closes that gap on the rider's next request after
+    ``GuildMember.date_left`` is stamped -- usually within seconds, by the Discord bot's
+    member-left report (``POST /api/dbot/member_left/{discord_id}``), and otherwise by the
+    scheduled guild sync, so the lag is at most its interval
     (``SCHEDULER_SYNC_GUILD_MEMBERS_HOURS``). The rule itself, including who is exempt
     (staff, superusers, riders with no ``GuildMember`` row yet), is
     ``apps.accounts.membership.is_departed_member``.

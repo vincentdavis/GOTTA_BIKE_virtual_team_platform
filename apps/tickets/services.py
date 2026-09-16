@@ -71,17 +71,32 @@ def create_member_left_ticket(guild_member: GuildMember) -> Ticket | None:
         return None
 
     display_name = guild_member.nickname or guild_member.display_name or guild_member.username
+    # A row the bot's leave report created from an empty body has no names at all.
+    label = display_name or f"Discord ID {guild_member.discord_id}"
 
     lines: list[str] = ["A Discord guild member left the server.", ""]
     linked_user = guild_member.user
+    # The link can outlive a move to another Discord account: the leave report stamps the old
+    # row before any sync has released it (apps.accounts.services._release_user_link). That
+    # account signs in with its new id, has not left, and its squads and signups are not
+    # this departure's to clean up.
+    moved_away = linked_user is not None and (linked_user.discord_id or "") != guild_member.discord_id
     if linked_user:
-        full_name = linked_user.get_full_name() or display_name
+        full_name = linked_user.get_full_name() or label
         profile_url = reverse("accounts:public_profile", args=[linked_user.pk])
-        lines.append(f"- **Registered user:** [{full_name}]({profile_url})")
+        if moved_away:
+            lines.append(
+                f"- **Previously linked account:** [{full_name}]({profile_url}), which now uses a "
+                "different Discord ID and is not affected by this departure"
+            )
+        else:
+            lines.append(f"- **Registered user:** [{full_name}]({profile_url})")
     else:
         lines.append("- **Registered user:** _(no linked account)_")
-    lines.append(f"- **Discord handle:** `{guild_member.username}`")
-    lines.append(f"- **Display name:** {display_name}")
+    if guild_member.username:
+        lines.append(f"- **Discord handle:** `{guild_member.username}`")
+    if display_name:
+        lines.append(f"- **Display name:** {display_name}")
     lines.append(f"- **Discord ID:** `{guild_member.discord_id}`")
     if guild_member.joined_at:
         lines.append(f"- **Joined:** {guild_member.joined_at.strftime('%Y-%m-%d')}")
@@ -91,7 +106,7 @@ def create_member_left_ticket(guild_member: GuildMember) -> Ticket | None:
         role_ids = ", ".join(str(r) for r in guild_member.roles)
         lines.append(f"- **Last known role IDs:** {role_ids}")
 
-    if linked_user:
+    if linked_user and not moved_away:
         cleanup_lines = _member_cleanup_lines(linked_user)
         if cleanup_lines:
             lines.append("")
@@ -99,7 +114,7 @@ def create_member_left_ticket(guild_member: GuildMember) -> Ticket | None:
             lines.extend(cleanup_lines)
 
     ticket = Ticket.objects.create(
-        title=f"Member left guild: {display_name}",
+        title=f"Member left guild: {label}",
         details="\n".join(lines),
         status=Ticket.Status.NEW,
         category=Ticket.Category.MEMBERSHIP,
@@ -112,6 +127,7 @@ def create_member_left_ticket(guild_member: GuildMember) -> Ticket | None:
         guild_member_id=guild_member.pk,
         discord_id=guild_member.discord_id,
         had_linked_user=linked_user is not None,
+        linked_user_moved=moved_away,
     )
     return ticket
 

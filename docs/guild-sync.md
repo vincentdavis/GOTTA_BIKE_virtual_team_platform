@@ -31,7 +31,12 @@ Stores Discord guild member data:
 
 ## How to Sync
 
-There are two sync drivers. Both upsert through `apps/accounts/services.py:apply_guild_member_sync`, but only one of them, the scheduled task, decides who has left. So the longest a departed rider keeps access is `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS`.
+Departures reach the platform in two ways:
+
+- **The bot's leave report** — most departures. The bot tells the platform the moment a member leaves, and the departure is recorded at once (see [The leave report](#the-leave-report))
+- **The scheduled task** — the backstop. It reads the whole member list and catches any departure the bot missed (the bot was down, or the event was lost), so the longest a departed rider keeps access is `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS`
+
+There are two sync drivers. Both upsert through `apps/accounts/services.py:apply_guild_member_sync`, but only one of them decides who has left.
 
 ### The scheduled task (primary)
 
@@ -44,14 +49,26 @@ There are two sync drivers. Both upsert through `apps/accounts/services.py:apply
 ### The bot push (fallback)
 
 1. The `/sync_members` slash command in Discord (admin only), or the bot's periodic loop, collects the members in the bot's cache
-2. The bot POSTs them to `POST /api/dbot/sync_guild_members`
-3. Django creates/updates those GuildMember records, and clears `date_left` for any listed member who had been marked as left
+2. The bot POSTs them to `POST /api/dbot/sync_guild_members`, with `observed_at`: when it read the list
+3. Django creates/updates those GuildMember records, and clears `date_left` for any listed member who had been marked as left before `observed_at`
 
 The push **never** marks anybody as left and never records unseen accounts. The bot's gateway cache can be missing whole member chunks after a restart, and a short list would sign real members out. The response says so with `departures_evaluated: false` (`left` is always 0).
 
-### Rejoining
+### The leave report
 
-Both syncs clear `date_left` for a listed member who had been marked as left (counted in `rejoined`).
+1. The bot sees a member leave the server (its member-remove event)
+2. It POSTs `POST /api/dbot/member_left/{discord_id}` straight away
+3. Django stamps `date_left` on that member's row and files the usual low-priority Membership ticket. **The rider is signed out on their next request and their API keys stop working**
+
+If the member has no row yet (they joined and left between syncs), one is created from what the bot sends and marked as left. It is a real departure, not a **Never seen in the server** row: its `date_left` is always later than its `date_created`. The new row is linked to a site account only when exactly one account has that Discord ID and that account has no row of its own yet. It gets a ticket only when some site account has that Discord ID: for anyone else there is nothing in the app to follow up, and people who join and leave again would fill the queue.
+
+A report for a member already marked as left answers `already_departed` and files no ticket, but moves `date_left` up to now. The member may have come back and left again, and a sync that read its list while they were back would otherwise clear the departure (see [A list older than the departure](#a-list-older-than-the-departure)). A **Never seen in the server** row reported this way becomes an ordinary departure. So a repeated report is safe; it only moves the time. One member per report, so the [safety limits](#safety-limits) do not apply.
+
+The ticket names the linked site account. If that account has since moved to a different Discord ID, the ticket says so and leaves out the cleanup checklist: the account has not left.
+
+### A list older than the departure
+
+A departure recorded by the leave report can be newer than a member list that still includes the rider. So both syncs clear `date_left` only when their list was read **after** the stamp (`date_left` earlier than `observed_at`). Otherwise the stamp stays, the row is counted in `rejoin_deferred`, and the next list decides. The scheduled task sets `observed_at` itself, before the fetch. The bot push sends it. If the push leaves it out or sends something unreadable, the platform uses the time it received the push. A time in the future is treated as now.
 
 A Discord login that passes the live guild check always clears the stamp: Discord has just confirmed the rider is back.
 
@@ -125,7 +142,38 @@ intents = discord.Intents.default()
 intents.members = True  # Required for guild member sync
 ```
 
-## API Endpoint
+## API Endpoints
+
+### POST /api/dbot/member_left/{discord_id}
+
+Records that one member has left, as the bot saw it happen.
+
+**Headers:** as below. `X-Discord-User-Id` is the bot's own user ID, since no person triggered the call.
+
+**Path:** `discord_id` — the departed member's Discord ID, 1–20 ASCII digits. Anything else gets **400**.
+
+**Body:** JSON, every field optional; `{}` is valid. The fields are only used to create a row when the platform has none for that ID. `null` counts as blank.
+```json
+{
+  "username": "leaver",
+  "display_name": "The Leaver",
+  "avatar_hash": "a1b2c3",
+  "is_bot": false
+}
+```
+
+**Response (200):**
+```json
+{"status": "departed", "created": false, "ticket_created": true}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `status` | `departed` (stamped now) or `already_departed` (it already was; the stamp is moved up to now, no ticket) |
+| `created` | A new row was created for a member the platform had no row for |
+| `ticket_created` | A member-left ticket was filed (false if one is already open, filing failed, the member was already departed, or the row is new and no site account has that ID) |
+
+**Errors:** 401 for a wrong key or guild, or a missing header. 400 for an ID that is not all digits, or a missing or non-JSON body (send at least `{}`). 422 for a field of the wrong type.
 
 ### POST /api/dbot/sync_guild_members
 
@@ -134,10 +182,12 @@ Refreshes the guild members the bot lists. It does not mark anybody as left.
 **Headers:**
 - `X-API-Key` - Must match `DBOT_AUTH_KEY`
 - `X-Guild-Id` - Must match `GUILD_ID`
+- `X-Discord-User-Id` - The Discord ID of whoever ran `/sync_members`, or the bot's own ID for its periodic sync
 
 **Body:**
 ```json
 {
+  "observed_at": "2026-09-16T12:00:00Z",
   "members": [
     {
       "discord_id": "123456789",
@@ -159,6 +209,7 @@ Refreshes the guild members the bot lists. It does not mark anybody as left.
   "created": 5,
   "updated": 10,
   "rejoined": 1,
+  "rejoin_deferred": 0,
   "left": 0,
   "linked": 3,
   "departures_evaluated": false,
@@ -171,6 +222,8 @@ Refreshes the guild members the bot lists. It does not mark anybody as left.
 
 `left` is always 0 and `departures_refused` always empty here: the push never marks anybody as left (see [The bot push](#the-bot-push-fallback)).
 
+`observed_at` is optional: an ISO-8601 UTC time when the bot read the member list. A listed member whose departure was recorded at or after it keeps it and is counted in `rejoin_deferred` (see [A list older than the departure](#a-list-older-than-the-departure)).
+
 ## Troubleshooting
 
 ### `sync_guild_members` shows Failed, or a "holding back sign-outs" ticket is open
@@ -179,7 +232,7 @@ The scheduled sync refused to sign people out (see [Safety limits](#safety-limit
 
 ### A rider who left still has access
 
-Check `/team/discord-review/`. If their row is not marked as left, either no scheduled sync has run since they left (run `sync_guild_members` from `/site/config/background_tasks/` to catch it now), or the last one held departures back (see the entry above). Staff and superusers keep access by design.
+Check `/team/discord-review/`. If their row is not marked as left, the bot's leave report did not arrive: look in Logfire for "Bot-reported member departure handled" or a 4xx on `/api/dbot/member_left/`. Run `sync_guild_members` from `/site/config/background_tasks/` to catch it now; if that run holds departures back, see the entry above. Staff and superusers keep access by design.
 
 ### /sync_members command not working
 

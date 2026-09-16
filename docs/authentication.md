@@ -58,14 +58,14 @@ Both live in `apps/accounts/adapters.py`.
 
 ## Leaving the Discord Server
 
-Discord confirms membership only when a rider signs in, but a session outlives that check. The guild sync closes the gap.
+Discord confirms membership only when a rider signs in, but a session outlives that check. The Discord bot's leave report and the guild sync close the gap.
 
-- **Sign-out**: the guild sync (`sync_guild_members`, every `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS`, default 6) stamps `GuildMember.date_left` for any member it no longer lists. `DepartedMemberLogoutMiddleware` then signs that user out on their next request and shows a warning. The request carries on as anonymous, so a protected page redirects to the login page. An HTMX request gets an `HX-Redirect` to the login page instead.
-- **Lag**: a rider who leaves keeps access until the next sync runs, so for up to the sync interval.
+- **Sign-out**: when a member leaves the server, the Discord bot reports it straight away (`POST /api/dbot/member_left/{discord_id}`) and `GuildMember.date_left` is stamped. The guild sync (`sync_guild_members`, every `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS`, default 6) stamps it too for any member it no longer lists. `DepartedMemberLogoutMiddleware` then signs that user out on their next request and shows a warning. The request carries on as anonymous, so a protected page redirects to the login page. An HTMX request gets an `HX-Redirect` to the login page instead.
+- **Lag**: usually seconds, through the bot's report. If the bot is down or misses the event, a rider keeps access until the next sync runs, so for up to the sync interval.
 - **Exempt**: staff and superusers are never signed out by this rule.
 - **The rule** (`apps/accounts/membership.py:is_departed_member`): a `GuildMember` row for the user's *current* `discord_id` with `date_left` set.
 - **Accounts with no row**: left alone. Local accounts (no `discord_id`) never get one. A Discord-linked account without one is left alone only until the next sync that passes its safety checks: that sync writes a departed row for every Discord-linked account its member list has never included. So someone who signs in and leaves before any sync has seen them is still caught.
-- **Rejoining**: signing in with Discord again passes the live check and clears the stamp, so the rider is not signed out again while waiting for the next sync. A sync clears it too when it lists the rider.
+- **Rejoining**: signing in with Discord again passes the live check and clears the stamp, so the rider is not signed out again while waiting for the next sync. A sync clears it too when it lists the rider, but only if its member list was read after the departure was recorded.
 - **API keys**: `user_can_use_api` (`apps/user_api/services.py`) refuses a departed user who is not staff, on every bearer request (401) and on the API key page. It is needed separately because the role syncs skip departed riders, so their stored `team_member` role never goes away. The keys are not deleted.
 - **Safety**: the sync does not stamp departures from an empty member list or from a suspiciously large drop. See [Guild Member Sync](guild-sync.md).
 
@@ -119,7 +119,7 @@ Configure in Django admin at `/admin/constance/config/`:
 | `GUILD_ID` | Discord server ID. Required: `0` refuses every Discord login |
 | `GUILD_NAME` | Server name (shown in error messages) |
 | `DISCORD_URL` | Invite link, offered as "Join here" on the login page to users who are not in the server (`http(s)` URLs only) |
-| `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS` | How often the guild sync runs, and so the longest a rider who left keeps access (default 6) |
+| `SCHEDULER_SYNC_GUILD_MEMBERS_HOURS` | How often the guild sync runs, and so the longest a rider who left keeps access when the bot's leave report does not arrive (default 6) |
 
 Blocked Discord accounts are managed under "Blocked logins" at `/site/config/compliance/`.
 
@@ -153,7 +153,7 @@ The Discord account, or the account it matched, is on the block list at `/site/c
 
 ### "You have been signed out because you are no longer a member of the team's Discord server."
 
-The guild sync has marked the user's Discord id as departed. If they have rejoined, signing in with Discord again clears it. If they never left, check their row on `/team/discord-review/` and the latest `sync_guild_members` run.
+The bot's leave report or the guild sync has marked the user's Discord id as departed. If they have rejoined, signing in with Discord again clears it. If they never left, check their row on `/team/discord-review/`, the latest `sync_guild_members` run, and Logfire for "Recorded a guild member departure".
 
 ### User can login but has no permissions
 

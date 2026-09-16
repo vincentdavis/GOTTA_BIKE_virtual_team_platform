@@ -1,7 +1,8 @@
 """Discord Bot API endpoints."""
 
 import hmac
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import logfire
 from constance import config as constance_config
@@ -129,9 +130,28 @@ class GuildMemberSchema(Schema):
 
 
 class SyncGuildMembersRequest(Schema):
-    """Request schema for syncing all guild members."""
+    """Request schema for syncing all guild members.
+
+    ``observed_at`` is optional: an ISO-8601 UTC timestamp of when the bot read the member
+    list. Typed loosely on purpose -- a missing or unreadable value falls back to the
+    platform's own clock rather than refusing the whole push.
+    """
 
     members: list[GuildMemberSchema]
+    observed_at: Any = None
+
+
+class MemberLeftRequest(Schema):
+    """Request schema for the bot's report that a member left the guild.
+
+    Every field is optional (``{}`` is a valid body): they only fill in a ``GuildMember`` row
+    when the platform has none for that Discord id. ``null`` reads as blank.
+    """
+
+    username: str | None = None
+    display_name: str | None = None
+    avatar_hash: str | None = None
+    is_bot: bool | None = None
 
 
 class CreateRosterFilterRequest(Schema):
@@ -615,6 +635,11 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
     ``departures_refused`` and ``departures_skipped`` stay in the response for the bot
     and are always empty here.
 
+    The optional ``observed_at`` says when the bot read the list. A departure stamped at or
+    after it -- the bot reported the member leaving (``member_left``) after reading the list --
+    is not cleared, and is counted in ``rejoin_deferred``. Missing or unreadable, the
+    platform's own clock is used; a time in the future is clamped to now.
+
     NOTE: This only affects GuildMember records and links to User accounts
     that have a discord_id. Regular Django accounts (staff, admin) without
     Discord OAuth are NOT modified or disabled by this sync.
@@ -642,7 +667,12 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
         }
         for m in payload.members
     ]
-    result = apply_guild_member_sync(members, source="bot_webhook", authoritative=False)
+    result = apply_guild_member_sync(
+        members,
+        source="bot_webhook",
+        authoritative=False,
+        observed_at=_push_observed_at(payload.observed_at),
+    )
     logfire.debug(
         "Bot-driven guild_members sync completed",
         discord_user_id=request.auth["discord_user_id"],  # ty:ignore[unresolved-attribute]
@@ -652,6 +682,7 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
         "created": result["created"],
         "updated": result["updated"],
         "rejoined": result["rejoined"],
+        "rejoin_deferred": result["rejoin_deferred"],
         "left": result["left"],
         "linked": result["linked"],
         "departures_evaluated": result["departures_evaluated"],
@@ -659,6 +690,82 @@ def sync_guild_members(request: HttpRequest, payload: SyncGuildMembersRequest) -
         "departures_skipped": result["departures_skipped"],
         "total_received": result["total_received"],
         "total_active": result["total_active"],
+    }
+
+
+def _push_observed_at(raw: object) -> datetime:
+    """Read the bot's ``observed_at`` for a member push.
+
+    Args:
+        raw: The body's ``observed_at``: an ISO-8601 timestamp, or anything else.
+
+    Returns:
+        That time in UTC (a naive value is taken as UTC), no later than now; now when it is
+        missing or cannot be read.
+
+    """
+    now = timezone.now()
+    if raw is None or raw == "":
+        return now
+    if not isinstance(raw, str):
+        logfire.warning("Bot guild member push sent a non-string observed_at; using now", value_type=type(raw).__name__)
+        return now
+    try:
+        parsed = datetime.fromisoformat(raw.strip())
+    except ValueError:
+        logfire.warning("Bot guild member push sent an unreadable observed_at; using now")
+        return now
+    if timezone.is_naive(parsed):
+        parsed = parsed.replace(tzinfo=UTC)
+    return min(parsed, now)
+
+
+@api.post("/member_left/{discord_id}")
+def member_left(request: HttpRequest, discord_id: str, payload: MemberLeftRequest) -> dict:
+    """Record that a member has just left the guild, as the Discord bot saw it happen.
+
+    The bot calls this from its member-remove event, with its own user id as
+    ``X-Discord-User-Id`` (no person triggered it). The departure is stamped at once, so a
+    non-staff rider is signed out on their next request and their API keys stop working,
+    instead of waiting for the scheduled guild sync. Delegates to
+    :func:`apps.accounts.services.record_member_departure`. An active row is stamped and a
+    member-left ticket filed. A row already departed stays departed, with its stamp moved up
+    to now and no ticket. A missing row is created from the body (every field optional) and
+    stamped, with a ticket only when an account holds the id. Safe to repeat: the answer is
+    ``already_departed`` and only the stamp moves.
+
+    Args:
+        request: The HTTP request.
+        discord_id: The departed member's Discord id: 1-20 ASCII digits, else 400.
+        payload: Optional ``username``, ``display_name``, ``avatar_hash``, ``is_bot``.
+
+    Returns:
+        ``{"status": "departed" | "already_departed", "created": bool, "ticket_created": bool}``,
+        or a 400 error for an id that is not a Discord id.
+
+    """
+    from apps.accounts.services import is_discord_snowflake, record_member_departure
+
+    bot_user_id = request.auth["discord_user_id"]  # ty:ignore[unresolved-attribute]
+    if not is_discord_snowflake(discord_id):
+        logfire.warning("Member-left report refused: not a Discord id", discord_user_id=bot_user_id)
+        return api.create_response(  # ty:ignore[invalid-return-type]
+            request,
+            {"error": "discord_id must be a Discord user id (ASCII digits only)"},
+            status=400,
+        )
+
+    result = record_member_departure(discord_id, payload.model_dump(), source="bot_event")
+    logfire.debug(
+        "Bot-reported member departure handled",
+        discord_user_id=bot_user_id,
+        target_discord_id=discord_id,
+        **result,
+    )
+    return {
+        "status": result["status"],
+        "created": result["created"],
+        "ticket_created": result["ticket_created"],
     }
 
 

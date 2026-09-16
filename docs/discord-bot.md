@@ -87,6 +87,13 @@ The RoleSync cog runs automatic background tasks:
 | Role updated | When a role is updated |
 | Member update | When a member's roles change |
 
+The MemberSync cog runs these:
+
+| Task | Trigger |
+|------|---------|
+| Member push (`POST /api/dbot/sync_guild_members`) | Every 6 hours by default, and `/sync_members` |
+| Leave report (`POST /api/dbot/member_left/{discord_id}`) | `on_raw_member_remove`: a member leaves, is kicked or is banned |
+
 ## API Integration
 
 The bot communicates with Django via the Discord Bot API:
@@ -98,6 +105,7 @@ The bot communicates with Django via the Discord Bot API:
 | `GET /api/dbot/zwiftpower_profile/{zwid}` | Get ZwiftPower data |
 | `POST /api/dbot/sync_guild_roles` | Sync all Discord roles |
 | `POST /api/dbot/sync_guild_members` | Sync all guild members |
+| `POST /api/dbot/member_left/{discord_id}` | Report that a member left the server (signs them out at once) |
 | `POST /api/dbot/sync_user_roles/{discord_id}` | Sync a user's roles |
 
 ### Authentication
@@ -105,7 +113,7 @@ The bot communicates with Django via the Discord Bot API:
 All API requests require:
 - `X-API-Key` header - Must match `DBOT_AUTH_KEY`
 - `X-Guild-Id` header - Must match `GUILD_ID`
-- `X-Discord-User-Id` header - The requesting user's Discord ID
+- `X-Discord-User-Id` header - The requesting user's Discord ID, or the bot's own ID for calls no person triggered (periodic syncs, the member-leave report)
 
 ## Race Ready Role Assignment
 

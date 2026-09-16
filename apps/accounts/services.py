@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import re
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -33,6 +34,10 @@ GUILD_MEMBER_PAGE_SIZE = 1000
 # records accounts no sync has ever listed (_record_unseen_accounts).
 MASS_DEPARTURE_FLOOR = 10
 MASS_DEPARTURE_SHARE = 0.05
+
+# A Discord user id (snowflake) as the bot reports it: ASCII digits only, and no longer than
+# GuildMember.discord_id holds (a 64-bit snowflake has at most 20 digits).
+DISCORD_SNOWFLAKE_RE = re.compile(r"[0-9]{1,20}")
 
 
 class GuildSyncRefusedError(RuntimeError):
@@ -753,6 +758,21 @@ def delete_user_account(user, *, deleted_by=None) -> dict:
     return audit
 
 
+# What a sync writes to a GuildMember row it already has. Never date_left: clearing a
+# departure is a separate, conditional update (see apply_guild_member_sync).
+_GUILD_MEMBER_SYNC_FIELDS = [
+    "username",
+    "display_name",
+    "nickname",
+    "avatar_hash",
+    "roles",
+    "joined_at",
+    "is_bot",
+    "user",
+    "date_modified",
+]
+
+
 def apply_guild_member_sync(
     members: list[dict[str, Any]],
     *,
@@ -764,9 +784,11 @@ def apply_guild_member_sync(
     """Reconcile the GuildMember table against a Discord member list.
 
     Members present in ``members`` are upserted (and linked to a ``User`` by
-    ``discord_id`` when possible), which also clears the departure stamp of anyone listed.
-    Idempotent: re-running with the same input is a no-op apart from refreshing
-    ``date_modified``.
+    ``discord_id`` when possible), which also clears the departure stamp of anyone listed
+    whose stamp is older than ``observed_at``. A stamp at or after it -- a departure the bot
+    reported after the list was read (:func:`record_member_departure`) -- is kept and counted
+    in ``rejoin_deferred``; the next list judges it. Idempotent: re-running with the same
+    input is a no-op apart from refreshing ``date_modified``.
 
     Only an ``authoritative`` list is also used to decide who has gone, because a departure
     ends that rider's access (``apps.accounts.membership``). For such a list, members
@@ -791,10 +813,11 @@ def apply_guild_member_sync(
         allow_mass_departure: Act on an authoritative list even past the mass-departure
             limit. Does not apply to an empty list, which is never acted on.
         observed_at: When ``members`` was read from Discord; defaults to now. A row changed,
-            or an account created or signed in, at or after it is left for the next run.
+            or an account created or signed in, at or after it is left for the next run, and
+            a departure stamped at or after it is not cleared.
 
     Returns:
-        Dict with ``created``, ``updated``, ``rejoined``, ``left``, ``linked``,
+        Dict with ``created``, ``updated``, ``rejoined``, ``rejoin_deferred``, ``left``, ``linked``,
         ``relinked``, ``failed``, ``unseen_recorded``, ``departures_skipped``,
         ``departures_deferred``, ``unseen_skipped``, ``total_received`` and
         ``total_active`` counts; ``departures_evaluated``, whether the list was used to
@@ -816,6 +839,7 @@ def apply_guild_member_sync(
     created = 0
     updated = 0
     rejoined = 0
+    rejoin_deferred = 0
     linked = 0
     relinked = 0
     failed = 0
@@ -839,7 +863,6 @@ def apply_guild_member_sync(
                 existing.roles = member_data.get("roles") or []
                 existing.joined_at = joined_at
                 existing.is_bot = bool(member_data.get("is_bot", False))
-                existing.date_left = None  # Clear when they're back
 
                 if not existing.user and member_data["discord_id"] in users_by_discord_id:
                     candidate = users_by_discord_id[member_data["discord_id"]]
@@ -847,10 +870,22 @@ def apply_guild_member_sync(
                     existing.user = candidate
                     linked += 1
 
-                existing.save()
+                # date_left is never written here: a departure the bot reported
+                # (record_member_departure) between the read above and this save would
+                # otherwise be overwritten with the value read before it.
+                existing.save(update_fields=_GUILD_MEMBER_SYNC_FIELDS)
 
                 if was_left:
-                    rejoined += 1
+                    # Clear the stamp only when the list is newer than it. A stamp at or after
+                    # observed_at -- the bot saw them leave after this list was read -- is
+                    # newer news than the list, so it stays for the next list to judge.
+                    if GuildMember.objects.filter(pk=existing.pk, date_left__lt=observed_at).update(
+                        date_left=None, date_modified=timezone.now()
+                    ):
+                        existing.date_left = None
+                        rejoined += 1
+                    else:
+                        rejoin_deferred += 1
                 else:
                     updated += 1
             else:
@@ -960,6 +995,7 @@ def apply_guild_member_sync(
         created=created,
         updated=updated,
         rejoined=rejoined,
+        rejoin_deferred=rejoin_deferred,
         left=left,
         linked=linked,
         relinked=relinked,
@@ -979,6 +1015,7 @@ def apply_guild_member_sync(
         "created": created,
         "updated": updated,
         "rejoined": rejoined,
+        "rejoin_deferred": rejoin_deferred,
         "left": left,
         "linked": linked,
         "relinked": relinked,
@@ -1064,6 +1101,204 @@ def _stamp_departures(rows: list, *, observed_at: datetime) -> int:
     return stamped
 
 
+def is_discord_snowflake(value: object) -> bool:
+    """Say whether a value is a Discord user id as the bot sends one.
+
+    Args:
+        value: The value to check.
+
+    Returns:
+        True for a string of 1-20 ASCII digits.
+
+    """
+    return isinstance(value, str) and DISCORD_SNOWFLAKE_RE.fullmatch(value) is not None
+
+
+def _clip(value: object, field_name: str) -> str:
+    """Fit a bot-reported string into a GuildMember field.
+
+    Args:
+        value: The reported value; None or blank reads as "".
+        field_name: The GuildMember field it is stored in.
+
+    Returns:
+        The value, cut to the field's ``max_length``.
+
+    """
+    from apps.accounts.models import GuildMember
+
+    return str(value or "")[: GuildMember._meta.get_field(field_name).max_length]
+
+
+def _create_departed_member(discord_id: str, member_data: dict[str, Any]) -> GuildMember:
+    """Create the GuildMember row for a member the bot saw leave before any sync listed them.
+
+    The user link follows the rules of :func:`_record_unseen_accounts`: only when exactly one
+    account holds this Discord id and that account has no row of its own yet. An account
+    already linked keeps its link (it may be an older Discord account's row), and a shared id
+    is recorded linked to nobody rather than to a guess. The access rule reads the row by
+    ``discord_id`` either way.
+
+    The row is created departed, with ``date_left`` strictly after ``date_created``: the bot
+    watched this member leave, so it must not read as "never seen in the server"
+    (:func:`never_seen_in_guild`).
+
+    Args:
+        discord_id: The departed member's Discord id.
+        member_data: What the bot knows about them (``username``, ``display_name``,
+            ``avatar_hash``, ``is_bot``); anything absent is left blank.
+
+    A row for this Discord id created meanwhile (by a sync or another report) makes the
+    insert raise ``IntegrityError``, from a savepoint, so an enclosing transaction survives.
+
+    Returns:
+        The new row.
+
+    """
+    from django.db import transaction
+
+    from apps.accounts.models import GuildMember, User
+
+    holders = list(User.objects.filter(discord_id=discord_id).values_list("pk", flat=True)[:2])
+    link = None
+    if len(holders) == 1 and not GuildMember.objects.filter(user_id=holders[0]).exists():
+        link = holders[0]
+
+    with transaction.atomic():
+        row = GuildMember.objects.create(
+            discord_id=discord_id,
+            username=_clip(member_data.get("username"), "username"),
+            display_name=_clip(member_data.get("display_name"), "display_name"),
+            avatar_hash=_clip(member_data.get("avatar_hash"), "avatar_hash"),
+            is_bot=bool(member_data.get("is_bot")),
+            user_id=link,
+            # Departed from the start; the final stamp is set below, inside the same savepoint,
+            # so no other connection ever sees the row active or never-seen.
+            date_left=timezone.now(),
+        )
+        # date_created is auto_now_add and cannot be passed in; stamp strictly after it.
+        stamp = max(timezone.now(), row.date_created + timedelta(microseconds=1))
+        GuildMember.objects.filter(pk=row.pk).update(date_left=stamp, date_modified=stamp)
+    row.date_left = stamp
+    row.date_modified = stamp
+    return row
+
+
+def record_member_departure(
+    discord_id: str,
+    member_data: dict[str, Any] | None = None,
+    *,
+    source: str = "bot_event",
+) -> dict[str, Any]:
+    """Record at once that a member has left the guild, as the Discord bot reports it.
+
+    The bot sees a member leave the moment it happens, so this closes the gap the scheduled
+    sync leaves (up to ``SCHEDULER_SYNC_GUILD_MEMBERS_HOURS``): the stamp signs a non-staff
+    rider out on their next request and stops their API keys (``apps.accounts.membership``).
+    One member per call, so no mass-departure check applies.
+
+    - An active row is stamped (conditionally, so a concurrent stamp is not repeated) and a
+      member-left ticket is filed, as the sync does.
+    - A row already departed keeps its departure, but the stamp is moved up to now, with no
+      ticket. The member may have rejoined and left again: a sync that read its list in
+      between still lists them, and would otherwise clear the old stamp after this report. A
+      "never seen" row (:func:`never_seen_in_guild`) becomes a real departure this way,
+      which is what it is: the bot saw the member leave.
+    - With no row, one is created from ``member_data`` and stamped (see
+      :func:`_create_departed_member`). The ticket is filed only when some account holds the
+      Discord id. For anyone else there is nothing in the app to follow up, the scheduled
+      sync never files one for them either, and join-and-leave churn would otherwise fill
+      the queue.
+
+    A later sync clears the stamp only if its member list was read after it
+    (``observed_at`` in :func:`apply_guild_member_sync`), and a Discord login that passes the
+    live guild check clears it (``apps.accounts.membership.clear_departure``).
+
+    Args:
+        discord_id: The departed member's Discord id (see :func:`is_discord_snowflake`).
+        member_data: Optional ``username``, ``display_name``, ``avatar_hash`` and ``is_bot``,
+            used only to create a missing row.
+        source: Label for the audit log.
+
+    Returns:
+        ``{"status": "departed" | "already_departed", "created": bool,
+        "ticket_created": bool}``.
+
+    Raises:
+        ValueError: ``discord_id`` is not a Discord id.
+        IntegrityError: Creating the missing row clashed with a row that then could not be
+            found (deleted again at once).
+
+    """
+    from django.db import IntegrityError
+
+    from apps.accounts.models import GuildMember, User
+    from apps.tickets.services import create_member_left_ticket
+
+    if not is_discord_snowflake(discord_id):
+        msg = "discord_id must be 1-20 ASCII digits"
+        raise ValueError(msg)
+
+    created = False
+    row = GuildMember.objects.filter(discord_id=discord_id).first()
+    if row is None:
+        try:
+            row = _create_departed_member(discord_id, member_data or {})
+            created = True
+        except IntegrityError:
+            # Created meanwhile by a sync or a repeated report: stamp that row instead.
+            row = GuildMember.objects.filter(discord_id=discord_id).first()
+            if row is None:
+                raise
+
+    if not created:
+        now = timezone.now()
+        # The departed case goes first. The other order would leave a gap: the "still active?"
+        # update misses, a sync clears the old stamp, and the "move it up" update then misses
+        # too, so the report would answer already_departed for a row that is active. In this
+        # order the only thing that can land between the two updates is another stamp.
+        moved = GuildMember.objects.filter(pk=row.pk, date_left__lt=now).update(date_left=now, date_modified=now)
+        if moved or not GuildMember.objects.filter(pk=row.pk, date_left__isnull=True).update(
+            date_left=now, date_modified=now
+        ):
+            logfire.info(
+                "Member departure already recorded",
+                source=source,
+                discord_id=discord_id,
+                guild_member_id=row.pk,
+                user_id=row.user_id,
+                stamp_moved=bool(moved),
+            )
+            return {"status": "already_departed", "created": False, "ticket_created": False}
+        row.date_left = now
+        row.date_modified = now
+
+    ticket_created = False
+    # A new row nobody's account holds the id of: nothing in the app to follow up (see above).
+    no_account = created and row.user_id is None and not User.objects.filter(discord_id=discord_id).exists()
+    if not no_account:
+        try:
+            ticket_created = create_member_left_ticket(row) is not None
+        except Exception as exc:
+            logfire.error(
+                "Failed to create member-left ticket",
+                guild_member_id=row.pk,
+                discord_id=discord_id,
+                error=str(exc),
+            )
+
+    logfire.info(
+        "Recorded a guild member departure",
+        source=source,
+        discord_id=discord_id,
+        guild_member_id=row.pk,
+        user_id=row.user_id,
+        created=created,
+        ticket_created=ticket_created,
+    )
+    return {"status": "departed", "created": created, "ticket_created": ticket_created}
+
+
 def _report_sync_refusal(**counts: Any) -> None:
     """Open or refresh the ticket that tells an admin the sync held sign-outs back.
 
@@ -1118,7 +1353,8 @@ def never_seen_in_guild() -> Q:
     copied from ``date_created``. A real departure is stamped on a row an earlier sync
     created as active, so its ``date_left`` is always later. Once such an account turns up
     in a sync, or passes a live login check, the stamp is cleared, and a later departure is
-    a real one.
+    a real one. A leave the bot reports for such a row moves its stamp later
+    (:func:`record_member_departure`), which also makes it a real departure.
 
     Returns:
         A filter for ``GuildMember`` querysets.

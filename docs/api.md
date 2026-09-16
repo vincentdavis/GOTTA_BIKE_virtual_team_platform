@@ -14,7 +14,7 @@ All endpoints require these headers:
 |--------|-------------|
 | `X-API-Key` | Must match `DBOT_AUTH_KEY` constance setting |
 | `X-Guild-Id` | Must match `GUILD_ID` constance setting |
-| `X-Discord-User-Id` | The requesting user's Discord ID |
+| `X-Discord-User-Id` | The requesting user's Discord ID, or the bot's own ID for calls no person triggered (periodic syncs, the member-leave report) |
 
 ### Endpoints
 
@@ -140,11 +140,16 @@ Push the bot's view of the guild members to Django. See [Guild Sync](guild-sync.
 This push upserts members and clears departures for members it lists, but **never marks anyone as
 left** (`left` is always 0 and `departures_evaluated` is `false`): the bot's list comes from its
 gateway cache, which can be partial after a restart, so only the platform's scheduled REST sync
-decides departures.
+decides departures from a member list.
+
+`observed_at` is optional: an ISO-8601 UTC time when the bot read the list. A departure recorded
+at or after it is not cleared, and is counted in `rejoin_deferred`. If it is missing or cannot be
+read, the platform uses its own clock; a time in the future is treated as now.
 
 **Body:**
 ```json
 {
+  "observed_at": "2026-09-16T12:00:00Z",
   "members": [...]
 }
 ```
@@ -155,6 +160,7 @@ decides departures.
   "created": 5,
   "updated": 10,
   "rejoined": 1,
+  "rejoin_deferred": 0,
   "left": 0,
   "linked": 2,
   "departures_evaluated": false,
@@ -164,6 +170,41 @@ decides departures.
   "total_active": 1150
 }
 ```
+
+#### POST /api/dbot/member_left/{discord_id}
+
+Record that a member has just left the guild. The bot calls it from its member-remove event,
+sending its own user ID as `X-Discord-User-Id`. The departure is stamped at once, so the rider is
+signed out on their next request and their API keys stop working. See
+[Guild Sync](guild-sync.md#the-leave-report).
+
+**Parameters:**
+- `discord_id` (path) - The departed member's Discord ID: 1-20 ASCII digits, otherwise 400
+
+**Body** (every field optional; `{}` is valid; only used to create a row the platform does not have):
+```json
+{
+  "username": "leaver",
+  "display_name": "The Leaver",
+  "avatar_hash": "a1b2c3",
+  "is_bot": false
+}
+```
+
+**Response:**
+```json
+{
+  "status": "departed",
+  "created": false,
+  "ticket_created": true
+}
+```
+
+`status` is `departed`, or `already_departed` when the member was already recorded as left. In
+that case no ticket is filed, but the departure time is moved up to now, so a member list read
+before this report cannot clear it. For a member the platform had no row for (`created: true`), a
+ticket is filed only when a site account has that Discord ID. Safe to repeat. Errors: 401 bad
+auth, 400 bad ID or a missing or non-JSON body, 422 a field of the wrong type.
 
 #### POST /api/dbot/sync_user_roles/{discord_id}
 

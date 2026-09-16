@@ -591,6 +591,7 @@ def test_the_bot_push_keeps_its_response_shape(client, synced_guild):
         "created",
         "updated",
         "rejoined",
+        "rejoin_deferred",
         "left",
         "linked",
         "departures_evaluated",

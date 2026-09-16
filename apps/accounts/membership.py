@@ -3,9 +3,11 @@
 Only members of the Discord guild may use the site. A Discord login checks that live
 (``DiscordSocialAccountAdapter._check_guild_membership``), but a session outlives the login,
 so a rider who leaves the server would otherwise keep their access until the session expired.
-The scheduled guild-member sync (``apps.accounts.services.apply_guild_member_sync``) notices a
-departure and stamps ``GuildMember.date_left``; a sync that lists the member again clears it.
-This module turns that stamp into an access decision, read by
+Two things notice a departure and stamp ``GuildMember.date_left``: the Discord bot, which reports
+a member leaving as it happens (``apps.accounts.services.record_member_departure``), and the
+scheduled guild-member sync (``apps.accounts.services.apply_guild_member_sync``), the backstop.
+The syncs clear the stamp again if they list the member in a list read after it. This
+module turns that stamp into an access decision, read by
 ``apps.accounts.middleware.DepartedMemberLogoutMiddleware`` for every signed-in request and by
 ``apps.user_api.services.user_can_use_api`` for every API key.
 
@@ -95,7 +97,7 @@ def clear_departure(discord_id: str | int | None) -> int:
     Called after a Discord login passes the live guild check. Without it a rider who
     rejoined the server would sign in, then be signed out again on the very next request,
     until the next guild sync (up to its interval) caught up. The sync clears the stamp
-    too, once it lists them.
+    too when it lists them, if its list was read after the stamp.
 
     Args:
         discord_id: The Discord id Discord has just confirmed is in the guild.

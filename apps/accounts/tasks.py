@@ -154,6 +154,35 @@ def sync_guild_members(allow_mass_departure: bool = False) -> dict:
         return {"status": "ok", **result}
 
 
+def _last_completed_guild_sync():
+    """When the scheduled guild member sync last finished and did its job.
+
+    Read from the task backend rather than ``GuildMember.date_modified``, which the bot's
+    leave report and every Discord login bump on their own: that would show a fresh sync
+    while the sync had stopped running. A refused run is recorded as failed, and a run with
+    no bot token or guild returns ``status: skipped``; neither counts.
+
+    Returns:
+        The finish time as an aware datetime, or None if no run has completed.
+
+    """
+    from django.apps import apps as django_apps
+
+    results = django_apps.get_model("django_tasks_database", "DBTaskResult")
+    return (
+        results.objects
+        .filter(
+            task_path=sync_guild_members.module_path,
+            status="SUCCESSFUL",
+            finished_at__isnull=False,
+            return_value__status="ok",
+        )
+        .order_by("-finished_at")
+        .values_list("finished_at", flat=True)
+        .first()
+    )
+
+
 @task
 def guild_member_sync_status() -> dict:
     """Report on guild member sync health and statistics.
@@ -162,7 +191,9 @@ def guild_member_sync_status() -> dict:
     The actual sync is performed by the ``sync_guild_members`` background task.
 
     Returns:
-        dict with sync status and statistics.
+        dict with sync status and statistics. ``last_sync`` and ``hours_since_sync`` describe
+        the last completed ``sync_guild_members`` run (see :func:`_last_completed_guild_sync`);
+        ``last_member_change`` is the newest ``GuildMember.date_modified``, whatever wrote it.
 
     """
     from apps.accounts.services import never_seen_in_guild
@@ -180,13 +211,14 @@ def guild_member_sync_status() -> dict:
         linked_members = GuildMember.objects.filter(user__isnull=False, date_left__isnull=True).count()
         bot_members = GuildMember.objects.filter(is_bot=True, date_left__isnull=True).count()
 
-        # Get last sync time (most recently modified record)
+        last_sync = _last_completed_guild_sync()
+        # Any change to any row: a sync, a bot push, a leave report, a Discord login. Not a sign
+        # that the scheduled sync -- the backstop for leave reports that never arrive -- still runs.
         last_modified = GuildMember.objects.order_by("-date_modified").values_list("date_modified", flat=True).first()
 
-        # Calculate time since last sync
         hours_since_sync = None
-        if last_modified:
-            delta = now - last_modified
+        if last_sync:
+            delta = now - last_sync
             hours_since_sync = round(delta.total_seconds() / 3600, 1)
 
         status = {
@@ -196,8 +228,9 @@ def guild_member_sync_status() -> dict:
             "never_seen_members": never_seen,
             "linked_to_users": linked_members,
             "bot_accounts": bot_members,
-            "last_sync": last_modified.isoformat() if last_modified else None,
+            "last_sync": last_sync.isoformat() if last_sync else None,
             "hours_since_sync": hours_since_sync,
+            "last_member_change": last_modified.isoformat() if last_modified else None,
             "sync_source": "platform",
             "note": "Guild member sync is performed by the sync_guild_members background task",
         }
