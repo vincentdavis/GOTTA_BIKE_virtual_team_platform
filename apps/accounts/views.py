@@ -1365,7 +1365,8 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
         "Race ready form validation failed",
         user_id=request.user.id,
         verify_type=request.POST.get("verify_type"),
-        form_errors=dict(form.errors),
+        # Codes, not messages: a message can quote what the rider sent, such as a file name.
+        form_errors={field: [e.code or "invalid" for e in errors.as_data()] for field, errors in form.errors.items()},
     )
     if request.headers.get("HX-Request"):
         return render(

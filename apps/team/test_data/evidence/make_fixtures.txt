@@ -1,0 +1,85 @@
+"""Regenerate the synthetic HEIC fixtures in this directory. See README.md."""
+
+from pathlib import Path
+
+import pillow_heif
+from PIL import ExifTags, Image, ImageCms, ImageDraw
+
+pillow_heif.register_heif_opener()
+HERE = Path(__file__).parent
+
+
+def picture(width, height):
+    image = Image.new("RGB", (width, height), (30, 90, 200))
+    ImageDraw.Draw(image).rectangle([0, 0, width // 4, height // 4], fill=(255, 0, 0))
+    return image
+
+
+def exif(orientation=None):
+    tags = Image.Exif()
+    tags[ExifTags.Base.Make] = "Apple"
+    tags[ExifTags.Base.Model] = "iPhone Fixture"
+    tags[ExifTags.Base.Software] = "26.6.1"
+    tags[ExifTags.Base.ImageDescription] = "Kitchen scale at 1 Example Road"
+    tags[ExifTags.Base.DateTime] = "2026:09:01 07:31:00"
+    if orientation:
+        tags[ExifTags.Base.Orientation] = orientation
+    sub = tags.get_ifd(ExifTags.IFD.Exif)
+    sub[ExifTags.Base.DateTimeOriginal] = "2026:09:01 07:30:00"
+    sub[ExifTags.Base.OffsetTimeOriginal] = "+01:00"
+    sub[ExifTags.Base.BodySerialNumber] = "FIXTURE-SERIAL-0001"
+    gps = tags.get_ifd(ExifTags.IFD.GPSInfo)
+    gps[ExifTags.GPS.GPSLatitudeRef] = "N"
+    gps[ExifTags.GPS.GPSLatitude] = (51.0, 28.0, 38.0)
+    gps[ExifTags.GPS.GPSLongitudeRef] = "W"
+    gps[ExifTags.GPS.GPSLongitude] = (0.0, 0.0, 0.0)
+    return tags.tobytes()
+
+
+icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+xmp = b'<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:exif="http://ns.adobe.com/exif/1.0/" exif:GPSLatitude="51,28.63N"/></rdf:RDF></x:xmpmeta>'
+
+picture(64, 48).save(HERE / "tagged.heic", exif=exif(), icc_profile=icc, xmp=xmp, quality=60)
+picture(64, 48).save(HERE / "rotated.heic", exif=exif(orientation=6), quality=60)
+Image.new("RGBA", (40, 30), (0, 200, 0, 128)).save(HERE / "transparent.heic", quality=60)
+(HERE / "truncated.heic").write_bytes((HERE / "tagged.heic").read_bytes()[:200])
+
+
+def with_display_serial(icc, marker=b"FIXTURE-DISPLAY-SERIAL"):
+    """Add an Apple 'mmod' tag, the kind a Mac display profile carries its serial number in."""
+    import struct
+
+    count = struct.unpack(">I", icc[128:132])[0]
+    table_end = 132 + 12 * count
+    entries = []
+    for i in range(count):
+        sig, offset, size = struct.unpack(">4sII", icc[132 + 12 * i : 144 + 12 * i])
+        entries.append((sig, offset + 12, size))  # the table grows by one entry
+    body = icc[table_end:]
+    body += bytes(-len(body) % 4)
+    data = b"mmod" + bytes(4) + marker.ljust(32, b"\0")
+    entries.append((b"mmod", table_end + 12 + len(body), len(data)))
+    table = struct.pack(">I", count + 1) + b"".join(struct.pack(">4sII", *entry) for entry in entries)
+    profile = icc[:128] + table + body + data
+    return struct.pack(">I", len(profile)) + profile[4:]
+
+
+# Transparency stored premultiplied: left half clear, right half half-transparent green.
+clear_and_green = Image.new("RGBA", (40, 30), (0, 200, 0, 128))
+clear_and_green.paste((0, 0, 0, 0), (0, 0, 20, 30))
+premultiplied = pillow_heif.from_pillow(clear_and_green)
+premultiplied.premultiplied_alpha = True
+premultiplied.save(HERE / "premultiplied.heic", quality=90)
+
+# 10-bit greyscale, which pi-heif hands over as 16-bit: a grey 76 field with a darker 30 block.
+import struct
+
+grey = Image.new("L", (64, 48), 76)
+grey.paste(30, (0, 0, 16, 12))
+grey10 = pillow_heif.from_bytes(
+    mode="I;16", size=grey.size, data=b"".join(struct.pack("<H", v * 257) for v in grey.tobytes())
+)
+grey10.save(HERE / "grey10.heic", quality=90)
+
+# A screenshot-like HEIC whose profile carries a display serial.
+picture(64, 48).save(HERE / "display_profile.heic", icc_profile=with_display_serial(icc), quality=60)

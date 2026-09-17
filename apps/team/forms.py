@@ -7,9 +7,11 @@ from zoneinfo import available_timezones
 import logfire
 from constance import config
 from django import forms
+from django.core.exceptions import NON_FIELD_ERRORS
 from django.utils import timezone
 from django_countries.widgets import CountrySelectWidget
 
+from apps.team import evidence_media
 from apps.team.converters import inches_to_cm, lbs_to_kg
 from apps.team.models import MembershipApplication, RaceReadyRecord, TeamLink
 
@@ -146,8 +148,13 @@ class TeamLinkEditForm(forms.ModelForm):
 # Extensions are not admin-tunable: the set is dictated by what browsers and the storage
 # backend can actually handle, not by policy. The SIZE ceiling is, and lives in Constance as
 # MAX_MEDIA_UPLOAD_MB -- read at call time, never captured at import, or a change would not
-# take effect until the process restarted.
-ALLOWED_MEDIA_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".mp4", ".mov", ".avi", ".webm")
+# take effect until the process restarted. Photos (HEIC included, stored as JPEG) are rebuilt
+# before they are stored; see apps/team/evidence_media.py.
+ALLOWED_MEDIA_EXTENSIONS = evidence_media.PHOTO_EXTENSIONS + evidence_media.VIDEO_EXTENSIONS
+
+# Which file kind each evidence type must carry. "Link" takes either, as it always has; "Other"
+# takes no file at all (RaceReadyRecord.clean()).
+FILE_KIND_BY_MEDIA_TYPE = {"photo": "photo", "video": "video"}
 
 
 class RaceReadyRecordForm(forms.ModelForm):
@@ -244,9 +251,19 @@ class RaceReadyRecordForm(forms.ModelForm):
         # the same constant the validator uses, so the three cannot disagree.
         self.max_media_upload_mb = config.MAX_MEDIA_UPLOAD_MB
         self.allowed_media_extensions = ", ".join(ALLOWED_MEDIA_EXTENSIONS)
+        # The page narrows `accept` to the chosen evidence kind -- on an iPhone that is what
+        # makes the picker offer videos for Video -- and checks the chosen file before it is
+        # sent, with the same lists and wording the validator below uses.
         self.fields["media_file"].widget.attrs.update({
             "data-max-mb": config.MAX_MEDIA_UPLOAD_MB,
             "accept": ",".join(ALLOWED_MEDIA_EXTENSIONS),
+            "data-accept-photo": ",".join(evidence_media.PHOTO_EXTENSIONS),
+            "data-accept-video": ",".join(evidence_media.VIDEO_EXTENSIONS),
+            "data-wrong-kind-photo": evidence_media.WRONG_KIND_MESSAGES["photo"],
+            "data-wrong-kind-video": evidence_media.WRONG_KIND_MESSAGES["video"],
+            "data-raw-extensions": ",".join(evidence_media.RAW_PHOTO_EXTENSIONS),
+            "data-raw-message": evidence_media.RAW_PHOTO_MESSAGE,
+            "aria-describedby": "media-file-help",
         })
 
         # Make record_date required (model allows null for existing records)
@@ -282,23 +299,31 @@ class RaceReadyRecordForm(forms.ModelForm):
             self.fields["height"].label = "Height (cm)"
 
     def clean_media_file(self):
-        """Validate media file size and type.
+        """Validate the uploaded file, and turn a photo into the file that is stored.
+
+        Size and extension first, then whether the file is the kind the evidence type needs,
+        then a photo is rebuilt (HEIC to JPEG, location removed) and a video is given the
+        Content-Type its extension implies. ``media_type`` is cleaned before this field, so it
+        is available here; when it is missing or invalid, its own error covers the form.
 
         Returns:
-            The cleaned media file.
+            The file to store: a new upload object for a photo, the rider's own for a video.
 
         Raises:
-            ValidationError: If file is too large or wrong type.
+            ValidationError: If the file is too large, not a taken type, the wrong kind for the
+                evidence type, or a photo that cannot be read.
 
         """
         media_file = self.cleaned_data.get("media_file")
         if media_file:
+            # The extension, never the name, goes to Logfire: riders name files after themselves.
+            ext = evidence_media.extension(media_file.name)
             max_mb = config.MAX_MEDIA_UPLOAD_MB
             if media_file.size > max_mb * 1024 * 1024:
                 actual_mb = media_file.size / 1024 / 1024
                 logfire.warning(
                     "RaceReadyRecordForm media file validation failed",
-                    file_name=media_file.name,
+                    file_extension=ext,
                     file_size=media_file.size,
                     error_reason="file_too_large",
                 )
@@ -306,21 +331,54 @@ class RaceReadyRecordForm(forms.ModelForm):
                 # big", which is the difference between retrying blindly and trimming a clip.
                 raise forms.ValidationError(
                     f"That file is {actual_mb:.0f} MB. The limit is {max_mb} MB — "
-                    f"please trim or compress it and try again."
+                    f"please trim or compress it and try again.",
+                    code="file_too_large",
                 )
 
-            ext = media_file.name.lower().split(".")[-1]
-            if f".{ext}" not in ALLOWED_MEDIA_EXTENSIONS:
+            if ext in evidence_media.RAW_PHOTO_EXTENSIONS:
                 logfire.warning(
                     "RaceReadyRecordForm media file validation failed",
-                    file_name=media_file.name,
+                    file_extension=ext,
+                    file_size=media_file.size,
+                    error_reason="raw_photo",
+                )
+                raise forms.ValidationError(evidence_media.RAW_PHOTO_MESSAGE, code="raw_photo")
+            if ext not in ALLOWED_MEDIA_EXTENSIONS:
+                logfire.warning(
+                    "RaceReadyRecordForm media file validation failed",
+                    file_extension=ext,
                     file_size=media_file.size,
                     error_reason="invalid_file_type",
                 )
                 raise forms.ValidationError(
                     f"{media_file.name} is not an allowed file type. "
-                    f"Allowed: {', '.join(ALLOWED_MEDIA_EXTENSIONS)}"
+                    f"Allowed: {', '.join(ALLOWED_MEDIA_EXTENSIONS)}",
+                    code="invalid_file_type",
                 )
+
+            media_type = self.cleaned_data.get("media_type")
+            if media_type == "other":
+                # Refused by RaceReadyRecord.clean() -- Other takes no file -- so there is
+                # nothing to be gained from decoding it first.
+                return media_file
+
+            kind = evidence_media.evidence_kind(media_file.name)
+            needed = FILE_KIND_BY_MEDIA_TYPE.get(media_type)
+            if needed and kind != needed:
+                logfire.warning(
+                    "RaceReadyRecordForm media file validation failed",
+                    file_extension=ext,
+                    media_type=media_type,
+                    error_reason="wrong_file_kind",
+                )
+                raise forms.ValidationError(evidence_media.WRONG_KIND_MESSAGES[needed], code="wrong_file_kind")
+
+            if kind == "photo":
+                try:
+                    return evidence_media.prepare_photo(media_file, max_bytes=max_mb * 1024 * 1024)
+                except evidence_media.PhotoRejectedError as exc:
+                    raise forms.ValidationError(exc.message, code=exc.reason) from exc
+            media_file.content_type = evidence_media.video_content_type(media_file.name)
         return media_file
 
     def clean_weight(self):
@@ -348,6 +406,25 @@ class RaceReadyRecordForm(forms.ModelForm):
             # Convert from inches to cm
             height = inches_to_cm(height)
         return height
+
+    def _post_clean(self):
+        """Run the model's checks, then drop its "no evidence" error where it is only an echo.
+
+        A refused file never reaches the instance, so ``RaceReadyRecord.clean()`` sees no file
+        and adds "provide either a file upload or a URL" beside the refusal that explains why --
+        two errors, the second contradicting what the rider just did. The same goes for a
+        refused link.
+        """
+        super()._post_clean()
+        if not (self.has_error("media_file") or self.has_error("url")):
+            return
+        if NON_FIELD_ERRORS not in self._errors:
+            return
+        kept = [e for e in self._errors[NON_FIELD_ERRORS].as_data() if e.code != RaceReadyRecord.NO_EVIDENCE_CODE]
+        if kept:
+            self._errors[NON_FIELD_ERRORS] = self.error_class(kept, error_class="nonfield", renderer=self.renderer)
+        else:
+            del self._errors[NON_FIELD_ERRORS]
 
     def clean(self):
         """Validate form data.

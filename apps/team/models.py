@@ -58,6 +58,9 @@ class RaceReadyRecord(models.Model):
 
     """
 
+    # The code on clean()'s "no file and no URL" error, so the submission form can tell it apart.
+    NO_EVIDENCE_CODE = "no_evidence"
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -211,7 +214,9 @@ class RaceReadyRecord(models.Model):
                 raise ValidationError(errors)
             return
         if not self.media_file and not self.url:
-            raise ValidationError("You must provide either a file upload or a URL (or both).")
+            raise ValidationError(
+                "You must provide either a file upload or a URL (or both).", code=self.NO_EVIDENCE_CODE
+            )
 
     def delete(self, *args, **kwargs):
         """Delete the record, and take its evidence file with it.

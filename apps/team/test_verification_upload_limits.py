@@ -11,6 +11,8 @@ The size tests drive ``clean_media_file`` with a stub rather than a real file. A
 ``.name`` -- so a stub tests the actual rule, and a small real file covers the wiring.
 """
 
+import io
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -19,7 +21,9 @@ from constance.test import override_config
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.forms import ValidationError
 from django.urls import reverse
+from PIL import Image
 
+from apps.team.evidence_media import PHOTO_EXTENSIONS, VIDEO_EXTENSIONS
 from apps.team.forms import ALLOWED_MEDIA_EXTENSIONS, RaceReadyRecordForm
 from apps.team.models import RaceReadyRecord
 
@@ -79,11 +83,34 @@ def test_a_disallowed_extension_is_rejected_by_name():
     assert "evidence.pdf" in str(caught.value)
 
 
+def _real_photo(ext: str) -> bytes:
+    """Make a small picture in the format ``ext`` names.
+
+    Returns:
+        The file's bytes.
+
+    """
+    if ext in (".heic", ".heif"):
+        return (Path(__file__).parent / "test_data" / "evidence" / "tagged.heic").read_bytes()
+    out = io.BytesIO()
+    Image.new("RGB", (8, 8), (200, 0, 0)).save(out, {".png": "PNG", ".gif": "GIF"}.get(ext, "JPEG"))
+    return out.getvalue()
+
+
 @pytest.mark.django_db
 def test_every_allowed_extension_passes():
-    """Guards the extension list against a typo that would silently reject a real format."""
-    for ext in ALLOWED_MEDIA_EXTENSIONS:
+    """Guards the extension list against a typo that would silently reject a real format.
+
+    Videos are checked by name alone, so the stub does. Photos are decoded and rebuilt before
+    they are stored (test_evidence_photos.py), so each gets a real picture of its own format.
+    """
+    assert set(ALLOWED_MEDIA_EXTENSIONS) == set(PHOTO_EXTENSIONS) | set(VIDEO_EXTENSIONS)
+    for ext in VIDEO_EXTENSIONS:
         assert _check(1, name=f"evidence{ext}") is not None
+    for ext in PHOTO_EXTENSIONS:
+        form = RaceReadyRecordForm()
+        form.cleaned_data = {"media_file": SimpleUploadedFile(f"evidence{ext}", _real_photo(ext))}
+        assert form.clean_media_file() is not None, ext
 
 
 # ---------------------------------------------------------------- the rendered form

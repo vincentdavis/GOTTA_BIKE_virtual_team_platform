@@ -237,7 +237,7 @@
         </div>
       {% endif %}
       <label class="label">
-        <span class="label-text-alt">Max {{ race_ready_form.max_media_upload_mb }}MB. Allowed: {{ race_ready_form.allowed_media_extensions }}</span>
+        <span id="media-file-help" class="label-text-alt">Max {{ race_ready_form.max_media_upload_mb }}MB. Allowed: {{ race_ready_form.allowed_media_extensions }}. Photos are saved without their location, and iPhone (HEIC) photos are saved as JPEG.</span>
       </label>
     </div>
 
@@ -431,8 +431,21 @@
           const notesOptional = document.getElementById('notes-label-optional');
           const notesRequired = document.getElementById('notes-label-required');
 
+          // The file picker offers only the kind of file the chosen evidence needs -- on an
+          // iPhone, Video opens the video library -- from the lists the form puts on the widget,
+          // which are the ones its validator uses. Link keeps the full list.
+          const mediaFileInput = document.getElementById('id_media_file');
+          const acceptAny = mediaFileInput ? (mediaFileInput.getAttribute('accept') || '') : '';
+          function acceptFor(mediaType) {
+              if (!mediaFileInput) return '';
+              if (mediaType === 'photo') return mediaFileInput.dataset.acceptPhoto || acceptAny;
+              if (mediaType === 'video') return mediaFileInput.dataset.acceptVideo || acceptAny;
+              return acceptAny;
+          }
+
           function toggleEvidenceFields() {
               const isOther = mediaTypeSelect.value === 'other';
+              if (mediaFileInput) mediaFileInput.setAttribute('accept', acceptFor(mediaTypeSelect.value));
               [mediaFileField, urlField].forEach(field => {
                   if (!field) return;
                   field.classList.toggle('hidden', isOther);
@@ -465,7 +478,7 @@
               if (heightInput.value) updateHeightPreview();
           }
 
-          // File info display, and a size check BEFORE the upload starts.
+          // File info display, and the type, kind and size checks BEFORE the upload starts.
           const fileInput = document.getElementById('id_media_file');
           const fileInfo = document.getElementById('file-info');
           const fileName = document.getElementById('file-name');
@@ -476,6 +489,38 @@
           // Read from the widget attribute so the browser, the help text and the server
           // validator all come from the one constant in forms.py.
           const maxMb = fileInput ? parseInt(fileInput.dataset.maxMb || '0', 10) : 0;
+          const listFrom = value => (value || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+          // The server's reading of a name (PurePath.suffix in apps/team/evidence_media.py):
+          // leading dots are ignored, then the text from the last dot on -- none for ".heic".
+          const extensionOf = name => {
+              const base = name.replace(/^\.+/, '');
+              const dot = base.lastIndexOf('.');
+              return dot >= 0 ? base.slice(dot).toLowerCase() : '';
+          };
+
+          // What is wrong with the chosen file, in the validator's own words, or '' if nothing.
+          function fileProblem(input, f, mb) {
+              const ext = extensionOf(f.name);
+              const allowed = listFrom(acceptAny);
+              const wanted = mediaTypeSelect.value;
+              if (listFrom(input.dataset.rawExtensions).includes(ext)) {
+                  return input.dataset.rawMessage;
+              }
+              if (!allowed.includes(ext)) {
+                  return f.name + ' is not an allowed file type. Allowed: ' + allowed.join(', ');
+              }
+              if (wanted === 'photo' && !listFrom(input.dataset.acceptPhoto).includes(ext)) {
+                  return input.dataset.wrongKindPhoto;
+              }
+              if (wanted === 'video' && !listFrom(input.dataset.acceptVideo).includes(ext)) {
+                  return input.dataset.wrongKindVideo;
+              }
+              if (maxMb && mb > maxMb) {
+                  return f.name + ' is ' + mb.toFixed(0) + ' MB. The limit is ' + maxMb +
+                      ' MB — please trim or compress it, then choose the file again.';
+              }
+              return '';
+          }
 
           function showBanner(el, message) {
               if (!el) return;
@@ -516,11 +561,11 @@
                   fileSize.textContent = mb.toFixed(1) + ' MB';
                   fileInfo.classList.remove('hidden');
 
-                  // Catch it here rather than after a long upload that the server will refuse.
-                  if (maxMb && mb > maxMb) {
-                      showBanner(fileError,
-                          f.name + ' is ' + mb.toFixed(0) + ' MB. The limit is ' + maxMb +
-                          ' MB — please trim or compress it, then choose the file again.');
+                  // Catch it here rather than after a long upload that the server will refuse --
+                  // a RAW photo from an iPhone is tens of megabytes.
+                  const problem = fileProblem(this, f, mb);
+                  if (problem) {
+                      showBanner(fileError, problem);
                       setSubmitEnabled(false);
                   }
               });

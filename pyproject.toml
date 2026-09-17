@@ -31,6 +31,7 @@ dependencies = [
     "justhtml>=3.11.2",
     "logfire[asgi,django,psycopg,httpx]>=4.41.0",
     "markdown>=3.10.3",
+    "pi-heif>=1.4.0",
     "pillow>=12.3.0",
     "psycopg[binary]>=3.3.5",
     "pydantic>=2.13.5",
