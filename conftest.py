@@ -41,6 +41,21 @@ def _use_plain_static_storage(settings):
     staticfiles_storage._wrapped = empty
 
 
+@pytest.fixture(autouse=True)
+def _fresh_roster_index():
+    """Start every test with no shared roster index.
+
+    ``apps.team.rosterv2.shared_roster_index`` keeps the built roster in the process for a
+    minute, which in a test run means one test's riders would still be on the next test's
+    page. Autouse and site-wide because any test that renders /team/roster/ reads it.
+    """
+    from apps.team.rosterv2 import reset_roster_index_cache
+
+    reset_roster_index_cache()
+    yield
+    reset_roster_index_cache()
+
+
 @pytest.fixture
 def user_model() -> type[AbstractUser]:
     """Return the active User model class."""

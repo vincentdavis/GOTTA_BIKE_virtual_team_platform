@@ -9,12 +9,13 @@ from urllib.parse import urlencode
 import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.cache import patch_vary_headers
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import discord_permission_required, team_member_required
@@ -42,9 +43,9 @@ from apps.team.rosterv2 import (
     WKG_STEPS,
     apply_filters,
     build_link_rows,
-    build_roster_index,
     filter_options,
     parse_filters,
+    roster_index_for,
     search_link_rows,
     sort_link_rows,
     sort_rows,
@@ -510,6 +511,11 @@ def filtered_roster_view(request: HttpRequest, filter_id: uuid.UUID) -> HttpResp
 
 
 ROSTER_PAGE_SIZE = 48
+# How many pages load by themselves as a reader scrolls before "Show more riders" has to be
+# pressed: past this the footer stays reachable, and a phone is not asked to hold the team.
+ROSTER_AUTO_LOAD_PAGES = 5
+# The parts of the roster page an HTMX request may ask for, by the id of what it replaces.
+ROSTER_PARTS = {"roster-results": "results", "roster-more": "more"}
 
 # Labels for the removable chips. Only what a reader would recognise: "Cat B", not "category=B".
 _CHIP_LABELS = {
@@ -531,7 +537,10 @@ _CHIP_LABELS = {
 
 
 def _query_without(request: HttpRequest, *drop: str) -> str:
-    """Rebuild the querystring without the named parameters.
+    """Rebuild the querystring without the named parameters, or any left blank.
+
+    Blank ones go too: a live search that has been cleared sends ``q=``, and every link built
+    from that request would otherwise carry it along.
 
     Args:
         request: The HTTP request.
@@ -542,9 +551,30 @@ def _query_without(request: HttpRequest, *drop: str) -> str:
 
     """
     params = request.GET.copy()
-    for name in drop:
-        params.pop(name, None)
+    for name in list(params):
+        if name in drop or not any(value.strip() for value in params.getlist(name)):
+            params.pop(name)
     return params.urlencode()
+
+
+def _roster_part(request: HttpRequest) -> str:
+    """Name the part of the roster page an HTMX request wants, or "" for the whole page.
+
+    A live search asks for the results, "Show more riders" for the next page's cards. htmx
+    restoring history sends HX-Request too, but swaps whatever comes back in as the whole
+    page, so it gets the whole page.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        ``"results"``, ``"more"`` or ``""``.
+
+    """
+    htmx = getattr(request, "htmx", None)
+    if not htmx or htmx.history_restore_request:
+        return ""
+    return ROSTER_PARTS.get(htmx.target or "", "")
 
 
 def _roster_chips(request: HttpRequest, *, link: str = "") -> list[dict]:
@@ -610,7 +640,7 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
         The roster page, in whichever of its two modes the querystring asked for.
 
     """
-    roster = build_roster_index(viewer_id=request.user.pk)
+    roster = roster_index_for(request.user.pk)
     query = request.GET.get("q", "").strip()
     direction = request.GET.get("dir", "")
     may_see_gaps = request.user.has_permission("membership_admin")
@@ -635,23 +665,44 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
     # 48 a page: enough to fill four columns twelve deep, and the reason the whole index is
     # never handed to the template. v1 sends ~450 KB of HTML for 100 rows.
     paginator = Paginator(rows, ROSTER_PAGE_SIZE)
-    page_obj = paginator.get_page(request.GET.get("page", "1"))
+    part = _roster_part(request)
+    if part == "more":
+        # "Show more" names a page after the one on screen. If the list has shrunk since (a
+        # new minute's index), there is no such page, and get_page's fallback to the last one
+        # would append riders already shown -- so the answer is nothing, which removes the button.
+        try:
+            page_obj = paginator.page(request.GET.get("page", ""))
+        except (EmptyPage, PageNotAnInteger):
+            return HttpResponse("")
+    else:
+        page_obj = paginator.get_page(request.GET.get("page", "1"))
 
     # The query text is NOT logged: it is rider-authored free text, and someone looking up a
     # teammate by real name should not leave that in telemetry. The count is the useful part.
-    logfire.info(
-        "Roster viewed",
-        user_id=request.user.pk,
-        riders=roster.rider_count,
-        matched=len(rows),
-        # A roster that is thin because the stats cache is behind looks, from the outside,
-        # exactly like a team that shrank. The number says which.
-        unstatted=roster.unstatted_count,
-    )
+    if part:
+        # A live search sends one of these per pause in typing, so they stay at debug.
+        logfire.debug(
+            "Roster results updated", user_id=request.user.pk, part=part, matched=len(rows), page=page_obj.number
+        )
+    else:
+        logfire.info(
+            "Roster viewed",
+            user_id=request.user.pk,
+            riders=roster.rider_count,
+            matched=len(rows),
+            # A roster that is thin because the stats cache is behind looks, from the outside,
+            # exactly like a team that shrank. The number says which.
+            unstatted=roster.unstatted_count,
+        )
 
-    return render(
+    template = {
+        "": "team/rosterv2.html",
+        "results": "team/partials/_roster_results.html",
+        "more": "team/partials/_roster_more.html",
+    }[part]
+    response = render(
         request,
-        "team/rosterv2.html",
+        template,
         {
             "roster": roster,
             "page_obj": page_obj,
@@ -684,8 +735,29 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
             # Paging has to carry every control, or page 2 of a filtered search silently
             # becomes page 2 of everyone.
             "page_query": _query_without(request, "page"),
+            # A live search keeps the filters in force, so the search form carries them.
+            "kept_params": [
+                (name, value)
+                for name, values in request.GET.lists()
+                if name not in {"q", "page"}
+                for value in values
+                if value.strip()
+            ],
+            "auto_load": page_obj.number < ROSTER_AUTO_LOAD_PAGES,
+            # Whether this page's cards are being added under the ones already shown, so
+            # "96 of 2,076 shown" is true; a page opened on its own shows only its own riders.
+            "appending": part == "more",
+            "part": part,
         },
     )
+    if part == "results":
+        # The address bar follows the search, minus the page (a new search starts at the top)
+        # and minus anything left blank, so clearing the box gives back the plain URL.
+        query_string = _query_without(request, "page")
+        response["HX-Replace-Url"] = reverse("team:roster") + (f"?{query_string}" if query_string else "")
+    # One URL answers with a whole page or with a fragment, so a cache must keep them apart.
+    patch_vary_headers(response, ("HX-Request",))
+    return response
 
 
 @login_required

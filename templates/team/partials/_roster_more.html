@@ -1,0 +1,19 @@
+{% load humanize %}
+{% comment %}
+  The answer to "Show more riders": the next page's entries appended to the list already on
+  the page, a line for screen readers, and the button for the page after (or nothing, which
+  removes the button). The first <li> is an off-screen marker naming the range, and is where
+  focus goes when the button was pressed.
+{% endcomment %}
+<ul hx-swap-oob="beforeend:#roster-list">
+  <li id="roster-from-{{ page_obj.start_index }}" tabindex="-1" class="sr-only">{% if filters.link %}People{% else %}Riders{% endif %} {{ page_obj.start_index|intcomma }} to {{ page_obj.end_index|intcomma }} of {{ page_obj.paginator.count|intcomma }}</li>
+  {% for row in page_obj.object_list %}
+    {% if filters.link %}
+      {% include "team/partials/_link_row.html" with row=row %}
+    {% else %}
+      {% include "team/partials/_rider_card.html" with row=row %}
+    {% endif %}
+  {% endfor %}
+</ul>
+<p id="roster-announcer" hx-swap-oob="innerHTML">Loaded {% if filters.link %}people{% else %}riders{% endif %} {{ page_obj.start_index|intcomma }} to {{ page_obj.end_index|intcomma }} of {{ page_obj.paginator.count|intcomma }}.</p>
+{% include "team/partials/_roster_more_button.html" %}

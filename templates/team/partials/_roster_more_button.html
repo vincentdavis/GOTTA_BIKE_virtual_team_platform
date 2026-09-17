@@ -1,0 +1,29 @@
+{% load humanize %}
+{% comment %}
+  The next page, as a real link: with JavaScript it adds the next page's cards under these
+  (htmx, the "more" part of rosterv2_view) and replaces itself with the button after that;
+  without, it simply opens the next page. It also loads by itself once scrolled into view,
+  for the first ROSTER_AUTO_LOAD_PAGES pages -- after that it waits to be pressed, so the
+  footer stays reachable and a phone is never handed the whole team.
+
+  Pressing it removes it, so focus moves to the first new entry (rosterMoreRequested and the
+  htmx.onLoad hook in rosterv2.html); a load that scrolling started leaves focus alone. The
+  choice is made before the request because htmx drops this link's own listeners when the
+  swap removes it, before an after-request handler could run; after-request only ever sees a
+  failure, when nothing was swapped.
+{% endcomment %}
+{% if page_obj.has_next %}
+  <nav id="roster-more" class="mt-6 flex flex-col items-center gap-1" aria-label="More {% if filters.link %}people{% else %}riders{% endif %}">
+    <a class="btn btn-sm"
+       href="{% url 'team:roster' %}?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}"
+       hx-get="{% url 'team:roster' %}?{% if page_query %}{{ page_query }}&amp;{% endif %}page={{ page_obj.next_page_number }}"
+       hx-target="#roster-more"
+       hx-swap="outerHTML"
+       hx-trigger="click{% if auto_load %}, intersect once{% endif %}"
+       hx-on::before-request="rosterMoreRequested(event, {{ page_obj.end_index|add:1 }})"
+       hx-on::after-request="rosterMoreFailed(event)">{% if filters.link %}Show more{% else %}Show more riders{% endif %}</a>
+    {% if page_obj.number == 1 or appending %}
+      <p class="text-xs text-base-content/70">{{ page_obj.end_index|intcomma }} of {{ page_obj.paginator.count|intcomma }} shown</p>
+    {% endif %}
+  </nav>
+{% endif %}

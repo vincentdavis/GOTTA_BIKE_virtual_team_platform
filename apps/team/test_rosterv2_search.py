@@ -276,9 +276,10 @@ def test_an_empty_query_shows_everyone(auth_client, roster_rider):
     for query in ("", "   "):
         body = auth_client.get(reverse("team:roster") + f"?q={query}").content.decode()
         assert "Ada Racer" in body
-        # Everything between the search box and the first card: the chips and the count live
-        # there, and an empty query must claim neither a filter nor a narrowed result.
-        above_the_cards = body.split('id="roster-search"', 1)[1].split('class="card bg-base-100', 1)[0]
+        # Everything between the start of the results and the first card: the chips and the
+        # count live there, and an empty query must claim neither a filter nor a narrowed result.
+        # (From the results, not the search box: the box's own help text says "matches".)
+        above_the_cards = body.split('id="roster-results"', 1)[1].split('class="card bg-base-100', 1)[0]
         assert "match" not in above_the_cards
 
 

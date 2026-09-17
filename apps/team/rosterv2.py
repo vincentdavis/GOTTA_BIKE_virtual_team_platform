@@ -37,6 +37,8 @@ from __future__ import annotations
 
 import html
 import re
+import threading
+import time
 import unicodedata
 from dataclasses import dataclass, field, replace
 from datetime import timedelta
@@ -1754,3 +1756,77 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
         contested_count=contested,
         team_size=len(roster_zwids),
     )
+
+
+# --- the shared index -------------------------------------------------------------------------
+
+# How long one built index serves every reader. Building takes most of a second at ~2,000
+# riders, and the page asks for it on every keystroke of a live search and every "Show more",
+# so without this each of those waited the full build. A minute is short enough that a new
+# signup or stat is not missed for long; nothing invalidates it on write.
+ROSTER_INDEX_TTL_SECONDS = 60
+
+_shared_index: tuple[float, RosterIndex] | None = None
+_build_lock = threading.Lock()
+
+
+def reset_roster_index_cache() -> None:
+    """Forget the shared index, so the next request builds a fresh one. For tests."""
+    global _shared_index
+    with _build_lock:
+        _shared_index = None
+
+
+def shared_roster_index() -> RosterIndex:
+    """Return the roster as everyone sees it, built at most once a minute per process.
+
+    Kept in the process, not in Django's cache: the rows are frozen dataclasses, so readers
+    can share one copy, and LocMemCache would pickle 2,000 of them on every read. One build
+    at a time -- a second request arriving mid-build waits for it rather than starting its
+    own.
+
+    Returns:
+        The index built with no reader, so no private event signup is on it.
+
+    """
+    global _shared_index
+    cached = _shared_index
+    if cached and time.monotonic() - cached[0] < ROSTER_INDEX_TTL_SECONDS:
+        return cached[1]
+    with _build_lock:
+        cached = _shared_index
+        if cached and time.monotonic() - cached[0] < ROSTER_INDEX_TTL_SECONDS:
+            return cached[1]
+        index = build_roster_index()
+        _shared_index = (time.monotonic(), index)
+        return index
+
+
+def roster_index_for(viewer_id: int | None) -> RosterIndex:
+    """Return the shared index with the reader's own card carrying all their event signups.
+
+    The one part of the index that differs between readers is the reader's own card, which
+    shows their signups even for events that hide them (see ``event_chips``). That card's
+    chips are looked up fresh on every request, so a rider sees their own new signup at once
+    however old the shared index is.
+
+    Args:
+        viewer_id: The signed-in reader.
+
+    Returns:
+        The index to render for them.
+
+    """
+    shared = shared_roster_index()
+    if viewer_id is None:
+        return shared
+    for position, row in enumerate(shared.rows):
+        if row.account is None or row.account.user_id != viewer_id:
+            continue
+        own = event_chips([viewer_id], viewer_id=viewer_id).get(viewer_id, ())
+        if own == row.account.events:
+            return shared
+        rows = list(shared.rows)
+        rows[position] = replace(row, account=replace(row.account, events=own))
+        return replace(shared, rows=tuple(rows))
+    return shared

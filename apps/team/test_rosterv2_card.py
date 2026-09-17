@@ -204,7 +204,8 @@ def test_one_page_of_riders_needs_no_paging_controls(auth_client, roster_rider):
 
     body = auth_client.get(reverse("team:roster")).content.decode()
 
-    assert "Roster pages" not in body
+    assert 'id="roster-more"' not in body
+    assert ">Show more riders</a>" not in body
 
 
 @pytest.mark.django_db
@@ -218,8 +219,12 @@ def test_a_long_roster_is_paged_rather_than_sent_whole(auth_client, roster_rider
 
     assert first.count('class="card bg-base-100') == ROSTER_PAGE_SIZE
     assert second.count('class="card bg-base-100') == 5
-    assert "Page 1 of 2" in first
-    assert "Page 2 of 2" in second
+    # The first page offers the rest; the last page, opened on its own, says where it is.
+    assert ">Show more riders</a>" in first
+    assert f"{ROSTER_PAGE_SIZE} of {ROSTER_PAGE_SIZE + 5} shown" in first
+    assert ">Show more riders</a>" not in second
+    assert f"Showing {ROSTER_PAGE_SIZE + 1}&ndash;{ROSTER_PAGE_SIZE + 5} of {ROSTER_PAGE_SIZE + 5}" in second
+    assert "Start from the first" in second
     # The header counts the whole roster, not the page.
     assert f"{ROSTER_PAGE_SIZE + 5} riders" in first
 

@@ -1,0 +1,120 @@
+{% load humanize %}
+{% comment %}
+  Everything a search or filter changes, as one region: a live search swaps it whole
+  (hx-target="#roster-results" in rosterv2.html) and the full page includes it, so the two
+  cannot drift. The count line is plain text here; screen readers hear it from
+  #roster-announcer, which lives outside this region so that it survives the swap -- a live
+  region that is itself replaced is not reliably announced.
+{% endcomment %}
+<div id="roster-results">
+  {% if chips %}
+    <ul class="mt-3 flex flex-wrap items-center gap-2 list-none p-0">
+      {% for chip in chips %}
+        <li>
+          <a class="badge badge-neutral gap-1 h-auto py-1"
+             href="?{{ chip.without }}"
+             aria-label="Remove the {{ chip.label }} filter, {{ chip.value }}">
+            {{ chip.label }}: {{ chip.value }} <span aria-hidden="true">&times;</span>
+          </a>
+        </li>
+      {% endfor %}
+      <li><a class="link text-sm" href="{% url 'team:roster' %}">Clear all</a></li>
+    </ul>
+  {% endif %}
+
+  {% if filters.link %}
+    {% comment %}
+      Three populations, three explanations, and they deliberately never share a
+      sentence. The first two name something the reader can go and ask someone to do.
+      The third names US as the actor throughout, because a rider on that list has
+      already done everything asked of them -- it is our profile cache that is behind,
+      and wording it as a chase would blame them for our gap.
+    {% endcomment %}
+    {% if filters.link == "no_account" %}
+      <h2 class="mt-4 text-lg font-semibold">In the Discord, no account here</h2>
+      <p class="mt-1 text-sm text-base-content/70 max-w-prose">
+        {{ link_total }} {{ link_noun }} {{ link_total|pluralize:"is,are" }} in the Discord
+        server and {{ link_total|pluralize:"has,have" }} never signed in here, so we hold
+        nothing for them &mdash; no Zwift ID, no stats, no card. One Discord sign-in is all
+        it takes.
+      </p>
+    {% elif filters.link == "no_zwid" %}
+      <h2 class="mt-4 text-lg font-semibold">Signed in, no Zwift ID</h2>
+      <p class="mt-1 text-sm text-base-content/70 max-w-prose">
+        {{ link_total }} {{ link_noun }} {{ link_total|pluralize:"has,have" }} an account
+        here but {{ link_total|pluralize:"has,have" }} not connected Zwift, so there is no
+        Zwift ID to hang their results on. They can connect it from their profile.
+      </p>
+    {% else %}
+      <h2 class="mt-4 text-lg font-semibold">We have no stats for these riders</h2>
+      <p class="mt-1 text-sm text-base-content/70 max-w-prose">
+        {{ link_total }} {{ link_noun }} {{ link_total|pluralize:"has,have" }} an account
+        here and a Zwift ID, and we hold no profile data for them, so they have no card.
+        This one is ours, not theirs: there is nothing on this list for a rider to fix.
+        {% if last_profile_sync %}
+          We last completed a profile sync {{ last_profile_sync|timesince }} ago.
+        {% else %}
+          We have never completed a profile sync, so nobody on this list has been asked
+          for yet.
+        {% endif %}
+      </p>
+    {% endif %}
+
+    <p class="mt-2 text-sm text-base-content/70">
+      {% if query %}
+        Showing {{ match_count }} of {{ link_total }} {{ link_noun }}
+      {% endif %}
+    </p>
+
+    {% if page_obj.object_list %}
+      {% include "team/partials/_roster_page_position.html" %}
+      <ul id="roster-list" class="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 list-none p-0">
+        {% for row in page_obj.object_list %}
+          {% include "team/partials/_link_row.html" with row=row %}
+        {% endfor %}
+      </ul>
+      {% include "team/partials/_roster_more_button.html" %}
+    {% else %}
+      <p class="mt-6 text-center text-base-content/70">
+        {% if query %}
+          Nobody here matches.
+          <a class="link" href="?link={{ filters.link }}">Clear the search</a>.
+        {% elif filters.link == "no_account" %}
+          Everyone in the Discord has an account here.
+        {% elif filters.link == "no_zwid" %}
+          Every member has connected a Zwift ID.
+        {% else %}
+          Every rider with an account here has stats. Nothing to chase.
+        {% endif %}
+      </p>
+    {% endif %}
+  {% else %}
+    <p class="mt-2 text-sm text-base-content/70">
+      {% if query or filters.active %}
+        Showing {{ match_count }} of {{ rider_count }} rider{{ rider_count|pluralize }}
+      {% endif %}
+    </p>
+
+    {% if page_obj.object_list %}
+      {% include "team/partials/_roster_page_position.html" %}
+      <ul id="roster-list" class="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 list-none p-0">
+        {% for row in page_obj.object_list %}
+          {% include "team/partials/_rider_card.html" with row=row %}
+        {% endfor %}
+      </ul>
+      {% include "team/partials/_roster_more_button.html" %}
+    {% else %}
+      <p class="mt-6 text-center text-base-content/70">
+        {% if query or filters.active %}
+          No riders match. <a class="link" href="{% url 'team:roster' %}">Clear the search and filters</a>.
+        {% else %}
+          No riders yet. Rider stats arrive with the profile sync.
+        {% endif %}
+      </p>
+    {% endif %}
+  {% endif %}
+</div>
+{% if part == "results" %}
+  {# A live search's answer, read out: the count, or that nothing matched. #}
+  <p id="roster-announcer" hx-swap-oob="innerHTML">{% if filters.link %}{% if page_obj.object_list %}Showing {{ match_count }} of {{ link_total }} {{ link_noun }}.{% else %}Nobody here matches.{% endif %}{% elif not query and not filters.active %}All {{ rider_count|intcomma }} rider{{ rider_count|pluralize }}.{% elif page_obj.object_list %}Showing {{ match_count|intcomma }} of {{ rider_count|intcomma }} rider{{ rider_count|pluralize }}.{% else %}No riders match.{% endif %}</p>
+{% endif %}

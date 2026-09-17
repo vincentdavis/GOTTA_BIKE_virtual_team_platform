@@ -1,0 +1,12 @@
+{% load humanize %}
+{% comment %}
+  Only for a page opened on its own -- a shared link, or "Show more riders" followed with
+  JavaScript off -- which shows just its own riders, so the reader is told where they are and
+  given the way back to the top.
+{% endcomment %}
+{% if page_obj.number > 1 and not appending %}
+  <p class="mt-4 text-sm text-base-content/70">
+    Showing {{ page_obj.start_index|intcomma }}&ndash;{{ page_obj.end_index|intcomma }} of {{ page_obj.paginator.count|intcomma }}.
+    <a class="link" href="?{{ page_query }}">Start from the first</a>
+  </p>
+{% endif %}
