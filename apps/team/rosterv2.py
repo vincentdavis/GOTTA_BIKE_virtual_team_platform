@@ -59,7 +59,8 @@ from apps.rider_data.services import zwids_to_refresh
 from apps.team.kits import current_kit
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    from collections.abc import Sequence
+    from datetime import date, datetime
 
 # Columns read from the cache. THIS TUPLE IS THE ALLOW-LIST -- see the module docstring.
 # Deliberately absent, and not to be added without deciding the privacy question again:
@@ -659,7 +660,117 @@ def _haystack(
     return tuple(pairs)
 
 
-def search(rows: tuple[RosterRow, ...], query: str) -> list[RosterRow]:
+@dataclass(frozen=True, slots=True)
+class SquadMatch:
+    """A squad, in a visible event running today, whose name matched a roster search.
+
+    Squad membership of a visible event is already on that event's page for every team
+    member, so finding riders by it tells the searcher nothing the site did not.
+
+    Attributes:
+        squad_id: The squad.
+        name: The squad's name.
+        event_title: The event it belongs to.
+        event_url: That event's page.
+        user_ids: Accounts that are full members -- not pending, not rejected.
+
+    """
+
+    squad_id: int
+    name: str
+    event_title: str
+    event_url: str
+    user_ids: frozenset[int] = frozenset()
+
+    @property
+    def label(self) -> str:
+        """Say, on a card, which squad found the rider.
+
+        Returns:
+            E.g. "squad Alpha, Tour de Coalition".
+
+        """
+        return f"squad {self.name}, {self.event_title}"
+
+
+def matching_squads(query: str, *, today: date | None = None) -> list[SquadMatch]:
+    """Find the squads whose name contains the query, in visible events running today.
+
+    Running means today falls within the event's dates, both ends included. Hidden events
+    never match (an organiser has the event's own page). Looked up fresh on every search,
+    not kept in the shared index: captains change squads all the time. Two queries however
+    many squads or members: the running events' squads, then the members of those matching.
+
+    Args:
+        query: Raw text from the search box.
+        today: The date to judge "running" by; the current date when omitted.
+
+    Returns:
+        One entry per matching squad, soonest-starting event first, then by squad name.
+
+    """
+    from apps.events.models import Squad, SquadMember
+
+    folded = fold(query)
+    if not folded:
+        return []
+    today = today or timezone.localdate()
+    running = (
+        Squad.objects
+        .filter(event__visible=True, event__start_date__lte=today, event__end_date__gte=today)
+        .order_by("event__start_date", "event__title", "name", "pk")
+        .values_list("pk", "name", "event_id", "event__title")
+    )
+    matched = [row for row in running if folded in fold(row[1])]
+    if not matched:
+        return []
+
+    members: dict[int, set[int]] = {}
+    for squad_id, user_id in SquadMember.objects.filter(
+        squad_id__in=[squad_id for squad_id, *_ in matched], status=SquadMember.Status.MEMBER
+    ).values_list("squad_id", "user_id"):
+        members.setdefault(squad_id, set()).add(user_id)
+    return [
+        SquadMatch(
+            squad_id=squad_id,
+            name=name,
+            event_title=event_title,
+            event_url=reverse("events:event_detail", args=[event_id]),
+            user_ids=frozenset(members.get(squad_id, ())),
+        )
+        for squad_id, name, event_id, event_title in matched
+    ]
+
+
+def squad_summaries(squads: Sequence[SquadMatch], rows: tuple[RosterRow, ...]) -> list[dict]:
+    """Describe each matching squad for the line above the cards.
+
+    Members who have no card -- no Zwift ID connected, or no stats cached yet -- cannot be
+    shown, so the count of those who can is given beside the member count whenever the two
+    differ; otherwise a squad of six that shows four cards looks like a broken search.
+
+    Args:
+        squads: The squads the query matched.
+        rows: The whole roster.
+
+    Returns:
+        ``name``, ``event_title``, ``event_url``, ``members`` and ``on_roster`` per squad.
+
+    """
+    with_cards = {row.account.user_id for row in rows if row.account is not None}
+    return [
+        {
+            "name": squad.name,
+            "event_title": squad.event_title,
+            "event_url": squad.event_url,
+            "members": len(squad.user_ids),
+            "on_roster": len(squad.user_ids & with_cards),
+        }
+        for squad in squads
+    ]
+
+
+def search(rows: tuple[RosterRow, ...], query: str, squads: Sequence[SquadMatch] = ()) -> list[RosterRow]:
     """Narrow the roster to the riders matching a typed query.
 
     A run of digits is matched against the zwid EXACTLY, and OR-ed with the name search
@@ -668,19 +779,28 @@ def search(rows: tuple[RosterRow, ...], query: str) -> list[RosterRow]:
     an exact match can only confirm a number the searcher already holds. The OR matters the
     other way too: 110 names contain digits, so "202" has to keep finding "Team 202".
 
+    Squad membership is OR-ed in the same way: ``squads`` (from ``matching_squads``) adds
+    their members, and a rider found only that way says which squad found them.
+
     Args:
         rows: The whole roster.
         query: Raw text from the search box.
+        squads: Squads whose name matched the query.
 
     Returns:
         The matching rows, each carrying ``matched_as`` when the hit was on a name the card
-        does not show.
+        does not show, or on a squad.
 
     """
     folded = fold(query)
     wanted_zwid = as_zwid(query)
     if not folded and wanted_zwid is None:
         return list(rows)
+
+    in_squads: dict[int, list[str]] = {}
+    for squad in squads:
+        for user_id in squad.user_ids:
+            in_squads.setdefault(user_id, []).append(squad.label)
 
     hits: list[RosterRow] = []
     for row in rows:
@@ -690,11 +810,12 @@ def search(rows: tuple[RosterRow, ...], query: str) -> list[RosterRow]:
         if not folded:
             continue
         matched = next((written for name, written in row._search if folded in name), None)
-        if matched is None:
-            continue
-        # The first haystack entry is the card's own name, so "matched:" only appears when
-        # the rider was found by something the card does not show.
-        hits.append(row if matched == row.card.name else replace(row, matched_as=matched))
+        if matched is not None:
+            # The first haystack entry is the card's own name, so "matched:" only appears
+            # when the rider was found by something the card does not show.
+            hits.append(row if matched == row.card.name else replace(row, matched_as=matched))
+        elif row.account is not None and row.account.user_id in in_squads:
+            hits.append(replace(row, matched_as="; ".join(in_squads[row.account.user_id])))
     return hits
 
 

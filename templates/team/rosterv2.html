@@ -66,14 +66,14 @@
             {% for name, value in kept_params %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
             <input type="search" id="roster-search" name="q" value="{{ query }}"
                    class="input input-bordered w-full"
-                   placeholder="Any name, or a Zwift ID"
+                   placeholder="A name, a squad, or a Zwift ID"
                    autocomplete="off"
                    aria-describedby="roster-search-help">
           </div>
           <button type="submit" class="btn btn-primary">Search</button>
           <span id="roster-searching" class="htmx-indicator loading loading-spinner loading-sm self-center" aria-hidden="true"></span>
           <p id="roster-search-help" class="basis-full text-xs text-base-content/70">
-            Results update as you type. A Zwift ID matches only in full.
+            Results update as you type. Squad names find squads in events running now; a Zwift ID matches only in full.
           </p>
         </form>
         {# Read out after each search or "Show more"; lives outside #roster-results so it survives the swap. #}

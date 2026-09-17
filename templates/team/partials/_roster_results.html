@@ -89,6 +89,27 @@
       </p>
     {% endif %}
   {% else %}
+    {% if squad_matches %}
+      {% comment %}
+        Which squads the query matched, so a search for a squad reads as one: the event it is
+        in, and how many of its members have a card here -- one with no Zwift ID connected
+        or no stats yet cannot be shown, and a squad of six showing four cards would
+        otherwise look like a broken search.
+      {% endcomment %}
+      <div class="mt-3 text-sm">
+        {# Named by its label rather than a heading: the cards below are not part of it. #}
+        <p id="roster-squads-label" class="font-semibold">Squads in events running now</p>
+        <ul class="mt-1 list-disc pl-5 space-y-0.5" aria-labelledby="roster-squads-label">
+          {% for squad in squad_matches %}
+            <li>
+              <span class="font-medium">{{ squad.name }}</span>,
+              <a class="link" href="{{ squad.event_url }}">{{ squad.event_title }}</a>:
+              {{ squad.members }} member{{ squad.members|pluralize }}{% if squad.on_roster != squad.members %}, {{ squad.on_roster }} with a card here{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endif %}
     <p class="mt-2 text-sm text-base-content/70">
       {% if query or filters.active %}
         Showing {{ match_count }} of {{ rider_count }} rider{{ rider_count|pluralize }}
@@ -116,5 +137,5 @@
 </div>
 {% if part == "results" %}
   {# A live search's answer, read out: the count, or that nothing matched. #}
-  <p id="roster-announcer" hx-swap-oob="innerHTML">{% if filters.link %}{% if page_obj.object_list %}Showing {{ match_count }} of {{ link_total }} {{ link_noun }}.{% else %}Nobody here matches.{% endif %}{% elif not query and not filters.active %}All {{ rider_count|intcomma }} rider{{ rider_count|pluralize }}.{% elif page_obj.object_list %}Showing {{ match_count|intcomma }} of {{ rider_count|intcomma }} rider{{ rider_count|pluralize }}.{% else %}No riders match.{% endif %}</p>
+  <p id="roster-announcer" hx-swap-oob="innerHTML">{% if filters.link %}{% if page_obj.object_list %}Showing {{ match_count }} of {{ link_total }} {{ link_noun }}.{% else %}Nobody here matches.{% endif %}{% elif not query and not filters.active %}All {{ rider_count|intcomma }} rider{{ rider_count|pluralize }}.{% elif page_obj.object_list %}Showing {{ match_count|intcomma }} of {{ rider_count|intcomma }} rider{{ rider_count|pluralize }}.{% else %}No riders match.{% endif %}{% if squad_matches %} {{ squad_matches|length }} squad{{ squad_matches|length|pluralize }} matched.{% endif %}</p>
 {% endif %}

@@ -44,11 +44,13 @@ from apps.team.rosterv2 import (
     apply_filters,
     build_link_rows,
     filter_options,
+    matching_squads,
     parse_filters,
     roster_index_for,
     search_link_rows,
     sort_link_rows,
     sort_rows,
+    squad_summaries,
 )
 from apps.team.rosterv2 import search as roster_search
 from apps.team.services import (
@@ -651,13 +653,16 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
 
     sort = DEFAULT_SORT
     link_total = 0
+    squads = []
     if filters.link:
         link_rows = build_link_rows(filters.link)
         link_total = len(link_rows)
         rows = search_link_rows(link_rows, query) if query else link_rows
         rows = sort_link_rows(rows, direction)
     else:
-        rows = roster_search(roster.rows, query) if query else list(roster.rows)
+        # Squad names only find riders on the cards: a not-linked worklist is about accounts.
+        squads = matching_squads(query) if query else []
+        rows = roster_search(roster.rows, query, squads) if query else list(roster.rows)
         rows = apply_filters(rows, filters)
         sort = request.GET.get("sort", "") if request.GET.get("sort", "") in SORTS else DEFAULT_SORT
         rows = sort_rows(rows, sort, direction)
@@ -682,7 +687,12 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
     if part:
         # A live search sends one of these per pause in typing, so they stay at debug.
         logfire.debug(
-            "Roster results updated", user_id=request.user.pk, part=part, matched=len(rows), page=page_obj.number
+            "Roster results updated",
+            user_id=request.user.pk,
+            part=part,
+            matched=len(rows),
+            squads_matched=len(squads),
+            page=page_obj.number,
         )
     else:
         logfire.info(
@@ -690,6 +700,7 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
             user_id=request.user.pk,
             riders=roster.rider_count,
             matched=len(rows),
+            squads_matched=len(squads),
             # A roster that is thin because the stats cache is behind looks, from the outside,
             # exactly like a team that shrank. The number says which.
             unstatted=roster.unstatted_count,
@@ -735,6 +746,7 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
             # Paging has to carry every control, or page 2 of a filtered search silently
             # becomes page 2 of everyone.
             "page_query": _query_without(request, "page"),
+            "squad_matches": squad_summaries(squads, roster.rows) if part != "more" else [],
             # A live search keeps the filters in force, so the search form carries them.
             "kept_params": [
                 (name, value)
