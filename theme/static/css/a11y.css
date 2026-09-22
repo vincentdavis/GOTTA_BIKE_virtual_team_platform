@@ -120,3 +120,21 @@
 .tooltip:not(.tooltip-open):not(:hover):not(:has(:focus-visible)) > .tooltip-content {
   display: none;
 }
+
+/*
+ * Keep an unselected tab's label readable.
+ * ---------------------------------------
+ * daisyUI dims a tab that is not `.tab-active` to 50% of `--color-base-content`. Measured on
+ * the event page's tab strip, that is 3.33:1 in the light theme -- under the 4.5:1 a label
+ * needs (WCAG 1.4.3). Dark happens to pass at 4.91:1, but the same rule is used in both.
+ *
+ * 70% restores the margin (6.38:1 light, 8.26:1 dark) while keeping the selected tab clearly
+ * ahead: it stays at full strength, 16.68:1 light and 15.62:1 dark. `color` rather than
+ * `opacity`, so the count badges inside the tabs keep their own colours.
+ *
+ * Selection is never carried by this dimming alone: `.tab-active` also changes the tab's
+ * background (`tabs-box`), and every tab bar sets `aria-selected`.
+ */
+.tabs .tab:not(.tab-active):not(.tab-disabled):not([disabled]) {
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+}

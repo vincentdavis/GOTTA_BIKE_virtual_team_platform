@@ -72,3 +72,17 @@ def test_hidden_tooltips_are_out_of_the_layout():
     selectors = [s.strip() for s in block.group(1).split(",")]
     hidden = ".tooltip:not(.tooltip-open):not(:hover):not(:has(:focus-visible))"
     assert selectors == [f"{hidden}[data-tip]::before", f"{hidden}::after", f"{hidden} > .tooltip-content"]
+
+
+def test_unselected_tabs_are_readable():
+    """DaisyUI dims a tab that is not selected to 50% of base-content: 3.33:1 in light.
+
+    Set with `color` rather than `opacity`, so the count badges some tab bars carry keep
+    their own colours instead of fading with the label.
+    """
+    css = _CSS.read_text()
+    rule = re.search(r"\.tabs \.tab:not\(\.tab-active\)[^{]*\{([^}]*)\}", css)
+    assert rule, "the unselected-tab colour rule is gone"
+    body = rule.group(1)
+    assert "--color-base-content" in body
+    assert "opacity" not in body, "opacity would fade the badges inside the tab too"
