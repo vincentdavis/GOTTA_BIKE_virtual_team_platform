@@ -1316,7 +1316,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         event.squads.prefetch_related("captains", "vice_captains").annotate(member_count=Count("squad_members")).all()
     )
     signups = event.signups.select_related("user").all()
-    # One aggregate rather than three .count() round trips, and it replaces the separate
+    # One aggregate rather than a .count() round trip, and it replaces the separate
     # signups.count() the template's badge used to trigger.
     # Registered only. Withdrawing flips the status instead of deleting the row, so an
     # unfiltered count reports riders who have pulled out as though they were still in. The
@@ -1324,11 +1324,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     # table below still lists withdrawn riders, marked, because who pulled out is worth
     # seeing -- it is the number that should not include them.
     registered = Q(status=EventSignup.Status.REGISTERED)
-    signup_totals = signups.aggregate(
-        total=Count("pk", filter=registered),
-        male=Count("pk", filter=registered & Q(user__gender=User.Gender.MALE)),
-        female=Count("pk", filter=registered & Q(user__gender=User.Gender.FEMALE)),
-    )
+    signup_totals = signups.aggregate(total=Count("pk", filter=registered))
     user_signup = event.signups.filter(user=request.user).first()
     # What would stop this rider signing up, with where to fix each -- shown in the signup dialog
     # instead of the form. Only asked while signups are open and they are not already on the event.
@@ -1443,8 +1439,6 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "event_squad_tags": event_squad_tags,
             "signups": enriched_signups,
             "signup_count": signup_totals["total"],
-            "signup_male_count": signup_totals["male"],
-            "signup_female_count": signup_totals["female"],
             "user_signup": user_signup,
             "signup_blockers": signup_blocker_details,
             "signup_questions": signup_questions,

@@ -1,9 +1,10 @@
-"""The summary counts under the event description, and where Add members lives.
+"""The signup button and count badge, withdrawn riders, and where Add members lives.
 
-The counts come from one aggregate rather than three round trips, and they follow the same
-gate as the signup table: aggregate rather than personal, but there is no reason to show
-figures summarising a list the viewer cannot open. The squad count is ungated, because the
-squads themselves are listed further down the page for everyone.
+The counts row that used to sit under the signup button (signups / male / female / squads)
+was removed: the tab badges already carry the signup and squad numbers, and the squads and
+riders themselves are listed in full further down the page. What survives it is the rule
+those figures were written for -- the signup count is registered-only, so a rider who
+withdrew is not counted, while their row stays in the table, marked.
 """
 
 import re
@@ -58,69 +59,20 @@ def _rider(user_model, name: str, gender: str):
     )
 
 
-def _counts(body: str) -> dict[str, int]:
-    """Pull the number/label pairs out of the summary lists.
+def _badge_count(body: str) -> int:
+    """Read the registered-signup count off the badge beside the Signups heading.
 
     Args:
         body: The rendered page.
 
     Returns:
-        Mapping of label to count.
+        The number the badge shows; fails the test when the page carries no badge.
 
     """
-    # One list, under the signup button. Written as a loop so it still works if the counts
-    # are ever split across more than one list again.
-    counts = {}
-    for block in re.findall(r"<dl[^>]*>(.*?)</dl>", body, re.S):
-        for n, label in re.findall(r'<dd[^>]*>\s*(\d+)\s*</dd>\s*<dt[^>]*>\s*([a-z]+)\s*</dt>', block):
-            counts[label] = int(n)
-    return counts
-
-
-@pytest.mark.django_db
-def test_counts_reflect_signups_and_squads(client, event, team_member, user_model):
-    Squad.objects.create(event=event, name="A")
-    Squad.objects.create(event=event, name="B")
-    for name, gender in [("m1", "male"), ("m2", "male"), ("f1", "female"), ("x1", "other")]:
-        EventSignup.objects.create(event=event, user=_rider(user_model, name, gender))
-    client.force_login(team_member)
-
-    counts = _counts(client.get(reverse("events:event_detail", args=[event.pk])).content.decode())
-
-    assert counts["signups"] == 4
-    assert counts["male"] == 2
-    assert counts["female"] == 1  # "other" is counted in the total but has no column
-    assert counts["squads"] == 2
-
-
-@pytest.mark.django_db
-def test_singular_labels(client, event, team_member, user_model):
-    Squad.objects.create(event=event, name="A")
-    EventSignup.objects.create(event=event, user=_rider(user_model, "m1", "male"))
-    client.force_login(team_member)
-
-    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
-
-    assert "signup<" in body.replace("</dt>", "<")
-    assert _counts(body) == {"signup": 1, "male": 1, "female": 0, "squad": 1}
-
-
-@pytest.mark.django_db
-def test_counts_show_even_when_the_signup_list_is_hidden(client, event, team_member, user_model):
-    """The figures are aggregate, so they do not follow show_signups.
-
-    A member on an event with the list hidden still sees the totals; what they cannot do is
-    expand the list to see who those signups are.
-    """
-    event.show_signups = False
-    event.save(update_fields=["show_signups"])
-    Squad.objects.create(event=event, name="A")
-    EventSignup.objects.create(event=event, user=_rider(user_model, "m1", "male"))
-    client.force_login(team_member)
-
-    counts = _counts(client.get(reverse("events:event_detail", args=[event.pk])).content.decode())
-
-    assert counts == {"signup": 1, "male": 1, "female": 0, "squad": 1}
+    match = re.search(r'id="signup-count-badge"[^>]*>\s*(\d+)\s*<', body)
+    if match is None:
+        pytest.fail("the page has no signup-count badge")
+    return int(match.group(1))
 
 
 @pytest.mark.django_db
@@ -152,11 +104,9 @@ def test_withdrawn_riders_are_left_out_of_the_counts(client, event, superuser, u
     )
     client.force_login(superuser)
 
-    counts = _counts(client.get(reverse("events:event_detail", args=[event.pk])).content.decode())
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
 
-    assert counts["signups"] == 2
-    assert counts["male"] == 1  # the withdrawn rider is male and must not be counted
-    assert counts["female"] == 1
+    assert _badge_count(body) == 2, "the withdrawn rider must not be counted"
 
 
 @pytest.mark.django_db
@@ -207,7 +157,7 @@ def test_table_stays_reachable_when_everyone_withdrew(client, event, superuser, 
 
     body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
 
-    assert _counts(body)["signups"] == 0
+    assert _badge_count(body) == 0
     assert 'id="signups-toggle"' in body or "signups-content" in body
     assert ">Withdrawn</span>" in body
 
@@ -271,8 +221,12 @@ def test_closed_signups_say_so_without_a_button(client, event, team_member):
 
 
 @pytest.mark.django_db
-def test_signup_figures_sit_with_the_signup_button(client, event, team_member, user_model):
-    """All four counts sit together directly under the signup button."""
+def test_no_counts_row_under_the_signup_button(client, event, team_member, user_model):
+    """The signups / male / female / squads row was removed; the tab badges carry the numbers.
+
+    Asserted by its labels rather than by the markup, so it stays true however such a row
+    would be built if anyone added one back.
+    """
     event.signups_open = True
     event.save(update_fields=["signups_open"])
     Squad.objects.create(event=event, name="A")
@@ -281,7 +235,8 @@ def test_signup_figures_sit_with_the_signup_button(client, event, team_member, u
 
     body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
 
-    button = body.index("Sign up for this event")
-    for label in (">signup</dt>", ">male</dt>", ">female</dt>", ">squad</dt>"):
-        assert button < body.index(label), f"{label} should sit below the signup button"
-    assert body.index(">squad</dt>") < body.index(">Signups</h3>")
+    for label in (">signup</dt>", ">signups</dt>", ">male</dt>", ">female</dt>", ">squad</dt>", ">squads</dt>"):
+        assert label not in body, f"{label} belongs to the removed counts row"
+    # The counts a reader still gets, on the tabs.
+    assert re.search(r">Squads\s*<span[^>]*>\s*1\s*</span>", body)
+    assert re.search(r">Signups\s*<span[^>]*>\s*1\s*</span>", body)
