@@ -1,0 +1,12 @@
+{% comment %}
+A squad's tags (Squad.tags, a subset of Event.squad_tags) as plain badges, in a list.
+Expects `tags`. Pass `labelled=True` where nothing else names them (a card header): the list
+is then named "Tags", and being a list it also tells a screen reader where the tags end, so
+a badge after it (the squad gender) is not heard as one more tag. Renders nothing when there
+are none. role="list" because Tailwind's reset removes list styling, and Safari then drops
+the list semantics. A long tag wraps inside its badge rather than pushing the card sideways
+(40 characters at the largest text size is wider than a phone); inside a scrolling table,
+give the cell whitespace-nowrap so each tag keeps to one line instead.
+Tags are admin-authored text: auto-escaped here, never |safe, never markdown.
+{% endcomment %}
+{% if tags %}<ul role="list" class="flex flex-wrap items-center gap-1 min-w-0 max-w-full"{% if labelled %} aria-label="Tags"{% endif %}>{% for tag in tags %}<li class="badge badge-sm h-auto min-h-[var(--size)] py-0.5 max-w-full text-left wrap-anywhere">{{ tag }}</li>{% if not forloop.last %} {% endif %}{% endfor %}</ul>{% endif %}

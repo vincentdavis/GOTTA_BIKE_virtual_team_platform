@@ -8,6 +8,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from apps.events.squad_tags import tags_in_event
+
 ZR_CATEGORY_ORDER = [
     "Diamond",
     "Ruby",
@@ -67,6 +69,9 @@ class Event(models.Model):
         end_date: Event end date.
         visible: Whether the event is visible to team members.
         head_captain_role_id: Discord role ID for the head captain of this event.
+        squad_tags: Labels a squad in this event may carry (list of strings). The only
+            source of squad tags: saving the event prunes every squad's ``tags`` to it
+            (``apps.events.squad_tags.prune_squad_tags``).
         url: External URL for event details or signup.
         discord_channel_id: Discord channel ID for event coordination.
         created_at: When the record was created.
@@ -240,6 +245,14 @@ class Event(models.Model):
         default=list,
         blank=True,
         help_text="List of Discord role IDs (strings) a squad's Captain Discord Role may be chosen from",
+    )
+    squad_tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Labels a squad in this event can carry, e.g. Red, Blue, Tall, Short. "
+            "Removing a tag here removes it from every squad."
+        ),
     )
     created_at = models.DateTimeField(default=timezone.now, help_text="When the event was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the event was last updated")
@@ -601,6 +614,8 @@ class Squad(models.Model):
         region_role: Discord role auto-added to riders assigned to this squad
             and removed on leave, unless the rider still belongs to another
             squad carrying the same region role.
+        tags: The event's squad tags this squad carries (list of strings, a subset of
+            ``Event.squad_tags`` in the event's order and spelling).
         min_zwift_category: Minimum Zwift category letter.
         max_zwift_category: Maximum Zwift category letter.
         min_womens_zwift_category: Minimum women's Zwift category letter.
@@ -671,6 +686,11 @@ class Squad(models.Model):
         default=0,
         help_text="Discord role added to riders assigned to this squad and removed when they leave — "
         "unless they still belong to another squad with the same region role (0 = none)",
+    )
+    tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Tags from the event's squad tags that this squad carries",
     )
     min_zwift_category = models.CharField(
         max_length=20,
@@ -889,6 +909,27 @@ class Squad(models.Model):
         """Generate or regenerate the squad invite token, invalidating the old one."""
         self.invite_token = uuid.uuid4()
         self.save(update_fields=["invite_token"])
+
+    @property
+    def tag_list(self) -> list[str]:
+        """The squad's tags as its event lists them -- what every page that shows tags renders.
+
+        ``Event.squad_tags`` is the only source. Every UI write path already prunes ``tags``
+        to it, and this prunes again at render, so a write that bypassed them (a shell
+        ``update()``, a data migration, a fixture load) cannot leave one page showing a tag
+        another page has already dropped, in a spelling the event no longer uses.
+
+        It lives on the model rather than being annotated per view because four call sites
+        render the squad card and two more render tags of their own: an annotation would be
+        forgotten at one of them, exactly as the squad's Discord roles once were (see
+        ``apps.events.views._annotate_squad_role_names``). Reading it costs no query where
+        the squads came from ``event.squads`` (Django caches the event on each of them).
+
+        Returns:
+            The squad's tags the event still lists, in the event's spelling and order.
+
+        """
+        return tags_in_event(self.tags, self.event.squad_tags)
 
     @property
     def captain_pks(self) -> set[int]:

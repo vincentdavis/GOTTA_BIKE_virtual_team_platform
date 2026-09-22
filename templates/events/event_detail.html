@@ -7,6 +7,10 @@
 <style>
 .tooltip::before,.tooltip::after{transition-delay:0s!important;transition-duration:75ms!important}
 .squad-assign-ctrl{display:none}
+/* Squad tag filter: the pressed tag also shows a check mark, so its state never rests on the
+   fill alone (btn-neutral sits close to the card colour in the dark theme). The second
+   declaration hides the glyph from screen readers, which already hear "pressed". */
+#squad-tag-filter button[aria-pressed="true"]::before{content:"\2713";content:"\2713" / ""}
 @media(max-width:767px){
   [data-signup-table] [data-col="zwid"],
   [data-signup-table] [data-col="ftp"],
@@ -223,6 +227,9 @@
             <label tabindex="0" class="btn btn-outline btn-sm">Squad columns</label>
             <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-64 max-h-72 overflow-y-auto">
               <li class="menu-title text-xs">Columns on the squads table</li>
+              {% if event_squad_tags %}
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_tags"> Tags</label></li>
+              {% endif %}
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_members"> Members</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_tz"> Time zone</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_gender"> Squad Gender</label></li>
@@ -261,12 +268,28 @@
         </div>
       </div>
       {% if squads %}
+      {% if event_squad_tags %}
+      {# Single-select tag filter: one tag at a time, "All" (or the active tag again) clears it. #}
+      <div class="mb-3">
+        <div class="flex flex-wrap items-center gap-2" role="group" id="squad-tag-filter" aria-labelledby="squad-tag-filter-label">
+          <span id="squad-tag-filter-label" class="text-sm font-semibold">Filter squads by tag</span>
+          <button type="button" class="btn btn-xs btn-neutral" data-squad-tag-filter="" aria-pressed="true">All</button>
+          {% for tag in event_squad_tags %}
+          {# A long tag wraps inside its button (still at least btn-xs tall) instead of pushing the card sideways. #}
+          <button type="button" class="btn btn-xs btn-outline h-auto min-h-[var(--size)] py-0.5 max-w-full text-left wrap-anywhere" data-squad-tag-filter="{{ tag }}" aria-pressed="false">{{ tag }}</button>
+          {% endfor %}
+        </div>
+        {# Always in the page (empty when unfiltered) so screen readers pick up each change. #}
+        <p id="squad-tag-filter-status" role="status" class="text-sm mt-1"></p>
+      </div>
+      {% endif %}
       <div class="overflow-x-auto">
         <table class="table table-sm" id="squad-table">
           <thead>
             <tr>
               <th class="!px-0 !w-6"></th>
               <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+              {% if event_squad_tags %}<th data-scol="sqf_tags" data-sort="text" class="cursor-pointer hover:text-primary select-none">Tags</th>{% endif %}
               <th data-scol="sqf_members" data-sort="num" class="cursor-pointer hover:text-primary select-none">Members</th>
               <th data-scol="sqf_tz" data-sort="text" class="cursor-pointer hover:text-primary select-none">Time zone</th>
               <th data-scol="sqf_gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>
@@ -280,7 +303,7 @@
           </thead>
           <tbody>
             {% for squad in squads %}
-            <tr class="squad-row">
+            <tr class="squad-row"{% if event_squad_tags %} data-squad-tags="{{ squad.tags_json }}"{% endif %}>
               <td class="!px-0 !w-6">
                 <button aria-label="Show details for {{ squad.name }}" type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleSquadMembers({{ squad.pk }})" title="Show details">
                   <svg id="squad-arrow-{{ squad.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -289,6 +312,12 @@
                 </button>
               </td>
               <td class="font-semibold">{{ squad.name }}</td>
+              {% if event_squad_tags %}
+              {# nowrap: inside the scrolling table a tag keeps to one line rather than being squeezed letter by letter. #}
+              <td data-scol="sqf_tags" class="whitespace-nowrap">
+                {% if squad.tag_list %}{% include "events/_squad_tag_badges.html" with tags=squad.tag_list %}{% else %}<span class="text-base-content/70">-</span>{% endif %}
+              </td>
+              {% endif %}
               <td data-scol="sqf_members">
                 {% if squad.enriched_members %}
                 <div class="tooltip tooltip-right" data-tip="{{ squad.member_names_tooltip }}">
@@ -334,7 +363,8 @@
               <td data-scol="sqf_vice">{% for vc in squad.vice_captains.all %}{{ vc.get_full_name|default:vc.discord_username }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
             </tr>
             <tr id="squad-members-{{ squad.pk }}" style="display:none">
-              <td colspan="11" class="p-0">
+              {# Every squads-table column; the column toggler re-counts the visible ones on load. #}
+              <td colspan="{% if event_squad_tags %}12{% else %}11{% endif %}" class="p-0">
                 <div class="bg-base-300 rounded-lg mx-2 mb-2 p-2">
                   <div class="flex flex-wrap items-center gap-2 mb-2 relative">
                     {% if squad.discord_channel_id %}
@@ -1204,8 +1234,15 @@ function toggleSquadMembers(squadPk) {
   }
   syncSquadExpandAllLabel();
 }
+// Detail rows of the squads the tag filter is showing. A filtered-out squad's rows carry the
+// hidden attribute, so "Expand all" neither opens them nor counts them.
+function shownSquadDetailRows() {
+  return Array.from(document.querySelectorAll('tr[id^="squad-members-"]')).filter(function(row) {
+    return !row.hidden;
+  });
+}
 function toggleAllSquadMembers() {
-  var rows = Array.from(document.querySelectorAll('tr[id^="squad-members-"]'));
+  var rows = shownSquadDetailRows();
   if (!rows.length) return;
   // Collapse only when everything is already open, so a half-expanded table opens the
   // rest rather than throwing away what the user already opened.
@@ -1213,7 +1250,8 @@ function toggleAllSquadMembers() {
   rows.forEach(function(row) {
     var pk = row.id.replace('squad-members-', '');
     var isOpen = row.style.display !== 'none';
-    if (isOpen !== expand) return;
+    // Skip the rows already in the state we are moving to; toggle the rest.
+    if (isOpen === expand) return;
     toggleSquadMembers(pk);
   });
   syncSquadExpandAllLabel();
@@ -1222,7 +1260,7 @@ function toggleAllSquadMembers() {
 function syncSquadExpandAllLabel() {
   var button = document.getElementById('squad-expand-all');
   if (!button) return;
-  var rows = Array.from(document.querySelectorAll('tr[id^="squad-members-"]'));
+  var rows = shownSquadDetailRows();
   var allOpen = rows.length > 0 && rows.every(function(row) { return row.style.display !== 'none'; });
   button.textContent = allOpen ? 'Collapse all' : 'Expand all';
 }
@@ -1294,6 +1332,7 @@ function switchCategorySource(source) {
 (function() {
   var STORAGE_KEY = 'event_squad_field_cols';
   var DEFAULTS = {
+    sqf_tags: true,
     sqf_members: true, sqf_tz: true, sqf_gender: true, sqf_enforced: true,
     sqf_zwift_cat: true, sqf_womens_cat: true,
     sqf_zr_cat: false, sqf_captain: false, sqf_vice: false
@@ -1428,6 +1467,59 @@ function switchCategorySource(source) {
   });
   // Sort by Name A-Z on page load
   if (headers.length > 0) headers[0].click();
+})();
+
+// Squad tag filter (single-select). Only rendered when the event has squad tags. Each squad
+// row carries its tags as JSON in data-squad-tags; a squad's detail row is its next sibling,
+// which the sort above keeps true, and is hidden with it.
+(function() {
+  var group = document.getElementById('squad-tag-filter');
+  var table = document.getElementById('squad-table');
+  if (!group || !table) return;
+  var status = document.getElementById('squad-tag-filter-status');
+  var buttons = Array.from(group.querySelectorAll('button[data-squad-tag-filter]'));
+  var active = '';
+
+  function tagsOf(row) {
+    var tags = [];
+    try { tags = JSON.parse(row.getAttribute('data-squad-tags') || '[]'); } catch (e) { tags = []; }
+    if (!Array.isArray(tags)) return [];
+    return tags.map(function(tag) { return String(tag).toLowerCase(); });
+  }
+
+  function apply(tag) {
+    active = tag;
+    var key = tag.toLowerCase();
+    var rows = Array.from(table.querySelectorAll('tbody tr.squad-row'));
+    var shown = 0;
+    rows.forEach(function(row) {
+      var match = !key || tagsOf(row).indexOf(key) !== -1;
+      row.hidden = !match;
+      var detail = row.nextElementSibling;
+      if (detail && detail.id.indexOf('squad-members-') === 0) detail.hidden = !match;
+      if (match) shown += 1;
+    });
+    buttons.forEach(function(button) {
+      var pressed = button.getAttribute('data-squad-tag-filter') === tag;
+      button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      button.classList.toggle('btn-neutral', pressed);
+      button.classList.toggle('btn-outline', !pressed);
+    });
+    if (status) {
+      status.textContent = key
+        ? 'Showing ' + shown + ' of ' + rows.length + (rows.length === 1 ? ' squad' : ' squads')
+        : '';
+    }
+    syncSquadExpandAllLabel();
+  }
+
+  buttons.forEach(function(button) {
+    button.addEventListener('click', function() {
+      var tag = button.getAttribute('data-squad-tag-filter');
+      // Clicking the active tag again clears the filter, as "All" does.
+      apply(tag && tag !== active ? tag : '');
+    });
+  });
 })();
 
 // Category table sorting (both ZP and ZR tables)

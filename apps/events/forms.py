@@ -11,6 +11,13 @@ from django.contrib.auth import get_user_model
 from apps.events.grid_defaults import SETTINGS as GRID_DEFAULT_SETTINGS
 from apps.events.models import SQUAD_GENDER_CHOICES, Event, EventSignup, SignupQuestion, Squad
 from apps.events.signup_questions import MAX_OPTIONS_PER_QUESTION
+from apps.events.squad_tags import (
+    MAX_SQUAD_TAGS,
+    MAX_TAG_LENGTH,
+    clean_event_tags,
+    event_tag_spellings,
+    normalize_tags,
+)
 from apps.team.models import DiscordChannel, DiscordRole
 
 User = get_user_model()
@@ -180,6 +187,10 @@ class EventForm(forms.ModelForm):
         widget=forms.Select(attrs={"class": "select select-bordered w-full filter-select"}),
     )
 
+    # The squad-tag limits, for the template's maxlength and help text.
+    squad_tag_max_length = MAX_TAG_LENGTH
+    squad_tag_max_count = MAX_SQUAD_TAGS
+
     class Meta:
         """Meta options for EventForm."""
 
@@ -201,6 +212,7 @@ class EventForm(forms.ModelForm):
             "timezone_options",
             "timezone_required",
             "squad_gender_required",
+            "squad_tags",
             "require_complete_profile_signup",
             "require_race_verified_signup",
             "require_race_verified_availability",
@@ -260,6 +272,8 @@ class EventForm(forms.ModelForm):
                 },
             ),
             "timezone_options": forms.HiddenInput(),
+            # Edited through the chip input in event_form.html, which writes JSON here.
+            "squad_tags": forms.HiddenInput(),
             "timezone_required": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
             ),
@@ -291,10 +305,18 @@ class EventForm(forms.ModelForm):
                 attrs={"class": "checkbox"},
             ),
         }
+        labels: ClassVar[dict] = {"squad_tags": "Squad tags"}
+        error_messages: ClassVar[dict] = {
+            "squad_tags": {"invalid": "Squad tags could not be read. Reload the page and try again."},
+        }
 
     def __init__(self, *args, **kwargs) -> None:
         """Initialize form with Discord channel choices."""
         super().__init__(*args, **kwargs)
+        # The chip script reads its limits from here so it cannot drift from clean_squad_tags.
+        self.fields["squad_tags"].widget.attrs.update(
+            {"data-max-length": MAX_TAG_LENGTH, "data-max-tags": MAX_SQUAD_TAGS}
+        )
         choices = _get_channel_choices()
         all_values = self._flat_choice_values(choices)
 
@@ -403,6 +425,19 @@ class EventForm(forms.ModelForm):
             return int(value)
         except (ValueError, TypeError):
             return 0
+
+    def clean_squad_tags(self) -> list[str]:
+        """Type-check, normalise and bound the event's squad tags.
+
+        The JSON itself is parsed by the field (a bad payload fails there with the
+        ``invalid`` message above); this checks what it holds. The view prunes the squads
+        to the saved list afterwards.
+
+        Returns:
+            The normalised tags.
+
+        """
+        return clean_event_tags(self.cleaned_data.get("squad_tags"))
 
 
 def _allowed_event_prefixes() -> list[str]:
@@ -780,12 +815,21 @@ class SquadForm(forms.ModelForm):
         label="Gender",
     )
 
+    # Choices are the event's squad tags, set in __init__. The template renders one
+    # labelled checkbox per tag, so the attrs only ever land on the inputs.
+    tags = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-primary checkbox-sm"}),
+        label="Tags",
+    )
+
     class Meta:
         """Meta options for SquadForm."""
 
         model = Squad
         fields: ClassVar[list[str]] = [
             "name",
+            "tags",
             "squad_timezone",
             "gender",
             "discord_channel_id",
@@ -972,6 +1016,7 @@ class SquadForm(forms.ModelForm):
         coordinator_role_ids: list[str] | None = None,
         region_role_ids: list[str] | None = None,
         captain_role_ids: list[str] | None = None,
+        squad_tags: list[str] | None = None,
         event=None,
         **kwargs,
     ) -> None:
@@ -991,6 +1036,8 @@ class SquadForm(forms.ModelForm):
             captain_role_ids: The parent event's configured captain role IDs (Role Setup
                 page). The Captain Discord Role picker is limited to these; when empty,
                 that field is disabled.
+            squad_tags: The parent event's squad tags (``Event.squad_tags``). The Tags
+                picker offers exactly these; when empty, that field is disabled.
             **kwargs: Keyword arguments passed to ModelForm.
 
         """
@@ -1023,6 +1070,18 @@ class SquadForm(forms.ModelForm):
 
         # Squad gender is a fixed set (Male/Female/COED) and required when configuring a squad.
         self.fields["gender"].choices = [("", "Select gender"), *SQUAD_GENDER_CHOICES]
+
+        # Tags: the event's list is the only source. The choices are the gate -- a tampered
+        # POST naming any other tag fails MultipleChoiceField validation. A stored tag the
+        # event has since dropped is not offered back (saving the event prunes it anyway),
+        # and a case-only rename is shown in the event's spelling.
+        spellings = event_tag_spellings(squad_tags)
+        self.squad_tags = list(spellings.values())
+        self.fields["tags"].choices = [(tag, tag) for tag in self.squad_tags]
+        current_tags = {tag.casefold() for tag in normalize_tags(self.initial.get("tags"))}
+        self.initial["tags"] = [tag for key, tag in spellings.items() if key in current_tags]
+        if not self.squad_tags:
+            self.fields["tags"].disabled = True
 
         # Captains are chosen from the event's registered signups, not from the squad's
         # own members -- picking a leader is often the step that *brings* someone into a
@@ -1246,6 +1305,19 @@ class SquadForm(forms.ModelForm):
             names = ", ".join(sorted(u.get_full_name() or u.username for u in both))
             self.add_error("vice_captains", f"Already listed as captain: {names}")
         return cleaned
+
+    def clean_tags(self) -> list[str]:
+        """Return the picked tags in the event's order.
+
+        Only the event's tags can get this far: anything else was refused as an invalid
+        choice.
+
+        Returns:
+            The squad's tags, ordered as the event lists them.
+
+        """
+        picked = set(self.cleaned_data.get("tags") or [])
+        return [tag for tag in self.squad_tags if tag in picked]
 
     def clean_discord_channel_id(self) -> int:
         """Convert selected channel ID string back to int for the model.

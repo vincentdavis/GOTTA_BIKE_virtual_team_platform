@@ -311,6 +311,39 @@
           </label>
         </div>
 
+        <!-- ===== Squads ===== -->
+        <div class="divider"></div>
+        <h3 class="text-lg font-semibold">Squads</h3>
+
+        <!-- Squad tags (chip input). The event's list is the only source of squad tags:
+             the script below writes it to the hidden JSON input, and saving the event
+             prunes every squad's tags to it. -->
+        <div class="form-control w-full" id="squad-tags-field">
+          <label class="label" for="squad-tag-input">
+            <span class="label-text">{{ form.squad_tags.label }}</span>
+          </label>
+          {{ form.squad_tags }}
+          <ul id="squad-tag-chips" class="flex flex-wrap gap-2 mb-2 min-h-[2rem]" aria-label="Squad tags on this event"></ul>
+          <div class="join w-full">
+            <input type="text" id="squad-tag-input" class="input input-bordered join-item w-full"
+                   maxlength="{{ form.squad_tag_max_length }}" autocomplete="off"
+                   placeholder="e.g. Red, Blue, Tall, Short"
+                   aria-describedby="id_squad_tags_helptext{% if form.squad_tags.errors %} squad-tags-error{% endif %}">
+            <button type="button" id="squad-tag-add-btn" class="btn btn-primary join-item">Add</button>
+          </div>
+          <p id="squad-tag-status" role="status" class="text-sm mt-1"></p>
+          {% if form.squad_tags.errors %}
+          <p id="squad-tags-error" class="flex items-start gap-2 text-sm mt-1">
+            <span class="badge badge-error badge-sm shrink-0">Error</span>
+            <span>{{ form.squad_tags.errors.0 }}</span>
+          </p>
+          {% endif %}
+          <p id="id_squad_tags_helptext" class="label whitespace-normal">
+            {{ form.squad_tags.help_text }} Type a tag and press Enter or click Add; at most
+            {{ form.squad_tag_max_count }} tags of up to {{ form.squad_tag_max_length }} characters each.
+          </p>
+        </div>
+
         <!-- ===== Status ===== -->
         <div class="divider"></div>
         <h3 class="text-lg font-semibold">Status</h3>
@@ -755,6 +788,141 @@ document.querySelectorAll('[data-signup-table]').forEach(function(table) {
     });
   });
 });
+</script>
+<script>
+// Squad tags chip editor. Writes the list to the hidden JSON input; the server re-checks
+// everything (apps/events/squad_tags.py), this only mirrors its tidying so the admin sees
+// what will be saved. Case is kept as typed, unlike the timezone chips.
+(function() {
+  var hiddenInput = document.getElementById('id_squad_tags');
+  var chips = document.getElementById('squad-tag-chips');
+  var textInput = document.getElementById('squad-tag-input');
+  var addBtn = document.getElementById('squad-tag-add-btn');
+  var status = document.getElementById('squad-tag-status');
+  if (!hiddenInput || !chips || !textInput || !addBtn) return;
+  var maxLength = parseInt(hiddenInput.getAttribute('data-max-length'), 10) || 40;
+  var maxTags = parseInt(hiddenInput.getAttribute('data-max-tags'), 10) || 30;
+
+  var tags = [];
+  try {
+    if (hiddenInput.value) tags = JSON.parse(hiddenInput.value);
+  } catch (e) {
+    tags = [];
+  }
+  if (!Array.isArray(tags)) tags = [];
+  tags = tags.filter(function(tag) { return typeof tag === 'string'; });
+
+  function tidy(value) {
+    return value.replace(/\s+/g, ' ').trim();
+  }
+  function indexOfTag(tag) {
+    var key = tag.toLowerCase();
+    for (var i = 0; i < tags.length; i++) {
+      if (tags[i].toLowerCase() === key) return i;
+    }
+    return -1;
+  }
+  function say(message) {
+    if (status) status.textContent = message;
+  }
+  function sync() {
+    hiddenInput.value = JSON.stringify(tags);
+  }
+
+  function render(focusIndex) {
+    chips.innerHTML = '';
+    tags.forEach(function(tag, i) {
+      var chip = document.createElement('li');
+      // h-auto: a long tag wraps on a phone, and the chip has to grow with it.
+      chip.className = 'badge badge-lg gap-1 h-auto py-1 max-w-full';
+      var text = document.createElement('span');
+      text.className = 'break-words min-w-0';
+      text.textContent = tag;
+      chip.appendChild(text);
+      var removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn btn-ghost btn-xs btn-circle';
+      removeBtn.setAttribute('aria-label', 'Remove tag ' + tag);
+      removeBtn.innerHTML = '<span aria-hidden="true">&times;</span>';
+      removeBtn.addEventListener('click', function() {
+        tags.splice(i, 1);
+        sync();
+        // The pressed button is gone: move focus to the chip that took its place, the
+        // one before it, or the text box, so keyboard users are not dropped to <body>.
+        render(tags.length ? Math.min(i, tags.length - 1) : -1);
+        say('Removed tag ' + tag + '.');
+      });
+      chip.appendChild(removeBtn);
+      chips.appendChild(chip);
+    });
+    if (focusIndex === undefined) return;
+    var buttons = chips.querySelectorAll('button');
+    if (focusIndex >= 0 && buttons[focusIndex]) {
+      buttons[focusIndex].focus();
+    } else {
+      textInput.focus();
+    }
+  }
+
+  // Why a new tag cannot be added, or '' when it can. A duplicate is not a problem: it is
+  // already in the list.
+  function problemWith(tag) {
+    if (tag.length > maxLength) return 'A squad tag can be at most ' + maxLength + ' characters.';
+    if (indexOfTag(tag) === -1 && tags.length >= maxTags) {
+      return 'An event can have at most ' + maxTags + ' squad tags. Remove one first.';
+    }
+    return '';
+  }
+
+  // Adds what is typed in the box. Returns false when the text had to stay in the box
+  // because it cannot be added, true otherwise (added, already listed, or nothing typed).
+  function addTag() {
+    var tag = tidy(textInput.value);
+    if (!tag) return true;
+    var problem = problemWith(tag);
+    if (problem) {
+      say(problem);
+      return false;
+    }
+    if (indexOfTag(tag) !== -1) {
+      say(tags[indexOfTag(tag)] + ' is already in the list.');
+      textInput.value = '';
+      return true;
+    }
+    tags.push(tag);
+    sync();
+    render();
+    textInput.value = '';
+    textInput.focus();
+    say('Added tag ' + tag + '.');
+    return true;
+  }
+
+  addBtn.addEventListener('click', function() { addTag(); });
+  textInput.addEventListener('keydown', function(e) {
+    // Enter adds the tag instead of submitting the whole event form (but not while an
+    // input method is still composing a character).
+    if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      addTag();
+    }
+  });
+  // A tag typed but never added (Save pressed instead of Enter or Add) would otherwise be
+  // dropped behind "Event updated": add it as the event is saved, or stop the save and say
+  // why it cannot be added.
+  if (textInput.form) {
+    textInput.form.addEventListener('submit', function(e) {
+      var tag = tidy(textInput.value);
+      if (!tag || addTag()) return;
+      e.preventDefault();
+      say('The event was not saved. ' + problemWith(tag) + ' Or clear the Squad tags box to save without it.');
+      textInput.focus();
+    });
+  }
+
+  sync();
+  render();
+})();
 </script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>

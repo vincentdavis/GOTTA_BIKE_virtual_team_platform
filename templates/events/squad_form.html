@@ -36,6 +36,36 @@
           {% endif %}
         </div>
 
+        <!-- Tags: chosen from the event's squad tags, which are the only source -->
+        <fieldset class="form-control w-full"{% if form.tags.field.disabled %} disabled{% endif %} aria-describedby="squad-tags-help{% if form.tags.errors %} squad-tags-error{% endif %}">
+          <legend class="label">
+            <span class="label-text">{{ form.tags.label }}</span>
+          </legend>
+          {% if form.tags.field.choices %}
+          <div class="flex flex-wrap gap-x-4 gap-y-1">
+            {% for checkbox in form.tags %}
+            <label class="label cursor-pointer justify-start gap-2" for="{{ checkbox.id_for_label }}">
+              {{ checkbox.tag }}
+              <span class="label-text">{{ checkbox.choice_label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if form.tags.errors %}
+          <p id="squad-tags-error" class="flex items-start gap-2 text-sm mt-1">
+            <span class="badge badge-error badge-sm shrink-0">Error</span>
+            <span>{{ form.tags.errors.0 }}</span>
+          </p>
+          {% endif %}
+          <p id="squad-tags-help" class="label whitespace-normal">
+            {% if form.tags.field.disabled %}
+            This event has no squad tags yet. An event admin can add them on the event&rsquo;s edit page.
+            {% else %}
+            Optional. Tags come from the event&rsquo;s squad tags, set by an event admin on the event&rsquo;s edit page.
+            {% endif %}
+          </p>
+        </fieldset>
+
         <!-- Captains / Vice-captains -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="form-control w-full">

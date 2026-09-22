@@ -2,6 +2,7 @@
 
 from typing import ClassVar
 
+from django import forms
 from django.contrib import admin
 
 from apps.events.models import (
@@ -14,6 +15,7 @@ from apps.events.models import (
     Squad,
     SquadMember,
 )
+from apps.events.squad_tags import clean_event_tags, clean_tag_list, prune_squad_tags
 
 
 class SquadInline(admin.TabularInline):
@@ -39,9 +41,27 @@ class EventSignupInline(admin.TabularInline):
     show_change_link = True
 
 
+class EventAdminForm(forms.ModelForm):
+    """Event change form, holding squad tags to the same rules as the event edit page.
+
+    No Meta: ModelAdmin.get_form builds it with the model and the admin's own field list.
+    """
+
+    def clean_squad_tags(self) -> list[str]:
+        """Type-check, normalise and bound the squad tags typed into the JSON box.
+
+        Returns:
+            The normalised tags.
+
+        """
+        return clean_event_tags(self.cleaned_data.get("squad_tags"))
+
+
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
     """Admin for Event model."""
+
+    form = EventAdminForm
 
     list_display: ClassVar[list[str]] = [
         "title",
@@ -56,6 +76,22 @@ class EventAdmin(admin.ModelAdmin):
     readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
     ordering: ClassVar[list[str]] = ["-start_date"]
     inlines: ClassVar[list] = [SquadInline, EventSignupInline]
+
+    def save_related(self, request, form, formsets, change) -> None:
+        """Prune every squad's tags to the event's list once the squad inline is saved too.
+
+        Done here rather than in save_model: the inline saves its changed squads after
+        save_model, from rows read before it, and would write the old tags back.
+
+        Args:
+            request: The admin request.
+            form: The saved event form.
+            formsets: The inline formsets.
+            change: Whether this was an edit rather than an add.
+
+        """
+        super().save_related(request, form, formsets, change)
+        prune_squad_tags(form.instance)
 
 
 @admin.register(Race)
@@ -127,9 +163,29 @@ class SquadMemberInline(admin.TabularInline):
     fields: ClassVar[list[str]] = ["user", "status"]
 
 
+class SquadAdminForm(forms.ModelForm):
+    """Squad change form: an emptied Tags box means no tags, not a NULL the column refuses.
+
+    No Meta: ModelAdmin.get_form builds it with the model and the admin's own field list.
+    """
+
+    def clean_tags(self) -> list[str]:
+        """Type-check and normalise the tags typed into the JSON box.
+
+        ``save_model`` then holds them to the event's list.
+
+        Returns:
+            The normalised tags (``[]`` for an empty box or ``null``).
+
+        """
+        return clean_tag_list(self.cleaned_data.get("tags"))
+
+
 @admin.register(Squad)
 class SquadAdmin(admin.ModelAdmin):
     """Admin for Squad model."""
+
+    form = SquadAdminForm
 
     list_display: ClassVar[list[str]] = [
         "event",
@@ -146,6 +202,22 @@ class SquadAdmin(admin.ModelAdmin):
     readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at", "invite_token"]
     filter_horizontal: ClassVar[list[str]] = ["captains", "vice_captains"]
     inlines: ClassVar[list] = [SquadMemberInline]
+
+    def save_model(self, request, obj: Squad, form, change) -> None:
+        """Save the squad, then hold its tags to its event's list.
+
+        The JSON box takes anything, but the event's squad tags are the only source: a tag
+        the event does not list is dropped and a case variant takes the event's spelling.
+
+        Args:
+            request: The admin request.
+            obj: The squad being saved.
+            form: The admin form.
+            change: Whether this was an edit rather than an add.
+
+        """
+        super().save_model(request, obj, form, change)
+        prune_squad_tags(obj.event)
 
     @admin.display(description="Captains")
     def captains_display(self, obj: Squad) -> str:

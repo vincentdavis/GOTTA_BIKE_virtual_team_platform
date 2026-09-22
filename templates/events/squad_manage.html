@@ -140,8 +140,11 @@
          data-search="{{ squad.name|lower }} {% for c in squad.captains.all %}{{ c.get_full_name|lower }} {% endfor %}{% for c in squad.vice_captains.all %}{{ c.get_full_name|lower }} {% endfor %}">
       <div class="card-body p-4">
         {# Header: name + action buttons #}
-        <div class="flex items-center justify-between mb-1">
-          <h3 class="card-title text-base">{{ squad.name }}</h3>
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+          <div class="flex flex-wrap items-center gap-2 min-w-0">
+            <h3 class="card-title text-base">{{ squad.name }}</h3>
+            {% include "events/_squad_tag_badges.html" with tags=squad.tag_list labelled=True %}
+          </div>
           <div class="flex gap-1">
             {% if squad.can_manage %}
             <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="btn btn-primary btn-sm">Edit</a>
@@ -410,7 +413,8 @@
 
         {# Availability section #}
         <div class="card bg-base-300 p-3 mb-2">
-          <div class="flex items-center justify-between mb-2">
+          {# flex-wrap: at 320px with the largest text size the caption and the button cannot share a line, and .btn does not shrink -- without it the card pushes the page sideways. #}
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
             <p class="text-xs font-semibold uppercase tracking-wide text-base-content/50">Availability</p>
             {% if squad.can_manage %}
             <a href="{% url 'events:squad_availability' event.pk squad.pk %}" class="btn btn-primary btn-xs">Manage Availability</a>

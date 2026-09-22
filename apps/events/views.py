@@ -65,6 +65,7 @@ from apps.events.signup_questions import (
     resolve_signup_answers,
 )
 from apps.events.signup_requirements import blocker_details, missing_phrase, requirement_phrase, signup_blockers
+from apps.events.squad_tags import normalize_tags, prune_squad_tags
 from apps.events.squads import squad_member_users as squad_roster_users
 from apps.events.timezone_roles import mapped_roles, parse_role_map, role_columns
 from apps.events.tz_utils import (
@@ -1356,6 +1357,9 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     published_grids_by_squad: dict[int, list] = {}
     for grid in AvailabilityGrid.objects.filter(squad__event=event, status__in=["published", "closed"]):
         published_grids_by_squad.setdefault(grid.squad_id, []).append(grid)
+    # The event's squad tags drive the Tags column, its menu entry and the tag filter; with
+    # none, all three are left out.
+    event_squad_tags = normalize_tags(event.squad_tags)
 
     for squad in squads:
         squad.enriched_members = squad_members_data.get(squad.pk, [])
@@ -1363,6 +1367,11 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         squad.member_names_tooltip = ", ".join(names) if names else "No members"
         squad.user_is_member = squad.pk in user_squad_ids
         squad.published_grids = published_grids_by_squad.get(squad.pk, [])
+        # Squad.tag_list is the squad's tags as the event spells and orders them -- the same
+        # list the Tags column renders. Carried here as JSON for the tag filter's data
+        # attribute, so the filter can never disagree with the badges beside it (rendered
+        # auto-escaped, never |safe).
+        squad.tags_json = json.dumps(squad.tag_list)
 
     # Aggregate ZP and ZR category counts per squad
     zp_by_squad = []
@@ -1431,6 +1440,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "event": event,
             "races": races,
             "squads": squads,
+            "event_squad_tags": event_squad_tags,
             "signups": enriched_signups,
             "signup_count": signup_totals["total"],
             "signup_male_count": signup_totals["male"],
@@ -1555,6 +1565,9 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
                 current=Event.objects.filter(pk=pk).values_list("timezone_role_map", flat=True).first(),
             )
             event.save(update_fields=["timezone_role_map"])
+            # The event's list is the only source of squad tags: a tag removed here leaves
+            # every squad, and a case-only rename is rewritten on each of them.
+            prune_squad_tags(event)
             logfire.info(
                 "Event updated",
                 event_id=pk,
@@ -3351,6 +3364,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             coordinator_role_ids=event.coordinator_role_ids or [],
             region_role_ids=event.region_role_ids or [],
             captain_role_ids=event.captain_role_ids or [],
+            squad_tags=event.squad_tags or [],
             event=event,
         )
         if form.is_valid():
@@ -3388,6 +3402,7 @@ def squad_create_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             coordinator_role_ids=event.coordinator_role_ids or [],
             region_role_ids=event.region_role_ids or [],
             captain_role_ids=event.captain_role_ids or [],
+            squad_tags=event.squad_tags or [],
             event=event,
         )
 
@@ -3439,6 +3454,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             coordinator_role_ids=event.coordinator_role_ids or [],
             region_role_ids=event.region_role_ids or [],
             captain_role_ids=event.captain_role_ids or [],
+            squad_tags=event.squad_tags or [],
             event=event,
         )
         if form.is_valid():
@@ -3474,6 +3490,7 @@ def squad_edit_view(request: HttpRequest, event_pk: int, squad_pk: int) -> HttpR
             coordinator_role_ids=event.coordinator_role_ids or [],
             region_role_ids=event.region_role_ids or [],
             captain_role_ids=event.captain_role_ids or [],
+            squad_tags=event.squad_tags or [],
             event=event,
         )
 
@@ -3922,9 +3939,12 @@ def squad_set_captain_view(request: HttpRequest, event_pk: int, squad_pk: int) -
             for member in members:
                 member["signup_id"] = signup_by_user.get(member["user"].pk)
 
-        # Refresh squad from DB to get updated captain/vice_captain
+        # Refresh squad from DB to get updated captain/vice_captain. select_related("event")
+        # because the card reads squad.tag_list, which needs the event's own tag list.
         squad.refresh_from_db()
-        squad = Squad.objects.prefetch_related("captains", "vice_captains").get(pk=squad_pk)
+        squad = (
+            Squad.objects.select_related("event").prefetch_related("captains", "vice_captains").get(pk=squad_pk)
+        )
         event_role_name = _annotate_squad_role_names([squad], event=event)
 
         panel_html = render_to_string(
