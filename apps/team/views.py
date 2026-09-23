@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 import logfire
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
@@ -24,6 +25,7 @@ from apps.accounts.models import User
 from apps.accounts.utils import resolve_country
 from apps.rider_data.services import last_successful_sync
 from apps.rider_data.tasks import refresh_zwift_profile
+from apps.team.context_processors import SQUAD_EXPIRING_CACHE_PREFIX, SQUAD_EXPIRING_CACHE_TIMEOUT
 from apps.team.forms import (
     MembershipApplicationAdminForm,
     MembershipApplicationApplicantForm,
@@ -2923,10 +2925,20 @@ def squad_expiring_modal_view(request: HttpRequest) -> HttpResponse:
 
     """
     summary = squad_expiring_summary(request.user)
+    # Seed the banner's cache with the count we just computed. Rendering this partial runs the
+    # squad_expiring_verifications context processor, which on a miss would compute the very
+    # same summary a second time -- doubling a cold modal open. Same key, same payload shape
+    # and same sentinel (``False`` means "computed, nothing to remind about").
+    count = summary["rider_count"]
+    cache.set(
+        f"{SQUAD_EXPIRING_CACHE_PREFIX}:{request.user.pk}",
+        {"count": count} if count else False,
+        SQUAD_EXPIRING_CACHE_TIMEOUT,
+    )
     logfire.info(
         "Squad expiring verification modal viewed",
         user_id=request.user.id,
         squads=len(summary["squads"]),
-        riders=summary["rider_count"],
+        riders=count,
     )
     return render(request, "team/partials/_squad_expiring_modal.html", summary)

@@ -1,16 +1,26 @@
 {% comment %}
-  Body of the captain banner's modal: squad-mates whose Race Verified status is expiring,
-  grouped by squad and soonest-first within each, because the list exists to answer "who do
-  I chase today".
+  Body of the captain banner's modal: squad-mates whose Race Verified status is missing,
+  lapsed or expiring, grouped by squad and worst-first within each, because the list exists to
+  answer "who do I chase today".
+
+  What a row says is the BINDING REQUIREMENT, not a verify_type: the service judges each rider
+  against what their ZwiftPower category actually demands, and in a category that accepts
+  either weight the two weight records are one requirement called "Weight". Naming a type here
+  is what made a covered rider read as "expired 145 days ago" for a full-weight record their
+  valid light one had already superseded.
 
   Every squad here is one the viewer captains -- the service filters on that -- so the names
   are people they already manage. Names link to the public profile, which is where the
   Discord handle to nudge them on lives.
+
+  The heading does NOT say "expiring": most rows are riders who cannot race right now, and a
+  rider missing a verification outright has nothing that is expiring. The id is here so
+  base.html's <dialog> can point aria-labelledby at it -- that half is still to be added.
 {% endcomment %}
-<h3 class="font-bold text-lg mb-1">Expiring verifications in your squads</h3>
+<h3 id="squad-expiring-title" class="font-bold text-lg mb-1">Verifications to chase in your squads</h3>
 <p class="text-sm text-base-content/60 mb-4">
   {{ rider_count }} squad-mate{{ rider_count|pluralize }} to remind. Riders who cannot race
-  &mdash; nothing verified, or verification lapsed &mdash; come first; for the rest, the days
+  &mdash; a required verification missing, or lapsed &mdash; come first; for the rest, the days
   shown are what is left.
 </p>
 
@@ -22,7 +32,12 @@
   </div>
   <ul class="divide-y divide-base-content/10">
     {% for row in group.rows %}
-    <li class="flex items-center justify-between gap-3 py-1.5">
+    {% comment %}
+      flex-wrap so the badge drops below the name instead of pushing the row wider than a
+      375px viewport: the badge now carries the requirement name as well as the days, and a
+      rider with a long name plus "Weight expired 145 days ago" has nowhere else to go.
+    {% endcomment %}
+    <li class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-1.5">
       <a href="{% url 'accounts:public_profile' row.user.pk %}" class="link link-primary text-sm">
         {{ row.user.get_full_name|default:row.user.discord_username }}
       </a>
@@ -37,20 +52,26 @@
         The two can't-race states share one colour on purpose. They are equally severe, the
         words already tell them apart, and making colour the only difference between them
         would be the thing that fails for a colour-blind reader.
+
+        The requirement is in the badge TEXT, not a title= tooltip: a phone cannot show a
+        tooltip, and which verification to chase is the actionable half of the row.
       {% endcomment %}
       {% if row.state == "none" %}
-      <span class="badge badge-error badge-sm whitespace-nowrap">nothing verified</span>
+      <span class="badge badge-error badge-sm whitespace-nowrap">
+        {% if row.missing_all %}nothing verified{% else %}no {{ row.verify_type }}{% endif %}
+      </span>
       {% elif row.state == "lapsed" %}
-      <span class="badge badge-error badge-sm whitespace-nowrap" title="{{ row.verify_type }}">
-        expired {{ row.days_abs }} day{{ row.days_abs|pluralize }} ago
+      <span class="badge badge-error badge-sm whitespace-nowrap">
+        {{ row.verify_type }} expired {{ row.days_abs }} day{{ row.days_abs|pluralize }} ago
       </span>
       {% elif row.days <= 3 %}
-      <span class="badge badge-warning badge-sm whitespace-nowrap" title="{{ row.verify_type }}">
+      <span class="badge badge-warning badge-sm whitespace-nowrap">
+        {{ row.verify_type }} &middot;
         {% if row.days == 0 %}today{% else %}{{ row.days }} day{{ row.days|pluralize }}{% endif %}
       </span>
       {% else %}
-      <span class="text-sm whitespace-nowrap text-base-content/70" title="{{ row.verify_type }}">
-        {{ row.days }} days
+      <span class="text-sm whitespace-nowrap text-base-content/70">
+        {{ row.verify_type }} &middot; {{ row.days }} days
       </span>
       {% endif %}
     </li>
@@ -62,5 +83,5 @@
   Reachable: the banner's count is cached for a few minutes, so a captain can open this
   moments after the last rider renewed. Better to say so than to show an empty box.
 {% endcomment %}
-<p class="text-sm text-base-content/60">Nothing expiring right now &mdash; everyone is up to date.</p>
+<p class="text-sm text-base-content/60">Nothing to chase right now &mdash; everyone is up to date.</p>
 {% endfor %}

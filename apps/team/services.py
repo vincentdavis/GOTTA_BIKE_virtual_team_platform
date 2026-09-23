@@ -24,6 +24,11 @@ from apps.zwiftracing.models import ZRRider
 # Default verification types when no ZwiftPower category is found
 DEFAULT_VERIFICATION_TYPES: list[str] = ["weight_light", "height"]
 
+# The two weight verifications. A category listing BOTH (40/50 by default) is satisfied by
+# EITHER; a category listing one demands that one. The rule lives in requirements_for() and
+# nowhere else, so every surface reads it the way User.calculate_race_ready does.
+WEIGHT_VERIFY_TYPES: frozenset[str] = frozenset({"weight_full", "weight_light"})
+
 # ZwiftPower division to category letter mapping
 ZP_DIV_TO_CATEGORY: dict[int, str] = {
     5: "A+",
@@ -56,8 +61,99 @@ def verification_accepted(user_row: dict) -> bool:
     return user_row.get("zwid_verification_method") == "zauth"
 
 
+def required_types_bulk(users) -> dict[int, list[str]]:
+    """Resolve required verification types per user, for many users at a fixed query cost.
+
+    The one implementation of "what does this rider's ZwiftPower category demand".
+    :func:`get_user_required_verification_types` is a single-user wrapper around it, so no
+    surface can grow a second copy of the rule and drift from ``User.calculate_race_ready``.
+
+    Costs at most two queries for the whole batch: one ``ZPTeamRiders`` lookup keyed on the
+    riders' zwids (skipped when nobody has one) and one Constance read of
+    ``CATEGORY_REQUIREMENTS`` (skipped when nobody resolved to a real category, which is what
+    the per-user version did by returning before it read the config). Constance has no cache
+    backend configured here, so every read is a real SELECT -- the reason this exists at all.
+
+    Falls back to :data:`DEFAULT_VERIFICATION_TYPES` for every "we do not know" case, exactly
+    as the per-user version always has: no zwid, no ``ZPTeamRiders`` row, a falsy category
+    (``div``/``divw`` both default to ``0``, so a row with no division is indistinguishable
+    from no row), a category the config does not mention, an empty list, or a config that
+    cannot be read.
+
+    Args:
+        users: The users to resolve. Unsaved users (no ``pk``) are keyed by ``None``.
+
+    Returns:
+        Mapping of ``user.id`` -> a fresh list of required ``verify_type`` values.
+
+    """
+    user_list = list(users)
+    if not user_list:
+        return {}
+
+    # The dict is keyed by the ints values() returns, so the riders' zwids are normalised the
+    # same way. The old per-user lookup filtered in the ORM, which coerced whatever the
+    # attribute held; an in-memory instance carrying a string zwid (assigned from a form or an
+    # API response before save) would otherwise miss the dict and silently fall back to the
+    # default types -- and, since calculate_race_ready runs through here, silently lose its
+    # Race Verified status with it.
+    def _zwid(user: User) -> int | None:
+        try:
+            return int(user.zwid) if user.zwid else None
+        except TypeError, ValueError:
+            return None
+
+    zwids = {z for z in (_zwid(u) for u in user_list) if z is not None}
+    # order_by() drops ZPTeamRiders.Meta.ordering ("name"), which this lookup does not need,
+    # and values() keeps ~29 unused columns out of the round trip.
+    zp_categories: dict[int, tuple[int, int]] = {}
+    if zwids:
+        zp_categories = {
+            row["zwid"]: (row["div"], row["divw"])
+            for row in ZPTeamRiders.objects.filter(zwid__in=zwids).order_by().values("zwid", "div", "divw")
+        }
+
+    def _category(user: User) -> int:
+        zwid = _zwid(user)
+        cats = zp_categories.get(zwid) if zwid is not None else None
+        if not cats:
+            return 0
+        return cats[1] if user.gender == "female" else cats[0]
+
+    categories = {user.id: _category(user) for user in user_list}
+
+    requirements: dict = {}
+    if any(categories.values()):
+        try:
+            parsed = json.loads(config.CATEGORY_REQUIREMENTS)
+        except (json.JSONDecodeError, TypeError) as exc:
+            logfire.error("Failed to parse CATEGORY_REQUIREMENTS config", error=str(exc), users=len(user_list))
+            parsed = None
+        if isinstance(parsed, dict):
+            requirements = parsed
+        elif parsed is not None:
+            # Valid JSON that is not an object (e.g. "[]") used to raise AttributeError on
+            # .get. This runs inside a context processor, so a bad config must degrade to the
+            # default rather than 500 every page.
+            logfire.error("CATEGORY_REQUIREMENTS is not a JSON object", users=len(user_list))
+
+    result: dict[int, list[str]] = {}
+    for user in user_list:
+        category = categories[user.id]
+        types = requirements.get(str(category)) if category else None
+        # A non-list value (a bare string would iterate as characters) is as unusable as a
+        # missing one.
+        if not types or not isinstance(types, list):
+            types = DEFAULT_VERIFICATION_TYPES
+        result[user.id] = [str(t) for t in types]
+    return result
+
+
 def get_user_required_verification_types(user: User) -> list[str]:
     """Get required verification types for race-ready status based on ZwiftPower category.
+
+    Thin wrapper over :func:`required_types_bulk` -- deliberately, so the batched and
+    per-user answers are the same answer rather than two copies of one rule.
 
     Args:
         user: The user to get required types for.
@@ -66,29 +162,7 @@ def get_user_required_verification_types(user: User) -> list[str]:
         List of verify_type values required for race-ready status.
 
     """
-    if not user.zwid:
-        return DEFAULT_VERIFICATION_TYPES
-
-    zp_rider = ZPTeamRiders.objects.filter(zwid=user.zwid).first()
-    if not zp_rider:
-        return DEFAULT_VERIFICATION_TYPES
-
-    category = zp_rider.divw if user.gender == "female" else zp_rider.div
-    if not category:
-        return DEFAULT_VERIFICATION_TYPES
-
-    try:
-        requirements = json.loads(config.CATEGORY_REQUIREMENTS)
-        types = requirements.get(str(category), DEFAULT_VERIFICATION_TYPES)
-        return types if types else DEFAULT_VERIFICATION_TYPES
-    except (json.JSONDecodeError, TypeError) as e:
-        logfire.error(
-            "Failed to parse CATEGORY_REQUIREMENTS config",
-            error=str(e),
-            user_id=user.id,
-            zwid=user.zwid,
-        )
-        return DEFAULT_VERIFICATION_TYPES
+    return required_types_bulk([user])[user.id]
 
 
 _VERIFICATION_GROUPS = {
@@ -106,6 +180,16 @@ def verification_days_bulk(users: list[User]) -> dict[int, dict]:
     Uses a small constant number of queries (verified records, ZwiftPower
     categories, and the validity settings read once) regardless of user count,
     instead of several queries per user, then does the date math in memory.
+
+    This helper is deliberately NOT on the coverage rule
+    (:func:`verification_coverage_bulk`), left as it was because its one caller is the events
+    Eligibility table and changing what its columns mean is a separate decision. Three known
+    divergences, for whoever picks that up: ``weight_days`` is the LATEST weight record of
+    either kind, so it can report a ``weight_light`` window for a category that only accepts
+    ``weight_full``; ``_days_and_has`` returns None both for "never expires" and for "already
+    expired", conflating +infinity with lapsed; and ``race_ready_days`` is gated on the CACHED
+    ``User.is_race_ready``, so a stale cache blanks it. The required-types half of the rule IS
+    shared, via :func:`required_types_bulk`.
 
     Args:
         users: The users to compute for.
@@ -136,13 +220,10 @@ def verification_days_bulk(users: list[User]) -> dict[int, dict]:
             if rec.verify_type in types:
                 groups.setdefault(group, rec)
 
-    # 2) ZwiftPower categories for the required-types lookup, parsed config once.
-    zwids = [u.zwid for u in user_list if u.zwid]
-    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
-    try:
-        requirements = json.loads(config.CATEGORY_REQUIREMENTS)
-    except (json.JSONDecodeError, TypeError):
-        requirements = {}
+    # 2) Required types, through the shared batched lookup -- same two queries this used to
+    # issue by hand, but one implementation of the fallbacks instead of a second copy that
+    # silently swallowed a bad CATEGORY_REQUIREMENTS into "everyone gets the default".
+    required_by_user = required_types_bulk(user_list)
 
     # Read the validity settings ONCE (RaceReadyRecord.days_remaining reads all four
     # from Constance on every call, which is the real per-record query cost).
@@ -165,16 +246,6 @@ def verification_days_bulk(users: list[User]) -> dict[int, dict]:
             return None, True  # expired but a record exists
         return days, True
 
-    def _required_types(user: User) -> list[str]:
-        zp = zp_by_zwid.get(user.zwid) if user.zwid else None
-        if not zp:
-            return DEFAULT_VERIFICATION_TYPES
-        category = zp.divw if user.gender == "female" else zp.div
-        if not category:
-            return DEFAULT_VERIFICATION_TYPES
-        types = requirements.get(str(category), DEFAULT_VERIFICATION_TYPES)
-        return types if types else DEFAULT_VERIFICATION_TYPES
-
     result: dict[int, dict] = {}
     for user in user_list:
         groups = latest.get(user.id, {})
@@ -190,7 +261,8 @@ def verification_days_bulk(users: list[User]) -> dict[int, dict]:
                 "height": height_days,
                 "power": power_days,
             }
-            constraining = [type_to_days[t] for t in _required_types(user) if type_to_days.get(t) is not None]
+            required = required_by_user.get(user.id) or DEFAULT_VERIFICATION_TYPES
+            constraining = [type_to_days[t] for t in required if type_to_days.get(t) is not None]
             if constraining:
                 race_ready_days = min(constraining)
 
@@ -247,8 +319,12 @@ VERIFY_TYPE_LABELS: dict[str, str] = {
 }
 
 
-def _verify_type_validity_days() -> dict[str, int]:
+def verify_type_validity_days() -> dict[str, int]:
     """Map each verify_type to its configured validity window in days.
+
+    Public so every loop over records can read the four windows ONCE and pass them to
+    :func:`record_days_left`: ``RaceReadyRecord.days_remaining`` reads all four on every
+    access and Constance has no cache backend here, so the property costs four SELECTs a call.
 
     Returns:
         Dict of verify_type to validity days (0 means never expires).
@@ -305,7 +381,7 @@ def build_verify_type_options(user: User) -> list[dict]:
     """
     allowed = get_user_verification_types(user)
     required = set(get_user_required_verification_types(user))
-    validity_days = _verify_type_validity_days()
+    validity_days = verify_type_validity_days()
 
     latest_by_type: dict[str, RaceReadyRecord] = {}
     for record in user.race_ready_records.all():
@@ -1277,8 +1353,9 @@ def is_expiring_soon(days_remaining: int | None) -> bool:
     return 0 <= days_remaining <= max(expiry_warning_thresholds())
 
 
-# Worst first on a captain's list: a rider we hold nothing for cannot race and has not even
-# started, a lapsed rider cannot race, and an expiring one still can.
+# Worst first on a captain's list: a rider missing a REQUIRED verification cannot race and has
+# nothing to renew (whether or not they hold others -- "missing_all" tells those apart), a
+# lapsed rider cannot race, and an expiring one still can.
 _ROW_ORDER = {"none": 0, "lapsed": 1, "expiring": 2}
 
 
@@ -1341,8 +1418,279 @@ def covering_records_by_type(records) -> dict[str, RaceReadyRecord]:
     return covering
 
 
+@dataclass(frozen=True)
+class Requirement:
+    """One thing a rider must hold, satisfiable by ANY of its ``types``.
+
+    Most requirements are a single verify_type. The exception is weight in a category that
+    lists both weight verifications, where either one satisfies it -- which is why a
+    requirement is a SET rather than a type, and why warning about a type in isolation is
+    what made a covered rider read as expired.
+
+    Attributes:
+        types: The verify_types that satisfy this requirement.
+        label: What to call it in the UI ("Weight" for the either-weight requirement, so a
+            rider is not told to renew the record their better one has already superseded).
+
+    """
+
+    types: frozenset[str]
+    label: str
+
+
+@dataclass(frozen=True)
+class VerificationCoverage:
+    """Whether a rider's REQUIRED verifications cover them, and for how much longer.
+
+    ``covered_now`` is exactly ``User.calculate_race_ready()`` recomputed from batched data:
+    a type counts as valid when its longest-lived verified record has not expired, and a
+    requirement counts as met when any of its types is valid.
+
+    Attributes:
+        covered_now: Whether every requirement is met today (i.e. race ready).
+        state: ``"none"`` (a requirement has no record at all), ``"lapsed"`` (a requirement's
+            best record is past expiry), ``"expiring"`` (met, and the soonest requirement is
+            inside the warning window) or ``"ok"``.
+        days: Signed days until the soonest-lapsing requirement, or None when every met
+            requirement never expires. A never-expiring requirement never bounds this.
+        requirement: Label of the binding requirement, or None when nothing binds.
+        holds_any: Whether the rider holds any verified record at all. Lets a caller tell
+            "has never started" from "missing one required type".
+
+    """
+
+    covered_now: bool
+    state: str
+    days: int | None
+    requirement: str | None
+    holds_any: bool
+
+
+def requirements_for(required_types) -> list[Requirement]:
+    """Turn a list of required verify_types into the requirements a rider must satisfy.
+
+    This is where the weight OR rule lives, mirroring ``User.calculate_race_ready``: when the
+    category lists BOTH weight types they collapse into one requirement satisfied by either,
+    and when it lists one (or neither) every listed type stands on its own.
+
+    Args:
+        required_types: The verify_types the rider's category demands.
+
+    Returns:
+        Requirements in display order, weight first. Each is satisfied by ANY of its types.
+
+    """
+    weight_required = WEIGHT_VERIFY_TYPES.intersection(required_types)
+    either_weight = len(weight_required) > 1
+    requirements = [Requirement(frozenset(weight_required), "Weight")] if either_weight else []
+    requirements += [
+        Requirement(frozenset({t}), VERIFY_TYPE_LABELS.get(t, t))
+        for t in dict.fromkeys(required_types)
+        if not (either_weight and t in weight_required)
+    ]
+    return requirements
+
+
+def record_days_left(record: RaceReadyRecord, validity_by_type: dict[str, int], today: date) -> int | None:
+    """Days until a verified record expires, without re-reading Constance per record.
+
+    ``RaceReadyRecord.days_remaining`` reads all four expiry windows on every access, and
+    Constance has no cache backend here, so the property costs four SELECTs per call.
+
+    Args:
+        record: A verified record.
+        validity_by_type: The four windows, read once by the caller.
+        today: The local date, taken once by the caller.
+
+    Returns:
+        Signed days remaining, or None when this record never expires -- either because its
+        type's window is 0 or because it carries no ``record_date`` to count from. None means
+        "+infinity", never "unknown" and never "expired".
+
+    """
+    validity = validity_by_type.get(record.verify_type, 0)
+    if not validity or not record.record_date:
+        return None
+    return (record.record_date + timedelta(days=validity) - today).days
+
+
+def _cover_days_by_type(records, validity_by_type: dict[str, int], today: date) -> dict[str, int | None]:
+    """Collapse verified records to the days the coverage-defining record of each type leaves.
+
+    Same rule as :func:`covering_records_by_type` / :func:`_covers_longer` -- a never-expiring
+    record outranks any finite one, otherwise more days wins -- but on days computed once per
+    record rather than re-derived on every comparison. Only the days survive: nothing
+    downstream needs the record itself, and the same shape is what
+    :func:`superseded_weight_types` already takes.
+
+    Args:
+        records: The rider's verified records, any mix of types.
+        validity_by_type: The four expiry windows, read once.
+        today: The local date, taken once.
+
+    Returns:
+        Mapping of verify_type -> signed days, or None where the type never expires. A type
+        the rider holds nothing for is ABSENT, which is deliberately different from a
+        negative entry.
+
+    """
+    best: dict[str, int | None] = {}
+    for record in records:
+        days = record_days_left(record, validity_by_type, today)
+        if record.verify_type not in best:
+            best[record.verify_type] = days
+            continue
+        current = best[record.verify_type]
+        if current is None:
+            continue  # current never expires -- nothing beats it
+        if days is None or days > current:
+            best[record.verify_type] = days
+    return best
+
+
+def _coverage_from(
+    requirements: list[Requirement],
+    cover: dict[str, int | None],
+    *,
+    warn_within: int,
+) -> VerificationCoverage:
+    """Judge one rider's requirements against the coverage they actually hold.
+
+    Args:
+        requirements: What this rider's category demands, from :func:`requirements_for`.
+        cover: Per-type days remaining from :func:`_cover_days_by_type`.
+        warn_within: The expiry warning window, read once by the caller.
+
+    Returns:
+        The rider's coverage, worst finding first: a missing requirement outranks a lapsed
+        one, which outranks an expiring one.
+
+    """
+    missing: Requirement | None = None
+    lapsed: tuple[int, Requirement] | None = None
+    soonest: tuple[int, Requirement] | None = None
+
+    for requirement in requirements:
+        held = [cover[t] for t in requirement.types if t in cover]
+        if not held:
+            if missing is None:
+                missing = requirement
+            continue
+        if any(days is None for days in held):
+            # This requirement never lapses, so it must not bound the minimum.
+            continue
+        days = max(held)
+        if days < 0:
+            if lapsed is None or days < lapsed[0]:
+                lapsed = (days, requirement)
+        elif soonest is None or days < soonest[0]:
+            soonest = (days, requirement)
+
+    holds_any = bool(cover)
+    if missing is not None:
+        return VerificationCoverage(False, "none", None, missing.label, holds_any)
+    if lapsed is not None:
+        days, requirement = lapsed
+        return VerificationCoverage(False, "lapsed", days, requirement.label, holds_any)
+    if soonest is None:
+        return VerificationCoverage(True, "ok", None, None, holds_any)
+    days, requirement = soonest
+    # needs_captain_attention is the captain window's definition; the window is passed in so
+    # this stays free of a Constance read per rider.
+    state = "expiring" if needs_captain_attention(days, warn_within=warn_within) else "ok"
+    return VerificationCoverage(True, state, days, requirement.label, holds_any)
+
+
+def verification_coverage_bulk(users, *, warn_within: int | None = None) -> dict[int, VerificationCoverage]:
+    """Answer "is this rider covered, when does it lapse, and what binds" for many riders.
+
+    The one place the race-ready rule is applied to an expiry question. Every warning surface
+    must go through it: judging each verify_type on its own is what listed riders as expired
+    who were covered -- a category-40 rider's lapsed ``weight_full`` beside a valid
+    ``weight_light``, or a lapsed ``power`` record their category never asked for -- while
+    hiding the riders who genuinely could not race because a REQUIRED type was missing.
+
+    Costs a constant number of queries for the whole batch: one verified-records query, at
+    most one ``ZPTeamRiders`` query, and the Constance reads (category requirements, the four
+    expiry windows, the warning window) hoisted above every loop. It is called from a context
+    processor on each authenticated render, so per-rider queries are the one thing it exists
+    to prevent.
+
+    Args:
+        users: The riders to judge. Rows are read; nothing is written.
+        warn_within: The warning window, when the caller has already read it. Omit to read
+            ``EXPIRE_WARNING_DAYS`` once here.
+
+    Returns:
+        Mapping of ``user.id`` -> :class:`VerificationCoverage`.
+
+    """
+    user_list = list(users)
+    if not user_list:
+        return {}
+
+    # only() because the answer needs four columns and the row carries other riders'
+    # measurements (weight, height, ftp), the evidence path and the reviewer's notes. This
+    # runs on a captain's every render for every member of every squad they lead, so pulling
+    # the rest into the web worker is personal data leaving the database for nothing.
+    records_by_user: dict[int, list[RaceReadyRecord]] = {}
+    for record in RaceReadyRecord.objects.filter(
+        user_id__in=[u.id for u in user_list], status=RaceReadyRecord.Status.VERIFIED
+    ).only("id", "user_id", "verify_type", "record_date", "status"):
+        records_by_user.setdefault(record.user_id, []).append(record)
+
+    required_by_user = required_types_bulk(user_list)
+    validity_by_type = verify_type_validity_days()
+    window = max(expiry_warning_thresholds()) if warn_within is None else warn_within
+    today = timezone.localdate()
+
+    return {
+        user.id: _coverage_from(
+            requirements_for(required_by_user.get(user.id) or DEFAULT_VERIFICATION_TYPES),
+            _cover_days_by_type(records_by_user.get(user.id, ()), validity_by_type, today),
+            warn_within=window,
+        )
+        for user in user_list
+    }
+
+
+def superseded_weight_types(required_types, days_by_type: dict[str, int | None]) -> set[str]:
+    """Weight types whose requirement a better record of the OTHER weight type already covers.
+
+    The rider-facing half of the same fix. A rider's own banner and the expiry DM warn per
+    verify_type, and :func:`covering_records_by_type` already stops a renewed record from
+    nagging about the one it replaced -- but only WITHIN a type. In a category that accepts
+    either weight the two types are one requirement, so a ``weight_full`` expiring in 5 days
+    is not worth a warning while a ``weight_light`` covers the same requirement for 30 more.
+
+    Only weight can be superseded across types, because weight is the only either-or
+    requirement. Equal days supersede nothing: both records are then holding the requirement
+    up, and silencing one arbitrarily would lose the warning.
+
+    Args:
+        required_types: The rider's required verify_types.
+        days_by_type: Signed days remaining per covering verify_type (None = never expires).
+
+    Returns:
+        The verify_types to leave out of the rider's warnings. Empty for every category that
+        does not accept either weight.
+
+    """
+    accepted = WEIGHT_VERIFY_TYPES.intersection(required_types)
+    if len(accepted) < 2:
+        return set()
+    held = {t: days_by_type[t] for t in accepted if t in days_by_type}
+    if len(held) < 2:
+        return set()
+    if any(days is None for days in held.values()):
+        # One of them never expires, so it covers the requirement forever.
+        return {t for t, days in held.items() if days is not None}
+    best = max(held.values())
+    return {t for t, days in held.items() if days < best}
+
+
 def squad_expiring_summary(user) -> dict:
-    """Squad-mates with an expiring verification, for the squads this user leads.
+    """Squad-mates who cannot race, or soon will not be able to, for the squads this user leads.
 
     Drives both the captain banner and the modal behind it, deliberately from one place:
     the banner is a count of what the modal lists, and two implementations of that would
@@ -1356,31 +1704,38 @@ def squad_expiring_summary(user) -> dict:
       captain to chase verifications for it is pure noise;
     * riders with a ``MEMBER`` row on that squad -- a pending or rejected applicant is not
       yet a squad-mate to remind;
-    * of those, riders in one of three states, worst first:
+    * of those, riders whose REQUIRED coverage is in one of three states, worst first:
 
-      - ``none`` -- we hold no verified record for them at all. Free to detect: the member
-        ids and the fetched records are both already in hand, so it is set arithmetic.
-      - ``lapsed`` -- a covering record has gone past its expiry.
+      - ``none`` -- a required verification is missing entirely: either the rider holds
+        nothing at all, or they hold some records but not one that satisfies a requirement
+        their category demands.
+      - ``lapsed`` -- a required requirement's best record has gone past its expiry.
       - ``expiring`` -- inside the warning window (``needs_captain_attention``).
 
       The rider's own banner still separates expiring from lapsed, because "renew this" and
       "you have lost Race Verified" are different things to tell the person themselves; to a
       captain chasing a roster all three are one list.
 
-      NOTE the ``none`` state is the literal reading: zero verified records. It does NOT
-      catch a rider who holds some verifications but is missing a REQUIRED one and therefore
-      still cannot race. Answering that needs the per-category requirements, and
-      ``get_user_required_verification_types`` runs a ZPTeamRiders query plus a Constance
-      read per rider -- exactly the amplification this function exists to avoid. Widening it
-      would mean batching that lookup first.
+      The judgement is ``verification_coverage_bulk``, i.e. the race-ready rule itself, so
+      this list agrees with ``User.calculate_race_ready()``, the rule behind the badge. The
+      badge itself renders the CACHED ``User.is_race_ready``, so the two can still differ for
+      up to ``SCHEDULER_REFRESH_ALL_RACE_READY_HOURS`` after a record lapses on its own --
+      closing that needs the cache refreshed on expiry, not on a sweep. Judging each
+      verify_type on its own -- what this did before -- listed a category-40 rider as
+      "expired 145 days ago" for a ``weight_full`` their valid ``weight_light`` already
+      covered, flagged records of types the category never asked for, and stayed silent about
+      riders who held one record and were missing a required one.
 
     Args:
         user: The signed-in user, treated as a potential captain or vice-captain.
 
     Returns:
         ``{"squads": [{"squad", "rows": [...]}], "rider_count"}``. Each row carries ``user``,
-        ``state`` (``"none"``, ``"lapsed"`` or ``"expiring"``), and for the latter two
-        ``days`` (signed), ``days_abs`` and ``verify_type``.
+        ``state`` (``"none"``, ``"lapsed"`` or ``"expiring"``), ``days`` (signed, None for
+        ``none``), ``days_abs``, ``verify_type`` (the BINDING REQUIREMENT's label -- "Weight"
+        where either weight satisfies it) and ``missing_all`` (True only when the rider holds
+        no verified record whatsoever, so the modal can say "nothing verified" rather than
+        naming one requirement).
         ``rider_count`` counts DISTINCT riders: a rider in two of this captain's squads is
         still one person to remind, so the banner speaks of people while the modal shows
         them under each squad they belong to.
@@ -1407,77 +1762,22 @@ def squad_expiring_summary(user) -> dict:
         return {"squads": [], "rider_count": 0}
 
     members_by_squad: dict[int, list] = {}
-    member_ids: set[int] = set()
-    for membership in SquadMember.objects.filter(
-        squad__in=squads, status=SquadMember.Status.MEMBER
-    ).select_related("user"):
+    members_by_id: dict[int, User] = {}
+    for membership in SquadMember.objects.filter(squad__in=squads, status=SquadMember.Status.MEMBER).select_related(
+        "user"
+    ):
         members_by_squad.setdefault(membership.squad_id, []).append(membership.user)
-        member_ids.add(membership.user_id)
-    if not member_ids:
+        members_by_id[membership.user_id] = membership.user
+    if not members_by_id:
         return {"squads": [], "rider_count": 0}
 
-    records_by_user: dict[int, list[RaceReadyRecord]] = {}
-    for record in RaceReadyRecord.objects.filter(
-        user_id__in=member_ids, status=RaceReadyRecord.Status.VERIFIED
-    ):
-        records_by_user.setdefault(record.user_id, []).append(record)
-
-    # Riders with no verified record at all. Deliberately derived rather than queried: both
-    # sides are already in memory, so this state costs nothing.
-    unverified = member_ids - set(records_by_user)
-
-    # Read every Constance value ONCE, before the loop. RaceReadyRecord.days_remaining goes
-    # through validity_days, which reads all four windows on every single access, and
-    # CONSTANCE_DATABASE_CACHE_BACKEND is unset here, so each of those is a real SELECT. This
-    # runs in a context processor on every authenticated render and scales with squad size,
-    # so leaving the property to do it costs hundreds of queries a pageview for a captain of
-    # a full squad. get_unified_team_roster hoists them for the same reason.
-    validity_by_type = _verify_type_validity_days()
-    warn_within = max(expiry_warning_thresholds())
-    today = timezone.localdate()
-
-    def _days_left(record: RaceReadyRecord) -> int | None:
-        """Days until a record expires, without re-reading the config per record.
-
-        Args:
-            record: A verified record.
-
-        Returns:
-            Signed days remaining, or None when the type never expires.
-
-        """
-        validity = validity_by_type.get(record.verify_type, 0)
-        if not validity or not record.record_date:
-            return None
-        return (record.record_date + timedelta(days=validity) - today).days
-
-    # Per rider, the soonest-expiring type and how long it has left.
-    worst_by_user: dict[int, tuple[int, str]] = {}
-    for user_id, records in records_by_user.items():
-        # Same rule as covering_records_by_type/_covers_longer -- a never-expiring record
-        # outranks any finite one, otherwise more days wins -- applied to days computed once
-        # per record rather than re-derived on each comparison.
-        covering: dict[str, tuple[RaceReadyRecord, int | None]] = {}
-        for record in records:
-            days = _days_left(record)
-            current = covering.get(record.verify_type)
-            if current is None:
-                covering[record.verify_type] = (record, days)
-                continue
-            current_days = current[1]
-            if current_days is None:
-                continue  # current never expires -- nothing beats it
-            if days is None or days > current_days:
-                covering[record.verify_type] = (record, days)
-
-        flagged = [
-            (record, days)
-            for record, days in covering.values()
-            if needs_captain_attention(days, warn_within=warn_within)
-        ]
-        if flagged:
-            soonest, days = min(flagged, key=lambda pair: pair[1])
-            worst_by_user[user_id] = (days, soonest.get_verify_type_display())
+    # One batched judgement for every member, using the race-ready rule. Constance and the
+    # ZwiftPower categories are read once inside it, for the same reason this used to hoist
+    # the expiry windows by hand: RaceReadyRecord.days_remaining reads all four windows on
+    # every access, CONSTANCE_DATABASE_CACHE_BACKEND is unset here, and this runs in a context
+    # processor on every authenticated render -- per-rider reads cost hundreds of queries a
+    # pageview for a captain of a full squad.
+    coverage = verification_coverage_bulk(members_by_id.values())
 
     groups = []
     riders: set[int] = set()
@@ -1488,30 +1788,24 @@ def squad_expiring_summary(user) -> dict:
             # them among the squad-mates to chase double-counts one person's problem.
             if member.pk == user.pk:
                 continue
-            if member.pk in unverified:
-                rows.append({
-                    "user": member,
-                    "state": "none",
-                    "days": None,
-                    "days_abs": None,
-                    "verify_type": None,
-                })
-                riders.add(member.pk)
+            cover = coverage.get(member.pk)
+            # "ok" is everything outside the warning window. The window itself is the one
+            # needs_captain_attention() uses -- verification_coverage_bulk reads it once and
+            # applies it to the binding REQUIREMENT, so re-testing per rider here would only
+            # buy a Constance SELECT each.
+            if cover is None or cover.state == "ok":
                 continue
-            hit = worst_by_user.get(member.pk)
-            if hit is None:
-                continue
-            days, verify_type = hit
             rows.append({
                 "user": member,
-                "state": "lapsed" if days < 0 else "expiring",
-                "days": days,
-                "days_abs": abs(days),
-                "verify_type": verify_type,
+                "state": cover.state,
+                "days": cover.days,
+                "days_abs": abs(cover.days) if cover.days is not None else None,
+                "verify_type": cover.requirement,
+                "missing_all": cover.state == "none" and not cover.holds_any,
             })
             riders.add(member.pk)
         if rows:
-            # Worst first -- nothing at all, then lapsed (most overdue first), then the
+            # Worst first -- a missing requirement, then lapsed (most overdue first), then the
             # merely expiring (soonest first). Signed days do the second and third orderings
             # in one key; _ROW_ORDER separates the states. The point of the list is who to
             # chase first.

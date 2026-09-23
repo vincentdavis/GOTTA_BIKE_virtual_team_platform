@@ -76,6 +76,30 @@ def captain(user_model, squad):
     return user
 
 
+def _height(user) -> RaceReadyRecord:
+    """Give a rider the OTHER verification their default category requires.
+
+    These riders have no zwid, so their required types are DEFAULT_VERIFICATION_TYPES --
+    weight_light AND height. Without a height record every one of them is missing a required
+    verification, which is now its own (worse) state, and every "is the weight expiring"
+    assertion below would be testing the missing height instead. HEIGHT_VERIFICATION_DAYS
+    defaults to 0, so this record never expires and never binds the days.
+
+    Args:
+        user: The rider.
+
+    Returns:
+        The height record.
+
+    """
+    return RaceReadyRecord.objects.create(
+        user=user,
+        verify_type="height",
+        status=RaceReadyRecord.Status.VERIFIED,
+        record_date=timezone.localdate() - timedelta(days=400),
+    )
+
+
 def _expiring_member(user_model, squad, name: str, days: int, *, status=SquadMember.Status.MEMBER):
     """Add a squad member whose weight verification expires in ``days`` days.
 
@@ -100,6 +124,7 @@ def _expiring_member(user_model, squad, name: str, days: int, *, status=SquadMem
         status=RaceReadyRecord.Status.VERIFIED,
         record_date=timezone.localdate() - timedelta(days=30 - days),
     )
+    _height(user)
     return user
 
 
@@ -226,6 +251,7 @@ def test_a_member_whose_verification_is_not_expiring_is_not_counted(client, user
         status=RaceReadyRecord.Status.VERIFIED,
         record_date=timezone.localdate(),
     )
+    _height(healthy)
 
     assert "Remind your Squad-mates: 1 Expiring" in _banner(client, captain)
 
@@ -252,6 +278,9 @@ def test_a_lapsed_rider_reads_as_expired_not_as_negative_days(client, user_model
 
     assert "expired 5 days ago" in body
     assert "-5 day" not in body
+    # The requirement is in the badge TEXT, not a title= tooltip a phone cannot show. These
+    # riders have no zwid, so their required weight is the light one.
+    assert "Weight (Light) expired 5 days ago" in body
 
 
 @pytest.mark.django_db
@@ -534,8 +563,8 @@ def test_nothing_verified_reads_as_a_state_not_a_deadline(client, user_model, sq
     client.force_login(captain)
     body = client.get(reverse("team:squad_expiring_modal")).content.decode()
 
-    # Scoped to the row: "nothing verified" also appears in the modal's intro sentence, so an
-    # unscoped check passes even when no row rendered at all.
+    # Scoped to the row: the modal's intro sentence talks about the same states, so an
+    # unscoped check can pass even when no row rendered at all.
     row = body[body.index("Ana Rider") : body.index("</li>", body.index("Ana Rider"))]
     assert "nothing verified" in row
     assert "badge-error" in row
@@ -571,7 +600,7 @@ def test_nothing_verified_sorts_above_lapsed_and_expiring(client, user_model, sq
 
 @pytest.mark.django_db
 def test_a_verification_configured_never_to_expire_is_not_flagged(user_model, squad, captain):
-    """A rider holding a non-expiring record has verified something; they are not "nothing"."""
+    """A 900-day-old record with a 0-day window is "never lapses", not "lapsed long ago"."""
     from constance.test import override_config
 
     rider = _bare_member(user_model, squad, "Ana")
@@ -579,9 +608,34 @@ def test_a_verification_configured_never_to_expire_is_not_flagged(user_model, sq
         user=rider, verify_type="height", status=RaceReadyRecord.Status.VERIFIED,
         record_date=timezone.localdate() - timedelta(days=900),
     )
+    # The rider's other required verification, valid, so the height record is what this
+    # assertion turns on. Before the required-types rule they were unflagged despite holding
+    # no weight at all -- which is the false negative that rule fixed.
+    RaceReadyRecord.objects.create(
+        user=rider,
+        verify_type="weight_light",
+        status=RaceReadyRecord.Status.VERIFIED,
+        record_date=timezone.localdate(),
+    )
 
     with override_config(HEIGHT_VERIFICATION_DAYS=0):
         assert _summary(captain)["rider_count"] == 0
+
+
+@pytest.mark.django_db
+def test_a_rider_holding_nothing_the_category_requires_is_flagged(user_model, squad, captain):
+    """The false negative the old "zero verified records" state let through.
+
+    A rider with a never-expiring height and no weight of any kind cannot race, and used to be
+    invisible to their captain purely because they held ONE verified record.
+    """
+    rider = _bare_member(user_model, squad, "Ana")
+    _height(rider)
+
+    rows = _summary(captain)["squads"][0]["rows"]
+
+    assert [(r["state"], r["verify_type"], r["missing_all"]) for r in rows] == [("none", "Weight (Light)", False)]
+    assert rider.calculate_race_ready() is False
 
 
 @pytest.mark.django_db

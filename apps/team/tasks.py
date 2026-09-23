@@ -556,23 +556,53 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
 
         from collections import defaultdict
 
-        from apps.team.services import covering_records_by_type, is_expiring_soon
+        from apps.team.services import (
+            covering_records_by_type,
+            is_expiring_soon,
+            record_days_left,
+            required_types_bulk,
+            superseded_weight_types,
+            verify_type_validity_days,
+        )
 
         records_by_user: dict[int, list[RaceReadyRecord]] = defaultdict(list)
+        users_by_id = {}
         for record in verified_records:
             total_checked += 1
             records_by_user[record.user_id].append(record)
+            users_by_id[record.user_id] = record.user
+
+        # Required types for every rider in ONE batch (two queries for the whole run), so the
+        # weight reconciliation below cannot reintroduce a per-rider ZwiftPower lookup.
+        required_by_user = required_types_bulk(users_by_id.values())
+
+        # The four expiry windows, read ONCE for the whole run. days_remaining goes through
+        # validity_days, which reads all four from Constance on every access, and Constance
+        # has no cache backend here -- so leaving the property to do it cost four SELECTs per
+        # covering record, thousands of queries a night for a full roster.
+        validity_by_type = verify_type_validity_days()
 
         # Reconcile per verify_type before warning: only each type's longest-lived
         # record is a warning candidate, so a record the rider has already renewed
         # (a newer same-type record with more days left) never triggers a nag while
         # coverage still stands. Keeps this task in lockstep with the web banner.
         for user_id, user_records in records_by_user.items():
-            for record in covering_records_by_type(user_records).values():
-                remaining = record.days_remaining
+            covering = covering_records_by_type(user_records)
+            days_by_type = {vtype: record_days_left(rec, validity_by_type, today) for vtype, rec in covering.items()}
+            # And the same reconciliation ACROSS types where the rider's category accepts
+            # either weight: a weight_full lapsing in 5 days costs them nothing while their
+            # weight_light covers that requirement for 30 more, so DMing them to renew it is
+            # the false alarm their captain was also being shown.
+            superseded = superseded_weight_types(required_by_user.get(user_id, ()), days_by_type)
+            for record in covering.values():
+                remaining = days_by_type[record.verify_type]
                 if remaining is None:
                     continue
+                # Listed under "your other verifications" either way -- it is still a record
+                # they hold, and the DM is more useful for saying so.
                 verified_by_user.setdefault(user_id, []).append((record, remaining))
+                if record.verify_type in superseded:
+                    continue
 
                 # Warn on the highest threshold this record has CROSSED but not yet been
                 # warned about -- not on exact equality with today's days_remaining.

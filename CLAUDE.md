@@ -422,10 +422,12 @@ Client-side JS in `base.html` sends page data to `/api/analytics/track/` (Django
 
 Sidebar/avatar badges are driven by context processors with short per-user caches. Source files: `apps/team/context_processors.py`, `apps/events/context_processors.py`. Both are registered in `TEMPLATES["OPTIONS"]["context_processors"]` in `gotta_bike_platform/settings.py`.
 
-- `pending_verification_count` (team) — count of `RaceReadyRecord.status=PENDING` the current user can review (mirrors same-gender gate from `verification_records_view`). Sidebar badge on "Verification Records".
-- `pending_availability_count` (events) — published `AvailabilityGrid`s in squads where the user is an active `MEMBER`, unanswered and not yet ended (`end_date` ≥ the user's local today, as on My Events). Drives the warning dot on the avatar and the count next to "My Events" in the user-menu dropdown.
+- `pending_verification_count` (team) — count of `RaceReadyRecord.status=PENDING` the current user can review (mirrors same-gender gate from `verification_records_view`). Sidebar badge on "Verification Records". **60 s** cache.
+- `pending_availability_count` (events) — published `AvailabilityGrid`s in squads where the user is an active `MEMBER`, unanswered and not yet ended (`end_date` ≥ the user's local today, as on My Events). Drives the warning dot on the avatar and the count next to "My Events" in the user-menu dropdown. **60 s** cache.
+- `expiring_verifications` (team) — the rider's OWN soon-to-expire records, as a warning banner. **360 s** cache.
+- `squad_expiring_verifications` (team) — for a captain or vice-captain of an opted-in squad, how many squad-mates cannot race or soon will not be able to. Gated on `team_member` as well, matching the modal behind it. The count is `squad_expiring_summary`'s `rider_count`, judged against each rider's REQUIRED verifications (see The Coverage Rule), so it agrees with Race Verified. **360 s** cache, and the modal is NOT cached — a captain can open it moments after the last rider renewed, which is why the partial has an `{% empty %}` line.
 
-Both gate on permission/auth before any DB call, then cache the count for 60 s per user. New badges should follow this pattern (skip the query when the user can't act on it; cache short). Counts are never invalidated on write (TTL only); bump the key's `:vN` when a value's meaning changes. **Tests:** the default cache is a process-wide `LocMemCache` that pytest-django doesn't reset, and SQLite reuses rolled-back PKs, so a cached per-user value leaks into the next test's user — `cache.clear()` in a fixture (see `apps/team/test_expiring_verifications_context.py`).
+All four gate on permission/auth before any DB call, then cache the count per user. New badges should follow this pattern (skip the query when the user can't act on it; cache short). Counts are never invalidated on write (TTL only); bump the key's `:vN` when a value's meaning changes. **Tests:** the default cache is a process-wide `LocMemCache` that pytest-django doesn't reset, and SQLite reuses rolled-back PKs, so a cached per-user value leaks into the next test's user — `cache.clear()` in a fixture (see `apps/team/test_expiring_verifications_context.py`).
 
 ## Strava Integration
 
@@ -589,8 +591,50 @@ When a category lists both weight types, either satisfies; every other listed ty
 Constance serves a stored row over a changed default, so read `config.CATEGORY_REQUIREMENTS`, not settings.py, for the effective rule.
 
 `get_user_required_verification_types(user)` (`apps/team/services.py`) returns the required types — used by `User.calculate_race_ready()`
-and the `/user/verification/` summary. `get_user_verification_types(user)` is the wider list a rider may submit (required types,
-`power` always, and `weight_light` once a `weight_full` is verified) — it fills the submission form.
+and the `/user/verification/` summary. It is a one-user wrapper around `required_types_bulk(users)`, which resolves a whole batch in
+at most two queries (one `ZPTeamRiders` lookup on the riders' zwids, one `CATEGORY_REQUIREMENTS` read, both skipped when nothing
+needs them). Every "we do not know" case falls back to `DEFAULT_VERIFICATION_TYPES`: no zwid, no `ZPTeamRiders` row, a falsy
+category (`div`/`divw` both default to `0`, so a row with no division is indistinguishable from no row — in particular a female
+rider with `divw=0` gets the default, not her `div`), a category the config omits, an empty list, or a config that cannot be read
+(logged, never raised — a config that is valid JSON but not an object degrades to the default rather than 500ing every page).
+`get_user_verification_types(user)` is the wider list a rider may submit (required types, `power` always, and `weight_light` once a
+`weight_full` is verified) — it fills the submission form.
+
+### The Coverage Rule (every expiring / lapsed / missing warning)
+
+**One helper owns "is this rider covered, when does it lapse, and which requirement binds": `apps/team/services.py:verification_coverage_bulk(users)`.**
+It is the race-ready rule applied to an expiry question: `VerificationCoverage.covered_now` is `User.calculate_race_ready()`
+recomputed from batched data, and the tests assert that equality per case (`apps/team/test_verification_coverage_rule.py`). Note it
+agrees with that **live** rule, not with the **badge** — the badge renders the cached `User.is_race_ready`, so a warning can still
+contradict it for up to `SCHEDULER_REFRESH_ALL_RACE_READY_HOURS` after a record lapses on its own (closing that means refreshing the
+cache on expiry, not on a sweep). The rule:
+
+- Required types are **category-derived** (above). `requirements_for(types)` turns them into **requirements** — a requirement is a
+  *set* of verify_types satisfied by ANY member. The weight OR rule lives there and nowhere else: both weight types listed (40/50)
+  collapse into one requirement labelled "Weight"; one listed means that one is demanded.
+- A type's coverage is its **longest-lived** verified record. `days == None` means **never expires** (validity `0`, or a verified
+  record with no `record_date`) and ranks **above every finite value** — never "unknown", never "expired". A never-expiring
+  requirement does not bound the days.
+- Three states, worst first: **missing** (`"none"` — no record of any type in a requirement, which subsumes "holds nothing at all";
+  `holds_any` tells them apart), **lapsed** (the requirement's best record is past expiry), **expiring** (inside
+  `max(EXPIRE_WARNING_DAYS)`); otherwise `"ok"`. A record of a type the rider's category does not require is **not** a state.
+- Cost is constant per call: the records query, at most one `ZPTeamRiders` query, and every Constance read hoisted above the loop.
+  Measured for the captain banner: **8 queries when no member has a zwid, 10 when they do, flat in both the number of riders and
+  the number of squads.** Never call `get_user_required_verification_types` per rider in a loop, and never let
+  `RaceReadyRecord.days_remaining` run inside one — it reads all four `*_DAYS` windows on **every** access and Constance has no
+  cache backend here, so each is a real SELECT. Read the windows once with `verify_type_validity_days()` and turn a record into
+  days with `record_days_left(record, windows, today)`; both are public for exactly that.
+- Only the four columns the rule needs are selected (`.only("id", "user_id", "verify_type", "record_date", "status")`) — the rest
+  of the row is other riders' weight, height, FTP, evidence path and reviewer notes, and this runs on a captain's every render.
+
+Consumers: `squad_expiring_summary` (the captain banner and its modal) goes through it wholesale. The rider's own banner
+(`expiring_verifications`) and the DM task (`warn_expiring_verifications`) warn per verify_type and take only the cross-type half,
+`superseded_weight_types` — a weight record whose either-weight requirement the *other* weight covers for longer stops warning,
+exactly as `covering_records_by_type` already suppresses a renewed record of the same type. They deliberately still warn about a
+type the category does not require (a `power` record, a `weight_full` held by a rider with no category): it is evidence the rider
+chose to hold, it feeds Extra Verified, and silencing it is a policy change, not a fix. `verification_days_bulk` (the events
+Eligibility table) shares only the required-types lookup — its docstring lists the three ways it still diverges, and fixing those
+changes what that table's columns mean.
 
 ### Verification Form
 

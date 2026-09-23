@@ -16,10 +16,15 @@ if TYPE_CHECKING:
 PENDING_VERIFICATION_CACHE_PREFIX = "pending_verification_count:v2"
 PENDING_VERIFICATION_CACHE_TIMEOUT = 60  # seconds
 
-EXPIRING_VERIFICATION_CACHE_PREFIX = "expiring_verifications:v1"
+# v2: a weight record the rider's OTHER weight record supersedes no longer warns, where the
+# category accepts either one. A different set of warnings, so a different key.
+EXPIRING_VERIFICATION_CACHE_PREFIX = "expiring_verifications:v2"
 EXPIRING_VERIFICATION_CACHE_TIMEOUT = 360  # seconds
 
-SQUAD_EXPIRING_CACHE_PREFIX = "squad_expiring_verifications:v1"
+# v2: the count now follows the rider's REQUIRED verifications (services.verification_coverage_bulk)
+# instead of every type they hold, so the same squad yields a different number. A new meaning,
+# so a new key -- otherwise captains read the old, wrong count for the whole cache window.
+SQUAD_EXPIRING_CACHE_PREFIX = "squad_expiring_verifications:v2"
 SQUAD_EXPIRING_CACHE_TIMEOUT = 360  # seconds
 
 
@@ -78,6 +83,19 @@ def expiring_verifications(request: HttpRequest) -> dict:
     that have already lapsed are excluded — that is a "lost race ready" state
     needing different wording, not an "expiring" warning.
 
+    Reconciliation then happens a second time ACROSS types, through
+    ``services.superseded_weight_types``: in a category that accepts either weight
+    (40/50) the two weight records are ONE requirement, so the one with less time
+    left is superseded by the other exactly as an older same-type record is. Without
+    it a rider with a valid ``weight_light`` was told to renew their lapsing
+    ``weight_full`` to keep a status neither was about to cost them.
+
+    Note this banner still warns about a type the rider's category does NOT require
+    — a ``power`` record, or a ``weight_full`` held by a rider with no ZwiftPower
+    category. It is evidence they chose to hold, it feeds Extra Verified, and losing
+    the reminder for it would be a policy change rather than a fix. The captain list
+    does drop those, because "who on my squad cannot race" is a different question.
+
     Note the banner is CONTINUOUS while the DM is discrete: the banner shows on
     every day inside the window, the task sends at most one DM per configured
     threshold. Same window, different cadence — deliberately, since nobody wants
@@ -106,25 +124,49 @@ def expiring_verifications(request: HttpRequest) -> dict:
         return {"expiring_verifications": cached or None}
 
     with logfire.span("expiring_verifications", user_id=user.pk):
-        from apps.team.services import covering_records_by_type, is_expiring_soon
+        from django.utils import timezone
+
+        from apps.team.services import (
+            covering_records_by_type,
+            get_user_required_verification_types,
+            is_expiring_soon,
+            record_days_left,
+            superseded_weight_types,
+            verify_type_validity_days,
+        )
 
         records = user.race_ready_records.filter(status=RaceReadyRecord.Status.VERIFIED)
         # Reconcile per verify_type: a type is only "expiring" when its longest-lived
         # record is inside the window. This keeps a record the rider has already renewed
         # (a newer same-type record with more days left) from raising a false warning.
         covering = covering_records_by_type(records)
+        # days_remaining reads all four Constance windows on EVERY access and Constance has no
+        # cache backend here, so the four are read once for the whole banner instead of four
+        # SELECTs per type the rider holds.
+        validity_by_type = verify_type_validity_days()
+        today = timezone.localdate()
+        days_by_type = {vtype: record_days_left(record, validity_by_type, today) for vtype, record in covering.items()}
+        # Then the same reconciliation ACROSS types, where a category accepts either weight:
+        # a weight_full expiring in 5 days is not the rider's problem while a weight_light
+        # covers that one requirement for 30 more. Without this the rider was told to renew a
+        # record their better one had already superseded -- the false alarm their captain saw.
+        superseded = superseded_weight_types(get_user_required_verification_types(user), days_by_type)
         # One shared definition with the DM task -- see services.is_expiring_soon. Both used
         # to parse EXPIRE_WARNING_DAYS separately while claiming to be in lockstep, and they
         # disagreed about the last day: the banner vanished when a record expired today, and
         # the rider lost the warning on the one day it was most urgent.
-        expiring = [r for r in covering.values() if is_expiring_soon(r.days_remaining)]
+        expiring = [
+            covering[vtype]
+            for vtype, days in days_by_type.items()
+            if vtype not in superseded and is_expiring_soon(days)
+        ]
         payload: dict | bool = False
         if expiring:
-            soonest = min(expiring, key=lambda r: r.days_remaining)
+            soonest = min(expiring, key=lambda r: days_by_type[r.verify_type])
             payload = {
                 "count": len(expiring),
                 "soonest_type": soonest.get_verify_type_display(),
-                "soonest_days": soonest.days_remaining,
+                "soonest_days": days_by_type[soonest.verify_type],
             }
 
     cache.set(cache_key, payload, EXPIRING_VERIFICATION_CACHE_TIMEOUT)
@@ -133,7 +175,16 @@ def expiring_verifications(request: HttpRequest) -> dict:
 
 
 def squad_expiring_verifications(request: HttpRequest) -> dict:
-    """Expose how many of a captain's squad-mates have a verification expiring soon.
+    """Expose how many of a captain's squad-mates cannot race, or soon will not be able to.
+
+    The count follows the rider's REQUIRED verifications
+    (``services.verification_coverage_bulk``, the race-ready rule itself), so it agrees with
+    ``User.calculate_race_ready()``: a lapsed record of a type the rider's category does not
+    need is not counted, a lapsed weight is not counted while the other weight type still
+    satisfies an either-weight category, and a rider missing a required type IS counted even
+    when they hold something else. The Race Verified BADGE is the cached
+    ``User.is_race_ready``, so this can still name a rider the badge has not caught up with,
+    for up to ``SCHEDULER_REFRESH_ALL_RACE_READY_HOURS`` after a record lapses.
 
     Drives the captain banner in ``base.html``. Only the count is cached and rendered; the
     names, links and days are fetched on click by ``squad_expiring_modal_view``. Note the
