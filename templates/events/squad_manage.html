@@ -129,6 +129,15 @@
         {% for g in squad_genders %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
       </select>
       {% endif %}
+      {% if event.squad_tags %}
+      {# Every tag the event offers, not just the ones in use: picking an unused one says #}
+      {# plainly that no squad carries it, which is what an admin came to find out. #}
+      <select id="filter-squad-tag" class="select select-bordered select-sm w-full sm:w-auto"
+              aria-label="Filter squads by tag" onchange="filterSquads()">
+        <option value="">All tags</option>
+        {% for tag in event.squad_tags %}<option value="{{ tag }}">{{ tag }}</option>{% endfor %}
+      </select>
+      {% endif %}
     </div>
     <p id="squad-no-results" class="text-sm text-base-content/60 mt-2 hidden">No squads match your search.</p>
   </div>
@@ -137,6 +146,8 @@
     <div class="card bg-base-200 shadow-md squad-card{% if squad.role_violations or squad.channel_warnings %} border-2 border-error{% endif %}"
          data-timezone="{{ squad.squad_timezone|default:'' }}"
          data-gender="{{ squad.gender|default:'' }}"
+         {# Bar-wrapped and lowercased, so a filter matches a whole tag and never half of one. #}
+         data-tags="{% for tag in squad.tag_list %}|{{ tag|lower }}{% endfor %}{% if squad.tag_list %}|{% endif %}"
          data-search="{{ squad.name|lower }} {% for c in squad.captains.all %}{{ c.get_full_name|lower }} {% endfor %}{% for c in squad.vice_captains.all %}{{ c.get_full_name|lower }} {% endfor %}">
       <div class="card-body p-4">
         {# Header: name + action buttons #}
@@ -593,11 +604,15 @@
     var tz = tzEl ? tzEl.value : "";
     var genderEl = document.getElementById("filter-squad-gender");
     var gender = genderEl ? genderEl.value : "";
+    var tagEl = document.getElementById("filter-squad-tag");
+    // Bars around the tag, so "Red" cannot match "Red Group".
+    var tag = tagEl && tagEl.value ? "|" + tagEl.value.toLowerCase() + "|" : "";
     var shown = 0;
     document.querySelectorAll("#squad-grid .squad-card").forEach(function (card) {
       var match = !q || card.dataset.search.indexOf(q) !== -1;
       if (match && tz && card.dataset.timezone !== tz) match = false;
       if (match && gender && card.dataset.gender !== gender) match = false;
+      if (match && tag && (card.dataset.tags || "").indexOf(tag) === -1) match = false;
       card.style.display = match ? "" : "none";
       if (match) shown++;
     });
