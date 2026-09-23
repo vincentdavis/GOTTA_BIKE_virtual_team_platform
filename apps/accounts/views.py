@@ -39,6 +39,7 @@ from apps.team.services import (
 )
 from apps.zwift import client as zwift_client
 from apps.zwift import profile_fields
+from gotta_bike_platform.log_utils import log_id
 
 # How recently the Zwift Racing data must have been fetched before the profile
 # refresh button is offered / honored. Mirrors the once-per-hour client guard.
@@ -1968,6 +1969,11 @@ def config_section_update(request: HttpRequest, section_key: str) -> HttpRespons
         # view verification photographs -- so an admin can widen their own access here. That
         # was previously untraceable: no actor, no before, no after. Secrets are noted as
         # changed without their values.
+        #
+        # Every int-typed setting goes out as a string. The snowflakes among them --
+        # GUILD_ID, the *_ROLE_ID and *_CHANNEL_ID keys -- are 19 digits, and Logfire
+        # would round them (see log_id), so the one line that records who widened a
+        # permission would name a role that does not exist.
         previous = getattr(config, key, None)
         if previous != value:
             secret = setting.get("input_type") == "password"
@@ -1977,8 +1983,8 @@ def config_section_update(request: HttpRequest, section_key: str) -> HttpRespons
                 setting=key,
                 changed_by_id=request.user.pk,
                 changed_by=request.user.get_username(),
-                old_value="(hidden)" if secret else previous,
-                new_value="(hidden)" if secret else value,
+                old_value="(hidden)" if secret else log_id(previous),
+                new_value="(hidden)" if secret else log_id(value),
                 is_permission_mapping=key.startswith("PERM_"),
             )
 

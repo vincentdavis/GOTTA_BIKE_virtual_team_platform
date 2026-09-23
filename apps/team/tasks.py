@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from apps.accounts.discord_service import send_discord_channel_message, send_discord_dm
 from apps.team.models import DiscordChannel, DiscordRole, MembershipApplication, RaceReadyRecord
+from gotta_bike_platform.log_utils import log_id
 
 VERIFICATION_TYPE_LABELS = {
     "weight_full": "Weight (Full)",
@@ -269,7 +270,7 @@ def notify_race_ready_change(
             user_id=user_id,
             is_now_race_ready=is_now_race_ready,
             changed_by_user_id=changed_by_user_id,
-            channel_id=channel_id,
+            channel_id=log_id(channel_id),
             success=success,
         )
 

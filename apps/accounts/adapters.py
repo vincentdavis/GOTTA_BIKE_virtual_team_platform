@@ -17,6 +17,7 @@ from django.utils.html import format_html
 
 from apps.accounts.discord_service import sync_user_discord_roles
 from apps.accounts.membership import clear_departure
+from gotta_bike_platform.log_utils import log_id
 
 if TYPE_CHECKING:
     from django.http import HttpResponseRedirect
@@ -263,7 +264,7 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             logfire.warning(
                 "User not in required guild",
                 discord_id=discord_id,
-                required_guild_id=guild_id,
+                required_guild_id=log_id(guild_id),
                 user_guild_count=len(user_guild_ids),
             )
             invite_msg = ""

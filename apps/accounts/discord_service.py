@@ -10,6 +10,8 @@ import logfire
 from constance import config
 from django.core.cache import cache
 
+from gotta_bike_platform.log_utils import log_id
+
 if TYPE_CHECKING:
     from apps.accounts.models import User
 
@@ -736,7 +738,7 @@ def add_discord_role(discord_id: str, role_id: str) -> bool:
                 "Discord role added",
                 discord_id=discord_id,
                 role_id=role_id,
-                guild_id=guild_id,
+                guild_id=log_id(guild_id),
             )
             return True
 
@@ -800,7 +802,7 @@ def remove_discord_role(discord_id: str, role_id: str) -> bool:
                     "Discord role remove skipped: member or role not found (already removed)",
                     discord_id=discord_id,
                     role_id=role_id,
-                    guild_id=guild_id,
+                    guild_id=log_id(guild_id),
                 )
                 return True
 
@@ -810,7 +812,7 @@ def remove_discord_role(discord_id: str, role_id: str) -> bool:
                 "Discord role removed",
                 discord_id=discord_id,
                 role_id=role_id,
-                guild_id=guild_id,
+                guild_id=log_id(guild_id),
             )
             return True
 
@@ -907,7 +909,7 @@ def sync_user_discord_roles(user: User) -> bool:
                 "User not found in guild",
                 user_id=user.id,
                 discord_id=user.discord_id,
-                guild_id=guild_id,
+                guild_id=log_id(guild_id),
             )
         else:
             logfire.error(

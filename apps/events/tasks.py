@@ -13,6 +13,7 @@ from apps.events.models import EventSignup, SlotDS
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
+from gotta_bike_platform.log_utils import log_id
 
 
 def _format_signup_message(signup: EventSignup, profile_url: str | None) -> str:
@@ -99,7 +100,7 @@ def post_signup_notification(signup_id: int, profile_url: str | None = None) -> 
                 "Signup notification not sent",
                 signup_id=signup_id,
                 event_id=signup.event_id,
-                channel_id=channel_id,
+                channel_id=log_id(channel_id),
             )
             return {"status": "error", "reason": "send_failed", "channel_id": str(channel_id)}
 
@@ -107,7 +108,7 @@ def post_signup_notification(signup_id: int, profile_url: str | None = None) -> 
             "Signup notification posted",
             signup_id=signup_id,
             event_id=signup.event_id,
-            channel_id=channel_id,
+            channel_id=log_id(channel_id),
         )
         return {"status": "posted", "channel_id": str(channel_id)}
 
