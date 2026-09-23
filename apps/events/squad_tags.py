@@ -25,7 +25,12 @@ def normalize_tags(values: object) -> list[str]:
 
     Each tag is stripped and its internal whitespace collapsed to one space; empty tags are
     dropped, and a tag that differs from an earlier one only in case is dropped too, keeping the
-    first spelling. Order and case are kept (unlike the timezone chips, which uppercase).
+    first spelling. Case is kept (unlike the timezone chips, which uppercase).
+
+    The list comes back in alphabetical order, ignoring case. Every surface reads its order
+    from here -- the event's chips, the squad form's checkboxes, the event page's tag filter
+    and each squad's badges -- so a tag is always in the place a reader expects, whenever it
+    was added.
 
     Anything that is not a list or tuple reads as no tags, and non-string items are skipped, so
     a malformed stored value can never be iterated character by character. The event form
@@ -51,6 +56,7 @@ def normalize_tags(values: object) -> list[str]:
             continue
         seen.add(key)
         tags.append(tag)
+    tags.sort(key=str.casefold)
     return tags
 
 

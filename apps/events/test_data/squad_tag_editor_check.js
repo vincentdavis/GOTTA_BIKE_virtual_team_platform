@@ -4,7 +4,7 @@
 //   node squad_tag_editor_check.js page.html
 //
 // Used by apps/events/test_squad_tags.py, which renders the edit page of an event offering
-// the tags Red and Blue. Prints one line per check and exits 1 if any failed.
+// the tags Blue and Red (the order they are stored in: alphabetical, ignoring case). Prints one line per check and exits 1 if any failed.
 'use strict';
 const fs = require('fs');
 const {loadPage, checker, KeyboardEvent} = require('./mini_dom');
@@ -39,40 +39,40 @@ function save() {
     return hidden.form.submitted;
 }
 
-check('the saved tags load as chips', chips.querySelectorAll('li').map(li => li.querySelector('span').textContent), ['Red', 'Blue']);
+check('the saved tags load as chips', chips.querySelectorAll('li').map(li => li.querySelector('span').textContent), ['Blue', 'Red']);
 check('each remove button names its tag', chips.querySelectorAll('button').map(b => b.getAttribute('aria-label')),
-    ['Remove tag Red', 'Remove tag Blue']);
+    ['Remove tag Blue', 'Remove tag Red']);
 check('the remove glyph is hidden from screen readers',
     chips.querySelectorAll('button span').map(s => s.getAttribute('aria-hidden')), ['true', 'true']);
 
 check('Enter in the tag box does not submit the form', type('  Tall   Squad '), true);
-check('Enter adds the tidied tag, keeping its case', saved(), ['Red', 'Blue', 'Tall Squad']);
+check('Enter adds the tidied tag, keeping its case', saved(), ['Blue', 'Red', 'Tall Squad']);
 check('the box is emptied', input.value, '');
 check('the addition is announced', status(), 'Added tag Tall Squad.');
 check('the new chip names its tag too', chips.querySelectorAll('button').map(b => b.getAttribute('aria-label'))[2], 'Remove tag Tall Squad');
 
 input.value = 'Green';
 check('Enter while an input method is composing is left alone', pressEnter(true), false);
-check('and adds nothing', saved(), ['Red', 'Blue', 'Tall Squad']);
+check('and adds nothing', saved(), ['Blue', 'Red', 'Tall Squad']);
 
-check('a case-duplicate is not added', (type('rED'), saved()), ['Red', 'Blue', 'Tall Squad']);
+check('a case-duplicate is not added', (type('rED'), saved()), ['Blue', 'Red', 'Tall Squad']);
 check('and says which tag it matches', status(), 'Red is already in the list.');
 
 doc.getElementById('squad-tag-add-btn').click();
-check('Add with an empty box adds nothing', saved(), ['Red', 'Blue', 'Tall Squad']);
+check('Add with an empty box adds nothing', saved(), ['Blue', 'Red', 'Tall Squad']);
 input.value = 'Short';
 doc.getElementById('squad-tag-add-btn').click();
-check('the Add button adds the tag', saved(), ['Red', 'Blue', 'Tall Squad', 'Short']);
+check('the Add button adds the tag, in its place', saved(), ['Blue', 'Red', 'Short', 'Tall Squad']);
 
 chips.querySelectorAll('button')[1].click();
-check('a remove button removes its tag', saved(), ['Red', 'Tall Squad', 'Short']);
-check('and says so', status(), 'Removed tag Blue.');
-check('focus moves to the chip that took its place', doc.activeElement.getAttribute('aria-label'), 'Remove tag Tall Squad');
+check('a remove button removes its tag', saved(), ['Blue', 'Short', 'Tall Squad']);
+check('and says so', status(), 'Removed tag Red.');
+check('focus moves to the chip that took its place', doc.activeElement.getAttribute('aria-label'), 'Remove tag Short');
 
 // Save pressed with a tag still in the box.
 input.value = ' Purple ';
 check('Save with a tag still typed goes ahead', save(), true);
-check('and saves that tag with the rest', saved(), ['Red', 'Tall Squad', 'Short', 'Purple']);
+check('and saves that tag with the rest', saved(), ['Blue', 'Purple', 'Short', 'Tall Squad']);
 
 input.value = '   ';
 check('Save with only spaces in the box goes ahead', save(), true);

@@ -889,7 +889,10 @@ document.querySelectorAll('[data-signup-table]').forEach(function(table) {
       textInput.value = '';
       return true;
     }
+    // Alphabetical, ignoring case, as the server stores them: a chip stays where the reader
+    // will look for it instead of jumping on the next save.
     tags.push(tag);
+    tags.sort(function(a, b) { return a.localeCompare(b, undefined, {sensitivity: 'base'}); });
     sync();
     render();
     textInput.value = '';

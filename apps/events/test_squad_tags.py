@@ -46,7 +46,7 @@ def event(db) -> Event:
         start_date=today,
         end_date=today + timedelta(days=30),
         visible=True,
-        squad_tags=["Red", "Blue"],
+        squad_tags=["Blue", "Red"],
     )
 
 
@@ -181,16 +181,16 @@ def _admin_change_post(client, url: str) -> tuple[dict, dict]:
 
 
 def test_normalize_strips_and_collapses_whitespace() -> None:
-    assert normalize_tags(["  Red  ", "Tall\t  Squad", "Short\nOnes"]) == ["Red", "Tall Squad", "Short Ones"]
+    assert normalize_tags(["  Red  ", "Tall\t  Squad", "Short\nOnes"]) == ["Red", "Short Ones", "Tall Squad"]
 
 
 def test_normalize_dedupes_ignoring_case_and_keeps_the_first_spelling() -> None:
-    assert normalize_tags(["Red", "RED", "Blue", "red", " blue "]) == ["Red", "Blue"]
+    assert normalize_tags(["Red", "RED", "Blue", "red", " blue "]) == ["Blue", "Red"]
 
 
-def test_normalize_keeps_case_and_order() -> None:
-    """Unlike the timezone chips, tags are not uppercased."""
-    assert normalize_tags(["tall", "Blue", "RED"]) == ["tall", "Blue", "RED"]
+def test_normalize_keeps_case_and_sorts_ignoring_it() -> None:
+    """Unlike the timezone chips, tags are not uppercased -- but they do come back in order."""
+    assert normalize_tags(["tall", "Blue", "RED"]) == ["Blue", "RED", "tall"]
 
 
 def test_normalize_drops_empties() -> None:
@@ -252,7 +252,7 @@ def test_event_form_saves_normalised_tags(event) -> None:
     assert form.is_valid(), form.errors
     form.save()
     event.refresh_from_db()
-    assert event.squad_tags == ["Red", "Tall Squad", "Blue"]
+    assert event.squad_tags == ["Blue", "Red", "Tall Squad"]
 
 
 @pytest.mark.django_db
@@ -286,7 +286,7 @@ def test_a_refused_list_leaves_the_event_alone(client, event, event_admin) -> No
     assert response.status_code == 200  # re-rendered with the error, not redirected
     assert f"at most {MAX_SQUAD_TAGS} squad tags" in response.content.decode()
     event.refresh_from_db()
-    assert event.squad_tags == ["Red", "Blue"]
+    assert event.squad_tags == ["Blue", "Red"]
 
 
 @pytest.mark.django_db
@@ -341,15 +341,15 @@ def test_prune_rewrites_a_case_only_rename(event) -> None:
 
 @pytest.mark.django_db
 def test_prune_orders_tags_as_the_event_lists_them(event) -> None:
-    squad = Squad.objects.create(event=event, name="A", tags=["Blue", "red"])
+    squad = Squad.objects.create(event=event, name="A", tags=["red", "Blue"])
     prune_squad_tags(event)
     squad.refresh_from_db()
-    assert squad.tags == ["Red", "Blue"]
+    assert squad.tags == ["Blue", "Red"]
 
 
 @pytest.mark.django_db
 def test_prune_writes_only_squads_that_change(event, untagged_event) -> None:
-    unchanged = Squad.objects.create(event=event, name="A", tags=["Red", "Blue"])
+    unchanged = Squad.objects.create(event=event, name="A", tags=["Blue", "Red"])
     changed = Squad.objects.create(event=event, name="B", tags=["Green"])
     elsewhere = Squad.objects.create(event=untagged_event, name="C", tags=["Green"])
     before = Squad.objects.get(pk=unchanged.pk).updated_at
@@ -360,7 +360,7 @@ def test_prune_writes_only_squads_that_change(event, untagged_event) -> None:
     unchanged.refresh_from_db()
     changed.refresh_from_db()
     elsewhere.refresh_from_db()
-    assert unchanged.tags == ["Red", "Blue"]
+    assert unchanged.tags == ["Blue", "Red"]
     assert unchanged.updated_at == before
     assert changed.tags == []
     # A rewritten squad really was modified, and the card's "Updated" line says so. The save
@@ -398,7 +398,7 @@ def test_saving_the_event_prunes_its_squads(client, event, event_admin) -> None:
 @pytest.mark.django_db
 def test_squad_form_offers_only_the_event_tags(event) -> None:
     form = _squad_form(event)
-    assert form.fields["tags"].choices == [("Red", "Red"), ("Blue", "Blue")]
+    assert form.fields["tags"].choices == [("Blue", "Blue"), ("Red", "Red")]
     assert not form.fields["tags"].disabled
 
 
@@ -411,9 +411,9 @@ def test_squad_form_refuses_a_tampered_tag(event) -> None:
 
 @pytest.mark.django_db
 def test_squad_form_returns_picks_in_the_event_order(event) -> None:
-    form = _squad_form(event, {"name": "A", "gender": "COED", "tags": ["Blue", "Red"]})
+    form = _squad_form(event, {"name": "A", "gender": "COED", "tags": ["Red", "Blue"]})
     assert form.is_valid(), form.errors
-    assert form.cleaned_data["tags"] == ["Red", "Blue"]
+    assert form.cleaned_data["tags"] == ["Blue", "Red"]
 
 
 @pytest.mark.django_db
@@ -449,7 +449,7 @@ def test_squad_form_page_labels_each_tag_checkbox(client, event, event_admin) ->
     client.force_login(event_admin)
     body = _body(client, reverse("events:squad_create", args=[event.pk]))
     assert "<legend" in body
-    for index, tag in enumerate(["Red", "Blue"]):
+    for index, tag in enumerate(["Blue", "Red"]):
         assert f'for="id_tags_{index}"' in body
         assert f'value="{tag}"' in body
         assert f'<span class="label-text">{tag}</span>' in body
@@ -462,10 +462,10 @@ def test_squad_form_page_labels_each_tag_checkbox(client, event, event_admin) ->
 def test_an_event_admin_creates_a_squad_with_tags(client, event, event_admin) -> None:
     client.force_login(event_admin)
     response = client.post(
-        reverse("events:squad_create", args=[event.pk]), {"name": "A", "gender": "COED", "tags": ["Blue", "Red"]}
+        reverse("events:squad_create", args=[event.pk]), {"name": "A", "gender": "COED", "tags": ["Red", "Blue"]}
     )
     assert response.status_code == 302
-    assert Squad.objects.get(event=event, name="A").tags == ["Red", "Blue"]
+    assert Squad.objects.get(event=event, name="A").tags == ["Blue", "Red"]
 
 
 @pytest.mark.django_db
@@ -575,14 +575,14 @@ def test_the_tag_filter_script_shows_hides_and_counts_squads(client, event, even
 @pytest.mark.django_db
 @pytest.mark.parametrize("url_name", ["squad_manage", "squad_assign_page"])
 def test_squad_cards_show_the_tags(client, event, event_admin, url_name) -> None:
-    Squad.objects.create(event=event, name="A", gender="Male", tags=["Red", "Blue"])
+    Squad.objects.create(event=event, name="A", gender="Male", tags=["Blue", "Red"])
     client.force_login(event_admin)
     body = _body(client, reverse(f"events:{url_name}", args=[event.pk]))
     # A named list, so a screen reader hears where the tags end: the gender badge that
     # follows on the Assign Riders card is not read as one more tag.
     tag_list = re.search(r'<ul role="list" class="[^"]*" aria-label="Tags">(.*?)</ul>', body)
     assert tag_list, "no labelled tag list"
-    assert re.findall(r"<li [^>]*>([^<]*)</li>", tag_list.group(1)) == ["Red", "Blue"]
+    assert re.findall(r"<li [^>]*>([^<]*)</li>", tag_list.group(1)) == ["Blue", "Red"]
     assert "Male" not in tag_list.group(1)
 
 
@@ -719,7 +719,7 @@ def test_the_event_admin_prunes_squads_after_an_inline_squad_edit(client, event,
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     ("payload", "saved"),
-    [('[" Red ", "red", "Blue"]', ["Red", "Blue"]), ("", []), ("null", [])],
+    [('[" Red ", "red", "Blue"]', ["Blue", "Red"]), ("", []), ("null", [])],
 )
 def test_the_event_admin_normalises_squad_tags(client, event, superuser, payload, saved) -> None:
     client.force_login(superuser)
@@ -753,14 +753,14 @@ def test_the_event_admin_refuses_what_the_edit_page_refuses(client, event, super
     assert "squad_tags" in response.context["adminform"].form.errors
     event.refresh_from_db()
     squad.refresh_from_db()
-    assert event.squad_tags == ["Red", "Blue"]
+    assert event.squad_tags == ["Blue", "Red"]
     assert squad.tags == ["Red"]
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     ("payload", "saved"),
-    [("", []), ("null", []), ('["blue", "Purple", "Red"]', ["Red", "Blue"])],
+    [("", []), ("null", []), ('["blue", "Purple", "Red"]', ["Blue", "Red"])],
 )
 def test_the_squad_admin_saves_tags_held_to_the_event(client, event, superuser, payload, saved) -> None:
     """An emptied Tags box is no tags, not a NULL the column refuses with a 500."""
