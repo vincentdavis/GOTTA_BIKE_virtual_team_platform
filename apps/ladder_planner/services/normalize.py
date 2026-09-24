@@ -8,6 +8,7 @@ regardless of whether a rider is on our team (``ZRRider``) or an opponent
 
 from __future__ import annotations
 
+import html
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -27,6 +28,24 @@ DURATIONS: list[tuple[str, str]] = [
 DURATION_KEYS: list[str] = [k for k, _ in DURATIONS]
 
 PROFILES: list[str] = ["flat", "rolling", "hilly", "mountainous"]
+
+
+def clean_name(value: str | None) -> str:
+    """Decode HTML entities in a rider/club name (``Kr&ouml;ger`` -> ``Kröger``).
+
+    The Zwift Racing API returns names with raw HTML entities. Opponents come
+    straight from the API and ``ZRRider`` rows synced before the fix still hold
+    the raw form, so both paths decode here before the name reaches a template.
+
+    Args:
+        value: Raw name (may be None).
+
+    Returns:
+        The decoded, stripped name, or "" for None/empty.
+
+    """
+    return html.unescape(value or "").strip()
+
 
 # vELO2 discipline scores: (key used in the dict, human label). Order matches the
 # spreadsheet's vELO2 Scores block.
@@ -122,7 +141,7 @@ def minimal(zwid: int, name: str) -> dict[str, Any]:
     """
     data = _blank()
     data["zwid"] = zwid
-    data["name"] = name or str(zwid)
+    data["name"] = clean_name(name) or str(zwid)
     return data
 
 
@@ -138,14 +157,14 @@ def from_zrrider(rider: ZRRider) -> dict[str, Any]:
     """
     data = _blank()
     data["zwid"] = rider.zwid
-    data["name"] = rider.name
+    data["name"] = clean_name(rider.name)
     data["weight_kg"] = _f(rider.weight)
     data["height_cm"] = _i(rider.height)
     data["zp_ftp"] = _i(rider.zp_ftp)
     data["zp_category"] = rider.zp_category or ""
     data["phenotype"] = rider.phenotype_value or ""
     data["club_id"] = rider.club_id
-    data["club_name"] = rider.club_name or ""
+    data["club_name"] = clean_name(rider.club_name)
     data["rating_current"] = _f(rider.race_current_rating)
     data["rating_max30"] = _f(rider.race_max30_rating)
     data["rating_max90"] = _f(rider.race_max90_rating)
@@ -190,7 +209,7 @@ def from_api(payload: dict[str, Any]) -> dict[str, Any]:
     """
     data = _blank()
     data["zwid"] = _i(payload.get("riderId"))
-    data["name"] = payload.get("name") or ""
+    data["name"] = clean_name(payload.get("name"))
     data["weight_kg"] = _f(payload.get("weight"))
     data["height_cm"] = _i(payload.get("height"))
     data["zp_ftp"] = _i(payload.get("zpFTP"))
@@ -198,7 +217,7 @@ def from_api(payload: dict[str, Any]) -> dict[str, Any]:
 
     club = payload.get("club") or {}
     data["club_id"] = _i(club.get("id"))
-    data["club_name"] = club.get("name") or ""
+    data["club_name"] = clean_name(club.get("name"))
 
     power = payload.get("power") or {}
     for key in DURATION_KEYS:
