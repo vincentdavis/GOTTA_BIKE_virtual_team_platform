@@ -68,6 +68,9 @@
   .heatmap-cell .cell-lane .dropdown > a { flex-wrap: nowrap; }
   .heatmap-cell .cell-lane .dropdown > a > span:first-of-type { min-width: 0; max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
   .heatmap-cell .cell-lane .slot-badge { margin-bottom: 0; line-height: 1.3; }
+  /* Picked to race that day: outside the rider link, so a cut-short name never hides it
+     and the Icons toggle never does either. */
+  .heatmap-cell .cell-racing { flex: none; font-size: 0.65rem; line-height: 1; margin-right: 0.15rem; }
   .heatmap-cell.cell-clickable { cursor: pointer; }
   .heatmap-cell.cell-clickable:hover { outline: 2px solid oklch(0.6 0.15 250); outline-offset: -2px; }
   .slot-badge { font-size: 0.55rem; font-weight: 700; background: oklch(0.55 0.2 250); color: white; border-radius: 0.2rem; padding: 0 0.2rem; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.1rem; }
@@ -147,6 +150,7 @@
               {% for entry in cell.lanes %}
               <div class="cell-lane{% if entry %} cell-name{% endif %}">
                 {% if entry %}
+                {% if entry.racing %}<span class="cell-racing" role="img" aria-label="Racing {{ entry.racing }}" title="Racing {{ entry.racing }}">🏁</span>{% endif %}
                 {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=None zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                 {% endif %}
               </div>
@@ -161,7 +165,7 @@
   </div>
 
   <!-- Legend -->
-  <div class="flex items-center gap-2 mb-6 text-sm">
+  <div class="flex flex-wrap items-center gap-2 mb-6 text-sm">
     <span class="text-base-content/70">Legend:</span>
     <div class="flex items-center gap-1">
       <span class="inline-block w-6 h-4 rounded" style="background: var(--color-base-300);"></span>
@@ -183,6 +187,12 @@
     <div class="flex items-center gap-1 ml-2">
       <span class="slot-badge">Name</span>
       <span>Scheduled race</span>
+    </div>
+    {% endif %}
+    {% if has_racing_flags %}
+    <div class="flex items-center gap-1 ml-2">
+      <span aria-hidden="true">🏁</span>
+      <span>Picked to race that day</span>
     </div>
     {% endif %}
   </div>

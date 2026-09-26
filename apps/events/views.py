@@ -5953,13 +5953,21 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     slot_selections = list(grid.slot_selections.prefetch_related("selected_users", "substitutes"))
     slot_selection_by_utc_key = {}
     scheduled_count_by_user_id: dict[int, int] = {}
+    # Riders picked to race (substitutes are not), by the day the race falls on in the
+    # display timezone -- the column its badge sits in, not its UTC date. The heatmap flags
+    # a picked rider in every slot of that day, as a rider seldom races twice in one day.
+    display_zone = ZoneInfo(display_tz)
+    racing_by_date: dict[str, dict[int, list[str]]] = {}
     for sel in slot_selections:
         utc_key = f"{sel.slot_date.isoformat()}|{sel.slot_time}"
         slot_selection_by_utc_key[utc_key] = sel
+        race_starts = datetime.combine(sel.slot_date, time.fromisoformat(sel.slot_time), tzinfo=ZoneInfo("UTC"))
+        racing_that_day = racing_by_date.setdefault(race_starts.astimezone(display_zone).date().isoformat(), {})
         for selected_user in sel.selected_users.all():
             scheduled_count_by_user_id[selected_user.pk] = (
                 scheduled_count_by_user_id.get(selected_user.pk, 0) + 1
             )
+            racing_that_day.setdefault(selected_user.pk, []).append(sel.name)
 
     # Annotate the responders table with each rider's scheduled-race count.
     for entry in enriched_responders:
@@ -5977,6 +5985,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         cells = []
         for d_info in display_dates:
             key = f"{d_info['full_date']}|{time_slot}"
+            racing_today = racing_by_date.get(d_info["full_date"], {})
             is_blocked = key in blocked_set
             uids = cell_user_ids.get(key, [])
             count = len(uids)
@@ -5999,13 +6008,21 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
                 "count": count,
                 "opacity": opacity,
                 "dark_text": dark_text,
-                "users": [user_by_id[uid] for uid in uids if uid in user_by_id],
+                # A copy of each rider's entry per cell: whether they race is per day.
+                "users": [
+                    {**user_by_id[uid], "racing": ", ".join(racing_today.get(uid, []))}
+                    for uid in uids
+                    if uid in user_by_id
+                ],
                 "utc_date": utc_date,
                 "utc_time": utc_time,
                 "selection_name": selection.name if selection else "",
                 "selection_id": selection.pk if selection else None,
             })
         grid_rows.append(_results_row_in_lanes(time_slot, cells, lane_order))
+    has_racing_flags = any(
+        entry and entry["racing"] for row in grid_rows for cell in row["cells"] for entry in cell["lanes"]
+    )
 
     # Build JSON data for JS modal (keyed by UTC coords)
     utc_cell_users_json = dict(utc_cell_user_ids)
@@ -6082,11 +6099,12 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
                 "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
                 "zr_age": getattr(zr, "age", "") or "" if zr else "",
             })
-        from datetime import datetime as dt
-        from zoneinfo import ZoneInfo
-
-        utc_dt = dt.combine(sel.slot_date, dt.strptime(sel.slot_time, "%H:%M").time(), tzinfo=ZoneInfo("UTC"))  # noqa: DTZ007  # clock-only parse, no date used
-        local_dt = utc_dt.astimezone(ZoneInfo(display_tz))
+        utc_dt = datetime.combine(
+            sel.slot_date,
+            datetime.strptime(sel.slot_time, "%H:%M").time(),  # noqa: DTZ007  # clock-only parse, no date used
+            tzinfo=ZoneInfo("UTC"),
+        )
+        local_dt = utc_dt.astimezone(display_zone)
         enriched_selections.append({
             "selection": sel,
             "enriched_users": enriched_sel_users,
@@ -6113,6 +6131,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "grid": grid,
             "display_dates": display_dates,
             "grid_rows": grid_rows,
+            "has_racing_flags": has_racing_flags,
             "total_responders": total_responders,
             "enriched_responders": enriched_responders,
             "enriched_non_responders": enriched_non_responders,
