@@ -57,6 +57,17 @@
   .avail-grid.icons-hidden .heatmap-cell .cell-name .badge {
     display: none;
   }
+  /* Rider lanes (_results_row_in_lanes): every lane is one line of a fixed height, so a
+     rider sits on the same line in every day column of a row. Nothing in a lane may wrap --
+     a second line would push every lane below it out of step -- so an over-long name is
+     cut short instead; the full name is in the rider card. */
+  .heatmap-cell .cell-lane { height: 1rem; display: flex; align-items: center; justify-content: center; white-space: nowrap; }
+  .avail-grid.icons-hidden .heatmap-cell .cell-lane { height: 0.8rem; }
+  .heatmap-cell .cell-lane + .cell-lane { border-top: 1px solid color-mix(in oklch, var(--color-base-content) 12%, transparent); }
+  .heatmap-cell .cell-lane .dropdown { max-width: 100%; }
+  .heatmap-cell .cell-lane .dropdown > a { flex-wrap: nowrap; }
+  .heatmap-cell .cell-lane .dropdown > a > span:first-of-type { min-width: 0; max-width: 10rem; overflow: hidden; text-overflow: ellipsis; }
+  .heatmap-cell .cell-lane .slot-badge { margin-bottom: 0; line-height: 1.3; }
   .heatmap-cell.cell-clickable { cursor: pointer; }
   .heatmap-cell.cell-clickable:hover { outline: 2px solid oklch(0.6 0.15 250); outline-offset: -2px; }
   .slot-badge { font-size: 0.55rem; font-weight: 700; background: oklch(0.55 0.2 250); color: white; border-radius: 0.2rem; padding: 0 0.2rem; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.1rem; }
@@ -130,10 +141,14 @@
               {% endif %}
               {% endif %}>
             {% if not cell.is_blocked %}
-              {% if cell.selection_name %}<div class="slot-badge" title="{{ cell.selection_name }}">{{ cell.selection_name }}</div>{% endif %}
-              {% for entry in cell.users %}
-              <div class="cell-name">
+              {% if row.has_race %}
+              <div class="cell-lane">{% if cell.selection_name %}<div class="slot-badge" title="{{ cell.selection_name }}">{{ cell.selection_name }}</div>{% endif %}</div>
+              {% endif %}
+              {% for entry in cell.lanes %}
+              <div class="cell-lane{% if entry %} cell-name{% endif %}">
+                {% if entry %}
                 {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=None zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                {% endif %}
               </div>
               {% endfor %}
             {% endif %}

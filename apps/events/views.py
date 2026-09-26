@@ -5771,6 +5771,46 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
     )
 
 
+def _results_row_in_lanes(time_slot: str, cells: list[dict], lane_order: dict[int, int]) -> dict:
+    """Lay one time slot of the results heatmap out in rider lanes.
+
+    A lane is a line given to one rider who is free at this time on any day shown. Every
+    open cell in the row repeats the same lanes in the same order -- the rider where they
+    are free, ``None`` (a blank line) where they are not -- so a rider sits on the same
+    line in every day column and can be read straight across the row. Stacking only each
+    cell's own riders put the same rider on a different line from one day to the next,
+    because the riders above them changed.
+
+    A blocked cell gets no lanes and opens none. ``has_race`` is set when an open cell
+    carries a scheduled race: its badge takes a line of its own, so every open cell in the
+    row reserves that line, or the day with the badge would sit a line lower than the rest.
+
+    Args:
+        time_slot: The row's local time ("HH:MM").
+        cells: The row's cells in day order, each with ``is_blocked``, ``users`` (the
+            enriched riders free in it) and ``selection_name``.
+        lane_order: Each rider's place in the lane order, by user pk. Every rider in
+            ``users`` must be in it.
+
+    Returns:
+        The row: ``time_slot``, ``cells`` (each given ``lanes``) and ``has_race``.
+
+    """
+    open_cells = [cell for cell in cells if not cell["is_blocked"]]
+    lane_user_ids = sorted(
+        {entry["user"].pk for cell in open_cells for entry in cell["users"]},
+        key=lane_order.__getitem__,
+    )
+    for cell in cells:
+        free = {entry["user"].pk: entry for entry in cell["users"]}
+        cell["lanes"] = [] if cell["is_blocked"] else [free.get(user_id) for user_id in lane_user_ids]
+    return {
+        "time_slot": time_slot,
+        "cells": cells,
+        "has_race": any(cell["selection_name"] for cell in open_cells),
+    }
+
+
 @require_GET
 @login_required
 @team_member_required()
@@ -5929,6 +5969,9 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
 
     # Build grid_rows for server-side rendering
     blocked_set = grid_data["display_blocked"]
+    # Lanes list riders in the responses' order (first name, last name), the order the
+    # cells stacked them in before lanes.
+    lane_order = {user.pk: position for position, user in enumerate(responder_users)}
     grid_rows = []
     for time_slot in grid_data["display_time_slots"]:
         cells = []
@@ -5962,7 +6005,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
                 "selection_name": selection.name if selection else "",
                 "selection_id": selection.pk if selection else None,
             })
-        grid_rows.append({"time_slot": time_slot, "cells": cells})
+        grid_rows.append(_results_row_in_lanes(time_slot, cells, lane_order))
 
     # Build JSON data for JS modal (keyed by UTC coords)
     utc_cell_users_json = dict(utc_cell_user_ids)
