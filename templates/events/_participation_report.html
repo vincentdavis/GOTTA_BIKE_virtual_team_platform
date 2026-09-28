@@ -18,10 +18,17 @@ upcoming_count and the matching raced / upcoming lists of {name, date}, and an
 <div class="mb-4"></div>
 {% endif %}
 
-{% if participation_timezones or participation_genders %}
+{% if participation %}
 <div class="mb-4">
   <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
+    {# Filters as you type: a squad stays when its name, or a rider's name as shown below, contains the text. #}
+    {# The placeholder is the box's only visible label, so it is darkened past daisyUI's 3.4:1 default. #}
+    <label for="filter-participation-search" class="sr-only">Search squads or riders</label>
+    <input type="search" id="filter-participation-search"
+           class="input input-bordered input-sm w-full sm:w-64 placeholder:text-base-content/70"
+           placeholder="Search squads or riders" autocomplete="off" oninput="filterParticipation()">
     {% if participation_timezones %}
+    <label for="filter-participation-timezone" class="sr-only">Filter by timezone</label>
     <select id="filter-participation-timezone" class="select select-bordered select-sm w-full sm:w-auto"
             onchange="filterParticipation()">
       <option value="">All timezones</option>
@@ -29,6 +36,7 @@ upcoming_count and the matching raced / upcoming lists of {name, date}, and an
     </select>
     {% endif %}
     {% if participation_genders %}
+    <label for="filter-participation-gender" class="sr-only">Filter by gender</label>
     <select id="filter-participation-gender" class="select select-bordered select-sm w-full sm:w-auto"
             onchange="filterParticipation()">
       <option value="">All genders</option>
@@ -36,16 +44,18 @@ upcoming_count and the matching raced / upcoming lists of {name, date}, and an
     </select>
     {% endif %}
   </div>
-  <p id="participation-no-results" class="text-sm text-base-content/60 mt-2 hidden">No squads match your filters.</p>
+  <p id="participation-filter-status" class="text-sm text-base-content/70 mt-2" role="status"></p>
 </div>
 {% endif %}
 
 {% for group in participation %}
 {% comment %}
 The filters hide whole squad blocks, so the timezone/gender live on the block rather
-than on each row -- they are properties of the squad, not the rider.
+than on each row -- they are properties of the squad, not the rider. The search reads
+the squad's name here and each rider's name from their row.
 {% endcomment %}
 <div class="mb-6 participation-squad"
+     data-squad-name="{{ group.squad.name }}"
      data-timezone="{{ group.squad.squad_timezone|default:'' }}"
      data-gender="{{ group.squad.gender|default:'' }}">
   <h3 class="font-semibold mb-2 flex flex-wrap items-center gap-2">
@@ -86,7 +96,7 @@ than on each row -- they are properties of the squad, not the rider.
       </thead>
       <tbody>
         {% for row in group.rows %}
-        <tr>
+        <tr data-rider-name="{{ row.user.get_full_name|default:row.user.discord_username }}">
           <td class="font-medium whitespace-nowrap">
             {% include "accounts/_user_tooltip.html" with display_name=row.user.get_full_name|default:row.user.discord_username user_id=row.user.pk discord_id=row.user.discord_id discord_avatar_url=row.user.discord_avatar_url zwid=row.zwid zp_category=row.zp_category zp_category_w=row.zp_category_w zr_category=row.zr_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype zr_age=row.zr_age is_race_ready=row.is_race_ready is_extra_verified=row.is_extra_verified in_zwiftpower=row.in_zwiftpower in_zwiftracing=row.in_zwiftracing %}
           </td>

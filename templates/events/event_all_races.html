@@ -71,24 +71,63 @@ function toggleAllRacesRiders(key) {
   }
 }
 
-// Participation filters: timezone + gender, matching the Manage Squads page. They hide
-// whole squad blocks, since both are properties of the squad rather than the rider.
+// Participation filters: a search, timezone and gender. They hide whole squad blocks.
+// Timezone and gender match the Manage Squads page -- properties of the squad, not the
+// rider. The search keeps a squad when its name, or one of its riders' names as shown,
+// contains the text, ignoring case and accents ("francois" finds "François").
+function foldForSearch(text) {
+  return (text || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+function participationNames(block) {
+  if (!block._searchNames) {
+    var names = [block.dataset.squadName];
+    block.querySelectorAll("tr[data-rider-name]").forEach(function (row) {
+      names.push(row.dataset.riderName);
+    });
+    block._searchNames = names.map(foldForSearch);
+  }
+  return block._searchNames;
+}
+
+var participationStatusTimer = null;
 function filterParticipation() {
+  var searchEl = document.getElementById("filter-participation-search");
+  var query = searchEl ? foldForSearch(searchEl.value.trim()) : "";
   var tzEl = document.getElementById("filter-participation-timezone");
   var tz = tzEl ? tzEl.value : "";
   var genderEl = document.getElementById("filter-participation-gender");
   var gender = genderEl ? genderEl.value : "";
+  var blocks = document.querySelectorAll(".participation-squad");
   var shown = 0;
-  document.querySelectorAll(".participation-squad").forEach(function (block) {
+  blocks.forEach(function (block) {
     var match = true;
     if (tz && block.dataset.timezone !== tz) match = false;
     if (match && gender && block.dataset.gender !== gender) match = false;
+    if (match && query) {
+      match = participationNames(block).some(function (name) { return name.indexOf(query) !== -1; });
+    }
     block.style.display = match ? "" : "none";
     if (match) shown++;
   });
-  var none = document.getElementById("participation-no-results");
-  if (none) none.classList.toggle("hidden", shown !== 0);
+
+  // Updated once typing pauses rather than on every key, so a screen reader reading
+  // the count is not talked over.
+  var status = document.getElementById("participation-filter-status");
+  if (!status) return;
+  var message = "";
+  if (query || tz || gender) {
+    message = shown === 0
+      ? "No squads match your filters."
+      : shown + " of " + blocks.length + " squad" + (blocks.length === 1 ? "" : "s");
+  }
+  clearTimeout(participationStatusTimer);
+  participationStatusTimer = setTimeout(function () { status.textContent = message; }, 300);
 }
+
+// Re-apply once the browser has restored the fields (Back, reload), or every squad
+// would show under a search box that still holds text.
+window.addEventListener("pageshow", filterParticipation);
 
 // "View Availability" columns on the participation report. Off by default -- the
 // report's main job is the race tallies, and the availability columns are only
