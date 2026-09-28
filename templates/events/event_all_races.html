@@ -3,7 +3,8 @@
 {% block title %}Races - {{ event.title }}{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto">
+{# hx-history="false": htmx would otherwise keep a copy of this page -- riders' names -- in localStorage. #}
+<div class="max-w-4xl mx-auto" hx-history="false">
   <div class="mb-4">
     <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
   </div>
@@ -17,34 +18,32 @@
     <div role="tabpanel" class="tab-content pt-4">
       <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 class="font-semibold">All Races</h3>
-        <span class="badge badge-ghost">{{ paginator.count }} race{{ paginator.count|pluralize }} from today</span>
+        <span class="badge badge-ghost">{{ total_races }} race{{ total_races|pluralize }} from today</span>
       </div>
 
-      {% if paginator.num_pages > 1 %}
-      <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
-        {% if page_obj.has_previous %}
-        <a href="?page={{ page_obj.previous_page_number }}" class="btn btn-outline btn-xs">&larr; Previous</a>
-        {% else %}
-        <button class="btn btn-outline btn-xs" disabled>&larr; Previous</button>
-        {% endif %}
-        <span class="text-base-content/70">Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
-        {% if page_obj.has_next %}
-        <a href="?page={{ page_obj.next_page_number }}" class="btn btn-outline btn-xs">Next &rarr;</a>
-        {% else %}
-        <button class="btn btn-outline btn-xs" disabled>Next &rarr;</button>
-        {% endif %}
-      </div>
+      {% if total_races %}
+      {% comment %}
+        Searches as you type: htmx swaps #all-races-results only, so the box keeps focus, and
+        hx-sync drops an answer a later keystroke has overtaken. Without JavaScript it is a
+        plain GET form. The placeholder is the box's only visible label, so it is darkened
+        past daisyUI's 3.4:1 default.
+      {% endcomment %}
+      <form method="get" action="{% url 'events:event_all_races' event.pk %}" role="search" class="mb-4"
+            hx-get="{% url 'events:event_all_races' event.pk %}"
+            hx-trigger="input changed delay:300ms from:#all-races-search, submit"
+            hx-target="#all-races-results"
+            hx-swap="outerHTML"
+            hx-sync="this:replace">
+        <label for="all-races-search" class="sr-only">Search races, squads or riders</label>
+        <input type="search" id="all-races-search" name="q" value="{{ query }}"
+               class="input input-bordered input-sm w-full sm:w-72 placeholder:text-base-content/70"
+               placeholder="Search races, squads or riders" autocomplete="off">
+      </form>
       {% endif %}
+      {# Read out after each live search; outside #all-races-results so it survives the swap. #}
+      <p id="all-races-announcer" class="sr-only" role="status" aria-live="polite"></p>
 
-      {% if slots %}
-      <div class="flex flex-col gap-2">
-        {% for slot in slots %}
-        {% include "events/_scheduled_race_card.html" %}
-        {% endfor %}
-      </div>
-      {% else %}
-      <p class="text-sm text-base-content/50">No upcoming races scheduled for this event.</p>
-      {% endif %}
+      {% include "events/_all_races_results.html" %}
     </div>
 
     {# ===== Participation ===== #}
@@ -62,13 +61,12 @@
 function toggleAllRacesRiders(key) {
   var row = document.getElementById('all-races-riders-' + key);
   var arrow = document.getElementById('all-races-arrow-' + key);
-  if (row.style.display === 'none') {
-    row.style.display = '';
-    arrow.style.transform = 'rotate(90deg)';
-  } else {
-    row.style.display = 'none';
-    arrow.style.transform = '';
-  }
+  var open = row.style.display === 'none';
+  row.style.display = open ? '' : 'none';
+  arrow.style.transform = open ? 'rotate(90deg)' : '';
+  // A search can open a card's list on load, so the button says which state it is in.
+  var button = document.querySelector('[aria-controls="all-races-riders-' + key + '"]');
+  if (button) button.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
 // Participation filters: a search, timezone and gender. They hide whole squad blocks.

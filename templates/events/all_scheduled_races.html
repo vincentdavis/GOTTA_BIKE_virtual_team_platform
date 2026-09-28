@@ -79,13 +79,12 @@
 function toggleAllRacesRiders(key) {
   var row = document.getElementById('all-races-riders-' + key);
   var arrow = document.getElementById('all-races-arrow-' + key);
-  if (row.style.display === 'none') {
-    row.style.display = '';
-    arrow.style.transform = 'rotate(90deg)';
-  } else {
-    row.style.display = 'none';
-    arrow.style.transform = '';
-  }
+  var open = row.style.display === 'none';
+  row.style.display = open ? '' : 'none';
+  arrow.style.transform = open ? 'rotate(90deg)' : '';
+  // A search can open a card's list on load, so the button says which state it is in.
+  var button = document.querySelector('[aria-controls="all-races-riders-' + key + '"]');
+  if (button) button.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 </script>
 {% endblock %}

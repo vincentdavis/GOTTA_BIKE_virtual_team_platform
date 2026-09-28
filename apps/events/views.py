@@ -22,7 +22,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.cache import patch_vary_headers
+from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import discord_permission_required, team_member_required
@@ -76,6 +77,7 @@ from apps.events.tz_utils import (
     convert_utc_to_local_config,
     drop_fully_blocked_days,
 )
+from apps.team.rosterv2 import fold
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -2541,6 +2543,36 @@ def _build_scheduled_race_slots(
     return slots
 
 
+def _races_matching(
+    selections: list[AvailabilitySlotSelection], query: str
+) -> tuple[list[AvailabilitySlotSelection], set[int]]:
+    """Keep the races whose name, squad's name or a picked rider's name contains ``query``.
+
+    A rider's name is the one the race card shows: their full name, or their Discord
+    username when they have none -- so every match can be seen. Compared with the
+    roster's ``fold`` (case and accents ignored, the same on SQLite and Postgres), which
+    is why this runs in Python: one event's upcoming races are a few hundred at most.
+
+    Args:
+        selections: The races to search, with ``grid__squad`` and ``selected_users`` loaded.
+        query: The text typed.
+
+    Returns:
+        The matching races, in the order given, and the ids of those a rider matched,
+        whose rider list the page opens so the reason for the match is on screen.
+
+    """
+    needle = fold(query)
+    matches: list[AvailabilitySlotSelection] = []
+    found_by_rider: set[int] = set()
+    for sel in selections:
+        if any(needle in fold(rider.get_full_name() or rider.discord_username) for rider in sel.selected_users.all()):
+            found_by_rider.add(sel.pk)
+        if sel.pk in found_by_rider or needle in fold(sel.name) or needle in fold(sel.grid.squad.name):
+            matches.append(sel)
+    return matches, found_by_rider
+
+
 @login_required
 @team_member_required()
 @require_GET
@@ -2548,7 +2580,10 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """Paginated list of every scheduled race in the event from today forward.
 
     25 races per page, ordered chronologically. ``?page=N`` selects a page
-    (out-of-range falls back to the last available page).
+    (out-of-range falls back to the last available page). ``?q=`` narrows the list to
+    races whose name, squad or picked rider contains the text (``_races_matching``); a
+    live search asks with ``HX-Target: all-races-results`` and gets that region alone,
+    without the participation report.
 
     Args:
         request: The HTTP request.
@@ -2581,6 +2616,12 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         .prefetch_related("selected_users", "grid__squad__captains", "grid__squad__vice_captains")
         .order_by("slot_date", "slot_time", "grid__squad__name")
     )
+    query = (request.GET.get("q") or "").strip()
+    found_by_rider: set[int] = set()
+    if query:
+        all_selections = list(all_selections)
+        total_races = len(all_selections)
+        all_selections, found_by_rider = _races_matching(all_selections, query)
 
     paginator = Paginator(all_selections, 25)
     page_number = request.GET.get("page") or 1
@@ -2589,13 +2630,15 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     except Exception:
         page_obj = paginator.page(paginator.num_pages or 1)
     selections = list(page_obj.object_list)
+    if not query:
+        total_races = paginator.count
 
     slots = _build_scheduled_race_slots(selections, user_tz, today_local)
-    participation = _build_participation_report(event, tz_obj, now_utc)
-    # Option lists for the participation filters, built from the squads actually
-    # present so a value that would match nothing is never offered.
-    participation_timezones = sorted({g["squad"].squad_timezone for g in participation if g["squad"].squad_timezone})
-    participation_genders = sorted({g["squad"].gender for g in participation if g["squad"].gender})
+    for slot in slots:
+        slot["open_riders"] = slot["selection"].pk in found_by_rider
+
+    htmx = getattr(request, "htmx", None)
+    live_search = bool(htmx and not htmx.history_restore_request and htmx.target == "all-races-results")
 
     logfire.debug(
         "Event all races viewed",
@@ -2605,28 +2648,53 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         total_pages=paginator.num_pages,
         slot_count=len(slots),
         total_count=paginator.count,
+        # The length only: a search is free text, often a rider's name.
+        query_length=len(query),
+        live_search=live_search,
     )
 
-    return render(
-        request,
-        "events/event_all_races.html",
-        {
-            "event": event,
-            "slots": slots,
-            "page_obj": page_obj,
-            "paginator": paginator,
-            "today": today_local,
-            "participation": participation,
-            "participation_timezones": participation_timezones,
-            "participation_genders": participation_genders,
-            # Drives the "View Availability" toggle: nothing to toggle when no squad
-            # has an availability sheet.
-            "has_open_grids": any(group["grids"] for group in participation),
-            "display_timezone": str(tz_obj),
-            "active_tab": request.GET.get("tab") or "races",
-            "guild_id": config.GUILD_ID,
-        },
-    )
+    context = {
+        "event": event,
+        "slots": slots,
+        "page_obj": page_obj,
+        "paginator": paginator,
+        "query": query,
+        "total_races": total_races,
+        "live_search": live_search,
+    }
+    if live_search:
+        response = render(request, "events/_all_races_results.html", context)
+        # The address bar follows the search, so a reload or a shared link keeps it; a
+        # new search starts on page 1, and clearing the box gives back the plain URL.
+        response["HX-Replace-Url"] = reverse("events:event_all_races", args=[event.pk]) + (
+            f"?{urlencode({'q': query})}" if query else ""
+        )
+    else:
+        participation = _build_participation_report(event, tz_obj, now_utc)
+        response = render(
+            request,
+            "events/event_all_races.html",
+            {
+                **context,
+                "today": today_local,
+                "participation": participation,
+                # Option lists for the participation filters, built from the squads actually
+                # present so a value that would match nothing is never offered.
+                "participation_timezones": sorted(
+                    {g["squad"].squad_timezone for g in participation if g["squad"].squad_timezone}
+                ),
+                "participation_genders": sorted({g["squad"].gender for g in participation if g["squad"].gender}),
+                # Drives the "View Availability" toggle: nothing to toggle when no squad
+                # has an availability sheet.
+                "has_open_grids": any(group["grids"] for group in participation),
+                "display_timezone": str(tz_obj),
+                "active_tab": request.GET.get("tab") or "races",
+                "guild_id": config.GUILD_ID,
+            },
+        )
+    # One URL answers with a whole page or with a fragment, so a cache must keep them apart.
+    patch_vary_headers(response, ("HX-Request",))
+    return response
 
 
 @login_required

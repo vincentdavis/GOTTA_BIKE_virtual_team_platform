@@ -4,12 +4,13 @@ One scheduled-race card. Expects a ``slot`` dict from
 (cross-event "Sch. Races" page) the event is shown as a linked badge.
 Pass ``hide_event_invite=True`` to suppress the "Event invite" link (used by
 the cross-event page). Relies on a ``toggleAllRacesRiders`` JS function defined
-by the host page.
+by the host page. ``slot.open_riders`` starts the rider list open: a search that found
+the race by one of its riders shows that rider.
 {% endcomment %}
 <div class="bg-base-200 rounded-md p-2 border border-base-300">
   <div class="flex flex-wrap items-center gap-2 text-sm">
-    <button aria-label="Show riders for {{ slot.selection.name }}" type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleAllRacesRiders('{{ slot.selection.pk }}')" title="Show riders">
-      <svg id="all-races-arrow-{{ slot.selection.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <button aria-label="Riders for {{ slot.selection.name }}" aria-expanded="{% if slot.open_riders %}true{% else %}false{% endif %}" aria-controls="all-races-riders-{{ slot.selection.pk }}" type="button" class="btn btn-ghost btn-xs !px-0 !min-h-0" onclick="toggleAllRacesRiders('{{ slot.selection.pk }}')" title="Show or hide riders">
+      <svg id="all-races-arrow-{{ slot.selection.pk }}" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"{% if slot.open_riders %} style="transform: rotate(90deg)"{% endif %}>
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
       </svg>
     </button>
@@ -29,7 +30,7 @@ by the host page.
     <span class="text-xs text-base-content/50">&middot; {{ slot.grid_title }}</span>
     {% endif %}
   </div>
-  <div id="all-races-riders-{{ slot.selection.pk }}" style="display:none" class="mt-2">
+  <div id="all-races-riders-{{ slot.selection.pk }}"{% if not slot.open_riders %} style="display:none"{% endif %} class="mt-2">
     {% if slot.selection.event_invite_url and not hide_event_invite or slot.selection.course_url or slot.selection.thread_link %}
     <p class="text-xs mb-2 flex flex-wrap gap-x-3">
       {% if slot.selection.event_invite_url and not hide_event_invite %}
