@@ -10,6 +10,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.http import require_GET
 
 from apps.cms.models import Page
+from gotta_bike_platform.url_utils import http_url
 
 # AI crawlers to block when ROBOTS_DISALLOW_AI is enabled
 AI_CRAWLERS = [
@@ -180,7 +181,6 @@ def login_help(request):
     from apps.accounts import login_help as diagnosis_store
 
     diagnosis = diagnosis_store.read(request)
-    discord_url = config.DISCORD_URL or ""
     # What the page explained, never who: the session holds no full id to log.
     logfire.info(
         "Login help shown",
@@ -195,8 +195,8 @@ def login_help(request):
         {
             "diagnosis": diagnosis,
             "guild_name": config.GUILD_NAME or "the team",
-            # Same rule as the old toast: only an http(s) invite becomes a link.
-            "join_url": discord_url if discord_url.startswith(("http://", "https://")) else "",
+            # Only an http(s) invite becomes a link -- the footer's rule too.
+            "join_url": http_url(config.DISCORD_URL),
         },
     )
 

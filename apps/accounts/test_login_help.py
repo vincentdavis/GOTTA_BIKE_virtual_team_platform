@@ -172,10 +172,9 @@ def test_no_join_link_without_an_http_invite(client, discord_login, discord_url)
         discord_login(client, DISCORD_ID, guild_ids=[111])
         body = _help_page(client)
 
-    # Only this page's own content: the site footer renders DISCORD_URL on its own terms.
-    content = body[body.index("Why couldn") : body.index("Try again")]
-    assert "Join the server" not in content
-    assert "javascript:" not in content
+    assert "Join the server" not in body
+    # The whole page, footer included: both go through gotta_bike_platform.url_utils.http_url.
+    assert "javascript:" not in body
 
 
 @pytest.mark.django_db

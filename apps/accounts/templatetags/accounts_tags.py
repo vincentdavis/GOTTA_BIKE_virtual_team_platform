@@ -10,11 +10,27 @@ from django.utils.safestring import mark_safe
 
 from apps.accounts.markdown_safe import render_untrusted_markdown
 from apps.accounts.permission_registry import get_permission_help
+from gotta_bike_platform.url_utils import http_url as _http_url
 
 if TYPE_CHECKING:
     from decimal import Decimal
 
 register = template.Library()
+
+
+@register.filter
+def http_url(value: object) -> str:
+    """Pass an admin-set address only if it is http(s); see ``gotta_bike_platform.url_utils``.
+
+    Args:
+        value: The address as stored.
+
+    Returns:
+        The address, or "" -- so ``{% if value|http_url %}`` drops the link entirely.
+
+    """
+    return _http_url(value)
+
 
 ZP_CATEGORY_EMOJI_FIELDS = {
     "A+": "zp_a_plus_emoji",
