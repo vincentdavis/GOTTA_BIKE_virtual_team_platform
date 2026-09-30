@@ -242,7 +242,8 @@ def test_a_departed_rider_trying_discord_again_is_refused_by_the_guild_check(cli
     """The re-login path is untouched: the live guild check still turns them away.
 
     The middleware ends the session; the Discord callback then runs as anonymous and the
-    adapter refuses them, landing on the login page with the guild message -- no loop.
+    adapter refuses them, landing on the sign-in help page with the server check failed --
+    a page an anonymous visitor can open, so no loop.
     """
     from allauth.socialaccount.models import SocialAccount
 
@@ -254,13 +255,13 @@ def test_a_departed_rider_trying_discord_again_is_refused_by_the_guild_check(cli
     response = discord_login(client, DISCORD_ID, guild_ids=[1])
 
     assert response.status_code == 302
-    assert response["Location"] == reverse("account_login")
+    assert response["Location"] == reverse("login_help")
     assert not _is_signed_in(client)
     # A refused login must not clear the stamp.
     assert GuildMember.objects.get(discord_id=DISCORD_ID).date_left is not None
-    login_page = client.get(reverse("account_login"))
-    assert login_page.status_code == 200
-    assert "must be a member" in login_page.content.decode()
+    help_page = client.get(reverse("login_help"))
+    assert help_page.status_code == 200
+    assert "Not met" in help_page.content.decode()
 
 
 @pytest.mark.django_db

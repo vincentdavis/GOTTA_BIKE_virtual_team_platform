@@ -1,0 +1,124 @@
+{% extends "account/base.html" %}
+{% comment %}
+  Where a refused Discord sign-in lands (gotta_bike_platform.views.login_help). `diagnosis`
+  is the refused person's own outcome from apps/accounts/login_help.py, or None for a direct
+  visit or an expired one. Every value in it came from Discord (the account's handle and
+  display name) or is one of our own status words: all of it is auto-escaped here.
+
+  Status is carried in words ("Met", "Not met", "Couldn't check"), never by colour alone,
+  and on solid badges, which pass contrast in both themes.
+{% endcomment %}
+
+{% block title %}Why couldn't I sign in? - The Coalition{% endblock %}
+
+{% block card_title %}
+<h2 class="card-title justify-center text-2xl text-center">Why couldn&rsquo;t I sign in?</h2>
+{% endblock %}
+
+{% block card_content %}
+<div class="mt-4 space-y-5">
+
+  {% if diagnosis.oauth_problem %}
+    {# Discord's own step failed, so no account is known: the problem is the whole story. #}
+    <div class="space-y-2">
+      {% if diagnosis.oauth_problem == "cancelled" %}
+        <p>You pressed <strong>Cancel</strong> on Discord&rsquo;s screen, so Discord didn&rsquo;t sign you in.</p>
+        <p>Try again and choose <strong>Authorize</strong> when Discord asks.</p>
+      {% elif diagnosis.oauth_problem == "denied" %}
+        <p>Discord refused to sign you in.</p>
+        <p>Check that the right Discord account is signed in at
+          <a href="https://discord.com/login" class="link" target="_blank" rel="noopener">discord.com</a>
+          in this browser, and that its email is verified (Discord &rarr; User Settings &rarr; My Account). Then try again.</p>
+      {% elif diagnosis.oauth_problem == "rate_limited" %}
+        <p>Discord is limiting sign-ins right now. Wait a few minutes and try again.</p>
+      {% else %}
+        <p>Something went wrong talking to Discord. Please try again.</p>
+        <p class="text-sm text-base-content/70">If it keeps happening, tell a team admin and mention the code
+          <code>{{ diagnosis.code|default:"unknown" }}</code>.</p>
+      {% endif %}
+    </div>
+
+  {% elif diagnosis %}
+    {# The account first: signing in with the wrong one is the commonest cause of all. #}
+    {# wrap-anywhere: a Discord handle has no spaces, and a 32-character one at the largest #}
+    {# text size would otherwise push the page sideways on a phone. #}
+    <div class="rounded-box bg-base-300 p-3 space-y-1 wrap-anywhere">
+      <p>
+        You signed in to Discord as
+        {% if diagnosis.display_name %}<strong>{{ diagnosis.display_name }}</strong>
+          <span class="text-base-content/70">(@{{ diagnosis.username }}{% if diagnosis.id_tail %}, ID ending {{ diagnosis.id_tail }}{% endif %})</span>{% else %}<strong>@{{ diagnosis.username }}</strong>{% if diagnosis.id_tail %} <span class="text-base-content/70">(ID ending {{ diagnosis.id_tail }})</span>{% endif %}{% endif %}.
+      </p>
+      <p class="text-sm text-base-content/70">
+        Not you? Discord uses whichever account is signed in at
+        <a href="https://discord.com/login" class="link" target="_blank" rel="noopener">discord.com</a>
+        in this browser. Log out there, sign in with the account you use for {{ guild_name }}, then try again.
+      </p>
+    </div>
+
+    <ul role="list" class="space-y-4">
+      <li class="space-y-1">
+        <div class="flex flex-wrap items-center gap-2">
+          {% if diagnosis.guild == "member" %}
+            <span class="badge badge-success">Met</span>
+          {% elif diagnosis.guild == "not_member" %}
+            <span class="badge badge-error">Not met</span>
+          {% else %}
+            <span class="badge badge-warning">Couldn&rsquo;t check</span>
+          {% endif %}
+          <span class="font-semibold">In {{ guild_name }}&rsquo;s Discord server</span>
+        </div>
+        {% if diagnosis.guild == "not_member" %}
+          <p class="text-sm">
+            {% if diagnosis.guild_count %}
+              Discord says this account is in {{ diagnosis.guild_count }} server{{ diagnosis.guild_count|pluralize }}, and {{ guild_name }}&rsquo;s isn&rsquo;t one of them.
+            {% else %}
+              Discord says this account isn&rsquo;t in any servers.
+            {% endif %}
+          </p>
+          {% if join_url %}
+            <a href="{{ join_url }}" class="btn btn-outline btn-sm" target="_blank" rel="noopener">Join the server</a>
+          {% endif %}
+        {% elif diagnosis.guild == "rate_limited" %}
+          <p class="text-sm">Discord is limiting requests right now. Wait a few minutes and try again.</p>
+        {% elif diagnosis.guild == "unavailable" %}
+          <p class="text-sm">Discord didn&rsquo;t answer when we checked. Try again in a moment.</p>
+        {% elif diagnosis.guild == "unconfigured" %}
+          <p class="text-sm">Sign-in is switched off on our side at the moment. It isn&rsquo;t anything you did &mdash; please tell a team admin.</p>
+        {% endif %}
+      </li>
+
+      <li class="space-y-1">
+        <div class="flex flex-wrap items-center gap-2">
+          {% if diagnosis.email_verified %}
+            <span class="badge badge-success">Met</span>
+          {% else %}
+            <span class="badge badge-error">Not met</span>
+          {% endif %}
+          <span class="font-semibold">Email verified on Discord</span>
+        </div>
+        {% if not diagnosis.email_verified %}
+          <p class="text-sm">
+            In Discord, open User Settings &rarr; My Account and verify your email.
+            Discord sends a link to that address &mdash; check your spam folder if it hasn&rsquo;t arrived.
+          </p>
+        {% endif %}
+      </li>
+    </ul>
+
+  {% else %}
+    {# A direct visit, or the diagnosis has expired: explain the requirements. #}
+    <p>To sign in, your Discord account needs to:</p>
+    <ul role="list" class="list-disc pl-5 space-y-1">
+      <li>be a member of {{ guild_name }}&rsquo;s Discord server{% if join_url %} &mdash;
+        <a href="{{ join_url }}" class="link" target="_blank" rel="noopener">join here</a>{% endif %}</li>
+      <li>have a verified email (Discord &rarr; User Settings &rarr; My Account)</li>
+    </ul>
+    <p class="text-sm text-base-content/70">
+      If you&rsquo;ve just been refused, try again. This page will then show which of these failed,
+      and which Discord account you signed in with.
+    </p>
+  {% endif %}
+
+  <a href="{% url 'account_login' %}" class="btn btn-primary w-full">Try again</a>
+</div>
+{% endblock %}

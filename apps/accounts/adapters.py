@@ -13,8 +13,8 @@ from constance import config
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
-from django.utils.html import format_html
 
+from apps.accounts import login_help
 from apps.accounts.discord_service import sync_user_discord_roles
 from apps.accounts.membership import clear_departure
 from gotta_bike_platform.log_utils import log_id
@@ -171,40 +171,33 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
         """
         return True
 
-    def _check_guild_membership(self, request, sociallogin):
+    def _guild_membership(self, sociallogin) -> login_help.GuildCheck:
         """Check live, with the rider's own token, that they are in the team's Discord server.
 
-        Fails closed: anything short of Discord listing ``GUILD_ID`` among the rider's
-        servers refuses the login -- including an unset ``GUILD_ID``, which used to skip the
-        check and let any Discord account in.
+        Returns the outcome rather than raising, so ``pre_social_login`` can run the email
+        check too and tell a refused rider about every problem at once. It still fails
+        closed: only ``MEMBER`` lets a login through, and every other status -- an unset
+        ``GUILD_ID`` included, which once skipped the check and let any account in -- is a
+        refusal there.
 
         Args:
-            request: The HTTP request.
             sociallogin: The social login object.
 
-        Raises:
-            ImmediateHttpResponse: If membership is not confirmed.
+        Returns:
+            The check's status, with the number of servers Discord listed when it listed them.
 
         """
         discord_id = sociallogin.account.extra_data.get("id")
         guild_id = config.GUILD_ID
         if not guild_id:
             logfire.error("GUILD_ID is not configured; refusing Discord login", discord_id=discord_id)
-            raise ImmediateHttpResponse(
-                _back_to_login(
-                    request,
-                    "Sign-in is unavailable because the team's Discord server is not configured. "
-                    "Please contact a team admin.",
-                )
-            )
+            return login_help.GuildCheck(login_help.GuildStatus.UNCONFIGURED)
 
         # A login without a token is refused like any other failure, not answered with a 500.
         access_token = getattr(sociallogin.token, "token", None)
         if not access_token:
             logfire.error("Discord login carried no access token", discord_id=discord_id)
-            raise ImmediateHttpResponse(
-                _back_to_login(request, "Failed to verify Discord server membership. Please try again.")
-            )
+            return login_help.GuildCheck(login_help.GuildStatus.UNAVAILABLE)
 
         try:
             response = httpx.get(
@@ -219,9 +212,7 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
                 error_type=type(e).__name__,
                 discord_id=discord_id,
             )
-            raise ImmediateHttpResponse(
-                _back_to_login(request, "Failed to verify Discord server membership. Please try again.")
-            ) from e
+            return login_help.GuildCheck(login_help.GuildStatus.UNAVAILABLE)
 
         if response.status_code == 429:
             # Discord's 429 body is normally JSON, but an edge or proxy can answer with
@@ -235,12 +226,7 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
                 discord_id=discord_id,
                 retry_after=retry_after,
             )
-            raise ImmediateHttpResponse(
-                _back_to_login(
-                    request,
-                    "Discord is temporarily rate limiting requests. Please wait a few minutes and try again.",
-                )
-            )
+            return login_help.GuildCheck(login_help.GuildStatus.RATE_LIMITED)
 
         try:
             response.raise_for_status()
@@ -254,32 +240,17 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
                 status_code=response.status_code,
                 discord_id=discord_id,
             )
-            raise ImmediateHttpResponse(
-                _back_to_login(request, "Failed to verify Discord server membership. Please try again.")
-            ) from e
+            return login_help.GuildCheck(login_help.GuildStatus.UNAVAILABLE)
 
         if int(guild_id) not in user_guild_ids:
-            guild_name = config.GUILD_NAME or "the team"
-            discord_url = config.DISCORD_URL or ""
             logfire.warning(
                 "User not in required guild",
                 discord_id=discord_id,
                 required_guild_id=log_id(guild_id),
                 user_guild_count=len(user_guild_ids),
             )
-            invite_msg = ""
-            if discord_url and discord_url.startswith(("http://", "https://")):
-                invite_msg = format_html(
-                    ' <a href="{}" target="_blank" rel="noopener" class="link">Join here</a>.', discord_url
-                )
-            # Built as safe HTML (both values escaped) so the toast renders the invite as a link;
-            # the message store keeps the safe flag across the redirect.
-            raise ImmediateHttpResponse(
-                _back_to_login(
-                    request,
-                    format_html("You must be a member of the {} Discord server to log in.{}", guild_name, invite_msg),
-                )
-            )
+            return login_help.GuildCheck(login_help.GuildStatus.NOT_MEMBER, guild_count=len(user_guild_ids))
+        return login_help.GuildCheck(login_help.GuildStatus.MEMBER, guild_count=len(user_guild_ids))
 
     def _check_not_blocked(self, request, sociallogin):
         """Refuse a blocked Discord account, and an existing account that belongs to one.
@@ -327,15 +298,14 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
                 )
             )
 
-    def _check_email_verified(self, request, sociallogin):
-        """Refuse a Discord account whose email Discord has not verified.
+    def _email_verified(self, sociallogin) -> bool:
+        """Whether Discord has verified the account's email -- a refusal when it has not.
 
         Args:
-            request: The HTTP request.
             sociallogin: The social login object.
 
-        Raises:
-            ImmediateHttpResponse: If the email is unverified.
+        Returns:
+            True only when Discord says the email is verified.
 
         """
         extra_data = sociallogin.account.extra_data
@@ -346,13 +316,7 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
                 discord_id=extra_data.get("id"),
                 email_verified=email_verified,
             )
-            raise ImmediateHttpResponse(
-                _back_to_login(
-                    request,
-                    "Your Discord account's email is not verified. "
-                    "Please verify your email in Discord Settings > My Account, then try again.",
-                )
-            )
+        return bool(email_verified)
 
     def _reconnect_by_discord_id(self, request, sociallogin):
         """Attach this Discord login to the account already holding its ``discord_id``.
@@ -515,13 +479,20 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
         Every check -- block list, live guild membership, verified email -- runs before
         this method writes anything, so a refused login leaves no ``SocialAccount`` or
         ``User`` change behind. Only then are existing users whose SocialAccount was lost
-        reconnected by ``discord_id``. A failed check raises allauth's
-        ``ImmediateHttpResponse`` (from the ``_check_*`` helpers), which sends the rider back
-        to the login page.
+        reconnected by ``discord_id``.
+
+        A blocked account is refused first and silently, back on the login page. The server
+        and email checks both run, and a refusal on either sends the rider to ``login_help``
+        with both outcomes recorded (``apps.accounts.login_help``), so they see which Discord
+        account they used and every problem at once.
 
         Args:
             request: The HTTP request.
             sociallogin: The social login object.
+
+        Raises:
+            ImmediateHttpResponse: For a refused login -- to the login page for a blocked
+                account, to ``login_help`` for a failed server or email check.
 
         """
         from allauth.socialaccount.providers.base import AuthProcess
@@ -541,8 +512,14 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             request_path=request.path if request else None,
         )
 
-        self._check_guild_membership(request, sociallogin)
-        self._check_email_verified(request, sociallogin)
+        # Both checks run, so a rider failing two learns about both from one attempt.
+        guild = self._guild_membership(sociallogin)
+        email_verified = self._email_verified(sociallogin)
+        if guild.status != login_help.GuildStatus.MEMBER or not email_verified:
+            login_help.record_refusal(request, extra_data=extra_data, guild=guild, email_verified=email_verified)
+            raise ImmediateHttpResponse(redirect("login_help"))
+        # A sign-in that passes leaves no earlier diagnosis behind for the next person.
+        login_help.forget(request)
 
         # CRITICAL: If allauth doesn't recognize this as an existing user, check if we have
         # a User with this discord_id. This handles cases where the SocialAccount was deleted
@@ -582,10 +559,13 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             sync_user_discord_roles(user)
 
     def on_authentication_error(self, request, provider, error=None, exception=None, extra_context=None):
-        """Handle OAuth authentication errors with user-friendly messages.
+        """Send a failed Discord sign-in to ``login_help``, which says what went wrong.
 
-        Called by allauth when the OAuth callback contains an error, e.g. when
-        Discord denies authorization because the user's email is unverified.
+        Called by allauth when Discord's own step fails, before any check has run -- so no
+        account is known and the page explains the failure alone. A Cancel on Discord's
+        screen arrives as ``cancelled``; the old message called every ``denied`` an
+        unverified email, which was a guess, and said nothing useful about a Cancel.
+        allauth returns the response carried by an ``ImmediateHttpResponse`` raised here.
 
         Args:
             request: The HTTP request.
@@ -593,6 +573,9 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             error: The error code (e.g. AuthError.DENIED, AuthError.UNKNOWN).
             exception: The exception that occurred, if any.
             extra_context: Additional context dict.
+
+        Raises:
+            ImmediateHttpResponse: Always, carrying the redirect to ``login_help``.
 
         """
         exception_str = str(exception) if exception else ""
@@ -607,23 +590,15 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
         )
 
         if "rate" in exception_str.lower() and "limit" in exception_str.lower():
-            messages.error(
-                request,
-                "Discord is temporarily rate limiting login requests. Please wait a few minutes and try again.",
-            )
+            problem = login_help.OAuthProblem.RATE_LIMITED
+        elif error == "cancelled":
+            problem = login_help.OAuthProblem.CANCELLED
         elif error == "denied":
-            messages.error(
-                request,
-                "Discord denied the login request. This usually means your Discord account's "
-                "email is not verified. Please check Discord Settings > My Account and verify "
-                "your email address, then try again.",
-            )
+            problem = login_help.OAuthProblem.DENIED
         else:
-            messages.error(
-                request,
-                f"Something went wrong during Discord login. Please try again. "
-                f"If the problem persists, contact a team admin. (Error: {error or 'unknown'})",
-            )
+            problem = login_help.OAuthProblem.ERROR
+        login_help.record_oauth_problem(request, problem, code=str(error or "unknown"))
+        raise ImmediateHttpResponse(redirect("login_help"))
 
     def get_login_redirect_url(self, request):
         """Return redirect URL after login.

@@ -5,6 +5,11 @@ Before these tests the check was always patched out, so nothing noticed that an 
 reconnect-by-``discord_id`` branch wrote a ``SocialAccount`` for a possible non-member and
 then crashed assigning allauth's read-only ``is_existing``.
 
+The server check returns its outcome (``_guild_membership``); ``pre_social_login`` refuses
+anything but ``MEMBER`` and sends the rider to ``login_help`` with the reason, while a blocked
+account is still refused first, back on the login page. What the help page says is covered in
+``apps/accounts/test_login_help.py``; this file is about who gets in.
+
 Fixtures (``callback_request``, ``make_sociallogin``, ``guilds_response``, ``discord_login``,
 ``guild_id``) live in ``apps/accounts/conftest.py``.
 """
@@ -21,6 +26,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.accounts.adapters import DiscordSocialAccountAdapter
+from apps.accounts.login_help import GuildStatus
 from apps.accounts.models import BlockedDiscordId, GuildMember
 
 DISCORD_ID = "700000000000000001"
@@ -32,15 +38,15 @@ def check(guild_id):
     """Run the guild check against a mocked Discord answer (a response or an exception).
 
     Returns:
-        ``run(request, sociallogin, answer)`` returning the ``httpx.get`` mock.
+        ``run(sociallogin, answer)`` returning ``(outcome, httpx.get mock)``.
 
     """
 
-    def run(request, sociallogin, answer):
+    def run(sociallogin, answer):
         kwargs = {"side_effect": answer} if isinstance(answer, Exception) else {"return_value": answer}
         with override_config(GUILD_ID=guild_id), patch("apps.accounts.adapters.httpx.get", **kwargs) as get:
-            DiscordSocialAccountAdapter()._check_guild_membership(request, sociallogin)
-        return get
+            outcome = DiscordSocialAccountAdapter()._guild_membership(sociallogin)
+        return outcome, get
 
     return run
 
@@ -69,53 +75,50 @@ def pre_social_login(guild_id, guilds_response):
 
 
 @pytest.mark.django_db
-def test_member_is_admitted(check, callback_request, make_sociallogin, guilds_response, guild_id):
-    get = check(callback_request, make_sociallogin(DISCORD_ID), guilds_response([111, guild_id]))
+def test_member_is_admitted(check, make_sociallogin, guilds_response, guild_id):
+    outcome, get = check(make_sociallogin(DISCORD_ID), guilds_response([111, guild_id]))
 
+    assert outcome.status == GuildStatus.MEMBER
     get.assert_called_once()
     assert get.call_args.kwargs["headers"]["Authorization"] == "Bearer tok"
-    assert not callback_request._messages.add.called
 
 
 @pytest.mark.django_db
-def test_non_member_is_refused(check, callback_request, make_sociallogin, guilds_response):
-    with pytest.raises(ImmediateHttpResponse) as refused:
-        check(callback_request, make_sociallogin(DISCORD_ID), guilds_response([111, 222]))
+def test_non_member_is_refused(check, make_sociallogin, guilds_response):
+    outcome, _ = check(make_sociallogin(DISCORD_ID), guilds_response([111, 222]))
 
-    assert refused.value.response["Location"] == reverse("account_login")
-    assert "must be a member" in callback_request.error_text()
-
-
-@pytest.mark.django_db
-def test_member_of_no_servers_is_refused(check, callback_request, make_sociallogin, guilds_response):
-    with pytest.raises(ImmediateHttpResponse):
-        check(callback_request, make_sociallogin(DISCORD_ID), guilds_response([]))
+    assert outcome.status == GuildStatus.NOT_MEMBER
+    assert outcome.guild_count == 2  # what the help page tells them Discord listed
 
 
 @pytest.mark.django_db
-def test_unset_guild_id_refuses_instead_of_skipping(callback_request, make_sociallogin):
+def test_member_of_no_servers_is_refused(check, make_sociallogin, guilds_response):
+    outcome, _ = check(make_sociallogin(DISCORD_ID), guilds_response([]))
+
+    assert (outcome.status, outcome.guild_count) == (GuildStatus.NOT_MEMBER, 0)
+
+
+@pytest.mark.django_db
+def test_unset_guild_id_refuses_instead_of_skipping(make_sociallogin):
     # 0 is what "not configured" looks like: GUILD_ID is an int setting.
     with (
         override_config(GUILD_ID=0),
         patch("apps.accounts.adapters.httpx.get") as get,
         patch("apps.accounts.adapters.logfire") as log,
-        pytest.raises(ImmediateHttpResponse) as refused,
     ):
-        DiscordSocialAccountAdapter()._check_guild_membership(callback_request, make_sociallogin(DISCORD_ID))
+        outcome = DiscordSocialAccountAdapter()._guild_membership(make_sociallogin(DISCORD_ID))
 
-    assert refused.value.response["Location"] == reverse("account_login")
+    assert outcome.status == GuildStatus.UNCONFIGURED
     get.assert_not_called()
     log.error.assert_called_once()
-    assert "not configured" in callback_request.error_text()
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("status", [401, 403, 500, 502])
-def test_http_error_status_is_refused(check, callback_request, make_sociallogin, guilds_response, guild_id, status):
-    with pytest.raises(ImmediateHttpResponse):
-        check(callback_request, make_sociallogin(DISCORD_ID), guilds_response([guild_id], status=status))
+def test_http_error_status_is_refused(check, make_sociallogin, guilds_response, guild_id, status):
+    outcome, _ = check(make_sociallogin(DISCORD_ID), guilds_response([guild_id], status=status))
 
-    assert "Failed to verify" in callback_request.error_text()
+    assert outcome.status == GuildStatus.UNAVAILABLE
 
 
 @pytest.mark.django_db
@@ -123,37 +126,34 @@ def test_http_error_status_is_refused(check, callback_request, make_sociallogin,
     "exc",
     [httpx.ReadTimeout("timed out"), httpx.ConnectTimeout("timed out"), httpx.ConnectError("no route")],
 )
-def test_timeout_and_transport_errors_are_refused(check, callback_request, make_sociallogin, exc):
-    with pytest.raises(ImmediateHttpResponse):
-        check(callback_request, make_sociallogin(DISCORD_ID), exc)
+def test_timeout_and_transport_errors_are_refused(check, make_sociallogin, exc):
+    outcome, _ = check(make_sociallogin(DISCORD_ID), exc)
 
-    assert "Failed to verify" in callback_request.error_text()
+    assert outcome.status == GuildStatus.UNAVAILABLE
 
 
 @pytest.mark.django_db
-def test_rate_limit_with_json_body_is_refused(check, callback_request, make_sociallogin, guilds_response):
+def test_rate_limit_with_json_body_is_refused(check, make_sociallogin, guilds_response):
     answer = guilds_response(status=429, body=b'{"retry_after": 1.5, "global": false}')
 
-    with patch("apps.accounts.adapters.logfire") as log, pytest.raises(ImmediateHttpResponse):
-        check(callback_request, make_sociallogin(DISCORD_ID), answer)
+    with patch("apps.accounts.adapters.logfire") as log:
+        outcome, _ = check(make_sociallogin(DISCORD_ID), answer)
 
+    assert outcome.status == GuildStatus.RATE_LIMITED
     assert log.warning.call_args.kwargs["retry_after"] == pytest.approx(1.5)
-    assert "rate limiting" in callback_request.error_text()
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("body", [b"<html>Too Many Requests</html>", b"", b"[1, 2]"])
-def test_rate_limit_with_non_json_body_is_refused_without_a_500(
-    check, callback_request, make_sociallogin, guilds_response, body
-):
+def test_rate_limit_with_non_json_body_is_refused_without_a_500(check, make_sociallogin, guilds_response, body):
     """The old code called ``response.json().get(...)`` unguarded here and raised out of the login."""
     answer = guilds_response(status=429, body=body, headers={"Retry-After": "7"})
 
-    with patch("apps.accounts.adapters.logfire") as log, pytest.raises(ImmediateHttpResponse):
-        check(callback_request, make_sociallogin(DISCORD_ID), answer)
+    with patch("apps.accounts.adapters.logfire") as log:
+        outcome, _ = check(make_sociallogin(DISCORD_ID), answer)
 
+    assert outcome.status == GuildStatus.RATE_LIMITED
     assert log.warning.call_args.kwargs["retry_after"] == "7"
-    assert "rate limiting" in callback_request.error_text()
 
 
 @pytest.mark.django_db
@@ -161,58 +161,29 @@ def test_rate_limit_with_non_json_body_is_refused_without_a_500(
     "body",
     [b"not json", b'{"id": "1"}', b'[{"name": "no id"}]', b'[{"id": "not-a-number"}]', b"null"],
 )
-def test_unreadable_guild_list_is_refused(check, callback_request, make_sociallogin, guilds_response, body):
-    with pytest.raises(ImmediateHttpResponse):
-        check(callback_request, make_sociallogin(DISCORD_ID), guilds_response(body=body))
+def test_unreadable_guild_list_is_refused(check, make_sociallogin, guilds_response, body):
+    outcome, _ = check(make_sociallogin(DISCORD_ID), guilds_response(body=body))
 
-    assert "Failed to verify" in callback_request.error_text()
+    assert outcome.status == GuildStatus.UNAVAILABLE
 
 
 @pytest.mark.django_db
-def test_a_login_without_a_token_is_refused(callback_request, make_sociallogin, guild_id):
-    with (
-        override_config(GUILD_ID=guild_id),
-        patch("apps.accounts.adapters.httpx.get") as get,
-        pytest.raises(ImmediateHttpResponse),
-    ):
-        DiscordSocialAccountAdapter()._check_guild_membership(
-            callback_request, make_sociallogin(DISCORD_ID, token=None)
-        )
+def test_a_login_without_a_token_is_refused(make_sociallogin, guild_id):
+    with override_config(GUILD_ID=guild_id), patch("apps.accounts.adapters.httpx.get") as get:
+        outcome = DiscordSocialAccountAdapter()._guild_membership(make_sociallogin(DISCORD_ID, token=None))
 
+    assert outcome.status == GuildStatus.UNAVAILABLE
     get.assert_not_called()
-    assert "Failed to verify" in callback_request.error_text()
 
 
 @pytest.mark.django_db
-def test_the_guild_check_logs_ids_not_usernames(check, callback_request, make_sociallogin, guilds_response):
-    with patch("apps.accounts.adapters.logfire") as log, pytest.raises(ImmediateHttpResponse):
-        check(callback_request, make_sociallogin(DISCORD_ID), guilds_response([1]))
+def test_the_guild_check_logs_ids_not_usernames(check, make_sociallogin, guilds_response):
+    with patch("apps.accounts.adapters.logfire") as log:
+        check(make_sociallogin(DISCORD_ID), guilds_response([1]))
 
     kwargs = log.warning.call_args.kwargs
     assert kwargs["discord_id"] == DISCORD_ID
     assert "discord_username" not in kwargs
-
-
-@pytest.mark.django_db
-def test_the_invite_renders_as_a_link_on_the_login_page(client, discord_login):
-    """It was queued as plain text, so the toast showed the raw ``<a href=...>`` markup."""
-    with override_config(DISCORD_URL="https://discord.gg/x?a=1&b=2", GUILD_NAME="<b>Team</b>"):
-        discord_login(client, DISCORD_ID, guild_ids=[111])
-
-    body = client.get(reverse("account_login")).content.decode()
-    link = '<a href="https://discord.gg/x?a=1&amp;b=2" target="_blank" rel="noopener" class="link">Join here</a>'
-    assert link in body
-    # The admin-set name is still escaped: only the invite is markup.
-    assert "the &lt;b&gt;Team&lt;/b&gt; Discord server" in body
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("discord_url", ["", "#", "javascript:alert(1)"])
-def test_no_invite_link_without_an_http_url(check, callback_request, make_sociallogin, guilds_response, discord_url):
-    with override_config(DISCORD_URL=discord_url), pytest.raises(ImmediateHttpResponse):
-        check(callback_request, make_sociallogin(DISCORD_ID), guilds_response([1]))
-
-    assert "<a" not in callback_request.error_text()
 
 
 # --- pre_social_login: ordering, reconnect, block list -------------------------------
@@ -266,11 +237,11 @@ def test_reconnect_writes_nothing_for_an_unverified_email(
 ):
     user_model.objects.create_user(username="kept", email="kept@example.test", discord_id=DISCORD_ID)
 
-    with pytest.raises(ImmediateHttpResponse):
+    with pytest.raises(ImmediateHttpResponse) as refused:
         pre_social_login(callback_request, make_sociallogin(DISCORD_ID, verified=False), [guild_id])
 
     assert not SocialAccount.objects.exists()
-    assert "not verified" in callback_request.error_text()
+    assert refused.value.response["Location"] == reverse("login_help")
 
 
 @pytest.mark.django_db
@@ -390,11 +361,10 @@ def test_new_non_member_gets_no_account_and_no_session(client, discord_login, us
     response = discord_login(client, DISCORD_ID, guild_ids=[111])
 
     assert response.status_code == 302
-    assert response["Location"] == reverse("account_login")
+    assert response["Location"] == reverse("login_help")
     assert not _signed_in(client)
     assert not user_model.objects.filter(discord_id=DISCORD_ID).exists()
     assert not SocialAccount.objects.exists()
-    assert "must be a member" in client.get(reverse("account_login")).content.decode()
 
 
 @pytest.mark.django_db
@@ -408,7 +378,7 @@ def test_existing_non_member_gets_no_session_and_no_changes(client, discord_logi
 
     response = discord_login(client, DISCORD_ID, guild_ids=[111])
 
-    assert response["Location"] == reverse("account_login")
+    assert response["Location"] == reverse("login_help")
     assert not _signed_in(client)
     user.refresh_from_db()
     assert user.discord_username == "before"
@@ -433,7 +403,7 @@ def test_existing_member_signs_in(client, discord_login, user_model):
 def test_unset_guild_id_refuses_a_real_login(client, discord_login, user_model):
     response = discord_login(client, DISCORD_ID, configured_guild_id=0)
 
-    assert response["Location"] == reverse("account_login")
+    assert response["Location"] == reverse("login_help")
     assert not _signed_in(client)
     assert not user_model.objects.filter(discord_id=DISCORD_ID).exists()
     response.guild_get.assert_not_called()
@@ -444,7 +414,7 @@ def test_discord_outage_refuses_a_real_login_without_a_500(client, discord_login
     response = discord_login(client, DISCORD_ID, guilds=httpx.ReadTimeout("slow"))
 
     assert response.status_code == 302
-    assert response["Location"] == reverse("account_login")
+    assert response["Location"] == reverse("login_help")
     assert not _signed_in(client)
     assert not user_model.objects.filter(discord_id=DISCORD_ID).exists()
 
@@ -454,7 +424,7 @@ def test_non_json_rate_limit_refuses_a_real_login_without_a_500(client, discord_
     response = discord_login(client, DISCORD_ID, guilds=guilds_response(status=429, body=b"slow down"))
 
     assert response.status_code == 302
-    assert response["Location"] == reverse("account_login")
+    assert response["Location"] == reverse("login_help")
     assert not _signed_in(client)
 
 

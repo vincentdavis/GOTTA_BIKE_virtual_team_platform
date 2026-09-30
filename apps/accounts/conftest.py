@@ -17,6 +17,7 @@ import httpx
 import pytest
 import requests
 from constance.test import override_config
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.core.cache import cache
 from django.test import RequestFactory
 
@@ -39,6 +40,8 @@ def callback_request():
     ``callback_request.error_text()`` joins every message queued on it.
     """
     request = RequestFactory().get("/accounts/discord/login/callback/")
+    # A real session: a refused login records its diagnosis there (apps/accounts/login_help.py).
+    SessionMiddleware(lambda _request: None).process_request(request)
     request._messages = MagicMock()
     request.error_text = lambda: " ".join(str(call.args[1]) for call in request._messages.add.call_args_list)
     return request

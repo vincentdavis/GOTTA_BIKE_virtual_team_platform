@@ -143,7 +143,7 @@ Answers live on `EventSignup.custom_answers` (JSON `{str(question_id): answer}`;
   `facebook_url`, `twitter_url`, `tiktok_url`, `bluesky_url`, `mastodon_url`, `garmin_url`, `tpv_profile_url`),
   equipment fields (`trainer`, `powermeter`, `dual_recording`, `heartrate_monitor`)
 - TOTP two-factor authentication via `allauth.mfa`
-- Custom adapter at `apps/accounts/adapters.py` verifies guild membership and syncs Discord profile data. Rejected users (not in the guild, blocked, unverified email, Discord API errors) go back to `account_login` with an error message — never to `DISCORD_URL`, which only adds a "Join here" when it is an http(s) URL (built with `format_html`, so the toast renders a real link and the guild name stays escaped). See "Discord OAuth Adapter" below for the load-bearing gotchas
+- Custom adapter at `apps/accounts/adapters.py` verifies guild membership and syncs Discord profile data. **A refused sign-in lands on `/accounts/login/help/` (`login_help`)**, which says which Discord account the browser used (display name, handle, last four digits of the id — never the email) and each check's outcome: server membership (with how many servers Discord listed, and a "Join the server" link only when `DISCORD_URL` is http(s)), or "couldn't check" for a Discord error, a 429 or an unset `GUILD_ID`; and email verified. Both checks run, so every problem shows from one attempt. Errors from Discord's own step (`on_authentication_error`) land there too — a Cancel is called a Cancel, not an unverified email. The outcome lives in the refused person's **own session** for `login_help.TTL` (15 min), is never looked up by Discord id, and is cleared by a sign-in that passes (`apps/accounts/login_help.py`). **A blocked account is the exception**: still refused first and silently, back on `account_login` with the generic toast and no diagnosis. Guarded by `apps/accounts/test_login_help.py`; who gets in at all stays in `test_guild_membership_check.py`. See "Discord OAuth Adapter" below for the load-bearing gotchas
 - OAuth scopes: `identify`, `email`, `guilds`
 - URLs at `/accounts/` (login, logout, 2fa management)
 
@@ -151,7 +151,7 @@ Answers live on `EventSignup.custom_answers` (JSON `{str(question_id): answer}`;
 
 **Critical gotchas:**
 
-- `pre_social_login` runs every check — block list, live guild check, verified email — **before it writes anything**; keep new checks ahead of the writes
+- `pre_social_login` runs every check — block list, live guild check, verified email — **before it writes anything**; keep new checks ahead of the writes. `_guild_membership` returns a `GuildCheck` and `_email_verified` a bool rather than raising, and the refusal is decided in one place: only `GuildStatus.MEMBER` with a verified email gets through, so a new status must still fail closed there
 - The block list refuses the incoming Discord id **and** the account allauth already resolved (`sociallogin.user`, which email authentication can match by address alone), so a blocked person's second Discord account cannot reach their old account
 - `pre_social_login` reconnects existing users by `discord_id` if SocialAccount was lost — prevents profile data loss. `connect()` is what makes `sociallogin.is_existing` True (it is a read-only property; assigning it raises). Refused if more than one `User` holds the id (`User.discord_id` is not unique); skipped for a `connect` from the connections page
 - `pre_social_login` only updates Discord fields, **never** profile fields (`first_name`, `last_name`, `birth_year`, etc.)

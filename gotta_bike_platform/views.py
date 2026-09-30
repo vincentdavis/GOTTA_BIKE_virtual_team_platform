@@ -160,6 +160,47 @@ def closed_account_route(request, *args, route: str = "", **kwargs):
     raise Http404
 
 
+@require_GET
+def login_help(request):
+    """Tell a rider why their Discord sign-in was refused, and what to do about each problem.
+
+    A refused sign-in lands here with its outcome in the rider's own session
+    (``apps.accounts.login_help``): the Discord account the browser used, and each check that
+    failed. Visited any other way -- directly, or after the diagnosis has expired -- it
+    explains the requirements instead. Open to anyone: the person it is for is by
+    definition not signed in, and it only ever shows the visitor their own session.
+
+    Args:
+        request: The HTTP request.
+
+    Returns:
+        The rendered help page.
+
+    """
+    from apps.accounts import login_help as diagnosis_store
+
+    diagnosis = diagnosis_store.read(request)
+    discord_url = config.DISCORD_URL or ""
+    # What the page explained, never who: the session holds no full id to log.
+    logfire.info(
+        "Login help shown",
+        diagnosed=diagnosis is not None,
+        guild=(diagnosis or {}).get("guild"),
+        email_verified=(diagnosis or {}).get("email_verified"),
+        oauth_problem=(diagnosis or {}).get("oauth_problem"),
+    )
+    return render(
+        request,
+        "account/login_help.html",
+        {
+            "diagnosis": diagnosis,
+            "guild_name": config.GUILD_NAME or "the team",
+            # Same rule as the old toast: only an http(s) invite becomes a link.
+            "join_url": discord_url if discord_url.startswith(("http://", "https://")) else "",
+        },
+    )
+
+
 def discord_only_login(request, *args, **kwargs):
     """Serve allauth's login page for GET only: the page offers Discord and nothing else.
 

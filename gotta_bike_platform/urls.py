@@ -51,6 +51,7 @@ from gotta_bike_platform.views import (
     discord_only_login,
     healthz,
     home,
+    login_help,
     robots_txt,
 )
 
@@ -68,6 +69,8 @@ urlpatterns = [
     # (every sub-path) so none of them can sign anybody in or hand out a password; see
     # closed_account_route. allauth's own URL names still reverse, the pages just 404.
     path("accounts/login/", discord_only_login, name="discord_only_login"),
+    # Where a refused Discord sign-in lands, with the reason (apps/accounts/login_help.py).
+    path("accounts/login/help/", login_help, name="login_help"),
     re_path(r"^accounts/login/code/", closed_account_route, {"route": "login_code"}),
     re_path(r"^accounts/password/", closed_account_route, {"route": "password"}),
     re_path(r"^accounts/email/", closed_account_route, {"route": "email"}),

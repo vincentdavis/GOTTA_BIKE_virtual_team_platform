@@ -4,10 +4,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from allauth.core.exceptions import ImmediateHttpResponse
+from django.contrib.sessions.middleware import SessionMiddleware
 from django.test import Client
 from django.urls import reverse
 
 from apps.accounts.adapters import DiscordSocialAccountAdapter
+from apps.accounts.login_help import GuildCheck, GuildStatus
 from apps.accounts.models import BlockedDiscordId
 
 BLOCKED_ID = "1201456726373834752"
@@ -57,12 +59,22 @@ def test_unblocked_id_passes_the_block_check(rf):
     """An id that is not on the list gets past the block and on to the usual checks."""
     BlockedDiscordId.objects.create(discord_id=BLOCKED_ID)
     request = rf.get("/accounts/discord/login/callback/")
+    SessionMiddleware(lambda _request: None).process_request(request)
     request._messages = MagicMock()
     sociallogin = _sociallogin("999999999999999999")
 
-    with patch.object(DiscordSocialAccountAdapter, "_check_guild_membership") as guild_check:
+    # Answered "not a member", so the login stops at the usual checks rather than the block.
+    with (
+        patch.object(
+            DiscordSocialAccountAdapter,
+            "_guild_membership",
+            return_value=GuildCheck(GuildStatus.NOT_MEMBER, guild_count=0),
+        ) as guild_check,
+        pytest.raises(ImmediateHttpResponse) as refused,
+    ):
         DiscordSocialAccountAdapter().pre_social_login(request, sociallogin)
     guild_check.assert_called_once()
+    assert refused.value.response["Location"] == reverse("login_help")
 
 
 @pytest.mark.django_db

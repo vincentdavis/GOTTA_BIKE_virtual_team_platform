@@ -109,7 +109,7 @@ Read these helpers before touching event/squad views — most non-trivial behavi
   `facebook_url`, `twitter_url`, `tiktok_url`, `bluesky_url`, `mastodon_url`, `garmin_url`, `tpv_profile_url`),
   equipment fields (`trainer`, `powermeter`, `dual_recording`, `heartrate_monitor`)
 - TOTP two-factor authentication via `allauth.mfa`
-- Custom adapter at `apps/accounts/adapters.py` verifies guild membership and syncs Discord profile data. Rejected users (not in the guild, blocked, unverified email, Discord API errors) go back to `account_login` with an error message — never to `DISCORD_URL`, which only adds a "Join here" link when it is an http(s) URL. See "Discord OAuth Adapter" below for the load-bearing gotchas
+- Custom adapter at `apps/accounts/adapters.py` verifies guild membership and syncs Discord profile data. A refused sign-in lands on `/accounts/login/help/` (`login_help`), which shows which Discord account the browser used and each check's outcome (server membership, email verified), from the refused person's own session (`apps/accounts/login_help.py`). A blocked account is the exception: refused first and silently, back on `account_login`. See "Discord OAuth Adapter" below for the load-bearing gotchas
 - OAuth scopes: `identify`, `email`, `guilds`
 - URLs at `/accounts/` (login, logout, 2fa management)
 
@@ -117,7 +117,7 @@ Read these helpers before touching event/squad views — most non-trivial behavi
 
 **Critical gotchas:**
 
-- `pre_social_login` runs every check — block list, live guild check, verified email — **before it writes anything**; keep new checks ahead of the writes
+- `pre_social_login` runs every check — block list, live guild check, verified email — **before it writes anything**; keep new checks ahead of the writes. The server check returns a `GuildCheck` rather than raising, and only `GuildStatus.MEMBER` with a verified email gets through, so a new status must still fail closed
 - `pre_social_login` reconnects existing users by `discord_id` if SocialAccount was lost — prevents profile data loss. Refused if more than one `User` holds the id
 - `pre_social_login` only updates Discord fields, **never** profile fields (`first_name`, `last_name`, `birth_year`, etc.)
 - `save_user` is only called for NEW users; `populate_user` runs on **every** Discord callback, so keep it side-effect free
