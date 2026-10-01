@@ -3,6 +3,7 @@
 Uses Django 6.0 background tasks feature with django-tasks database backend.
 """
 
+import html
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -14,6 +15,23 @@ from django.utils import timezone
 
 from apps.zwiftracing.models import ZRRider
 from apps.zwiftracing.zr_client import get_club, get_rider
+
+
+def _clean_text(value: str | None) -> str:
+    """Decode HTML entities the Zwift Racing API leaves in names.
+
+    ZR returns names like ``Kr&ouml;ger`` verbatim. Stored as-is, the template
+    escapes the ``&`` again and the page shows ``Kr&ouml;ger`` instead of
+    ``Kröger``. The ZwiftPower sync already does the same (``_clean_str``).
+
+    Args:
+        value: Raw string from the API (may be None).
+
+    Returns:
+        The decoded, stripped string, or "" for None/empty.
+
+    """
+    return html.unescape(value or "").strip()
 
 
 def _parse_decimal(value: float | str | None) -> Decimal | None:
@@ -74,7 +92,7 @@ def _map_rider_to_model(rider: dict) -> dict:
 
     return {
         # Basic info
-        "name": rider.get("name") or "",
+        "name": _clean_text(rider.get("name")),
         "gender": rider.get("gender") or "",
         "country": rider.get("country") or "",
         "age": rider.get("age") or "",
@@ -145,7 +163,7 @@ def _map_rider_to_model(rider: dict) -> dict:
         "phenotype_tt": _parse_decimal(phenotype_scores.get("tt")),
         # Club info
         "club_id": _parse_int(club.get("id")),
-        "club_name": club.get("name") or "",
+        "club_name": _clean_text(club.get("name")),
         # Seed ratings
         "seed_race": _parse_decimal(seed.get("race")),
         "seed_time_trial": _parse_decimal(seed.get("timeTrial")),
