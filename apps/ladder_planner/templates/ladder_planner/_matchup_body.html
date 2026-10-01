@@ -9,13 +9,15 @@
 
 {# ---- Riders: add controls + rosters, collapsible (open when empty) ---- #}
 <details id="ladder-riders" class="card bg-base-200 shadow-xl overflow-visible group mb-6" {% if not matchup.riders.all %}open{% endif %}>
-  <summary class="card-body py-3 cursor-pointer select-none list-none marker:hidden [&::-webkit-details-marker]:hidden flex-row items-center justify-between gap-3">
-    <span class="flex items-center gap-2">
+  <summary class="card-body py-3 cursor-pointer select-none list-none marker:hidden [&::-webkit-details-marker]:hidden flex-row flex-wrap items-center justify-between gap-3">
+    <span class="flex items-center gap-2 shrink-0">
       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
       <span class="card-title text-lg">Riders</span>
     </span>
-    <span class="flex gap-2 shrink-0">
-      <span class="badge badge-sm">{{ summary.our_count }} {{ summary.projected.our_label|default:"ours" }}</span>
+    {# Rather than push the page sideways on a phone or at a large text size, the badges drop below the title, #}
+    {# then onto separate lines, and a long team name wraps inside its badge (which keeps its usual height for one line). #}
+    <span class="flex flex-wrap justify-end gap-2 min-w-0">
+      <span class="badge badge-sm h-auto min-h-(--size) max-w-full">{{ summary.our_count }} {{ summary.projected.our_label|default:"ours" }}</span>
       <span class="badge badge-sm badge-ghost">{{ summary.opp_count }} opp</span>
     </span>
   </summary>
