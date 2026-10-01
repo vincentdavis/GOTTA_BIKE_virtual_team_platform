@@ -1,7 +1,10 @@
-"""Squad-based edit permission on TTT plans.
+"""The edit squad on TTT plans: who manages a plan besides its creator.
 
-Mirrors the ladder planner's ``edit_squad`` grant: the creator picks a squad, and
-that squad's roster (members, captains, vice-captains) can edit the plan too.
+Mirrors the ladder planner's ``edit_squad``: the creator picks a squad, and that squad's
+roster (members, captains, vice-captains) manages the plan as the creator does -- edits it
+without being asked to confirm, deletes it, and picks its squad. Any other team member may
+still edit it after confirming; that side is ``gotta_bike_platform/test_planner_access.py``,
+and the rule itself ``gotta_bike_platform/planner_access.py``.
 """
 
 from datetime import timedelta
@@ -11,8 +14,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.events.models import Event, Squad, SquadMember
-from apps.ttt_planner import views as ttt_views
 from apps.ttt_planner.models import TttPlan
+from gotta_bike_platform import planner_access
 
 
 def _event(title="Series", *, days_to_end=7, visible=True):
@@ -35,14 +38,14 @@ def _plan(owner, **kwargs):
     return TttPlan.objects.create(created_by=owner, target_speed_kph=40, **kwargs)
 
 
-# --- _can_edit ---------------------------------------------------------------
+# --- can_manage --------------------------------------------------------------
 
 
 @pytest.mark.django_db
-def test_owner_and_superuser_can_edit(team_member, superuser):
+def test_owner_and_superuser_manage_the_plan(team_member, superuser):
     plan = _plan(team_member)
-    assert ttt_views._can_edit(plan, team_member) is True
-    assert ttt_views._can_edit(plan, superuser) is True
+    assert planner_access.can_manage(plan, team_member) is True
+    assert planner_access.can_manage(plan, superuser) is True
 
 
 @pytest.mark.django_db
@@ -59,31 +62,31 @@ def test_edit_squad_grants_the_whole_roster(user_model):
     squad.vice_captains.add(vice)
     SquadMember.objects.create(squad=squad, user=member, status=SquadMember.Status.MEMBER)
 
-    assert ttt_views._can_edit(plan, cap) is True
-    assert ttt_views._can_edit(plan, vice) is True
-    assert ttt_views._can_edit(plan, member) is True
-    assert ttt_views._can_edit(plan, outsider) is False
+    assert planner_access.can_manage(plan, cap) is True
+    assert planner_access.can_manage(plan, vice) is True
+    assert planner_access.can_manage(plan, member) is True
+    assert planner_access.can_manage(plan, outsider) is False
 
 
 @pytest.mark.django_db
 def test_no_edit_squad_means_no_extra_grant(user_model, team_member):
-    """A plan without an edit squad stays owner-only."""
+    """A plan without an edit squad is managed by its creator alone."""
     owner = user_model.objects.create(username="owner2", zwid=9101)
     plan = _plan(owner)
 
     assert plan.edit_squad_id is None
-    assert ttt_views._can_edit(plan, team_member) is False
+    assert planner_access.can_manage(plan, team_member) is False
 
 
 @pytest.mark.django_db
-def test_a_pending_squad_membership_does_not_grant_edit(user_model, team_member):
+def test_a_pending_squad_membership_does_not_grant_managing(user_model, team_member):
     """Only MEMBER status counts, matching squad_member_users."""
     owner = user_model.objects.create(username="owner3", zwid=9201)
     squad = Squad.objects.create(event=_event(), name="Alpha")
     plan = _plan(owner, edit_squad=squad)
     SquadMember.objects.create(squad=squad, user=team_member, status=SquadMember.Status.PENDING)
 
-    assert ttt_views._can_edit(plan, team_member) is False
+    assert planner_access.can_manage(plan, team_member) is False
 
 
 # --- picking the squad -------------------------------------------------------
@@ -190,21 +193,29 @@ def test_a_squad_member_can_edit_rider_rows(client, team_member, user_model):
 
 
 @pytest.mark.django_db
-def test_an_outsider_still_cannot_edit(client, team_member, user_model):
+def test_an_outsider_cannot_choose_the_edit_squad(client, team_member, user_model):
+    """They may edit the plan, but not hand it to another squad: refused before anything saves."""
     owner = user_model.objects.create(username="other-owner3", zwid=8003)
     squad = Squad.objects.create(event=_event(), name="Alpha")
-    plan = _plan(owner, edit_squad=squad)
+    other = Squad.objects.create(event=_event(), name="Bravo")
+    plan = _plan(owner, edit_squad=squad, name="Kept")
     client.force_login(team_member)  # not in the squad
 
-    resp = client.post(reverse("ttt_planner:update", args=[plan.pk]), {"name": "Nope"}, HTTP_HX_REQUEST="true")
+    resp = client.post(
+        reverse("ttt_planner:update", args=[plan.pk]),
+        {"name": "Nope", "edit_squad": str(other.pk)},
+        HTTP_HX_REQUEST="true",
+    )
 
     plan.refresh_from_db()
     assert resp.status_code == 403
-    assert plan.name != "Nope"
+    assert plan.edit_squad_id == squad.pk
+    assert plan.name == "Kept"
+    assert plan.updated_by is None
 
 
 @pytest.mark.django_db
-def test_deleting_the_squad_leaves_the_plan_owner_only(user_model, team_member):
+def test_deleting_the_squad_leaves_the_plan_to_its_owner(user_model, team_member):
     """SET_NULL: losing the squad must not cascade the plan away."""
     owner = user_model.objects.create(username="owner4", zwid=9301)
     squad = Squad.objects.create(event=_event(), name="Alpha")
@@ -215,5 +226,5 @@ def test_deleting_the_squad_leaves_the_plan_owner_only(user_model, team_member):
 
     plan.refresh_from_db()
     assert plan.edit_squad_id is None
-    assert ttt_views._can_edit(plan, team_member) is False
-    assert ttt_views._can_edit(plan, owner) is True
+    assert planner_access.can_manage(plan, team_member) is False
+    assert planner_access.can_manage(plan, owner) is True

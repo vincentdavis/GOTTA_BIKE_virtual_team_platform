@@ -17,6 +17,7 @@ from apps.ladder_planner.models import CachedClub, CachedRider, CourseProfile, L
 from apps.ladder_planner.services import cache, compute, courses, normalize, roster, squads
 from apps.zwift_data.models import ZwiftRoute
 from apps.zwiftracing.models import ZRRider
+from gotta_bike_platform import planner_access
 
 # ----- fixtures / helpers ------------------------------------------------------------------------
 
@@ -774,17 +775,19 @@ def test_our_squad_add_dedupes(auth_client, team_member, user_model):
 
 
 # ----- edit-squad permissions --------------------------------------------------------------------
+# Who manages a matchup (deletes it, picks its squad, edits it unasked). Any team member may still
+# edit it after confirming: see gotta_bike_platform/test_planner_access.py and planner_access.py.
 
 
 @pytest.mark.django_db
-def test_can_edit_owner_and_superuser(team_member, superuser):
+def test_can_manage_owner_and_superuser(team_member, superuser):
     matchup = _make_matchup(team_member)
-    assert lp_views._can_edit(matchup, team_member) is True
-    assert lp_views._can_edit(matchup, superuser) is True
+    assert planner_access.can_manage(matchup, team_member) is True
+    assert planner_access.can_manage(matchup, superuser) is True
 
 
 @pytest.mark.django_db
-def test_can_edit_grants_edit_squad_members(team_member, user_model):
+def test_can_manage_grants_edit_squad_members(team_member, user_model):
     owner = user_model.objects.create(username="owner", zwid=9001)
     squad = Squad.objects.create(event=_event("Series"), name="Alpha")
     matchup = _make_matchup(owner, edit_squad=squad)
@@ -797,10 +800,10 @@ def test_can_edit_grants_edit_squad_members(team_member, user_model):
     squad.vice_captains.add(vice)
     SquadMember.objects.create(squad=squad, user=member, status=SquadMember.Status.MEMBER)
 
-    assert lp_views._can_edit(matchup, cap) is True
-    assert lp_views._can_edit(matchup, vice) is True
-    assert lp_views._can_edit(matchup, member) is True
-    assert lp_views._can_edit(matchup, outsider) is False
+    assert planner_access.can_manage(matchup, cap) is True
+    assert planner_access.can_manage(matchup, vice) is True
+    assert planner_access.can_manage(matchup, member) is True
+    assert planner_access.can_manage(matchup, outsider) is False
 
 
 @pytest.mark.django_db

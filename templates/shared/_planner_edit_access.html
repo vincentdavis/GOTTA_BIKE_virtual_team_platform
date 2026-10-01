@@ -1,0 +1,59 @@
+{% comment %}
+  Who a planner document belongs to, who last changed it, and, for anyone else on the
+  team, the step to start editing it. Shared by the ladder matchup and TTT plan pages;
+  the rule itself is gotta_bike_platform/planner_access.py.
+
+  Context: doc (a LadderMatchup or TttPlan with created_by, updated_by and
+  edit_squad__event loaded), noun ("matchup" or "plan"), dialog_id, and the page's
+  can_edit (its edit controls are showing) and can_manage (creator, edit squad or
+  superuser).
+
+  Someone who cannot manage the document opens it read-only. "Edit anyway" asks first,
+  then reloads the page with ?edit=1. That is a speed bump against a stray change, not a
+  lock: the server accepts their changes either way, and names them as its last editor.
+{% endcomment %}
+{% load humanize %}
+{% with creator=doc.created_by.discord_nickname|default:doc.created_by.discord_username|default:doc.created_by.username %}
+<p class="text-sm text-base-content/70">
+  Created by {% if doc.created_by_id == request.user.id %}you{% else %}{{ creator }}{% endif %}
+  {# Inside the if: a filter argument that looks through an empty updated_by raises rather than rendering blank. #}
+  {% if doc.updated_by %}
+    · last edited by {% if doc.updated_by_id == request.user.id %}you{% else %}{{ doc.updated_by.discord_nickname|default:doc.updated_by.discord_username|default:doc.updated_by.username }}{% endif %}
+    {{ doc.updated_at|naturaltime }}
+  {% endif %}
+</p>
+
+{% if not can_manage %}
+  {% if can_edit %}
+    <div class="alert alert-warning flex flex-wrap items-center justify-between gap-2 py-2">
+      <span>You&rsquo;re editing {{ creator }}&rsquo;s {{ noun }}. Changes save as you make them.</span>
+      <a href="{{ request.path }}" class="btn btn-sm">Done editing</a>
+    </div>
+  {% else %}
+    <div class="alert alert-info flex flex-wrap items-center justify-between gap-2 py-2">
+      <span>You&rsquo;re viewing {{ creator }}&rsquo;s {{ noun }}.</span>
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('{{ dialog_id }}').showModal()">Edit anyway&hellip;</button>
+    </div>
+    <dialog id="{{ dialog_id }}" class="modal" aria-labelledby="{{ dialog_id }}-title" aria-describedby="{{ dialog_id }}-text">
+      <div class="modal-box">
+        <h3 id="{{ dialog_id }}-title" class="font-semibold text-lg">Edit this {{ noun }}?</h3>
+        <p id="{{ dialog_id }}-text" class="py-3">
+          {% if doc.edit_squad %}
+            You are not a member of this {{ noun }}&rsquo;s squad ({{ doc.edit_squad.event.title }} &mdash; {{ doc.edit_squad.name }})
+            and did not create it ({{ creator }} did).
+          {% else %}
+            You did not create this {{ noun }} ({{ creator }} did).
+          {% endif %}
+          Are you sure you want to edit it?
+        </p>
+        <p class="text-sm text-base-content/70">Changes save as you make them, and your name will show as its last editor.</p>
+        <div class="modal-action">
+          <button type="button" class="btn btn-sm btn-ghost" onclick="this.closest('dialog').close()">Cancel</button>
+          <a href="?edit=1" class="btn btn-sm btn-warning">Edit anyway</a>
+        </div>
+      </div>
+      <form method="dialog" class="modal-backdrop"><button>close</button></form>
+    </dialog>
+  {% endif %}
+{% endif %}
+{% endwith %}

@@ -522,7 +522,8 @@
   {# ===== Climb compare (lazy — computed on demand, see matchup_climb) ===== #}
   <input type="radio" name="ladder_tabs" role="tab" class="tab" aria-label="Climb compare" />
   <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
-    <div hx-get="{% url 'ladder_planner:climb' matchup.pk %}" hx-trigger="intersect once"
+    {# ?edit=1 carries edit mode to the panel (its CdA control), for someone who confirmed "Edit anyway". #}
+    <div hx-get="{% url 'ladder_planner:climb' matchup.pk %}{% if can_edit %}?edit=1{% endif %}" hx-trigger="intersect once"
          hx-target="this" hx-swap="innerHTML">
       <div class="flex justify-center py-10"><span class="loading loading-spinner loading-lg"></span></div>
     </div>

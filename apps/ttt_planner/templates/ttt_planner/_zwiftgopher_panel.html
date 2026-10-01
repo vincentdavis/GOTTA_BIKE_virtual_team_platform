@@ -2,7 +2,7 @@
 {# zwiftgopher compare panel. Self-polls (load delay) while a run is pending. #}
 <div id="ttt-gopher-panel" class="card bg-base-200 shadow-xl mt-6"
      {% if plan.zwiftgopher_status == 'pending' %}
-     hx-get="{% url 'ttt_planner:zwiftgopher_panel' plan.pk %}"
+     hx-get="{% url 'ttt_planner:zwiftgopher_panel' plan.pk %}{% if can_edit %}?edit=1{% endif %}"
      hx-trigger="load delay:3s"
      hx-swap="outerHTML"
      {% endif %}>

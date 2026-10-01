@@ -7,10 +7,9 @@
 
   <div class="flex items-center justify-between gap-4">
     <a href="{% url 'ttt_planner:list' %}" class="btn btn-ghost btn-sm">&larr; All plans</a>
-    {% if not can_edit %}
-      <span class="badge badge-info">Shared view (read-only)</span>
-    {% endif %}
   </div>
+
+  {% include "shared/_planner_edit_access.html" with doc=plan noun="plan" dialog_id="ttt-edit-dialog" %}
 
   {# ---- Plan settings ---- #}
   <div class="card bg-base-200 shadow-xl">
@@ -88,11 +87,13 @@
                  class="input input-bordered input-sm" />
           <span class="label-text-alt mt-1 text-base-content/50">Clear to use the team default.</span>
         </label>
+        {# Only someone who can manage the plan chooses its squad: the view refuses it from anyone else. #}
+        {% if can_manage %}
         <label class="form-control md:col-span-2 lg:col-span-4">
           <span class="label-text mb-1">Edit squad
-            <span class="text-base-content/40">(let a squad's members edit this plan — you and admins always can)</span></span>
+            <span class="text-base-content/40">(its members can edit and delete this plan, as its creator can; anyone else on the team is asked to confirm before editing)</span></span>
           <select name="edit_squad" class="select select-bordered select-sm">
-            <option value="">— No shared editing —</option>
+            <option value="">— No squad —</option>
             {% if plan.edit_squad_id and not edit_squad_active %}
               <option value="{{ plan.edit_squad_id }}" selected>
                 {{ plan.edit_squad.event.title }} — {{ plan.edit_squad.name }} (event ended)
@@ -110,6 +111,7 @@
             {% endif %}
           </select>
         </label>
+        {% endif %}
       </form>
       {% else %}
         <h2 class="card-title text-2xl">{{ plan.name|default:"TTT Plan" }}</h2>
@@ -123,7 +125,7 @@
     </div>
   </div>
 
-  {# ---- Add rider (owner only) ---- #}
+  {# ---- Add rider (while the edit controls show) ---- #}
   {% if can_edit %}
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
@@ -187,10 +189,10 @@
     {% include "ttt_planner/_plan_body.html" %}
   </div>
 
-  {# zwiftgopher compare panel — lazy-loaded after the page renders #}
-  <div hx-get="{% url 'ttt_planner:zwiftgopher_panel' plan.pk %}" hx-trigger="load" hx-swap="outerHTML"></div>
+  {# zwiftgopher compare panel — lazy-loaded after the page renders; ?edit=1 carries edit mode to its run controls #}
+  <div hx-get="{% url 'ttt_planner:zwiftgopher_panel' plan.pk %}{% if can_edit %}?edit=1{% endif %}" hx-trigger="load" hx-swap="outerHTML"></div>
 
-  {% if can_edit %}
+  {% if can_manage %}
   <div class="text-right">
     <form method="post" action="{% url 'ttt_planner:delete' plan.pk %}"
           onsubmit="return confirm('Delete this plan?');">

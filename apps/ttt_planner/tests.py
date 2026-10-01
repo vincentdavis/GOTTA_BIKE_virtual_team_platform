@@ -1,5 +1,7 @@
 """Tests for the TTT planner: physics, computation, roster merge, and sharing."""
 
+from types import SimpleNamespace
+
 import pytest
 from django.urls import reverse
 
@@ -310,13 +312,15 @@ def test_owner_can_edit_shared_view_readonly(auth_client, team_member, app_admin
 
 
 @pytest.mark.django_db
-def test_non_owner_cannot_mutate(auth_client, team_member, app_admin):
-    """A non-owner cannot add riders to someone else's plan."""
+def test_a_non_owner_can_add_riders_and_is_named_last_editor(auth_client, team_member, app_admin):
+    """Any team member may change someone else's plan once they confirm in the page; the plan says who."""
     plan = TttPlan.objects.create(created_by=team_member)
     auth_client.force_login(app_admin)
-    resp = auth_client.post(reverse("ttt_planner:rider_add_manual", args=[plan.pk]), {"name": "Sneaky"})
-    assert resp.status_code == 403
-    assert plan.riders.count() == 0
+    resp = auth_client.post(reverse("ttt_planner:rider_add_manual", args=[plan.pk]), {"name": "Guest"})
+    plan.refresh_from_db()
+    assert resp.status_code == 200
+    assert plan.riders.count() == 1
+    assert plan.updated_by == app_admin
 
 
 @pytest.mark.django_db
@@ -390,8 +394,8 @@ def test_riders_remove_selected(auth_client, team_member):
 
 
 @pytest.mark.django_db
-def test_riders_remove_selected_non_owner_forbidden(auth_client, team_member, app_admin):
-    """A non-owner cannot bulk-remove riders from someone else's plan."""
+def test_riders_remove_selected_by_a_non_owner(auth_client, team_member, app_admin):
+    """A non-owner may bulk-remove riders from someone else's plan, and is named its last editor."""
     plan = TttPlan.objects.create(created_by=team_member)
     rider = PlanRider.objects.create(plan=plan, order=0, name="A")
     auth_client.force_login(app_admin)
@@ -399,8 +403,10 @@ def test_riders_remove_selected_non_owner_forbidden(auth_client, team_member, ap
         reverse("ttt_planner:riders_remove_selected", args=[plan.pk]),
         {"rider_ids": [str(rider.pk)]},
     )
-    assert resp.status_code == 403
-    assert plan.riders.count() == 1
+    plan.refresh_from_db()
+    assert resp.status_code == 200
+    assert plan.riders.count() == 0
+    assert plan.updated_by == app_admin
 
 
 @pytest.mark.django_db
@@ -578,15 +584,18 @@ def test_draft_savings_reset_uses_default(auth_client, team_member):
 
 
 @pytest.mark.django_db
-def test_draft_savings_table_non_owner_forbidden(auth_client, team_member, app_admin):
-    """A non-owner cannot edit another captain's draft savings."""
+def test_draft_savings_table_by_a_non_owner(auth_client, team_member, app_admin):
+    """A non-owner may edit another captain's draft savings, and is named the plan's last editor."""
     plan = TttPlan.objects.create(created_by=team_member)
     auth_client.force_login(app_admin)
     resp = auth_client.post(
         reverse("ttt_planner:draft_savings_update", args=[plan.pk]),
         {"saving": ["25"]},
     )
-    assert resp.status_code == 403
+    plan.refresh_from_db()
+    assert resp.status_code == 200
+    assert plan.draft_savings == pytest.approx([0.0, 0.25])
+    assert plan.updated_by == app_admin
 
 
 @pytest.mark.django_db
@@ -760,12 +769,20 @@ def test_zwiftgopher_run_enqueues(auth_client, team_member, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_zwiftgopher_run_non_owner_forbidden(auth_client, team_member, app_admin):
-    """A non-owner cannot trigger a run on someone else's plan."""
+def test_zwiftgopher_run_by_a_non_owner(auth_client, team_member, app_admin, monkeypatch):
+    """A non-owner may start a run on someone else's plan, and is named its last editor."""
+    calls = []
+    monkeypatch.setattr(
+        "apps.ttt_planner.views.run_zwiftgopher_optimize", SimpleNamespace(enqueue=lambda *args: calls.append(args))
+    )
     plan = TttPlan.objects.create(created_by=team_member)
     auth_client.force_login(app_admin)
     resp = auth_client.post(reverse("ttt_planner:zwiftgopher_run", args=[plan.pk]))
-    assert resp.status_code == 403
+    plan.refresh_from_db()
+    assert resp.status_code == 200
+    assert plan.zwiftgopher_status == TttPlan.GopherStatus.PENDING
+    assert len(calls) == 1
+    assert plan.updated_by == app_admin
 
 
 @pytest.mark.django_db

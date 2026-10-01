@@ -162,7 +162,18 @@ class TttPlan(models.Model):
         null=True,
         blank=True,
         related_name="+",
-        help_text="Optional squad whose members (incl. captains/vice-captains) may also edit this plan",
+        help_text=(
+            "Optional squad whose members (incl. captains/vice-captains) edit this plan as its creator does; "
+            "any other team member is asked to confirm first (gotta_bike_platform/planner_access.py)"
+        ),
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Who last changed the plan",
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

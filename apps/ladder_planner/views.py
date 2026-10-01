@@ -27,6 +27,7 @@ from apps.ladder_planner.models import CourseProfile, LadderMatchup, LadderRider
 from apps.ladder_planner.services import cache, compute, courses, normalize, roster, squads
 from apps.ladder_planner.tasks import warm_club
 from apps.zwift_data.models import ZwiftRoute
+from gotta_bike_platform import planner_access
 
 _MAX_OPPONENTS_PER_REQUEST = 50
 
@@ -61,23 +62,6 @@ def _add_opponent(matchup: LadderMatchup, data: dict, order: int, now) -> None:
         zr_data=data,
         fetched_at=now,
     )
-
-
-def _can_edit(matchup: LadderMatchup, user) -> bool:
-    """Return whether a user may edit a matchup.
-
-    Args:
-        matchup: The matchup.
-        user: The requesting user.
-
-    Returns:
-        True for the matchup owner, a superuser, or a member of the matchup's
-        ``edit_squad`` (member, captain, or vice-captain).
-
-    """
-    if user.is_superuser or matchup.created_by_id == user.id:
-        return True
-    return bool(matchup.edit_squad_id) and squads.user_in_squad(matchup.edit_squad, user)
 
 
 def _render_body(
@@ -120,19 +104,23 @@ def _render_body(
     )
 
 
-def _get_editable(request: HttpRequest, matchup_id: str) -> LadderMatchup | None:
-    """Fetch a matchup if the user may edit it, else None.
+def _changing(request: HttpRequest, matchup_id: str) -> LadderMatchup:
+    """Fetch a matchup whose contents this request changes, recording the user as its last editor.
+
+    Any team member may change a matchup's contents (``gotta_bike_platform.planner_access``);
+    deleting it and choosing its edit squad are checked separately, with ``can_manage``.
 
     Args:
         request: The request.
         matchup_id: Matchup UUID.
 
     Returns:
-        The matchup, or None if not editable (caller returns 403).
+        The matchup.
 
     """
     matchup = get_object_or_404(LadderMatchup, pk=matchup_id)
-    return matchup if _can_edit(matchup, request.user) else None
+    planner_access.record_editor(matchup, request.user)
+    return matchup
 
 
 def _next_order(matchup: LadderMatchup, side: str) -> int:
@@ -252,14 +240,21 @@ def matchup_create(request: HttpRequest) -> HttpResponse:
 @team_member_required(raise_exception=True)
 @require_GET
 def matchup_detail(request: HttpRequest, matchup_id: str) -> HttpResponse:
-    """Show a matchup. Read-only for non-owners (share link).
+    """Show a matchup: editable for its creator and edit squad, read-only for anyone else until they confirm.
 
     Returns:
         The matchup detail page.
 
     """
-    matchup = get_object_or_404(LadderMatchup.objects.select_related("edit_squad__event"), pk=matchup_id)
-    can_edit = _can_edit(matchup, request.user)
+    matchup = get_object_or_404(
+        LadderMatchup.objects.select_related("edit_squad__event", "created_by", "updated_by"), pk=matchup_id
+    )
+    can_manage = planner_access.can_manage(matchup, request.user)
+    can_edit = can_manage or planner_access.edit_requested(request)
+    if can_edit and not can_manage:
+        logfire.info(
+            "Ladder matchup opened for editing by a non-owner", matchup_id=str(matchup.pk), user_id=request.user.id
+        )
     my_squads, other_squads = squads.squads_for_picker(request.user) if can_edit else ([], [])
     # Whether the currently-selected edit squad appears in the active-event picker.
     # If not (its event has ended), the template renders it as a standalone option
@@ -272,6 +267,7 @@ def matchup_detail(request: HttpRequest, matchup_id: str) -> HttpResponse:
             "matchup": matchup,
             "summary": compute.matchup_summary(matchup),
             "can_edit": can_edit,
+            "can_manage": can_manage,
             "course_profiles": CourseProfile.choices,
             "route_options": courses.route_options() if can_edit else [],
             "my_squads": my_squads,
@@ -286,14 +282,17 @@ def matchup_detail(request: HttpRequest, matchup_id: str) -> HttpResponse:
 @team_member_required(raise_exception=True)
 @require_POST
 def matchup_delete(request: HttpRequest, matchup_id: str) -> HttpResponse:
-    """Delete a matchup (owner only).
+    """Delete a matchup: its creator, edit squad or a superuser only, never any team member.
 
     Returns:
         Redirect to the matchup list.
 
     """
     matchup = get_object_or_404(LadderMatchup, pk=matchup_id)
-    if not _can_edit(matchup, request.user):
+    if not planner_access.can_manage(matchup, request.user):
+        logfire.warning(
+            "Refused a ladder matchup delete by a non-owner", matchup_id=matchup_id, user_id=request.user.id
+        )
         return HttpResponse("Permission denied", status=403)
     matchup.delete()
     logfire.info("Ladder matchup deleted", matchup_id=matchup_id, user_id=request.user.id)
@@ -306,12 +305,18 @@ def matchup_delete(request: HttpRequest, matchup_id: str) -> HttpResponse:
 def matchup_update(request: HttpRequest, matchup_id: str) -> HttpResponse:
     """Update matchup-level settings (names, course, profile); recompute.
 
+    Any team member may; choosing the edit squad is refused, before anything is saved,
+    unless the user can manage the matchup.
+
     Returns:
         The refreshed matchup body partial.
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
+    matchup = get_object_or_404(LadderMatchup, pk=matchup_id)
+    if "edit_squad" in request.POST and not planner_access.can_manage(matchup, request.user):
+        logfire.warning(
+            "Refused a ladder edit-squad change by a non-owner", matchup_id=str(matchup.pk), user_id=request.user.id
+        )
         return HttpResponse("Permission denied", status=403)
 
     if "name" in request.POST:
@@ -340,6 +345,7 @@ def matchup_update(request: HttpRequest, matchup_id: str) -> HttpResponse:
             with contextlib.suppress(ValueError):
                 matchup.cda_coef = max(0.0, float(raw))
 
+    matchup.updated_by = request.user
     matchup.save()
     return HttpResponse(_render_body(request, matchup, can_edit=True))
 
@@ -354,9 +360,7 @@ def our_rider_search(request: HttpRequest, matchup_id: str) -> HttpResponse:
         The search-results dropdown partial.
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
-        return HttpResponse("Permission denied", status=403)
+    matchup = get_object_or_404(LadderMatchup, pk=matchup_id)
 
     query = request.GET.get("q", "")
     existing = set(matchup.riders.filter(side=Side.OURS).values_list("zwid", flat=True))
@@ -380,9 +384,7 @@ def opponent_search(request: HttpRequest, matchup_id: str) -> HttpResponse:
         The opponent search-results dropdown partial.
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
-        return HttpResponse("Permission denied", status=403)
+    matchup = get_object_or_404(LadderMatchup, pk=matchup_id)
 
     query = request.GET.get("q", "").strip()
     existing = set(matchup.riders.filter(side=Side.OPPONENT).values_list("zwid", flat=True))
@@ -405,9 +407,7 @@ def our_rider_add(request: HttpRequest, matchup_id: str, zwid: int) -> HttpRespo
         The refreshed matchup body partial.
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
-        return HttpResponse("Permission denied", status=403)
+    matchup = _changing(request, matchup_id)
 
     error = ""
     if not matchup.riders.filter(side=Side.OURS, zwid=zwid).exists():
@@ -441,9 +441,7 @@ def our_squad_add(request: HttpRequest, matchup_id: str) -> HttpResponse:
         The refreshed matchup body partial (with a notice or error).
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
-        return HttpResponse("Permission denied", status=403)
+    matchup = _changing(request, matchup_id)
 
     squad = Squad.objects.filter(pk=request.POST.get("squad")).select_related("event").first()
     if squad is None:
@@ -507,9 +505,7 @@ def opponent_add(request: HttpRequest, matchup_id: str, zwid: int) -> HttpRespon
         The refreshed matchup body partial.
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
-        return HttpResponse("Permission denied", status=403)
+    matchup = _changing(request, matchup_id)
 
     error = ""
     if not matchup.riders.filter(side=Side.OPPONENT, zwid=zwid).exists():
@@ -539,9 +535,7 @@ def opponents_add(request: HttpRequest, matchup_id: str) -> HttpResponse:
         The refreshed matchup body partial (with a notice or error).
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
-        return HttpResponse("Permission denied", status=403)
+    matchup = _changing(request, matchup_id)
 
     zwids = _parse_zwids(request.POST.get("zwids", ""))
     if not zwids:
@@ -604,9 +598,7 @@ def rider_remove(request: HttpRequest, matchup_id: str, rider_id: int) -> HttpRe
         The refreshed matchup body partial.
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
-        return HttpResponse("Permission denied", status=403)
+    matchup = _changing(request, matchup_id)
 
     matchup.riders.filter(pk=rider_id).delete()
     return HttpResponse(_render_body(request, matchup, can_edit=True))
@@ -622,9 +614,7 @@ def rider_toggle(request: HttpRequest, matchup_id: str, rider_id: int) -> HttpRe
         The refreshed matchup body partial.
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
-        return HttpResponse("Permission denied", status=403)
+    matchup = _changing(request, matchup_id)
 
     rider = get_object_or_404(LadderRider, pk=rider_id, matchup=matchup)
     rider.is_racing = not rider.is_racing
@@ -652,7 +642,8 @@ def matchup_climb(request: HttpRequest, matchup_id: str) -> HttpResponse:
         {
             "matchup": matchup,
             "climb": compute.climb_advantage(matchup),
-            "can_edit": _can_edit(matchup, request.user),
+            # The page asks for the panel with ?edit=1 while its edit controls show.
+            "can_edit": planner_access.can_manage(matchup, request.user) or planner_access.edit_requested(request),
         },
     )
 
@@ -671,9 +662,7 @@ def matchup_refresh(request: HttpRequest, matchup_id: str) -> HttpResponse:
         The refreshed matchup body partial (with a notice).
 
     """
-    matchup = _get_editable(request, matchup_id)
-    if matchup is None:
-        return HttpResponse("Permission denied", status=403)
+    matchup = _changing(request, matchup_id)
 
     now = timezone.now()
     updated = 0

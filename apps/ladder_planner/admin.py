@@ -18,9 +18,18 @@ class LadderRiderInline(admin.TabularInline):
 class LadderMatchupAdmin(admin.ModelAdmin):
     """Admin for ladder matchups."""
 
-    list_display = ("__str__", "our_team_name", "opponent_team_name", "course_profile", "created_by", "updated_at")
+    list_display = (
+        "__str__",
+        "our_team_name",
+        "opponent_team_name",
+        "course_profile",
+        "created_by",
+        "updated_by",
+        "updated_at",
+    )
     list_filter = ("course_profile",)
     search_fields = ("name", "our_team_name", "opponent_team_name", "course_name")
+    readonly_fields = ("updated_by",)  # set by the planner views, which record every change's author
     inlines = (LadderRiderInline,)
 
 

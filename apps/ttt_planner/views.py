@@ -42,23 +42,7 @@ from apps.zwift_data import catalog
 from apps.zwift_data.models import ZwiftDataset, ZwiftRoute, ZwiftSegment, ZwiftWorld
 from apps.zwift_data.services.velo import import_velo_from_file
 from apps.zwift_data.tasks import sync_zwift_data
-
-
-def _can_edit(plan: TttPlan, user) -> bool:
-    """Return whether a user may edit a plan.
-
-    Args:
-        plan: The plan.
-        user: The requesting user.
-
-    Returns:
-        True for the plan owner, a superuser, or a member of the plan's
-        ``edit_squad`` (member, captain, or vice-captain).
-
-    """
-    if user.is_superuser or plan.created_by_id == user.id:
-        return True
-    return bool(plan.edit_squad_id) and event_squads.user_in_squad(plan.edit_squad, user)
+from gotta_bike_platform import planner_access
 
 
 def _render_plan_body(request: HttpRequest, plan: TttPlan, *, can_edit: bool) -> str:
@@ -356,14 +340,19 @@ def plan_create(request: HttpRequest) -> HttpResponse:
 @team_member_required(raise_exception=True)
 @require_GET
 def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
-    """Show a plan. Read-only for non-owners (share link).
+    """Show a plan: editable for its creator and edit squad, read-only for anyone else until they confirm.
 
     Returns:
         The plan detail page.
 
     """
-    plan = get_object_or_404(TttPlan.objects.select_related("route", "edit_squad__event"), pk=plan_id)
-    can_edit = _can_edit(plan, request.user)
+    plan = get_object_or_404(
+        TttPlan.objects.select_related("route", "edit_squad__event", "created_by", "updated_by"), pk=plan_id
+    )
+    can_manage = planner_access.can_manage(plan, request.user)
+    can_edit = can_manage or planner_access.edit_requested(request)
+    if can_edit and not can_manage:
+        logfire.info("TTT plan opened for editing by a non-owner", plan_id=str(plan.pk), user_id=request.user.id)
     result = compute_plan(plan)
     route_options = terrain.route_options() if can_edit else []
     my_squads, other_squads = event_squads.squads_for_picker(request.user) if can_edit else ([], [])
@@ -378,6 +367,7 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
             "plan": plan,
             "result": result,
             "can_edit": can_edit,
+            "can_manage": can_manage,
             "route_options": route_options,
             "course_types": terrain.TERRAIN_CHOICES,
             "event_types": TttPlan.EventType.choices,
@@ -392,14 +382,15 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
 @team_member_required(raise_exception=True)
 @require_POST
 def plan_delete(request: HttpRequest, plan_id: str) -> HttpResponse:
-    """Delete a plan (owner only).
+    """Delete a plan: its creator, edit squad or a superuser only, never any team member.
 
     Returns:
         Redirect to the plan list.
 
     """
     plan = get_object_or_404(TttPlan, pk=plan_id)
-    if not _can_edit(plan, request.user):
+    if not planner_access.can_manage(plan, request.user):
+        logfire.warning("Refused a TTT plan delete by a non-owner", plan_id=plan_id, user_id=request.user.id)
         return HttpResponse("Permission denied", status=403)
     plan.delete()
     logfire.info("TTT plan deleted", plan_id=plan_id, user_id=request.user.id)
@@ -426,19 +417,23 @@ def _clamp(value: int, ceiling: int) -> int:
     return min(max(value, 0), ceiling)
 
 
-def _get_editable_plan(request: HttpRequest, plan_id: str) -> TttPlan | None:
-    """Fetch a plan if the user may edit it, else None.
+def _changing(request: HttpRequest, plan_id: str) -> TttPlan:
+    """Fetch a plan whose contents this request changes, recording the user as its last editor.
+
+    Any team member may change a plan's contents (``gotta_bike_platform.planner_access``);
+    deleting it and choosing its edit squad are checked separately, with ``can_manage``.
 
     Args:
         request: The request.
         plan_id: Plan UUID.
 
     Returns:
-        The plan, or None if not editable (caller returns 403).
+        The plan.
 
     """
     plan = get_object_or_404(TttPlan, pk=plan_id)
-    return plan if _can_edit(plan, request.user) else None
+    planner_access.record_editor(plan, request.user)
+    return plan
 
 
 @login_required
@@ -447,12 +442,16 @@ def _get_editable_plan(request: HttpRequest, plan_id: str) -> TttPlan | None:
 def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
     """Update plan-level settings (name, team, route, target speed); recompute.
 
+    Any team member may; choosing the edit squad is refused, before anything is saved,
+    unless the user can manage the plan.
+
     Returns:
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
+    plan = get_object_or_404(TttPlan, pk=plan_id)
+    if "edit_squad" in request.POST and not planner_access.can_manage(plan, request.user):
+        logfire.warning("Refused a TTT edit-squad change by a non-owner", plan_id=str(plan.pk), user_id=request.user.id)
         return HttpResponse("Permission denied", status=403)
 
     if "name" in request.POST:
@@ -487,6 +486,7 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
         squad_id = request.POST.get("edit_squad")
         plan.edit_squad = Squad.objects.filter(pk=squad_id).first() if squad_id else None
 
+    plan.updated_by = request.user
     plan.save()
     return HttpResponse(_render_plan_body(request, plan, can_edit=True))
 
@@ -504,9 +504,7 @@ def draft_savings_update(request: HttpRequest, plan_id: str) -> HttpResponse:
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     if request.POST.get("reset"):
         plan.draft_savings = []
@@ -562,7 +560,9 @@ def zwiftgopher_panel(request: HttpRequest, plan_id: str) -> HttpResponse:
 
     """
     plan = get_object_or_404(TttPlan, pk=plan_id)
-    return HttpResponse(_render_gopher_panel(request, plan, can_edit=_can_edit(plan, request.user)))
+    # The page asks for the panel with ?edit=1 while its edit controls show (and the panel's own polling keeps it).
+    can_edit = planner_access.can_manage(plan, request.user) or planner_access.edit_requested(request)
+    return HttpResponse(_render_gopher_panel(request, plan, can_edit=can_edit))
 
 
 @login_required
@@ -575,9 +575,7 @@ def zwiftgopher_run(request: HttpRequest, plan_id: str) -> HttpResponse:
         The panel partial (in the pending state, which self-polls).
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     schedule = request.POST.get("route_schedule", zwiftgopher.DEFAULT_ROUTE_SCHEDULE)
     if schedule not in zwiftgopher.VALID_ROUTE_SCHEDULES:
@@ -609,9 +607,7 @@ def calculate_speed(request: HttpRequest, plan_id: str) -> HttpResponse:
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     if "target_if" in request.POST:
         with contextlib.suppress(ValueError):
@@ -632,9 +628,7 @@ def auto_balance(request: HttpRequest, plan_id: str) -> HttpResponse:
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     result = compute_auto_balance(plan)
     if result is not None:
@@ -666,9 +660,7 @@ def rider_search(request: HttpRequest, plan_id: str) -> HttpResponse:
         The search-results dropdown partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = get_object_or_404(TttPlan, pk=plan_id)
 
     query = request.GET.get("q", "")
     existing = set(plan.riders.exclude(zwid__isnull=True).values_list("zwid", flat=True))
@@ -700,9 +692,7 @@ def rider_add(request: HttpRequest, plan_id: str, zwid: int) -> HttpResponse:
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     if not plan.riders.filter(zwid=zwid).exists():
         data = roster.get_rider_data([zwid]).get(zwid)
@@ -732,9 +722,7 @@ def plan_squad_add(request: HttpRequest, plan_id: str) -> HttpResponse:
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     squad = Squad.objects.filter(pk=request.POST.get("squad")).first()
     if squad is None:
@@ -775,9 +763,7 @@ def rider_add_manual(request: HttpRequest, plan_id: str) -> HttpResponse:
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     name = request.POST.get("name", "").strip()
     if name:
@@ -817,9 +803,7 @@ def rider_remove(request: HttpRequest, plan_id: str, rider_id: int) -> HttpRespo
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     plan.riders.filter(pk=rider_id).delete()
     return HttpResponse(_render_plan_body(request, plan, can_edit=True))
@@ -837,9 +821,7 @@ def riders_remove_selected(request: HttpRequest, plan_id: str) -> HttpResponse:
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     rider_ids = request.POST.getlist("rider_ids")
     if rider_ids:
@@ -857,9 +839,7 @@ def rider_reorder(request: HttpRequest, plan_id: str, rider_id: int, direction: 
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     riders = list(plan.riders.all())
     idx = next((i for i, r in enumerate(riders) if r.pk == rider_id), None)
@@ -882,9 +862,7 @@ def rider_update(request: HttpRequest, plan_id: str, rider_id: int) -> HttpRespo
         The refreshed plan body partial.
 
     """
-    plan = _get_editable_plan(request, plan_id)
-    if plan is None:
-        return HttpResponse("Permission denied", status=403)
+    plan = _changing(request, plan_id)
 
     rider = get_object_or_404(PlanRider, pk=rider_id, plan=plan)
     fields: list[str] = []

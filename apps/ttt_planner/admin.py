@@ -26,6 +26,7 @@ class PowerUpAdmin(admin.ModelAdmin):
 class TttPlanAdmin(admin.ModelAdmin):
     """Admin for TTT plans."""
 
-    list_display = ("__str__", "team_name", "route", "target_speed_kph", "created_by", "updated_at")
+    list_display = ("__str__", "team_name", "route", "target_speed_kph", "created_by", "updated_by", "updated_at")
     search_fields = ("name", "team_name")
+    readonly_fields = ("updated_by",)  # set by the planner views, which record every change's author
     inlines = (PlanRiderInline,)

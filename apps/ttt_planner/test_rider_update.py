@@ -171,13 +171,16 @@ def test_negative_pull_duration_is_clamped_to_zero(auth_client, plan_rider):
 
 
 @pytest.mark.django_db
-def test_a_non_owner_cannot_edit_the_row(client, plan_rider, user_model):
+def test_any_team_member_can_edit_the_row_and_is_named_its_last_editor(client, plan_rider, user_model):
+    """Not the plan's creator or squad: they confirm in the page first, and the server takes the change."""
     plan, rider = plan_rider
-    other = user_model.objects.create_user(username="intruder", permission_overrides={"team_member": True})
+    other = user_model.objects.create_user(username="teammate", permission_overrides={"team_member": True})
     client.force_login(other)
 
     resp = client.post(_url(plan, rider), {"zero_pull_submitted": "1", "zero_pull": "on"})
 
     rider.refresh_from_db()
-    assert resp.status_code == 403
-    assert rider.zero_pull is False
+    plan.refresh_from_db()
+    assert resp.status_code == 200
+    assert rider.zero_pull is True
+    assert plan.updated_by == other
