@@ -84,6 +84,8 @@
               <th class="text-right">kg</th>
               <th class="text-right">CdA</th>
               <th class="text-right">FTP</th>
+              <th class="text-right">CP</th>
+              <th class="text-right">W′ kJ</th>
               <th class="text-right">Pull W</th>
               <th class="text-right">W/kg</th>
               <th class="text-right">Pull %FTP</th>
@@ -91,6 +93,7 @@
               <th class="text-right">NP</th>
               <th class="text-right">IF</th>
               <th class="text-right">TSS</th>
+              <th class="text-right">Low W′bal</th>
               {% if can_edit %}<th>Pull (s)</th><th>No pull</th><th><span class="sr-only">Order and remove</span></th>{% else %}<th class="text-right">Pull (s)</th>{% endif %}
             </tr>
           </thead>
@@ -112,17 +115,32 @@
                 {% if rr.rider.zero_pull %}
                   <span class="badge badge-ghost badge-xs">no pull</span>
                 {% endif %}
+                {% if rr.over_target %}
+                  <span class="badge badge-error badge-xs">over target</span>
+                {% endif %}
               </td>
               <td class="text-right">{{ rr.weight_kg|floatformat:0 }}</td>
               <td class="text-right">{{ rr.cda|floatformat:3 }}</td>
               <td class="text-right">{{ rr.rider.ftp_w|default:"—" }}</td>
+              <td class="text-right">{% if rr.cp_w %}{% if rr.cp_estimated %}<span aria-hidden="true">~</span><span class="sr-only">about </span>{% endif %}{{ rr.cp_w }}{% else %}—{% endif %}</td>
+              <td class="text-right">{% if rr.w_prime_kj %}{% if rr.w_prime_estimated %}<span aria-hidden="true">~</span><span class="sr-only">about </span>{% endif %}{{ rr.w_prime_kj|floatformat:1 }}{% else %}—{% endif %}</td>
               <td class="text-right font-semibold">{% if rr.rider.zero_pull %}—{% else %}{{ rr.pull_power_w }}{% endif %}</td>
               <td class="text-right">{% if rr.rider.zero_pull %}—{% else %}{{ rr.pull_wkg }}{% endif %}</td>
               <td class="text-right">{% if rr.pull_pct_ftp is not None %}{{ rr.pull_pct_ftp }}%{% else %}—{% endif %}</td>
               <td class="text-right">{{ rr.avg_power_w }}</td>
               <td class="text-right">{{ rr.normalized_power_w|default:"—" }}</td>
-              <td class="text-right">{% if rr.intensity_factor is not None %}{{ rr.intensity_factor|floatformat:2 }}{% else %}—{% endif %}</td>
+              <td class="text-right">
+                {% if rr.intensity_factor is None %}—
+                {% elif rr.over_if %}<span class="badge badge-warning badge-sm">{{ rr.intensity_factor|floatformat:2 }}<span class="sr-only">, over Target IF</span></span>
+                {% else %}{{ rr.intensity_factor|floatformat:2 }}{% endif %}
+              </td>
               <td class="text-right">{% if rr.tss is not None %}{{ rr.tss|floatformat:"-1" }}{% else %}—{% endif %}</td>
+              <td class="text-right">
+                {% if rr.w_prime_empty %}<span class="badge badge-error badge-sm">empty<span class="sr-only">: runs out of W′</span></span>
+                {% elif rr.w_prime_low_pct is None %}—
+                {% elif rr.below_reserve %}<span class="badge badge-warning badge-sm">{{ rr.w_prime_low_pct }}%<span class="sr-only">, under the W′ reserve</span></span>
+                {% else %}{{ rr.w_prime_low_pct }}%{% endif %}
+              </td>
               {% if can_edit %}
               <td>
                 <input type="number" name="pull_duration_s" value="{{ rr.rider.pull_duration_s }}"
@@ -167,9 +185,15 @@
         <p>
           <strong class="text-base-content">Pull W</strong> holds the target flat speed on the front.
           <strong class="text-base-content">Pull %FTP</strong> is that pull against FTP, so it sits above 100% for most riders.
-          <strong class="text-base-content">IF</strong> is NP ÷ FTP over the whole race; NP, IF and TSS need a route.
+          <strong class="text-base-content">IF</strong> is NP ÷ FTP, planned to stay at or under Target IF
+          ({{ result.target_if|floatformat:2 }}). <strong class="text-base-content">Low W′bal</strong> is the least W′ a rider has
+          left at any point in the race, planned to stay at {{ result.w_prime_reserve_pct }}% or more. TSS needs a route.
           <a href="{% url 'ttt_planner:help' %}#metrics" class="link">What every column means</a>
         </p>
+        {% if result.any_power_estimated %}
+        <p><span aria-hidden="true">~</span> Estimated: the rider has no Zwift Racing CP or W′, so the planner uses their FTP as CP
+          and {{ result.fallback_w_prime_kj|floatformat:0 }} kJ as W′.</p>
+        {% endif %}
         {% if result.any_estimated %}
         <p><span class="badge badge-warning badge-xs" aria-hidden="true">est</span> Weight or height is missing, so the
           model uses {{ result.fallback_weight_kg|floatformat:0 }} kg and {{ result.fallback_height_cm|floatformat:0 }} cm

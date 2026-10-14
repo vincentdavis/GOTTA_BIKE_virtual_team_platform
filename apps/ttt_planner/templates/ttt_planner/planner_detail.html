@@ -213,20 +213,51 @@
         <a href="{% url 'ttt_planner:help' %}#targets" class="link text-sm">How these work</a>
       </div>
       {% if can_edit %}
-      <form class="grid grid-cols-1 sm:grid-cols-3 gap-4"
+      <form class="space-y-4"
             hx-post="{% url 'ttt_planner:update' plan.pk %}"
             hx-trigger="change, submit"
             hx-target="#ttt-plan-body" hx-swap="innerHTML">
-        <label class="form-control">
-          <span class="label-text mb-1">Target flat speed (kph)</span>
-          {% include "ttt_planner/_speed_input.html" %}
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-1">Target IF</span>
-          <input type="number" step="0.01" min="0.1" max="1.5" name="target_if" value="{{ plan.target_if }}"
-                 class="input input-bordered input-sm" />
-        </label>
-        <label class="form-control">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <label class="form-control">
+            <span class="label-text mb-1">Target flat speed (kph)</span>
+            {% include "ttt_planner/_speed_input.html" %}
+          </label>
+          <label class="form-control">
+            <span class="label-text mb-1">Target IF <span class="text-base-content/70">(NP ÷ FTP)</span></span>
+            <input type="number" step="0.01" min="0.1" max="1.5" name="target_if" value="{{ plan.target_if }}"
+                   class="input input-bordered input-sm" />
+          </label>
+          <label class="form-control">
+            <span class="label-text mb-1">W′ reserve (%)</span>
+            <input type="number" step="5" min="0" max="90" name="w_prime_reserve_pct" value="{{ plan.w_prime_reserve_pct }}"
+                   aria-describedby="ttt-reserve-help" class="input input-bordered input-sm" />
+            <span id="ttt-reserve-help" class="label-text-alt mt-1 text-base-content/70">The W′ every rider keeps in hand.</span>
+          </label>
+        </div>
+        <fieldset>
+          <legend class="label-text mb-2">Auto-balance pull lengths</legend>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <label class="form-control">
+              <span class="label-text mb-1">Shortest pull (s)</span>
+              <input type="number" name="min_pull_s" min="{{ plan.pull_step_s }}" max="300" step="{{ plan.pull_step_s }}"
+                     value="{{ plan.min_pull_s }}" class="input input-bordered input-sm" />
+            </label>
+            <label class="form-control">
+              <span class="label-text mb-1">Longest pull (s)</span>
+              <input type="number" name="max_pull_s" min="{{ plan.pull_step_s }}" max="300" step="{{ plan.pull_step_s }}"
+                     value="{{ plan.max_pull_s }}" class="input input-bordered input-sm" />
+            </label>
+            <label class="form-control">
+              <span class="label-text mb-1">In steps of (s)</span>
+              <select name="pull_step_s" class="select select-bordered select-sm">
+                {% for step in pull_steps %}
+                  <option value="{{ step }}" {% if plan.pull_step_s == step %}selected{% endif %}>{{ step }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          </div>
+        </fieldset>
+        <label class="form-control sm:w-1/3">
           <span class="label-text mb-1">Aero CdA coefficient</span>
           {# Blank, not the default's value: a full-form save would otherwise pin today's default to the plan. #}
           <input type="number" step="0.0001" min="0" name="cda_coef"
@@ -248,14 +279,18 @@
       </div>
       <ul class="text-sm text-base-content/70 list-disc pl-5 space-y-1">
         <li><strong class="text-base-content">Calculate speed</strong> keeps your pull lengths and finds the fastest target
-          speed at which no rider's average power over a rotation goes above Target IF × FTP.</li>
-        <li><strong class="text-base-content">Auto-balance pulls</strong> also sets each rider's pull length and the pull
-          order, so every rider averages exactly Target IF × FTP, then sets the speed.</li>
+          speed at which every rider, those who take no pulls too, keeps their IF at or under Target IF and at least the
+          W′ reserve in hand.</li>
+        <li><strong class="text-base-content">Auto-balance pulls</strong> chooses the pull lengths (within the limits above),
+          the order and the speed, as fast as the same two limits allow.</li>
       </ul>
       {% else %}
       <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
         <dt class="text-base-content/70">Target flat speed</dt><dd>{{ plan.target_speed_kph }} kph</dd>
         <dt class="text-base-content/70">Target IF</dt><dd>{{ plan.target_if }}</dd>
+        <dt class="text-base-content/70">W′ reserve</dt><dd>{{ plan.w_prime_reserve_pct }}%</dd>
+        <dt class="text-base-content/70">Pull lengths</dt>
+        <dd>{{ plan.min_pull_s }}–{{ plan.max_pull_s }} s, in steps of {{ plan.pull_step_s }} s</dd>
         <dt class="text-base-content/70">Aero CdA coefficient</dt>
         <dd>{{ result.cda_coef }}{% if plan.cda_coef is None %} (site default){% endif %}</dd>
       </dl>

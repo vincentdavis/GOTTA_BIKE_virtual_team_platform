@@ -9,6 +9,7 @@ page in sync after every edit. CSRF is supplied globally via ``hx-headers`` on
 from __future__ import annotations
 
 import contextlib
+import math
 
 import logfire
 from django.contrib import messages
@@ -29,7 +30,7 @@ from apps.events.models import Squad
 from apps.ttt_planner import terrain
 from apps.ttt_planner.forms import PowerUpForm
 from apps.ttt_planner.models import PlanRider, PowerUp, TttPlan
-from apps.ttt_planner.services import compute, physics, roster, zwiftgopher, zwiftgopher_client
+from apps.ttt_planner.services import compute, effort, physics, roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
     climb_strength,
     compute_auto_balance,
@@ -333,6 +334,21 @@ def planner_help(request: HttpRequest) -> HttpResponse:
     params = physics.params_from_constance()
     example_kph, example_kg, example_cm = 40.0, compute.FALLBACK_WEIGHT_KG, compute.FALLBACK_HEIGHT_CM
     third_wheel = physics.draft_savings_fraction(3, params)
+    # The W′ worked example, computed by the model itself so its numbers cannot drift.
+    cp, w_prime, front, draft, pull_s, sit_s = 300, 20_000, 380, 240, 60, 180
+    low_j = effort.lowest_w_prime_bal(front, draft, pull_s, pull_s + sit_s, cp, w_prime)
+    w_example = {
+        "cp": cp,
+        "w_prime_kj": f"{w_prime / 1000:g}",
+        "front": front,
+        "draft": draft,
+        "pull_s": pull_s,
+        "sit_min": f"{sit_s / 60:g}",
+        "spent_kj": f"{(front - cp) * pull_s / 1000:.1f}",
+        "refill_pct": round(100 * (1 - math.exp(-(cp - draft) * sit_s / w_prime))),
+        "low_kj": f"{low_j / 1000:.1f}",
+        "low_pct": round(100 * low_j / w_prime),
+    }
     return render(
         request,
         "ttt_planner/help.html",
@@ -345,10 +361,14 @@ def planner_help(request: HttpRequest) -> HttpResponse:
             ],
             "fallback_weight_kg": compute.FALLBACK_WEIGHT_KG,
             "fallback_height_cm": compute.FALLBACK_HEIGHT_CM,
-            "balance_max_pull_s": compute.BALANCE_MAX_PULL_S,
-            "balance_min_pull_s": compute.BALANCE_MIN_PULL_S,
-            "balance_step_s": compute.BALANCE_STEP_S,
-            "max_np_hours": compute.MAX_NP_SECONDS // 3600,
+            # A new plan's settings, read off the model so the page cannot drift from them.
+            "defaults": {
+                name: TttPlan._meta.get_field(name).default
+                for name in ("target_if", "w_prime_reserve_pct", "min_pull_s", "max_pull_s", "pull_step_s")
+            },
+            "pull_steps": compute.PULL_STEPS_S,
+            "fallback_w_prime_kj": f"{compute.FALLBACK_W_PRIME_J / 1000:g}",
+            "w_example": w_example,
             "climb_grade_pct": f"{compute.TTT_CLIMB_GRADE * 100:g}",
             "example": {
                 "kph": f"{example_kph:g}",
@@ -432,6 +452,7 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
             "my_squads": my_squads,
             "other_squads": other_squads,
             "edit_squad_active": plan.edit_squad_id in picker_pks,
+            "pull_steps": compute.PULL_STEPS_S,
         },
     )
 
@@ -540,6 +561,7 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
     if "target_if" in request.POST:
         with contextlib.suppress(ValueError):
             plan.target_if = min(max(float(request.POST.get("target_if") or 0.95), 0.1), 1.5)
+    _take_balance_settings(request, plan)
     if "edit_squad" in request.POST:
         squad_id = request.POST.get("edit_squad")
         plan.edit_squad = Squad.objects.filter(pk=squad_id).first() if squad_id else None
@@ -547,6 +569,35 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
     plan.updated_by = request.user
     plan.save()
     return HttpResponse(_render_plan_body(request, plan, can_edit=True))
+
+
+def _take_balance_settings(request: HttpRequest, plan: TttPlan) -> None:
+    """Read the W′ reserve and Auto-balance's pull limits from a settings post.
+
+    They are stored as :class:`compute.Limits` cleans them, so what the form shows after a
+    save is exactly what Calculate and Auto-balance use: a step from ``PULL_STEPS_S``, the
+    pulls on its grid and in order, the reserve between 0 and 90%.
+
+    Args:
+        request: The settings post.
+        plan: The plan, changed in memory (the caller saves it).
+
+    """
+
+    def number(key: str) -> int | None:
+        raw = (request.POST.get(key) or "").strip()
+        try:
+            return int(float(raw)) if raw else None
+        except ValueError:
+            return None
+
+    if (reserve := number("w_prime_reserve_pct")) is not None:
+        plan.w_prime_reserve_pct = min(max(reserve, 0), 90)
+    for key in ("pull_step_s", "min_pull_s", "max_pull_s"):
+        if (value := number(key)) is not None:
+            setattr(plan, key, max(value, 0))
+    limits = compute.Limits.for_plan(plan)
+    plan.pull_step_s, plan.min_pull_s, plan.max_pull_s = limits.step_s, limits.min_pull_s, limits.max_pull_s
 
 
 @login_required
@@ -789,6 +840,8 @@ def rider_add(request: HttpRequest, plan_id: str, zwid: int) -> HttpResponse:
                 weight_kg=data.weight_kg,
                 height_cm=data.height_cm,
                 ftp_w=data.ftp_w,
+                cp_w=data.cp_w,
+                w_prime_j=data.w_prime_j,
             )
     return HttpResponse(_render_plan_body(request, plan, can_edit=True))
 
@@ -830,6 +883,8 @@ def plan_squad_add(request: HttpRequest, plan_id: str) -> HttpResponse:
             weight_kg=data.weight_kg if data else None,
             height_cm=data.height_cm if data else None,
             ftp_w=data.ftp_w if data else None,
+            cp_w=data.cp_w if data else None,
+            w_prime_j=data.w_prime_j if data else None,
         )
         existing.add(user.zwid)
         order += 1

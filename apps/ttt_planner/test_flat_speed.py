@@ -79,9 +79,11 @@ def test_pull_pct_ftp_is_the_pull_against_ftp_and_if_is_np_against_ftp(plan):
 
 
 @pytest.mark.django_db
-def test_without_a_route_there_is_no_if_or_course_speed(plan):
+def test_without_a_route_there_is_no_tss_or_course_speed(plan):
+    """IF comes from one rotation and needs no route; TSS and the course speed need the race length."""
     result = compute_plan(plan)
 
     assert not result.course_avg_kph
-    assert all(r.intensity_factor is None for r in result.riders)
+    assert all(r.tss is None for r in result.riders)
+    assert all(r.intensity_factor is not None for r in result.riders)
     assert all(r.pull_pct_ftp is not None for r in result.riders)

@@ -140,12 +140,13 @@ def test_compute_plan_np_tss_with_route(team_member):
 
 
 @pytest.mark.django_db
-def test_compute_plan_no_np_without_route(team_member):
-    """Without a route there is no finish time, so NP/TSS stay None."""
+def test_compute_plan_np_and_if_but_no_tss_without_route(team_member):
+    """NP comes from one rotation, so it needs no route; TSS needs the race length, so it does."""
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
     PlanRider.objects.create(plan=plan, order=0, name="A", weight_kg=72, height_cm=178, ftp_w=300)
     result = compute_plan(plan)
-    assert result.riders[0].normalized_power_w is None
+    assert result.riders[0].normalized_power_w is not None
+    assert result.riders[0].intensity_factor is not None
     assert result.riders[0].tss is None
 
 
@@ -201,9 +202,10 @@ def test_auto_balance_gives_stronger_rider_longer_pull(team_member):
 
     result = compute_auto_balance(plan, target_if=0.95)
     assert result is not None
-    durations = {a.rider_pk: a.pull_duration_s for a in result.assignments}
+    # A rider set to take no pulls spends no time on the front, whatever their stored length.
+    pulled = {a.rider_pk: 0 if a.zero_pull else a.pull_duration_s for a in result.assignments}
     orders = {a.rider_pk: a.order for a in result.assignments}
-    assert durations[strong.pk] > durations[weak.pk]
+    assert pulled[strong.pk] > pulled[weak.pk]
     assert orders[strong.pk] < orders[weak.pk]  # strongest leads
     assert result.speed_kph > 0
 

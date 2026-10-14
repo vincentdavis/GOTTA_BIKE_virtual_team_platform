@@ -30,6 +30,7 @@
         <li><a class="link" href="#targets">Target speed, Target IF and the two buttons</a></li>
         <li><a class="link" href="#metrics">What the pull schedule shows</a></li>
         <li><a class="link" href="#physics">The power model</a></li>
+        <li><a class="link" href="#wprime">W′ balance</a></li>
         <li><a class="link" href="#draft">Drafting</a></li>
         <li><a class="link" href="#time">Finish time</a></li>
         <li><a class="link" href="#climb">Climb compare</a></li>
@@ -48,8 +49,8 @@
           Course name and type are labels only; they change no numbers.</li>
         <li><strong>Add riders.</strong> Add a whole squad, search team riders by name or Zwift ID, or add a guest
           with their weight, height and FTP.</li>
-        <li><strong>Parameters.</strong> Set the Target IF: how hard each rider should work on average, as a
-          fraction of FTP. 0.95 means each rider averages 95% of their FTP over a rotation.</li>
+        <li><strong>Parameters.</strong> Set the Target IF, the most any rider's IF may reach, and the W′ reserve,
+          the share of W′ every rider keeps in hand. For Auto-balance, set the shortest and longest pull.</li>
         <li><strong>Calculate speed</strong> keeps your pull lengths and finds the fastest speed everyone can hold.
           <strong>Auto-balance pulls</strong> also sets the pull lengths and the order.</li>
         <li><strong>Adjust.</strong> Change pull lengths, mark riders who take no pulls, reorder. The table updates
@@ -64,14 +65,16 @@
       <h2 id="riders-h" class="card-title">Rider data</h2>
       <p>
         When you add a team rider, the planner copies their weight, height and FTP from the team's data: weight and
-        FTP from ZwiftPower first, then Zwift Racing; height from Zwift Racing. The copy stays as it was if their
-        data changes later.
+        FTP from ZwiftPower first, then Zwift Racing; height from Zwift Racing. Their critical power (CP) and W′ come
+        from Zwift Racing. The copy stays as it was if their data changes later.
       </p>
       <ul class="list-disc pl-5 space-y-1">
         <li>No weight or height: the rider is modelled at {{ fallback_weight_kg|floatformat:0 }} kg and
           {{ fallback_height_cm|floatformat:0 }} cm, and marked <span class="badge badge-warning badge-xs">est</span>.</li>
-        <li>No FTP: the rider still gets pull powers, but no %FTP, IF or TSS, and Calculate speed and Auto-balance
-          leave them out.</li>
+        <li>No CP or W′ (guests, or riders Zwift Racing has no figures for): the planner uses their FTP as CP and
+          {{ fallback_w_prime_kj }} kJ as W′, close to the team's average, and shows those values with a <span aria-hidden="true">~</span><span class="sr-only">tilde</span> in front.</li>
+        <li>No FTP: the rider still gets pull powers, but no %FTP, IF, TSS or W′ figures, and Calculate speed and
+          Auto-balance cannot judge them.</li>
       </ul>
     </div>
   </section>
@@ -90,52 +93,50 @@
       </div>
 
       <div class="space-y-2">
-        <h3 class="font-semibold">Target IF</h3>
+        <h3 class="font-semibold">The two limits</h3>
+        <p>Calculate speed and Auto-balance hold <strong>every</strong> rider with an FTP, including riders who take no
+          pulls, to two limits:</p>
+        <ul class="list-disc pl-5 space-y-1">
+          <li><strong>Target IF</strong> (a new plan starts at {{ defaults.target_if }}): the rider's IF, Normalized
+            Power ÷ FTP over the race, may not go above it.</li>
+          <li><strong>W′ reserve</strong> (starts at {{ defaults.w_prime_reserve_pct }}%): the rider's W′ balance may
+            not drop below that share of their W′ at any point in the race (see <a class="link" href="#wprime">W′
+            balance</a>).</li>
+        </ul>
         <p>
-          How hard each rider works on average, as a fraction of FTP. Calculate speed and Auto-balance never let a
-          rider's <em>average</em> power over a rotation go above Target IF × FTP.
-        </p>
-        <p>
-          It caps average power, not Normalized Power, so the IF column (NP ÷ FTP) comes out a little above the
-          target, and further above it with longer pulls.
+          Riders who take no pulls count too, because they still have to hold the wheel: the plan never goes faster by
+          leaving someone to be dropped. If one rider cannot even sit in at the speed the others could hold, that rider
+          sets the speed; the table marks anyone past a limit <span class="badge badge-error badge-xs">over target</span>.
         </p>
       </div>
 
       <div class="space-y-2">
         <h3 class="font-semibold">Calculate speed</h3>
         <p>
-          Keeps the pull lengths and no-pull riders as they are, and searches for the fastest target speed (to
-          0.1 kph) at which every rider with an FTP keeps
-        </p>
-        <p class="font-mono text-sm bg-base-100 rounded px-3 py-2 overflow-x-auto">
-          (Pull W × own pull + Draft W × (rotation − own pull)) ÷ rotation ≤ Target IF × FTP
-        </p>
-        <p>
-          where the rotation is the sum of every puller's pull length. The rider who reaches the limit first sets
-          the speed, so a longer pull for a weaker rider lowers it and a shorter one raises it.
+          Keeps the pull lengths and no-pull riders as they are, and searches for the fastest target speed, to 0.1 kph,
+          at which every rider with an FTP stays inside both limits. The first rider to reach a limit sets the speed,
+          so a shorter pull for whoever that is raises it.
         </p>
       </div>
 
       <div class="space-y-2">
         <h3 class="font-semibold">Auto-balance pulls</h3>
-        <p>For each rider with an FTP, the planner works out the share of the rotation they can spend on the front
-          while averaging exactly Target IF × FTP:</p>
-        <p class="font-mono text-sm bg-base-100 rounded px-3 py-2 overflow-x-auto">
-          share = (Target IF × FTP − Draft W) ÷ (Pull W − Draft W)
-        </p>
-        <ul class="list-disc pl-5 space-y-1">
-          <li>It finds the fastest speed at which the shares add up to one, so someone is always on the front.</li>
-          <li>The shares become pull lengths scaled so the strongest rider pulls {{ balance_max_pull_s }} seconds,
-            rounded to {{ balance_step_s }} seconds, and at least {{ balance_min_pull_s }} seconds.</li>
-          <li>The order runs from the longest pull to the shortest.</li>
-          <li>A rider whose share is zero, who would be over Target IF × FTP just sitting in at that speed, is set
-            to take no pulls.</li>
-          <li>Riders with no FTP keep their settings and go last.</li>
-        </ul>
+        <p>Chooses the pull lengths, the order and the speed together, as fast as the two limits allow:</p>
+        <ol class="list-decimal pl-5 space-y-1">
+          <li>It tries a speed. If any rider could not sit in at it within the limits, the speed is too fast.</li>
+          <li>Otherwise it tries rotations from the shortest up. In each, every rider gets the longest pull they can
+            take within the limits, from the shortest pull (a new plan: {{ defaults.min_pull_s }} s) to the longest
+            ({{ defaults.max_pull_s }} s) in steps ({{ defaults.pull_step_s }} s). A rider who cannot manage even the
+            shortest pull sits in. The rotation works if those pulls can fill it.</li>
+          <li>It halves its way to the fastest speed with a working rotation, and the shortest such rotation wins.</li>
+          <li>The front time is shared out: everyone starts on the shortest pull, and each further step goes to the rider
+            with the most room left under their longest, so the spare capacity ends up evenly spread.</li>
+          <li>The order runs from the longest pull to the shortest. Riders with no FTP keep their settings and go last.</li>
+          <li>The speed is then worked out exactly as Calculate speed does for those pulls, so the two buttons agree.</li>
+        </ol>
         <p>
-          Only averages are balanced, so how long the rotation is does not change them. The planner always makes the
-          strongest rider's pull {{ balance_max_pull_s }} seconds; shorter pulls with the same shares give the same
-          averages and are easier on the legs.
+          Pulls are chosen as if the race were long, which is the worst case for W′; the speed is then set for the race
+          you planned.
         </p>
       </div>
     </div>
@@ -159,12 +160,18 @@
           <dd>Average power over one rotation: Pull W for the rider's own pull, Draft W for the rest. A rider who
             takes no pulls averages their Draft W.</dd></div>
         <div><dt class="font-semibold">NP</dt>
-          <dd>Normalized Power over the race. The planner builds each rider's power second by second for the whole
-            race (Pull W during their pulls, Draft W otherwise, each rider's first pull starting after the riders
-            ahead of them), takes a 30-second rolling average, raises it to the fourth power, averages that, and takes
-            the fourth root. At most {{ max_np_hours }} hours are simulated. Needs a route.</dd></div>
-        <div><dt class="font-semibold">IF</dt><dd>NP ÷ FTP: the usual intensity factor.</dd></div>
-        <div><dt class="font-semibold">TSS</dt><dd>Race hours × IF² × 100.</dd></div>
+          <dd>Normalized Power over the race: a 30-second rolling average of the rider's power, raised to the fourth power,
+            averaged, and the fourth root taken. Their power repeats every rotation, so the planner works it out exactly for
+            one rotation, which needs no route.</dd></div>
+        <div><dt class="font-semibold">IF</dt><dd>NP ÷ FTP: the usual intensity factor, and what Target IF limits.</dd></div>
+        <div><dt class="font-semibold">TSS</dt><dd>Race hours × IF² × 100. Needs a route, for the race length.</dd></div>
+        <div><dt class="font-semibold">CP, W′ kJ</dt>
+          <dd>Critical power and W′ from Zwift Racing; a <span aria-hidden="true">~</span><span class="sr-only">tilde</span>
+            marks a stand-in (see <a class="link" href="#riders">Rider data</a>).</dd></div>
+        <div><dt class="font-semibold">Low W′bal</dt>
+          <dd>The least W′ the rider has left at any point in the race, as a share of their W′. Under the W′ reserve it is
+            highlighted; below zero it reads <span class="badge badge-error badge-xs">empty</span>: the rider would run
+            out and be dropped.</dd></div>
         <div><dt class="font-semibold">Pull (s), No pull</dt>
           <dd>The rider's pull length, and whether they sit in the whole race.</dd></div>
         <div><dt class="font-semibold">Team card</dt>
@@ -213,6 +220,35 @@
         air resistance saved).
       </p>
       <p class="text-sm text-base-content/70">A site admin sets these values in Site Config, under TTT Planner.</p>
+    </div>
+  </section>
+
+  <section id="wprime" aria-labelledby="wprime-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="wprime-h" class="card-title">W′ balance</h2>
+      <p>
+        A pull above a rider's critical power (CP) spends a limited store of work, W′ ("W-prime"). Sitting in below CP
+        refills it, faster the further below CP the rider is and the more is missing. W′ balance is what is left. It is
+        what decides whether a hard pull can be repeated, which an average or IF cannot show.
+      </p>
+      <p>The planner uses the differential W′ balance model (Skiba 2015, after Froncioni and Clarke):</p>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Above CP, W′ drains at <code>power − CP</code> joules a second.</li>
+        <li>Below CP, it refills: <code>dW′bal/dt = (W′ − W′bal) × (CP − power) ÷ W′</code>.</li>
+      </ul>
+      <p>
+        Through a rotation the rider's power is their pull power for their own pull and their sitting-in power for the
+        rest, so each rotation drains W′ on the pull and refills some of it in the line. The race starts with W′ full and
+        the low point sinks a little each rotation until drain and refill balance out. The planner counts the rider's
+        pulls in the estimated race time (rounding up), or, without a route, assumes a long race.
+      </p>
+      <p>
+        For example, a rider with CP {{ w_example.cp }} W and W′ {{ w_example.w_prime_kj }} kJ who pulls
+        {{ w_example.pull_s }} seconds at {{ w_example.front }} W spends {{ w_example.spent_kj }} kJ a pull. If they
+        then sit in for {{ w_example.sit_min }} minutes at {{ w_example.draft }} W, they get back about
+        {{ w_example.refill_pct }}% of whatever is missing each time, and over a long race their W′ balance settles at
+        about {{ w_example.low_kj }} kJ, {{ w_example.low_pct }}% of W′, at the end of each pull.
+      </p>
     </div>
   </section>
 
@@ -297,8 +333,9 @@
           <a class="link" href="#time">Finish time</a>).</li>
         <li><strong>Where each rider sits.</strong> Sitting in uses the average saving over the whole line, not the
           wheel each rider is actually on at each moment.</li>
-        <li><strong>Anaerobic capacity.</strong> A long pull far above FTP can fail even when the averages fit; the
-          planner does not model how far each pull drains a rider.</li>
+        <li><strong>W′ is an estimate.</strong> Zwift Racing's CP and W′ come from each rider's best recent efforts,
+          and the stand-ins for riders without them are rougher still. Real riders also tire over a race in ways the W′
+          model does not capture.</li>
         <li><strong>Race dynamics.</strong> Surges, corners, power-ups, gaps in the rotation and riders being dropped
           are not modelled.</li>
         <li><strong>Data age.</strong> Weights, heights and FTPs are copies from ZwiftPower and Zwift Racing, and can
@@ -314,6 +351,9 @@
         <div><dt class="font-semibold">FTP</dt><dd>Functional threshold power: roughly the power a rider can hold for an hour.</dd></div>
         <div><dt class="font-semibold">W/kg</dt><dd>Watts per kilogram of body weight.</dd></div>
         <div><dt class="font-semibold">CdA</dt><dd>Drag area: how much air a rider pushes, in m².</dd></div>
+        <div><dt class="font-semibold">CP</dt><dd>Critical power: the highest power a rider can hold for a long time; close to FTP.</dd></div>
+        <div><dt class="font-semibold">W′</dt><dd>The work a rider can do above CP before they must ease off, in kilojoules.</dd></div>
+        <div><dt class="font-semibold">W′ balance (W′bal)</dt><dd>How much of W′ a rider has left at a given moment.</dd></div>
         <div><dt class="font-semibold">Pull</dt><dd>A turn on the front of the line.</dd></div>
         <div><dt class="font-semibold">Rotation</dt><dd>One full turn through every rider who pulls.</dd></div>
         <div><dt class="font-semibold">NP</dt><dd>Normalized Power: an average that weights hard efforts more, closer to how a varied ride feels.</dd></div>

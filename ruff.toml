@@ -4,6 +4,9 @@ line-length = 120
 preview = true
 
 [lint]
+# W′ (W-prime, a rider's anaerobic work capacity, in the TTT planner) is written with the
+# real prime, U+2032, which RUF001-003 would otherwise flag as a look-alike.
+allowed-confusables = ["′"]
 select = [
     # flake8-bugbear
     "B",

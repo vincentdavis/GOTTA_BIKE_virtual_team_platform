@@ -111,7 +111,18 @@ class TttPlan(models.Model):
         max_digits=5, decimal_places=1, default=40.0, help_text="Target flat speed in km/h"
     )
     target_if = models.FloatField(
-        default=0.95, help_text="Target intensity factor used by Calculate / Auto-balance (e.g. 0.95)"
+        default=0.95,
+        help_text="Target intensity factor (NP / FTP) that Calculate and Auto-balance hold every puller to (e.g. 0.95)",
+    )
+    w_prime_reserve_pct = models.PositiveSmallIntegerField(
+        default=25,
+        validators=[MaxValueValidator(90)],
+        help_text="Share of W′ (%) every puller keeps in hand through the race; Calculate and Auto-balance hold to it",
+    )
+    min_pull_s = models.PositiveSmallIntegerField(default=30, help_text="Shortest pull Auto-balance gives, in seconds")
+    max_pull_s = models.PositiveSmallIntegerField(default=180, help_text="Longest pull Auto-balance gives, in seconds")
+    pull_step_s = models.PositiveSmallIntegerField(
+        default=15, help_text="Auto-balance's pull lengths are multiples of this, in seconds (5, 10, 15 or 30)"
     )
     draft_savings = models.JSONField(
         default=list,
@@ -198,12 +209,12 @@ class TttPlan(models.Model):
 class PlanRider(models.Model):
     """A rider on a plan, in pull order.
 
-    Weight/height/FTP are snapshotted at add time so later changes to team data
-    do not mutate a saved plan.
+    Weight/height/FTP, and CP/W′ from Zwift Racing, are snapshotted at add time so later
+    changes to team data do not mutate a saved plan.
     """
 
-    # Ceilings for manually entered values. Auto-balance never generates more than
-    # BALANCE_MAX_PULL_S (180s), so the duration cap is the looser manual bound. Both
+    # Ceilings for manually entered values. Auto-balance never gives more than the plan's
+    # longest pull, which is itself capped at the duration ceiling. Both
     # are enforced three ways: as field validators (the admin inline, which is where
     # Pull W is actually set, runs full_clean), as a clamp in the inline edit view
     # (which does not), and as the number input's max attribute.
@@ -217,6 +228,14 @@ class PlanRider(models.Model):
     weight_kg = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True, help_text="Weight in kg")
     height_cm = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Height in cm")
     ftp_w = models.PositiveSmallIntegerField(null=True, blank=True, help_text="FTP in watts")
+    cp_w = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Critical power in watts, from Zwift Racing (blank: FTP stands in)"
+    )
+    w_prime_j = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="W′ (anaerobic work capacity) in joules, from Zwift Racing (blank: 20 kJ stands in)",
+    )
     pull_power_w = models.PositiveSmallIntegerField(
         null=True,
         blank=True,

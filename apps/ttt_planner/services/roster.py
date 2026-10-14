@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from django.db.models import Q
 
+from apps.ttt_planner.services.compute import MIN_CREDIBLE_W_PRIME_J
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
 
@@ -25,6 +26,8 @@ class RiderData:
     height_cm: int | None
     ftp_w: int | None
     category: str
+    cp_w: int | None = None
+    w_prime_j: int | None = None
 
 
 def _category(zp: ZPTeamRiders | None, zr: ZRRider | None) -> str:
@@ -70,6 +73,9 @@ def get_rider_data(zwids: list[int]) -> dict[int, RiderData]:
         ftp = (zp and zp.ftp) or (zr and zr.zp_ftp)
         height = zr.height if zr else None
         name = (zp and zp.name) or (zr and zr.name) or str(zwid)
+        # CP and W′ come from Zwift Racing alone; a W′ of 0 there means "unknown".
+        cp = zr.power_cp if zr and zr.power_cp and zr.power_cp > 0 else None
+        awc = zr.power_awc if zr and zr.power_awc and zr.power_awc >= MIN_CREDIBLE_W_PRIME_J else None
         result[zwid] = RiderData(
             zwid=zwid,
             name=name,
@@ -77,6 +83,8 @@ def get_rider_data(zwids: list[int]) -> dict[int, RiderData]:
             height_cm=int(height) if height is not None else None,
             ftp_w=int(ftp) if ftp is not None else None,
             category=_category(zp, zr),
+            cp_w=round(cp) if cp is not None else None,
+            w_prime_j=round(awc) if awc is not None else None,
         )
     return result
 
