@@ -1,0 +1,64 @@
+/* The TTT plan's course chart (course_plot.js). Every colour comes from the theme's tokens,
+   so the chart follows light and dark; only the gradient bands carry their own colours,
+   and their meaning is also spelled out in the key and the readout. */
+
+.ttt-course-plot {
+  touch-action: pan-y; /* a horizontal drag moves along the course; a vertical one still scrolls */
+  border-radius: var(--radius-box, 0.5rem);
+}
+.ttt-course-plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  cursor: crosshair;
+}
+.ttt-course-plot .cc-grid {
+  stroke: color-mix(in oklab, var(--color-base-content) 12%, transparent);
+}
+.ttt-course-plot .cc-text {
+  fill: color-mix(in oklab, var(--color-base-content) 78%, transparent);
+  font-size: 0.7rem;
+}
+.ttt-course-plot .cc-elev-line {
+  fill: none;
+  stroke: color-mix(in oklab, var(--color-base-content) 45%, transparent);
+  stroke-width: 1;
+}
+.ttt-course-plot .cc-speed {
+  fill: none;
+  stroke: var(--color-base-content);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.ttt-course-plot .cc-leadin {
+  fill: color-mix(in oklab, var(--color-base-content) 7%, transparent);
+}
+.ttt-course-plot .cc-leadin-line {
+  stroke: color-mix(in oklab, var(--color-base-content) 55%, transparent);
+  stroke-dasharray: 3 3;
+}
+.ttt-course-plot .cc-cross {
+  stroke: color-mix(in oklab, var(--color-base-content) 75%, transparent);
+  stroke-width: 1;
+}
+.ttt-course-plot .cc-dot {
+  fill: var(--color-base-content);
+}
+.ttt-course-plot .cc-dot-elev {
+  fill: var(--color-base-100);
+  stroke: var(--color-base-content);
+  stroke-width: 1.5;
+}
+.ttt-course-key .cc-swatch {
+  display: inline-block;
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 0.2rem;
+  vertical-align: -0.12rem;
+}
+.ttt-course-key .cc-line {
+  display: inline-block;
+  width: 1.2rem;
+  border-top: 2px solid var(--color-base-content);
+  vertical-align: 0.25rem;
+}

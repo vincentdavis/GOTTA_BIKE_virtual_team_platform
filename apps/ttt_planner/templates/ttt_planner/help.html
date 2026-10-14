@@ -32,6 +32,7 @@
         <li><a class="link" href="#physics">The power model</a></li>
         <li><a class="link" href="#wprime">W′ balance</a></li>
         <li><a class="link" href="#draft">Drafting</a></li>
+        <li><a class="link" href="#course">On the course</a></li>
         <li><a class="link" href="#time">Finish time</a></li>
         <li><a class="link" href="#climb">Climb compare</a></li>
         <li><a class="link" href="#zwiftgopher">zwiftgopher comparison</a></li>
@@ -205,8 +206,8 @@
           <dd>The rider's pull length, and whether they sit in the whole race.</dd></div>
         <div><dt class="font-semibold">Team card</dt>
           <dd>Avg team power is the mean of the riders' Avg W. Est. finish time is explained under
-            <a class="link" href="#time">Finish time</a>; the speed beside it is the route's distance over that
-            time.</dd></div>
+            <a class="link" href="#time">Finish time</a>; the speed beside it is the distance raced, lead-in
+            included, over that time.</dd></div>
       </dl>
     </div>
   </section>
@@ -229,7 +230,8 @@
             <tr><th scope="row">m (mass)</th><td>rider weight + {{ params.bike_mass_kg }} kg of bike</td></tr>
             <tr><th scope="row">g</th><td>9.8067 m/s²</td></tr>
             <tr><th scope="row">η (drivetrain efficiency)</th><td>{{ params.drivetrain_efficiency }}</td></tr>
-            <tr><th scope="row">grade</th><td>0 for every power the planner shows; used only for the finish time</td></tr>
+            <tr><th scope="row">grade</th><td>0 for every power in the pull schedule; the route's own slopes in the
+              finish time and <a class="link" href="#course">On the course</a></td></tr>
             <tr><th scope="row">draft</th><td>1 on the front; 1 − saving when sitting in (see <a class="link" href="#draft">Drafting</a>)</td></tr>
           </tbody>
         </table>
@@ -310,19 +312,63 @@
     </div>
   </section>
 
+  <section id="course" aria-labelledby="course-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="course-h" class="card-title">On the course</h2>
+      <p>
+        Everything in the pull schedule is worked out on level road. When the route has an elevation profile (from
+        the Zwift Speed Lab data the routes page uses), the plan page also shows the team riding it:
+      </p>
+      <ol class="list-decimal pl-5 space-y-1">
+        <li>The riders' weights and heights are averaged into one typical rider, and that rider's power to hold the
+          target flat speed alone on the flat is worked out.</li>
+        <li>That power is held steady over the whole route, lead-in included. On each stretch of the profile, about
+          every 50 m, it gives the team's speed there: slower up a climb, faster down a descent. That is the line on
+          the chart. Each stretch's slope is measured over about {{ course_grade_window_m }} m, since a bike's
+          momentum carries it over shorter bumps.</li>
+        <li>For each rider, the readout gives the power to hold that speed on that stretch: on the front, with no
+          draft, and sitting in, with the plan's average draft saving. A custom pull power scales a rider's pulls in
+          step with the model's own.</li>
+      </ol>
+      <p>
+        Two things stand out on a hilly route. On a climb, everyone's power to hold the team's speed comes out at
+        nearly the same W/kg, so a light rider holds it on fewer watts than a heavy one. And the draft saves a share
+        of the air resistance, which is most of the work on the flat but little of it on a climb, so sitting in there
+        costs nearly as much as pulling. A rider whose sitting-in power goes over their FTP is marked
+        <span class="badge badge-warning badge-xs">over FTP</span>: they get no rest there.
+      </p>
+      <p>
+        Move along the profile with the mouse, drag across it on a phone, or focus it and use the arrow keys (Page Up
+        and Page Down jump further, Home and End go to the start and the finish). The chart starts on the steepest
+        stretch.
+      </p>
+      <p>
+        The steady effort is a model, not a pacing plan: real teams often ease off on climbs so everyone stays
+        together, and push harder on the flat.
+      </p>
+    </div>
+  </section>
+
   <section id="time" aria-labelledby="time-h" class="card bg-base-200 scroll-mt-24">
     <div class="card-body space-y-3">
       <h2 id="time-h" class="card-title">Finish time</h2>
+      <p>
+        With an elevation profile, the finish time is the profile ridden at the steady effort described under
+        <a class="link" href="#course">On the course</a>: each stretch's length over the team's speed on it, added up,
+        lead-in included, since the lead-in is raced. The speed beside it on the Team card is that distance over that
+        time.
+      </p>
+      <p>When the route has no profile, the planner falls back to a rougher estimate:</p>
       <ol class="list-decimal pl-5 space-y-1">
-        <li>The riders' weights and heights are averaged into one typical rider.</li>
-        <li>That rider's power to hold the target flat speed alone on the flat is worked out.</li>
+        <li>The typical rider's power to hold the target flat speed alone on the flat is worked out.</li>
         <li>The planner finds the speed that power gives on the route's average gradient: total climbing ÷ distance.</li>
         <li>Finish time = distance ÷ that speed.</li>
       </ol>
       <p>
-        This treats all the climbing as one steady slope with no descents. On a hilly course the estimate runs slow,
-        because real descents give some of the time back.
+        That treats all the climbing as one steady slope with no descents, so on a hilly course it runs slow, and it
+        leaves the lead-in out.
       </p>
+      <p>The race length also sets how many pulls each rider takes, which the W′ balance and TSS depend on.</p>
     </div>
   </section>
 
@@ -358,8 +404,12 @@
     <div class="card-body space-y-3">
       <h2 id="limits-h" class="card-title">What the model leaves out</h2>
       <ul class="list-disc pl-5 space-y-1">
-        <li><strong>Hills in the finish time.</strong> The average gradient has no descents in it (see
-          <a class="link" href="#time">Finish time</a>).</li>
+        <li><strong>Hills in the pull schedule.</strong> Pull powers, IF and the limits are worked out on level
+          road; only the finish time and <a class="link" href="#course">On the course</a> ride the route's slopes.</li>
+        <li><strong>Pacing.</strong> The team rides the course at a steady effort. Easing off on climbs and pushing on
+          the flat is not modelled yet.</li>
+        <li><strong>Equipment.</strong> Every rider is modelled with the same position and bike, so a team on TT bikes
+          needs less power than the planner shows.</li>
         <li><strong>Where each rider sits.</strong> Sitting in uses the average saving over the whole line, not the
           wheel each rider is actually on at each moment.</li>
         <li><strong>W′ is an estimate.</strong> Zwift Racing's CP and W′ come from each rider's best recent efforts,

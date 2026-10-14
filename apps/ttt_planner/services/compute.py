@@ -26,7 +26,7 @@ import math
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, ClassVar
 
-from apps.ttt_planner.services import effort, physics
+from apps.ttt_planner.services import course, effort, physics
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -367,9 +367,14 @@ class PlanResult:
     draft_table: list[DraftRow]
     draft_savings_input: str
     cda_coef: float
-    # Route distance over the estimated time: the target flat speed once the route's
-    # climbing is applied (0.0 without a route).
+    # The distance raced over the estimated time: the target flat speed once the route's
+    # climbs and descents are applied (0.0 without a route).
     course_avg_kph: float = 0.0
+    # The distance raced: the profile's, lead-in included, or the route's own without a profile.
+    course_km: float = 0.0
+    leadin_km: float = 0.0
+    # What the course chart draws (see _course_chart), or None without a route profile.
+    course_chart: dict | None = None
     # Whether any rider is computed on the fallback weight/height below.
     any_estimated: bool = False
     # Whether any rider's CP or W′ is a fallback rather than a Zwift Racing value.
@@ -477,32 +482,70 @@ def quick_finish_time(plan: TttPlan, params: physics.PhysicsParams | None = None
         return 0.0
     if params is None:
         params = params_for_plan(plan)
-
-    riders = list(plan.riders.all())
-    if riders:
-        avg_weight = sum(float(r.weight_kg or FALLBACK_WEIGHT_KG) for r in riders) / len(riders)
-        avg_height = sum(float(r.height_cm or FALLBACK_HEIGHT_CM) for r in riders) / len(riders)
-    else:
-        avg_weight, avg_height = FALLBACK_WEIGHT_KG, FALLBACK_HEIGHT_CM
-
-    return physics.estimate_time_seconds(
-        float(plan.route.distance_km),
-        plan.route.ascent_m,
-        float(plan.target_speed_kph),
-        avg_weight_kg=avg_weight,
-        avg_height_cm=avg_height,
-        params=params,
-    )
+    specs = [rider_spec(r) for r in plan.riders.all()]
+    return _race_seconds(plan, specs, float(plan.target_speed_kph), params) or 0.0
 
 
-def _race_seconds(plan: TttPlan, specs: list[RiderSpec], speed: float, params: physics.PhysicsParams) -> float | None:
-    """Return the estimated race length at a target speed, or None without a route.
+# Marks a course nobody has looked up yet, as distinct from None (no route profile).
+_UNSET = object()
+
+
+def _team_body(specs: list[RiderSpec]) -> tuple[float, float]:
+    """Return the team's average weight and height: the typical rider who stands in for the team.
+
+    Args:
+        specs: The riders.
+
+    Returns:
+        ``(weight_kg, height_cm)``, the fallbacks for a plan with no riders.
+
+    """
+    if not specs:
+        return FALLBACK_WEIGHT_KG, FALLBACK_HEIGHT_CM
+    return sum(s.weight_kg for s in specs) / len(specs), sum(s.height_cm for s in specs) / len(specs)
+
+
+def course_for(plan: TttPlan, specs: list[RiderSpec], params: physics.PhysicsParams) -> course.Course | None:
+    """Return the plan's route ready to ride at a steady effort.
+
+    Args:
+        plan: The plan.
+        specs: Its riders (their average weight and height stand in for the team).
+        params: Physics constants.
+
+    Returns:
+        A :class:`course.Course`, or None without a route or without a profile for it.
+
+    """
+    if not plan.route:
+        return None
+    profile = course.load_profile(plan.route)
+    if profile is None:
+        return None
+    weight, height = _team_body(specs)
+    return course.Course.build(profile, weight, height, params)
+
+
+def _race_seconds(
+    plan: TttPlan,
+    specs: list[RiderSpec],
+    speed: float,
+    params: physics.PhysicsParams,
+    route_course: course.Course | object | None = _UNSET,
+) -> float | None:
+    """Return the estimated race length at a target flat speed, or None without a route.
+
+    With the route's profile, the team rides it at a steady effort, lead-in included
+    (:meth:`course.Course.seconds`). Without one, it rides the route's distance on its
+    average gradient (``physics.estimate_time_seconds``).
 
     Args:
         plan: The plan.
         specs: Its riders (their average weight and height stand in for the team).
         speed: Target flat speed, in km/h.
         params: Physics constants.
+        route_course: The plan's course from :func:`course_for`, when the caller already has
+            it; looked up when left out.
 
     Returns:
         Race seconds, or None.
@@ -510,16 +553,21 @@ def _race_seconds(plan: TttPlan, specs: list[RiderSpec], speed: float, params: p
     """
     if not plan.route or speed <= 0:
         return None
-    count = len(specs) or 1
-    seconds = physics.estimate_time_seconds(
-        float(plan.route.distance_km),
-        plan.route.ascent_m,
-        speed,
-        avg_weight_kg=sum(s.weight_kg for s in specs) / count if specs else FALLBACK_WEIGHT_KG,
-        avg_height_cm=sum(s.height_cm for s in specs) / count if specs else FALLBACK_HEIGHT_CM,
-        params=params,
-    )
-    return seconds if seconds > 0 else None
+    if route_course is _UNSET:
+        route_course = course_for(plan, specs, params)
+    if isinstance(route_course, course.Course):
+        seconds = route_course.seconds(speed)
+    else:
+        weight, height = _team_body(specs)
+        seconds = physics.estimate_time_seconds(
+            float(plan.route.distance_km),
+            plan.route.ascent_m,
+            speed,
+            avg_weight_kg=weight,
+            avg_height_cm=height,
+            params=params,
+        )
+    return seconds if 0 < seconds < math.inf else None
 
 
 def _mean_draft_factor(team_size: int, params: physics.PhysicsParams) -> float:
@@ -559,7 +607,8 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
     specs = [rider_spec(r) for r in riders]
     powers = _Powers(params, _mean_draft_factor(len(specs), params))
     cycle = sum(s.pull_s for s in specs if s.pulls)
-    race_s = _race_seconds(plan, specs, target, params)
+    route_course = course_for(plan, specs, params)
+    race_s = _race_seconds(plan, specs, target, params, route_course)
 
     results: list[RiderResult] = []
     for rider, spec in zip(riders, specs, strict=True):
@@ -597,7 +646,13 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
     estimated_time = race_s or 0.0
     judged = any(s.ftp for s in specs)
     anyone_pulls = any(s.pulls for s in specs)
-    fastest = _fastest(plan, specs, limits, params)
+    fastest = _fastest(plan, specs, limits, params, route_course)
+    if route_course is not None:
+        course_km = route_course.profile.length_m / 1000
+        leadin_km = route_course.profile.leadin_m / 1000
+    else:
+        course_km = float(plan.route.distance_km) if plan.route else 0.0
+        leadin_km = 0.0
     return PlanResult(
         riders=results,
         target_speed_kph=target,
@@ -606,7 +661,14 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
         draft_table=_draft_table(params),
         draft_savings_input=format_draft_savings_input(params),
         cda_coef=params.cda_coef,
-        course_avg_kph=(round(float(plan.route.distance_km) / estimated_time * 3600, 1) if estimated_time > 0 else 0.0),
+        course_avg_kph=round(course_km / estimated_time * 3600, 1) if estimated_time > 0 else 0.0,
+        course_km=round(course_km, 2),
+        leadin_km=round(leadin_km, 2),
+        course_chart=(
+            _course_chart(route_course, target, specs, powers)
+            if route_course is not None and specs and target > 0
+            else None
+        ),
         any_estimated=any(s.missing_body for s in specs),
         any_power_estimated=any(s.cp_estimated or s.w_prime_estimated for s in specs),
         target_if=limits.target_if,
@@ -618,13 +680,21 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
             over=[r for r in results if r.over_target],
             fastest_kph=fastest,
             held_back_by=(
-                _held_back_by(plan, riders, specs, limits, params, round(fastest + 0.1, 1)) if fastest else []
+                _held_back_by(plan, riders, specs, limits, params, round(fastest + 0.1, 1), route_course)
+                if fastest
+                else []
             ),
         ),
     )
 
 
-def _fastest(plan: TttPlan, specs: list[RiderSpec], limits: Limits, params: physics.PhysicsParams) -> float | None:
+def _fastest(
+    plan: TttPlan,
+    specs: list[RiderSpec],
+    limits: Limits,
+    params: physics.PhysicsParams,
+    route_course: course.Course | object | None = _UNSET,
+) -> float | None:
     """Return the fastest flat speed (to 0.1 km/h, rounded down) at which every rider is within the limits.
 
     Args:
@@ -632,6 +702,7 @@ def _fastest(plan: TttPlan, specs: list[RiderSpec], limits: Limits, params: phys
         specs: Its riders, with the pull lengths to judge.
         limits: Target IF and W′ reserve.
         params: Physics constants.
+        route_course: The plan's course from :func:`course_for`; looked up when left out.
 
     Returns:
         The speed in km/h, or None when nobody pulls, nobody has an FTP, or no speed fits.
@@ -642,9 +713,11 @@ def _fastest(plan: TttPlan, specs: list[RiderSpec], limits: Limits, params: phys
         return None
     powers = _Powers(params, _mean_draft_factor(len(specs), params))
     cycle = sum(s.pull_s for s in specs if s.pulls)
+    if route_course is _UNSET:
+        route_course = course_for(plan, specs, params)
 
     def fits(speed: float) -> bool:
-        race_s = _race_seconds(plan, specs, speed, params)
+        race_s = _race_seconds(plan, specs, speed, params, route_course)
         for spec in judged:
             load = rider_load(spec, powers.front(spec, speed), powers.draft(spec, speed), cycle, race_s)
             if not within_limits(spec, load, limits):
@@ -668,6 +741,7 @@ def _max_speed(
     params: physics.PhysicsParams,
     *,
     fallback: float,
+    route_course: course.Course | object | None = _UNSET,
 ) -> float:
     """Return :func:`_fastest`, or ``fallback`` when it cannot say.
 
@@ -677,12 +751,13 @@ def _max_speed(
         limits: Target IF and W′ reserve.
         params: Physics constants.
         fallback: Returned when nobody pulls, nobody has an FTP, or no speed fits.
+        route_course: The plan's course from :func:`course_for`; looked up when left out.
 
     Returns:
         The speed in km/h.
 
     """
-    fastest = _fastest(plan, specs, limits, params)
+    fastest = _fastest(plan, specs, limits, params, route_course)
     return fallback if fastest is None else fastest
 
 
@@ -693,6 +768,7 @@ def _held_back_by(
     limits: Limits,
     params: physics.PhysicsParams,
     speed: float,
+    route_course: course.Course | object | None = _UNSET,
 ) -> list[Holdback]:
     """Name the riders who would be past a limit at ``speed``, and which limit.
 
@@ -705,6 +781,7 @@ def _held_back_by(
         limits: Target IF and W′ reserve.
         params: Physics constants.
         speed: The flat speed to judge, in km/h.
+        route_course: The plan's course from :func:`course_for`; looked up when left out.
 
     Returns:
         One :class:`Holdback` per rider past a limit, in pull order; IF is named when both are.
@@ -712,7 +789,7 @@ def _held_back_by(
     """
     powers = _Powers(params, _mean_draft_factor(len(specs), params))
     cycle = sum(s.pull_s for s in specs if s.pulls)
-    race_s = _race_seconds(plan, specs, speed, params)
+    race_s = _race_seconds(plan, specs, speed, params, route_course)
     held: list[Holdback] = []
     for rider, spec in zip(riders, specs, strict=True):
         if not spec.ftp:
@@ -723,6 +800,73 @@ def _held_back_by(
         elif below_reserve(spec, load, limits):
             held.append(Holdback(rider.name, "w_prime"))
     return held
+
+
+def _course_chart(route_course: course.Course, flat_kph: float, specs: list[RiderSpec], powers: _Powers) -> dict:
+    """Lay out what the course chart draws: the profile, the team's speed, and every rider's powers.
+
+    At each chart point the team holds the typical rider's steady power, which sets its
+    speed on that slope; each rider's power to hold that speed on the front (no draft) and
+    sitting in (the plan's average draft) follows. A custom pull power scales a rider's pulls
+    in proportion to the model's own on level road. Riders come in plan order and without
+    names: the page renders the names itself.
+
+    Args:
+        route_course: The plan's course.
+        flat_kph: The target flat speed.
+        specs: The plan's riders, as the model reads them, in plan order.
+        powers: The plan's pulling and sitting-in powers on level road.
+
+    Returns:
+        A JSON-ready dict: distances (km), elevations (m), gradients (%) and team speeds (km/h)
+        at each point, and per rider their weight, FTP, whether they pull, and their powers there.
+
+    """
+    profile, params = route_course.profile, route_course.params
+    points = course.chart_samples(route_course)
+    last = len(route_course.grades) - 1
+    grades = [route_course.grades[min(i, last)] for i in points]
+    power = route_course.team_power(flat_kph)
+    speeds = [route_course.speed(power, grade) for grade in grades]
+
+    def watts(spec: RiderSpec, draft_factor: float, scale: float = 1.0) -> list[int]:
+        return [
+            round(
+                scale
+                * physics.power_for_speed(
+                    kph,
+                    weight_kg=spec.weight_kg,
+                    height_cm=spec.height_cm,
+                    grade=grade,
+                    draft_factor=draft_factor,
+                    params=params,
+                )
+            )
+            for grade, kph in zip(grades, speeds, strict=True)
+        ]
+
+    rows = []
+    for spec in specs:
+        scale = 1.0
+        if spec.pull_power_override is not None:
+            level = physics.power_for_speed(flat_kph, weight_kg=spec.weight_kg, height_cm=spec.height_cm, params=params)
+            scale = spec.pull_power_override / level if level > 0 else 1.0
+        rows.append({
+            "kg": round(spec.weight_kg, 1),
+            "ftp": round(spec.ftp) if spec.ftp else None,
+            "pulls": spec.pulls,
+            "front": watts(spec, 1.0, scale),
+            "sit": watts(spec, powers.draft_factor),
+        })
+    return {
+        "flat_kph": flat_kph,
+        "km": [round(profile.d[i] / 1000, 3) for i in points],
+        "elev": [round(profile.e[i], 1) for i in points],
+        "grade": [round(grade * 100, 1) for grade in grades],
+        "kph": [round(kph, 1) for kph in speeds],
+        "leadin_km": round(profile.leadin_m / 1000, 3),
+        "riders": rows,
+    }
 
 
 def sustainable_speed(

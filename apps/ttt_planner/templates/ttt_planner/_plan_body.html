@@ -256,7 +256,7 @@
             {% else %}—{% endif %}
           </div>
           <div class="stat-desc whitespace-normal">
-            {% if plan.route %}{{ plan.route.name }} · {{ plan.route.distance_km }} km{% if result.course_avg_kph %} · {{ result.course_avg_kph }} kph on the course{% endif %}{% else %}Pick a route in the Course card{% endif %}
+            {% if plan.route %}{{ plan.route.name }} · {{ result.course_km }} km{% if result.leadin_km %} incl. {{ result.leadin_km }} km lead-in{% endif %}{% if result.course_avg_kph %} · {{ result.course_avg_kph }} kph on the course{% endif %}{% else %}Pick a route in the Course card{% endif %}
           </div>
         </div>
       </div>
@@ -264,6 +264,51 @@
   </section>
 
 </div>
+
+{% if result.course_chart %}
+{# ---- On the course: the team's speed and every rider's watts along the route (course_plot.js draws it) ---- #}
+<section class="card bg-base-200 shadow-xl mt-6" aria-labelledby="ttt-on-course-heading">
+  <div class="card-body gap-3">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 id="ttt-on-course-heading" class="card-title">On the course</h2>
+      <a href="{% url 'ttt_planner:help' %}#course" class="link text-sm">How this works</a>
+    </div>
+    <p class="text-sm text-base-content/70" id="ttt-course-help">
+      The team at a steady effort: the power that holds {{ result.target_speed_kph }} kph on the flat, held over every
+      climb and descent of {{ plan.route.name }}, lead-in included. Move along the profile, or focus it and use the
+      arrow keys, to see what each rider needs to hold the team's speed there, on the front and sitting in.
+    </p>
+    <div id="ttt-course-plot" class="ttt-course-plot" tabindex="0" role="slider"
+         aria-label="Position along the course, in km" aria-describedby="ttt-course-help"></div>
+    <ul id="ttt-course-key" class="ttt-course-key flex flex-wrap gap-x-4 gap-y-1 text-xs text-base-content/80"
+        aria-label="Key"></ul>
+    <div id="ttt-course-readout" class="space-y-1">
+      <p id="ttt-course-where" class="font-semibold text-sm"></p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th scope="col">Rider</th>
+              <th scope="col" class="text-right">On the front</th>
+              <th scope="col" class="text-right">Sitting in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rr in result.riders %}
+            <tr data-rider-index="{{ forloop.counter0 }}">
+              <th scope="row" class="font-medium whitespace-nowrap align-top">{{ rr.rider.name }}</th>
+              <td class="cc-front text-right whitespace-nowrap align-top"></td>
+              <td class="cc-sit text-right whitespace-nowrap align-top"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {{ result.course_chart|json_script:"ttt-course-data" }}
+  </div>
+</section>
+{% endif %}
 
 {# ---- Climb compare (per-rider climb-strength) ---- #}
 <section class="card bg-base-200 shadow-xl mt-6" aria-labelledby="ttt-climb-heading">

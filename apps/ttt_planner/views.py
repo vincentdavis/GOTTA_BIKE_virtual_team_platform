@@ -30,7 +30,7 @@ from apps.events.models import Squad
 from apps.ttt_planner import terrain
 from apps.ttt_planner.forms import PowerUpForm
 from apps.ttt_planner.models import PlanRider, PowerUp, TttPlan
-from apps.ttt_planner.services import compute, effort, physics, roster, zwiftgopher, zwiftgopher_client
+from apps.ttt_planner.services import compute, course, effort, physics, roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
     climb_strength,
     compute_plan,
@@ -383,6 +383,7 @@ def planner_help(request: HttpRequest) -> HttpResponse:
             "fallback_w_prime_kj": f"{compute.FALLBACK_W_PRIME_J / 1000:g}",
             "w_example": w_example,
             "climb_grade_pct": f"{compute.TTT_CLIMB_GRADE * 100:g}",
+            "course_grade_window_m": course.GRADE_WINDOW_M,
             "example": {
                 "kph": f"{example_kph:g}",
                 "kg": f"{example_kg:g}",

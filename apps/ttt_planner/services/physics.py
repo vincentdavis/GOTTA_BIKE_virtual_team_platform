@@ -16,6 +16,7 @@ redeploy. The defaults are calibrated so a ~75 kg / 180 cm rider needs roughly
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 
 GRAVITY = 9.8067  # m/s^2
@@ -182,6 +183,58 @@ def speed_for_power(
         else:
             hi = mid
     return (lo + hi) / 2.0
+
+
+def speed_on_grade(
+    power_w: float,
+    *,
+    weight_kg: float,
+    height_cm: float,
+    grade: float = 0.0,
+    draft_factor: float = 1.0,
+    params: PhysicsParams = DEFAULT_PARAMS,
+) -> float:
+    """Return the speed (km/h) a power holds on a gradient, the same answer as :func:`speed_for_power`.
+
+    The power model is a cubic in speed, ``a v³ + b v = P``, so this solves it directly
+    instead of bisecting, which makes it cheap enough to time a whole course inside a
+    search over speeds. On a descent steeper than rolling resistance (``b < 0``) the cubic
+    can have three real roots; the rider's speed is the largest. A Newton step tidies the
+    rounding.
+
+    Args:
+        power_w: Rider power in watts.
+        weight_kg: Rider weight in kilograms.
+        height_cm: Rider height in centimetres.
+        grade: Road gradient as a fraction.
+        draft_factor: Multiplier on the aerodynamic term.
+        params: Physics constants.
+
+    Returns:
+        Speed in km/h (0.0 for no power on a road that does not pull the rider along).
+
+    """
+    total_mass = weight_kg + params.bike_mass_kg
+    a = 0.5 * params.air_density * estimate_cda(height_cm, weight_kg, params) * draft_factor
+    b = total_mass * GRAVITY * (params.crr + grade)
+    wheel = max(0.0, power_w) * params.drivetrain_efficiency
+    if a <= 0:
+        return wheel / b * 3.6 if b > 0 else 0.0
+    if wheel == 0:
+        # Coasting: the speed at which gravity is balanced by drag and rolling, if any.
+        return math.sqrt(-b / a) * 3.6 if b < 0 else 0.0
+    p, q = b / a, -wheel / a  # v³ + p v + q = 0
+    disc = (q / 2) ** 2 + (p / 3) ** 3
+    if disc >= 0:
+        root = math.sqrt(disc)
+        v = math.cbrt(-q / 2 + root) + math.cbrt(-q / 2 - root)
+    else:  # three real roots (only when p < 0): take the largest
+        r = math.sqrt(-p / 3)
+        v = 2 * r * math.cos(math.acos(max(-1.0, min(1.0, (-q / 2) / r**3))) / 3)
+    slope = 3 * a * v * v + b
+    if slope > 0:
+        v -= (a * v**3 + b * v - wheel) / slope
+    return max(0.0, v) * 3.6
 
 
 def intensity_factor(power_w: float, ftp_w: float | None) -> float | None:

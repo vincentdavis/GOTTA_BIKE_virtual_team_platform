@@ -1,6 +1,11 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ plan.name|default:"TTT Plan" }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'ttt_planner/course_plot.css' %}" />
+{% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto space-y-6">
@@ -96,8 +101,8 @@
         {% endif %}
         {% if can_edit %}
         <p class="text-sm text-base-content/70">
-          The route's distance and climbing set the finish-time estimate. Course name and type are labels only;
-          they change no numbers.
+          The route's elevation profile, lead-in included, sets the finish time and the On the course chart below.
+          Course name and type are labels only; they change no numbers.
         </p>
         {% endif %}
       </div>
@@ -441,4 +446,5 @@
   })();
 </script>
 {% include "events/_filter_select_script.html" %}
+<script src="{% static 'ttt_planner/course_plot.js' %}"></script>
 {% endblock %}
