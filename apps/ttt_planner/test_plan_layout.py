@@ -2,7 +2,7 @@
 
 Plan and Course are separate cards; the edit-squad picker lives in Add riders; the plan's goal
 (how fast, how the pulls are set), its limits, the CdA coefficient, Optimize and the draft
-savings live in Parameters, just above the pull schedule.
+savings live in Parameters, just above the pull schedule and Pull Stats.
 """
 
 from datetime import timedelta

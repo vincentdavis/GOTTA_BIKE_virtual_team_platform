@@ -1,28 +1,125 @@
 {% load ttt_extras %}
 {# Roster table + results panel. Returned by every mutating endpoint. #}
+{% if result.riders %}
+{# ---- Pull schedule: what each rider rides, and the copies to share it in Discord ---- #}
+<section class="card bg-base-200 shadow-xl mb-6" aria-labelledby="ttt-schedule-heading">
+  <div class="card-body gap-3">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 id="ttt-schedule-heading" class="card-title">Pull schedule</h2>
+      {# Outside the can_edit gate: someone opening a shared link wants to share it as much as the owner does. #}
+      <div class="flex flex-wrap gap-1">
+        <button type="button" class="btn btn-neutral btn-xs" data-ttt-copy-text="ttt-discord-text"
+                aria-describedby="ttt-copy-status">Copy for Discord</button>
+        <button type="button" class="btn btn-ghost btn-xs ttt-capture-btn" data-ttt-capture-btn
+                aria-label="Copy the pull schedule as an image">Copy image</button>
+      </div>
+    </div>
+    <p class="text-sm text-base-content/70">
+      In pull order, at {{ result.target_speed_kph }} kph on the flat. After a pull a rider drops to the back and works
+      up the line; the wheel columns are the watts to hold the speed sitting in at each place, 2nd being right behind
+      the rider on the front.
+    </p>
+    <div class="overflow-x-auto">
+      <table class="table table-sm table-pin-col">
+        <thead>
+          <tr>
+            <th scope="col">Rider</th>
+            <th scope="col" class="text-right">Pull (s)</th>
+            <th scope="col" class="text-right">Pull W/kg</th>
+            <th scope="col" class="text-right">Pull W</th>
+            {% for position in result.wheel_positions %}<th scope="col" class="text-right">{{ position|wheel_name }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for rr in result.riders %}
+          <tr>
+            <td class="font-medium whitespace-nowrap">{{ rr.rider.name }}</td>
+            {% if rr.rider.zero_pull or not rr.rider.pull_duration_s %}
+            <td class="text-right whitespace-nowrap">no pull</td><td class="text-right">—</td><td class="text-right">—</td>
+            {% else %}
+            <td class="text-right">{{ rr.rider.pull_duration_s }}</td>
+            <td class="text-right">{{ rr.pull_wkg|floatformat:1 }}</td>
+            <td class="text-right font-semibold">{{ rr.pull_power_w }}</td>
+            {% endif %}
+            {% for watts in rr.wheel_powers %}<td class="text-right">{{ watts }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p id="ttt-copy-status" role="status" class="text-sm"></p>
+    <details>
+      <summary class="text-sm cursor-pointer w-fit">Show as text</summary>
+      {# Discord shows a code block in a monospace font, so the padded columns line up there (services/schedule.py). #}
+      <textarea id="ttt-discord-text" readonly rows="{{ result.riders|length|add:7 }}" spellcheck="false"
+                aria-label="Pull schedule as text for Discord"
+                class="textarea textarea-bordered w-full font-mono text-xs mt-2 whitespace-pre">{{ result|discord_schedule:plan }}</textarea>
+    </details>
+    {% comment %}
+      The capture stage for Copy image. html-to-image clones the target with its own computed
+      styles, so an off-screen offset on the sheet itself travels into the clone and the PNG
+      comes out blank -- verified. The offset therefore lives on this wrapper, which is not
+      part of the capture, leaving the sheet normally positioned. opacity is used rather than
+      visibility because visibility inherits and would blank the clone too.
+    {% endcomment %}
+    <div style="position:fixed; left:0; top:0; opacity:0; pointer-events:none; z-index:-1;" aria-hidden="true">
+    <div data-ttt-capture-sheet style="width:max-content; min-width:460px;"
+         class="bg-base-100 text-base-content p-4 rounded-box">
+      <div class="font-bold text-lg leading-tight">{{ plan.name|default:"TTT Plan" }}</div>
+      {% if plan.course_name or plan.route %}
+      <div class="text-sm text-base-content/70 mb-1">
+        {% if plan.course_name %}{{ plan.course_name }}{% else %}{{ plan.route.name }}{% endif %}
+      </div>
+      {% endif %}
+      <div class="text-sm text-base-content/70 mb-2">{{ result.target_speed_kph }} kph on the flat</div>
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Rider</th>
+            <th class="text-right">Pull (s)</th>
+            <th class="text-right">W/kg</th>
+            <th class="text-right">Pull W</th>
+            {% for position in result.wheel_positions %}<th class="text-right">{{ position|wheel_name }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for rr in result.riders %}
+          <tr>
+            <td class="text-base-content/70">{{ forloop.counter }}</td>
+            <td class="font-medium">{{ rr.rider.name }}</td>
+            {% if rr.rider.zero_pull or not rr.rider.pull_duration_s %}
+            <td class="text-right">no pull</td><td class="text-right">&mdash;</td><td class="text-right">&mdash;</td>
+            {% else %}
+            <td class="text-right">{{ rr.rider.pull_duration_s }}</td>
+            <td class="text-right">{{ rr.pull_wkg|floatformat:1 }}</td>
+            <td class="text-right font-semibold">{{ rr.pull_power_w }}</td>
+            {% endif %}
+            {% for watts in rr.wheel_powers %}<td class="text-right">{{ watts }}</td>{% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
 <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
 
-  {# ---- Roster / pull schedule ---- #}
-  <section class="xl:col-span-3 card bg-base-200 shadow-xl" aria-labelledby="ttt-schedule-heading">
+  {# ---- Pull Stats: the planning view of every rider's load ---- #}
+  <section class="xl:col-span-3 card bg-base-200 shadow-xl" aria-labelledby="ttt-stats-heading">
     <div class="card-body">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="ttt-schedule-heading" class="card-title">Pull schedule</h2>
-        <div class="flex gap-1">
-        {% if result.riders %}
-        {# Outside the can_edit gate: someone sharing a read-only link still wants the image. #}
-        <button type="button" class="btn btn-ghost btn-xs ttt-capture-btn" data-ttt-capture-btn
-                title="Copy the pull schedule as an image" aria-label="Copy the pull schedule as an image">
-          Copy
-        </button>
-        {% endif %}
+        <h2 id="ttt-stats-heading" class="card-title">Pull Stats</h2>
         {% if can_edit and result.riders %}
-          <button type="button" class="btn btn-ghost btn-xs"
-                  hx-post="{% url 'ttt_planner:riders_remove_selected' plan.pk %}"
-                  hx-include="[name='rider_ids']"
-                  hx-target="#ttt-plan-body" hx-swap="innerHTML"
-                  hx-confirm="Remove the selected riders?">Remove selected</button>
+        <button type="button" class="btn btn-ghost btn-xs"
+                hx-post="{% url 'ttt_planner:riders_remove_selected' plan.pk %}"
+                hx-include="[name='rider_ids']"
+                hx-target="#ttt-plan-body" hx-swap="innerHTML"
+                hx-confirm="Remove the selected riders?">Remove selected</button>
         {% endif %}
-        </div>
       </div>
       {% if result.riders and result.status %}
       {% with s=result.status %}
@@ -54,55 +151,6 @@
       {% endwith %}
       {% endif %}
       {% if result.riders %}
-      {% comment %}
-        What Copy actually captures: only what a rider needs on the bike -- order, name,
-        pull power and pull length. The table above is a planning view (kg, CdA, FTP, IF,
-        NP, TSS) and its Pull (s) cell is a number input, which photographs badly.
-        Re-rendered with the rest of the body on every HTMX swap, so it never lags.
-      {% endcomment %}
-      {% comment %}
-        The capture stage. html-to-image clones the target with its own computed styles,
-        so an off-screen offset on the sheet itself travels into the clone and the PNG
-        comes out blank -- verified. The offset therefore lives on this wrapper, which is
-        not part of the capture, leaving the sheet normally positioned. opacity is used
-        rather than visibility because visibility inherits and would blank the clone too.
-      {% endcomment %}
-      <div style="position:fixed; left:0; top:0; opacity:0; pointer-events:none; z-index:-1;" aria-hidden="true">
-      <div data-ttt-capture-sheet style="width:460px;"
-           class="bg-base-100 text-base-content p-4 rounded-box">
-        <div class="font-bold text-lg leading-tight">{{ plan.name|default:"TTT Plan" }}</div>
-        {% if plan.course_name or plan.route %}
-        <div class="text-sm text-base-content/70 mb-1">
-          {% if plan.course_name %}{{ plan.course_name }}{% else %}{{ plan.route.name }}{% endif %}
-        </div>
-        {% endif %}
-        {% if result.target_speed_kph %}
-        <div class="text-sm text-base-content/70 mb-2">Target {{ result.target_speed_kph }} kph</div>
-        {% endif %}
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Rider</th>
-              <th class="text-right">Pull W</th>
-              <th class="text-right">W/kg</th>
-              <th class="text-right">Pull (s)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for rr in result.riders %}
-            <tr>
-              <td class="text-base-content/70">{{ forloop.counter }}</td>
-              <td class="font-medium">{{ rr.rider.name }}</td>
-              <td class="text-right font-semibold">{% if rr.rider.zero_pull %}&mdash;{% else %}{{ rr.pull_power_w }}{% endif %}</td>
-              <td class="text-right">{% if rr.rider.zero_pull %}&mdash;{% else %}{{ rr.pull_wkg }}{% endif %}</td>
-              <td class="text-right">{% if rr.rider.zero_pull %}no pull{% else %}{{ rr.rider.pull_duration_s }}{% endif %}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      </div>
       <div class="overflow-x-auto">
         <table class="table table-sm">
           <thead>

@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import itertools
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, ClassVar
 
 from apps.ttt_planner.services import course, effort, physics
@@ -283,7 +283,9 @@ class RiderResult:
     ``pull_pct_ftp`` is how hard the pull is (pull power as a percentage of FTP; pulls
     usually sit above 100). ``intensity_factor`` is the standard IF, NP / FTP, which Target
     IF caps for every rider who pulls. ``w_prime_low_pct`` is the lowest W′ balance over
-    the race, as a percentage of W′ (below zero when the rider runs out).
+    the race, as a percentage of W′ (below zero when the rider runs out). ``wheel_powers``
+    is the power to hold the target flat speed sitting in at each wheel, from the 2nd to
+    the last, with that wheel's own draft saving; the averages above use the average saving.
     """
 
     rider: PlanRider
@@ -306,6 +308,7 @@ class RiderResult:
     w_prime_empty: bool = False
     over_if: bool = False
     below_reserve: bool = False
+    wheel_powers: list[int] = field(default_factory=list)
 
     @property
     def over_target(self) -> bool:
@@ -382,6 +385,8 @@ class PlanResult:
     target_if: float = 0.95
     w_prime_reserve_pct: int = 25
     status: PlanStatus | None = None
+    # The wheels behind the front, 2 to the team size, that RiderResult.wheel_powers follow.
+    wheel_positions: list[int] = field(default_factory=list)
     fallback_weight_kg: ClassVar[float] = FALLBACK_WEIGHT_KG
     fallback_height_cm: ClassVar[float] = FALLBACK_HEIGHT_CM
     fallback_w_prime_kj: ClassVar[float] = FALLBACK_W_PRIME_J / 1000
@@ -609,6 +614,7 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
     cycle = sum(s.pull_s for s in specs if s.pulls)
     route_course = course_for(plan, specs, params)
     race_s = _race_seconds(plan, specs, target, params, route_course)
+    wheels = list(range(2, len(specs) + 1))
 
     results: list[RiderResult] = []
     for rider, spec in zip(riders, specs, strict=True):
@@ -640,6 +646,18 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
                 w_prime_empty=low is not None and low < 0,
                 over_if=over_if(spec, load, limits),
                 below_reserve=below_reserve(spec, load, limits),
+                wheel_powers=[
+                    round(
+                        physics.power_for_speed(
+                            target,
+                            weight_kg=spec.weight_kg,
+                            height_cm=spec.height_cm,
+                            draft_factor=1.0 - physics.draft_savings_fraction(position, params),
+                            params=params,
+                        )
+                    )
+                    for position in wheels
+                ],
             )
         )
 
@@ -673,6 +691,7 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
         any_power_estimated=any(s.cp_estimated or s.w_prime_estimated for s in specs),
         target_if=limits.target_if,
         w_prime_reserve_pct=round(limits.reserve * 100),
+        wheel_positions=wheels,
         status=PlanStatus(
             speed_kph=target,
             judged=judged,

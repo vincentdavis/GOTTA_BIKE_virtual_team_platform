@@ -72,10 +72,10 @@ def test_a_read_only_viewer_can_still_copy(auth_client, team_member, app_admin) 
 
 @pytest.mark.django_db
 def test_the_capture_targets_a_ride_sheet_not_the_planning_table(auth_client, team_member) -> None:
-    """Only what a rider needs on the bike, and no number inputs in the PNG.
+    """Only what a rider needs on the bike, and nothing from the planning view in the PNG.
 
-    The visible table is a planning view (kg, CdA, FTP, IF, NP, TSS) whose Pull (s) cell
-    is an <input>. The image comes from a separate off-screen sheet instead.
+    Pull Stats is a planning view (kg, CdA, FTP, IF, NP, TSS) whose Pull (s) cell is an
+    <input>. The image comes from a separate off-screen sheet with the pull schedule's columns.
     """
     plan = TttPlan.objects.create(created_by=team_member, name="Mine")
     _rider(plan, "Ana")

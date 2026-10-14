@@ -1,4 +1,4 @@
-"""Optimize carries out the plan's goal, and the pull schedule says whether the plan fits.
+"""Optimize carries out the plan's goal, and Pull Stats says whether the plan fits.
 
 A plan's goal has two halves: how fast (as fast as the limits allow, or hold the target speed)
 and how the pull lengths are set (for even effort, for the most W′ in reserve, or kept as they

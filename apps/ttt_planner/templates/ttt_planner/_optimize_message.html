@@ -10,8 +10,8 @@
   {% elif not outcome %}
     No speed keeps every rider inside the limits.
   {% elif plan.pull_rule == "keep" and plan.speed_goal == "hold" %}
-    Nothing to change: you hold {{ speed }} kph with your own pull lengths. The pull schedule shows how they fit
-    the limits.
+    Nothing to change: you hold {{ speed }} kph with your own pull lengths. Pull Stats shows how they fit the
+    limits.
   {% elif plan.pull_rule == "keep" %}
     {% if s.anyone_pulls %}
       Speed set to {{ speed }} kph, the fastest your pull lengths allow.

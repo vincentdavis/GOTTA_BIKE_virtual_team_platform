@@ -59,8 +59,7 @@ GOAL_SENTENCES = {
     "hold-even": "Optimize keeps your speed, and sets the pull lengths and order for even effort.",
     "hold-reserve": "Optimize keeps your speed, and sets the pull lengths and order to keep the most W′ in reserve.",
     "hold-keep": (
-        "Nothing to optimize: the speed and the pull lengths are yours. The pull schedule shows how they fit the "
-        "limits."
+        "Nothing to optimize: the speed and the pull lengths are yours. Pull Stats shows how they fit the limits."
     ),
 }
 # The pull-length rules as the Parameters card offers them.

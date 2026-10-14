@@ -28,7 +28,8 @@
         <li><a class="link" href="#workflow">Planning a race, step by step</a></li>
         <li><a class="link" href="#riders">Rider data</a></li>
         <li><a class="link" href="#targets">The goal, the limits and Optimize</a></li>
-        <li><a class="link" href="#metrics">What the pull schedule shows</a></li>
+        <li><a class="link" href="#schedule">The pull schedule</a></li>
+        <li><a class="link" href="#metrics">What Pull Stats shows</a></li>
         <li><a class="link" href="#physics">The power model</a></li>
         <li><a class="link" href="#wprime">W′ balance</a></li>
         <li><a class="link" href="#draft">Drafting</a></li>
@@ -57,7 +58,7 @@
         <li><strong>Optimize</strong> carries out the goal. The sentence beside the button says what it will do.</li>
         <li><strong>Adjust.</strong> Change pull lengths, mark riders who take no pulls, reorder. The table and the
           line above it, which says whether the plan fits the limits, update as you go.</li>
-        <li><strong>Share.</strong> Copy the pull schedule as an image for the team.</li>
+        <li><strong>Share.</strong> Copy the pull schedule for Discord, as text or as an image.</li>
       </ol>
     </div>
   </section>
@@ -114,7 +115,7 @@
       <div class="space-y-2">
         <h3 class="font-semibold">Does the plan fit?</h3>
         <p>
-          The line above the pull schedule answers that for the plan as it stands, whatever produced it. It says
+          The line at the top of Pull Stats answers that for the plan as it stands, whatever produced it. It says
           whether every rider is inside both limits at the target speed, and if not, who is past which limit. It
           also gives the fastest speed the current pull lengths allow, to 0.1 kph, and names whoever would cross a
           limit if the team went any faster: that rider and that limit are what hold the plan back.
@@ -172,9 +173,28 @@
     </div>
   </section>
 
+  <section id="schedule" aria-labelledby="schedule-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="schedule-h" class="card-title">The pull schedule</h2>
+      <p>
+        What each rider rides, in pull order: the pull's length, its W/kg and watts on the front, then the watts to hold
+        the speed sitting in at each wheel, from the 2nd (right behind the rider on the front) to the last. After a pull
+        a rider drops to the back and works up the line, so they pass through every wheel before their next turn. The
+        wheel powers use each wheel's own saving from <a class="link" href="#draft">Drafting</a>; the averages in Pull
+        Stats use the average saving.
+      </p>
+      <p>
+        <strong>Copy for Discord</strong> copies the schedule as text in a code block, which Discord shows in a fixed
+        width font so the columns line up, on a phone too. Paste it into a message as it is. <strong>Show as
+        text</strong> shows the same text, to copy by hand where the browser will not. <strong>Copy image</strong>
+        copies a picture of it instead.
+      </p>
+    </div>
+  </section>
+
   <section id="metrics" aria-labelledby="metrics-h" class="card bg-base-200 scroll-mt-24">
     <div class="card-body space-y-3">
-      <h2 id="metrics-h" class="card-title">What the pull schedule shows</h2>
+      <h2 id="metrics-h" class="card-title">What Pull Stats shows</h2>
       <dl class="space-y-3">
         <div><dt class="font-semibold">#, kg, FTP</dt>
           <dd>Pull order, and the rider's data (see <a class="link" href="#riders">Rider data</a>).</dd></div>
@@ -231,7 +251,7 @@
             <tr><th scope="row">m (mass)</th><td>rider weight + {{ params.bike_mass_kg }} kg of bike</td></tr>
             <tr><th scope="row">g</th><td>9.8067 m/s²</td></tr>
             <tr><th scope="row">η (drivetrain efficiency)</th><td>{{ params.drivetrain_efficiency }}</td></tr>
-            <tr><th scope="row">grade</th><td>0 for every power in the pull schedule; the route's own slopes in the
+            <tr><th scope="row">grade</th><td>0 for every power in the pull schedule and Pull Stats; the route's own slopes in the
               finish time and <a class="link" href="#course">On the course</a></td></tr>
             <tr><th scope="row">draft</th><td>1 on the front; 1 − saving when sitting in (see <a class="link" href="#draft">Drafting</a>)</td></tr>
           </tbody>
@@ -330,7 +350,7 @@
     <div class="card-body space-y-3">
       <h2 id="course-h" class="card-title">On the course</h2>
       <p>
-        Everything in the pull schedule is worked out on level road. When the route has an elevation profile (from
+        Everything in the pull schedule and Pull Stats is worked out on level road. When the route has an elevation profile (from
         the Zwift Speed Lab data the routes page uses), the plan page also shows the team riding it:
       </p>
       <ol class="list-decimal pl-5 space-y-1">
@@ -418,7 +438,7 @@
     <div class="card-body space-y-3">
       <h2 id="limits-h" class="card-title">What the model leaves out</h2>
       <ul class="list-disc pl-5 space-y-1">
-        <li><strong>Hills in the pull schedule.</strong> Pull powers, IF and the limits are worked out on level
+        <li><strong>Hills in the pull schedule and Pull Stats.</strong> Pull powers, IF and the limits are worked out on level
           road; only the finish time and <a class="link" href="#course">On the course</a> ride the route's slopes.</li>
         <li><strong>Pacing.</strong> The team rides the course at a steady effort. Easing off on climbs and pushing on
           the flat is not modelled yet.</li>

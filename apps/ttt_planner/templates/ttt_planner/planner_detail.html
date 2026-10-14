@@ -426,7 +426,35 @@
 </script>
 {% include "shared/_copy_image_script.html" %}
 <script>
-  // "Copy" on the Pull schedule card. Delegated from the body so it survives the HTMX
+  // "Copy for Discord" on the Pull schedule card: the text in its textarea, which the server
+  // lays out as a code block (services/schedule.py). Delegated from the body so it survives
+  // the HTMX swaps of #ttt-plan-body. Where the clipboard is not available, the text is
+  // shown and selected so it can be copied by hand.
+  document.body.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("[data-ttt-copy-text]");
+    if (!btn) return;
+    var source = document.getElementById(btn.dataset.tttCopyText);
+    var status = document.getElementById("ttt-copy-status");
+    if (!source) return;
+    function report(copied) {
+      if (copied) {
+        if (status) status.textContent = "Copied. Paste it into a Discord message.";
+        return;
+      }
+      var box = source.closest("details");
+      if (box) box.open = true;
+      source.focus();
+      source.select();
+      if (status) status.textContent = "Couldn't copy here. The text is selected below: copy it with Ctrl+C or Cmd+C.";
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(source.value).then(function () { report(true); }, function () { report(false); });
+    } else {
+      report(false);
+    }
+  });
+
+  // "Copy image" on the Pull schedule card. Delegated from the body so it survives the HTMX
   // swaps that every mutating endpoint performs on #ttt-plan-body; the capture itself
   // lives in shared/_copy_image_script.html.
   (function () {
