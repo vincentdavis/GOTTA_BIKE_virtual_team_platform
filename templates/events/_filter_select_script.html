@@ -36,12 +36,12 @@
     empty.style.display = 'none';
     list.appendChild(empty);
 
+    // Each option's value and text stay here, in the script, not in data-* attributes on
+    // the rows: Datastar runs on every page and evaluates any data-text attribute as an
+    // expression, so an option called "— No route —" became a syntax error in the console.
     var rows = Array.from(select.options).map(function (opt) {
       var row = document.createElement('div');
       row.className = 'px-3 py-1.5 cursor-pointer hover:bg-base-200 text-sm';
-      row.dataset.value = opt.value;
-      row.dataset.text = opt.textContent;
-      row.dataset.label = opt.textContent.toLowerCase();
       row.textContent = opt.textContent;
       row.addEventListener('mousedown', function (e) {
         e.preventDefault();  // keep focus so blur doesn't fire before the click
@@ -52,7 +52,7 @@
         close();
       });
       list.appendChild(row);
-      return row;
+      return { el: row, value: opt.value, text: opt.textContent, search: opt.textContent.toLowerCase() };
     });
 
     function currentLabel() {
@@ -62,10 +62,10 @@
 
     function mark() {
       rows.forEach(function (row) {
-        var sel = row.dataset.value === select.value;
-        row.classList.toggle('bg-base-300', sel);
-        row.classList.toggle('font-semibold', sel);
-        row.textContent = (sel ? '✓ ' : '') + row.dataset.text;
+        var sel = row.value === select.value;
+        row.el.classList.toggle('bg-base-300', sel);
+        row.el.classList.toggle('font-semibold', sel);
+        row.el.textContent = (sel ? '✓ ' : '') + row.text;
       });
     }
 
@@ -73,8 +73,8 @@
       var q = (query || '').trim().toLowerCase();
       var shown = 0;
       rows.forEach(function (row) {
-        var match = !q || row.dataset.label.indexOf(q) !== -1;
-        row.style.display = match ? '' : 'none';
+        var match = !q || row.search.indexOf(q) !== -1;
+        row.el.style.display = match ? '' : 'none';
         if (match) { shown++; }
       });
       empty.style.display = shown ? 'none' : '';
@@ -83,8 +83,8 @@
     function open() {
       render('');
       list.classList.remove('hidden');
-      var sel = rows.find(function (r) { return r.dataset.value === select.value; });
-      if (sel) { sel.scrollIntoView({ block: 'nearest' }); }
+      var sel = rows.find(function (r) { return r.value === select.value; });
+      if (sel) { sel.el.scrollIntoView({ block: 'nearest' }); }
     }
     function close() { list.classList.add('hidden'); }
 

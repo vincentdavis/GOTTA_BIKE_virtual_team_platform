@@ -5,9 +5,16 @@ widget, both pickers opt into the shared `filter-select` enhancement already use
 squad and event forms: it wraps the native <select>, which keeps holding and submitting
 the value, and dispatches `change` on selection -- which matters here, because both
 pickers use `onchange` to prefill the course name and terrain/profile.
+
+The script must not put a Datastar attribute on the rows it builds: Datastar is loaded on
+every page and evaluates them as expressions, which is how a `data-text="— No route —"`
+filled the console with syntax errors.
 """
 
+import re
+
 import pytest
+from django.template.loader import get_template
 from django.urls import reverse
 
 from apps.ladder_planner.models import LadderMatchup
@@ -59,3 +66,35 @@ def test_the_ladder_route_picker_keeps_its_prefill_hook(auth_client, team_member
     body = auth_client.get(reverse("ladder_planner:detail", args=[matchup.pk])).content.decode()
 
     assert 'onchange="ladderApplyRoute(this)"' in body
+
+
+# The attribute plugins Datastar 1.0.2 (loaded in base.html) acts on. It takes the attribute name
+# after "data-", up to the first ":" (a key) or "__" (modifiers), as the plugin name, exactly.
+DATASTAR_ATTRIBUTES = (
+    "attr",
+    "bind",
+    "class",
+    "computed",
+    "effect",
+    "indicator",
+    "init",
+    "json-signals",
+    "on",
+    "on-intersect",
+    "on-interval",
+    "on-signal-patch",
+    "ref",
+    "show",
+    "signals",
+    "style",
+    "text",
+)
+
+
+def test_the_filter_script_writes_no_attribute_datastar_acts_on() -> None:
+    source = get_template("events/_filter_select_script.html").template.source
+    as_dataset = "|".join(re.sub(r"-(\w)", lambda m: m.group(1).upper(), name) for name in DATASTAR_ATTRIBUTES)
+    as_attribute = "|".join(DATASTAR_ATTRIBUTES)
+
+    assert not re.search(rf"dataset\.({as_dataset})\b", source)
+    assert not re.search(rf"""setAttribute\(\s*['"]data-({as_attribute})(['":]|__)""", source)
