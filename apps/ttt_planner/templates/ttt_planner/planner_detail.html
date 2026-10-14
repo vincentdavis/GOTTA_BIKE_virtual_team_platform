@@ -5,137 +5,116 @@
 {% block content %}
 <div class="max-w-6xl mx-auto space-y-6">
 
-  <div class="flex items-center justify-between gap-4">
+  <div class="flex flex-wrap items-center justify-between gap-2">
     <a href="{% url 'ttt_planner:list' %}" class="btn btn-ghost btn-sm">&larr; All plans</a>
+    <a href="{% url 'ttt_planner:help' %}" class="btn btn-ghost btn-sm">How the planner works</a>
   </div>
+
+  <h1 class="text-2xl font-bold wrap-anywhere">{{ plan.name|default:"TTT Plan" }}</h1>
 
   {% include "shared/_planner_edit_access.html" with doc=plan noun="plan" dialog_id="ttt-edit-dialog" %}
 
-  {# ---- Plan settings ---- #}
-  <div class="card bg-base-200 shadow-xl">
-    <div class="card-body">
-      {% if can_edit %}
-      <form class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
-            hx-post="{% url 'ttt_planner:update' plan.pk %}"
-            hx-trigger="change, submit"
-            hx-target="#ttt-plan-body"
-            hx-swap="innerHTML">
-        <label class="form-control">
-          <span class="label-text mb-1">Plan name</span>
-          <input type="text" name="name" value="{{ plan.name }}" class="input input-bordered input-sm" />
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-1">Team name</span>
-          <input type="text" name="team_name" value="{{ plan.team_name }}" class="input input-bordered input-sm" />
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-1">Event</span>
-          <select name="event_type" class="select select-bordered select-sm">
-            <option value="">— Unspecified —</option>
-            {% for value, label in event_types %}
-              <option value="{{ value }}" {% if plan.event_type == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-1">Route</span>
-          <select name="route" class="select select-bordered select-sm filter-select" onchange="tttApplyRoute(this)">
-            <option value="">— No route —</option>
-            {% for r in route_options %}
-              <option value="{{ r.pk }}" data-name="{{ r.name }}" data-terrain="{{ r.terrain }}"
-                      {% if plan.route_id == r.pk %}selected{% endif %}>{{ r.label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-1">Course name <span class="text-base-content/40">(optional)</span></span>
-          <input type="text" id="ttt-course-name" name="course_name" value="{{ plan.course_name }}"
-                 class="input input-bordered input-sm" />
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-1">Course type</span>
-          <select id="ttt-course-type" name="course_type" class="select select-bordered select-sm">
-            <option value="">— Unspecified —</option>
-            {% for value, label in course_types %}
-              <option value="{{ value }}" {% if plan.course_type == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-1">Target flat speed (kph)</span>
-          {% include "ttt_planner/_speed_input.html" %}
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-1">Target IF</span>
-          <div class="join">
-            <input type="number" step="0.01" min="0.1" max="1.5" name="target_if"
-                   value="{{ plan.target_if }}"
-                   class="input input-bordered input-sm join-item w-full" />
-            <button type="button"
-                    class="btn btn-sm btn-primary join-item"
-                    hx-post="{% url 'ttt_planner:calculate_speed' plan.pk %}"
-                    hx-include="[name='target_if']"
-                    hx-target="#ttt-plan-body"
-                    hx-swap="innerHTML">Calculate</button>
-          </div>
-          <span class="label-text-alt mt-1 text-base-content/50">Sets the max sustainable speed from pull durations.</span>
-        </label>
-        <label class="form-control">
-          <span class="label-text mb-1">Aero CdA coef</span>
-          <input type="number" step="0.0001" min="0" name="cda_coef"
-                 value="{{ result.cda_coef }}"
-                 class="input input-bordered input-sm" />
-          <span class="label-text-alt mt-1 text-base-content/50">Clear to use the team default.</span>
-        </label>
-        {# Only someone who can manage the plan chooses its squad: the view refuses it from anyone else. #}
-        {% if can_manage %}
-        <label class="form-control md:col-span-2 lg:col-span-4">
-          <span class="label-text mb-1">Edit squad
-            <span class="text-base-content/40">(its members can edit and delete this plan, as its creator can; anyone else on the team is asked to confirm before editing)</span></span>
-          <select name="edit_squad" class="select select-bordered select-sm">
-            <option value="">— No squad —</option>
-            {% if plan.edit_squad_id and not edit_squad_active %}
-              <option value="{{ plan.edit_squad_id }}" selected>
-                {{ plan.edit_squad.event.title }} — {{ plan.edit_squad.name }} (event ended)
-              </option>
-            {% endif %}
-            {% if my_squads %}
-            <optgroup label="Your squads">
-              {% for s in my_squads %}<option value="{{ s.pk }}" {% if plan.edit_squad_id == s.pk %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
-            </optgroup>
-            {% endif %}
-            {% if other_squads %}
-            <optgroup label="Other active squads">
-              {% for s in other_squads %}<option value="{{ s.pk }}" {% if plan.edit_squad_id == s.pk %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
-            </optgroup>
-            {% endif %}
-          </select>
-        </label>
+  {# ---- Plan and Course, side by side on wide screens ---- #}
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <section class="card bg-base-200 shadow-xl" aria-labelledby="ttt-plan-heading">
+      <div class="card-body">
+        <h2 id="ttt-plan-heading" class="card-title">Plan</h2>
+        {% if can_edit %}
+        <form class="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              hx-post="{% url 'ttt_planner:update' plan.pk %}"
+              hx-trigger="change, submit"
+              hx-target="#ttt-plan-body" hx-swap="innerHTML">
+          <label class="form-control sm:col-span-2">
+            <span class="label-text mb-1">Plan name</span>
+            <input type="text" name="name" value="{{ plan.name }}" class="input input-bordered input-sm" />
+          </label>
+          <label class="form-control">
+            <span class="label-text mb-1">Team name</span>
+            <input type="text" name="team_name" value="{{ plan.team_name }}" class="input input-bordered input-sm" />
+          </label>
+          <label class="form-control">
+            <span class="label-text mb-1">Event</span>
+            <select name="event_type" class="select select-bordered select-sm">
+              <option value="">— Unspecified —</option>
+              {% for value, label in event_types %}
+                <option value="{{ value }}" {% if plan.event_type == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </form>
+        {% else %}
+        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          <dt class="text-base-content/70">Team</dt><dd>{{ plan.team_name|default:"—" }}</dd>
+          <dt class="text-base-content/70">Event</dt><dd>{{ plan.get_event_type_display|default:"—" }}</dd>
+        </dl>
         {% endif %}
-      </form>
-      {% else %}
-        <h2 class="card-title text-2xl">{{ plan.name|default:"TTT Plan" }}</h2>
+      </div>
+    </section>
+
+    <section class="card bg-base-200 shadow-xl" aria-labelledby="ttt-course-heading">
+      <div class="card-body">
+        <h2 id="ttt-course-heading" class="card-title">Course</h2>
+        {% if can_edit %}
+        <form class="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              hx-post="{% url 'ttt_planner:update' plan.pk %}"
+              hx-trigger="change, submit"
+              hx-target="#ttt-plan-body" hx-swap="innerHTML">
+          <label class="form-control sm:col-span-2">
+            <span class="label-text mb-1">Route</span>
+            <select name="route" class="select select-bordered select-sm filter-select" onchange="tttApplyRoute(this)">
+              <option value="">— No route —</option>
+              {% for r in route_options %}
+                <option value="{{ r.pk }}" data-name="{{ r.name }}" data-terrain="{{ r.terrain }}"
+                        {% if plan.route_id == r.pk %}selected{% endif %}>{{ r.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label class="form-control">
+            <span class="label-text mb-1">Course name <span class="text-base-content/70">(optional)</span></span>
+            <input type="text" id="ttt-course-name" name="course_name" value="{{ plan.course_name }}"
+                   class="input input-bordered input-sm" />
+          </label>
+          <label class="form-control">
+            <span class="label-text mb-1">Course type</span>
+            <select id="ttt-course-type" name="course_type" class="select select-bordered select-sm">
+              <option value="">— Unspecified —</option>
+              {% for value, label in course_types %}
+                <option value="{{ value }}" {% if plan.course_type == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </form>
+        {% else %}
+        <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          <dt class="text-base-content/70">Course</dt>
+          <dd>{% if plan.course_name %}{{ plan.course_name }}{% elif plan.route %}{{ plan.route.name }}{% else %}—{% endif %}</dd>
+          <dt class="text-base-content/70">Type</dt><dd>{{ plan.get_course_type_display|default:"—" }}</dd>
+        </dl>
+        {% endif %}
+        {% if plan.route %}
+        <p class="text-sm">{{ plan.route.name }}: {{ plan.route.distance_km }} km, {{ plan.route.ascent_m|floatformat:0 }} m of climbing.</p>
+        {% endif %}
+        {% if can_edit %}
         <p class="text-sm text-base-content/70">
-          {% if plan.team_name %}{{ plan.team_name }} · {% endif %}
-          {% if plan.course_name %}{{ plan.course_name }}{% elif plan.route %}{{ plan.route.name }}{% endif %}
-          {% if plan.course_type %} ({{ plan.get_course_type_display }}){% endif %} ·
-          Target {{ plan.target_speed_kph }} kph
+          The route's distance and climbing set the finish-time estimate. Course name and type are labels only;
+          they change no numbers.
         </p>
-      {% endif %}
-    </div>
+        {% endif %}
+      </div>
+    </section>
   </div>
 
-  {# ---- Add rider (while the edit controls show) ---- #}
+  {# ---- Add riders, and who else edits the plan (while the edit controls show) ---- #}
   {% if can_edit %}
-  <div class="card bg-base-200 shadow-xl">
+  <section class="card bg-base-200 shadow-xl" aria-labelledby="ttt-add-heading">
     <div class="card-body">
-      <h3 class="font-semibold">Add riders</h3>
+      <h2 id="ttt-add-heading" class="card-title">Add riders</h2>
       {% if my_squads or other_squads %}
       <form hx-post="{% url 'ttt_planner:plan_squad_add' plan.pk %}"
             hx-target="#ttt-plan-body" hx-swap="innerHTML"
-            hx-on::after-request="if(event.detail.successful) this.reset()" class="mb-4">
-        <span class="label-text mb-1 block">Add a whole squad</span>
-        <select name="squad" class="select select-bordered select-sm w-full lg:w-96"
+            hx-on::after-request="if(event.detail.successful) this.reset()" class="mb-2">
+        <label for="ttt-add-squad" class="label-text mb-1 block">Add a whole squad</label>
+        <select id="ttt-add-squad" name="squad" class="select select-bordered select-sm w-full lg:w-96"
                 onchange="if(this.value) this.form.requestSubmit()">
           <option value="">Choose squad…</option>
           {% if my_squads %}
@@ -153,8 +132,8 @@
       {% endif %}
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div class="relative">
-          <span class="label-text mb-1 block">Search team riders</span>
-          <input type="text" name="q" placeholder="Name or Zwift ID…"
+          <label for="ttt-rider-q" class="label-text mb-1 block">Search team riders</label>
+          <input type="search" id="ttt-rider-q" name="q" placeholder="Name or Zwift ID…" autocomplete="off"
                  class="input input-bordered input-sm w-full"
                  hx-get="{% url 'ttt_planner:rider_search' plan.pk %}"
                  hx-trigger="keyup changed delay:300ms, search"
@@ -166,23 +145,139 @@
         <form hx-post="{% url 'ttt_planner:rider_add_manual' plan.pk %}"
               hx-target="#ttt-plan-body" hx-swap="innerHTML"
               hx-on::after-request="if(event.detail.successful) this.reset()">
-          <span class="label-text mb-1 block">Add a guest manually</span>
-          <div class="flex flex-wrap gap-2 items-end">
-            <input type="text" name="name" placeholder="Name" required
-                   class="input input-bordered input-sm w-32" />
-            <input type="number" step="0.1" name="weight_kg" placeholder="kg"
-                   class="input input-bordered input-sm w-20" />
-            <input type="number" name="height_cm" placeholder="cm"
-                   class="input input-bordered input-sm w-20" />
-            <input type="number" name="ftp_w" placeholder="FTP"
-                   class="input input-bordered input-sm w-20" />
-            <button type="submit" class="btn btn-primary btn-sm">Add</button>
-          </div>
+          <fieldset>
+            <legend class="label-text mb-1">Add a guest manually</legend>
+            <div class="flex flex-wrap gap-2 items-end">
+              <label class="form-control w-36">
+                <span class="label-text text-xs">Name</span>
+                <input type="text" name="name" required class="input input-bordered input-sm" />
+              </label>
+              <label class="form-control w-20">
+                <span class="label-text text-xs">Weight (kg)</span>
+                <input type="number" step="0.1" name="weight_kg" class="input input-bordered input-sm" />
+              </label>
+              <label class="form-control w-20">
+                <span class="label-text text-xs">Height (cm)</span>
+                <input type="number" name="height_cm" class="input input-bordered input-sm" />
+              </label>
+              <label class="form-control w-20">
+                <span class="label-text text-xs">FTP (W)</span>
+                <input type="number" name="ftp_w" class="input input-bordered input-sm" />
+              </label>
+              <button type="submit" class="btn btn-neutral btn-sm">Add guest</button>
+            </div>
+          </fieldset>
         </form>
       </div>
+
+      {# Only someone who can manage the plan chooses its squad: the view refuses it from anyone else. #}
+      {% if can_manage %}
+      <form class="mt-2 border-t border-base-300 pt-4"
+            hx-post="{% url 'ttt_planner:update' plan.pk %}"
+            hx-trigger="change" hx-target="#ttt-plan-body" hx-swap="innerHTML">
+        <label for="ttt-edit-squad" class="label-text mb-1 block">Edit squad</label>
+        <select id="ttt-edit-squad" name="edit_squad" class="select select-bordered select-sm w-full lg:w-96"
+                aria-describedby="ttt-edit-squad-help">
+          <option value="">— No squad —</option>
+          {% if plan.edit_squad_id and not edit_squad_active %}
+            <option value="{{ plan.edit_squad_id }}" selected>
+              {{ plan.edit_squad.event.title }} — {{ plan.edit_squad.name }} (event ended)
+            </option>
+          {% endif %}
+          {% if my_squads %}
+          <optgroup label="Your squads">
+            {% for s in my_squads %}<option value="{{ s.pk }}" {% if plan.edit_squad_id == s.pk %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
+          </optgroup>
+          {% endif %}
+          {% if other_squads %}
+          <optgroup label="Other active squads">
+            {% for s in other_squads %}<option value="{{ s.pk }}" {% if plan.edit_squad_id == s.pk %}selected{% endif %}>{{ s.label }}</option>{% endfor %}
+          </optgroup>
+          {% endif %}
+        </select>
+        <p id="ttt-edit-squad-help" class="text-sm text-base-content/70 mt-1">
+          Its members can edit and delete this plan, as its creator can. Anyone else on the team is asked to
+          confirm before editing.
+        </p>
+      </form>
+      {% endif %}
     </div>
-  </div>
+  </section>
   {% endif %}
+
+  {# ---- Parameters: what the numbers below are worked out from ---- #}
+  <section class="card bg-base-200 shadow-xl" aria-labelledby="ttt-params-heading">
+    <div class="card-body gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="ttt-params-heading" class="card-title">Parameters</h2>
+        <a href="{% url 'ttt_planner:help' %}#targets" class="link text-sm">How these work</a>
+      </div>
+      {% if can_edit %}
+      <form class="grid grid-cols-1 sm:grid-cols-3 gap-4"
+            hx-post="{% url 'ttt_planner:update' plan.pk %}"
+            hx-trigger="change, submit"
+            hx-target="#ttt-plan-body" hx-swap="innerHTML">
+        <label class="form-control">
+          <span class="label-text mb-1">Target flat speed (kph)</span>
+          {% include "ttt_planner/_speed_input.html" %}
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Target IF</span>
+          <input type="number" step="0.01" min="0.1" max="1.5" name="target_if" value="{{ plan.target_if }}"
+                 class="input input-bordered input-sm" />
+        </label>
+        <label class="form-control">
+          <span class="label-text mb-1">Aero CdA coefficient</span>
+          {# Blank, not the default's value: a full-form save would otherwise pin today's default to the plan. #}
+          <input type="number" step="0.0001" min="0" name="cda_coef"
+                 value="{{ plan.cda_coef|default_if_none:'' }}" placeholder="{{ config.TTT_CDA_COEF }}"
+                 aria-describedby="ttt-cda-help" class="input input-bordered input-sm" />
+          <span id="ttt-cda-help" class="label-text-alt mt-1 text-base-content/70">Leave blank for the site default ({{ config.TTT_CDA_COEF }}).</span>
+        </label>
+      </form>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" class="btn btn-neutral btn-sm"
+                hx-post="{% url 'ttt_planner:calculate_speed' plan.pk %}"
+                hx-include="[name='target_if']"
+                hx-target="#ttt-plan-body" hx-swap="innerHTML">Calculate speed</button>
+        <button type="button" class="btn btn-neutral btn-sm"
+                hx-post="{% url 'ttt_planner:auto_balance' plan.pk %}"
+                hx-include="[name='target_if']"
+                hx-target="#ttt-plan-body" hx-swap="innerHTML"
+                hx-confirm="Auto-balance replaces every rider's pull length and the pull order. Continue?">Auto-balance pulls</button>
+      </div>
+      <ul class="text-sm text-base-content/70 list-disc pl-5 space-y-1">
+        <li><strong class="text-base-content">Calculate speed</strong> keeps your pull lengths and finds the fastest target
+          speed at which no rider's average power over a rotation goes above Target IF × FTP.</li>
+        <li><strong class="text-base-content">Auto-balance pulls</strong> also sets each rider's pull length and the pull
+          order, so every rider averages exactly Target IF × FTP, then sets the speed.</li>
+      </ul>
+      {% else %}
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+        <dt class="text-base-content/70">Target flat speed</dt><dd>{{ plan.target_speed_kph }} kph</dd>
+        <dt class="text-base-content/70">Target IF</dt><dd>{{ plan.target_if }}</dd>
+        <dt class="text-base-content/70">Aero CdA coefficient</dt>
+        <dd>{{ result.cda_coef }}{% if plan.cda_coef is None %} (site default){% endif %}</dd>
+      </dl>
+      {% endif %}
+      <details class="collapse collapse-arrow bg-base-100 border border-base-300">
+        <summary class="collapse-title text-sm font-semibold">Draft savings by wheel position</summary>
+        <div class="collapse-content space-y-2">
+          <p class="text-sm text-base-content/70">
+            Aerodynamic power saved at each wheel position. Position 1 is the rider on the front, who saves nothing;
+            savings grow deeper in the line and level off. A rider sitting in needs aero power × (1 − saving).
+          </p>
+          {% include "ttt_planner/_draft_savings.html" with draft_table=result.draft_table %}
+          {% if can_edit %}
+          <button type="button" class="btn btn-ghost btn-xs"
+                  hx-post="{% url 'ttt_planner:draft_savings_update' plan.pk %}"
+                  hx-vals='{"reset": "1"}'
+                  hx-target="#ttt-plan-body" hx-swap="innerHTML">Reset to default</button>
+          {% endif %}
+        </div>
+      </details>
+    </div>
+  </section>
 
   {# ---- Roster + results (HTMX swap target) ---- #}
   <div id="ttt-plan-body">

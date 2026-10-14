@@ -1,6 +1,6 @@
 {% load ttt_extras %}
 {# zwiftgopher compare panel. Self-polls (load delay) while a run is pending. #}
-<div id="ttt-gopher-panel" class="card bg-base-200 shadow-xl mt-6"
+<div id="ttt-gopher-panel" class="card bg-base-200 shadow-xl mt-6" role="region" aria-labelledby="ttt-gopher-heading"
      {% if plan.zwiftgopher_status == 'pending' %}
      hx-get="{% url 'ttt_planner:zwiftgopher_panel' plan.pk %}{% if can_edit %}?edit=1{% endif %}"
      hx-trigger="load delay:3s"
@@ -9,8 +9,8 @@
   <div class="card-body">
     <div class="flex items-center justify-between gap-2 flex-wrap">
       <div>
-        <h3 class="card-title">zwiftgopher comparison</h3>
-        <p class="text-xs text-base-content/50">
+        <h2 id="ttt-gopher-heading" class="card-title">zwiftgopher comparison</h2>
+        <p class="text-sm text-base-content/70">
           Runs zwiftgopher's optimizer on this roster (for the upcoming event) and compares it to our model.
         </p>
       </div>
@@ -22,11 +22,11 @@
           <span class="label-text text-xs mb-1">Event</span>
           <select name="route_schedule" class="select select-bordered select-xs">
             {% for s in route_schedules %}
-              <option value="{{ s }}" {% if s == 'next_wtrl' %}selected{% endif %}>{{ s }}</option>
+              <option value="{{ s }}" {% if s == 'next_wtrl' %}selected{% endif %}>{% if s == 'next_wtrl' %}Next WTRL TTT{% elif s == 'next_zrl' %}Next ZRL race{% else %}Next event{% endif %}</option>
             {% endfor %}
           </select>
         </label>
-        <button type="submit" class="btn btn-primary btn-xs"
+        <button type="submit" class="btn btn-neutral btn-xs"
                 {% if plan.zwiftgopher_status == 'pending' %}disabled{% endif %}>
           {% if plan.zwiftgopher_status == 'pending' %}Running…{% else %}Run optimize{% endif %}
         </button>
@@ -35,16 +35,16 @@
     </div>
 
     {% if not gopher_configured %}
-      <p class="text-sm text-warning mt-2">zwiftgopher API key is not configured (set <code>ZWIFT_GOPHER_API</code>).</p>
+      <p class="text-sm mt-2"><span class="badge badge-warning badge-sm">Not set up</span> The zwiftgopher API key is not configured (set <code>ZWIFT_GOPHER_API</code>).</p>
     {% elif plan.zwiftgopher_status == 'pending' %}
-      <div class="flex items-center gap-2 text-sm text-base-content/70 mt-2">
-        <span class="loading loading-spinner loading-sm"></span>
+      <div class="flex items-center gap-2 text-sm text-base-content/70 mt-2" role="status">
+        <span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
         Optimizing… this can take up to ~90 s (the API is rate-limited to 1 request/min).
       </div>
     {% elif plan.zwiftgopher_status == 'error' %}
-      <p class="text-sm text-error mt-2">zwiftgopher error: {{ plan.zwiftgopher_error }}</p>
+      <p class="text-sm mt-2"><span class="badge badge-error badge-sm">Error</span> zwiftgopher said: {{ plan.zwiftgopher_error }}</p>
     {% elif gopher and gopher.ok %}
-      <div class="text-xs text-base-content/50 mt-1">
+      <div class="text-sm text-base-content/70 mt-1">
         Last run {{ plan.zwiftgopher_fetched_at|date:"M j, H:i" }} ·
         their route: <strong>{{ gopher.route|default:"—" }}</strong> ·
         your route: <strong>{{ plan.route.name|default:"none" }}</strong>
@@ -66,7 +66,8 @@
             </tr>
             <tr>
               <td>Avg speed (kph)</td>
-              <td class="text-right">{{ result.target_speed_kph }}<span class="text-base-content/40 text-xs"> target</span></td>
+              {# Their figure is an average over the course, so ours is too; the flat target only without a route. #}
+              <td class="text-right">{% if result.course_avg_kph %}{{ result.course_avg_kph }}{% else %}{{ result.target_speed_kph }}<span class="text-base-content/70 text-xs"> flat target</span>{% endif %}</td>
               <td class="text-right">{{ gopher.estimated_avg_speed|default:"—" }}</td>
             </tr>
             <tr>
@@ -85,7 +86,7 @@
 
       {% if gopher.riders %}
       <div class="flex items-center justify-between gap-2 mt-4">
-        <h4 class="font-semibold text-sm">Suggested pull order (zwiftgopher)</h4>
+        <h3 class="font-semibold text-sm">Suggested pull order (zwiftgopher)</h3>
         <button type="button" class="btn btn-ghost btn-xs" data-ttt-capture-btn
                 data-capture-target="[data-gopher-capture-sheet]"
                 title="Copy the suggested pull order as an image"
@@ -120,7 +121,7 @@
           <tbody>
             {% for gr in gopher.riders %}
             <tr>
-              <td class="text-base-content/50">{{ gr.order|default:forloop.counter }}</td>
+              <td class="text-base-content/70">{{ gr.order|default:forloop.counter }}</td>
               <td class="font-medium">{{ gr.name|default:gr.zwift_id }}</td>
               <td class="text-right font-semibold">{{ gr.pull_power|default:"—" }}</td>
               <td class="text-right">{{ gr.pull_power_wkg|default:"—" }}</td>
@@ -148,7 +149,7 @@
           <tbody>
             {% for gr in gopher.riders %}
             <tr>
-              <td class="text-base-content/50">{{ gr.order|default:forloop.counter }}</td>
+              <td class="text-base-content/70">{{ gr.order|default:forloop.counter }}</td>
               <td class="font-medium">{{ gr.name|default:gr.zwift_id }}</td>
               <td class="text-right font-semibold">{{ gr.pull_power|default:"—" }}</td>
               <td class="text-right">{{ gr.pull_power_wkg|default:"—" }}</td>

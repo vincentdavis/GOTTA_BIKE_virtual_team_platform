@@ -1,9 +1,16 @@
-"""Compute TTT plan results (pull power, IF, averages, finish time) from riders."""
+"""Compute TTT plan results (pull power, IF, averages, finish time) from riders.
+
+The target speed is a **flat** speed: every power here (pull, draft, the Calculate and
+Auto-balance constraints) is the power to hold it on level road. The route's climbing
+enters once, in the finish-time estimate (``physics.estimate_time_seconds``), which
+turns that flat-speed effort into a speed on the course. ``ttt_planner/help.html``
+explains all of this to riders, so keep it in step with this module.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from apps.ttt_planner.services import physics
 
@@ -17,7 +24,13 @@ FALLBACK_HEIGHT_CM = 178.0
 
 @dataclass
 class RiderResult:
-    """Computed metrics for a single rider on the plan."""
+    """Computed metrics for a single rider on the plan.
+
+    ``pull_pct_ftp`` is how hard the pull is (pull power as a percentage of FTP; pulls
+    usually sit above 100). ``intensity_factor`` is the standard IF, NP / FTP over the
+    whole race. Target IF caps neither of them directly: Calculate and Auto-balance cap
+    each rider's *average* power over a rotation at Target IF x FTP.
+    """
 
     rider: PlanRider
     weight_kg: float
@@ -26,9 +39,10 @@ class RiderResult:
     pull_power_w: int
     pull_wkg: float
     avg_power_w: int
-    intensity_factor: float | None
+    pull_pct_ftp: int | None
     missing_data: bool
     normalized_power_w: int | None = None
+    intensity_factor: float | None = None
     tss: float | None = None
 
 
@@ -51,6 +65,13 @@ class PlanResult:
     draft_table: list[DraftRow]
     draft_savings_input: str
     cda_coef: float
+    # Route distance over the estimated time: the target flat speed once the route's
+    # climbing is applied (0.0 without a route).
+    course_avg_kph: float = 0.0
+    # Whether any rider is computed on the fallback weight/height below.
+    any_estimated: bool = False
+    fallback_weight_kg: ClassVar[float] = FALLBACK_WEIGHT_KG
+    fallback_height_cm: ClassVar[float] = FALLBACK_HEIGHT_CM
 
 
 def params_for_plan(plan: TttPlan) -> physics.PhysicsParams:
@@ -86,6 +107,19 @@ def _draft_table(params: physics.PhysicsParams) -> list[DraftRow]:
 
     """
     return [DraftRow(position=i + 1, saving_pct=round(frac * 100, 1)) for i, frac in enumerate(params.draft_savings)]
+
+
+def draft_table_for(plan: TttPlan) -> list[DraftRow]:
+    """Return the plan's draft-savings-by-position table (its own list, or the site default).
+
+    Args:
+        plan: The plan.
+
+    Returns:
+        One :class:`DraftRow` per configured wheel position.
+
+    """
+    return _draft_table(params_for_plan(plan))
 
 
 def format_draft_savings_input(params: physics.PhysicsParams) -> str:
@@ -136,7 +170,7 @@ def quick_finish_time(plan: TttPlan, params: physics.PhysicsParams | None = None
     )
 
 
-_MAX_NP_SECONDS = 14400  # cap the simulated series at 4 hours
+MAX_NP_SECONDS = 14400  # cap the simulated series at 4 hours
 
 
 def _add_np_and_tss(
@@ -160,7 +194,7 @@ def _add_np_and_tss(
         duration_s: Estimated race duration in seconds.
 
     """
-    total = min(round(duration_s), _MAX_NP_SECONDS)
+    total = min(round(duration_s), MAX_NP_SECONDS)
     if total <= 0:
         return
 
@@ -185,31 +219,19 @@ def _add_np_and_tss(
 
         ftp = float(rr.rider.ftp_w) if rr.rider.ftp_w else None
         rr.normalized_power_w = round(np_value)
+        intensity = physics.intensity_factor(np_value, ftp)
+        rr.intensity_factor = round(intensity, 2) if intensity is not None else None
         tss = physics.training_stress_score(np_value, ftp, total)
         rr.tss = round(tss, 1) if tss is not None else None
-
-
-def _grade(plan: TttPlan) -> float:
-    """Return the average gradient for the plan's route.
-
-    Args:
-        plan: The plan.
-
-    Returns:
-        Average gradient as a fraction (0.0 if no route).
-
-    """
-    if not plan.route:
-        return 0.0
-    return physics.average_grade(float(plan.route.distance_km), plan.route.ascent_m)
 
 
 def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> PlanResult:
     """Compute pull power, IF, averages, and finish time for a plan.
 
-    The pull power for each rider is the power to hold the target speed on the
+    The pull power for each rider is the power to hold the target flat speed on the
     front (no draft). Average power blends the front pull with drafting during the
-    rest of the rotation. IF is based on the demanding pull effort vs FTP.
+    rest of the rotation. Pull %FTP is the pull effort against FTP; IF (NP / FTP),
+    NP and TSS come from a second-by-second simulation of the race and need a route.
 
     Args:
         plan: The plan to compute, with its ``riders`` available.
@@ -223,7 +245,6 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
         params = params_for_plan(plan)
 
     target = float(plan.target_speed_kph)
-    grade = _grade(plan)
     riders = list(plan.riders.all())
 
     pulling = [r for r in riders if not r.zero_pull]
@@ -247,15 +268,17 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
         height = float(r.height_cm) if r.height_cm is not None else FALLBACK_HEIGHT_CM
         cda = physics.estimate_cda(height, weight, params)
 
+        # Flat road (no grade): the target is a flat speed, and the route's climbing is
+        # applied once, in the finish-time estimate below.
         if r.pull_power_w:
             front_power = float(r.pull_power_w)
         else:
             front_power = physics.power_for_speed(
-                target, weight_kg=weight, height_cm=height, grade=grade, draft_factor=1.0, params=params
+                target, weight_kg=weight, height_cm=height, draft_factor=1.0, params=params
             )
 
         draft_power = physics.power_for_speed(
-            target, weight_kg=weight, height_cm=height, grade=grade, draft_factor=draft_factor, params=params
+            target, weight_kg=weight, height_cm=height, draft_factor=draft_factor, params=params
         )
 
         if r.zero_pull:
@@ -266,12 +289,7 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
             avg_power = (front_power * own_pull + draft_power * (cycle_s - own_pull)) / cycle_s
             pull_display = round(front_power)
 
-        ftp = float(r.ftp_w) if r.ftp_w else None
-        if_value = (
-            physics.intensity_factor(front_power, ftp)
-            if not r.zero_pull
-            else physics.intensity_factor(draft_power, ftp)
-        )
+        pull_fraction = None if r.zero_pull else physics.intensity_factor(front_power, float(r.ftp_w or 0))
 
         results.append(
             RiderResult(
@@ -282,7 +300,7 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
                 pull_power_w=pull_display,
                 pull_wkg=round(pull_display / weight, 2) if weight else 0.0,
                 avg_power_w=round(avg_power),
-                intensity_factor=round(if_value, 2) if if_value is not None else None,
+                pull_pct_ftp=round(pull_fraction * 100) if pull_fraction is not None else None,
                 missing_data=missing,
             )
         )
@@ -316,6 +334,10 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
         draft_table=_draft_table(params),
         draft_savings_input=format_draft_savings_input(params),
         cda_coef=params.cda_coef,
+        course_avg_kph=(
+            round(float(plan.route.distance_km) / estimated_time * 3600, 1) if estimated_time > 0 else 0.0
+        ),
+        any_estimated=any(rr.missing_data for rr in results),
     )
 
 
@@ -382,17 +404,14 @@ def sustainable_speed(
     if not ftp_riders:
         return float(plan.target_speed_kph)
 
-    grade = _grade(plan)
     draft_factor = _mean_draft_factor(len(all_riders), params)
     cycle = sum(r.pull_duration_s for r in all_riders if not r.zero_pull) or 1
 
     def avg_power(rider: PlanRider, speed: float) -> float:
         weight, height = _rider_wh(rider)
-        front = physics.power_for_speed(
-            speed, weight_kg=weight, height_cm=height, grade=grade, draft_factor=1.0, params=params
-        )
+        front = physics.power_for_speed(speed, weight_kg=weight, height_cm=height, draft_factor=1.0, params=params)
         draft = physics.power_for_speed(
-            speed, weight_kg=weight, height_cm=height, grade=grade, draft_factor=draft_factor, params=params
+            speed, weight_kg=weight, height_cm=height, draft_factor=draft_factor, params=params
         )
         pull = 0 if rider.zero_pull else rider.pull_duration_s
         return (front * pull + draft * (cycle - pull)) / cycle
@@ -411,9 +430,9 @@ def sustainable_speed(
 
 
 # Auto-balance tuning.
-_BALANCE_MAX_PULL_S = 180
-_BALANCE_MIN_PULL_S = 10
-_BALANCE_STEP_S = 5
+BALANCE_MAX_PULL_S = 180
+BALANCE_MIN_PULL_S = 10
+BALANCE_STEP_S = 5
 
 
 @dataclass
@@ -464,16 +483,13 @@ def compute_auto_balance(
     if not ftp_riders:
         return None
 
-    grade = _grade(plan)
     draft_factor = _mean_draft_factor(len(all_riders), params)
 
     def powers(rider: PlanRider, speed: float) -> tuple[float, float]:
         weight, height = _rider_wh(rider)
-        front = physics.power_for_speed(
-            speed, weight_kg=weight, height_cm=height, grade=grade, draft_factor=1.0, params=params
-        )
+        front = physics.power_for_speed(speed, weight_kg=weight, height_cm=height, draft_factor=1.0, params=params)
         draft = physics.power_for_speed(
-            speed, weight_kg=weight, height_cm=height, grade=grade, draft_factor=draft_factor, params=params
+            speed, weight_kg=weight, height_cm=height, draft_factor=draft_factor, params=params
         )
         return front, draft
 
@@ -502,9 +518,9 @@ def compute_auto_balance(
     order = 0
     if pullers:
         max_share = max(shares[r.pk] for r in pullers)
-        cycle = _BALANCE_MAX_PULL_S / max_share if max_share > 0 else _BALANCE_MAX_PULL_S
+        cycle = BALANCE_MAX_PULL_S / max_share if max_share > 0 else BALANCE_MAX_PULL_S
         durations = {
-            r.pk: max(round(shares[r.pk] * cycle / _BALANCE_STEP_S) * _BALANCE_STEP_S, _BALANCE_MIN_PULL_S)
+            r.pk: max(round(shares[r.pk] * cycle / BALANCE_STEP_S) * BALANCE_STEP_S, BALANCE_MIN_PULL_S)
             for r in pullers
         }
         for rider in sorted(pullers, key=lambda r: -durations[r.pk]):

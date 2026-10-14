@@ -7,17 +7,20 @@
 <div class="max-w-4xl mx-auto">
   <div class="card bg-base-200 shadow-xl">
     <div class="card-body">
-      <div class="flex justify-between items-center mb-6">
+      <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
         <div>
-          <h2 class="card-title text-2xl">TTT Planner</h2>
-          <p class="text-sm text-base-content/70">Plan team time trial pull schedules</p>
+          <h1 class="card-title text-2xl">TTT Planner</h1>
+          <p class="text-sm text-base-content/70">
+            Plan team time trial pull schedules.
+            <a href="{% url 'ttt_planner:help' %}" class="link">How the planner works</a>
+          </p>
         </div>
         <button type="button" class="btn btn-primary btn-sm" onclick="new_plan_modal.showModal()">New Plan</button>
       </div>
 
-      <dialog id="new_plan_modal" class="modal">
+      <dialog id="new_plan_modal" class="modal" aria-labelledby="new-plan-title">
         <div class="modal-box">
-          <h3 class="font-bold text-lg mb-4">New TTT plan</h3>
+          <h2 id="new-plan-title" class="font-bold text-lg mb-4">New TTT plan</h2>
           <form method="post" action="{% url 'ttt_planner:create' %}" class="space-y-3">
             {% csrf_token %}
             <label class="form-control">
@@ -26,7 +29,7 @@
                      class="input input-bordered input-sm w-full" />
             </label>
             <label class="form-control">
-              <span class="label-text mb-1">Team name <span class="text-base-content/40">(optional)</span></span>
+              <span class="label-text mb-1">Team name <span class="text-base-content/70">(optional)</span></span>
               <input type="text" name="team_name" class="input input-bordered input-sm w-full" />
             </label>
             <label class="form-control">

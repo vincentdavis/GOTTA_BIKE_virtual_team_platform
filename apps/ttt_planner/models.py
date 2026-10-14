@@ -203,7 +203,7 @@ class PlanRider(models.Model):
     """
 
     # Ceilings for manually entered values. Auto-balance never generates more than
-    # _BALANCE_MAX_PULL_S (180s), so the duration cap is the looser manual bound. Both
+    # BALANCE_MAX_PULL_S (180s), so the duration cap is the looser manual bound. Both
     # are enforced three ways: as field validators (the admin inline, which is where
     # Pull W is actually set, runs full_clean), as a clamp in the inline edit view
     # (which does not), and as the number input's max attribute.

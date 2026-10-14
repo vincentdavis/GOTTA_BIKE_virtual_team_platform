@@ -29,11 +29,12 @@ from apps.events.models import Squad
 from apps.ttt_planner import terrain
 from apps.ttt_planner.forms import PowerUpForm
 from apps.ttt_planner.models import PlanRider, PowerUp, TttPlan
-from apps.ttt_planner.services import roster, zwiftgopher, zwiftgopher_client
+from apps.ttt_planner.services import compute, physics, roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
     climb_strength,
     compute_auto_balance,
     compute_plan,
+    draft_table_for,
     quick_finish_time,
     sustainable_speed,
 )
@@ -317,6 +318,63 @@ def planner_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @team_member_required(raise_exception=True)
+@require_GET
+def planner_help(request: HttpRequest) -> HttpResponse:
+    """Explain how the TTT planner works: its model, the numbers it shows, and its buttons.
+
+    Every constant the page quotes is read live (Constance and ``services/compute.py``),
+    so those cannot drift. The prose describing the method lives in
+    ``ttt_planner/help.html`` and has to be kept in step with ``services/compute.py``.
+
+    Returns:
+        The help page.
+
+    """
+    params = physics.params_from_constance()
+    example_kph, example_kg, example_cm = 40.0, compute.FALLBACK_WEIGHT_KG, compute.FALLBACK_HEIGHT_CM
+    third_wheel = physics.draft_savings_fraction(3, params)
+    return render(
+        request,
+        "ttt_planner/help.html",
+        {
+            "params": params,
+            "std_cda_coef": physics.params_from_constance(cda_coef_key="STD_CDA_COEF").cda_coef,
+            "draft_rows": [
+                {"position": i + 1, "saving_pct": round(fraction * 100, 1)}
+                for i, fraction in enumerate(params.draft_savings)
+            ],
+            "fallback_weight_kg": compute.FALLBACK_WEIGHT_KG,
+            "fallback_height_cm": compute.FALLBACK_HEIGHT_CM,
+            "balance_max_pull_s": compute.BALANCE_MAX_PULL_S,
+            "balance_min_pull_s": compute.BALANCE_MIN_PULL_S,
+            "balance_step_s": compute.BALANCE_STEP_S,
+            "max_np_hours": compute.MAX_NP_SECONDS // 3600,
+            "climb_grade_pct": f"{compute.TTT_CLIMB_GRADE * 100:g}",
+            "example": {
+                "kph": f"{example_kph:g}",
+                "kg": f"{example_kg:g}",
+                "cm": f"{example_cm:g}",
+                "cda": physics.estimate_cda(example_cm, example_kg, params),
+                "front_w": round(
+                    physics.power_for_speed(example_kph, weight_kg=example_kg, height_cm=example_cm, params=params)
+                ),
+                "third_wheel_pct": f"{third_wheel * 100:g}",
+                "third_wheel_w": round(
+                    physics.power_for_speed(
+                        example_kph,
+                        weight_kg=example_kg,
+                        height_cm=example_cm,
+                        draft_factor=1.0 - third_wheel,
+                        params=params,
+                    )
+                ),
+            },
+        },
+    )
+
+
+@login_required
+@team_member_required(raise_exception=True)
 @require_POST
 def plan_create(request: HttpRequest) -> HttpResponse:
     """Create a new empty plan and redirect to it.
@@ -520,7 +578,17 @@ def draft_savings_update(request: HttpRequest, plan_id: str) -> HttpResponse:
         plan.draft_savings = fractions
 
     plan.save(update_fields=["draft_savings", "updated_at"])
-    return HttpResponse(_render_plan_body(request, plan, can_edit=True))
+    body = _render_plan_body(request, plan, can_edit=True)
+    if request.POST.get("reset"):
+        # The inputs live in the Parameters card, outside the swapped body, so a reset sends
+        # them back out of band. Not after an ordinary edit: replacing the inputs then would
+        # take focus away from the cell the rider is typing in.
+        body += render_to_string(
+            "ttt_planner/_draft_savings.html",
+            {"plan": plan, "draft_table": draft_table_for(plan), "can_edit": True, "oob": True},
+            request=request,
+        )
+    return HttpResponse(body)
 
 
 def _render_gopher_panel(request: HttpRequest, plan: TttPlan, *, can_edit: bool) -> str:
@@ -608,14 +676,27 @@ def calculate_speed(request: HttpRequest, plan_id: str) -> HttpResponse:
 
     """
     plan = _changing(request, plan_id)
-
-    if "target_if" in request.POST:
-        with contextlib.suppress(ValueError):
-            plan.target_if = min(max(float(request.POST.get("target_if") or 0.95), 0.1), 1.5)
+    _take_posted_target_if(request, plan)
 
     plan.target_speed_kph = sustainable_speed(plan)
     plan.save(update_fields=["target_if", "target_speed_kph", "updated_at"])
     return HttpResponse(_plan_body_with_speed_oob(request, plan))
+
+
+def _take_posted_target_if(request: HttpRequest, plan: TttPlan) -> None:
+    """Use the Target IF field's value sent with Calculate or Auto-balance, when there is one.
+
+    Both buttons send the field with their click, so a value typed a moment ago counts even
+    if the field's own save has not landed yet. Clamped to 0.1-1.5, as the settings form is.
+
+    Args:
+        request: The request.
+        plan: The plan, changed in memory (the caller saves it).
+
+    """
+    if "target_if" in request.POST:
+        with contextlib.suppress(ValueError):
+            plan.target_if = min(max(float(request.POST.get("target_if") or 0.95), 0.1), 1.5)
 
 
 @login_required
@@ -629,9 +710,12 @@ def auto_balance(request: HttpRequest, plan_id: str) -> HttpResponse:
 
     """
     plan = _changing(request, plan_id)
+    _take_posted_target_if(request, plan)
 
     result = compute_auto_balance(plan)
-    if result is not None:
+    if result is None:
+        plan.save(update_fields=["target_if", "updated_at"])
+    else:
         riders_by_pk = {r.pk: r for r in plan.riders.all()}
         to_update = []
         for assignment in result.assignments:
@@ -645,7 +729,7 @@ def auto_balance(request: HttpRequest, plan_id: str) -> HttpResponse:
         if to_update:
             PlanRider.objects.bulk_update(to_update, ["pull_duration_s", "zero_pull", "order"])
         plan.target_speed_kph = result.speed_kph
-        plan.save(update_fields=["target_speed_kph", "updated_at"])
+        plan.save(update_fields=["target_if", "target_speed_kph", "updated_at"])
         logfire.info("TTT auto-balance applied", plan_id=str(plan.pk), speed=result.speed_kph)
     return HttpResponse(_plan_body_with_speed_oob(request, plan))
 

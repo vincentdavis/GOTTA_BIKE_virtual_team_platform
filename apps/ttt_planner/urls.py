@@ -9,6 +9,7 @@ app_name = "ttt_planner"
 urlpatterns = [
     path("", views.planner_list, name="list"),
     path("new/", views.plan_create, name="create"),
+    path("help/", views.planner_help, name="help"),
     path("<uuid:plan_id>/", views.planner_detail, name="detail"),
     path("<uuid:plan_id>/delete/", views.plan_delete, name="delete"),
     path("<uuid:plan_id>/update/", views.plan_update, name="update"),

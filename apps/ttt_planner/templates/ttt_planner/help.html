@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% comment %}
+  How the TTT planner works. Every number quoted here is read live (planner_help passes
+  the Constance physics settings and the constants from services/compute.py); the prose
+  describing the method is not, so keep it in step with services/compute.py.
+{% endcomment %}
+
+{% block title %}How the TTT planner works{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+  <a href="{% url 'ttt_planner:list' %}" class="btn btn-ghost btn-sm">&larr; TTT plans</a>
+
+  <div class="space-y-2">
+    <h1 class="text-3xl font-bold">How the TTT planner works</h1>
+    <p>
+      The planner works out how hard each rider has to pull to hold a target speed, how long each pull should
+      be, and roughly how long the race will take. It is a model: good for comparing line-ups and pull plans,
+      not a promise of the result.
+    </p>
+  </div>
+
+  <nav aria-labelledby="help-toc" class="card bg-base-200">
+    <div class="card-body py-4">
+      <h2 id="help-toc" class="font-semibold">On this page</h2>
+      <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1">
+        <li><a class="link" href="#workflow">Planning a race, step by step</a></li>
+        <li><a class="link" href="#riders">Rider data</a></li>
+        <li><a class="link" href="#targets">Target speed, Target IF and the two buttons</a></li>
+        <li><a class="link" href="#metrics">What the pull schedule shows</a></li>
+        <li><a class="link" href="#physics">The power model</a></li>
+        <li><a class="link" href="#draft">Drafting</a></li>
+        <li><a class="link" href="#time">Finish time</a></li>
+        <li><a class="link" href="#climb">Climb compare</a></li>
+        <li><a class="link" href="#zwiftgopher">zwiftgopher comparison</a></li>
+        <li><a class="link" href="#limits">What the model leaves out</a></li>
+        <li><a class="link" href="#glossary">Glossary</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <section id="workflow" aria-labelledby="workflow-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="workflow-h" class="card-title">Planning a race, step by step</h2>
+      <ol class="list-decimal pl-5 space-y-2">
+        <li><strong>Course.</strong> Pick the route. Its distance and climbing set the finish-time estimate.
+          Course name and type are labels only; they change no numbers.</li>
+        <li><strong>Add riders.</strong> Add a whole squad, search team riders by name or Zwift ID, or add a guest
+          with their weight, height and FTP.</li>
+        <li><strong>Parameters.</strong> Set the Target IF: how hard each rider should work on average, as a
+          fraction of FTP. 0.95 means each rider averages 95% of their FTP over a rotation.</li>
+        <li><strong>Calculate speed</strong> keeps your pull lengths and finds the fastest speed everyone can hold.
+          <strong>Auto-balance pulls</strong> also sets the pull lengths and the order.</li>
+        <li><strong>Adjust.</strong> Change pull lengths, mark riders who take no pulls, reorder. The table updates
+          as you go; press Calculate speed again after changing pulls.</li>
+        <li><strong>Share.</strong> Copy the pull schedule as an image for the team.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="riders" aria-labelledby="riders-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="riders-h" class="card-title">Rider data</h2>
+      <p>
+        When you add a team rider, the planner copies their weight, height and FTP from the team's data: weight and
+        FTP from ZwiftPower first, then Zwift Racing; height from Zwift Racing. The copy stays as it was if their
+        data changes later.
+      </p>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>No weight or height: the rider is modelled at {{ fallback_weight_kg|floatformat:0 }} kg and
+          {{ fallback_height_cm|floatformat:0 }} cm, and marked <span class="badge badge-warning badge-xs">est</span>.</li>
+        <li>No FTP: the rider still gets pull powers, but no %FTP, IF or TSS, and Calculate speed and Auto-balance
+          leave them out.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="targets" aria-labelledby="targets-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-4">
+      <h2 id="targets-h" class="card-title">Target speed, Target IF and the two buttons</h2>
+
+      <div class="space-y-2">
+        <h3 class="font-semibold">Target flat speed</h3>
+        <p>
+          The speed the team rides on level road. Every power the planner shows (on the front, sitting in, average)
+          is the power for that speed on the flat. The route's climbing enters only the finish-time estimate: on a
+          hilly course the team rides by power, so the same watts give a lower speed uphill and a higher one down.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-semibold">Target IF</h3>
+        <p>
+          How hard each rider works on average, as a fraction of FTP. Calculate speed and Auto-balance never let a
+          rider's <em>average</em> power over a rotation go above Target IF × FTP.
+        </p>
+        <p>
+          It caps average power, not Normalized Power, so the IF column (NP ÷ FTP) comes out a little above the
+          target, and further above it with longer pulls.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-semibold">Calculate speed</h3>
+        <p>
+          Keeps the pull lengths and no-pull riders as they are, and searches for the fastest target speed (to
+          0.1 kph) at which every rider with an FTP keeps
+        </p>
+        <p class="font-mono text-sm bg-base-100 rounded px-3 py-2 overflow-x-auto">
+          (Pull W × own pull + Draft W × (rotation − own pull)) ÷ rotation ≤ Target IF × FTP
+        </p>
+        <p>
+          where the rotation is the sum of every puller's pull length. The rider who reaches the limit first sets
+          the speed, so a longer pull for a weaker rider lowers it and a shorter one raises it.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-semibold">Auto-balance pulls</h3>
+        <p>For each rider with an FTP, the planner works out the share of the rotation they can spend on the front
+          while averaging exactly Target IF × FTP:</p>
+        <p class="font-mono text-sm bg-base-100 rounded px-3 py-2 overflow-x-auto">
+          share = (Target IF × FTP − Draft W) ÷ (Pull W − Draft W)
+        </p>
+        <ul class="list-disc pl-5 space-y-1">
+          <li>It finds the fastest speed at which the shares add up to one, so someone is always on the front.</li>
+          <li>The shares become pull lengths scaled so the strongest rider pulls {{ balance_max_pull_s }} seconds,
+            rounded to {{ balance_step_s }} seconds, and at least {{ balance_min_pull_s }} seconds.</li>
+          <li>The order runs from the longest pull to the shortest.</li>
+          <li>A rider whose share is zero, who would be over Target IF × FTP just sitting in at that speed, is set
+            to take no pulls.</li>
+          <li>Riders with no FTP keep their settings and go last.</li>
+        </ul>
+        <p>
+          Only averages are balanced, so how long the rotation is does not change them. The planner always makes the
+          strongest rider's pull {{ balance_max_pull_s }} seconds; shorter pulls with the same shares give the same
+          averages and are easier on the legs.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="metrics" aria-labelledby="metrics-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="metrics-h" class="card-title">What the pull schedule shows</h2>
+      <dl class="space-y-3">
+        <div><dt class="font-semibold">#, kg, FTP</dt>
+          <dd>Pull order, and the rider's data (see <a class="link" href="#riders">Rider data</a>).</dd></div>
+        <div><dt class="font-semibold">CdA</dt>
+          <dd>Estimated drag area in m² (see <a class="link" href="#physics">The power model</a>).</dd></div>
+        <div><dt class="font-semibold">Pull W</dt>
+          <dd>Power to hold the target flat speed on the front, with no draft. A custom pull power set for the rider
+            replaces it.</dd></div>
+        <div><dt class="font-semibold">W/kg</dt><dd>Pull W ÷ weight.</dd></div>
+        <div><dt class="font-semibold">Pull %FTP</dt>
+          <dd>Pull W ÷ FTP. Above 100% is normal: riders recover in the draft between pulls.</dd></div>
+        <div><dt class="font-semibold">Avg W</dt>
+          <dd>Average power over one rotation: Pull W for the rider's own pull, Draft W for the rest. A rider who
+            takes no pulls averages their Draft W.</dd></div>
+        <div><dt class="font-semibold">NP</dt>
+          <dd>Normalized Power over the race. The planner builds each rider's power second by second for the whole
+            race (Pull W during their pulls, Draft W otherwise, each rider's first pull starting after the riders
+            ahead of them), takes a 30-second rolling average, raises it to the fourth power, averages that, and takes
+            the fourth root. At most {{ max_np_hours }} hours are simulated. Needs a route.</dd></div>
+        <div><dt class="font-semibold">IF</dt><dd>NP ÷ FTP: the usual intensity factor.</dd></div>
+        <div><dt class="font-semibold">TSS</dt><dd>Race hours × IF² × 100.</dd></div>
+        <div><dt class="font-semibold">Pull (s), No pull</dt>
+          <dd>The rider's pull length, and whether they sit in the whole race.</dd></div>
+        <div><dt class="font-semibold">Team card</dt>
+          <dd>Avg team power is the mean of the riders' Avg W. Est. finish time is explained under
+            <a class="link" href="#time">Finish time</a>; the speed beside it is the route's distance over that
+            time.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section id="physics" aria-labelledby="physics-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="physics-h" class="card-title">The power model</h2>
+      <p>The power to hold road speed <code>v</code> (m/s) is the usual cycling model:</p>
+      <p class="font-mono text-sm bg-base-100 rounded px-3 py-2 overflow-x-auto">
+        P = ( Crr·m·g·v + m·g·grade·v + ½·ρ·CdA·v³·draft ) ÷ η
+      </p>
+      <p>The three terms are rolling resistance, climbing and air resistance. Zwift has no wind, so air speed equals
+        road speed. The values in use now:</p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm w-auto">
+          <caption class="sr-only">Power model constants</caption>
+          <tbody>
+            <tr><th scope="row">Crr (rolling resistance)</th><td>{{ params.crr }}</td></tr>
+            <tr><th scope="row">ρ (air density)</th><td>{{ params.air_density }} kg/m³</td></tr>
+            <tr><th scope="row">m (mass)</th><td>rider weight + {{ params.bike_mass_kg }} kg of bike</td></tr>
+            <tr><th scope="row">g</th><td>9.8067 m/s²</td></tr>
+            <tr><th scope="row">η (drivetrain efficiency)</th><td>{{ params.drivetrain_efficiency }}</td></tr>
+            <tr><th scope="row">grade</th><td>0 for every power the planner shows; used only for the finish time</td></tr>
+            <tr><th scope="row">draft</th><td>1 on the front; 1 − saving when sitting in (see <a class="link" href="#draft">Drafting</a>)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>CdA, the drag area, is estimated from height and weight:</p>
+      <p class="font-mono text-sm bg-base-100 rounded px-3 py-2 overflow-x-auto">
+        CdA = {{ params.cda_coef }} × height_m^{{ params.cda_height_exp }} × weight_kg^{{ params.cda_weight_exp }}
+      </p>
+      <p>
+        {{ params.cda_coef }} is the site default for a time-trial position; a plan can set its own coefficient in
+        Parameters. Climb compare uses the road-position coefficient, {{ std_cda_coef }}.
+      </p>
+      <p>
+        For example, a {{ example.kg }} kg, {{ example.cm }} cm rider has a CdA of about
+        {{ example.cda|floatformat:3 }} m² and needs about {{ example.front_w }} W to hold {{ example.kph }} kph alone
+        on the flat, or about {{ example.third_wheel_w }} W on the third wheel ({{ example.third_wheel_pct }}% of the
+        air resistance saved).
+      </p>
+      <p class="text-sm text-base-content/70">A site admin sets these values in Site Config, under TTT Planner.</p>
+    </div>
+  </section>
+
+  <section id="draft" aria-labelledby="draft-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="draft-h" class="card-title">Drafting</h2>
+      <p>
+        Riding behind others saves part of the air resistance; the saving grows deeper in the line and levels off.
+        The site's default savings, from Zwift Insider's pack-dynamics tests:
+      </p>
+      <div class="overflow-x-auto">
+        <table class="table table-sm w-auto">
+          <caption class="sr-only">Default draft savings by wheel position</caption>
+          <thead>
+            <tr><th scope="row">Position</th>{% for row in draft_rows %}<th scope="col" class="text-right">{{ row.position }}</th>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Air resistance saved</th>{% for row in draft_rows %}<td class="text-right">{{ row.saving_pct|floatformat:"-1" }}%</td>{% endfor %}</tr>
+          </tbody>
+        </table>
+      </div>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Position 1 is the rider on the front, who saves nothing. Positions past the end of the table use its
+          last value.</li>
+        <li>A plan can use its own savings (Parameters › Draft savings by wheel position).</li>
+        <li>While not pulling, a rider is modelled at the <em>average</em> saving over positions 2 to N, where N is
+          everyone on the plan. Their Draft W is the power for the target speed with the air resistance cut by that
+          average.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="time" aria-labelledby="time-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="time-h" class="card-title">Finish time</h2>
+      <ol class="list-decimal pl-5 space-y-1">
+        <li>The riders' weights and heights are averaged into one typical rider.</li>
+        <li>That rider's power to hold the target flat speed alone on the flat is worked out.</li>
+        <li>The planner finds the speed that power gives on the route's average gradient: total climbing ÷ distance.</li>
+        <li>Finish time = distance ÷ that speed.</li>
+      </ol>
+      <p>
+        This treats all the climbing as one steady slope with no descents. On a hilly course the estimate runs slow,
+        because real descents give some of the time back.
+      </p>
+    </div>
+  </section>
+
+  <section id="climb" aria-labelledby="climb-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="climb-h" class="card-title">Climb compare</h2>
+      <p>
+        For riders linked to Zwift Racing data, the plan page shows how far behind the squad's fastest climber each
+        rider would finish a {{ climb_grade_pct }}% climb of different lengths, riding a steady best effort without
+        drafting. It shows who is likely to be dropped on a long drag before it happens.
+      </p>
+      {% include "_climb_method.html" %}
+    </div>
+  </section>
+
+  <section id="zwiftgopher" aria-labelledby="zwiftgopher-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="zwiftgopher-h" class="card-title">zwiftgopher comparison</h2>
+      <p>
+        zwiftgopher.com runs its own TTT optimiser. <strong>Run optimize</strong> sends it your riders (Zwift IDs
+        with the weight, height and FTP the plan uses, or name, weight, height and FTP for guests), your target
+        speed and the upcoming event you choose. Its plan then appears next to ours: finish time, average speed,
+        team power, and a suggested pull order you can copy.
+      </p>
+      <ul class="list-disc pl-5 space-y-1">
+        <li>Its model is its own, and its route is the upcoming event's, which may not be the one you picked.</li>
+        <li>It takes 2 to 8 riders, and accepts one request a minute, so a run can take about a minute and a half.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="limits" aria-labelledby="limits-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="limits-h" class="card-title">What the model leaves out</h2>
+      <ul class="list-disc pl-5 space-y-1">
+        <li><strong>Hills in the finish time.</strong> The average gradient has no descents in it (see
+          <a class="link" href="#time">Finish time</a>).</li>
+        <li><strong>Where each rider sits.</strong> Sitting in uses the average saving over the whole line, not the
+          wheel each rider is actually on at each moment.</li>
+        <li><strong>Anaerobic capacity.</strong> A long pull far above FTP can fail even when the averages fit; the
+          planner does not model how far each pull drains a rider.</li>
+        <li><strong>Race dynamics.</strong> Surges, corners, power-ups, gaps in the rotation and riders being dropped
+          are not modelled.</li>
+        <li><strong>Data age.</strong> Weights, heights and FTPs are copies from ZwiftPower and Zwift Racing, and can
+          be out of date.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="glossary" aria-labelledby="glossary-h" class="card bg-base-200 scroll-mt-24">
+    <div class="card-body space-y-3">
+      <h2 id="glossary-h" class="card-title">Glossary</h2>
+      <dl class="space-y-2">
+        <div><dt class="font-semibold">FTP</dt><dd>Functional threshold power: roughly the power a rider can hold for an hour.</dd></div>
+        <div><dt class="font-semibold">W/kg</dt><dd>Watts per kilogram of body weight.</dd></div>
+        <div><dt class="font-semibold">CdA</dt><dd>Drag area: how much air a rider pushes, in m².</dd></div>
+        <div><dt class="font-semibold">Pull</dt><dd>A turn on the front of the line.</dd></div>
+        <div><dt class="font-semibold">Rotation</dt><dd>One full turn through every rider who pulls.</dd></div>
+        <div><dt class="font-semibold">NP</dt><dd>Normalized Power: an average that weights hard efforts more, closer to how a varied ride feels.</dd></div>
+        <div><dt class="font-semibold">IF</dt><dd>Intensity factor: NP ÷ FTP.</dd></div>
+        <div><dt class="font-semibold">TSS</dt><dd>Training Stress Score: hours × IF² × 100. An hour at FTP is 100.</dd></div>
+      </dl>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

@@ -79,7 +79,8 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/zp/results/{zid}/ - Per-event ZP results leaderboard",
             "/events/squad-invite/{token}/ - Accept squad invite link",
             "/ttt/ - TTT planner (list, create, edit plans)",
-            "/ttt/{id}/ - View/edit a TTT plan (read-only for non-owners via share link)",
+            "/ttt/help/ - How the TTT planner works (model, numbers, buttons)",
+            "/ttt/{id}/ - View/edit a TTT plan (anyone not its creator or squad confirms before editing)",
         ],
     },
     Permissions.RACE_READY: {

@@ -1,0 +1,41 @@
+{% comment %}
+  Draft savings by wheel position, in the Parameters card. It sits outside the swapped
+  plan body, so editing a cell never takes focus away from it; "Reset to default"
+  re-emits it out of band (draft_savings_update) with the site's values.
+  Context: plan, draft_table (DraftRow list), can_edit, oob.
+{% endcomment %}
+<div id="ttt-draft-savings" {% if oob %}hx-swap-oob="true"{% endif %}>
+  <form class="overflow-x-auto"
+        {% if can_edit %}
+        hx-post="{% url 'ttt_planner:draft_savings_update' plan.pk %}"
+        hx-trigger="change"
+        hx-target="#ttt-plan-body" hx-swap="innerHTML"
+        {% endif %}>
+    <table class="table table-sm w-auto">
+      <caption class="sr-only">Aerodynamic power saved at each wheel position</caption>
+      <thead>
+        <tr>
+          <th scope="row">Position</th>
+          {% for row in draft_table %}<th scope="col" class="text-right">{{ row.position }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row" class="font-medium whitespace-nowrap">Aero saved %</th>
+          {% for row in draft_table %}
+            <td class="text-right">
+              {% if can_edit and row.position > 1 %}
+                <input type="number" name="saving" value="{{ row.saving_pct|floatformat:'-1' }}"
+                       step="0.1" min="0" max="95"
+                       aria-label="Aero power saved at position {{ row.position }}, percent"
+                       class="input input-bordered input-xs w-16 text-right" />
+              {% else %}
+                {{ row.saving_pct|floatformat:"-1" }}%
+              {% endif %}
+            </td>
+          {% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </form>
+</div>
