@@ -73,6 +73,18 @@ def test_a_long_race_is_the_worst_case_and_the_race_approaches_it():
     assert long_race == pytest.approx(20000 - spend / refill, abs=1)
 
 
+def test_a_race_of_endless_pulls_is_still_quick_to_judge():
+    """A speed search near a standstill asks about races of billions of pulls.
+
+    The low point comes from a closed form, so the cost does not grow with the count, and a
+    race that empties W′ says so rather than settling.
+    """
+    settled = effort.lowest_w_prime_bal(420, 260, 60, 240, 320, 20000)
+
+    assert effort.lowest_w_prime_bal(420, 260, 60, 240, 320, 20000, pulls=10**15) == pytest.approx(settled)
+    assert effort.lowest_w_prime_bal(420, 330, 60, 240, 320, 20000, pulls=10**15) < -1e15
+
+
 def test_w_prime_edges():
     assert effort.lowest_w_prime_bal(300, 200, 60, 240, 320, 20000) == 20000  # pulls below CP never drain
     assert effort.lowest_w_prime_bal(400, 330, 60, 240, 320, 20000) == -math.inf  # nothing ever refills

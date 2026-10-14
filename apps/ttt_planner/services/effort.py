@@ -67,27 +67,6 @@ def cycle_np(front: float, draft: float, pull_s: float, cycle_s: float) -> float
     return fourth**0.25
 
 
-def _after(deficit: float, power: float, seconds: float, cp: float, w_prime: float) -> float:
-    """Return the W′ deficit after ``seconds`` at ``power``.
-
-    Args:
-        deficit: W′ - W′bal before, in joules.
-        power: Power held, in watts.
-        seconds: How long it is held.
-        cp: Critical power, in watts.
-        w_prime: W′, in joules.
-
-    Returns:
-        The deficit afterwards, in joules (never below zero).
-
-    """
-    if seconds <= 0:
-        return deficit
-    if power > cp:
-        return deficit + (power - cp) * seconds
-    return deficit * math.exp(-(cp - power) * seconds / w_prime)
-
-
 def lowest_w_prime_bal(
     front: float,
     draft: float,
@@ -119,17 +98,9 @@ def lowest_w_prime_bal(
 
     """
     sit_s = max(cycle_s - pull_s, 0.0)
-    if pulls is not None:
-        deficit = worst = 0.0
-        for _ in range(max(pulls, 1)):
-            deficit = _after(deficit, front, pull_s, cp, w_prime)
-            worst = max(worst, deficit)
-            deficit = _after(deficit, draft, sit_s, cp, w_prime)
-            worst = max(worst, deficit)
-        return w_prime - worst
 
-    # A long race: the fixed point of one rotation, u -> sit(pull(u)). Each step is affine
-    # in u, so the rotation is too: u -> scale * u + shift.
+    # Each stretch changes the deficit u = W′ - W′bal affinely (see the module docstring),
+    # so a whole rotation does too: u -> scale * u + shift.
     def affine(power: float, seconds: float) -> tuple[float, float]:
         if seconds <= 0:
             return 1.0, 0.0
@@ -141,6 +112,20 @@ def lowest_w_prime_bal(
     sit_scale, sit_shift = affine(draft, sit_s)
     scale = sit_scale * pull_scale
     shift = sit_scale * pull_shift + sit_shift
+
+    if pulls is not None:
+        # Starting from full, the deficit only grows from one rotation to the next, so the
+        # worst moment is in the last one. Its starting deficit has a closed form, which keeps
+        # the cost flat however many pulls the race holds (a near-standstill speed in a speed
+        # search makes that billions).
+        rotations = max(pulls, 1) - 1
+        refills = scale < 1.0 - 1e-12
+        start = shift * (1.0 - scale**rotations) / (1.0 - scale) if refills else shift * rotations
+        after_pull = pull_scale * start + pull_shift
+        after_sit = sit_scale * after_pull + sit_shift
+        return w_prime - max(after_pull, after_sit)
+
+    # A long race: the fixed point of one rotation.
     if scale >= 1.0 - 1e-12:
         # Nothing ever refills: any drain at all runs W′ down without end.
         return -math.inf if shift > 1e-9 else w_prime
