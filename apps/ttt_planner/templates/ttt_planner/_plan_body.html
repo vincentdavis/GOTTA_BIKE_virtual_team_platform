@@ -16,8 +16,9 @@
     </div>
     <p class="text-sm text-base-content/70">
       In pull order, at {{ result.target_speed_kph }} kph on the flat. After a pull a rider drops to the back and works
-      up the line; the wheel columns are the watts to hold the speed sitting in at each place, 2nd being right behind
-      the rider on the front.
+      up the line a wheel at a time, 2nd being right behind the rider on the front. Each wheel column gives the watts to
+      hold the speed sitting in there and, below, how long the rider sits there each rotation: as long as the rider
+      that many places ahead pulls. Riders who take no pulls come through and swing straight off.
     </p>
     <div class="overflow-x-auto">
       <table class="table table-sm table-pin-col">
@@ -41,7 +42,12 @@
             <td class="text-right">{{ rr.pull_wkg|floatformat:1 }}</td>
             <td class="text-right font-semibold">{{ rr.pull_power_w }}</td>
             {% endif %}
-            {% for watts in rr.wheel_powers %}<td class="text-right">{{ watts }}</td>{% endfor %}
+            {% for watts, seconds in rr.wheels %}
+            <td class="text-right">
+              <span aria-hidden="true">{{ watts }}<span class="block text-xs text-base-content/70 whitespace-nowrap">{{ seconds }} s</span></span>
+              <span class="sr-only">{{ watts }} watts for {{ seconds }} seconds</span>
+            </td>
+            {% endfor %}
           </tr>
           {% endfor %}
         </tbody>
@@ -324,7 +330,8 @@
     <p class="text-sm text-base-content/70" id="ttt-course-help">
       The team at a steady effort: the power that holds {{ result.target_speed_kph }} kph on the flat, held over every
       climb and descent of {{ plan.route.name }}, lead-in included. Move along the profile, or focus it and use the
-      arrow keys, to see what each rider needs to hold the team's speed there, on the front and sitting in.
+      arrow keys, to see what each rider needs to hold the team's speed there, on the front and sitting in (averaged
+      over the wheels they ride).
     </p>
     <div id="ttt-course-plot" class="ttt-course-plot" tabindex="0" role="slider"
          aria-label="Position along the course, in km" aria-describedby="ttt-course-help"></div>

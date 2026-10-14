@@ -5,12 +5,14 @@ Optimize works to) is the power to hold it on level road. The route's climbing e
 in the finish-time estimate (``physics.estimate_time_seconds``), which turns that flat-speed
 effort into a speed on the course.
 
-Through a rotation, a rider's power is a square wave: their pull power on the front, their
-sitting-in power for the rest. ``services/effort.py`` turns that into Normalized Power (so
-IF and TSS) and the lowest W′ balance. Every rider with an FTP is held to two limits: IF
-(NP / FTP) at or under Target IF, and W′bal at or above the plan's W′ reserve. That includes
-riders who take no pulls: they still have to hold the wheel, so a plan never goes faster by
-leaving a rider to be dropped.
+Through a rotation, a rider's power steps: their pull power on the front, then the power at
+each wheel they sit on as the line comes past, for as long as the rider that many places
+ahead pulls (:func:`wheel_seconds`), so the order of the line matters. ``services/effort.py``
+turns those steps into Normalized Power (so IF and TSS) and the lowest W′ balance.
+
+Every rider with an FTP is held to two limits: IF (NP / FTP) at or under Target IF, and
+W′bal at or above the plan's W′ reserve. That includes riders who take no pulls: they still
+have to hold the wheel, so a plan never goes faster by leaving a rider to be dropped.
 
 A plan's goal has two halves, stored on the plan: how fast (the fastest the limits allow, or
 hold the target speed) and how the pull lengths are set (for even effort, for the most W′
@@ -29,7 +31,7 @@ from typing import TYPE_CHECKING, ClassVar
 from apps.ttt_planner.services import course, effort, physics
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from apps.ttt_planner.models import PlanRider, TttPlan
 
@@ -52,6 +54,10 @@ _W_PRIME_TOLERANCE_J = 1e-3
 _SPEED_RANGE_KPH = (0.0, 120.0)
 _CALCULATE_STEPS = 40
 _BALANCE_STEPS = 16
+# Optimize settles this many rotation lengths at a time onto each rider's own wheels, in up
+# to this many passes each (see _settle).
+_SETTLED_ROTATIONS = 6
+_SETTLE_PASSES = 3
 
 
 @dataclass(frozen=True)
@@ -168,6 +174,7 @@ class Load:
     """One rider's load through the race at one speed."""
 
     front_w: float
+    # Average power sitting in, over the wheels ridden and the time at each.
     draft_w: float
     avg_w: float
     np_w: float
@@ -175,14 +182,15 @@ class Load:
     w_prime_low_j: float | None
 
 
-def rider_load(spec: RiderSpec, front: float, draft: float, cycle_s: float, race_s: float | None) -> Load:
-    """Work out a rider's load from their powers and the rotation.
+def rider_load(spec: RiderSpec, front: float, sitting: Sequence[tuple[float, float]], race_s: float | None) -> Load:
+    """Work out a rider's load through one rotation, repeated for the race.
 
     Args:
         spec: The rider.
         front: Their power on the front, in watts.
-        draft: Their power sitting in, in watts.
-        cycle_s: Length of the rotation, in seconds.
+        sitting: What they ride sitting in after their pull, in order: ``(watts, seconds)``
+            at each wheel, from the back up to the 2nd (see :func:`wheel_seconds`). The only
+            rider who pulls has no time in it: they never leave the front.
         race_s: Race length in seconds, or ``None`` (no route): then W′ is judged for a
             long race, the worst case.
 
@@ -191,18 +199,47 @@ def rider_load(spec: RiderSpec, front: float, draft: float, cycle_s: float, race
 
     """
     has_w_prime = spec.cp is not None and spec.w_prime is not None
-    if spec.pulls and cycle_s > 0:
-        pull = min(spec.pull_s, cycle_s)
-        avg = (front * pull + draft * (cycle_s - pull)) / cycle_s
-        np_w = effort.cycle_np(front, draft, pull, cycle_s)
-        low = None
-        if has_w_prime:
-            pulls = math.ceil(race_s / cycle_s) if race_s else None
-            low = effort.lowest_w_prime_bal(front, draft, pull, cycle_s, spec.cp, spec.w_prime, pulls)
-    else:
-        avg = np_w = draft
+    pull = spec.pull_s if spec.pulls else 0
+    sitting = [(watts, seconds) for watts, seconds in sitting if seconds > 0]
+    sit_s = sum(seconds for _, seconds in sitting)
+    draft = sum(watts * seconds for watts, seconds in sitting) / sit_s if sit_s > 0 else front
+    cycle_s = pull + sit_s
+    if not pull and len({watts for watts, _ in sitting}) <= 1:  # sits in at one power all race
         low = effort.sitting_w_prime_bal(draft, spec.cp, spec.w_prime, race_s) if has_w_prime else None
-    return Load(front_w=front, draft_w=draft, avg_w=avg, np_w=np_w, w_prime_low_j=low)
+        return Load(front_w=front, draft_w=draft, avg_w=draft, np_w=draft, w_prime_low_j=low)
+    stretches = [(front, pull), *sitting]
+    low = None
+    if has_w_prime:
+        rotations = math.ceil(race_s / cycle_s) if race_s else None
+        low = effort.rotation_lowest_w_prime_bal(stretches, spec.cp, spec.w_prime, rotations)
+    return Load(
+        front_w=front,
+        draft_w=draft,
+        avg_w=(front * pull + draft * sit_s) / cycle_s,
+        np_w=effort.rotation_np(stretches),
+        w_prime_low_j=low,
+    )
+
+
+def wheel_seconds(pulls: Sequence[float]) -> list[list[float]]:
+    """Return how long each rider in the line sits at each wheel in one rotation.
+
+    After a pull a rider drops to the back and works up the line a wheel at a time: they sit
+    at the last wheel while the rider just behind them pulls, and at the 2nd while the rider
+    just ahead of them pulls. So a rider's time at the 2nd wheel is the pull of the rider
+    ahead of them, at the 3rd the pull of the rider two ahead, and so on round the line. A
+    rider who takes no pulls comes through and swings straight off: their pull takes no
+    time, but it still moves everyone up a wheel.
+
+    Args:
+        pulls: Each rider's pull length in seconds, in pull order (0 for no pull).
+
+    Returns:
+        For each rider, the seconds at the 2nd, 3rd, … last wheel.
+
+    """
+    size = len(pulls)
+    return [[pulls[(i - wheel + 1) % size] for wheel in range(2, size + 1)] for i in range(size)]
 
 
 def over_if(spec: RiderSpec, load: Load, limits: Limits) -> bool:
@@ -254,26 +291,86 @@ def within_limits(spec: RiderSpec, load: Load, limits: Limits) -> bool:
 
 @dataclass(frozen=True)
 class _Powers:
-    """Power to hold a speed on level road, on the front and sitting in."""
+    """Power to hold a speed on level road: on the front, and sitting in at each wheel of the line."""
 
     params: physics.PhysicsParams
-    draft_factor: float
+    team_size: int
+
+    def _at(self, spec: RiderSpec, speed: float, draft_factor: float) -> float:
+        return physics.power_for_speed(
+            speed, weight_kg=spec.weight_kg, height_cm=spec.height_cm, draft_factor=draft_factor, params=self.params
+        )
 
     def front(self, spec: RiderSpec, speed: float) -> float:
         if spec.pull_power_override is not None:
             return spec.pull_power_override
-        return physics.power_for_speed(
-            speed, weight_kg=spec.weight_kg, height_cm=spec.height_cm, draft_factor=1.0, params=self.params
-        )
+        return self._at(spec, speed, 1.0)
 
-    def draft(self, spec: RiderSpec, speed: float) -> float:
-        return physics.power_for_speed(
-            speed,
-            weight_kg=spec.weight_kg,
-            height_cm=spec.height_cm,
-            draft_factor=self.draft_factor,
-            params=self.params,
-        )
+    def wheels(self, spec: RiderSpec, speed: float) -> list[float]:
+        """Return the power sitting in at each wheel.
+
+        Returns:
+            Watts at the 2nd, 3rd, … last wheel, each with its own draft saving.
+
+        """
+        return [
+            self._at(spec, speed, 1.0 - physics.draft_savings_fraction(wheel, self.params))
+            for wheel in range(2, self.team_size + 1)
+        ]
+
+    def even(self, spec: RiderSpec, speed: float) -> float:
+        """Return the power sitting in with an even share of every wheel.
+
+        Returns:
+            Watts at the average draft saving; alone on the road for a team of one.
+
+        """
+        return self._at(spec, speed, _mean_draft_factor(self.team_size, self.params))
+
+
+def _line_loads(specs: list[RiderSpec], powers: _Powers, speed: float, race_s: float | None) -> list[Load]:
+    """Work out every rider's load at a speed, each on the wheels their place in the line gives them.
+
+    Args:
+        specs: The riders, in pull order.
+        powers: Their powers on the front and at each wheel.
+        speed: The flat speed, in km/h.
+        race_s: Race length in seconds, or ``None`` for a long race.
+
+    Returns:
+        One :class:`Load` per rider, in the same order.
+
+    """
+    pulls = [spec.pull_s if spec.pulls else 0 for spec in specs]
+    rotating = sum(pulls) > 0
+    loads = []
+    for spec, seconds in zip(specs, wheel_seconds(pulls), strict=True):
+        if rotating:
+            sitting = list(zip(reversed(powers.wheels(spec, speed)), reversed(seconds), strict=True))
+        else:  # nobody pulls, so there is no rotation to ride
+            sitting = [(powers.even(spec, speed), 1.0)]
+        loads.append(rider_load(spec, powers.front(spec, speed), sitting, race_s))
+    return loads
+
+
+def sitting_draft_factor(seconds: Sequence[float], params: physics.PhysicsParams) -> float:
+    """Return the draft factor a rider sits in at on average: each wheel's, weighted by the time there.
+
+    Args:
+        seconds: Their seconds at the 2nd, 3rd, … last wheel, from :func:`wheel_seconds`.
+        params: Physics constants (the draft savings).
+
+    Returns:
+        The multiplier on air resistance; an even share of every wheel when there is no time to weigh.
+
+    """
+    total = sum(seconds)
+    if total <= 0:
+        return _mean_draft_factor(len(seconds) + 1, params)
+    return (
+        sum(t * (1.0 - physics.draft_savings_fraction(wheel, params)) for wheel, t in enumerate(seconds, start=2))
+        / total
+    )
 
 
 @dataclass
@@ -285,7 +382,8 @@ class RiderResult:
     IF caps for every rider who pulls. ``w_prime_low_pct`` is the lowest W′ balance over
     the race, as a percentage of W′ (below zero when the rider runs out). ``wheel_powers``
     is the power to hold the target flat speed sitting in at each wheel, from the 2nd to
-    the last, with that wheel's own draft saving; the averages above use the average saving.
+    the last, with that wheel's own draft saving, and ``wheel_seconds`` how long the rider
+    sits there in each rotation (:func:`wheel_seconds`); the averages above add those up.
     """
 
     rider: PlanRider
@@ -309,6 +407,12 @@ class RiderResult:
     over_if: bool = False
     below_reserve: bool = False
     wheel_powers: list[int] = field(default_factory=list)
+    wheel_seconds: list[int] = field(default_factory=list)
+
+    @property
+    def wheels(self) -> list[tuple[int, int]]:
+        """Each wheel from the 2nd to the last: the watts there and the seconds there in each rotation."""
+        return list(zip(self.wheel_powers, self.wheel_seconds, strict=True))
 
     @property
     def over_target(self) -> bool:
@@ -610,15 +714,15 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
     target = float(plan.target_speed_kph)
     riders = list(plan.riders.all())
     specs = [rider_spec(r) for r in riders]
-    powers = _Powers(params, _mean_draft_factor(len(specs), params))
-    cycle = sum(s.pull_s for s in specs if s.pulls)
+    powers = _Powers(params, len(specs))
     route_course = course_for(plan, specs, params)
     race_s = _race_seconds(plan, specs, target, params, route_course)
     wheels = list(range(2, len(specs) + 1))
+    seconds = wheel_seconds([s.pull_s if s.pulls else 0 for s in specs])
+    loads = _line_loads(specs, powers, target, race_s)
 
     results: list[RiderResult] = []
-    for rider, spec in zip(riders, specs, strict=True):
-        load = rider_load(spec, powers.front(spec, target), powers.draft(spec, target), cycle, race_s)
+    for rider, spec, load, at_wheels in zip(riders, specs, loads, seconds, strict=True):
         pull_w = round(load.front_w) if spec.pulls else 0
         intensity = load.np_w / spec.ftp if spec.ftp else None
         tss = physics.training_stress_score(load.np_w, spec.ftp, race_s) if race_s else None
@@ -646,18 +750,8 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
                 w_prime_empty=low is not None and low < 0,
                 over_if=over_if(spec, load, limits),
                 below_reserve=below_reserve(spec, load, limits),
-                wheel_powers=[
-                    round(
-                        physics.power_for_speed(
-                            target,
-                            weight_kg=spec.weight_kg,
-                            height_cm=spec.height_cm,
-                            draft_factor=1.0 - physics.draft_savings_fraction(position, params),
-                            params=params,
-                        )
-                    )
-                    for position in wheels
-                ],
+                wheel_powers=[round(watts) for watts in powers.wheels(spec, target)],
+                wheel_seconds=[round(t) for t in at_wheels],
             )
         )
 
@@ -683,7 +777,7 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
         course_km=round(course_km, 2),
         leadin_km=round(leadin_km, 2),
         course_chart=(
-            _course_chart(route_course, target, specs, powers)
+            _course_chart(route_course, target, specs, [sitting_draft_factor(t, params) for t in seconds])
             if route_course is not None and specs and target > 0
             else None
         ),
@@ -718,7 +812,7 @@ def _fastest(
 
     Args:
         plan: The plan (for its route).
-        specs: Its riders, with the pull lengths to judge.
+        specs: Its riders in pull order, with the pull lengths to judge.
         limits: Target IF and W′ reserve.
         params: Physics constants.
         route_course: The plan's course from :func:`course_for`; looked up when left out.
@@ -727,21 +821,15 @@ def _fastest(
         The speed in km/h, or None when nobody pulls, nobody has an FTP, or no speed fits.
 
     """
-    judged = [s for s in specs if s.ftp]
-    if not judged or not any(s.pulls for s in specs):
+    if not any(s.ftp for s in specs) or not any(s.pulls for s in specs):
         return None
-    powers = _Powers(params, _mean_draft_factor(len(specs), params))
-    cycle = sum(s.pull_s for s in specs if s.pulls)
+    powers = _Powers(params, len(specs))
     if route_course is _UNSET:
         route_course = course_for(plan, specs, params)
 
     def fits(speed: float) -> bool:
-        race_s = _race_seconds(plan, specs, speed, params, route_course)
-        for spec in judged:
-            load = rider_load(spec, powers.front(spec, speed), powers.draft(spec, speed), cycle, race_s)
-            if not within_limits(spec, load, limits):
-                return False
-        return True
+        loads = _line_loads(specs, powers, speed, _race_seconds(plan, specs, speed, params, route_course))
+        return all(within_limits(spec, load, limits) for spec, load in zip(specs, loads, strict=True))
 
     lo, hi = _SPEED_RANGE_KPH
     for _ in range(_CALCULATE_STEPS):
@@ -766,7 +854,7 @@ def _max_speed(
 
     Args:
         plan: The plan (for its route).
-        specs: Its riders, with the pull lengths to judge.
+        specs: Its riders in pull order, with the pull lengths to judge.
         limits: Target IF and W′ reserve.
         params: Physics constants.
         fallback: Returned when nobody pulls, nobody has an FTP, or no speed fits.
@@ -806,14 +894,12 @@ def _held_back_by(
         One :class:`Holdback` per rider past a limit, in pull order; IF is named when both are.
 
     """
-    powers = _Powers(params, _mean_draft_factor(len(specs), params))
-    cycle = sum(s.pull_s for s in specs if s.pulls)
     race_s = _race_seconds(plan, specs, speed, params, route_course)
+    loads = _line_loads(specs, _Powers(params, len(specs)), speed, race_s)
     held: list[Holdback] = []
-    for rider, spec in zip(riders, specs, strict=True):
+    for rider, spec, load in zip(riders, specs, loads, strict=True):
         if not spec.ftp:
             continue
-        load = rider_load(spec, powers.front(spec, speed), powers.draft(spec, speed), cycle, race_s)
         if over_if(spec, load, limits):
             held.append(Holdback(rider.name, "if"))
         elif below_reserve(spec, load, limits):
@@ -821,20 +907,22 @@ def _held_back_by(
     return held
 
 
-def _course_chart(route_course: course.Course, flat_kph: float, specs: list[RiderSpec], powers: _Powers) -> dict:
+def _course_chart(
+    route_course: course.Course, flat_kph: float, specs: list[RiderSpec], sit_factors: list[float]
+) -> dict:
     """Lay out what the course chart draws: the profile, the team's speed, and every rider's powers.
 
     At each chart point the team holds the typical rider's steady power, which sets its
     speed on that slope; each rider's power to hold that speed on the front (no draft) and
-    sitting in (the plan's average draft) follows. A custom pull power scales a rider's pulls
-    in proportion to the model's own on level road. Riders come in plan order and without
-    names: the page renders the names itself.
+    sitting in (averaged over the wheels they ride, by the time at each) follows. A custom
+    pull power scales a rider's pulls in proportion to the model's own on level road. Riders
+    come in plan order and without names: the page renders the names itself.
 
     Args:
         route_course: The plan's course.
         flat_kph: The target flat speed.
         specs: The plan's riders, as the model reads them, in plan order.
-        powers: The plan's pulling and sitting-in powers on level road.
+        sit_factors: Each rider's average draft factor sitting in (:func:`sitting_draft_factor`).
 
     Returns:
         A JSON-ready dict: distances (km), elevations (m), gradients (%) and team speeds (km/h)
@@ -865,7 +953,7 @@ def _course_chart(route_course: course.Course, flat_kph: float, specs: list[Ride
         ]
 
     rows = []
-    for spec in specs:
+    for spec, sit_factor in zip(specs, sit_factors, strict=True):
         scale = 1.0
         if spec.pull_power_override is not None:
             level = physics.power_for_speed(flat_kph, weight_kg=spec.weight_kg, height_cm=spec.height_cm, params=params)
@@ -875,7 +963,7 @@ def _course_chart(route_course: course.Course, flat_kph: float, specs: list[Ride
             "ftp": round(spec.ftp) if spec.ftp else None,
             "pulls": spec.pulls,
             "front": watts(spec, 1.0, scale),
-            "sit": watts(spec, powers.draft_factor),
+            "sit": watts(spec, sit_factor),
         })
     return {
         "flat_kph": flat_kph,
@@ -991,13 +1079,46 @@ def _rule(pull_rule: str, *, hold_if: bool, hold_w_prime: bool) -> _Rule:
     return _Rule(score=intensity, then=w_spent, allowed=allowed)
 
 
-def _tries(spec: RiderSpec, front: float, draft: float, cycle_s: int, lengths: list[int], limits: Limits) -> list[_Try]:
+# A rider's sitting in, as Optimize guesses it before the order is known: (watts, share of the
+# sitting time) at each wheel, in the order ridden.
+Profile = list[tuple[float, float]]
+
+
+def _judged(trial: RiderSpec, load: Load, limits: Limits) -> _Try:
+    """Score a rider's load on one pull length.
+
+    Args:
+        trial: The rider (with an FTP) on that pull.
+        load: Their load, judged for a long race.
+        limits: Target IF and W′ reserve.
+
+    Returns:
+        The :class:`_Try`.
+
+    """
+    low = load.w_prime_low_j
+    return _Try(
+        pull_s=trial.pull_s if trial.pulls else 0,
+        intensity=load.np_w / trial.ftp,
+        w_left=low / trial.w_prime if low is not None and trial.w_prime else math.inf,
+        over_if=over_if(trial, load, limits),
+        below_reserve=below_reserve(trial, load, limits),
+    )
+
+
+def _sitting(profile: Profile, seconds: float) -> list[tuple[float, float]]:
+    return [(watts, share * seconds) for watts, share in profile]
+
+
+def _tries(
+    spec: RiderSpec, front: float, profile: Profile, cycle_s: int, lengths: list[int], limits: Limits
+) -> list[_Try]:
     """Judge a rider sitting in, then on each pull length, in a rotation of ``cycle_s``.
 
     Args:
         spec: The rider (with an FTP).
         front: Their power on the front.
-        draft: Their power sitting in.
+        profile: How they sit in: the power at each wheel and its share of their sitting time.
         cycle_s: The rotation length.
         lengths: The pull lengths to try, shortest first.
         limits: Target IF and W′ reserve.
@@ -1009,17 +1130,7 @@ def _tries(spec: RiderSpec, front: float, draft: float, cycle_s: int, lengths: l
     tries = []
     for pull in (0, *lengths):
         trial = replace(spec, pull_s=pull, zero_pull=pull == 0)
-        load = rider_load(trial, front, draft, cycle_s, None)
-        low = load.w_prime_low_j
-        tries.append(
-            _Try(
-                pull_s=pull,
-                intensity=load.np_w / spec.ftp,
-                w_left=low / spec.w_prime if low is not None and spec.w_prime else math.inf,
-                over_if=over_if(trial, load, limits),
-                below_reserve=below_reserve(trial, load, limits),
-            )
-        )
+        tries.append(_judged(trial, rider_load(trial, front, _sitting(profile, cycle_s - pull), None), limits))
     return tries
 
 
@@ -1107,9 +1218,127 @@ def _fill(tries: dict[int, list[_Try]], front_time: int, limits: Limits, rule: _
     return {pk: by_pull[pk][pull] for pk, pull in pulls.items()}
 
 
+def _line(balanced: list[RiderSpec], fixed: list[RiderSpec], chosen: dict[int, _Try]) -> list[RiderSpec]:
+    """Put the riders in pull order once Optimize has chosen their pulls.
+
+    The longest pull goes first (a tie to the higher FTP), then the riders who sit in, then
+    the riders Optimize left alone. A rider spends the pull of the rider ahead of them on the
+    2nd wheel, the hardest place to sit, so in this order the long stints there fall to
+    riders who pull long themselves, and the last in line sits at the back, where it is
+    easiest, through the longest pull.
+
+    Args:
+        balanced: The riders Optimize sets (those with an FTP).
+        fixed: The riders it leaves alone (no FTP); their settings stand and they go last.
+        chosen: Each balanced rider's chosen try, by primary key.
+
+    Returns:
+        The riders in pull order, with their chosen pulls.
+
+    """
+    pulling = sorted(
+        (s for s in balanced if chosen[s.pk].pull_s), key=lambda s: (-chosen[s.pk].pull_s, -(s.ftp or 0.0))
+    )
+    return [
+        *(replace(s, pull_s=chosen[s.pk].pull_s, zero_pull=False) for s in pulling),
+        *(replace(s, zero_pull=True) for s in balanced if not chosen[s.pk].pull_s),
+        *fixed,
+    ]
+
+
+def _profiles(line: list[RiderSpec], powers: _Powers, speed: float) -> dict[int, Profile]:
+    """Work out how each rider in a line sits in: the power at each wheel and its share of their sitting time.
+
+    Args:
+        line: The riders in pull order, with their pulls.
+        powers: Their powers at each wheel.
+        speed: The flat speed, in km/h.
+
+    Returns:
+        Each rider's :data:`Profile`, by primary key.
+
+    """
+    profiles = {}
+    for spec, seconds in zip(line, wheel_seconds([s.pull_s if s.pulls else 0 for s in line]), strict=True):
+        total = sum(seconds)
+        if total > 0:
+            watts = reversed(powers.wheels(spec, speed))
+            profiles[spec.pk] = [(w, t / total) for w, t in zip(watts, reversed(seconds), strict=True)]
+        else:  # never sits in (the only rider who pulls): an even share of every wheel
+            profiles[spec.pk] = [(powers.even(spec, speed), 1.0)]
+    return profiles
+
+
+def _rotation_key(chosen: dict[int, _Try], rule: _Rule, front_time: int) -> tuple:
+    """Rank a rotation: its riders' scores worst first, then ``rule.then``, then the shorter rotation.
+
+    Returns:
+        A key that sorts the best rotation first.
+
+    """
+    scores = tuple(sorted((round(rule.score(t), 4) for t in chosen.values()), reverse=True))
+    return (scores, round(max(rule.then(t) for t in chosen.values()), 4), front_time)
+
+
+def _settle(
+    balanced: list[RiderSpec],
+    fixed: list[RiderSpec],
+    chosen: dict[int, _Try],
+    front_time: int,
+    powers: _Powers,
+    speed: float,
+    limits: Limits,
+    rule: _Rule,
+) -> dict[int, _Try] | None:
+    """Choose a rotation's pulls again, with every rider on the wheels their order gives them.
+
+    The first choice gave everyone an even share of every wheel. Once the pulls set the
+    order, each rider's time at each wheel is known, so the pulls are chosen again with it,
+    up to :data:`_SETTLE_PASSES` times, until they stop changing. Every choice along the
+    way, the first included, is judged on the wheels it really gives, and the best that
+    keeps to the rule is kept.
+
+    Args:
+        balanced: The riders Optimize sets (those with an FTP).
+        fixed: The riders it leaves alone; they keep their pulls and go last.
+        chosen: The first choice, each balanced rider's try by primary key.
+        front_time: Seconds of front time the balanced riders share.
+        powers: Pull and sitting-in powers.
+        speed: The flat speed, in km/h.
+        limits: The plan's limits and pull grid.
+        rule: What to keep lowest, and what every pull must keep to.
+
+    Returns:
+        Each balanced rider's try, judged on the wheels the order gives them, or None if
+        every choice breaks the rule.
+
+    """
+    cycle = front_time + sum(s.pull_s for s in fixed if s.pulls)
+    lengths = [d for d in limits.pull_grid() if d <= front_time]
+    front = {s.pk: powers.front(s, speed) for s in balanced}
+    best_key, best = None, None
+    for passes in itertools.count():
+        line = _line(balanced, fixed, chosen)
+        loads = _line_loads(line, powers, speed, None)
+        judged = {s.pk: _judged(s, load, limits) for s, load in zip(line, loads, strict=True) if s.pk in chosen}
+        if all(rule.allowed(t) for t in judged.values()):
+            key = _rotation_key(judged, rule, front_time)
+            if best_key is None or key < best_key:
+                best_key, best = key, judged
+        if passes == _SETTLE_PASSES:
+            break
+        profiles = _profiles(line, powers, speed)
+        tries = {s.pk: _tries(s, front[s.pk], profiles[s.pk], cycle, lengths, limits) for s in balanced}
+        again = _fill(tries, front_time, limits, rule)
+        if again is None or all(again[pk].pull_s == t.pull_s for pk, t in chosen.items()):
+            break
+        chosen = again
+    return best
+
+
 def _best_rotation(
     balanced: list[RiderSpec],
-    fixed_front: int,
+    fixed: list[RiderSpec],
     powers: _Powers,
     speed: float,
     limits: Limits,
@@ -1117,41 +1346,52 @@ def _best_rotation(
 ) -> dict[int, _Try] | None:
     """Try every rotation length at one speed and keep the pulls the rule likes best.
 
-    Rotations are compared on their riders' scores, worst first (so the second-worst breaks
-    a tie on the worst, and so on), then on ``rule.then``, then the shorter rotation wins.
+    Every length is filled first with each rider on an even share of every wheel, which is
+    quick. The most promising, :data:`_SETTLED_ROTATIONS` at a time, are then settled onto
+    the wheels their order gives each rider (:func:`_settle`), and the best of the first
+    batch to hold one that keeps to the rule wins. Rotations are compared on their riders'
+    scores, worst first (so the second-worst breaks a tie on the worst, and so on), then on
+    ``rule.then``, then the shorter rotation wins.
 
     Args:
         balanced: The riders Optimize sets (those with an FTP).
-        fixed_front: Front time of the riders it leaves alone, in seconds.
+        fixed: The riders it leaves alone (no FTP); they keep their pulls and go last.
         powers: Pull and sitting-in powers.
         speed: The flat speed, in km/h.
         limits: The plan's limits and pull grid.
         rule: What to keep lowest, and what every pull must keep to.
 
     Returns:
-        Each rider's chosen try, by primary key, or None if no rotation works.
+        Each balanced rider's chosen try, by primary key, or None if no rotation works.
 
     """
+    fixed_front = sum(s.pull_s for s in fixed if s.pulls)
     grid = limits.pull_grid()
-    level = {s.pk: (powers.front(s, speed), powers.draft(s, speed)) for s in balanced}
-    best_key, best = None, None
+    level = {s.pk: (powers.front(s, speed), [(powers.even(s, speed), 1.0)]) for s in balanced}
+    candidates = []
     for front_time in range(limits.min_pull_s, len(balanced) * limits.max_pull_s + 1, limits.step_s):
         lengths = [d for d in grid if d <= front_time]
         tries = {s.pk: _tries(s, *level[s.pk], front_time + fixed_front, lengths, limits) for s in balanced}
         chosen = _fill(tries, front_time, limits, rule)
-        if chosen is None:
-            continue
-        scores = tuple(sorted((round(rule.score(t), 4) for t in chosen.values()), reverse=True))
-        key = (scores, round(max(rule.then(t) for t in chosen.values()), 4), front_time)
-        if best_key is None or key < best_key:
-            best_key, best = key, chosen
-    return best
+        if chosen is not None:
+            candidates.append((_rotation_key(chosen, rule, front_time), front_time, chosen))
+    candidates.sort(key=lambda candidate: candidate[0])
+    for first in range(0, len(candidates), _SETTLED_ROTATIONS):
+        best_key, best = None, None
+        for _, front_time, chosen in candidates[first : first + _SETTLED_ROTATIONS]:
+            settled = _settle(balanced, fixed, chosen, front_time, powers, speed, limits, rule)
+            key = None if settled is None else _rotation_key(settled, rule, front_time)
+            if key is not None and (best_key is None or key < best_key):
+                best_key, best = key, settled
+        if best is not None:
+            return best
+    return None
 
 
 def _longest_pull(
     spec: RiderSpec,
     front: float,
-    draft: float,
+    profile: Profile,
     cycle_s: int,
     limits: Limits,
     lengths: list[int],
@@ -1161,7 +1401,7 @@ def _longest_pull(
     Args:
         spec: The rider.
         front: Their power on the front.
-        draft: Their power sitting in.
+        profile: How they sit in: the power at each wheel and its share of their sitting time.
         cycle_s: The rotation length.
         limits: Target IF and W′ reserve.
         lengths: The pull lengths allowed, shortest first.
@@ -1174,7 +1414,7 @@ def _longest_pull(
     while lo <= hi:  # the limits only tighten as the pull grows, so bisect
         mid = (lo + hi) // 2
         trial = replace(spec, pull_s=lengths[mid], zero_pull=False)
-        if within_limits(trial, rider_load(trial, front, draft, cycle_s, None), limits):
+        if within_limits(trial, rider_load(trial, front, _sitting(profile, cycle_s - lengths[mid]), None), limits):
             best, lo = lengths[mid], mid + 1
         else:
             hi = mid - 1
@@ -1182,10 +1422,12 @@ def _longest_pull(
 
 
 def _fits_somehow(balanced: list[RiderSpec], fixed_front: int, powers: _Powers, speed: float, limits: Limits) -> bool:
-    """Whether some pull lengths keep every rider within both limits at this speed.
+    """Whether some pull lengths keep every rider within both limits at this speed, at a first guess.
 
-    Every rider has to be able to sit in; then rotations are tried from the shortest, each
-    rider's cap being their longest pull within the limits, until one can be filled.
+    The guess gives every rider an even share of every wheel, which keeps the riders apart
+    and the check quick; :func:`_best_rotation` then settles the wheels the order gives each
+    rider. Every rider has to be able to sit in; then rotations are tried from the shortest,
+    each rider's cap being their longest pull within the limits, until one can be filled.
 
     Args:
         balanced: The riders Optimize sets (those with an FTP).
@@ -1198,10 +1440,11 @@ def _fits_somehow(balanced: list[RiderSpec], fixed_front: int, powers: _Powers, 
         True if a rotation works.
 
     """
-    level = {s.pk: (powers.front(s, speed), powers.draft(s, speed)) for s in balanced}
+    level = {s.pk: (powers.front(s, speed), [(powers.even(s, speed), 1.0)]) for s in balanced}
     for spec in balanced:  # everyone has to hold the wheel
         sitting = replace(spec, zero_pull=True)
-        if not within_limits(sitting, rider_load(sitting, *level[spec.pk], 0, None), limits):
+        front, profile = level[spec.pk]
+        if not within_limits(sitting, rider_load(sitting, front, _sitting(profile, 1.0), None), limits):
             return False
     grid = limits.pull_grid()
     for front_time in range(limits.min_pull_s, len(balanced) * limits.max_pull_s + 1, limits.step_s):
@@ -1213,27 +1456,17 @@ def _fits_somehow(balanced: list[RiderSpec], fixed_front: int, powers: _Powers, 
     return False
 
 
-def _assignments(balanced: list[RiderSpec], fixed: list[RiderSpec], chosen: dict[int, _Try]) -> list[BalanceAssignment]:
-    """Turn chosen pulls into assignments: longest pull first, then those who sit in, then the rest.
+def _assignments(line: list[RiderSpec]) -> list[BalanceAssignment]:
+    """Turn the riders in pull order (:func:`_line`) into numbered assignments.
 
     Args:
-        balanced: The riders Optimize set.
-        fixed: The riders it left alone (no FTP); their settings stand and they go last.
-        chosen: Each balanced rider's chosen try, by primary key.
+        line: The riders in pull order, with their pulls.
 
     Returns:
         One :class:`BalanceAssignment` per rider, numbered in pull order.
 
     """
-    ftp = {s.pk: s.ftp or 0.0 for s in balanced}
-    pullers = sorted((pk for pk, t in chosen.items() if t.pull_s), key=lambda pk: (-chosen[pk].pull_s, -ftp[pk]))
-    out: list[BalanceAssignment] = [BalanceAssignment(pk, chosen[pk].pull_s, False, i) for i, pk in enumerate(pullers)]
-    for spec in balanced:
-        if not chosen[spec.pk].pull_s:  # sits in at this speed
-            out.append(BalanceAssignment(spec.pk, spec.pull_s, True, len(out)))
-    for spec in fixed:
-        out.append(BalanceAssignment(spec.pk, spec.pull_s, spec.zero_pull, len(out)))
-    return out
+    return [BalanceAssignment(s.pk, s.pull_s, s.zero_pull, order) for order, s in enumerate(line)]
 
 
 def optimize_plan(
@@ -1244,16 +1477,18 @@ def optimize_plan(
     - Keep my pull lengths: as fast as the limits allow finds the fastest speed for the
       pulls as they are (:func:`sustainable_speed`); holding the speed changes nothing.
     - As fast as the limits allow, with Even effort or Most W′ in reserve: a bisection finds
-      the fastest speed at which some pulls keep every rider within both limits. At that
-      speed the rule picks the pulls, and the speed is then set by :func:`sustainable_speed`'s
-      rule for them, so a second Optimize with Keep my pull lengths changes nothing.
+      the fastest speed at which some pulls keep every rider within both limits, at a first
+      guess (:func:`_fits_somehow`). At that speed the rule picks the pulls and the order,
+      and the speed is then set by :func:`sustainable_speed`'s rule for them, so a second
+      Optimize with Keep my pull lengths changes nothing.
     - Holding the speed: the rule picks the pulls at the plan's speed. Even effort keeps the
       highest IF lowest, keeping everyone's W′ above the reserve; Most W′ in reserve keeps
       the lowest W′ highest, keeping everyone's IF at or under Target IF. When the speed is
       too fast for that other limit, it is set aside (``relaxed``).
 
     Pulls are judged for a long race, the worst case for W′, so they do not depend on the
-    route. Riders without an FTP cannot be judged: they keep their settings and go last.
+    route, and each rider is judged on the wheels the order gives them (:func:`_line`).
+    Riders without an FTP cannot be judged: they keep their settings and go last.
 
     Args:
         plan: The plan.
@@ -1278,21 +1513,22 @@ def optimize_plan(
     if not balanced:
         return None
     fixed = [s for s in specs if not s.ftp]
-    fixed_front = sum(s.pull_s for s in fixed if s.pulls)
-    powers = _Powers(params, _mean_draft_factor(len(specs), params))
+    powers = _Powers(params, len(specs))
+    free = _rule(plan.pull_rule, hold_if=False, hold_w_prime=False)
 
     relaxed = False
     if holding:
         speed = float(plan.target_speed_kph)
         rule = _rule(plan.pull_rule, hold_if=plan.pull_rule == RESERVE, hold_w_prime=plan.pull_rule == EVEN)
-        chosen = _best_rotation(balanced, fixed_front, powers, speed, limits, rule)
+        chosen = _best_rotation(balanced, fixed, powers, speed, limits, rule)
         if chosen is None:
             relaxed = True
-            free = _rule(plan.pull_rule, hold_if=False, hold_w_prime=False)
-            chosen = _best_rotation(balanced, fixed_front, powers, speed, limits, free)
+            chosen = _best_rotation(balanced, fixed, powers, speed, limits, free)
         if chosen is None:
             return None
+        line = _line(balanced, fixed, chosen)
     else:
+        fixed_front = sum(s.pull_s for s in fixed if s.pulls)
         lo, hi, found = *_SPEED_RANGE_KPH, False
         for _ in range(_BALANCE_STEPS):
             mid = (lo + hi) / 2.0
@@ -1303,15 +1539,17 @@ def optimize_plan(
         if not found:
             return None
         rule = _rule(plan.pull_rule, hold_if=True, hold_w_prime=True)
-        chosen = _best_rotation(balanced, fixed_front, powers, lo, limits, rule)
+        chosen = _best_rotation(balanced, fixed, powers, lo, limits, rule)
+        if chosen is None:
+            # The first guess fits this speed but the wheels the order gives each rider do not:
+            # take the pulls that come closest, and let the speed come down to fit them.
+            chosen = _best_rotation(balanced, fixed, powers, lo, limits, free)
         if chosen is None:
             return None
-        planned = [
-            replace(s, pull_s=chosen[s.pk].pull_s or s.pull_s, zero_pull=not chosen[s.pk].pull_s) for s in balanced
-        ]
-        speed = _max_speed(plan, planned + fixed, limits, params, fallback=math.floor(lo * 10) / 10)
+        line = _line(balanced, fixed, chosen)
+        speed = _max_speed(plan, line, limits, params, fallback=math.floor(lo * 10) / 10)
 
-    return OptimizeResult(speed_kph=speed, assignments=_assignments(balanced, fixed, chosen), relaxed=relaxed)
+    return OptimizeResult(speed_kph=speed, assignments=_assignments(line), relaxed=relaxed)
 
 
 # ----- Climb compare (per-rider climb-strength heatmap) ------------------------------------------

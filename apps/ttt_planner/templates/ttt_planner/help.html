@@ -146,7 +146,8 @@
       <div class="space-y-2">
         <h3 class="font-semibold">How Optimize sets the pull lengths</h3>
         <ol class="list-decimal pl-5 space-y-1">
-          <li>When the goal is as fast as the limits allow, it first finds the top speed. It tries a speed: if any rider
+          <li>When the goal is as fast as the limits allow, it first finds the top speed, at a first guess that gives
+            every rider an even share of every wheel. It tries a speed: if any rider
             could not sit in at it within the limits, the speed is too fast. Otherwise it tries rotations from the
             shortest up, giving every rider the longest pull they can take within the limits, from the shortest pull
             (a new plan: {{ defaults.min_pull_s }} s) to the longest ({{ defaults.max_pull_s }} s) in steps
@@ -154,14 +155,20 @@
             if some rotation can be filled that way, and halving its way between speeds finds the fastest that works.</li>
           <li>At that speed, or at the speed you hold, it tries every rotation length. In each, it finds the pull lengths
             that keep the hardest-working rider's IF lowest (Even effort), or the lowest W′ balance highest (Most W′ in
-            reserve), handing out the front time a step at a time to whoever it costs least.</li>
+            reserve), handing out the front time a step at a time to whoever it costs least. That first pass gives
+            everyone an even share of every wheel, which is quick.</li>
+          <li>The most promising rotations are then filled again with each rider on the wheels the order gives them
+            (see <a class="link" href="#schedule">The pull schedule</a>), until the pull lengths stop changing, and are
+            judged on those wheels.</li>
           <li>The rotation whose worst rider fares best wins; a tie goes to the one whose next-worst rider fares best,
             and so on, then to the other measure, then to the shorter rotation.</li>
           <li>Even effort keeps every rider's W′ above the reserve, and Most W′ in reserve keeps every IF at or under
             Target IF. If the speed you hold is too fast for that, Optimize says so and sets the pulls anyway, without
             that limit.</li>
-          <li>The order runs from the longest pull to the shortest, then the riders who sit in. Riders with no FTP keep
-            their settings and go last.</li>
+          <li>The order runs from the longest pull to the shortest, then the riders who sit in. A rider sits on the
+            2nd wheel, where the draft saves least, for as long as the rider ahead of them pulls, so this order gives
+            the long stints there to riders who pull long themselves, and puts the last in line at the back through
+            the longest pull. Riders with no FTP keep their settings and go last.</li>
           <li>When the goal is as fast as the limits allow, the speed is then worked out for those pulls exactly as
             with your pull lengths kept, so optimizing again that way changes nothing.</li>
         </ol>
@@ -177,11 +184,18 @@
     <div class="card-body space-y-3">
       <h2 id="schedule-h" class="card-title">The pull schedule</h2>
       <p>
-        What each rider rides, in pull order: the pull's length, its W/kg and watts on the front, then the watts to hold
-        the speed sitting in at each wheel, from the 2nd (right behind the rider on the front) to the last. After a pull
-        a rider drops to the back and works up the line, so they pass through every wheel before their next turn. The
-        wheel powers use each wheel's own saving from <a class="link" href="#draft">Drafting</a>; the averages in Pull
-        Stats use the average saving.
+        What each rider rides, in pull order: the pull's length, its W/kg and watts on the front, then, for each wheel
+        from the 2nd (right behind the rider on the front) to the last, the watts to hold the speed sitting in there,
+        with that wheel's own saving from <a class="link" href="#draft">Drafting</a>, and how long the rider sits there
+        in each rotation.
+      </p>
+      <p>
+        After a pull a rider drops to the back and works up the line a wheel at a time: they sit at the last wheel
+        while the rider just behind them pulls, and at the 2nd while the rider just ahead of them pulls. So each wheel
+        lasts as long as the pull of the rider that many places ahead, and the order changes how hard sitting in is:
+        the rider right behind a long pull spends all of it on the 2nd wheel. A rider who takes no pulls comes through
+        and swings straight off, which takes no time but still moves everyone up a wheel. Pull Stats adds this up:
+        each rider's Avg W, NP, IF and W′ balance come from the wheels they actually ride.
       </p>
       <p>
         <strong>Copy for Discord</strong> copies the schedule as text in a code block, which Discord shows in a fixed
@@ -208,8 +222,8 @@
         <div><dt class="font-semibold">Pull %FTP</dt>
           <dd>Pull W ÷ FTP. Above 100% is normal: riders recover in the draft between pulls.</dd></div>
         <div><dt class="font-semibold">Avg W</dt>
-          <dd>Average power over one rotation: Pull W for the rider's own pull, Draft W for the rest. A rider who
-            takes no pulls averages their Draft W.</dd></div>
+          <dd>Average power over one rotation: Pull W for the rider's own pull, then each wheel's power for as long
+            as they sit there (see <a class="link" href="#schedule">The pull schedule</a>).</dd></div>
         <div><dt class="font-semibold">NP</dt>
           <dd>Normalized Power over the race: a 30-second rolling average of the rider's power, raised to the fourth power,
             averaged, and the fourth root taken. Their power repeats every rotation, so the planner works it out exactly for
@@ -302,8 +316,8 @@
         <li>Below CP, it refills: <code>dW′bal/dt = (W′ − W′bal) × (CP − power) ÷ W′</code>.</li>
       </ul>
       <p>
-        Through a rotation the rider's power is their pull power for their own pull and their sitting-in power for the
-        rest, so each rotation drains W′ on the pull and refills some of it in the line. The race starts with W′ full and
+        Through a rotation the rider's power is their pull power for their own pull, then each wheel's power for as
+        long as they sit there, so each rotation drains W′ on the pull and refills some of it in the line. The race starts with W′ full and
         the low point sinks a little each rotation until drain and refill balance out. The planner counts the rider's
         pulls in the estimated race time (rounding up), or, without a route, assumes a long race.
       </p>
@@ -339,9 +353,9 @@
         <li>Position 1 is the rider on the front, who saves nothing. Positions past the end of the table use its
           last value.</li>
         <li>A plan can use its own savings (Parameters › Draft savings by wheel position).</li>
-        <li>While not pulling, a rider is modelled at the <em>average</em> saving over positions 2 to N, where N is
-          everyone on the plan. Their Draft W is the power for the target speed with the air resistance cut by that
-          average.</li>
+        <li>While not pulling, a rider gets each wheel's own saving for as long as they sit there (see
+          <a class="link" href="#schedule">The pull schedule</a>). The last wheel is the number of riders on the
+          plan.</li>
       </ul>
     </div>
   </section>
@@ -361,8 +375,8 @@
           the chart. Each stretch's slope is measured over about {{ course_grade_window_m }} m, since a bike's
           momentum carries it over shorter bumps.</li>
         <li>For each rider, the readout gives the power to hold that speed on that stretch: on the front, with no
-          draft, and sitting in, with the plan's average draft saving. A custom pull power scales a rider's pulls in
-          step with the model's own.</li>
+          draft, and sitting in, averaged over the wheels they ride by the time at each. A custom pull power scales a
+          rider's pulls in step with the model's own.</li>
       </ol>
       <p>
         Two things stand out on a hilly route. On a climb, everyone's power to hold the team's speed comes out at
@@ -444,8 +458,11 @@
           the flat is not modelled yet.</li>
         <li><strong>Equipment.</strong> Every rider is on the same TT bike, a TT frame with a deep front wheel and a
           disc. Ordinary wheels need about 5% more power than the planner shows, and a road bike about 15% more.</li>
-        <li><strong>Where each rider sits.</strong> Sitting in uses the average saving over the whole line, not the
-          wheel each rider is actually on at each moment.</li>
+        <li><strong>Riders who take no pulls.</strong> They come through and swing straight off, so they ride every
+          wheel in turn. One who sits at the back all race instead gets more draft than the planner shows, and the
+          riders rotating ahead of them less.</li>
+        <li><strong>The order Optimize picks.</strong> It orders the riders by pull length rather than trying every
+          order. Another order can suit a team better; Pull Stats shows what any order you set does.</li>
         <li><strong>W′ is an estimate.</strong> Zwift Racing's CP and W′ come from each rider's best recent efforts,
           and the stand-ins for riders without them are rougher still. Real riders also tire over a race in ways the W′
           model does not capture.</li>
