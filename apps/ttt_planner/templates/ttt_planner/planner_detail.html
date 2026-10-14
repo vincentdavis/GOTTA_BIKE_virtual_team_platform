@@ -205,7 +205,7 @@
   </section>
   {% endif %}
 
-  {# ---- Parameters: what the numbers below are worked out from ---- #}
+  {# ---- Parameters: the plan's goal, its limits, and what the numbers below are worked out from ---- #}
   <section class="card bg-base-200 shadow-xl" aria-labelledby="ttt-params-heading">
     <div class="card-body gap-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
@@ -213,41 +213,76 @@
         <a href="{% url 'ttt_planner:help' %}#targets" class="link text-sm">How these work</a>
       </div>
       {% if can_edit %}
-      <form class="space-y-4"
+      <form id="ttt-params-form" class="space-y-5"
             hx-post="{% url 'ttt_planner:update' plan.pk %}"
             hx-trigger="change, submit"
             hx-target="#ttt-plan-body" hx-swap="innerHTML">
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <label class="form-control">
-            <span class="label-text mb-1">Target flat speed (kph)</span>
-            {% include "ttt_planner/_speed_input.html" %}
-          </label>
-          <label class="form-control">
-            <span class="label-text mb-1">Target IF <span class="text-base-content/70">(NP ÷ FTP)</span></span>
-            <input type="number" step="0.01" min="0.1" max="1.5" name="target_if" value="{{ plan.target_if }}"
-                   class="input input-bordered input-sm" />
-          </label>
-          <label class="form-control">
-            <span class="label-text mb-1">W′ reserve (%)</span>
-            <input type="number" step="5" min="0" max="90" name="w_prime_reserve_pct" value="{{ plan.w_prime_reserve_pct }}"
-                   aria-describedby="ttt-reserve-help" class="input input-bordered input-sm" />
-            <span id="ttt-reserve-help" class="label-text-alt mt-1 text-base-content/70">The W′ every rider keeps in hand.</span>
-          </label>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <fieldset class="space-y-2">
+            <legend class="font-semibold mb-1">How fast</legend>
+            <label class="flex items-center gap-2 cursor-pointer w-fit">
+              <input type="radio" name="speed_goal" value="fastest" class="radio radio-sm"
+                     {% if plan.speed_goal == "fastest" %}checked{% endif %} />
+              <span>As fast as the limits allow</span>
+            </label>
+            <div class="flex flex-wrap items-center gap-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="speed_goal" value="hold" id="ttt-goal-hold" class="radio radio-sm"
+                       {% if plan.speed_goal == "hold" %}checked{% endif %} />
+                <span>Hold</span>
+              </label>
+              <div class="w-24">{% include "ttt_planner/_speed_input.html" %}</div>
+              <span>kph on the flat</span>
+            </div>
+          </fieldset>
+          <fieldset class="space-y-2">
+            <legend class="font-semibold mb-1">Pull lengths</legend>
+            {% for rule in pull_rules %}
+            <div>
+              <label class="flex items-center gap-2 cursor-pointer w-fit">
+                <input type="radio" name="pull_rule" value="{{ rule.value }}" class="radio radio-sm"
+                       aria-describedby="ttt-rule-{{ rule.value }}-help"
+                       {% if plan.pull_rule == rule.value %}checked{% endif %} />
+                <span>{{ rule.label }}</span>
+              </label>
+              <p id="ttt-rule-{{ rule.value }}-help" class="text-sm text-base-content/70 ml-8">{{ rule.help }}</p>
+            </div>
+            {% endfor %}
+          </fieldset>
         </div>
         <fieldset>
-          <legend class="label-text mb-2">Auto-balance pull lengths</legend>
+          <legend class="font-semibold mb-1">Limits</legend>
+          <p class="text-sm text-base-content/70 mb-3">Every rider with an FTP has to stay inside both, riders who take no
+            pulls too.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="form-control flex flex-col">
+              <span class="label-text mb-1">Target IF <span class="text-base-content/70">(NP ÷ FTP)</span></span>
+              <input type="number" step="0.01" min="0.1" max="1.5" name="target_if" value="{{ plan.target_if }}"
+                     aria-describedby="ttt-if-help" class="input input-bordered input-sm" />
+              <span id="ttt-if-help" class="label-text-alt mt-1 text-base-content/70">The most any rider's IF may reach.</span>
+            </label>
+            <label class="form-control flex flex-col">
+              <span class="label-text mb-1">W′ reserve (%)</span>
+              <input type="number" step="5" min="0" max="90" name="w_prime_reserve_pct" value="{{ plan.w_prime_reserve_pct }}"
+                     aria-describedby="ttt-reserve-help" class="input input-bordered input-sm" />
+              <span id="ttt-reserve-help" class="label-text-alt mt-1 text-base-content/70">The W′ every rider keeps in hand.</span>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend class="font-semibold mb-1">Pull lengths Optimize may give</legend>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <label class="form-control">
+            <label class="form-control flex flex-col">
               <span class="label-text mb-1">Shortest pull (s)</span>
               <input type="number" name="min_pull_s" min="{{ plan.pull_step_s }}" max="300" step="{{ plan.pull_step_s }}"
                      value="{{ plan.min_pull_s }}" class="input input-bordered input-sm" />
             </label>
-            <label class="form-control">
+            <label class="form-control flex flex-col">
               <span class="label-text mb-1">Longest pull (s)</span>
               <input type="number" name="max_pull_s" min="{{ plan.pull_step_s }}" max="300" step="{{ plan.pull_step_s }}"
                      value="{{ plan.max_pull_s }}" class="input input-bordered input-sm" />
             </label>
-            <label class="form-control">
+            <label class="form-control flex flex-col">
               <span class="label-text mb-1">In steps of (s)</span>
               <select name="pull_step_s" class="select select-bordered select-sm">
                 {% for step in pull_steps %}
@@ -257,7 +292,7 @@
             </label>
           </div>
         </fieldset>
-        <label class="form-control sm:w-1/3">
+        <label class="form-control flex flex-col sm:w-1/3">
           <span class="label-text mb-1">Aero CdA coefficient</span>
           {# Blank, not the default's value: a full-form save would otherwise pin today's default to the plan. #}
           <input type="number" step="0.0001" min="0" name="cda_coef"
@@ -266,30 +301,27 @@
           <span id="ttt-cda-help" class="label-text-alt mt-1 text-base-content/70">Leave blank for the site default ({{ config.TTT_CDA_COEF }}).</span>
         </label>
       </form>
-      <div class="flex flex-wrap gap-2">
-        <button type="button" class="btn btn-neutral btn-sm"
-                hx-post="{% url 'ttt_planner:calculate_speed' plan.pk %}"
-                hx-include="[name='target_if']"
-                hx-target="#ttt-plan-body" hx-swap="innerHTML">Calculate speed</button>
-        <button type="button" class="btn btn-neutral btn-sm"
-                hx-post="{% url 'ttt_planner:auto_balance' plan.pk %}"
-                hx-include="[name='target_if']"
+      <div class="flex flex-wrap items-center gap-3 border-t border-base-300 pt-4">
+        {# Sends the whole card with the click, so what is on screen counts even if a field's own save has not landed. #}
+        <button type="button" id="ttt-optimize" class="btn btn-neutral btn-sm"
+                hx-post="{% url 'ttt_planner:optimize' plan.pk %}"
+                hx-include="#ttt-params-form"
                 hx-target="#ttt-plan-body" hx-swap="innerHTML"
-                hx-confirm="Auto-balance replaces every rider's pull length and the pull order. Continue?">Auto-balance pulls</button>
+                hx-on::confirm="tttConfirmOptimize(event)"
+                aria-describedby="ttt-goal-sentence"
+                {% if plan.speed_goal == "hold" and plan.pull_rule == "keep" %}disabled{% endif %}>Optimize</button>
+        <p id="ttt-goal-sentence" class="text-sm flex-1 min-w-48">{{ goal_sentence }}</p>
       </div>
-      <ul class="text-sm text-base-content/70 list-disc pl-5 space-y-1">
-        <li><strong class="text-base-content">Calculate speed</strong> keeps your pull lengths and finds the fastest target
-          speed at which every rider, those who take no pulls too, keeps their IF at or under Target IF and at least the
-          W′ reserve in hand.</li>
-        <li><strong class="text-base-content">Auto-balance pulls</strong> chooses the pull lengths (within the limits above),
-          the order and the speed, as fast as the same two limits allow.</li>
-      </ul>
+      {% include "ttt_planner/_optimize_message.html" %}
+      {{ goal_sentences|json_script:"ttt-goal-sentences" }}
       {% else %}
       <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt class="text-base-content/70">Target flat speed</dt><dd>{{ plan.target_speed_kph }} kph</dd>
+        <dt class="text-base-content/70">How fast</dt>
+        <dd>{% if plan.speed_goal == "hold" %}Hold {{ plan.target_speed_kph }} kph on the flat{% else %}As fast as the limits allow: {{ plan.target_speed_kph }} kph on the flat{% endif %}</dd>
+        <dt class="text-base-content/70">Pull lengths</dt><dd>{{ plan.get_pull_rule_display }}</dd>
         <dt class="text-base-content/70">Target IF</dt><dd>{{ plan.target_if }}</dd>
         <dt class="text-base-content/70">W′ reserve</dt><dd>{{ plan.w_prime_reserve_pct }}%</dd>
-        <dt class="text-base-content/70">Pull lengths</dt>
+        <dt class="text-base-content/70">Pulls Optimize may give</dt>
         <dd>{{ plan.min_pull_s }}–{{ plan.max_pull_s }} s, in steps of {{ plan.pull_step_s }} s</dd>
         <dt class="text-base-content/70">Aero CdA coefficient</dt>
         <dd>{{ result.cda_coef }}{% if plan.cda_coef is None %} (site default){% endif %}</dd>
@@ -348,6 +380,42 @@
     if (nameEl && opt.dataset.name) nameEl.value = opt.dataset.name;
     if (typeEl && opt.dataset.terrain) typeEl.value = opt.dataset.terrain;
   };
+
+  // The Parameters card: keep the sentence under Optimize saying what it will do, select
+  // "Hold" as soon as a speed is typed (the server does the same when it sees a new speed),
+  // and ask before Optimize replaces the pull lengths. Delegated from the form, so the speed
+  // field Optimize sends back out of band is covered too.
+  (function () {
+    var form = document.getElementById("ttt-params-form");
+    var sentences = document.getElementById("ttt-goal-sentences");
+    if (!form || !sentences) return;
+    sentences = JSON.parse(sentences.textContent);
+    var sentence = document.getElementById("ttt-goal-sentence");
+    var button = document.getElementById("ttt-optimize");
+
+    function goal() {
+      var speed = form.querySelector('input[name="speed_goal"]:checked');
+      var rule = form.querySelector('input[name="pull_rule"]:checked');
+      return { speed: speed ? speed.value : "fastest", rule: rule ? rule.value : "even" };
+    }
+    function sync() {
+      var g = goal();
+      sentence.textContent = sentences[g.speed + "-" + g.rule];
+      button.disabled = g.speed === "hold" && g.rule === "keep";
+    }
+    form.addEventListener("input", function (e) {
+      if (e.target.name !== "target_speed_kph") return;
+      document.getElementById("ttt-goal-hold").checked = true;
+      sync();
+    });
+    form.addEventListener("change", sync);
+    window.tttConfirmOptimize = function (event) {
+      if (goal().rule === "keep") return;
+      if (!window.confirm("Optimize replaces every rider's pull length and the pull order. Continue?")) {
+        event.preventDefault();
+      }
+    };
+  })();
 </script>
 {% include "shared/_copy_image_script.html" %}
 <script>

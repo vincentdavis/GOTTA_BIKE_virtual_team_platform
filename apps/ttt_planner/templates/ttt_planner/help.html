@@ -27,7 +27,7 @@
       <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1">
         <li><a class="link" href="#workflow">Planning a race, step by step</a></li>
         <li><a class="link" href="#riders">Rider data</a></li>
-        <li><a class="link" href="#targets">Target speed, Target IF and the two buttons</a></li>
+        <li><a class="link" href="#targets">The goal, the limits and Optimize</a></li>
         <li><a class="link" href="#metrics">What the pull schedule shows</a></li>
         <li><a class="link" href="#physics">The power model</a></li>
         <li><a class="link" href="#wprime">W′ balance</a></li>
@@ -49,12 +49,13 @@
           Course name and type are labels only; they change no numbers.</li>
         <li><strong>Add riders.</strong> Add a whole squad, search team riders by name or Zwift ID, or add a guest
           with their weight, height and FTP.</li>
-        <li><strong>Parameters.</strong> Set the Target IF, the most any rider's IF may reach, and the W′ reserve,
-          the share of W′ every rider keeps in hand. For Auto-balance, set the shortest and longest pull.</li>
-        <li><strong>Calculate speed</strong> keeps your pull lengths and finds the fastest speed everyone can hold.
-          <strong>Auto-balance pulls</strong> also sets the pull lengths and the order.</li>
-        <li><strong>Adjust.</strong> Change pull lengths, mark riders who take no pulls, reorder. The table updates
-          as you go; press Calculate speed again after changing pulls.</li>
+        <li><strong>Parameters.</strong> Choose the goal: how fast (as fast as the limits allow, or a speed to hold)
+          and how the pull lengths are set (for even effort, for the most W′ in reserve, or as you set them). Set
+          the limits: the Target IF, the most any rider's IF may reach, and the W′ reserve, the share of W′ every
+          rider keeps in hand; and the shortest and longest pull Optimize may give.</li>
+        <li><strong>Optimize</strong> carries out the goal. The sentence beside the button says what it will do.</li>
+        <li><strong>Adjust.</strong> Change pull lengths, mark riders who take no pulls, reorder. The table and the
+          line above it, which says whether the plan fits the limits, update as you go.</li>
         <li><strong>Share.</strong> Copy the pull schedule as an image for the team.</li>
       </ol>
     </div>
@@ -73,15 +74,15 @@
           {{ fallback_height_cm|floatformat:0 }} cm, and marked <span class="badge badge-warning badge-xs">est</span>.</li>
         <li>No CP or W′ (guests, or riders Zwift Racing has no figures for): the planner uses their FTP as CP and
           {{ fallback_w_prime_kj }} kJ as W′, close to the team's average, and shows those values with a <span aria-hidden="true">~</span><span class="sr-only">tilde</span> in front.</li>
-        <li>No FTP: the rider still gets pull powers, but no %FTP, IF, TSS or W′ figures, and Calculate speed and
-          Auto-balance cannot judge them.</li>
+        <li>No FTP: the rider still gets pull powers, but no %FTP, IF, TSS or W′ figures, and Optimize cannot judge
+          them: it leaves their pull as it is and puts them last.</li>
       </ul>
     </div>
   </section>
 
   <section id="targets" aria-labelledby="targets-h" class="card bg-base-200 scroll-mt-24">
     <div class="card-body space-y-4">
-      <h2 id="targets-h" class="card-title">Target speed, Target IF and the two buttons</h2>
+      <h2 id="targets-h" class="card-title">The goal, the limits and Optimize</h2>
 
       <div class="space-y-2">
         <h3 class="font-semibold">Target flat speed</h3>
@@ -94,8 +95,7 @@
 
       <div class="space-y-2">
         <h3 class="font-semibold">The two limits</h3>
-        <p>Calculate speed and Auto-balance hold <strong>every</strong> rider with an FTP, including riders who take no
-          pulls, to two limits:</p>
+        <p>Every rider with an FTP, including riders who take no pulls, is held to two limits:</p>
         <ul class="list-disc pl-5 space-y-1">
           <li><strong>Target IF</strong> (a new plan starts at {{ defaults.target_if }}): the rider's IF, Normalized
             Power ÷ FTP over the race, may not go above it.</li>
@@ -111,32 +111,61 @@
       </div>
 
       <div class="space-y-2">
-        <h3 class="font-semibold">Calculate speed</h3>
+        <h3 class="font-semibold">Does the plan fit?</h3>
         <p>
-          Keeps the pull lengths and no-pull riders as they are, and searches for the fastest target speed, to 0.1 kph,
-          at which every rider with an FTP stays inside both limits. The first rider to reach a limit sets the speed,
-          so a shorter pull for whoever that is raises it.
+          The line above the pull schedule answers that for the plan as it stands, whatever produced it. It says
+          whether every rider is inside both limits at the target speed, and if not, who is past which limit. It
+          also gives the fastest speed the current pull lengths allow, to 0.1 kph, and names whoever would cross a
+          limit if the team went any faster: that rider and that limit are what hold the plan back.
         </p>
       </div>
 
       <div class="space-y-2">
-        <h3 class="font-semibold">Auto-balance pulls</h3>
-        <p>Chooses the pull lengths, the order and the speed together, as fast as the two limits allow:</p>
+        <h3 class="font-semibold">The goal</h3>
+        <p>A plan's goal has two halves, chosen in the Parameters card and kept with the plan.</p>
+        <dl class="space-y-2">
+          <div><dt class="font-semibold">How fast</dt>
+            <dd><strong>As fast as the limits allow</strong> finds the fastest target speed at which every rider stays
+              inside both limits. <strong>Hold</strong> keeps the speed you type; typing a speed chooses it.</dd></div>
+          <div><dt class="font-semibold">Pull lengths</dt>
+            <dd><strong>Even effort</strong> gives stronger riders longer pulls, until everyone's IF is as even as the
+              pull steps allow. <strong>Most W′ in reserve</strong> keeps pulls short enough that every rider holds on
+              to as much W′ as possible, for surges and the finish. <strong>Keep my pull lengths</strong> leaves them,
+              and the order, as they are.</dd></div>
+        </dl>
+        <p>
+          Optimize carries the goal out, and the sentence beside the button always says what it will do. As fast as
+          the limits allow with your pull lengths kept is what the planner used to call Calculate speed; with even
+          effort, it is the old Auto-balance. Holding a speed with your pull lengths kept leaves nothing to optimize,
+          so the button is off.
+        </p>
+      </div>
+
+      <div class="space-y-2">
+        <h3 class="font-semibold">How Optimize sets the pull lengths</h3>
         <ol class="list-decimal pl-5 space-y-1">
-          <li>It tries a speed. If any rider could not sit in at it within the limits, the speed is too fast.</li>
-          <li>Otherwise it tries rotations from the shortest up. In each, every rider gets the longest pull they can
-            take within the limits, from the shortest pull (a new plan: {{ defaults.min_pull_s }} s) to the longest
-            ({{ defaults.max_pull_s }} s) in steps ({{ defaults.pull_step_s }} s). A rider who cannot manage even the
-            shortest pull sits in. The rotation works if those pulls can fill it.</li>
-          <li>It halves its way to the fastest speed with a working rotation, and the shortest such rotation wins.</li>
-          <li>The front time is shared out: everyone starts on the shortest pull, and each further step goes to the rider
-            with the most room left under their longest, so the spare capacity ends up evenly spread.</li>
-          <li>The order runs from the longest pull to the shortest. Riders with no FTP keep their settings and go last.</li>
-          <li>The speed is then worked out exactly as Calculate speed does for those pulls, so the two buttons agree.</li>
+          <li>When the goal is as fast as the limits allow, it first finds the top speed. It tries a speed: if any rider
+            could not sit in at it within the limits, the speed is too fast. Otherwise it tries rotations from the
+            shortest up, giving every rider the longest pull they can take within the limits, from the shortest pull
+            (a new plan: {{ defaults.min_pull_s }} s) to the longest ({{ defaults.max_pull_s }} s) in steps
+            ({{ defaults.pull_step_s }} s); a rider who cannot manage even the shortest pull sits in. The speed works
+            if some rotation can be filled that way, and halving its way between speeds finds the fastest that works.</li>
+          <li>At that speed, or at the speed you hold, it tries every rotation length. In each, it finds the pull lengths
+            that keep the hardest-working rider's IF lowest (Even effort), or the lowest W′ balance highest (Most W′ in
+            reserve), handing out the front time a step at a time to whoever it costs least.</li>
+          <li>The rotation whose worst rider fares best wins; a tie goes to the one whose next-worst rider fares best,
+            and so on, then to the other measure, then to the shorter rotation.</li>
+          <li>Even effort keeps every rider's W′ above the reserve, and Most W′ in reserve keeps every IF at or under
+            Target IF. If the speed you hold is too fast for that, Optimize says so and sets the pulls anyway, without
+            that limit.</li>
+          <li>The order runs from the longest pull to the shortest, then the riders who sit in. Riders with no FTP keep
+            their settings and go last.</li>
+          <li>When the goal is as fast as the limits allow, the speed is then worked out for those pulls exactly as
+            with your pull lengths kept, so optimizing again that way changes nothing.</li>
         </ol>
         <p>
-          Pulls are chosen as if the race were long, which is the worst case for W′; the speed is then set for the race
-          you planned.
+          Pulls are chosen as if the race were long, which is the worst case for W′; the table and the line above it
+          judge the race you planned.
         </p>
       </div>
     </div>

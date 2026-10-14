@@ -67,7 +67,7 @@ def test_a_read_only_viewer_can_still_copy(auth_client, team_member, app_admin) 
     body = _plan_page(auth_client, plan)
 
     assert BUTTON in body
-    assert "Auto-balance" not in body  # confirms this really is the read-only view
+    assert reverse("ttt_planner:optimize", args=[plan.pk]) not in body  # confirms this really is the read-only view
 
 
 @pytest.mark.django_db

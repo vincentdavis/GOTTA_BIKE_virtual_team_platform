@@ -1,4 +1,4 @@
-"""W′ balance in the TTT planner, and the two limits Calculate speed and Auto-balance work to.
+"""W′ balance in the TTT planner, and the two limits Optimize works to.
 
 Every rider with an FTP, those who take no pulls too, must keep IF (NP / FTP) at or under
 Target IF and their W′ balance at or above the plan's W′ reserve. NP and W′bal are worked
@@ -157,7 +157,7 @@ def plan(team_member):
 
 
 @pytest.mark.django_db
-def test_a_bigger_w_prime_reserve_slows_calculate_speed(plan):
+def test_a_bigger_w_prime_reserve_slows_the_fastest_speed(plan):
     plan.w_prime_reserve_pct = 10
     loose = compute.sustainable_speed(plan)
     plan.w_prime_reserve_pct = 60
@@ -167,7 +167,7 @@ def test_a_bigger_w_prime_reserve_slows_calculate_speed(plan):
 
 
 @pytest.mark.django_db
-def test_calculate_speed_keeps_every_rider_inside_both_limits(plan):
+def test_the_fastest_speed_for_the_pulls_keeps_every_rider_inside_both_limits(plan):
     plan.target_speed_kph = compute.sustainable_speed(plan)
     plan.save()
     result = compute.compute_plan(plan)
@@ -187,11 +187,11 @@ def test_a_rider_who_takes_no_pulls_still_caps_the_speed(plan, team_member):
 
 
 @pytest.mark.django_db
-def test_auto_balance_pulls_sit_on_the_grid_and_keep_everyone_inside_the_limits(plan):
+def test_optimized_pulls_sit_on_the_grid_and_keep_everyone_inside_the_limits(plan):
     plan.min_pull_s, plan.max_pull_s, plan.pull_step_s = 30, 120, 15
     plan.save()
 
-    result = compute.compute_auto_balance(plan)
+    result = compute.optimize_plan(plan)
     by_pk = {r.pk: r for r in plan.riders.all()}
     for assignment in result.assignments:
         rider = by_pk[assignment.rider_pk]
@@ -209,15 +209,15 @@ def test_auto_balance_pulls_sit_on_the_grid_and_keep_everyone_inside_the_limits(
 
     shown = compute.compute_plan(plan)
     assert not any(r.over_target for r in shown.riders)
-    # Auto-balance sets the speed by Calculate's rule, so pressing Calculate after it changes nothing.
+    # Optimize sets the speed by the keep-my-pulls rule, so optimizing again with the pulls kept changes nothing.
     assert compute.sustainable_speed(plan) == result.speed_kph
 
 
 @pytest.mark.django_db
-def test_auto_balance_is_faster_than_even_pulls(plan):
+def test_optimize_is_faster_than_even_pulls(plan):
     even = compute.sustainable_speed(plan)
 
-    assert compute.compute_auto_balance(plan).speed_kph >= even
+    assert compute.optimize_plan(plan).speed_kph >= even
 
 
 # --- the settings --------------------------------------------------------------------------------

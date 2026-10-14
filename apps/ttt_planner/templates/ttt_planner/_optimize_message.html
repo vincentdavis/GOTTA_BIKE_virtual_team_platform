@@ -1,0 +1,36 @@
+{% comment %}
+  What the last Optimize did, in the Parameters card's live region, so a screen reader hears
+  it. The page renders it empty (an empty block takes no room); the optimize view sends it
+  back out of band, filled in.
+{% endcomment %}
+<div id="ttt-optimize-status" role="status" class="text-sm"{% if oob %} hx-swap-oob="true"{% endif %}>
+{% if oob %}{% with s=result.status speed=plan.target_speed_kph %}
+  {% if not s.judged %}
+    Optimize needs at least one rider with an FTP to judge the plan by.
+  {% elif not outcome %}
+    No speed keeps every rider inside the limits.
+  {% elif plan.pull_rule == "keep" and plan.speed_goal == "hold" %}
+    Nothing to change: you hold {{ speed }} kph with your own pull lengths. The pull schedule shows how they fit
+    the limits.
+  {% elif plan.pull_rule == "keep" %}
+    {% if s.anyone_pulls %}
+      Speed set to {{ speed }} kph, the fastest your pull lengths allow.
+    {% else %}
+      Nobody pulls, so there is no speed to find. Give someone a pull length, or let Optimize set them.
+    {% endif %}
+  {% elif plan.speed_goal == "fastest" %}
+    Speed set to {{ speed }} kph, the fastest the limits allow, with the pull lengths and order set
+    {% if plan.pull_rule == "reserve" %}to keep the most W′ in reserve{% else %}for even effort{% endif %}.
+  {% elif plan.pull_rule == "reserve" %}
+    Pull lengths and order set to keep the most W′ at {{ speed }} kph:
+    {% if result.anyone_runs_out %}a rider still runs out of W′{% else %}the lowest W′ balance is {{ result.lowest_w_prime_pct }}%{% endif %}.
+    {% if outcome.relaxed %}{{ speed }} kph is too fast to keep every rider's IF at or under
+      {{ result.target_if|floatformat:2 }}, so this only protects W′.{% endif %}
+  {% else %}
+    Pull lengths and order set for even effort at {{ speed }} kph: the highest IF is
+    {{ result.highest_if|floatformat:2 }}.
+    {% if outcome.relaxed %}{{ speed }} kph is too fast to keep every rider's W′ above the
+      {{ result.w_prime_reserve_pct }}% reserve, so this only evens out the effort.{% endif %}
+  {% endif %}
+{% endwith %}{% endif %}
+</div>

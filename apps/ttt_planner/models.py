@@ -86,6 +86,19 @@ class TttPlan(models.Model):
         WTRL_TTT = "wtrl_ttt", "WTRL TTT"
         OTHER = "other", "Other"
 
+    class SpeedGoal(models.TextChoices):
+        """How fast Optimize makes the plan (the first half of its goal)."""
+
+        FASTEST = "fastest", "As fast as the limits allow"
+        HOLD = "hold", "Hold the target speed"
+
+    class PullRule(models.TextChoices):
+        """How Optimize sets the pull lengths (the second half of its goal)."""
+
+        EVEN = "even", "Even effort"
+        RESERVE = "reserve", "Most W′ in reserve"
+        KEEP = "keep", "Keep my pull lengths"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=200, blank=True, help_text="Plan name")
     team_name = models.CharField(max_length=200, blank=True, help_text="Team name shown on the plan")
@@ -110,19 +123,31 @@ class TttPlan(models.Model):
     target_speed_kph = models.DecimalField(
         max_digits=5, decimal_places=1, default=40.0, help_text="Target flat speed in km/h"
     )
+    speed_goal = models.CharField(
+        max_length=10,
+        choices=SpeedGoal.choices,
+        default=SpeedGoal.FASTEST,
+        help_text="What Optimize does to the speed: the fastest the limits allow, or hold the target speed",
+    )
+    pull_rule = models.CharField(
+        max_length=10,
+        choices=PullRule.choices,
+        default=PullRule.EVEN,
+        help_text="How Optimize sets the pull lengths: for even effort, for the most W′ in reserve, or not at all",
+    )
     target_if = models.FloatField(
         default=0.95,
-        help_text="Target intensity factor (NP / FTP) that Calculate and Auto-balance hold every puller to (e.g. 0.95)",
+        help_text="Target intensity factor (NP / FTP) that Optimize holds every rider to (e.g. 0.95)",
     )
     w_prime_reserve_pct = models.PositiveSmallIntegerField(
         default=25,
         validators=[MaxValueValidator(90)],
-        help_text="Share of W′ (%) every puller keeps in hand through the race; Calculate and Auto-balance hold to it",
+        help_text="Share of W′ (%) every rider keeps in hand through the race; Optimize holds to it",
     )
-    min_pull_s = models.PositiveSmallIntegerField(default=30, help_text="Shortest pull Auto-balance gives, in seconds")
-    max_pull_s = models.PositiveSmallIntegerField(default=180, help_text="Longest pull Auto-balance gives, in seconds")
+    min_pull_s = models.PositiveSmallIntegerField(default=30, help_text="Shortest pull Optimize gives, in seconds")
+    max_pull_s = models.PositiveSmallIntegerField(default=180, help_text="Longest pull Optimize gives, in seconds")
     pull_step_s = models.PositiveSmallIntegerField(
-        default=15, help_text="Auto-balance's pull lengths are multiples of this, in seconds (5, 10, 15 or 30)"
+        default=15, help_text="Optimize's pull lengths are multiples of this, in seconds (5, 10, 15 or 30)"
     )
     draft_savings = models.JSONField(
         default=list,
@@ -213,7 +238,7 @@ class PlanRider(models.Model):
     changes to team data do not mutate a saved plan.
     """
 
-    # Ceilings for manually entered values. Auto-balance never gives more than the plan's
+    # Ceilings for manually entered values. Optimize never gives more than the plan's
     # longest pull, which is itself capped at the duration ceiling. Both
     # are enforced three ways: as field validators (the admin inline, which is where
     # Pull W is actually set, runs full_clean), as a clamp in the inline edit view

@@ -33,11 +33,10 @@ from apps.ttt_planner.models import PlanRider, PowerUp, TttPlan
 from apps.ttt_planner.services import compute, effort, physics, roster, zwiftgopher, zwiftgopher_client
 from apps.ttt_planner.services.compute import (
     climb_strength,
-    compute_auto_balance,
     compute_plan,
     draft_table_for,
+    optimize_plan,
     quick_finish_time,
-    sustainable_speed,
 )
 from apps.ttt_planner.tasks import run_zwiftgopher_optimize
 from apps.zwift_data import catalog
@@ -46,44 +45,58 @@ from apps.zwift_data.services.velo import import_velo_from_file
 from apps.zwift_data.tasks import sync_zwift_data
 from gotta_bike_platform import planner_access
 
+# What Optimize does for each goal ("<speed_goal>-<pull_rule>"), shown under its button.
+GOAL_SENTENCES = {
+    "fastest-even": (
+        "Optimize finds the fastest speed inside the limits, and sets the pull lengths and order for even effort."
+    ),
+    "fastest-reserve": (
+        "Optimize finds the fastest speed inside the limits, and sets the pull lengths and order to keep the most W′ "
+        "in reserve."
+    ),
+    "fastest-keep": "Optimize finds the fastest speed inside the limits for your pull lengths.",
+    "hold-even": "Optimize keeps your speed, and sets the pull lengths and order for even effort.",
+    "hold-reserve": "Optimize keeps your speed, and sets the pull lengths and order to keep the most W′ in reserve.",
+    "hold-keep": (
+        "Nothing to optimize: the speed and the pull lengths are yours. The pull schedule shows how they fit the "
+        "limits."
+    ),
+}
+# The pull-length rules as the Parameters card offers them.
+PULL_RULE_HELP = {
+    TttPlan.PullRule.EVEN: "Stronger riders pull longer, until everyone's IF is as even as the pull steps allow.",
+    TttPlan.PullRule.RESERVE: (
+        "Pulls kept short enough that every rider holds on to as much W′ as possible, for surges and the finish."
+    ),
+    TttPlan.PullRule.KEEP: "Optimize leaves the pull lengths and order as they are.",
+}
 
-def _render_plan_body(request: HttpRequest, plan: TttPlan, *, can_edit: bool) -> str:
+
+def _render_plan_body(
+    request: HttpRequest, plan: TttPlan, *, can_edit: bool, result: compute.PlanResult | None = None
+) -> str:
     """Render the roster + results partial for a plan.
 
     Args:
         request: The request (for template context/CSRF).
         plan: The plan.
         can_edit: Whether edit controls should be shown.
+        result: The plan's computed results, when the caller already has them.
 
     Returns:
         Rendered HTML string of the ``_plan_body`` partial.
 
     """
-    result = compute_plan(plan)
     return render_to_string(
         "ttt_planner/_plan_body.html",
-        {"plan": plan, "result": result, "can_edit": can_edit, "climb": climb_strength(plan)},
+        {
+            "plan": plan,
+            "result": result or compute_plan(plan),
+            "can_edit": can_edit,
+            "climb": climb_strength(plan),
+        },
         request=request,
     )
-
-
-def _plan_body_with_speed_oob(request: HttpRequest, plan: TttPlan) -> str:
-    """Plan body plus an out-of-band update of the target-speed input field.
-
-    Used by endpoints that change the target speed (Calculate / Auto-balance) so
-    the input in the settings form (outside the swapped body) stays in sync.
-
-    Args:
-        request: The request.
-        plan: The plan (with its new target speed already saved).
-
-    Returns:
-        Combined HTML for the swap.
-
-    """
-    body = _render_plan_body(request, plan, can_edit=True)
-    oob = render_to_string("ttt_planner/_speed_input.html", {"plan": plan, "oob": True}, request=request)
-    return body + oob
 
 
 @login_required
@@ -453,6 +466,11 @@ def planner_detail(request: HttpRequest, plan_id: str) -> HttpResponse:
             "other_squads": other_squads,
             "edit_squad_active": plan.edit_squad_id in picker_pks,
             "pull_steps": compute.PULL_STEPS_S,
+            "pull_rules": [
+                {"value": rule.value, "label": rule.label, "help": PULL_RULE_HELP[rule]} for rule in TttPlan.PullRule
+            ],
+            "goal_sentence": GOAL_SENTENCES[f"{plan.speed_goal}-{plan.pull_rule}"],
+            "goal_sentences": GOAL_SENTENCES,
         },
     )
 
@@ -540,9 +558,6 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
     if "event_type" in request.POST:
         event_type = request.POST.get("event_type", "")
         plan.event_type = event_type if event_type in TttPlan.EventType.values else ""
-    if "target_speed_kph" in request.POST:
-        with contextlib.suppress(ValueError):
-            plan.target_speed_kph = max(0.0, float(request.POST.get("target_speed_kph") or 0))
     if "route" in request.POST:
         route_id = request.POST.get("route")
         plan.route = ZwiftRoute.objects.filter(pk=route_id).first() if route_id else None
@@ -551,6 +566,38 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
     if "course_type" in request.POST:
         course_type = request.POST.get("course_type", "")
         plan.course_type = course_type if course_type in terrain.TERRAIN_VALUES else ""
+    _take_parameters(request, plan)
+    if "edit_squad" in request.POST:
+        squad_id = request.POST.get("edit_squad")
+        plan.edit_squad = Squad.objects.filter(pk=squad_id).first() if squad_id else None
+
+    plan.updated_by = request.user
+    plan.save()
+    return HttpResponse(_render_plan_body(request, plan, can_edit=True))
+
+
+def _take_parameters(request: HttpRequest, plan: TttPlan) -> None:
+    """Read the Parameters card from a post: the goal, the speed, the limits and the CdA coefficient.
+
+    Shared by the card's own saves and by Optimize, which sends the whole card with the click
+    so a value typed a moment ago counts even if its own save has not landed. A typed speed
+    that differs from the plan's is a speed to hold, so it switches the goal to holding it.
+
+    Args:
+        request: The post.
+        plan: The plan, changed in memory (the caller saves it).
+
+    """
+    if request.POST.get("speed_goal") in TttPlan.SpeedGoal.values:
+        plan.speed_goal = request.POST["speed_goal"]
+    if request.POST.get("pull_rule") in TttPlan.PullRule.values:
+        plan.pull_rule = request.POST["pull_rule"]
+    if "target_speed_kph" in request.POST:
+        with contextlib.suppress(ValueError):
+            speed = round(max(0.0, float(request.POST.get("target_speed_kph") or 0)), 1)
+            if speed != round(float(plan.target_speed_kph), 1):
+                plan.speed_goal = TttPlan.SpeedGoal.HOLD
+            plan.target_speed_kph = speed
     if "cda_coef" in request.POST:
         raw = request.POST.get("cda_coef", "").strip()
         if not raw:
@@ -562,21 +609,14 @@ def plan_update(request: HttpRequest, plan_id: str) -> HttpResponse:
         with contextlib.suppress(ValueError):
             plan.target_if = min(max(float(request.POST.get("target_if") or 0.95), 0.1), 1.5)
     _take_balance_settings(request, plan)
-    if "edit_squad" in request.POST:
-        squad_id = request.POST.get("edit_squad")
-        plan.edit_squad = Squad.objects.filter(pk=squad_id).first() if squad_id else None
-
-    plan.updated_by = request.user
-    plan.save()
-    return HttpResponse(_render_plan_body(request, plan, can_edit=True))
 
 
 def _take_balance_settings(request: HttpRequest, plan: TttPlan) -> None:
-    """Read the W′ reserve and Auto-balance's pull limits from a settings post.
+    """Read the W′ reserve and Optimize's pull limits from a settings post.
 
     They are stored as :class:`compute.Limits` cleans them, so what the form shows after a
-    save is exactly what Calculate and Auto-balance use: a step from ``PULL_STEPS_S``, the
-    pulls on its grid and in order, the reserve between 0 and 90%.
+    save is exactly what Optimize uses: a step from ``PULL_STEPS_S``, the pulls on its grid
+    and in order, the reserve between 0 and 90%.
 
     Args:
         request: The settings post.
@@ -716,73 +756,58 @@ def zwiftgopher_run(request: HttpRequest, plan_id: str) -> HttpResponse:
 @login_required
 @team_member_required(raise_exception=True)
 @require_POST
-def calculate_speed(request: HttpRequest, plan_id: str) -> HttpResponse:
-    """Set the target speed to the max sustainable value for the target IF; recompute.
+def optimize(request: HttpRequest, plan_id: str) -> HttpResponse:
+    """Carry out the plan's goal: set the speed, and the pull lengths and order when it says to; recompute.
 
-    Uses the current pull durations, so changing durations and recalculating
-    changes the speed (and the estimated time).
+    The click sends the whole Parameters card, so the goal and limits on screen are what
+    count. The response swaps the plan body, sends the speed field back out of band, and
+    says what happened in the card's live region.
 
     Returns:
-        The refreshed plan body partial.
+        The refreshed plan body partial, with the out-of-band updates.
 
     """
     plan = _changing(request, plan_id)
-    _take_posted_target_if(request, plan)
+    _take_parameters(request, plan)
+    plan.save()
 
-    plan.target_speed_kph = sustainable_speed(plan)
-    plan.save(update_fields=["target_if", "target_speed_kph", "updated_at"])
-    return HttpResponse(_plan_body_with_speed_oob(request, plan))
+    outcome = optimize_plan(plan)
+    if outcome is not None:
+        if outcome.assignments is not None:
+            riders_by_pk = {r.pk: r for r in plan.riders.all()}
+            to_update = []
+            for assignment in outcome.assignments:
+                rider = riders_by_pk.get(assignment.rider_pk)
+                if rider is None:
+                    continue
+                rider.pull_duration_s = assignment.pull_duration_s
+                rider.zero_pull = assignment.zero_pull
+                rider.order = assignment.order
+                to_update.append(rider)
+            if to_update:
+                PlanRider.objects.bulk_update(to_update, ["pull_duration_s", "zero_pull", "order"])
+        plan.target_speed_kph = outcome.speed_kph
+        plan.save(update_fields=["target_speed_kph", "updated_at"])
+    logfire.info(
+        "TTT plan optimized",
+        plan_id=str(plan.pk),
+        user_id=request.user.id,
+        speed_goal=plan.speed_goal,
+        pull_rule=plan.pull_rule,
+        applied=outcome is not None,
+        speed=float(plan.target_speed_kph),
+        relaxed=bool(outcome and outcome.relaxed),
+    )
 
-
-def _take_posted_target_if(request: HttpRequest, plan: TttPlan) -> None:
-    """Use the Target IF field's value sent with Calculate or Auto-balance, when there is one.
-
-    Both buttons send the field with their click, so a value typed a moment ago counts even
-    if the field's own save has not landed yet. Clamped to 0.1-1.5, as the settings form is.
-
-    Args:
-        request: The request.
-        plan: The plan, changed in memory (the caller saves it).
-
-    """
-    if "target_if" in request.POST:
-        with contextlib.suppress(ValueError):
-            plan.target_if = min(max(float(request.POST.get("target_if") or 0.95), 0.1), 1.5)
-
-
-@login_required
-@team_member_required(raise_exception=True)
-@require_POST
-def auto_balance(request: HttpRequest, plan_id: str) -> HttpResponse:
-    """Balance pull durations and order at the target IF, set the speed; recompute.
-
-    Returns:
-        The refreshed plan body partial.
-
-    """
-    plan = _changing(request, plan_id)
-    _take_posted_target_if(request, plan)
-
-    result = compute_auto_balance(plan)
-    if result is None:
-        plan.save(update_fields=["target_if", "updated_at"])
-    else:
-        riders_by_pk = {r.pk: r for r in plan.riders.all()}
-        to_update = []
-        for assignment in result.assignments:
-            rider = riders_by_pk.get(assignment.rider_pk)
-            if rider is None:
-                continue
-            rider.pull_duration_s = assignment.pull_duration_s
-            rider.zero_pull = assignment.zero_pull
-            rider.order = assignment.order
-            to_update.append(rider)
-        if to_update:
-            PlanRider.objects.bulk_update(to_update, ["pull_duration_s", "zero_pull", "order"])
-        plan.target_speed_kph = result.speed_kph
-        plan.save(update_fields=["target_if", "target_speed_kph", "updated_at"])
-        logfire.info("TTT auto-balance applied", plan_id=str(plan.pk), speed=result.speed_kph)
-    return HttpResponse(_plan_body_with_speed_oob(request, plan))
+    result = compute_plan(plan)
+    body = _render_plan_body(request, plan, can_edit=True, result=result)
+    oob = render_to_string("ttt_planner/_speed_input.html", {"plan": plan, "oob": True}, request=request)
+    message = render_to_string(
+        "ttt_planner/_optimize_message.html",
+        {"plan": plan, "outcome": outcome, "result": result, "oob": True},
+        request=request,
+    )
+    return HttpResponse(body + oob + message)
 
 
 @login_required

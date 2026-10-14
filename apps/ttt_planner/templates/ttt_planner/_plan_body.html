@@ -24,6 +24,35 @@
         {% endif %}
         </div>
       </div>
+      {% if result.riders and result.status %}
+      {% with s=result.status %}
+      {# Whether the plan as it stands fits the limits, and who stops it going faster. #}
+      <div class="rounded-box bg-base-100 p-3 text-sm flex flex-wrap items-baseline gap-x-2 gap-y-1" data-ttt-fit>
+        {% if not s.judged %}
+          <span class="badge badge-ghost badge-sm">Not judged</span>
+          <p>Add an FTP to a rider to see whether the plan fits the limits.</p>
+        {% elif not s.anyone_pulls %}
+          <span class="badge badge-warning badge-sm">No pulls</span>
+          <p>Nobody is pulling. Give someone a pull length, or let Optimize set them.</p>
+        {% elif s.fits %}
+          <span class="badge badge-success badge-sm">Fits</span>
+          <p>
+            Every rider is inside the limits at {{ s.speed_kph }} kph.
+            {% if s.at_fastest %}That is the fastest these pull lengths allow{% elif s.fastest_kph %}These pull lengths allow up to {{ s.fastest_kph }} kph{% endif %}{% if s.held_back_by %}: any faster and {% include "ttt_planner/_held_back.html" %}{% endif %}.
+          </p>
+        {% else %}
+          <span class="badge badge-warning badge-sm">Over a limit</span>
+          <p>
+            At {{ s.speed_kph }} kph,
+            {% for r in s.over %}{% if not forloop.first %}{% if forloop.last %} and {% else %}, {% endif %}{% endif %}{{ r.rider.name }}
+              ({% if r.over_if %}IF {{ r.intensity_factor|floatformat:2 }}, limit {{ result.target_if|floatformat:2 }}{% elif r.w_prime_empty %}runs out of W′{% else %}W′ down to {{ r.w_prime_low_pct }}%, reserve {{ result.w_prime_reserve_pct }}%{% endif %}){% endfor %}
+            {% if s.over|length == 1 %}is{% else %}are{% endif %} past a limit.
+            {% if s.fastest_kph %}These pull lengths fit up to {{ s.fastest_kph }} kph{% if s.held_back_by %}: any faster and {% include "ttt_planner/_held_back.html" %}{% endif %}.{% else %}No speed keeps every rider inside the limits with these pull lengths.{% endif %}
+          </p>
+        {% endif %}
+      </div>
+      {% endwith %}
+      {% endif %}
       {% if result.riders %}
       {% comment %}
         What Copy actually captures: only what a rider needs on the bike -- order, name,

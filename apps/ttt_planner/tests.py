@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from apps.ttt_planner.models import PlanRider, TttPlan
 from apps.ttt_planner.services import physics, zwiftgopher
-from apps.ttt_planner.services.compute import compute_auto_balance, compute_plan, sustainable_speed
+from apps.ttt_planner.services.compute import compute_plan, optimize_plan, sustainable_speed
 from apps.ttt_planner.services.roster import get_rider_data
 from apps.ttt_planner.tasks import run_zwiftgopher_optimize
 from apps.zwift_data.models import ZwiftRoute
@@ -194,13 +194,13 @@ def test_sustainable_speed_depends_on_pull_durations(team_member):
 
 
 @pytest.mark.django_db
-def test_auto_balance_gives_stronger_rider_longer_pull(team_member):
-    """Auto-balance assigns the stronger rider a longer pull and orders them first."""
+def test_optimize_gives_stronger_rider_longer_pull(team_member):
+    """Optimize (fastest, even effort) gives the stronger rider a longer pull and orders them first."""
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=10)
     strong = PlanRider.objects.create(plan=plan, order=0, name="Strong", weight_kg=70, height_cm=175, ftp_w=360)
     weak = PlanRider.objects.create(plan=plan, order=1, name="Weak", weight_kg=80, height_cm=185, ftp_w=240)
 
-    result = compute_auto_balance(plan, target_if=0.95)
+    result = optimize_plan(plan, target_if=0.95)
     assert result is not None
     # A rider set to take no pulls spends no time on the front, whatever their stored length.
     pulled = {a.rider_pk: 0 if a.zero_pull else a.pull_duration_s for a in result.assignments}
@@ -211,13 +211,13 @@ def test_auto_balance_gives_stronger_rider_longer_pull(team_member):
 
 
 @pytest.mark.django_db
-def test_auto_balance_view_applies(auth_client, team_member):
-    """The auto-balance endpoint writes durations/order and sets the speed."""
+def test_optimize_view_applies(auth_client, team_member):
+    """The optimize endpoint writes durations/order and sets the speed."""
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=10)
     PlanRider.objects.create(plan=plan, order=0, name="A", weight_kg=70, height_cm=175, ftp_w=360, pull_duration_s=60)
     PlanRider.objects.create(plan=plan, order=1, name="B", weight_kg=82, height_cm=186, ftp_w=240, pull_duration_s=60)
 
-    resp = auth_client.post(reverse("ttt_planner:auto_balance", args=[plan.pk]))
+    resp = auth_client.post(reverse("ttt_planner:optimize", args=[plan.pk]))
     assert resp.status_code == 200
     plan.refresh_from_db()
     assert float(plan.target_speed_kph) > 10
@@ -358,12 +358,15 @@ def test_plan_update_changes_speed_and_route(auth_client, team_member):
 
 
 @pytest.mark.django_db
-def test_calculate_sets_sustainable_speed_and_if(auth_client, team_member):
-    """Calculate stores the posted IF and a positive sustainable target speed."""
+def test_optimize_keeping_pulls_sets_sustainable_speed_and_if(auth_client, team_member):
+    """Optimize with the pulls kept stores the posted IF and a positive sustainable target speed."""
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=10)
     PlanRider.objects.create(plan=plan, order=0, name="A", weight_kg=72, height_cm=178, ftp_w=300)
     PlanRider.objects.create(plan=plan, order=1, name="B", weight_kg=78, height_cm=182, ftp_w=300)
-    resp = auth_client.post(reverse("ttt_planner:calculate_speed", args=[plan.pk]), {"target_if": "0.9"})
+    resp = auth_client.post(
+        reverse("ttt_planner:optimize", args=[plan.pk]),
+        {"speed_goal": "fastest", "pull_rule": "keep", "target_if": "0.9"},
+    )
     assert resp.status_code == 200
     plan.refresh_from_db()
     assert plan.target_if == pytest.approx(0.9)

@@ -3,8 +3,8 @@
 Pure functions, no Django, so they can be tested on their own. Through a rotation a
 rider's power is modelled as a square wave: ``front`` watts for their own pull, ``draft``
 watts while sitting in for the rest of the rotation. Both measures are worked out in
-closed form from that wave, which keeps them cheap enough for Calculate speed and
-Auto-balance to evaluate thousands of times per click.
+closed form from that wave, which keeps them cheap enough for Optimize to evaluate
+thousands of times per click.
 
 W′ balance follows the differential model (Skiba 2015, after Froncioni and Clarke).
 Above critical power (CP), W′ drains at ``power - CP`` joules a second. Below it, W′

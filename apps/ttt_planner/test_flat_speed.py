@@ -3,13 +3,13 @@
 Every power used to be worked out at the route's average gradient (total climbing over
 distance) as if the whole race were a steady climb, while the finish time also slowed the
 team down for the same climbing. On a 20 km / 200 m route that put roughly 100 W on every
-pull, made Calculate speed about 5 kph slower, and then slowed the finish time again.
+pull, made the fastest speed the limits allow about 5 kph slower, and then slowed the finish time again.
 """
 
 import pytest
 
 from apps.ttt_planner.models import PlanRider, TttPlan
-from apps.ttt_planner.services.compute import compute_auto_balance, compute_plan, sustainable_speed
+from apps.ttt_planner.services.compute import compute_plan, optimize_plan, sustainable_speed
 from apps.zwift_data.models import ZwiftRoute
 
 # Invented riders: (name, kg, cm, FTP).
@@ -51,14 +51,14 @@ def test_pull_powers_do_not_depend_on_the_routes_climbing(plan):
 
 
 @pytest.mark.django_db
-def test_calculate_speed_gives_the_same_flat_speed_on_any_route(plan):
+def test_the_fastest_speed_for_the_pulls_is_the_same_on_any_route(plan):
     assert sustainable_speed(_on(plan, _route("Flat", 0))) == sustainable_speed(_on(plan, _route("Hilly", 200)))
 
 
 @pytest.mark.django_db
-def test_auto_balance_gives_the_same_flat_speed_on_any_route(plan):
-    flat = compute_auto_balance(_on(plan, _route("Flat", 0)))
-    hilly = compute_auto_balance(_on(plan, _route("Hilly", 200)))
+def test_optimize_gives_the_same_flat_speed_on_any_route(plan):
+    flat = optimize_plan(_on(plan, _route("Flat", 0)))
+    hilly = optimize_plan(_on(plan, _route("Hilly", 200)))
 
     assert hilly.speed_kph == flat.speed_kph
     assert [a.pull_duration_s for a in hilly.assignments] == [a.pull_duration_s for a in flat.assignments]

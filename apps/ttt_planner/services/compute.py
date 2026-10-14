@@ -1,21 +1,27 @@
 """Compute TTT plan results (pull power, load, W′ balance, finish time) from riders.
 
 The target speed is a **flat** speed: every power here (pull, sitting in, and the limits
-Calculate speed and Auto-balance work to) is the power to hold it on level road. The
-route's climbing enters once, in the finish-time estimate (``physics.estimate_time_seconds``),
-which turns that flat-speed effort into a speed on the course.
+Optimize works to) is the power to hold it on level road. The route's climbing enters once,
+in the finish-time estimate (``physics.estimate_time_seconds``), which turns that flat-speed
+effort into a speed on the course.
 
 Through a rotation, a rider's power is a square wave: their pull power on the front, their
 sitting-in power for the rest. ``services/effort.py`` turns that into Normalized Power (so
-IF and TSS) and the lowest W′ balance. Calculate speed and Auto-balance hold every rider with
-an FTP to two limits: IF (NP / FTP) at or under Target IF, and W′bal at or above the plan's
-W′ reserve. That includes riders who take no pulls: they still have to hold the wheel, so a
-plan never goes faster by leaving a rider to be dropped. ``ttt_planner/help.html`` explains
-all of this to riders, so keep it in step with this module.
+IF and TSS) and the lowest W′ balance. Every rider with an FTP is held to two limits: IF
+(NP / FTP) at or under Target IF, and W′bal at or above the plan's W′ reserve. That includes
+riders who take no pulls: they still have to hold the wheel, so a plan never goes faster by
+leaving a rider to be dropped.
+
+A plan's goal has two halves, stored on the plan: how fast (the fastest the limits allow, or
+hold the target speed) and how the pull lengths are set (for even effort, for the most W′
+in reserve, or left alone). :func:`optimize_plan` carries it out; :class:`PlanStatus` says
+whether the plan as it stands fits the limits, and who stops it going faster.
+``ttt_planner/help.html`` explains all of this to riders, so keep it in step with this module.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, ClassVar
@@ -23,6 +29,8 @@ from typing import TYPE_CHECKING, ClassVar
 from apps.ttt_planner.services import effort, physics
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from apps.ttt_planner.models import PlanRider, TttPlan
 
 # Defaults used when a rider has no weight/height on file, so the model still runs.
@@ -32,8 +40,11 @@ FALLBACK_HEIGHT_CM = 178.0
 FALLBACK_W_PRIME_J = 20_000
 # Zwift Racing reports a W′ of 0 for some riders; anything this small counts as missing.
 MIN_CREDIBLE_W_PRIME_J = 1_000
-# Allowed pull steps for Auto-balance, in seconds.
+# Allowed pull steps for Optimize, in seconds.
 PULL_STEPS_S = (5, 10, 15, 30)
+# A plan's goal, as ``TttPlan.SpeedGoal`` and ``TttPlan.PullRule`` store it.
+FASTEST, HOLD = "fastest", "hold"
+EVEN, RESERVE, KEEP = "even", "reserve", "keep"
 # Slack for float noise when checking the IF and W′ limits.
 _IF_TOLERANCE = 1e-6
 _W_PRIME_TOLERANCE_J = 1e-3
@@ -143,7 +154,7 @@ class Limits:
         )
 
     def pull_grid(self) -> list[int]:
-        """Return every pull length Auto-balance may hand out.
+        """Return every pull length Optimize may hand out.
 
         Returns:
             The lengths from the shortest to the longest pull, one step apart.
@@ -310,6 +321,41 @@ class DraftRow:
     saving_pct: float
 
 
+@dataclass(frozen=True)
+class Holdback:
+    """A rider who would cross a limit if the team went any faster with these pulls."""
+
+    name: str
+    limit: str  # "if" (IF over Target IF) or "w_prime" (W′ under the reserve)
+
+
+@dataclass
+class PlanStatus:
+    """Whether the plan as it stands fits its limits, and what stops it going faster.
+
+    ``fastest_kph`` is the fastest flat speed the current pulls allow, to 0.1 km/h, and
+    ``held_back_by`` the riders who would cross a limit 0.1 km/h above it. Both are None or
+    empty when nobody can be judged: no rider has an FTP, or nobody pulls.
+    """
+
+    speed_kph: float
+    judged: bool
+    anyone_pulls: bool
+    over: list[RiderResult]
+    fastest_kph: float | None
+    held_back_by: list[Holdback]
+
+    @property
+    def fits(self) -> bool:
+        """Whether every rider is inside both limits at the plan's speed."""
+        return not self.over
+
+    @property
+    def at_fastest(self) -> bool:
+        """Whether the plan already rides at the fastest speed its pulls allow."""
+        return self.fastest_kph is not None and abs(self.fastest_kph - self.speed_kph) < 0.05
+
+
 @dataclass
 class PlanResult:
     """Computed metrics for the whole plan."""
@@ -330,9 +376,27 @@ class PlanResult:
     any_power_estimated: bool = False
     target_if: float = 0.95
     w_prime_reserve_pct: int = 25
+    status: PlanStatus | None = None
     fallback_weight_kg: ClassVar[float] = FALLBACK_WEIGHT_KG
     fallback_height_cm: ClassVar[float] = FALLBACK_HEIGHT_CM
     fallback_w_prime_kj: ClassVar[float] = FALLBACK_W_PRIME_J / 1000
+
+    @property
+    def highest_if(self) -> float | None:
+        """The highest IF over the riders, or None when nobody has an FTP."""
+        values = [r.intensity_factor for r in self.riders if r.intensity_factor is not None]
+        return max(values) if values else None
+
+    @property
+    def lowest_w_prime_pct(self) -> int | None:
+        """The lowest W′ balance over the riders, as a percentage of W′; None when none can be judged."""
+        values = [r.w_prime_low_pct for r in self.riders if r.w_prime_low_pct is not None]
+        return min(values) if values else None
+
+    @property
+    def anyone_runs_out(self) -> bool:
+        """Whether some rider's W′ runs out over the race."""
+        return any(r.w_prime_empty for r in self.riders)
 
 
 def params_for_plan(plan: TttPlan) -> physics.PhysicsParams:
@@ -531,6 +595,9 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
         )
 
     estimated_time = race_s or 0.0
+    judged = any(s.ftp for s in specs)
+    anyone_pulls = any(s.pulls for s in specs)
+    fastest = _fastest(plan, specs, limits, params)
     return PlanResult(
         riders=results,
         target_speed_kph=target,
@@ -544,17 +611,20 @@ def compute_plan(plan: TttPlan, params: physics.PhysicsParams | None = None) -> 
         any_power_estimated=any(s.cp_estimated or s.w_prime_estimated for s in specs),
         target_if=limits.target_if,
         w_prime_reserve_pct=round(limits.reserve * 100),
+        status=PlanStatus(
+            speed_kph=target,
+            judged=judged,
+            anyone_pulls=anyone_pulls,
+            over=[r for r in results if r.over_target],
+            fastest_kph=fastest,
+            held_back_by=(
+                _held_back_by(plan, riders, specs, limits, params, round(fastest + 0.1, 1)) if fastest else []
+            ),
+        ),
     )
 
 
-def _max_speed(
-    plan: TttPlan,
-    specs: list[RiderSpec],
-    limits: Limits,
-    params: physics.PhysicsParams,
-    *,
-    fallback: float,
-) -> float:
+def _fastest(plan: TttPlan, specs: list[RiderSpec], limits: Limits, params: physics.PhysicsParams) -> float | None:
     """Return the fastest flat speed (to 0.1 km/h, rounded down) at which every rider is within the limits.
 
     Args:
@@ -562,15 +632,14 @@ def _max_speed(
         specs: Its riders, with the pull lengths to judge.
         limits: Target IF and W′ reserve.
         params: Physics constants.
-        fallback: Returned when nobody pulls, nobody has an FTP, or no speed fits.
 
     Returns:
-        The speed in km/h.
+        The speed in km/h, or None when nobody pulls, nobody has an FTP, or no speed fits.
 
     """
     judged = [s for s in specs if s.ftp]
     if not judged or not any(s.pulls for s in specs):
-        return fallback
+        return None
     powers = _Powers(params, _mean_draft_factor(len(specs), params))
     cycle = sum(s.pull_s for s in specs if s.pulls)
 
@@ -589,17 +658,82 @@ def _max_speed(
             lo = mid
         else:
             hi = mid
-    return math.floor(lo * 10) / 10 if lo >= 0.1 else fallback
+    return math.floor(lo * 10) / 10 if lo >= 0.1 else None
+
+
+def _max_speed(
+    plan: TttPlan,
+    specs: list[RiderSpec],
+    limits: Limits,
+    params: physics.PhysicsParams,
+    *,
+    fallback: float,
+) -> float:
+    """Return :func:`_fastest`, or ``fallback`` when it cannot say.
+
+    Args:
+        plan: The plan (for its route).
+        specs: Its riders, with the pull lengths to judge.
+        limits: Target IF and W′ reserve.
+        params: Physics constants.
+        fallback: Returned when nobody pulls, nobody has an FTP, or no speed fits.
+
+    Returns:
+        The speed in km/h.
+
+    """
+    fastest = _fastest(plan, specs, limits, params)
+    return fallback if fastest is None else fastest
+
+
+def _held_back_by(
+    plan: TttPlan,
+    riders: list[PlanRider],
+    specs: list[RiderSpec],
+    limits: Limits,
+    params: physics.PhysicsParams,
+    speed: float,
+) -> list[Holdback]:
+    """Name the riders who would be past a limit at ``speed``, and which limit.
+
+    Called with a speed just above the fastest the pulls allow, so it names who sets that speed.
+
+    Args:
+        plan: The plan (for its route).
+        riders: Its riders.
+        specs: The same riders, as the model reads them.
+        limits: Target IF and W′ reserve.
+        params: Physics constants.
+        speed: The flat speed to judge, in km/h.
+
+    Returns:
+        One :class:`Holdback` per rider past a limit, in pull order; IF is named when both are.
+
+    """
+    powers = _Powers(params, _mean_draft_factor(len(specs), params))
+    cycle = sum(s.pull_s for s in specs if s.pulls)
+    race_s = _race_seconds(plan, specs, speed, params)
+    held: list[Holdback] = []
+    for rider, spec in zip(riders, specs, strict=True):
+        if not spec.ftp:
+            continue
+        load = rider_load(spec, powers.front(spec, speed), powers.draft(spec, speed), cycle, race_s)
+        if over_if(spec, load, limits):
+            held.append(Holdback(rider.name, "if"))
+        elif below_reserve(spec, load, limits):
+            held.append(Holdback(rider.name, "w_prime"))
+    return held
 
 
 def sustainable_speed(
     plan: TttPlan, *, target_if: float | None = None, params: physics.PhysicsParams | None = None
 ) -> float:
-    """Solve for the fastest flat speed at which every rider who pulls stays within the limits.
+    """Solve for the fastest flat speed at which every rider stays within the limits, keeping the pulls.
 
     Keeps the pull lengths as they are. Every rider with an FTP must keep IF (NP / FTP) at
     or under Target IF and their W′ balance at or above the plan's W′ reserve, riders who
-    take no pulls too; the first rider to reach a limit sets the speed.
+    take no pulls too; the first rider to reach a limit sets the speed. This is Optimize
+    with "Keep my pull lengths" and "As fast as the limits allow".
 
     Args:
         plan: The plan.
@@ -617,9 +751,12 @@ def sustainable_speed(
     return _max_speed(plan, specs, Limits.for_plan(plan, target_if), params, fallback=float(plan.target_speed_kph))
 
 
+# ----- Optimize: carry out the plan's goal ------------------------------------------------------
+
+
 @dataclass
 class BalanceAssignment:
-    """A proposed pull assignment for one rider from auto-balance."""
+    """A proposed pull assignment for one rider from Optimize."""
 
     rider_pk: int
     pull_duration_s: int
@@ -628,11 +765,224 @@ class BalanceAssignment:
 
 
 @dataclass
-class BalanceResult:
-    """Result of an auto-balance: per-rider assignments plus the team speed."""
+class OptimizeResult:
+    """What Optimize settled on for a plan."""
 
     speed_kph: float
-    assignments: list[BalanceAssignment]
+    # New pull lengths and order for every rider, or None when the pulls stay as they are.
+    assignments: list[BalanceAssignment] | None
+    # Holding a speed only: it is too fast for the rule's other limit, so that limit was set aside.
+    relaxed: bool = False
+
+
+@dataclass(frozen=True)
+class _Try:
+    """One rider on one pull length in one rotation, judged for a long race (the worst case for W′)."""
+
+    pull_s: int  # 0: sits in
+    intensity: float  # IF, NP / FTP
+    w_left: float  # lowest W′ balance as a share of W′; -inf when the race empties it
+    over_if: bool
+    below_reserve: bool
+
+
+@dataclass(frozen=True)
+class _Rule:
+    """How Optimize compares pull lengths: the worst rider on ``score`` decides, lower is better.
+
+    ``then`` breaks ties the same way, and every pull must be ``allowed``.
+    """
+
+    score: Callable[[_Try], float]
+    then: Callable[[_Try], float]
+    allowed: Callable[[_Try], bool]
+
+
+def _rule(pull_rule: str, *, hold_if: bool, hold_w_prime: bool) -> _Rule:
+    """Build the comparison for a pull rule.
+
+    Even effort keeps the highest IF lowest; Most W′ in reserve keeps the lowest W′ balance
+    highest. Each breaks ties on the other's measure.
+
+    Args:
+        pull_rule: :data:`EVEN` or :data:`RESERVE`.
+        hold_if: Whether every pull must keep IF at or under Target IF.
+        hold_w_prime: Whether every pull must keep W′ at or above the reserve.
+
+    Returns:
+        The :class:`_Rule`.
+
+    """
+
+    def allowed(t: _Try) -> bool:
+        return not (hold_if and t.over_if) and not (hold_w_prime and t.below_reserve)
+
+    def intensity(t: _Try) -> float:
+        return t.intensity
+
+    def w_spent(t: _Try) -> float:
+        return -t.w_left
+
+    if pull_rule == RESERVE:
+        return _Rule(score=w_spent, then=intensity, allowed=allowed)
+    return _Rule(score=intensity, then=w_spent, allowed=allowed)
+
+
+def _tries(spec: RiderSpec, front: float, draft: float, cycle_s: int, lengths: list[int], limits: Limits) -> list[_Try]:
+    """Judge a rider sitting in, then on each pull length, in a rotation of ``cycle_s``.
+
+    Args:
+        spec: The rider (with an FTP).
+        front: Their power on the front.
+        draft: Their power sitting in.
+        cycle_s: The rotation length.
+        lengths: The pull lengths to try, shortest first.
+        limits: Target IF and W′ reserve.
+
+    Returns:
+        One :class:`_Try` for sitting in, then one per length, in that order.
+
+    """
+    tries = []
+    for pull in (0, *lengths):
+        trial = replace(spec, pull_s=pull, zero_pull=pull == 0)
+        load = rider_load(trial, front, draft, cycle_s, None)
+        low = load.w_prime_low_j
+        tries.append(
+            _Try(
+                pull_s=pull,
+                intensity=load.np_w / spec.ftp,
+                w_left=low / spec.w_prime if low is not None and spec.w_prime else math.inf,
+                over_if=over_if(trial, load, limits),
+                below_reserve=below_reserve(trial, load, limits),
+            )
+        )
+    return tries
+
+
+def _can_fill(caps: dict[int, int], front_time: int, limits: Limits) -> bool:
+    """Whether some riders, each on a pull from the shortest up to their cap, can fill the front time.
+
+    Taking the riders with the longest caps, as many as the front time has room for at the
+    shortest pull, gives the most room; it works if their caps add up to the front time.
+
+    Args:
+        caps: Each rider's longest pull, by primary key (below the shortest pull: sits in).
+        front_time: Seconds of front time in the rotation.
+        limits: The shortest pull.
+
+    Returns:
+        True if the front time can be filled.
+
+    """
+    longest = sorted((cap for cap in caps.values() if cap >= limits.min_pull_s), reverse=True)
+    pullers = min(len(longest), front_time // limits.min_pull_s)
+    return pullers >= 1 and front_time <= sum(longest[:pullers])
+
+
+def _fill(tries: dict[int, list[_Try]], front_time: int, limits: Limits, rule: _Rule) -> dict[int, _Try] | None:
+    """Choose pull lengths that fill one rotation's front time, keeping the worst score lowest.
+
+    A pull only gets harder as it grows, so each rider's usable pulls run from sitting in up
+    to a longest. For a trial ceiling on the score, a rider's cap is their longest usable pull
+    under it; bisecting over the scores that occur finds the lowest ceiling at which the caps
+    can fill the front time. The front time is then handed out: the riders with the longest
+    caps start on the shortest pull, and each further step goes to whoever it costs least,
+    which leaves the scores as even as the steps allow.
+
+    Args:
+        tries: Each rider's tries (sitting in, then each pull length), by primary key.
+        front_time: Seconds of front time in the rotation.
+        limits: The pull grid.
+        rule: What to keep lowest, and what every pull must keep to.
+
+    Returns:
+        Each rider's chosen try, by primary key, or None if the rotation cannot be filled.
+
+    """
+    usable: dict[int, list[_Try]] = {}
+    for pk, options in tries.items():
+        usable[pk] = list(itertools.takewhile(rule.allowed, options))
+        if not usable[pk]:
+            return None  # cannot even sit in
+
+    def caps_under(ceiling: float) -> dict[int, int] | None:
+        caps = {}
+        for pk, options in usable.items():
+            fitting = list(itertools.takewhile(lambda t: rule.score(t) <= ceiling, options))
+            if not fitting:
+                return None
+            caps[pk] = fitting[-1].pull_s
+        return caps
+
+    ceilings = sorted({rule.score(t) for options in usable.values() for t in options})
+    lo, hi, found = 0, len(ceilings) - 1, None
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        caps = caps_under(ceilings[mid])
+        if caps is not None and _can_fill(caps, front_time, limits):
+            found, hi = caps, mid - 1
+        else:
+            lo = mid + 1
+    if found is None:
+        return None
+
+    by_pull = {pk: {t.pull_s: t for t in options} for pk, options in usable.items()}
+    able = sorted((pk for pk, cap in found.items() if cap >= limits.min_pull_s), key=lambda pk: -found[pk])
+    pullers = able[: front_time // limits.min_pull_s]
+    pulls = dict.fromkeys(found, 0)
+    for pk in pullers:
+        pulls[pk] = limits.min_pull_s
+    remaining = front_time - limits.min_pull_s * len(pullers)
+    while remaining >= limits.step_s:
+        room = [pk for pk in pullers if pulls[pk] + limits.step_s <= found[pk]]
+        if not room:
+            break
+        pk = min(room, key=lambda k: rule.score(by_pull[k][pulls[k] + limits.step_s]))
+        pulls[pk] += limits.step_s
+        remaining -= limits.step_s
+    return {pk: by_pull[pk][pull] for pk, pull in pulls.items()}
+
+
+def _best_rotation(
+    balanced: list[RiderSpec],
+    fixed_front: int,
+    powers: _Powers,
+    speed: float,
+    limits: Limits,
+    rule: _Rule,
+) -> dict[int, _Try] | None:
+    """Try every rotation length at one speed and keep the pulls the rule likes best.
+
+    Rotations are compared on their riders' scores, worst first (so the second-worst breaks
+    a tie on the worst, and so on), then on ``rule.then``, then the shorter rotation wins.
+
+    Args:
+        balanced: The riders Optimize sets (those with an FTP).
+        fixed_front: Front time of the riders it leaves alone, in seconds.
+        powers: Pull and sitting-in powers.
+        speed: The flat speed, in km/h.
+        limits: The plan's limits and pull grid.
+        rule: What to keep lowest, and what every pull must keep to.
+
+    Returns:
+        Each rider's chosen try, by primary key, or None if no rotation works.
+
+    """
+    grid = limits.pull_grid()
+    level = {s.pk: (powers.front(s, speed), powers.draft(s, speed)) for s in balanced}
+    best_key, best = None, None
+    for front_time in range(limits.min_pull_s, len(balanced) * limits.max_pull_s + 1, limits.step_s):
+        lengths = [d for d in grid if d <= front_time]
+        tries = {s.pk: _tries(s, *level[s.pk], front_time + fixed_front, lengths, limits) for s in balanced}
+        chosen = _fill(tries, front_time, limits, rule)
+        if chosen is None:
+            continue
+        scores = tuple(sorted((round(rule.score(t), 4) for t in chosen.values()), reverse=True))
+        key = (scores, round(max(rule.then(t) for t in chosen.values()), 4), front_time)
+        if best_key is None or key < best_key:
+            best_key, best = key, chosen
+    return best
 
 
 def _longest_pull(
@@ -641,11 +991,9 @@ def _longest_pull(
     draft: float,
     cycle_s: int,
     limits: Limits,
-    grid: list[int],
-) -> int | None:
-    """Return the longest pull on the grid a rider can take in a rotation of ``cycle_s``.
-
-    Judged for a long race (the worst case for W′), so a plan that fits here fits any race.
+    lengths: list[int],
+) -> int:
+    """Return the longest of ``lengths`` a rider can pull within both limits, or 0 if none.
 
     Args:
         spec: The rider.
@@ -653,65 +1001,96 @@ def _longest_pull(
         draft: Their power sitting in.
         cycle_s: The rotation length.
         limits: Target IF and W′ reserve.
-        grid: The pull lengths allowed, shortest first.
+        lengths: The pull lengths allowed, shortest first.
 
     Returns:
-        The longest allowed pull, or None if even the shortest breaks a limit.
+        The longest allowed pull in seconds, judged for a long race; 0 if even the shortest breaks a limit.
 
     """
-    candidates = [d for d in grid if d <= cycle_s]
-    lo, hi, best = 0, len(candidates) - 1, None
+    lo, hi, best = 0, len(lengths) - 1, 0
     while lo <= hi:  # the limits only tighten as the pull grows, so bisect
         mid = (lo + hi) // 2
-        trial = replace(spec, pull_s=candidates[mid], zero_pull=False)
-        if not within_limits(trial, rider_load(trial, front, draft, cycle_s, None), limits):
-            hi = mid - 1
+        trial = replace(spec, pull_s=lengths[mid], zero_pull=False)
+        if within_limits(trial, rider_load(trial, front, draft, cycle_s, None), limits):
+            best, lo = lengths[mid], mid + 1
         else:
-            best, lo = candidates[mid], mid + 1
+            hi = mid - 1
     return best
 
 
-def _share_out(front_time: int, caps: dict[int, int], limits: Limits) -> dict[int, int]:
-    """Split a rotation's front time between riders, within each one's longest pull.
+def _fits_somehow(balanced: list[RiderSpec], fixed_front: int, powers: _Powers, speed: float, limits: Limits) -> bool:
+    """Whether some pull lengths keep every rider within both limits at this speed.
 
-    Everyone starts on the shortest pull; each further step goes to the rider with the most
-    room left under their longest pull, so the spare capacity ends up evenly spread.
+    Every rider has to be able to sit in; then rotations are tried from the shortest, each
+    rider's cap being their longest pull within the limits, until one can be filled.
 
     Args:
-        front_time: Seconds of front time to hand out.
-        caps: Each rider's longest pull, by primary key.
-        limits: The plan's limits (shortest pull and step).
+        balanced: The riders Optimize sets (those with an FTP).
+        fixed_front: Front time of the riders it leaves alone, in seconds.
+        powers: Pull and sitting-in powers.
+        speed: The flat speed, in km/h.
+        limits: The plan's limits and pull grid.
 
     Returns:
-        Pull seconds by rider primary key.
+        True if a rotation works.
 
     """
-    pulls = dict.fromkeys(caps, limits.min_pull_s)
-    remaining = front_time - limits.min_pull_s * len(caps)
-    while remaining >= limits.step_s:
-        room = [pk for pk in caps if pulls[pk] + limits.step_s <= caps[pk]]
-        if not room:
-            break
-        pk = max(room, key=lambda k: (caps[k] - pulls[k], caps[k]))
-        pulls[pk] += limits.step_s
-        remaining -= limits.step_s
-    return pulls
+    level = {s.pk: (powers.front(s, speed), powers.draft(s, speed)) for s in balanced}
+    for spec in balanced:  # everyone has to hold the wheel
+        sitting = replace(spec, zero_pull=True)
+        if not within_limits(sitting, rider_load(sitting, *level[spec.pk], 0, None), limits):
+            return False
+    grid = limits.pull_grid()
+    for front_time in range(limits.min_pull_s, len(balanced) * limits.max_pull_s + 1, limits.step_s):
+        lengths = [d for d in grid if d <= front_time]
+        cycle = front_time + fixed_front
+        caps = {s.pk: _longest_pull(s, *level[s.pk], cycle, limits, lengths) for s in balanced}
+        if _can_fill(caps, front_time, limits):
+            return True
+    return False
 
 
-def compute_auto_balance(
+def _assignments(balanced: list[RiderSpec], fixed: list[RiderSpec], chosen: dict[int, _Try]) -> list[BalanceAssignment]:
+    """Turn chosen pulls into assignments: longest pull first, then those who sit in, then the rest.
+
+    Args:
+        balanced: The riders Optimize set.
+        fixed: The riders it left alone (no FTP); their settings stand and they go last.
+        chosen: Each balanced rider's chosen try, by primary key.
+
+    Returns:
+        One :class:`BalanceAssignment` per rider, numbered in pull order.
+
+    """
+    ftp = {s.pk: s.ftp or 0.0 for s in balanced}
+    pullers = sorted((pk for pk, t in chosen.items() if t.pull_s), key=lambda pk: (-chosen[pk].pull_s, -ftp[pk]))
+    out: list[BalanceAssignment] = [BalanceAssignment(pk, chosen[pk].pull_s, False, i) for i, pk in enumerate(pullers)]
+    for spec in balanced:
+        if not chosen[spec.pk].pull_s:  # sits in at this speed
+            out.append(BalanceAssignment(spec.pk, spec.pull_s, True, len(out)))
+    for spec in fixed:
+        out.append(BalanceAssignment(spec.pk, spec.pull_s, spec.zero_pull, len(out)))
+    return out
+
+
+def optimize_plan(
     plan: TttPlan, *, target_if: float | None = None, params: physics.PhysicsParams | None = None
-) -> BalanceResult | None:
-    """Choose pull lengths, order and speed so the team goes as fast as the limits allow.
+) -> OptimizeResult | None:
+    """Carry out the plan's goal: its ``speed_goal`` and ``pull_rule``.
 
-    For a trial speed, every rider with an FTP must first be able to sit in within the
-    limits; if one cannot, the speed is too fast. Then each rotation length is tried from
-    the shortest: every rider gets the longest pull on the plan's grid that keeps them
-    within the limits in that rotation (riders who cannot manage the shortest pull sit in),
-    and the rotation works if those pulls can fill it. A bisection finds the fastest speed with a working rotation,
-    whose front time is then shared out by :func:`_share_out`. Pulls are judged for a long
-    race; the speed is then set by :func:`sustainable_speed`'s rule for the race actually
-    planned, so Auto-balance and Calculate speed always agree. Riders without an FTP keep
-    their settings and go last.
+    - Keep my pull lengths: as fast as the limits allow finds the fastest speed for the
+      pulls as they are (:func:`sustainable_speed`); holding the speed changes nothing.
+    - As fast as the limits allow, with Even effort or Most W′ in reserve: a bisection finds
+      the fastest speed at which some pulls keep every rider within both limits. At that
+      speed the rule picks the pulls, and the speed is then set by :func:`sustainable_speed`'s
+      rule for them, so a second Optimize with Keep my pull lengths changes nothing.
+    - Holding the speed: the rule picks the pulls at the plan's speed. Even effort keeps the
+      highest IF lowest, keeping everyone's W′ above the reserve; Most W′ in reserve keeps
+      the lowest W′ highest, keeping everyone's IF at or under Target IF. When the speed is
+      too fast for that other limit, it is set aside (``relaxed``).
+
+    Pulls are judged for a long race, the worst case for W′, so they do not depend on the
+    route. Riders without an FTP cannot be judged: they keep their settings and go last.
 
     Args:
         plan: The plan.
@@ -719,12 +1098,18 @@ def compute_auto_balance(
         params: Physics constants; falls back to the plan's resolved params.
 
     Returns:
-        A :class:`BalanceResult`, or None if no rider has an FTP or no speed works.
+        An :class:`OptimizeResult`, or None if no rider has an FTP or no speed works.
 
     """
     if params is None:
         params = params_for_plan(plan)
     limits = Limits.for_plan(plan, target_if)
+    holding = plan.speed_goal == HOLD
+    if plan.pull_rule == KEEP:
+        if holding:
+            return OptimizeResult(speed_kph=float(plan.target_speed_kph), assignments=None)
+        return OptimizeResult(speed_kph=sustainable_speed(plan, target_if=target_if, params=params), assignments=None)
+
     specs = [rider_spec(r) for r in plan.riders.all()]
     balanced = [s for s in specs if s.ftp]
     if not balanced:
@@ -732,54 +1117,38 @@ def compute_auto_balance(
     fixed = [s for s in specs if not s.ftp]
     fixed_front = sum(s.pull_s for s in fixed if s.pulls)
     powers = _Powers(params, _mean_draft_factor(len(specs), params))
-    grid = limits.pull_grid()
 
-    def rotation_at(speed: float) -> dict[int, int] | None:
-        level = {s.pk: (powers.front(s, speed), powers.draft(s, speed)) for s in balanced}
-        # Everyone has to hold the wheel: a rider who cannot even sit in caps the speed.
-        for spec in balanced:
-            sitting = replace(spec, zero_pull=True)
-            if not within_limits(sitting, rider_load(sitting, *level[spec.pk], 0, None), limits):
-                return None
-        for front_time in range(limits.min_pull_s, len(balanced) * limits.max_pull_s + 1, limits.step_s):
-            cycle = front_time + fixed_front
-            caps = {}
-            for spec in balanced:
-                cap = _longest_pull(spec, *level[spec.pk], cycle, limits, [d for d in grid if d <= front_time])
-                if cap is not None:
-                    caps[spec.pk] = cap
-            if caps and len(caps) * limits.min_pull_s <= front_time <= sum(caps.values()):
-                return _share_out(front_time, caps, limits)
-        return None
+    relaxed = False
+    if holding:
+        speed = float(plan.target_speed_kph)
+        rule = _rule(plan.pull_rule, hold_if=plan.pull_rule == RESERVE, hold_w_prime=plan.pull_rule == EVEN)
+        chosen = _best_rotation(balanced, fixed_front, powers, speed, limits, rule)
+        if chosen is None:
+            relaxed = True
+            free = _rule(plan.pull_rule, hold_if=False, hold_w_prime=False)
+            chosen = _best_rotation(balanced, fixed_front, powers, speed, limits, free)
+        if chosen is None:
+            return None
+    else:
+        lo, hi, found = *_SPEED_RANGE_KPH, False
+        for _ in range(_BALANCE_STEPS):
+            mid = (lo + hi) / 2.0
+            if _fits_somehow(balanced, fixed_front, powers, mid, limits):
+                lo, found = mid, True
+            else:
+                hi = mid
+        if not found:
+            return None
+        rule = _rule(plan.pull_rule, hold_if=True, hold_w_prime=True)
+        chosen = _best_rotation(balanced, fixed_front, powers, lo, limits, rule)
+        if chosen is None:
+            return None
+        planned = [
+            replace(s, pull_s=chosen[s.pk].pull_s or s.pull_s, zero_pull=not chosen[s.pk].pull_s) for s in balanced
+        ]
+        speed = _max_speed(plan, planned + fixed, limits, params, fallback=math.floor(lo * 10) / 10)
 
-    lo, hi = _SPEED_RANGE_KPH
-    best: dict[int, int] | None = None
-    for _ in range(_BALANCE_STEPS):
-        mid = (lo + hi) / 2.0
-        rotation = rotation_at(mid)
-        if rotation is None:
-            hi = mid
-        else:
-            lo, best = mid, rotation
-    if best is None:
-        return None
-
-    ftp_by_pk = {s.pk: s.ftp for s in balanced}
-    pullers = sorted(best, key=lambda pk: (-best[pk], -(ftp_by_pk[pk] or 0)))
-    planned = [
-        replace(s, pull_s=best[s.pk], zero_pull=False) if s.pk in best else replace(s, zero_pull=True) for s in balanced
-    ] + fixed
-    speed = _max_speed(plan, planned, limits, params, fallback=math.floor(lo * 10) / 10)
-
-    assignments: list[BalanceAssignment] = []
-    for pk in pullers:
-        assignments.append(BalanceAssignment(pk, best[pk], False, len(assignments)))
-    for spec in balanced:
-        if spec.pk not in best:  # sits in at this speed
-            assignments.append(BalanceAssignment(spec.pk, spec.pull_s, True, len(assignments)))
-    for spec in fixed:  # no FTP to judge them by: their settings stand
-        assignments.append(BalanceAssignment(spec.pk, spec.pull_s, spec.zero_pull, len(assignments)))
-    return BalanceResult(speed_kph=speed, assignments=assignments)
+    return OptimizeResult(speed_kph=speed, assignments=_assignments(balanced, fixed, chosen), relaxed=relaxed)
 
 
 # ----- Climb compare (per-rider climb-strength heatmap) ------------------------------------------

@@ -1,8 +1,8 @@
 """The plan page's cards, the help page, and the controls that moved between them.
 
-Plan and Course are separate cards; the edit-squad picker lives in Add riders; target speed,
-Target IF, the CdA coefficient, Calculate speed, Auto-balance and the draft savings live in
-Parameters, just above the pull schedule.
+Plan and Course are separate cards; the edit-squad picker lives in Add riders; the plan's goal
+(how fast, how the pulls are set), its limits, the CdA coefficient, Optimize and the draft
+savings live in Parameters, just above the pull schedule.
 """
 
 from datetime import timedelta
@@ -68,23 +68,24 @@ def test_the_edit_squad_picker_is_in_add_riders(auth_client, team_member):
 
 
 @pytest.mark.django_db
-def test_parameters_hold_the_targets_and_both_optimisers_above_the_schedule(auth_client, team_member):
+def test_parameters_hold_the_goal_the_limits_and_optimize_above_the_schedule(auth_client, team_member):
     plan = _plan(team_member)
     body = _page(auth_client, plan)
     params = _card(body, "ttt-params-heading")
 
     for control in (
+        'name="speed_goal"',
+        'name="pull_rule"',
         'name="target_speed_kph"',
         'name="target_if"',
+        'name="w_prime_reserve_pct"',
         'name="cda_coef"',
-        reverse("ttt_planner:calculate_speed", args=[plan.pk]),
-        reverse("ttt_planner:auto_balance", args=[plan.pk]),
+        reverse("ttt_planner:optimize", args=[plan.pk]),
         'id="ttt-draft-savings"',
     ):
         assert control in params, control
     assert body.index('id="ttt-params-heading"') < body.index('id="ttt-schedule-heading"')
-    # Auto-balance moved out of the schedule's own toolbar.
-    assert reverse("ttt_planner:auto_balance", args=[plan.pk]) not in _card(body, "ttt-schedule-heading")
+    assert reverse("ttt_planner:optimize", args=[plan.pk]) not in _card(body, "ttt-schedule-heading")
 
 
 @pytest.mark.django_db
@@ -94,8 +95,9 @@ def test_a_read_only_viewer_sees_the_parameters_but_no_controls(auth_client, tea
     params = _card(_page(auth_client, plan), "ttt-params-heading")
 
     assert "0.92" in params
+    assert "As fast as the limits allow" in params  # the goal, as text
     assert 'name="target_if"' not in params
-    assert "Calculate speed" not in params
+    assert reverse("ttt_planner:optimize", args=[plan.pk]) not in params
 
 
 # --- the help page -----------------------------------------------------------------------------
@@ -132,16 +134,16 @@ def test_the_help_page_needs_team_membership(client, user):
 
 
 @pytest.mark.django_db
-def test_auto_balance_uses_the_target_if_sent_with_the_click(auth_client, team_member):
+def test_optimize_uses_the_target_if_sent_with_the_click(auth_client, team_member):
     """The field's own save may not have landed when the button is pressed."""
     plan = _plan(team_member, target_if=0.95)
 
-    auth_client.post(reverse("ttt_planner:auto_balance", args=[plan.pk]), {"target_if": "0.80"})
+    auth_client.post(reverse("ttt_planner:optimize", args=[plan.pk]), {"target_if": "0.80"})
     plan.refresh_from_db()
     slower = float(plan.target_speed_kph)
 
     assert plan.target_if == pytest.approx(0.80)
-    auth_client.post(reverse("ttt_planner:auto_balance", args=[plan.pk]), {"target_if": "0.95"})
+    auth_client.post(reverse("ttt_planner:optimize", args=[plan.pk]), {"target_if": "0.95"})
     plan.refresh_from_db()
     assert float(plan.target_speed_kph) > slower
 

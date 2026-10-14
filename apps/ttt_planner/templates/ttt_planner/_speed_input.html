@@ -1,5 +1,5 @@
-{% comment %}Target-speed input. Rendered in the settings form, and re-emitted out-of-band by Calculate / Auto-balance so the field reflects the new computed speed.{% endcomment %}
+{% comment %}Target-speed input. Rendered in the Parameters card's "Hold" choice, and re-emitted out-of-band by Optimize so the field shows the speed it set.{% endcomment %}
 <input type="number" step="0.1" min="0" name="target_speed_kph" id="ttt-target-speed"
-       value="{{ plan.target_speed_kph }}"
+       value="{{ plan.target_speed_kph }}" aria-label="Speed to hold, kph on the flat"
        {% if oob %}hx-swap-oob="true"{% endif %}
        class="input input-bordered input-sm w-full" />
