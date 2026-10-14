@@ -1073,7 +1073,15 @@ CONSTANCE_CONFIG = {
     "TTT_DRIVETRAIN_EFFICIENCY": (1.0, "Drivetrain efficiency (1.0 = no loss) for the TTT power model", float),
     "TTT_CDA_COEF": (
         0.0318,
-        "Leading coefficient of the CdA estimate (folds in Cd) for the TTT aero-tuck position",
+        "Leading coefficient of a TTT rider's body CdA estimate (folds in Cd). With the default exponents it "
+        "matches Zwift's own body formula; the bike is added by TTT_BIKE_CDA_M2",
+        float,
+    ),
+    "TTT_BIKE_CDA_M2": (
+        -0.050,
+        "Drag area (m²) the bike adds to every TTT rider's body, as Zwift models equipment: the TTT planner "
+        "assumes a TT bike, a TT frame (-0.030) with a deep front wheel (-0.010) and a disc (-0.010). "
+        "More negative is more aero; 0 leaves the bike out, which is close to a road bike",
         float,
     ),
     "STD_CDA_COEF": (
@@ -1268,6 +1276,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "TTT_BIKE_MASS_KG",
         "TTT_DRIVETRAIN_EFFICIENCY",
         "TTT_CDA_COEF",
+        "TTT_BIKE_CDA_M2",
         "STD_CDA_COEF",
         "TTT_CDA_HEIGHT_EXP",
         "TTT_CDA_WEIGHT_EXP",

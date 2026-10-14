@@ -633,7 +633,7 @@ def climb_advantage(matchup: LadderMatchup) -> dict[str, Any]:
     # Honour the configurable physics settings from Constance, using the standard
     # (upright) CdA coefficient rather than the TTT aero tuck, with an optional
     # per-matchup CdA coefficient override on top.
-    params = physics.params_from_constance(cda_coef_key="STD_CDA_COEF")
+    params = physics.params_from_constance(cda_coef_key="STD_CDA_COEF", bike_cda_key=None)
     if matchup.cda_coef is not None:
         params = replace(params, cda_coef=matchup.cda_coef)
     grid = climb_engine.advantage_grid(our_riders, opp_riders, CLIMB_LENGTHS_M, CLIMB_GRADES, params=params)

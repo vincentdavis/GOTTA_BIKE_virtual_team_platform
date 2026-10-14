@@ -1399,7 +1399,7 @@ def climb_strength(plan: TttPlan) -> dict:
     if len(riders) < 2:
         return {"available": False}
 
-    params = physics.params_from_constance(cda_coef_key="STD_CDA_COEF")
+    params = physics.params_from_constance(cda_coef_key="STD_CDA_COEF", bike_cda_key=None)
     if plan.cda_coef is not None:
         params = replace(params, cda_coef=plan.cda_coef)
 

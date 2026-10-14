@@ -9,6 +9,7 @@ page in sync after every edit. CSRF is supplied globally via ``hx-headers`` on
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import math
 
 import logfire
@@ -383,6 +384,9 @@ def planner_help(request: HttpRequest) -> HttpResponse:
             "fallback_w_prime_kj": f"{compute.FALLBACK_W_PRIME_J / 1000:g}",
             "w_example": w_example,
             "climb_grade_pct": f"{compute.TTT_CLIMB_GRADE * 100:g}",
+            # The bike's term in the CdA formula, signed for reading, with a real minus sign.
+            "bike_term": f"{'\u2212' if params.bike_cda_m2 < 0 else '+'} {abs(params.bike_cda_m2):g}",
+            "bike_area_m2": f"{abs(params.bike_cda_m2):g}",
             "course_grade_window_m": course.GRADE_WINDOW_M,
             "example": {
                 "kph": f"{example_kph:g}",
@@ -391,6 +395,15 @@ def planner_help(request: HttpRequest) -> HttpResponse:
                 "cda": physics.estimate_cda(example_cm, example_kg, params),
                 "front_w": round(
                     physics.power_for_speed(example_kph, weight_kg=example_kg, height_cm=example_cm, params=params)
+                ),
+                # The same rider with the bike left out, which is close to Zwift's road bike.
+                "road_w": round(
+                    physics.power_for_speed(
+                        example_kph,
+                        weight_kg=example_kg,
+                        height_cm=example_cm,
+                        params=dataclasses.replace(params, bike_cda_m2=0.0),
+                    )
                 ),
                 "third_wheel_pct": f"{third_wheel * 100:g}",
                 "third_wheel_w": round(

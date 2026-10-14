@@ -501,12 +501,13 @@ def test_plan_draft_savings_overrides_default(team_member):
 
 @pytest.mark.django_db
 def test_rider_cda_computed_and_default_coef(team_member):
-    """Each rider gets a positive CdA and the plan reports the default coef."""
+    """Each rider gets a CdA, body and TT bike, and the plan reports the default coef."""
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
     PlanRider.objects.create(plan=plan, order=0, name="A", weight_kg=75, height_cm=180, ftp_w=300)
     result = compute_plan(plan)
     assert result.cda_coef == pytest.approx(physics.DEFAULT_PARAMS.cda_coef)
-    assert result.riders[0].cda == pytest.approx(physics.estimate_cda(180, 75), abs=0.001)
+    body = physics.estimate_cda(180, 75)
+    assert result.riders[0].cda == pytest.approx(body + physics.TT_BIKE_CDA_M2, abs=0.001)
 
 
 @pytest.mark.django_db

@@ -140,7 +140,9 @@ def test_without_a_profile_the_average_gradient_stands_in(plan, route_profiles):
 
     result = compute.compute_plan(plan)
 
-    expected = physics.estimate_time_seconds(20, 200, 44, avg_weight_kg=75, avg_height_cm=179)
+    expected = physics.estimate_time_seconds(
+        20, 200, 44, avg_weight_kg=75, avg_height_cm=179, params=physics.params_from_constance()
+    )
     assert result.estimated_time_s == pytest.approx(expected, rel=1e-3)
     assert result.course_chart is None
 

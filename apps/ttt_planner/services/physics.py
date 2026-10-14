@@ -8,9 +8,15 @@ aerodynamic term.
 
 All constants live on :class:`PhysicsParams` with sensible defaults. The web
 layer builds a ``PhysicsParams`` from Constance via :func:`params_from_constance`
-so the model can be calibrated against Zwift Insider / zwiftgopher without a
-redeploy. The defaults are calibrated so a ~75 kg / 180 cm rider needs roughly
-290-300 W to hold 40 km/h solo on the flat, matching typical Zwift behaviour.
+so the model can be calibrated without a redeploy.
+
+A rider's drag area is their body's, from height and weight, plus their bike's. The
+body formula's defaults match Zwift's own (half of 0.3176 x the Shuter-Aslani body
+surface area, recovered from the game by the Zwift Speed Lab) to within about 1% for
+ordinary builds. Zwift has no riding position: what makes a TT faster is the
+equipment, a fixed drag area per item, which ``bike_cda_m2`` carries. The TTT planner
+assumes Zwift's TT bike (``TTT_BIKE_CDA_M2``); :data:`DEFAULT_PARAMS` leave the bike
+out, which is close to a road bike.
 """
 
 from __future__ import annotations
@@ -26,6 +32,12 @@ GRAVITY = 9.8067  # m/s^2
 # Seeded from Zwift Insider Pack Dynamics 4 TTT tests (~23/30/37%).
 DEFAULT_DRAFT_SAVINGS: tuple[float, ...] = (0.0, 0.233, 0.30, 0.366, 0.39, 0.40, 0.41, 0.42)
 
+# Zwift's TT bike, as the Speed Lab's equipment data has it: a TT frame (-0.030 m² for
+# the common ones, down to -0.036) with a deep front wheel (-0.010) and a disc (-0.010).
+TT_BIKE_CDA_M2 = -0.050
+# The smallest drag area a rider can end up with, whatever the settings say.
+MIN_CDA_M2 = 0.05
+
 
 @dataclass(frozen=True)
 class PhysicsParams:
@@ -36,9 +48,11 @@ class PhysicsParams:
         crr: Coefficient of rolling resistance.
         bike_mass_kg: Mass of the bike + wheels added to rider weight.
         drivetrain_efficiency: Fraction of rider power reaching the wheel (1.0 = no loss).
-        cda_coef: Leading coefficient of the CdA estimate (folds in Cd).
+        cda_coef: Leading coefficient of the body's CdA estimate (folds in Cd).
         cda_height_exp: Exponent applied to rider height (metres) in the CdA estimate.
         cda_weight_exp: Exponent applied to rider weight (kg) in the CdA estimate.
+        bike_cda_m2: The bike's drag area, added to the body's (Zwift's equipment CdA
+            bias; negative = more aero).
         draft_savings: Aero-power savings fraction by wheel position (index 0 = front).
 
     """
@@ -50,6 +64,7 @@ class PhysicsParams:
     cda_coef: float = 0.0318
     cda_height_exp: float = 0.725
     cda_weight_exp: float = 0.425
+    bike_cda_m2: float = 0.0
     draft_savings: tuple[float, ...] = field(default_factory=lambda: DEFAULT_DRAFT_SAVINGS)
 
 
@@ -57,10 +72,10 @@ DEFAULT_PARAMS = PhysicsParams()
 
 
 def estimate_cda(height_cm: float, weight_kg: float, params: PhysicsParams = DEFAULT_PARAMS) -> float:
-    """Estimate a rider's CdA (drag area, m^2) from height and weight.
+    """Estimate a rider's CdA (drag area, m^2): their body's, from height and weight, plus their bike's.
 
-    Uses a DuBois-style frontal-area approximation scaled by ``cda_coef`` (which
-    folds in the drag coefficient).
+    The body's is a frontal-area approximation scaled by ``cda_coef`` (which folds in the
+    drag coefficient); the bike's is ``bike_cda_m2``, as Zwift adds each item's.
 
     Args:
         height_cm: Rider height in centimetres.
@@ -68,11 +83,12 @@ def estimate_cda(height_cm: float, weight_kg: float, params: PhysicsParams = DEF
         params: Physics constants.
 
     Returns:
-        Estimated CdA in square metres.
+        Estimated CdA in square metres, never below :data:`MIN_CDA_M2`.
 
     """
     height_m = height_cm / 100.0
-    return params.cda_coef * (height_m**params.cda_height_exp) * (weight_kg**params.cda_weight_exp)
+    body = params.cda_coef * (height_m**params.cda_height_exp) * (weight_kg**params.cda_weight_exp)
+    return max(MIN_CDA_M2, body + params.bike_cda_m2)
 
 
 def draft_savings_fraction(position: int, params: PhysicsParams = DEFAULT_PARAMS) -> float:
@@ -438,15 +454,19 @@ def parse_draft_savings(raw: str | list | tuple | None) -> tuple[float, ...] | N
     return normalize_draft_savings(values)
 
 
-def params_from_constance(cda_coef_key: str = "TTT_CDA_COEF") -> PhysicsParams:
+def params_from_constance(
+    cda_coef_key: str = "TTT_CDA_COEF", bike_cda_key: str | None = "TTT_BIKE_CDA_M2"
+) -> PhysicsParams:
     """Build :class:`PhysicsParams` from Constance settings.
 
     Imports Constance lazily so this module stays import-safe without Django.
 
     Args:
-        cda_coef_key: Which Constance key supplies the CdA leading coefficient.
-            Defaults to ``TTT_CDA_COEF`` (aero tuck); pass ``STD_CDA_COEF`` for
-            general road/climbing racing (upright position).
+        cda_coef_key: Which Constance key supplies the body's CdA leading coefficient.
+            Defaults to ``TTT_CDA_COEF``; pass ``STD_CDA_COEF`` for general road/climbing
+            racing (upright position).
+        bike_cda_key: Which Constance key supplies the bike's drag area. Defaults to
+            ``TTT_BIKE_CDA_M2``, Zwift's TT bike; None leaves the bike out.
 
     Returns:
         A ``PhysicsParams`` populated from the ``TTT_*`` Constance settings,
@@ -474,5 +494,6 @@ def params_from_constance(cda_coef_key: str = "TTT_CDA_COEF") -> PhysicsParams:
         cda_coef=_f(cda_coef_key, DEFAULT_PARAMS.cda_coef),
         cda_height_exp=_f("TTT_CDA_HEIGHT_EXP", DEFAULT_PARAMS.cda_height_exp),
         cda_weight_exp=_f("TTT_CDA_WEIGHT_EXP", DEFAULT_PARAMS.cda_weight_exp),
+        bike_cda_m2=_f(bike_cda_key, TT_BIKE_CDA_M2) if bike_cda_key else 0.0,
         draft_savings=savings,
     )

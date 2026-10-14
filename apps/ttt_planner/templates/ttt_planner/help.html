@@ -179,7 +179,8 @@
         <div><dt class="font-semibold">#, kg, FTP</dt>
           <dd>Pull order, and the rider's data (see <a class="link" href="#riders">Rider data</a>).</dd></div>
         <div><dt class="font-semibold">CdA</dt>
-          <dd>Estimated drag area in m² (see <a class="link" href="#physics">The power model</a>).</dd></div>
+          <dd>Estimated drag area in m², the rider's body and TT bike together (see
+            <a class="link" href="#physics">The power model</a>).</dd></div>
         <div><dt class="font-semibold">Pull W</dt>
           <dd>Power to hold the target flat speed on the front, with no draft. A custom pull power set for the rider
             replaces it.</dd></div>
@@ -236,13 +237,26 @@
           </tbody>
         </table>
       </div>
-      <p>CdA, the drag area, is estimated from height and weight:</p>
+      <p>CdA, the drag area, is the rider's body, estimated from height and weight, plus their bike:</p>
       <p class="font-mono text-sm bg-base-100 rounded px-3 py-2 overflow-x-auto">
         CdA = {{ params.cda_coef }} × height_m^{{ params.cda_height_exp }} × weight_kg^{{ params.cda_weight_exp }}
+        {{ bike_term }}
       </p>
       <p>
-        {{ params.cda_coef }} is the site default for a time-trial position; a plan can set its own coefficient in
-        Parameters. Climb compare uses the road-position coefficient, {{ std_cda_coef }}.
+        This is how Zwift itself works: a rider's drag comes from their body, and each piece of equipment adds or
+        takes away a fixed amount. There is no riding position in Zwift; a TT is faster only because of the kit. The
+        body part matches Zwift's own formula, recovered from the game by the
+        <a class="link" href="https://zwiftspeedlab.coalitionracing.com">Zwift Speed Lab</a>, to within about 1% for
+        ordinary builds.
+      </p>
+      <p>
+        The planner assumes every rider is on a <strong>TT bike</strong>: a TT frame with a deep front wheel and a disc,
+        which {% if params.bike_cda_m2 < 0 %}takes {{ bike_area_m2 }} m² off{% else %}adds {{ bike_area_m2 }} m² to{% endif %}
+        the drag area, by the Speed Lab's equipment data. That makes a difference: for a
+        {{ example.kg }} kg, {{ example.cm }} cm rider, holding {{ example.kph }} kph on the flat takes about
+        {{ example.road_w }} W on a road bike and {{ example.front_w }} W on the TT bike. The saving is a fixed area,
+        so it matters more to a small rider. A plan can set its own body coefficient in Parameters (Aero CdA
+        coefficient). Climb compare models upright road riders: no TT bike, and the coefficient {{ std_cda_coef }}.
       </p>
       <p>
         For example, a {{ example.kg }} kg, {{ example.cm }} cm rider has a CdA of about
@@ -408,8 +422,8 @@
           road; only the finish time and <a class="link" href="#course">On the course</a> ride the route's slopes.</li>
         <li><strong>Pacing.</strong> The team rides the course at a steady effort. Easing off on climbs and pushing on
           the flat is not modelled yet.</li>
-        <li><strong>Equipment.</strong> Every rider is modelled with the same position and bike, so a team on TT bikes
-          needs less power than the planner shows.</li>
+        <li><strong>Equipment.</strong> Every rider is on the same TT bike, a TT frame with a deep front wheel and a
+          disc. Ordinary wheels need about 5% more power than the planner shows, and a road bike about 15% more.</li>
         <li><strong>Where each rider sits.</strong> Sitting in uses the average saving over the whole line, not the
           wheel each rider is actually on at each moment.</li>
         <li><strong>W′ is an estimate.</strong> Zwift Racing's CP and W′ come from each rider's best recent efforts,
