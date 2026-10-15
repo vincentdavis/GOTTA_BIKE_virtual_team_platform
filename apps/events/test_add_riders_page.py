@@ -197,18 +197,18 @@ def test_the_zr_filter_offers_velo_tiers_not_letters(client, event, squad, user_
 
 
 @pytest.mark.django_db
-def test_a_zr_tier_actually_matches_a_rider(client, event, squad, user_model, event_admin) -> None:
+def test_a_zr_tier_actually_matches_a_rider(
+    client, event, squad, user_model, event_admin, rider_profile_factory
+) -> None:
     """A tier the picker offers actually matches a row.
 
     The row's data-zr must carry the same spelling as the option, or the filter is
-    still cosmetic.
+    still cosmetic. The tier is the one in the rider's profile.
     """
-    from apps.zwiftracing.models import ZRRider
-
     rider = _rider(user_model, event, "emmy")
     rider.zwid = 4242
     rider.save(update_fields=["zwid"])
-    ZRRider.objects.create(zwid=4242, name="Emmy", race_current_category="Emerald")
+    rider_profile_factory(zwid=4242, name="Emmy", category_racing="Emerald")
     client.force_login(event_admin)
 
     body = client.get(_url(event, squad)).content.decode()
@@ -218,18 +218,18 @@ def test_a_zr_tier_actually_matches_a_rider(client, event, squad, user_model, ev
 
 
 @pytest.mark.django_db
-def test_riders_with_no_zr_record_can_be_isolated(client, event, squad, user_model, event_admin) -> None:
+def test_riders_with_no_zr_record_can_be_isolated(
+    client, event, squad, user_model, event_admin, rider_profile_factory
+) -> None:
     """Without this option there is no way to see exactly who cannot be judged.
 
-    A rider with no ZRRider row renders data-zr="", which every tier excludes and
-    "All ZR" buries among everyone else.
+    A rider with no Zwift Racing tier in their profile renders data-zr="", which every
+    tier excludes and "All ZR" buries among everyone else.
     """
-    from apps.zwiftracing.models import ZRRider
-
     rated = _rider(user_model, event, "emmy")
     rated.zwid = 4242
     rated.save(update_fields=["zwid"])
-    ZRRider.objects.create(zwid=4242, name="Emmy", race_current_category="Emerald")
+    rider_profile_factory(zwid=4242, name="Emmy", category_racing="Emerald")
     _rider(user_model, event, "nobody")
     client.force_login(event_admin)
 

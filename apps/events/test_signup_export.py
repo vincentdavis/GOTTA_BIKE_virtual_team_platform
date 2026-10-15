@@ -223,17 +223,15 @@ def test_rider_text_cannot_smuggle_a_spreadsheet_formula(client, event, user_mod
 
 
 @pytest.mark.django_db
-def test_negative_numbers_are_left_as_numbers(client, event, user_model) -> None:
+def test_negative_numbers_are_left_as_numbers(client, event, user_model, rider_profile_factory) -> None:
     """Blanket-prefixing every cell starting with "-" would break numeric columns."""
-    from apps.zwiftracing.models import ZRRider
-
     rider = _rider(user_model, event, "ann", zwid=4242)
-    ZRRider.objects.create(zwid=4242, name="Ann", race_current_rating=-12)
+    rider_profile_factory(zwid=4242, name="Ann", velo=-12.0)
     client.force_login(_actor(user_model, "hc", discord_roles={"777": "Head Captain"}))
 
     rows = _read(client.get(reverse("events:signup_export", args=[event.pk])))
     row = dict(zip(rows[0], rows[1], strict=True))
 
-    assert not row["Current Rating"].startswith("'")   # a Decimal, so never prefixed
+    assert not row["Current Rating"].startswith("'")   # a number, so never prefixed
     assert row["Current Rating"].startswith("-12")
     assert rider.pk

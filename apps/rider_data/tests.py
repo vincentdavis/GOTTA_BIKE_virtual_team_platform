@@ -100,6 +100,55 @@ def test_the_watts_curve_is_read_by_duration_in_seconds(profile_factory):
 
 
 @pytest.mark.django_db
+def test_velo2_seed_and_race_counts_are_read_from_the_payload(profile_factory):
+    """The vELO 2 block stays apart: a race rating near 400 must never be read as a vELO of 1,500."""
+    profile = profile_factory(
+        payload={
+            "ratings": {"rating_max30": 1520.0, "category_max30": "Diamond", "category_max90": "Ruby"},
+            "velo2": {
+                "race": 430.0,
+                "race_max30": 450.0,
+                "race_max90": 470,
+                "factors": {"sprint": 452, "punch": 440.5, "climb": None, "timeTrial": 415, "endurance": 398},
+            },
+            "seed": {"race": 420.0, "timeTrial": 380.5, "factors": {"sprint": 460, "timeTrial": 401}},
+            "race_counts": {"finishes": 88, "dnfs": 3, "wins": 5, "podiums": None},
+            "power": {"curve_wkg": {"5": 12.4, "60": 6.1, "1200": None}},
+        }
+    )
+
+    assert profile.velo2 == {
+        "race": 430.0,
+        "max30": 450.0,
+        "max90": 470.0,
+        "sprint": 452.0,
+        "punch": 440.5,
+        "climb": None,
+        "time_trial": 415.0,
+        "endurance": 398.0,
+        "pursuit": None,
+    }
+    seed = profile.seed_ratings
+    assert (seed["race"], seed["time_trial"]) == pytest.approx((420.0, 380.5))  # the time-trial rating
+    assert seed["time_trial_factor"] == pytest.approx(401.0)  # and the factor beside it
+    assert profile.race_counts == {"finishes": 88, "wins": 5, "podiums": None, "dnfs": 3}
+    assert profile.peak_categories == {"max30": "Diamond", "max90": "Ruby"}
+    assert profile.power_curve_wkg == {5: 12.4, 60: 6.1}
+
+
+@pytest.mark.django_db
+def test_a_profile_without_the_new_blocks_reads_none(profile_factory):
+    """Before zauth sends vELO 2 and race counts, or for a rider with no Zwift Racing record."""
+    profile = profile_factory(payload={"ratings": {"rating_max30": 1520.0}, "velo2": None, "race_counts": {}})
+
+    assert profile.velo2 is None
+    assert profile.seed_ratings is None
+    assert profile.race_counts is None
+    assert profile.peak_categories is None
+    assert profile.power_curve_wkg is None
+
+
+@pytest.mark.django_db
 def test_roster_membership_is_not_stored_here():
     """Membership belongs to team. A cache row carrying it could never be evicted."""
     columns = {f.name for f in RiderProfile._meta.get_fields()}

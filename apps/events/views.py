@@ -39,7 +39,7 @@ from apps.accounts.discord_service import (
     sync_user_discord_roles,
 )
 from apps.accounts.models import Permissions, User
-from apps.events import ds_service, grid_defaults
+from apps.events import ds_service, grid_defaults, rider_stats
 from apps.events.answer_facets import answers_payload, build_facets, panel_starts_open
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
 from apps.events.channel_access import can_view
@@ -679,14 +679,13 @@ def _enrich_squad_members(event):
 
     zwids = [sm.user.zwid for sm in all_sms if sm.user.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
-    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+    profiles = rider_stats.profiles_by_zwid(zwids)
 
     by_squad = {}
     for sm in all_sms:
         user = sm.user
         zwid = user.zwid
         zp = zp_by_zwid.get(zwid)
-        zr = zr_by_zwid.get(zwid)
         zp_ftp = zp.ftp if zp else None
         zp_weight = zp.weight if zp else None
         wkg = round(Decimal(zp_ftp) / zp_weight, 2) if zp_ftp and zp_weight and zp_weight > 0 else None
@@ -713,17 +712,7 @@ def _enrich_squad_members(event):
             "z_map": user.z_map,
             "z_ftp_wkg": user.z_ftp_wkg,
             "z_map_wkg": user.z_map_wkg,
-            "in_zwiftracing": zr is not None,
-            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
-            "zr_age": getattr(zr, "age", "") or "" if zr else "",
-            "zr_current_rating": getattr(zr, "race_current_rating", None) if zr else None,
-            "zr_current_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-            "zr_max30_rating": getattr(zr, "race_max30_rating", None) if zr else None,
-            "zr_max30_category": getattr(zr, "race_max30_category", "") or "" if zr else "",
-            "zr_max90_rating": getattr(zr, "race_max90_rating", None) if zr else None,
-            "zr_max90_category": getattr(zr, "race_max90_category", "") or "" if zr else "",
-            "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+            **rider_stats.zr_fields(profiles.get(zwid)),
             "has_discord_role": has_discord_role,
             "has_captain_role": has_captain_role,
         }
@@ -913,7 +902,7 @@ def _enrich_signups(signups, event=None):
     """
     zwids = [s.user.zwid for s in signups if s.user.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
-    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+    profiles = rider_stats.profiles_by_zwid(zwids)
 
     squads_by_user: dict[int, list] = {}
     if event:
@@ -939,7 +928,7 @@ def _enrich_signups(signups, event=None):
         user = signup.user
         zwid = user.zwid
         zp = zp_by_zwid.get(zwid)
-        zr = zr_by_zwid.get(zwid)
+        profile = profiles.get(zwid) if zwid else None
 
         zp_ftp = zp.ftp if zp else None
         zp_weight = zp.weight if zp else None
@@ -977,17 +966,8 @@ def _enrich_signups(signups, event=None):
             "z_map": user.z_map,
             "z_ftp_wkg": user.z_ftp_wkg,
             "z_map_wkg": user.z_map_wkg,
-            "in_zwiftracing": zr is not None,
-            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
-            "zr_age": getattr(zr, "age", "") or "" if zr else "",
-            "zr_current_rating": getattr(zr, "race_current_rating", None) if zr else None,
-            "zr_current_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-            "zr_max30_rating": getattr(zr, "race_max30_rating", None) if zr else None,
-            "zr_max30_category": getattr(zr, "race_max30_category", "") or "" if zr else "",
-            "zr_max90_rating": getattr(zr, "race_max90_rating", None) if zr else None,
-            "zr_max90_category": getattr(zr, "race_max90_category", "") or "" if zr else "",
-            "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+            **rider_stats.zr_fields(profile),
+            "rider_profile": profile,
             "assigned_squads": user_squads,
             "role_badges": role_badges,
             "custom_answers": resolve_signup_answers(signup, signup_questions),
@@ -1086,12 +1066,12 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
 
     zwids = [u.zwid for u in users_for_lookup.values() if u.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
-    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+    profiles = rider_stats.profiles_by_zwid(zwids)
 
     def _enrich(user: User) -> dict:
         zwid = user.zwid
         zp = zp_by_zwid.get(zwid) if zwid else None
-        zr = zr_by_zwid.get(zwid) if zwid else None
+        zr = rider_stats.zr_fields(profiles.get(zwid) if zwid else None)
         return {
             "user": user,
             "zwid": zwid,
@@ -1100,11 +1080,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             "in_zwiftpower": zp is not None,
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
-            "in_zwiftracing": zr is not None,
-            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
-            "zr_age": getattr(zr, "age", "") or "" if zr else "",
-            "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+            **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_age", "zr_phenotype")},
         }
 
     enriched_by_user_id = {pk: _enrich(u) for pk, u in users_for_lookup.items()}
@@ -1449,6 +1425,11 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "answer_payload": answer_payload,
             "answer_panel_open": answer_panel_open,
             "can_view_signup_table": can_view_signup_table,
+            # The signups table's extra Zwift Racing columns, built in the page from this JSON. Only
+            # for those who see the full table: a names-only list must not carry everyone's power.
+            "signup_stat_groups": rider_stats.STAT_GROUPS if can_view_signup_table else (),
+            "signup_stat_columns": rider_stats.stat_columns_json() if can_view_signup_table else [],
+            "signup_stat_values": rider_stats.stat_rows(enriched_signups) if can_view_signup_table else {},
             "can_view_signup_notes": can_view_signup_notes,
             # Narrower than viewing the table: the export is a bulk extract of every
             # rider's details, so only the people running the event get the button.
@@ -2459,12 +2440,12 @@ def _build_scheduled_race_slots(
 
     zwids = [u.zwid for u in users_for_lookup.values() if u.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
-    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+    profiles = rider_stats.profiles_by_zwid(zwids)
 
     def _enrich(user: User) -> dict:
         zwid = user.zwid
         zp = zp_by_zwid.get(zwid) if zwid else None
-        zr = zr_by_zwid.get(zwid) if zwid else None
+        zr = rider_stats.zr_fields(profiles.get(zwid) if zwid else None)
         return {
             "user": user,
             "zwid": zwid,
@@ -2473,11 +2454,7 @@ def _build_scheduled_race_slots(
             "in_zwiftpower": zp is not None,
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
-            "in_zwiftracing": zr is not None,
-            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
-            "zr_age": getattr(zr, "age", "") or "" if zr else "",
-            "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
+            **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_age", "zr_phenotype")},
         }
 
     enriched_by_user_id = {pk: _enrich(u) for pk, u in users_for_lookup.items()}
@@ -5922,21 +5899,21 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     # Enrich responders + non-responders with ZP/ZR data (shared lookup)
     zwids = list({u.zwid for u in responder_users + non_responder_users if u.zwid})
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
-    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+    profiles = rider_stats.profiles_by_zwid(zwids)
 
     enriched_responders = []
     user_by_id: dict[int, dict] = {}
     response_by_user: dict[int, AvailabilityResponse] = {r.user.pk: r for r in responses}
     for user in responder_users:
         zp = zp_by_zwid.get(user.zwid)
-        zr = zr_by_zwid.get(user.zwid)
+        zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None)
         display_name = user.get_full_name() or user.discord_username
         zp_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
         zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
-        zr_cat = getattr(zr, "race_current_category", "") or "" if zr else ""
-        zr_rating = getattr(zr, "race_current_rating", None) if zr else None
-        zr_phenotype = getattr(zr, "phenotype_value", "") or "" if zr else ""
-        zr_age = getattr(zr, "age", "") or "" if zr else ""
+        zr_cat = zr["zr_category"]
+        zr_rating = zr["zr_rating"]
+        zr_phenotype = zr["zr_phenotype"]
+        zr_age = zr["zr_age"]
         resp = response_by_user.get(user.pk)
         entry = {
             "user": user,
@@ -5947,7 +5924,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "in_zwiftpower": zp is not None,
             "zp_category": zp_cat,
             "zp_category_w": zp_cat_w,
-            "in_zwiftracing": zr is not None,
+            "in_zwiftracing": zr["in_zwiftracing"],
             "zr_category": zr_cat,
             "zr_rating": zr_rating,
             "zr_phenotype": zr_phenotype,
@@ -5961,7 +5938,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     enriched_non_responders = []
     for user in non_responder_users:
         zp = zp_by_zwid.get(user.zwid)
-        zr = zr_by_zwid.get(user.zwid)
+        zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None)
         enriched_non_responders.append({
             "user": user,
             "display_name": user.get_full_name() or user.discord_username,
@@ -5971,11 +5948,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "in_zwiftpower": zp is not None,
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
-            "in_zwiftracing": zr is not None,
-            "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-            "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
-            "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
-            "zr_age": getattr(zr, "age", "") or "" if zr else "",
+            **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_phenotype", "zr_age")},
         })
 
     # Aggregate user IDs keyed by UTC cell
@@ -6113,13 +6086,13 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     missing_roster = [u for u in roster_users if u.pk not in user_data_json]
     if missing_roster:
         extra_zwids = [u.zwid for u in missing_roster if u.zwid]
-        extra_zr = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=extra_zwids)} if extra_zwids else {}
+        extra_profiles = rider_stats.profiles_by_zwid(extra_zwids)
         for user in missing_roster:
-            zr = extra_zr.get(user.zwid)
-            rating = getattr(zr, "race_current_rating", None) if zr else None
+            zr = rider_stats.zr_fields(extra_profiles.get(user.zwid) if user.zwid else None)
+            rating = zr["zr_rating"]
             user_data_json[user.pk] = {
                 "display_name": user.get_full_name() or user.discord_username,
-                "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
+                "zr_category": zr["zr_category"],
                 "zr_rating": float(rating) if rating is not None else None,
                 "is_race_ready": user.is_race_ready,
             }
@@ -6149,7 +6122,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         enriched_sel_users = []
         for user in sel.selected_users.all():
             zp = zp_by_zwid.get(user.zwid)
-            zr = zr_by_zwid.get(user.zwid)
+            zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None)
             zp_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
             zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
             enriched_sel_users.append({
@@ -6161,11 +6134,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
                 "in_zwiftpower": zp is not None,
                 "zp_category": zp_cat,
                 "zp_category_w": zp_cat_w,
-                "in_zwiftracing": zr is not None,
-                "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-                "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
-                "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
-                "zr_age": getattr(zr, "age", "") or "" if zr else "",
+                **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_phenotype", "zr_age")},
             })
         utc_dt = datetime.combine(
             sel.slot_date,
@@ -8331,7 +8300,6 @@ def _render_slot_selections_partial(
 
     """
     from apps.zwiftpower.models import ZPTeamRiders
-    from apps.zwiftracing.models import ZRRider
 
     selections = list(grid.slot_selections.prefetch_related("selected_users", "directeurs_sportifs"))
     is_event_admin = _can_manage_squad_availability(request.user, squad)
@@ -8346,14 +8314,14 @@ def _render_slot_selections_partial(
         all_selected_users.update(sel.selected_users.all())
     zwids = [u.zwid for u in all_selected_users if u.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
-    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+    profiles = rider_stats.profiles_by_zwid(zwids)
 
     enriched_selections = []
     for sel in selections:
         enriched_users = []
         for user in sel.selected_users.all():
             zp = zp_by_zwid.get(user.zwid)
-            zr = zr_by_zwid.get(user.zwid)
+            zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None)
             zp_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
             zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
             enriched_users.append({
@@ -8365,11 +8333,7 @@ def _render_slot_selections_partial(
                 "in_zwiftpower": zp is not None,
                 "zp_category": zp_cat,
                 "zp_category_w": zp_cat_w,
-                "in_zwiftracing": zr is not None,
-                "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-                "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
-                "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
-                "zr_age": getattr(zr, "age", "") or "" if zr else "",
+                **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_phenotype", "zr_age")},
             })
         # Convert slot time to display timezone
         from datetime import datetime as dt

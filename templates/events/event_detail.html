@@ -557,7 +557,8 @@
             {% endif %}
             <div class="dropdown dropdown-end">
               <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>
-              <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-56 max-h-72 overflow-y-auto">
+              {# flex-nowrap: a daisyUI menu wraps into side-by-side columns at its height limit, which cut the labels short. #}
+              <ul tabindex="0" class="dropdown-content menu flex-nowrap bg-base-200 rounded-box shadow-lg z-50 p-2 w-64 max-h-96 overflow-y-auto">
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="name" checked> Name</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zwid" checked> ZWID</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="timezone" checked> Timezone</label></li>
@@ -574,7 +575,8 @@
                 {% if squads %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="squad" checked> Squad</label></li>{% endif %}
                 {% if can_view_signup_notes %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="notes" checked> Notes</label></li>{% endif %}
                 {% if signup_questions %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="custom_answers" checked> Answers</label></li>{% endif %}
-                <li class="menu-title text-xs pt-2">Zwift Racing</li>
+                {# text-base-content/70: daisyUI's own menu-title colour falls to 2.5:1 in the light theme. #}
+                <li class="menu-title text-xs pt-2 text-base-content/70">Zwift Racing</li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_age"> Age</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_cur_rating"> Current Rating</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_cur_cat"> Current Cat</label></li>
@@ -583,6 +585,18 @@
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max90_rating"> Max90 Rating</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_max90_cat"> Max90 Cat</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_phenotype"> Phenotype</label></li>
+                {% comment %}
+                  The rest of the Zwift Racing figures, from the rider profile cache. Their cells are built
+                  in the page from #signup-stat-values (below the table), so these boxes carry
+                  data-stat-col, not data-col: the toggler above hides everything with a matching
+                  data-col, which would take the box itself.
+                {% endcomment %}
+                {% for group in signup_stat_groups %}
+                <li class="menu-title text-xs pt-2 text-base-content/70">{{ group.title }}</li>
+                {% for column in group.columns %}
+                <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs stat-col-toggle" data-stat-col="{{ column.key }}"> {{ column.label }}</label></li>
+                {% endfor %}
+                {% endfor %}
               </ul>
             </div>
           </div>
@@ -801,6 +815,64 @@
             </tbody>
           </table>
         </div>
+        {% if signup_stat_groups %}
+        {{ signup_stat_columns|json_script:"signup-stat-columns" }}
+        {{ signup_stat_values|json_script:"signup-stat-values" }}
+        <script>
+          // The extra Zwift Racing columns (apps/events/rider_stats.py): built here from the JSON
+          // above rather than sent as cells hidden in every row, all at once and hidden, before the
+          // sort script further down binds every th[data-sort]. Shown and hidden by .stat-col-toggle,
+          // remembered in this browser.
+          (function () {
+            var table = document.querySelector('[data-signup-table="detail"]');
+            var columns = JSON.parse(document.getElementById('signup-stat-columns').textContent);
+            var values = JSON.parse(document.getElementById('signup-stat-values').textContent);
+            var STORAGE_KEY = 'event_signup_stat_cols';
+            var saved = {};
+            try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) {}
+            if (!table || !table.tHead) return;
+
+            var head = table.tHead.rows[0];
+            columns.forEach(function (column) {
+              var th = document.createElement('th');
+              th.dataset.col = column.key;
+              th.dataset.sort = 'num';
+              th.className = 'cursor-pointer hover:text-primary select-none whitespace-nowrap';
+              th.textContent = column.header;
+              th.style.display = saved[column.key] ? '' : 'none';
+              head.appendChild(th);
+            });
+            table.querySelectorAll('tbody tr[data-signup-pk]').forEach(function (row) {
+              var rowValues = values[row.dataset.signupPk] || [];
+              columns.forEach(function (column, i) {
+                var td = document.createElement('td');
+                td.dataset.col = column.key;
+                if (rowValues[i]) {
+                  td.className = 'font-mono text-sm text-right';
+                  td.textContent = rowValues[i];
+                } else {
+                  td.className = 'text-base-content/70';
+                  td.textContent = '-';
+                }
+                td.style.display = saved[column.key] ? '' : 'none';
+                row.appendChild(td);
+              });
+            });
+
+            document.querySelectorAll('.stat-col-toggle').forEach(function (box) {
+              var key = box.dataset.statCol;
+              box.checked = !!saved[key];
+              box.addEventListener('change', function () {
+                saved[key] = box.checked;
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) {}
+                table.querySelectorAll('[data-col="' + key + '"]').forEach(function (el) {
+                  el.style.display = box.checked ? '' : 'none';
+                });
+              });
+            });
+          })();
+        </script>
+        {% endif %}
         </div>
       {% else %}
       {# Non-admin members with show_signups on: names + icons only #}
@@ -1271,6 +1343,12 @@ function switchCategorySource(source) {
   var saved = {};
   try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e) {}
 
+  // The column's cells only: its box in the Columns menu carries the same data-col, and hiding
+  // that too left an unchecked column as bare text no keyboard or screen reader could reach.
+  function cellsOf(col) {
+    return document.querySelectorAll('th[data-col="' + col + '"], td[data-col="' + col + '"]');
+  }
+
   function getVisible(col) {
     return col in saved ? saved[col] : (col in DEFAULTS ? DEFAULTS[col] : true);
   }
@@ -1280,7 +1358,7 @@ function switchCategorySource(source) {
       var col = cb.getAttribute('data-col');
       var show = getVisible(col);
       cb.checked = show;
-      document.querySelectorAll('[data-col="' + col + '"]').forEach(function(el) {
+      cellsOf(col).forEach(function(el) {
         el.style.display = show ? '' : 'none';
       });
     });
@@ -1291,7 +1369,7 @@ function switchCategorySource(source) {
       var col = this.getAttribute('data-col');
       saved[col] = this.checked;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-      document.querySelectorAll('[data-col="' + col + '"]').forEach(function(el) {
+      cellsOf(col).forEach(function(el) {
         el.style.display = saved[col] ? '' : 'none';
       });
     });
@@ -1366,6 +1444,12 @@ function switchCategorySource(source) {
   var saved = {};
   try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e) {}
 
+  // The column's cells only: its box in the Columns menu carries the same data-col, and hiding
+  // that too left an unchecked column as bare text no keyboard or screen reader could reach.
+  function cellsOf(col) {
+    return document.querySelectorAll('th[data-col="' + col + '"], td[data-col="' + col + '"]');
+  }
+
   function getVisible(col) {
     return col in saved ? saved[col] : (col in DEFAULTS ? DEFAULTS[col] : true);
   }
@@ -1375,7 +1459,7 @@ function switchCategorySource(source) {
       var col = cb.getAttribute('data-col');
       var show = getVisible(col);
       cb.checked = show;
-      document.querySelectorAll('[data-col="' + col + '"]').forEach(function(el) {
+      cellsOf(col).forEach(function(el) {
         el.style.display = show ? '' : 'none';
       });
     });
@@ -1386,7 +1470,7 @@ function switchCategorySource(source) {
       var col = this.getAttribute('data-col');
       saved[col] = this.checked;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
-      document.querySelectorAll('[data-col="' + col + '"]').forEach(function(el) {
+      cellsOf(col).forEach(function(el) {
         el.style.display = saved[col] ? '' : 'none';
       });
     });

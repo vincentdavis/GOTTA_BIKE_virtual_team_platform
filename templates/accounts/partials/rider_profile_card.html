@@ -9,12 +9,15 @@
 
   Deliberately NOT shown, because RiderProfile cannot supply them:
     * ZwiftPower rank            -- zauth's ZpRider has no such column
-    * race finishes/wins/podiums -- ProfileFull carries only the two peak ratings
     * best-ever rating           -- needs a history table; this is an evictable snapshot
     * gender/country mismatch    -- needs Zwift's raw values to disagree with
-  The peak ratings are shown WITHOUT category badges for the same reason: zauth carries one
-  racing category, the current one, so labelling a 90-day-old rating with today's tier would
-  be a lie rather than a gap.
+  Each vELO peak carries the category zwiftracing gave it (zauth's category_max30/90), never
+  today's racing tier: labelling a 90-day-old rating with the current tier would be a lie
+  rather than a gap, so a peak with no category of its own is shown bare.
+
+  vELO 2 is a different scale from vELO (a race rating near 400 beside a vELO of 1,500), so it
+  has its own section and is never set beside vELO as if comparable. Its peaks are zauth's,
+  worked out from its own history, since zwiftracing serves none.
 {% endcomment %}
 <div id="rider-profile-card" class="card bg-base-300 p-4">
   <h3 class="font-semibold mb-3 flex items-center gap-2">
@@ -112,7 +115,33 @@
         </div>
       {% endif %}
 
-      {% if rider_profile.velo or rider_profile.peak_ratings or rider_profile.zp_skill or rider_profile.compound_score %}
+      {% with curve=rider_profile.power_curve %}
+        {% if curve %}
+          <div class="pt-2 border-t border-base-content/10 overflow-x-auto">
+            <table class="table table-xs">
+              <caption class="text-left text-base-content/70 pb-1">Best power (Zwift Racing)</caption>
+              <thead>
+                <tr class="text-xs text-base-content/70">
+                  <th scope="col" class="font-normal px-0">Duration</th>
+                  <th scope="col" class="font-normal text-right pl-2 pr-0">W/kg</th>
+                  <th scope="col" class="font-normal text-right pl-3 pr-0">Watts</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for duration, wkg, watts in curve %}
+                  <tr>
+                    <th scope="row" class="font-normal px-0">{{ duration }}</th>
+                    <td class="font-mono text-right pl-2 pr-0">{% if wkg is not None %}{{ wkg|floatformat:2 }}{% else %}&mdash;{% endif %}</td>
+                    <td class="font-mono text-right pl-3 pr-0">{% if watts is not None %}{{ watts|floatformat:0 }}{% else %}&mdash;{% endif %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% if rider_profile.velo or rider_profile.peak_ratings or rider_profile.zp_skill or rider_profile.compound_score or rider_profile.race_counts %}
         <div class="space-y-1 pt-2 border-t border-base-content/10">
           {% if rider_profile.velo %}
             <div class="flex justify-between gap-3">
@@ -120,12 +149,18 @@
               <span class="font-mono font-semibold">{{ rider_profile.velo|floatformat:0 }}</span>
             </div>
           {% endif %}
-          {% with peaks=rider_profile.peak_ratings %}
+          {% with peaks=rider_profile.peak_ratings categories=rider_profile.peak_categories %}
             {% if peaks %}
               <div class="flex justify-between gap-3">
-                <span class="text-base-content/70">30 / 90-day peak</span>
+                <span class="text-base-content/70">30-day peak</span>
                 <span class="font-mono text-right">
-                  {% if peaks.max30 %}{{ peaks.max30|floatformat:0 }}{% else %}&mdash;{% endif %} / {% if peaks.max90 %}{{ peaks.max90|floatformat:0 }}{% else %}&mdash;{% endif %}
+                  {% if peaks.max30 %}{{ peaks.max30|floatformat:0 }}{% else %}&mdash;{% endif %}{% if categories.max30 %} <span class="font-sans">&middot; {{ categories.max30 }}</span>{% endif %}
+                </span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">90-day peak</span>
+                <span class="font-mono text-right">
+                  {% if peaks.max90 %}{{ peaks.max90|floatformat:0 }}{% else %}&mdash;{% endif %}{% if categories.max90 %} <span class="font-sans">&middot; {{ categories.max90 }}</span>{% endif %}
                 </span>
               </div>
             {% endif %}
@@ -142,15 +177,86 @@
               <span class="font-mono">{{ rider_profile.compound_score|floatformat:0 }}</span>
             </div>
           {% endif %}
+          {% with races=rider_profile.race_counts %}
+            {% if races %}
+              {# Zero is a count, not a gap, so these test for None. #}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">Races / Wins</span>
+                <span class="font-mono text-right">
+                  {% if races.finishes is not None %}{{ races.finishes }}{% else %}&mdash;{% endif %} / {% if races.wins is not None %}{{ races.wins }}{% else %}&mdash;{% endif %}
+                </span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">Podiums / DNFs</span>
+                <span class="font-mono text-right">
+                  {% if races.podiums is not None %}{{ races.podiums }}{% else %}&mdash;{% endif %} / {% if races.dnfs is not None %}{{ races.dnfs }}{% else %}&mdash;{% endif %}
+                </span>
+              </div>
+            {% endif %}
+          {% endwith %}
         </div>
       {% endif %}
+
+      {% with velo2=rider_profile.velo2 %}
+        {% if velo2 %}
+          <div class="space-y-1 pt-2 border-t border-base-content/10">
+            {% if velo2.race is not None %}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">vELO 2</span>
+                <span class="font-mono font-semibold">{{ velo2.race|floatformat:0 }}</span>
+              </div>
+            {% endif %}
+            {% if velo2.max30 is not None or velo2.max90 is not None %}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">vELO 2 30 / 90-day peak</span>
+                <span class="font-mono text-right">
+                  {% if velo2.max30 is not None %}{{ velo2.max30|floatformat:0 }}{% else %}&mdash;{% endif %} / {% if velo2.max90 is not None %}{{ velo2.max90|floatformat:0 }}{% else %}&mdash;{% endif %}
+                </span>
+              </div>
+            {% endif %}
+            {% with factors=rider_profile.velo2_factors %}
+              {% if factors %}
+                <div class="flex flex-wrap gap-1 pt-1" role="group" aria-label="vELO 2 factors">
+                  {% for label, value in factors %}
+                    <span class="badge badge-sm badge-ghost font-mono">{{ label }} {{ value|floatformat:0 }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% with seed=rider_profile.seed_ratings %}
+        {% if seed %}
+          <div class="space-y-1 pt-2 border-t border-base-content/10">
+            {% if seed.race is not None or seed.time_trial is not None %}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">Seed race / TT</span>
+                <span class="font-mono text-right">
+                  {% if seed.race is not None %}{{ seed.race|floatformat:0 }}{% else %}&mdash;{% endif %} / {% if seed.time_trial is not None %}{{ seed.time_trial|floatformat:0 }}{% else %}&mdash;{% endif %}
+                </span>
+              </div>
+            {% endif %}
+            {% with factors=rider_profile.seed_factors %}
+              {% if factors %}
+                <div class="flex flex-wrap gap-1 pt-1" role="group" aria-label="Seed factors">
+                  {% for label, value in factors %}
+                    <span class="badge badge-sm badge-ghost font-mono">{{ label }} {{ value|floatformat:0 }}</span>
+                  {% endfor %}
+                </div>
+              {% endif %}
+            {% endwith %}
+          </div>
+        {% endif %}
+      {% endwith %}
 
       {% if rider_profile.phenotype_value %}
         <div class="space-y-1 pt-2 border-t border-base-content/10">
           <div class="flex justify-between gap-3">
             <span class="text-base-content/70">Phenotype</span>
             <span class="font-semibold text-right">
-              {{ rider_profile.phenotype_value }}{% if rider_profile.phenotype_bias %} <span class="text-base-content/50 font-normal">bias {{ rider_profile.phenotype_bias|floatformat:1 }}</span>{% endif %}
+              {{ rider_profile.phenotype_value }}{% if rider_profile.phenotype_bias %} <span class="text-base-content/70 font-normal">bias {{ rider_profile.phenotype_bias|floatformat:1 }}</span>{% endif %}
             </span>
           </div>
           {% with scores=rider_profile.phenotype_scores %}
@@ -170,9 +276,13 @@
           <div class="space-y-1 pt-2 border-t border-base-content/10">
             <div class="text-base-content/70">Terrain handicaps</div>
             <div class="flex flex-wrap gap-1">
+              {% comment %}
+                Solid badges: the outline ones, a status colour on the card, fell under 4.5:1 in
+                the light theme. The sign is written out, so the colour is never the only cue.
+              {% endcomment %}
               {% for label, value in handicaps.items %}
-                <span class="badge badge-sm font-mono {% if value > 0 %}badge-success{% elif value < 0 %}badge-error{% else %}badge-ghost{% endif %} badge-outline">
-                  {{ label }} {{ value|floatformat:1 }}
+                <span class="badge badge-sm font-mono {% if value > 0 %}badge-success{% elif value < 0 %}badge-error{% else %}badge-ghost{% endif %}">
+                  {{ label }} {% if value > 0 %}+{% endif %}{{ value|floatformat:1 }}
                 </span>
               {% endfor %}
             </div>
@@ -201,7 +311,7 @@
       {% endwith %}
     </div>
 
-    <p class="text-base-content/40 text-xs mt-3">
+    <p class="text-base-content/70 text-xs mt-3">
       Updated {{ rider_profile.fetched_at|date:"Y-m-d" }}{% if rider_profile.is_stale %} &middot; refresh pending{% endif %}
     </p>
 

@@ -16,6 +16,9 @@ read-only there, which is worth pinning: on a page whose whole purpose is editin
 data that looks editable but silently discards changes would be worse than not showing it.
 """
 
+import html
+import re
+
 import pytest
 from django.urls import reverse
 from django.utils import timezone
@@ -185,18 +188,42 @@ def test_lifetime_climbed_is_rendered_in_metres_not_kilometres(client, profile, 
     assert "483 km" not in body
 
 
-@pytest.mark.django_db
-def test_the_peak_ratings_carry_no_category_badge(client, profile, rider, team_member):
-    """Peak ratings render bare: zauth carries one racing category, the current one.
+def _text(markup):
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", markup)).split())
 
-    Labelling a 90-day-old peak with today's tier would state something false rather than
-    leave a gap, so the numbers are shown bare.
+
+def _row(body, label):
+    """Cut out one label/value row of the card.
+
+    Returns:
+        The row's text, tags removed and entities decoded.
+
     """
-    body = _body(client, team_member, rider)
-    section = body[body.index("30 / 90-day peak") : body.index("30 / 90-day peak") + 320]
+    start = body.index(f">{label}</span>") + 1
+    return _text(body[start : body.index("</div>", start)])
 
-    assert "694" in section and "768" in section
-    assert "Bronze" not in section
+
+@pytest.mark.django_db
+def test_a_peak_without_its_own_category_is_never_given_todays_tier(client, profile, rider, team_member):
+    """Labelling a 90-day-old peak with today's tier would state something false rather than leave a gap."""
+    body = _body(client, team_member, rider)
+
+    assert _row(body, "30-day peak") == "30-day peak 694"
+    assert _row(body, "90-day peak") == "90-day peak 768"
+
+
+@pytest.mark.django_db
+def test_each_peak_carries_the_category_zwiftracing_gave_it(client, profile, rider, team_member):
+    profile.payload = {
+        **PAYLOAD,
+        "ratings": {**PAYLOAD["ratings"], "category_max30": "Silver", "category_max90": "Gold"},
+    }
+    profile.save()
+
+    body = _body(client, team_member, rider)
+
+    assert _row(body, "30-day peak") == "30-day peak 694 · Silver"
+    assert _row(body, "90-day peak") == "90-day peak 768 · Gold"
 
 
 # ---------------------------------------------------------------- gates
@@ -207,10 +234,17 @@ def test_an_unverified_rider_gets_no_data_even_with_a_synced_row(client, user_mo
     """The gate stayed on User.zwid_verified, exactly where the replaced cards had it."""
     now = timezone.now()
     unverified = user_model.objects.create_user(
-        username="unver", email="unver@example.test", zwid=777, zwid_verified=False,
+        username="unver",
+        email="unver@example.test",
+        zwid=777,
+        zwid_verified=False,
     )
     RiderProfile.objects.create(
-        zwid=777, name="Should Not Show", club_name="SECRETCLUB", fetched_at=now, last_requested_at=now,
+        zwid=777,
+        name="Should Not Show",
+        club_name="SECRETCLUB",
+        fetched_at=now,
+        last_requested_at=now,
     )
 
     body = _body(client, team_member, unverified)
@@ -257,7 +291,7 @@ def test_the_card_does_not_invent_the_data_riderprofile_cannot_supply(client, pr
     card = body[body.index("Racing &amp; Performance") :]
     card = card[: card.index("Recent Results")] if "Recent Results" in card else card
 
-    for absent in ("Best seen", "Races", "Rank"):
+    for absent in ("Best seen", "Rank"):
         assert absent not in card, f"{absent!r} cannot come from RiderProfile"
 
 
@@ -275,7 +309,10 @@ def test_height_renders_for_a_rider_who_has_no_weight_or_power(client, rider, te
     """
     now = timezone.now()
     RiderProfile.objects.create(
-        zwid=rider.zwid, height_cm=182.0, fetched_at=now, last_requested_at=now,
+        zwid=rider.zwid,
+        height_cm=182.0,
+        fetched_at=now,
+        last_requested_at=now,
     )
 
     body = _body(client, team_member, rider)
@@ -310,7 +347,10 @@ def test_a_zero_measurement_counts_as_data(client, rider, team_member):
     """
     now = timezone.now()
     profile = RiderProfile.objects.create(
-        zwid=rider.zwid, ftp=0.0, fetched_at=now, last_requested_at=now,
+        zwid=rider.zwid,
+        ftp=0.0,
+        fetched_at=now,
+        last_requested_at=now,
     )
 
     assert profile.has_display_data is True
@@ -322,7 +362,10 @@ def test_name_alone_does_not_count_as_display_data(rider):
     """``name`` is promoted but never rendered -- the profile header already carries it."""
     now = timezone.now()
     profile = RiderProfile.objects.create(
-        zwid=rider.zwid, name="Alex Rivera", fetched_at=now, last_requested_at=now,
+        zwid=rider.zwid,
+        name="Alex Rivera",
+        fetched_at=now,
+        last_requested_at=now,
     )
 
     assert profile.has_display_data is False
@@ -415,11 +458,17 @@ def test_the_edit_page_card_uses_the_same_verification_gate(client, user_model):
     """The rider's own view is gated exactly as the public one; being the owner is not a bypass."""
     now = timezone.now()
     unverified = user_model.objects.create_user(
-        username="mine", email="mine@example.test", zwid=888, zwid_verified=False,
+        username="mine",
+        email="mine@example.test",
+        zwid=888,
+        zwid_verified=False,
         permission_overrides={"team_member": True},
     )
     RiderProfile.objects.create(
-        zwid=888, club_name="SECRETCLUB", fetched_at=now, last_requested_at=now,
+        zwid=888,
+        club_name="SECRETCLUB",
+        fetched_at=now,
+        last_requested_at=now,
     )
 
     body = _edit_body(client, unverified)
@@ -440,8 +489,11 @@ def test_all_three_source_links_render_for_a_synced_rider(client, rider, team_me
     """Zwift, ZwiftPower and ZwiftRacing -- the three places this data is merged from."""
     now = timezone.now()
     RiderProfile.objects.create(
-        zwid=rider.zwid, club_name="COALITION", zwift_user_id="41c49fb6-uuid",
-        fetched_at=now, last_requested_at=now,
+        zwid=rider.zwid,
+        club_name="COALITION",
+        zwift_user_id="41c49fb6-uuid",
+        fetched_at=now,
+        last_requested_at=now,
     )
 
     body = _body(client, team_member, rider)
@@ -479,10 +531,16 @@ def test_no_source_links_for_an_unverified_rider(client, user_model, team_member
     """
     now = timezone.now()
     unverified = user_model.objects.create_user(
-        username="unlinked", email="unlinked@example.test", zwid=999, zwid_verified=False,
+        username="unlinked",
+        email="unlinked@example.test",
+        zwid=999,
+        zwid_verified=False,
     )
     RiderProfile.objects.create(
-        zwid=999, zwift_user_id="should-not-link", fetched_at=now, last_requested_at=now,
+        zwid=999,
+        zwift_user_id="should-not-link",
+        fetched_at=now,
+        last_requested_at=now,
     )
 
     body = _body(client, team_member, unverified)
@@ -496,7 +554,10 @@ def test_the_zwift_link_is_omitted_when_the_account_id_is_unknown(client, rider,
     """zwift_user_id is the Zwift account UUID; without it there is no URL to build."""
     now = timezone.now()
     RiderProfile.objects.create(
-        zwid=rider.zwid, club_name="COALITION", fetched_at=now, last_requested_at=now,
+        zwid=rider.zwid,
+        club_name="COALITION",
+        fetched_at=now,
+        last_requested_at=now,
     )
 
     body = _body(client, team_member, rider)
@@ -510,8 +571,11 @@ def test_the_edit_page_carries_the_same_three_links(client, rider):
     """A rider reaches their own source profiles from the page they already have open."""
     now = timezone.now()
     RiderProfile.objects.create(
-        zwid=rider.zwid, club_name="COALITION", zwift_user_id="41c49fb6-uuid",
-        fetched_at=now, last_requested_at=now,
+        zwid=rider.zwid,
+        club_name="COALITION",
+        zwift_user_id="41c49fb6-uuid",
+        fetched_at=now,
+        last_requested_at=now,
     )
 
     body = _edit_body(client, rider)
@@ -578,3 +642,97 @@ def test_the_totals_accessors_tolerate_a_missing_or_non_numeric_block(rider):
     assert bare.lifetime_climbed_m is None
     assert odd.lifetime_distance_km is None
     assert odd.lifetime_climbed_m is None
+
+
+# ---------------------------------------------------------------- the rest of zwiftracing's figures
+
+# vELO 2, seed, the power curve and race counts, as zauth's document carries them.
+ZWIFTRACING = {
+    "velo2": {
+        "race": 430.4,
+        "race_max30": 450.0,
+        "race_max90": 470.0,
+        "factors": {"sprint": 452.0, "punch": 440.5, "climb": 401.0, "timeTrial": 415, "endurance": 398.0},
+    },
+    "seed": {"race": 421.0, "timeTrial": 380.6, "factors": {"sprint": 460, "timeTrial": 401}},
+    "race_counts": {"finishes": 88, "dnfs": 3, "wins": 0, "podiums": 14},
+}
+
+
+@pytest.fixture
+def full_profile(profile):
+    """Give the profile every zwiftracing block the card shows.
+
+    Returns:
+        The RiderProfile row.
+
+    """
+    power = {**PAYLOAD["power"], "curve_w": {"5": 1100, "60": 520}, "curve_wkg": {"5": 14.01, "60": 6.62, "1200": 3.9}}
+    profile.payload = {**PAYLOAD, **ZWIFTRACING, "power": power}
+    profile.save()
+    return profile
+
+
+@pytest.mark.django_db
+def test_velo_2_has_its_own_section(client, full_profile, rider, team_member):
+    """The vELO 2 rating is another scale: never on the vELO row, never compared with it."""
+    body = _body(client, team_member, rider)
+
+    assert _row(body, "vELO") == "vELO 367"
+    assert _row(body, "vELO 2") == "vELO 2 430"
+    assert _row(body, "vELO 2 30 / 90-day peak") == "vELO 2 30 / 90-day peak 450 / 470"
+    factors = body[body.index('aria-label="vELO 2 factors"') :]
+    factors = _text(factors[factors.index(">") + 1 : factors.index("</div>")])
+    assert factors == "Sprint 452 Punch 441 Climb 401 TT 415 Endurance 398"  # no pursuit: zwiftracing sent none
+
+
+@pytest.mark.django_db
+def test_the_seed_shows_its_race_and_time_trial_ratings_and_factors(client, full_profile, rider, team_member):
+    body = _body(client, team_member, rider)
+
+    assert _row(body, "Seed race / TT") == "Seed race / TT 421 / 381"
+    factors = body[body.index('aria-label="Seed factors"') :]
+    assert _text(factors[factors.index(">") + 1 : factors.index("</div>")]) == "Sprint 460 TT 401"
+
+
+@pytest.mark.django_db
+def test_the_power_curve_is_a_table_by_duration(client, full_profile, rider, team_member):
+    body = _body(client, team_member, rider)
+    table = body[body.index("Best power (Zwift Racing)") : body.index("</table>")]
+    rows = [_text(row[row.index(">") + 1 :]) for row in table.split("<tr")[2:]]
+
+    assert '<th scope="col"' in table and '<th scope="row"' in table
+    assert rows == ["5 s 14.01 1100", "1 min 6.62 520", "20 min 3.90 —"]  # only the durations it has
+
+
+@pytest.mark.django_db
+def test_race_counts_show_zero_as_a_count(client, full_profile, rider, team_member):
+    body = _body(client, team_member, rider)
+
+    assert _row(body, "Races / Wins") == "Races / Wins 88 / 0"
+    assert _row(body, "Podiums / DNFs") == "Podiums / DNFs 14 / 3"
+
+
+@pytest.mark.django_db
+def test_a_profile_with_only_the_new_blocks_still_has_something_to_show(rider):
+    now = timezone.now()
+    profile = RiderProfile.objects.create(
+        zwid=rider.zwid, payload={"race_counts": {"finishes": 4}}, fetched_at=now, last_requested_at=now
+    )
+
+    assert profile.has_display_data is True
+
+
+@pytest.mark.django_db
+def test_the_card_text_keeps_its_contrast(client, full_profile, rider, team_member):
+    """Fainter than /70 falls under 4.5:1, and so does a status colour as an outline on the card."""
+    body = _body(client, team_member, rider)
+    card = body[body.index('id="rider-profile-card"') :]
+    card = card[: card.index("Update")]
+
+    assert "text-base-content/50" not in card
+    assert "text-base-content/40" not in card
+    handicaps = card[card.index("Terrain handicaps") :]
+    handicaps = handicaps[: handicaps.index("</div>\n          </div>")]
+    assert "badge-outline" not in handicaps
+    assert "flat +16.4" in " ".join(handicaps.split())  # the sign written out, not left to the colour

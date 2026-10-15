@@ -22,6 +22,58 @@ from django.db import models
 from gotta_bike_platform.retention import RetentionPolicy
 
 
+def _number(value: object) -> float | None:
+    """Read a payload value as a number.
+
+    Returns:
+        The value as a float when it is a number (a bool is not), else None.
+
+    """
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+
+
+def _numbers(block: dict | None, keys: dict[str, str]) -> dict | None:
+    """Read ``{name: payload key}`` numbers out of a block.
+
+    Returns:
+        ``{name: value}``, None for each one missing, or None when none of them is there.
+
+    """
+    block = block if isinstance(block, dict) else {}
+    found = {name: _number(block.get(key)) for name, key in keys.items()}
+    return found if any(value is not None for value in found.values()) else None
+
+
+# zwiftracing's six vELO 2 / seed factors, as its blocks name them.
+_FACTORS = {
+    "sprint": "sprint",
+    "punch": "punch",
+    "climb": "climb",
+    "time_trial": "timeTrial",
+    "endurance": "endurance",
+    "pursuit": "pursuit",
+}
+# The same factors as the rider card names them, in zwiftracing's order.
+_FACTOR_LABELS = (
+    ("sprint", "Sprint"),
+    ("punch", "Punch"),
+    ("climb", "Climb"),
+    ("time_trial", "TT"),
+    ("endurance", "Endurance"),
+    ("pursuit", "Pursuit"),
+)
+# zwiftracing's power curve durations, in seconds, with the names the pages give them.
+CURVE_DURATIONS = (
+    (5, "5 s"),
+    (15, "15 s"),
+    (30, "30 s"),
+    (60, "1 min"),
+    (120, "2 min"),
+    (300, "5 min"),
+    (1200, "20 min"),
+)
+
+
 class RiderProfile(models.Model):
     """One rider's merged profile, as last returned by zauth.
 
@@ -237,7 +289,17 @@ class RiderProfile(models.Model):
         )
         if any(value is not None and value != "" for value in columns):
             return True
-        return any((self.power_extras, self.peak_ratings, self.handicaps, self.totals))
+        return any((
+            self.power_extras,
+            self.peak_ratings,
+            self.handicaps,
+            self.totals,
+            self.velo2,
+            self.seed_ratings,
+            self.race_counts,
+            self.power_curve_w,
+            self.power_curve_wkg,
+        ))
 
     @property
     def handicaps(self) -> dict | None:
@@ -357,9 +419,8 @@ class RiderProfile(models.Model):
     def peak_ratings(self) -> dict | None:
         """30- and 90-day peak vELO.
 
-        The CATEGORY that went with each peak is deliberately absent: zauth carries one racing
-        category, the current one, so these are bare numbers. Labelling them with
-        ``category_racing`` would attach today's tier to a rating from ninety days ago.
+        The category that went with each peak is :attr:`peak_categories`, never
+        ``category_racing``: that is today's tier, not the one held at a peak ninety days ago.
 
         Returns:
             A dict with whichever of max30/max90 are present, or None.
@@ -370,3 +431,125 @@ class RiderProfile(models.Model):
             key: block.get(f"rating_{key}") for key in ("max30", "max90") if block.get(f"rating_{key}") is not None
         }
         return found or None
+
+    @property
+    def peak_categories(self) -> dict | None:
+        """The category zwiftracing gave each 30- and 90-day vELO peak (e.g. "Ruby").
+
+        Returns:
+            A dict with whichever of max30/max90 are present, or None.
+
+        """
+        block = self._block("ratings") or {}
+        found = {
+            key: block[f"category_{key}"] for key in ("max30", "max90") if isinstance(block.get(f"category_{key}"), str)
+        }
+        return found or None
+
+    @property
+    def velo2(self) -> dict | None:
+        """Zwift Racing's vELO 2: the race rating, its 30- and 90-day peaks, and the six factors.
+
+        A different scale from vELO 1 (a race rating near 400 beside a vELO of 1,500), so it is
+        never shown or compared as if it were :attr:`velo`. zwiftracing has no vELO 2 peaks;
+        zauth works them out from its own history of the rider, so they miss a rating that
+        rose and fell between two of its fetches.
+
+        Returns:
+            ``race``, ``max30``, ``max90`` and each factor (``sprint``, ``punch``, ``climb``,
+            ``time_trial``, ``endurance``, ``pursuit``), None where missing; or None when the
+            profile has no vELO 2.
+
+        """
+        block = self._block("velo2")
+        if block is None:
+            return None
+        ratings = _numbers(block, {"race": "race", "max30": "race_max30", "max90": "race_max90"}) or {}
+        factors = _numbers(block.get("factors"), _FACTORS) or {}
+        found = {"race": None, "max30": None, "max90": None, **dict.fromkeys(_FACTORS), **ratings, **factors}
+        return found if any(value is not None for value in found.values()) else None
+
+    @property
+    def seed_ratings(self) -> dict | None:
+        """Zwift Racing's seed: the starting estimate behind vELO 2, from the rider's power data.
+
+        Returns:
+            ``race``, ``time_trial`` and each factor (``sprint`` … ``pursuit``, with the
+            time-trial factor as ``time_trial_factor``), None where missing; or None.
+
+        """
+        block = self._block("seed")
+        if block is None:
+            return None
+        ratings = _numbers(block, {"race": "race", "time_trial": "timeTrial"}) or {}
+        factor_keys = {("time_trial_factor" if name == "time_trial" else name): key for name, key in _FACTORS.items()}
+        factors = _numbers(block.get("factors"), factor_keys) or {}
+        found = {"race": None, "time_trial": None, **dict.fromkeys(factor_keys), **ratings, **factors}
+        return found if any(value is not None for value in found.values()) else None
+
+    @property
+    def race_counts(self) -> dict | None:
+        """How many races zwiftracing has for the rider, and how they ended.
+
+        Returns:
+            ``finishes``, ``wins``, ``podiums`` and ``dnfs`` as ints, None where missing; or None.
+
+        """
+        found = _numbers(self._block("race_counts"), {k: k for k in ("finishes", "wins", "podiums", "dnfs")})
+        return {key: None if value is None else int(value) for key, value in found.items()} if found else None
+
+    @property
+    def power_curve_wkg(self) -> dict[int, float] | None:
+        """Best power in W/kg by duration in seconds, from Zwift Racing: 5 seconds up to 20 minutes.
+
+        Returns:
+            ``{seconds: W/kg}`` for each duration with a positive number, or None.
+
+        """
+        block = self._block("power", "curve_wkg") or {}
+        curve = {
+            int(seconds): number
+            for seconds, value in block.items()
+            if str(seconds).isdigit() and (number := _number(value)) is not None and number > 0
+        }
+        return curve or None
+
+    @property
+    def velo2_factors(self) -> list[tuple[str, float]]:
+        """The vELO 2 factors the rider has, named for the card, in zwiftracing's order.
+
+        Returns:
+            ``(name, value)`` pairs; empty when there are none.
+
+        """
+        velo2 = self.velo2 or {}
+        return [(label, velo2[key]) for key, label in _FACTOR_LABELS if velo2.get(key) is not None]
+
+    @property
+    def seed_factors(self) -> list[tuple[str, float]]:
+        """The seed factors the rider has, named for the card, in zwiftracing's order.
+
+        Returns:
+            ``(name, value)`` pairs, the time-trial factor as "TT"; empty when there are none.
+
+        """
+        seed = self.seed_ratings or {}
+        keys = {key: ("time_trial_factor" if key == "time_trial" else key) for key, _ in _FACTOR_LABELS}
+        return [(label, seed[keys[key]]) for key, label in _FACTOR_LABELS if seed.get(keys[key]) is not None]
+
+    @property
+    def power_curve(self) -> list[tuple[str, float | None, float | None]]:
+        """Best power by duration, as the card's table lays it out.
+
+        Returns:
+            ``(duration, W/kg, watts)`` for each of :data:`CURVE_DURATIONS` with either value;
+            empty when the rider has no curve.
+
+        """
+        wkg = self.power_curve_wkg or {}
+        watts = self.power_curve_w or {}
+        return [
+            (name, wkg.get(seconds), watts.get(seconds))
+            for seconds, name in CURVE_DURATIONS
+            if seconds in wkg or seconds in watts
+        ]
