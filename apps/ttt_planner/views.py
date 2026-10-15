@@ -73,7 +73,13 @@ PULL_RULE_HELP = {
 
 
 def _render_plan_body(
-    request: HttpRequest, plan: TttPlan, *, can_edit: bool, result: compute.PlanResult | None = None
+    request: HttpRequest,
+    plan: TttPlan,
+    *,
+    can_edit: bool,
+    result: compute.PlanResult | None = None,
+    optimized: bool = False,
+    outcome: compute.OptimizeResult | None = None,
 ) -> str:
     """Render the roster + results partial for a plan.
 
@@ -82,6 +88,8 @@ def _render_plan_body(
         plan: The plan.
         can_edit: Whether edit controls should be shown.
         result: The plan's computed results, when the caller already has them.
+        optimized: Whether this answers Optimize, which then says under its button what it did.
+        outcome: What Optimize settled on (None when it could not); read only when ``optimized``.
 
     Returns:
         Rendered HTML string of the ``_plan_body`` partial.
@@ -94,6 +102,9 @@ def _render_plan_body(
             "result": result or compute_plan(plan),
             "can_edit": can_edit,
             "climb": climb_strength(plan),
+            "goal_sentence": GOAL_SENTENCES[f"{plan.speed_goal}-{plan.pull_rule}"],
+            "optimized": optimized,
+            "outcome": outcome,
         },
         request=request,
     )
@@ -773,8 +784,9 @@ def optimize(request: HttpRequest, plan_id: str) -> HttpResponse:
     """Carry out the plan's goal: set the speed, and the pull lengths and order when it says to; recompute.
 
     The click sends the whole Parameters card, so the goal and limits on screen are what
-    count. The response swaps the plan body, sends the speed field back out of band, and
-    says what happened in the card's live region.
+    count. The response swaps the plan body, which says under the Optimize button what
+    happened, sends the speed field back out of band, and fills the live region outside the
+    body with the same words for screen readers.
 
     Returns:
         The refreshed plan body partial, with the out-of-band updates.
@@ -813,14 +825,12 @@ def optimize(request: HttpRequest, plan_id: str) -> HttpResponse:
     )
 
     result = compute_plan(plan)
-    body = _render_plan_body(request, plan, can_edit=True, result=result)
+    body = _render_plan_body(request, plan, can_edit=True, result=result, optimized=True, outcome=outcome)
     oob = render_to_string("ttt_planner/_speed_input.html", {"plan": plan, "oob": True}, request=request)
-    message = render_to_string(
-        "ttt_planner/_optimize_message.html",
-        {"plan": plan, "outcome": outcome, "result": result, "oob": True},
-        request=request,
+    announcer = render_to_string(
+        "ttt_planner/_optimize_announcer.html", {"plan": plan, "outcome": outcome, "result": result}, request=request
     )
-    return HttpResponse(body + oob + message)
+    return HttpResponse(body + oob + announcer)
 
 
 @login_required

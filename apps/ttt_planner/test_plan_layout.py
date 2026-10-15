@@ -1,10 +1,11 @@
 """The plan page's cards, the help page, and the controls that moved between them.
 
 Plan and Course are separate cards; the edit-squad picker lives in Add riders; the plan's goal
-(how fast, how the pulls are set), its limits, the CdA coefficient, Optimize and the draft
-savings live in Parameters, just above the pull schedule and Pull Stats.
+(how fast, how the pulls are set), its limits, the CdA coefficient and the draft savings live in
+Parameters, closed until opened; Optimize sits just above Pull Stats, saying what it will do.
 """
 
+import re
 from datetime import timedelta
 
 import pytest
@@ -68,7 +69,7 @@ def test_the_edit_squad_picker_is_in_add_riders(auth_client, team_member):
 
 
 @pytest.mark.django_db
-def test_parameters_hold_the_goal_the_limits_and_optimize_above_the_schedule(auth_client, team_member):
+def test_parameters_hold_the_goal_and_the_limits_closed_until_opened(auth_client, team_member):
     plan = _plan(team_member)
     body = _page(auth_client, plan)
     params = _card(body, "ttt-params-heading")
@@ -80,12 +81,27 @@ def test_parameters_hold_the_goal_the_limits_and_optimize_above_the_schedule(aut
         'name="target_if"',
         'name="w_prime_reserve_pct"',
         'name="cda_coef"',
-        reverse("ttt_planner:optimize", args=[plan.pk]),
         'id="ttt-draft-savings"',
     ):
         assert control in params, control
     assert body.index('id="ttt-params-heading"') < body.index('id="ttt-schedule-heading"')
-    assert reverse("ttt_planner:optimize", args=[plan.pk]) not in _card(body, "ttt-schedule-heading")
+    opening = body[body.index('<details id="ttt-params"') :]
+    assert " open" not in opening[: opening.index(">")]  # closed by default
+    assert reverse("ttt_planner:optimize", args=[plan.pk]) not in params
+
+
+@pytest.mark.django_db
+def test_optimize_sits_just_above_pull_stats_saying_what_it_will_do(auth_client, team_member):
+    plan = _plan(team_member)
+    body = _page(auth_client, plan)
+
+    optimize = body.index(reverse("ttt_planner:optimize", args=[plan.pk]))
+    assert body.index('id="ttt-schedule-heading"') < optimize < body.index('id="ttt-stats-heading"')
+    bar = body[optimize : body.index('id="ttt-stats-heading"')]
+    assert 'id="ttt-goal-sentence"' in bar
+    assert 'href="#ttt-params"' in bar  # and a way back to the goal it carries out
+    button = body[body.rindex("<button", 0, optimize) : optimize]
+    assert "btn-block" in button  # full width
 
 
 @pytest.mark.django_db
@@ -169,7 +185,7 @@ def test_saving_the_parameters_does_not_pin_the_site_cda_default(auth_client, te
     plan = _plan(team_member)
     body = _page(auth_client, plan)
 
-    assert 'name="cda_coef"\n                 value=""' in body or 'name="cda_coef" value=""' in body
+    assert re.search(r'name="cda_coef"\s+value=""', body)
     auth_client.post(
         reverse("ttt_planner:update", args=[plan.pk]),
         {"target_speed_kph": "41", "target_if": "0.95", "cda_coef": ""},

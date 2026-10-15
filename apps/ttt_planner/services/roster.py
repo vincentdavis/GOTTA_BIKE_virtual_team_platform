@@ -1,8 +1,12 @@
-"""Look up rider weight / FTP / height from existing team data.
+"""Look up a team rider's weight, height and power figures for a plan.
 
-Merges ZwiftPower (`ZPTeamRiders`) and Zwift Racing (`ZRRider`) records by zwid,
-preferring whichever source has a value. No new external API calls -- this reads
-the data the platform already syncs.
+Everything comes from the rider profile cache (``apps.rider_data.RiderProfile``), which the
+zauth service fills from Zwift, ZwiftPower and Zwift Racing, merged into one document per
+rider. Nothing here calls out: it reads what ``sync_rider_profiles`` last stored.
+
+Only the team's riders are offered (``rider_data.services.zwids_to_refresh``, the same set
+the team roster lists). The cache keeps a rider who has left until it is purged, and can
+hold riders from other teams, so "every row we hold" is not the team.
 """
 
 from __future__ import annotations
@@ -11,14 +15,14 @@ from dataclasses import dataclass
 
 from django.db.models import Q
 
+from apps.rider_data.models import RiderProfile
+from apps.rider_data.services import zwids_to_refresh
 from apps.ttt_planner.services.compute import MIN_CREDIBLE_W_PRIME_J
-from apps.zwiftpower.models import ZPTeamRiders
-from apps.zwiftracing.models import ZRRider
 
 
 @dataclass
 class RiderData:
-    """Merged rider attributes from team data sources."""
+    """A team rider's figures, as a plan snapshots them."""
 
     zwid: int
     name: str
@@ -30,67 +34,61 @@ class RiderData:
     w_prime_j: int | None = None
 
 
-def _category(zp: ZPTeamRiders | None, zr: ZRRider | None) -> str:
-    """Derive a display category from ZP division or ZR category.
+def _number(value: object) -> float | None:
+    return float(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
+
+
+def _rider_data(profile: RiderProfile) -> RiderData:
+    """Read a profile into a plan's figures.
+
+    FTP is ``zftp``, as on the team roster: zauth resolves it from Zwift, ZwiftPower and
+    Zwift Racing in turn, while ``ftp`` (the in-game FTP) is there only for riders who
+    connected through zauth, so it stands in only when ``zftp`` is missing. CP and W′ come
+    from Zwift Racing's power block; a W′ of 0 there means "unknown", as anything below
+    :data:`MIN_CREDIBLE_W_PRIME_J` does.
 
     Args:
-        zp: ZwiftPower record or None.
-        zr: Zwift Racing record or None.
+        profile: The rider's cached profile.
 
     Returns:
-        A short category label (may be empty).
+        The rider's :class:`RiderData`.
 
     """
-    if zr and zr.zp_category:
-        return zr.zp_category
-    if zp and zp.div:
-        # ZP div 5/10/20/30/40/50 -> A+/A/B/C/D/E
-        return {5: "A+", 10: "A", 20: "B", 30: "C", 40: "D", 50: "E"}.get(zp.div, "")
-    return ""
+    power = profile.power_extras or {}
+    cp = _number(power.get("cp"))
+    awc = _number(power.get("awc"))
+    ftp = profile.zftp if profile.zftp is not None else profile.ftp
+    return RiderData(
+        zwid=profile.zwid,
+        name=profile.name or str(profile.zwid),
+        weight_kg=round(profile.weight_kg, 1) if profile.weight_kg is not None else None,
+        height_cm=round(profile.height_cm) if profile.height_cm is not None else None,
+        ftp_w=round(ftp) if ftp is not None else None,
+        category=profile.category_open or profile.category_women,
+        cp_w=round(cp) if cp is not None and cp > 0 else None,
+        w_prime_j=round(awc) if awc is not None and awc >= MIN_CREDIBLE_W_PRIME_J else None,
+    )
 
 
 def get_rider_data(zwids: list[int]) -> dict[int, RiderData]:
-    """Fetch merged rider data for a list of zwids.
+    """Fetch the figures of the team riders among some zwids.
 
     Args:
         zwids: Zwift IDs to look up.
 
     Returns:
-        Mapping of zwid -> RiderData for every zwid found in either source.
+        Mapping of zwid -> RiderData for every one on the team with a cached profile.
 
     """
-    if not zwids:
+    team = set(zwids_to_refresh())
+    wanted = [zwid for zwid in zwids if zwid in team]
+    if not wanted:
         return {}
-
-    zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)}
-    zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)}
-
-    result: dict[int, RiderData] = {}
-    for zwid in set(zp_by_zwid) | set(zr_by_zwid):
-        zp = zp_by_zwid.get(zwid)
-        zr = zr_by_zwid.get(zwid)
-        weight = (zp and zp.weight) or (zr and zr.weight)
-        ftp = (zp and zp.ftp) or (zr and zr.zp_ftp)
-        height = zr.height if zr else None
-        name = (zp and zp.name) or (zr and zr.name) or str(zwid)
-        # CP and W′ come from Zwift Racing alone; a W′ of 0 there means "unknown".
-        cp = zr.power_cp if zr and zr.power_cp and zr.power_cp > 0 else None
-        awc = zr.power_awc if zr and zr.power_awc and zr.power_awc >= MIN_CREDIBLE_W_PRIME_J else None
-        result[zwid] = RiderData(
-            zwid=zwid,
-            name=name,
-            weight_kg=float(weight) if weight is not None else None,
-            height_cm=int(height) if height is not None else None,
-            ftp_w=int(ftp) if ftp is not None else None,
-            category=_category(zp, zr),
-            cp_w=round(cp) if cp is not None else None,
-            w_prime_j=round(awc) if awc is not None else None,
-        )
-    return result
+    return {profile.zwid: _rider_data(profile) for profile in RiderProfile.objects.filter(zwid__in=wanted)}
 
 
 def search_riders(query: str, *, limit: int = 8, exclude_zwids: set[int] | None = None) -> list[RiderData]:
-    """Search team riders by name or zwid for the add-rider autocomplete.
+    """Search the team's riders by name, or by an exact zwid, for the add-rider autocomplete.
 
     Args:
         query: Search string (name fragment or numeric zwid).
@@ -105,24 +103,12 @@ def search_riders(query: str, *, limit: int = 8, exclude_zwids: set[int] | None 
     if len(query) < 2:
         return []
 
-    exclude_zwids = exclude_zwids or set()
-
-    name_q = Q(name__icontains=query)
+    matches = Q(name__icontains=query)
     if query.isdigit():
-        name_q |= Q(zwid=int(query))
+        matches |= Q(zwid=int(query))
+    team = set(zwids_to_refresh()) - (exclude_zwids or set())
+    found = RiderProfile.objects.filter(matches).order_by("name").values_list("zwid", flat=True)
+    zwids = [zwid for zwid in found if zwid in team][:limit]
 
-    zp_qs = ZPTeamRiders.objects.filter(name_q).exclude(zwid__in=exclude_zwids).order_by("name")[: limit * 2]
-    zwids = [r.zwid for r in zp_qs][:limit]
-
-    # Fall back to ZR for riders not on the ZP team table.
-    if len(zwids) < limit:
-        zr_qs = (
-            ZRRider.objects
-            .filter(name_q)
-            .exclude(zwid__in=set(zwids) | exclude_zwids)
-            .order_by("name")[: limit - len(zwids)]
-        )
-        zwids.extend(r.zwid for r in zr_qs)
-
-    data = get_rider_data(zwids)
-    return [data[z] for z in zwids if z in data]
+    profiles = RiderProfile.objects.in_bulk(zwids)
+    return [_rider_data(profiles[zwid]) for zwid in zwids if zwid in profiles]

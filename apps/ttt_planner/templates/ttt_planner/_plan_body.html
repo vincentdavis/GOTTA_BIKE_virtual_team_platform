@@ -112,6 +112,32 @@
 </section>
 {% endif %}
 
+{% if can_edit %}
+{% comment %}
+  Optimize carries out the goal set in Parameters, just above Pull Stats, which shows what it did.
+  The click sends the whole Parameters form, open or closed, so what is on screen there counts
+  even if a field's own save has not landed. Its answer replaces this block: the result below is
+  plain text, read out from #ttt-optimize-announcer outside the body, and focus goes back to the
+  new button (planner_detail.html).
+{% endcomment %}
+<div class="mb-6 space-y-2" data-ttt-optimize>
+  <button type="button" id="ttt-optimize" class="btn btn-accent btn-block"
+          hx-post="{% url 'ttt_planner:optimize' plan.pk %}"
+          hx-include="#ttt-params-form"
+          hx-target="#ttt-plan-body" hx-swap="innerHTML"
+          hx-on::confirm="tttConfirmOptimize(event)"
+          aria-describedby="ttt-goal-sentence"
+          {% if plan.speed_goal == "hold" and plan.pull_rule == "keep" %}disabled{% endif %}>Optimize</button>
+  <p class="text-sm">
+    <span id="ttt-goal-sentence">{{ goal_sentence }}</span>
+    <a href="#ttt-params" class="link whitespace-nowrap" data-ttt-open-params>Change in Parameters</a>
+  </p>
+  {% if optimized %}
+  <p class="text-sm rounded-box bg-base-200 p-3" data-ttt-optimize-result>{% include "ttt_planner/_optimize_message.html" %}</p>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
 
   {# ---- Pull Stats: the planning view of every rider's load ---- #}
@@ -399,7 +425,7 @@
     </div>
     {% include "_climb_method.html" %}
     {% else %}
-    <p class="text-base-content/70 py-6 text-center">Add riders linked to Zwift Racing data (zwid + power curve) to compare climbs.</p>
+    <p class="text-base-content/70 py-6 text-center">Add team riders whose profile has a power curve (from Zwift Racing) to compare climbs.</p>
     {% endif %}
   </div>
 </section>

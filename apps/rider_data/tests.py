@@ -90,6 +90,16 @@ def test_the_rich_blocks_stay_in_payload(profile_factory):
 
 
 @pytest.mark.django_db
+def test_the_watts_curve_is_read_by_duration_in_seconds(profile_factory):
+    """The curve is keyed by seconds as strings, with null where Zwift Racing has nothing."""
+    profile = profile_factory(payload={"power": {"curve_w": {"5": 900, "60": 410.5, "300": None, "1200": 0}}})
+
+    assert profile.power_curve_w == {5: 900.0, 60: 410.5}  # the missing and the zero dropped
+    assert profile_factory(zwid=1002, payload={"power": {"curve_w": None}}).power_curve_w is None
+    assert profile_factory(zwid=1003, payload={}).power_curve_w is None
+
+
+@pytest.mark.django_db
 def test_roster_membership_is_not_stored_here():
     """Membership belongs to team. A cache row carrying it could never be evicted."""
     columns = {f.name for f in RiderProfile._meta.get_fields()}

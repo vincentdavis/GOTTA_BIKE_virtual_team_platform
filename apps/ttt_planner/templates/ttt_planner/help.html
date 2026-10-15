@@ -51,11 +51,12 @@
           Course name and type are labels only; they change no numbers.</li>
         <li><strong>Add riders.</strong> Add a whole squad, search team riders by name or Zwift ID, or add a guest
           with their weight, height and FTP.</li>
-        <li><strong>Parameters.</strong> Choose the goal: how fast (as fast as the limits allow, or a speed to hold)
-          and how the pull lengths are set (for even effort, for the most W′ in reserve, or as you set them). Set
-          the limits: the Target IF, the most any rider's IF may reach, and the W′ reserve, the share of W′ every
-          rider keeps in hand; and the shortest and longest pull Optimize may give.</li>
-        <li><strong>Optimize</strong> carries out the goal. The sentence beside the button says what it will do.</li>
+        <li><strong>Parameters</strong> (closed until you open it). Choose the goal: how fast (as fast as the limits
+          allow, or a speed to hold) and how the pull lengths are set (for even effort, for the most W′ in reserve, or
+          as you set them). Set the limits: the Target IF, the most any rider's IF may reach, and the W′ reserve, the
+          share of W′ every rider keeps in hand; and the shortest and longest pull Optimize may give.</li>
+        <li><strong>Optimize</strong>, the wide button just above Pull Stats, carries out the goal. The sentence under
+          it says what it will do, and links back to Parameters to change it.</li>
         <li><strong>Adjust.</strong> Change pull lengths, mark riders who take no pulls, reorder. The table and the
           line above it, which says whether the plan fits the limits, update as you go.</li>
         <li><strong>Share.</strong> Copy the pull schedule for Discord, as text or as an image.</li>
@@ -67,14 +68,16 @@
     <div class="card-body space-y-3">
       <h2 id="riders-h" class="card-title">Rider data</h2>
       <p>
-        When you add a team rider, the planner copies their weight, height and FTP from the team's data: weight and
-        FTP from ZwiftPower first, then Zwift Racing; height from Zwift Racing. Their critical power (CP) and W′ come
-        from Zwift Racing. The copy stays as it was if their data changes later.
+        When you add a team rider, the planner copies their weight, height, FTP, critical power (CP) and W′ from
+        their rider profile, the same one their profile page shows. It merges Zwift, ZwiftPower and Zwift Racing:
+        weight and height from their Zwift profile first; FTP is Zwift's zFTP, or ZwiftPower's when Zwift has none;
+        CP and W′ are Zwift Racing's. The copy stays as it was if their profile changes later. Only riders on the
+        team can be found and added.
       </p>
       <ul class="list-disc pl-5 space-y-1">
         <li>No weight or height: the rider is modelled at {{ fallback_weight_kg|floatformat:0 }} kg and
           {{ fallback_height_cm|floatformat:0 }} cm, and marked <span class="badge badge-warning badge-xs">est</span>.</li>
-        <li>No CP or W′ (guests, or riders Zwift Racing has no figures for): the planner uses their FTP as CP and
+        <li>No CP or W′ (guests, or riders with no Zwift Racing figures): the planner uses their FTP as CP and
           {{ fallback_w_prime_kj }} kJ as W′, close to the team's average, and shows those values with a <span aria-hidden="true">~</span><span class="sr-only">tilde</span> in front.</li>
         <li>No FTP: the rider still gets pull powers, but no %FTP, IF, TSS or W′ figures, and Optimize cannot judge
           them: it leaves their pull as it is and puts them last.</li>
@@ -136,7 +139,7 @@
               and the order, as they are.</dd></div>
         </dl>
         <p>
-          Optimize carries the goal out, and the sentence beside the button always says what it will do. As fast as
+          Optimize carries the goal out, and the sentence under the button always says what it will do. As fast as
           the limits allow with your pull lengths kept is what the planner used to call Calculate speed; with even
           effort, it is the old Auto-balance. Holding a speed with your pull lengths kept leaves nothing to optimize,
           so the button is off.
@@ -424,9 +427,9 @@
     <div class="card-body space-y-3">
       <h2 id="climb-h" class="card-title">Climb compare</h2>
       <p>
-        For riders linked to Zwift Racing data, the plan page shows how far behind the squad's fastest climber each
-        rider would finish a {{ climb_grade_pct }}% climb of different lengths, riding a steady best effort without
-        drafting. It shows who is likely to be dropped on a long drag before it happens.
+        For riders whose profile has a power curve (from Zwift Racing), the plan page shows how far behind the squad's
+        fastest climber each rider would finish a {{ climb_grade_pct }}% climb of different lengths, riding a steady best
+        effort without drafting. It shows who is likely to be dropped on a long drag before it happens.
       </p>
       {% include "_climb_method.html" %}
     </div>
@@ -468,8 +471,8 @@
           model does not capture.</li>
         <li><strong>Race dynamics.</strong> Surges, corners, power-ups, gaps in the rotation and riders being dropped
           are not modelled.</li>
-        <li><strong>Data age.</strong> Weights, heights and FTPs are copies from ZwiftPower and Zwift Racing, and can
-          be out of date.</li>
+        <li><strong>Data age.</strong> Weights, heights, FTPs, CP and W′ are copies of the riders' profiles, taken
+          when each rider was added, and can be out of date.</li>
       </ul>
     </div>
   </section>

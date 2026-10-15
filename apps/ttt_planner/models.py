@@ -234,8 +234,8 @@ class TttPlan(models.Model):
 class PlanRider(models.Model):
     """A rider on a plan, in pull order.
 
-    Weight/height/FTP, and CP/W′ from Zwift Racing, are snapshotted at add time so later
-    changes to team data do not mutate a saved plan.
+    Weight/height/FTP and CP/W′ are snapshotted from the rider's profile
+    (``rider_data.RiderProfile``) at add time, so later changes to it do not mutate a saved plan.
     """
 
     # Ceilings for manually entered values. Optimize never gives more than the plan's

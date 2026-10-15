@@ -8,11 +8,9 @@ from django.urls import reverse
 from apps.ttt_planner.models import PlanRider, TttPlan
 from apps.ttt_planner.services import physics, zwiftgopher
 from apps.ttt_planner.services.compute import compute_plan, optimize_plan, sustainable_speed
-from apps.ttt_planner.services.roster import get_rider_data
+from apps.ttt_planner.services.roster import get_rider_data, search_riders
 from apps.ttt_planner.tasks import run_zwiftgopher_optimize
 from apps.zwift_data.models import ZwiftRoute
-from apps.zwiftpower.models import ZPTeamRiders
-from apps.zwiftracing.models import ZRRider
 
 
 def make_route(name="Route", distance_km=10, elevation_m=0, world="Watopia", world_id=1, name_hash=None, **velo):
@@ -266,30 +264,74 @@ def test_compute_plan_missing_data_flagged(team_member):
 
 
 # --------------------------------------------------------------------------- #
-# Roster merge
+# Rider data, from the rider profile cache
 # --------------------------------------------------------------------------- #
 
 
+@pytest.fixture
+def on_team(user_model):
+    """Put zwids on the team, as members here with that Zwift id.
+
+    Returns:
+        A function taking zwids.
+
+    """
+
+    def _on_team(*zwids):
+        for zwid in zwids:
+            user_model.objects.create(username=f"member-{zwid}", zwid=zwid)
+
+    return _on_team
+
+
 @pytest.mark.django_db
-def test_roster_merge_prefers_zp_then_zr():
-    """get_rider_data merges ZP and ZR, preferring ZP values when present."""
-    ZPTeamRiders.objects.create(zwid=123, name="Rider ZP", weight=72.5, ftp=305, div=20)
-    ZRRider.objects.create(zwid=123, name="Rider ZR", weight=99.9, zp_ftp=999, height=181, zp_category="B")
+def test_a_rider_is_read_from_their_profile(rider_profile_factory, on_team):
+    on_team(123)
+    rider_profile_factory(
+        zwid=123,
+        name="Profile Rider",
+        weight_kg=72.46,
+        height_cm=181.4,
+        category_open="B",
+        power={"ftp": 290, "zftp": 305, "cp": 312.4, "awc": 21480.6},
+    )
 
     data = get_rider_data([123])[123]
-    assert data.weight_kg == pytest.approx(72.5)  # ZP wins
-    assert data.ftp_w == 305  # ZP wins
-    assert data.height_cm == 181  # only ZR has height
-    assert data.category == "B"
+
+    assert (data.name, data.weight_kg, data.height_cm, data.category) == ("Profile Rider", 72.5, 181, "B")
+    assert data.ftp_w == 305  # zFTP, as on the team roster, over the sparser in-game FTP
+    assert (data.cp_w, data.w_prime_j) == (312, 21481)  # Zwift Racing's CP and W′
 
 
 @pytest.mark.django_db
-def test_roster_merge_falls_back_to_zr():
-    """When only ZR has data, those values are used."""
-    ZRRider.objects.create(zwid=456, name="Only ZR", weight=68.0, zp_ftp=260, height=170)
-    data = get_rider_data([456])[456]
-    assert data.weight_kg == pytest.approx(68.0)
-    assert data.ftp_w == 260
+def test_the_in_game_ftp_stands_in_only_without_a_zftp(rider_profile_factory, on_team):
+    on_team(124)
+    rider_profile_factory(zwid=124, power={"ftp": 280, "zftp": None})
+
+    assert get_rider_data([124])[124].ftp_w == 280
+
+
+@pytest.mark.django_db
+def test_a_zero_cp_or_w_prime_is_unknown(rider_profile_factory, on_team):
+    on_team(125)
+    rider_profile_factory(zwid=125, power={"cp": 0, "awc": 0})
+
+    data = get_rider_data([125])[125]
+
+    assert (data.cp_w, data.w_prime_j) == (None, None)
+
+
+@pytest.mark.django_db
+def test_only_the_teams_riders_are_found_and_read(rider_profile_factory, on_team):
+    """The cache also keeps riders who have left, and other teams' riders, until it is purged."""
+    on_team(201)
+    rider_profile_factory(zwid=201, name="Rider Tess")
+    rider_profile_factory(zwid=202, name="Rider Elsewhere")
+
+    assert set(get_rider_data([201, 202])) == {201}
+    assert [r.zwid for r in search_riders("Rider")] == [201]
+    assert [r.zwid for r in search_riders("201")] == [201]  # an exact zwid finds them too
+    assert search_riders("Rider", exclude_zwids={201}) == []  # already on the plan
 
 
 # --------------------------------------------------------------------------- #
@@ -374,9 +416,10 @@ def test_optimize_keeping_pulls_sets_sustainable_speed_and_if(auth_client, team_
 
 
 @pytest.mark.django_db
-def test_rider_search_renders(auth_client, team_member):
+def test_rider_search_renders(auth_client, team_member, rider_profile_factory, on_team):
     """The search endpoint finds a team rider and renders the dropdown partial."""
-    ZPTeamRiders.objects.create(zwid=789, name="Searchable Sam", weight=70, ftp=280, div=20)
+    on_team(789)
+    rider_profile_factory(zwid=789, name="Searchable Sam", weight_kg=70, ftp=280)
     plan = TttPlan.objects.create(created_by=team_member)
     resp = auth_client.get(reverse("ttt_planner:rider_search", args=[plan.pk]), {"q": "Searchable"})
     assert resp.status_code == 200
@@ -1034,8 +1077,8 @@ def test_velo_factor_bars_sorted_nonzero():
 
 
 @pytest.mark.django_db
-def test_plan_squad_add_adds_members(auth_client, team_member, user_model):
-    """Adding a squad snapshots team data where available, else name-only; skips no-zwid."""
+def test_plan_squad_add_adds_members(auth_client, team_member, user_model, rider_profile_factory):
+    """Adding a squad snapshots each member's profile where there is one, else name-only; skips no-zwid."""
     from datetime import date, timedelta
 
     from apps.events.models import Event, Squad, SquadMember
@@ -1046,7 +1089,7 @@ def test_plan_squad_add_adds_members(auth_client, team_member, user_model):
     squad = Squad.objects.create(event=event, name="Alpha")
 
     synced = user_model.objects.create(username="synced", zwid=7001, first_name="Syn")
-    ZRRider.objects.create(zwid=7001, name="Synced Rider", weight=72, zp_ftp=300)
+    rider_profile_factory(zwid=7001, name="Synced Rider", weight_kg=72, ftp=300)
     unsynced = user_model.objects.create(username="unsynced", zwid=7002, first_name="Uns")
     no_zwid = user_model.objects.create(username="nozwid")
     for u in (synced, unsynced, no_zwid):
@@ -1087,22 +1130,15 @@ def test_plan_squad_add_dedupes(auth_client, team_member, user_model):
 
 
 @pytest.mark.django_db
-def test_climb_strength_per_rider_gaps(team_member):
+def test_climb_strength_per_rider_gaps(team_member, rider_profile_factory):
     from apps.ttt_planner.services.compute import TTT_CLIMB_LENGTHS_M, climb_strength
 
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)
-    strong_w = {
-        "power_w5": 1100,
-        "power_w15": 880,
-        "power_w30": 770,
-        "power_w60": 560,
-        "power_w120": 500,
-        "power_w300": 420,
-        "power_w1200": 360,
-    }
+    # Zwift Racing's power curve, as the rider profile carries it: watts by duration in seconds.
+    strong_w = {"5": 1100, "15": 880, "30": 770, "60": 560, "120": 500, "300": 420, "1200": 360}
     weak_w = {k: int(v * 0.75) for k, v in strong_w.items()}
-    ZRRider.objects.create(zwid=101, name="Strong", weight=66, height=178, **strong_w)
-    ZRRider.objects.create(zwid=102, name="Weak", weight=80, height=178, **weak_w)
+    rider_profile_factory(zwid=101, name="Strong", weight_kg=66, height_cm=178, power={"curve_w": strong_w})
+    rider_profile_factory(zwid=102, name="Weak", weight_kg=80, height_cm=178, power={"curve_w": weak_w})
     PlanRider.objects.create(plan=plan, order=0, name="Strong", zwid=101, weight_kg=66, height_cm=178, ftp_w=320)
     PlanRider.objects.create(plan=plan, order=1, name="Weak", zwid=102, weight_kg=80, height_cm=178, ftp_w=240)
 
@@ -1117,7 +1153,7 @@ def test_climb_strength_per_rider_gaps(team_member):
 
 
 @pytest.mark.django_db
-def test_climb_strength_unavailable_without_zr(team_member):
+def test_climb_strength_unavailable_without_a_profile(team_member):
     from apps.ttt_planner.services.compute import climb_strength
 
     plan = TttPlan.objects.create(created_by=team_member, target_speed_kph=40)

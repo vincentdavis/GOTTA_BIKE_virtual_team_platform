@@ -334,6 +334,26 @@ class RiderProfile(models.Model):
         return found or None
 
     @property
+    def power_curve_w(self) -> dict[int, float] | None:
+        """Best power in watts by duration, from Zwift Racing: 5 seconds up to 20 minutes.
+
+        zauth keys the curve by the duration in seconds, as a string ("1200" is twenty
+        minutes); here the keys are ints. **Never render this on a page about other riders**:
+        it divided by ``curve_wkg`` at the same duration is the rider's weight, exactly.
+
+        Returns:
+            ``{seconds: watts}`` for each duration with a positive number, or None.
+
+        """
+        block = self._block("power", "curve_w") or {}
+        curve = {
+            int(seconds): float(watts)
+            for seconds, watts in block.items()
+            if str(seconds).isdigit() and isinstance(watts, int | float) and not isinstance(watts, bool) and watts > 0
+        }
+        return curve or None
+
+    @property
     def peak_ratings(self) -> dict | None:
         """30- and 90-day peak vELO.
 

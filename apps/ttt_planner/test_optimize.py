@@ -249,10 +249,14 @@ def test_optimize_saves_the_goal_on_screen_and_reports_back(auth_client, plan):
     body = resp.content.decode()
     assert (plan.speed_goal, plan.pull_rule, plan.target_if) == ("fastest", "reserve", pytest.approx(0.9))
     assert f'value="{plan.target_speed_kph}"' in body  # the speed field, sent back out of band
-    message = body[body.index('id="ttt-optimize-status"') :]
-    assert 'hx-swap-oob="true"' in message[: message.index(">")]
-    assert "the fastest the limits allow" in message
-    assert "most W′ in reserve" in message
+    # Under the button, in the plan body the response swaps in...
+    shown = body[body.index("data-ttt-optimize-result") : body.index('id="ttt-stats-heading"')]
+    assert "the fastest the limits allow" in shown
+    assert "most W′ in reserve" in shown
+    # ...and for screen readers, into the live region outside the body, which keeps its role.
+    announcer = body[body.index('id="ttt-optimize-announcer"') :]
+    assert 'hx-swap-oob="innerHTML"' in announcer[: announcer.index(">")]
+    assert "the fastest the limits allow" in announcer
 
 
 @pytest.mark.django_db

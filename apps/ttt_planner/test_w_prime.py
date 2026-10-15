@@ -97,8 +97,11 @@ def test_w_prime_edges():
 
 
 @pytest.mark.django_db
-def test_a_team_rider_brings_their_zwift_racing_cp_and_w_prime(auth_client, team_member):
-    ZRRider.objects.create(zwid=4242, name="Rider", weight=70, height=178, zp_ftp=300, power_cp=310, power_awc=21500)
+def test_a_team_rider_brings_their_cp_and_w_prime_from_their_profile(
+    auth_client, team_member, user_model, rider_profile_factory
+):
+    user_model.objects.create(username="rider", zwid=4242)  # a member, so on the team
+    rider_profile_factory(zwid=4242, name="Rider", power={"cp": 310, "awc": 21500})  # Zwift Racing's figures
     plan = TttPlan.objects.create(created_by=team_member)
 
     auth_client.post(reverse("ttt_planner:rider_add", args=[plan.pk, 4242]))

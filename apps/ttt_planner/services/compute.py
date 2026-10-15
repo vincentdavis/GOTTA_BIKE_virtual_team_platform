@@ -33,6 +33,7 @@ from apps.ttt_planner.services import course, effort, physics
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
+    from apps.rider_data.models import RiderProfile
     from apps.ttt_planner.models import PlanRider, TttPlan
 
 # Defaults used when a rider has no weight/height on file, so the model still runs.
@@ -1559,10 +1560,6 @@ from apps.ttt_planner.services import climb as climb_engine  # noqa: E402
 # Per-rider climb heatmap axes: a single reference grade, swept over climb lengths.
 TTT_CLIMB_GRADE = 0.08
 TTT_CLIMB_LENGTHS_M: list[float] = [500, 1000, 2000, 4000, 8000, 15000]
-_TTT_CURVE_FIELDS = (
-    (5, "power_w5"), (15, "power_w15"), (30, "power_w30"), (60, "power_w60"),
-    (120, "power_w120"), (300, "power_w300"), (1200, "power_w1200"),
-)
 
 
 def _ttt_format_length(metres: float) -> str:
@@ -1611,26 +1608,22 @@ def _ttt_gap_rgb(t: float) -> str:
     return f"rgb({rgb[0]},{rgb[1]},{rgb[2]})"
 
 
-def _ttt_climb_rider(plan_rider: PlanRider) -> climb_engine.ClimbRider | None:
-    """Build a climb-engine rider from a plan rider's linked ZR power curve.
+def _ttt_climb_rider(plan_rider: PlanRider, profile: RiderProfile | None) -> climb_engine.ClimbRider | None:
+    """Build a climb-engine rider from a plan rider's power curve in the rider profile cache.
 
     Args:
-        plan_rider: The plan rider (needs a ``zwid`` linked to a ``ZRRider``).
+        plan_rider: The plan rider.
+        profile: Their cached rider profile, by ``zwid``; None when they have none.
 
     Returns:
-        A ``ClimbRider``, or None if there's no zwid, ZR record, weight, or curve.
+        A ``ClimbRider``, or None without a profile, a weight, or a power curve.
 
     """
-    if not plan_rider.zwid:
+    if profile is None:
         return None
-    from apps.zwiftracing.models import ZRRider
-
-    zr = ZRRider.objects.filter(zwid=plan_rider.zwid).first()
-    if zr is None:
-        return None
-    curve = {secs: float(v) for secs, field in _TTT_CURVE_FIELDS if (v := getattr(zr, field))}
-    weight = float(zr.weight) if zr.weight else (float(plan_rider.weight_kg) if plan_rider.weight_kg else 0.0)
-    height = float(zr.height or plan_rider.height_cm or 0)
+    curve = profile.power_curve_w
+    weight = profile.weight_kg or (float(plan_rider.weight_kg) if plan_rider.weight_kg else 0.0)
+    height = float(profile.height_cm or plan_rider.height_cm or 0)
     if not weight or not curve:
         return None
     return climb_engine.ClimbRider(name=plan_rider.name, weight_kg=weight, height_cm=height, power_curve=curve)
@@ -1647,12 +1640,18 @@ def climb_strength(plan: TttPlan) -> dict:
         plan: The plan.
 
     Returns:
-        ``{"available": False}`` if fewer than two riders have ZR power + weight,
+        ``{"available": False}`` if fewer than two riders have a power curve and a weight,
         otherwise ``available`` plus ``grade_pct``, ``lengths`` (column headers),
         and ``rows`` (one per rider with colored gap cells).
 
     """
-    riders = [cr for r in plan.riders.all() if (cr := _ttt_climb_rider(r))]
+    from apps.rider_data.models import RiderProfile
+
+    plan_riders = list(plan.riders.all())
+    profiles = RiderProfile.objects.only("zwid", "weight_kg", "height_cm", "payload").in_bulk(
+        [r.zwid for r in plan_riders if r.zwid]
+    )
+    riders = [cr for r in plan_riders if (cr := _ttt_climb_rider(r, profiles.get(r.zwid)))]
     if len(riders) < 2:
         return {"available": False}
 

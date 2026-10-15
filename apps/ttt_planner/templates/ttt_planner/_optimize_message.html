@@ -1,10 +1,8 @@
 {% comment %}
-  What the last Optimize did, in the Parameters card's live region, so a screen reader hears
-  it. The page renders it empty (an empty block takes no room); the optimize view sends it
-  back out of band, filled in.
+  What the last Optimize did, in words. Shown under the Optimize button in the plan body Optimize
+  sends back, and read out from #ttt-optimize-announcer (_optimize_announcer.html).
 {% endcomment %}
-<div id="ttt-optimize-status" role="status" class="text-sm"{% if oob %} hx-swap-oob="true"{% endif %}>
-{% if oob %}{% with s=result.status speed=plan.target_speed_kph %}
+{% with s=result.status speed=plan.target_speed_kph %}
   {% if not s.judged %}
     Optimize needs at least one rider with an FTP to judge the plan by.
   {% elif not outcome %}
@@ -32,5 +30,4 @@
     {% if outcome.relaxed %}{{ speed }} kph is too fast to keep every rider's W′ above the
       {{ result.w_prime_reserve_pct }}% reserve, so this only evens out the effort.{% endif %}
   {% endif %}
-{% endwith %}{% endif %}
-</div>
+{% endwith %}
