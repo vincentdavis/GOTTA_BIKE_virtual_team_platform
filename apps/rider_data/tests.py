@@ -105,7 +105,7 @@ def test_the_watts_curve_is_read_by_duration_in_seconds(profile_factory):
 
 @pytest.mark.django_db
 def test_velo2_seed_and_race_counts_are_read_from_the_payload(profile_factory):
-    """The vELO 2 block stays apart: a race rating near 400 must never be read as a vELO of 1,500."""
+    """The vELO 2 block stays apart: its race rating is another scale and must never be read as vELO 1."""
     profile = profile_factory(
         payload={
             "ratings": {"rating_max30": 1520.0, "category_max30": "Diamond", "category_max90": "Ruby"},
@@ -113,6 +113,9 @@ def test_velo2_seed_and_race_counts_are_read_from_the_payload(profile_factory):
                 "race": 430.0,
                 "race_max30": 450.0,
                 "race_max90": 470,
+                "category": "Amethyst",
+                "category_max30": "Amethyst",
+                "category_max90": "",  # zauth sends None; an empty name is no category either
                 "factors": {"sprint": 452, "punch": 440.5, "climb": None, "timeTrial": 415, "endurance": 398},
             },
             "seed": {"race": 420.0, "timeTrial": 380.5, "factors": {"sprint": 460, "timeTrial": 401}},
@@ -131,6 +134,9 @@ def test_velo2_seed_and_race_counts_are_read_from_the_payload(profile_factory):
         "time_trial": 415.0,
         "endurance": 398.0,
         "pursuit": None,
+        "category": "Amethyst",
+        "category_max30": "Amethyst",
+        "category_max90": None,
     }
     seed = profile.seed_ratings
     assert (seed["race"], seed["time_trial"]) == pytest.approx((420.0, 380.5))  # the time-trial rating

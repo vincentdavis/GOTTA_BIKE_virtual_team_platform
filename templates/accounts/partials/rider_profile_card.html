@@ -15,9 +15,9 @@
   today's racing tier: labelling a 90-day-old rating with the current tier would be a lie
   rather than a gap, so a peak with no category of its own is shown bare.
 
-  vELO 2 is a different scale from vELO (a race rating near 400 beside a vELO of 1,500), so it
-  has its own section and is never set beside vELO as if comparable. Its peaks are zauth's,
-  worked out from its own history, since zwiftracing serves none.
+  vELO 2 is a different scale from vELO (a rider might be 650 in vELO 2 and 1,600 in
+  vELO 1), so it has its own section and is never set beside vELO as if comparable. Its
+  peaks and categories are zwiftracing's own.
 {% endcomment %}
 <div id="rider-profile-card" class="card bg-base-300 p-4">
   <h3 class="font-semibold mb-3 flex items-center gap-2">
@@ -203,14 +203,22 @@
             {% if velo2.race is not None %}
               <div class="flex justify-between gap-3">
                 <span class="text-base-content/70">vELO 2</span>
-                <span class="font-mono font-semibold">{{ velo2.race|floatformat:0 }}</span>
+                <span class="font-mono font-semibold text-right">
+                  {{ velo2.race|floatformat:0 }}{% if velo2.category %} <span class="font-sans font-normal">&middot; {{ velo2.category }}</span>{% endif %}
+                </span>
               </div>
             {% endif %}
             {% if velo2.max30 is not None or velo2.max90 is not None %}
               <div class="flex justify-between gap-3">
-                <span class="text-base-content/70">vELO 2 30 / 90-day peak</span>
+                <span class="text-base-content/70">vELO 2 30-day peak</span>
                 <span class="font-mono text-right">
-                  {% if velo2.max30 is not None %}{{ velo2.max30|floatformat:0 }}{% else %}&mdash;{% endif %} / {% if velo2.max90 is not None %}{{ velo2.max90|floatformat:0 }}{% else %}&mdash;{% endif %}
+                  {% if velo2.max30 is not None %}{{ velo2.max30|floatformat:0 }}{% else %}&mdash;{% endif %}{% if velo2.category_max30 %} <span class="font-sans">&middot; {{ velo2.category_max30 }}</span>{% endif %}
+                </span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">vELO 2 90-day peak</span>
+                <span class="font-mono text-right">
+                  {% if velo2.max90 is not None %}{{ velo2.max90|floatformat:0 }}{% else %}&mdash;{% endif %}{% if velo2.category_max90 %} <span class="font-sans">&middot; {{ velo2.category_max90 }}</span>{% endif %}
                 </span>
               </div>
             {% endif %}
@@ -230,12 +238,21 @@
       {% with seed=rider_profile.seed_ratings %}
         {% if seed %}
           <div class="space-y-1 pt-2 border-t border-base-content/10">
-            {% if seed.race is not None or seed.time_trial is not None %}
+            {% comment %}
+              zwiftracing's current responses carry no seed time-trial rating (its time-trial
+              factor is among the badges below), so the row names it only when it is there.
+            {% endcomment %}
+            {% if seed.time_trial is not None %}
               <div class="flex justify-between gap-3">
                 <span class="text-base-content/70">Seed race / TT</span>
                 <span class="font-mono text-right">
-                  {% if seed.race is not None %}{{ seed.race|floatformat:0 }}{% else %}&mdash;{% endif %} / {% if seed.time_trial is not None %}{{ seed.time_trial|floatformat:0 }}{% else %}&mdash;{% endif %}
+                  {% if seed.race is not None %}{{ seed.race|floatformat:0 }}{% else %}&mdash;{% endif %} / {{ seed.time_trial|floatformat:0 }}
                 </span>
+              </div>
+            {% elif seed.race is not None %}
+              <div class="flex justify-between gap-3">
+                <span class="text-base-content/70">Seed race</span>
+                <span class="font-mono text-right">{{ seed.race|floatformat:0 }}</span>
               </div>
             {% endif %}
             {% with factors=rider_profile.seed_factors %}

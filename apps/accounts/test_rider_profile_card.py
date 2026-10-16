@@ -652,6 +652,9 @@ ZWIFTRACING = {
         "race": 430.4,
         "race_max30": 450.0,
         "race_max90": 470.0,
+        "category": "Amethyst",
+        "category_max30": "Amethyst",
+        "category_max90": "Sapphire",
         "factors": {"sprint": 452.0, "punch": 440.5, "climb": 401.0, "timeTrial": 415, "endurance": 398.0},
     },
     "seed": {"race": 421.0, "timeTrial": 380.6, "factors": {"sprint": 460, "timeTrial": 401}},
@@ -679,8 +682,10 @@ def test_velo_2_has_its_own_section(client, full_profile, rider, team_member):
     body = _body(client, team_member, rider)
 
     assert _row(body, "vELO") == "vELO 367"
-    assert _row(body, "vELO 2") == "vELO 2 430"
-    assert _row(body, "vELO 2 30 / 90-day peak") == "vELO 2 30 / 90-day peak 450 / 470"
+    # Each with the category zwiftracing gave it, as the vELO 1 peaks are.
+    assert _row(body, "vELO 2") == "vELO 2 430 · Amethyst"
+    assert _row(body, "vELO 2 30-day peak") == "vELO 2 30-day peak 450 · Amethyst"
+    assert _row(body, "vELO 2 90-day peak") == "vELO 2 90-day peak 470 · Sapphire"
     factors = body[body.index('aria-label="vELO 2 factors"') :]
     factors = _text(factors[factors.index(">") + 1 : factors.index("</div>")])
     assert factors == "Sprint 452 Punch 441 Climb 401 TT 415 Endurance 398"  # no pursuit: zwiftracing sent none
@@ -693,6 +698,18 @@ def test_the_seed_shows_its_race_and_time_trial_ratings_and_factors(client, full
     assert _row(body, "Seed race / TT") == "Seed race / TT 421 / 381"
     factors = body[body.index('aria-label="Seed factors"') :]
     assert _text(factors[factors.index(">") + 1 : factors.index("</div>")]) == "Sprint 460 TT 401"
+
+
+@pytest.mark.django_db
+def test_a_seed_without_a_time_trial_rating_shows_the_race_rating_alone(client, full_profile, rider, team_member):
+    """The current zwiftracing responses have no seed time-trial rating, only the factor."""
+    full_profile.payload = {**full_profile.payload, "seed": {"race": 421.0, "factors": {"timeTrial": 401}}}
+    full_profile.save()
+
+    body = _body(client, team_member, rider)
+
+    assert _row(body, "Seed race") == "Seed race 421"
+    assert "Seed race / TT" not in body
 
 
 @pytest.mark.django_db

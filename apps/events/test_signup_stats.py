@@ -1,8 +1,8 @@
 """The signups table's Zwift Racing figures, from the rider profile cache.
 
 The figures the table always had (vELO, its peaks and their categories, phenotype, age)
-now come from ``rider_data.RiderProfile``, as do the 47 columns the column menu adds:
-vELO 2 with its 30- and 90-day peaks and six factors, seed ratings, phenotype scores,
+now come from ``rider_data.RiderProfile``, as do the 50 columns the column menu adds:
+vELO 2 with its 30- and 90-day peaks, each with its category, and six factors, seed ratings, phenotype scores,
 terrain handicaps, power and race counts (``apps/events/rider_stats.py``). The added
 columns travel as JSON that the page builds cells from, and only to those who see the full
 table.
@@ -61,6 +61,9 @@ def _profile(rider_profile_factory, zwid):
             "race": 430.4,
             "race_max30": 450.0,
             "race_max90": 470.0,
+            "category": "Amethyst",
+            "category_max30": "Amethyst",
+            "category_max90": "Sapphire",
             "factors": {
                 "sprint": 452.0,
                 "punch": 440.5,
@@ -147,8 +150,11 @@ def test_the_column_menu_offers_every_group(client, event, event_admin, user_mod
 
     for group in ("vELO 2", "Seed", "Phenotype scores", "Terrain handicaps", "Power", "Races"):
         assert f'<li class="menu-title text-xs pt-2 text-base-content/70">{group}</li>' in body, group
-    assert body.count('class="checkbox checkbox-xs stat-col-toggle"') == len(rider_stats.STAT_COLUMNS) == 47
-    assert [c["key"] for c in _json(body, "signup-stat-columns")] == [c.key for c in rider_stats.STAT_COLUMNS]
+    assert body.count('class="checkbox checkbox-xs stat-col-toggle"') == len(rider_stats.STAT_COLUMNS) == 50
+    columns = _json(body, "signup-stat-columns")
+    assert [c["key"] for c in columns] == [c.key for c in rider_stats.STAT_COLUMNS]
+    # The category columns sort as text and show a badge; every other column is a number.
+    assert {c["key"] for c in columns if c["kind"] == "category"} == {"zr_v2_cat", "zr_v2_max30_cat", "zr_v2_max90_cat"}
 
 
 @pytest.mark.django_db
@@ -161,8 +167,9 @@ def test_every_added_column_carries_the_riders_figure(client, event, event_admin
     keys = [c["key"] for c in _json(body, "signup-stat-columns")]
     row = dict(zip(keys, _json(body, "signup-stat-values")[str(signup.pk)], strict=True))
 
-    # vELO 2, its peaks and its six factors.
+    # vELO 2, its peaks, the category of each, and its six factors.
     assert [row[f"zr_v2_{k}"] for k in ("race", "max30", "max90")] == ["430", "450", "470"]
+    assert [row[f"zr_v2_{k}"] for k in ("cat", "max30_cat", "max90_cat")] == ["Amethyst", "Amethyst", "Sapphire"]
     factors = ("sprint", "punch", "climb", "time_trial", "endurance", "pursuit")
     assert [row[f"zr_v2_{k}"] for k in factors] == ["452", "441", "401", "415", "398", "420"]  # halves round up
     # The seed: its race and time-trial ratings, and the factors it has.

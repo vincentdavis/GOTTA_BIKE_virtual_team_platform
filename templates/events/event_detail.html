@@ -836,7 +836,7 @@
             columns.forEach(function (column) {
               var th = document.createElement('th');
               th.dataset.col = column.key;
-              th.dataset.sort = 'num';
+              th.dataset.sort = column.kind === 'category' ? 'text' : 'num';
               th.className = 'cursor-pointer hover:text-primary select-none whitespace-nowrap';
               th.textContent = column.header;
               th.style.display = saved[column.key] ? '' : 'none';
@@ -847,7 +847,13 @@
               columns.forEach(function (column, i) {
                 var td = document.createElement('td');
                 td.dataset.col = column.key;
-                if (rowValues[i]) {
+                if (rowValues[i] && column.kind === 'category') {
+                  // A badge, as the vELO 1 category cells are; the name is set as text, never HTML.
+                  var badge = document.createElement('span');
+                  badge.className = 'badge badge-sm';
+                  badge.textContent = rowValues[i];
+                  td.appendChild(badge);
+                } else if (rowValues[i]) {
                   td.className = 'font-mono text-sm text-right';
                   td.textContent = rowValues[i];
                 } else {

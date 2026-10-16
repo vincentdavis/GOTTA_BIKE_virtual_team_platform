@@ -54,6 +54,8 @@ _FACTORS = {
     "pursuit": "pursuit",
 }
 # The same factors as the rider card names them, in zwiftracing's order.
+# vELO 2's category names, as zauth's velo2 block carries them.
+_VELO2_CATEGORIES = ("category", "category_max30", "category_max90")
 _FACTOR_LABELS = (
     ("sprint", "Sprint"),
     ("punch", "Punch"),
@@ -462,17 +464,17 @@ class RiderProfile(models.Model):
 
     @property
     def velo2(self) -> dict | None:
-        """Zwift Racing's vELO 2: the race rating, its 30- and 90-day peaks, and the six factors.
+        """Zwift Racing's vELO 2: the race rating, its 30- and 90-day peaks, their categories, and the six factors.
 
-        A different scale from vELO 1 (a race rating near 400 beside a vELO of 1,500), so it is
-        never shown or compared as if it were :attr:`velo`. zwiftracing has no vELO 2 peaks;
-        zauth works them out from its own history of the rider, so they miss a rating that
-        rose and fell between two of its fetches.
+        A different scale from vELO 1 (a rider might be 650 in vELO 2 and 1,600 in vELO 1),
+        so it is never shown or compared as if it were :attr:`velo`. The peaks and categories
+        are zwiftracing's own, from its ``velo`` object.
 
         Returns:
             ``race``, ``max30``, ``max90`` and each factor (``sprint``, ``punch``, ``climb``,
-            ``time_trial``, ``endurance``, ``pursuit``), None where missing; or None when the
-            profile has no vELO 2.
+            ``time_trial``, ``endurance``, ``pursuit``), None where missing, with the category
+            names ``category``, ``category_max30`` and ``category_max90``; or None when the
+            profile has no vELO 2 figures.
 
         """
         block = self._block("velo2")
@@ -481,7 +483,10 @@ class RiderProfile(models.Model):
         ratings = _numbers(block, {"race": "race", "max30": "race_max30", "max90": "race_max90"}) or {}
         factors = _numbers(block.get("factors"), _FACTORS) or {}
         found = {"race": None, "max30": None, "max90": None, **dict.fromkeys(_FACTORS), **ratings, **factors}
-        return found if any(value is not None for value in found.values()) else None
+        if not any(value is not None for value in found.values()):
+            return None
+        categories = {key: block.get(key) if isinstance(block.get(key), str) else None for key in _VELO2_CATEGORIES}
+        return {**found, **{key: value or None for key, value in categories.items()}}
 
     @property
     def seed_ratings(self) -> dict | None:

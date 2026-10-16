@@ -5,7 +5,7 @@ The rider tables on the event pages take their Zwift Racing figures from
 ``zr_*`` keys the templates have always read (:func:`zr_fields`), and the extra columns
 the signups table offers (:data:`STAT_GROUPS`). Those extra columns travel as compact JSON
 (:func:`stat_rows`) that the page turns into cells, rather than as cells hidden in every
-row: there are 47 of them, and a big event would carry hundreds of kilobytes of markup
+row: there are 50 of them, and a big event would carry hundreds of kilobytes of markup
 nobody had asked to see.
 
 Squad eligibility still reads the zwiftracing table (``views._rider_categories``): moving
@@ -98,7 +98,8 @@ class StatColumn:
     label: str  # in the column menu, under its group's title
     header: str  # the table header, which has no group title beside it
     decimals: int
-    read: Callable[[_Blocks], float | None]
+    read: Callable[[_Blocks], float | str | None]
+    kind: str = "num"  # "num", or "category" for a category name shown as a badge
 
 
 @dataclass(frozen=True)
@@ -132,6 +133,14 @@ def _from(block: str, key: str) -> Callable[[_Blocks], float | None]:
     return lambda blocks: _number(getattr(blocks, block).get(key))
 
 
+def _name_from(block: str, key: str) -> Callable[[_Blocks], str | None]:
+    def read(blocks: _Blocks) -> str | None:
+        value = getattr(blocks, block).get(key)
+        return value if isinstance(value, str) and value else None
+
+    return read
+
+
 def _w_prime_kj(blocks: _Blocks) -> float | None:
     joules = _number(blocks.power.get("awc"))
     return joules / 1000 if joules is not None else None
@@ -153,8 +162,25 @@ STAT_GROUPS: tuple[StatGroup, ...] = (
         "vELO 2",
         (
             StatColumn("zr_v2_race", "Race rating", "vELO 2", 0, _from("velo2", "race")),
+            StatColumn("zr_v2_cat", "Category", "vELO 2 Cat", 0, _name_from("velo2", "category"), "category"),
             StatColumn("zr_v2_max30", "30-day peak", "vELO 2 Max30", 0, _from("velo2", "max30")),
+            StatColumn(
+                "zr_v2_max30_cat",
+                "30-day peak category",
+                "vELO 2 Max30 Cat",
+                0,
+                _name_from("velo2", "category_max30"),
+                "category",
+            ),
             StatColumn("zr_v2_max90", "90-day peak", "vELO 2 Max90", 0, _from("velo2", "max90")),
+            StatColumn(
+                "zr_v2_max90_cat",
+                "90-day peak category",
+                "vELO 2 Max90 Cat",
+                0,
+                _name_from("velo2", "category_max90"),
+                "category",
+            ),
             *(
                 StatColumn(f"zr_v2_{key}", label, f"v2 {short}", 0, _from("velo2", key))
                 for key, label, short in _FACTORS
@@ -228,10 +254,10 @@ def stat_columns_json() -> list[dict[str, str]]:
     """Return the extra columns as the page's script needs them.
 
     Returns:
-        ``{key, header}`` per column, in :data:`STAT_COLUMNS` order.
+        ``{key, header, kind}`` per column, in :data:`STAT_COLUMNS` order.
 
     """
-    return [{"key": column.key, "header": column.header} for column in STAT_COLUMNS]
+    return [{"key": column.key, "header": column.header, "kind": column.kind} for column in STAT_COLUMNS]
 
 
 def _display(value: float, decimals: int) -> str:
@@ -261,7 +287,12 @@ def stat_values(profile: RiderProfile) -> list[str]:
     values = []
     for column in STAT_COLUMNS:
         value = column.read(blocks)
-        values.append("" if value is None else _display(value, column.decimals))
+        if value is None:
+            values.append("")
+        elif column.kind == "category":
+            values.append(value)
+        else:
+            values.append(_display(value, column.decimals))
     return values
 
 
