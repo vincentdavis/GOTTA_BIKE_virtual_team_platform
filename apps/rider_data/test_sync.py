@@ -101,6 +101,96 @@ def test_a_document_without_a_zwid_is_skipped_not_crashed():
     assert RiderProfile.objects.count() == 0
 
 
+# --- on the ZwiftPower team ----------------------------------------------------------
+
+
+def _teams(*entries):
+    """Return a ``zwiftpower_teams`` block from ``(team_id, current)`` pairs.
+
+    Returns:
+        The block, as zauth sends it.
+
+    """
+    return [{"id": team_id, "name": f"Team {team_id}", "current": current} for team_id, current in entries]
+
+
+@pytest.mark.django_db
+@override_config(ZWIFTPOWER_TEAM_ID=2707)
+@pytest.mark.parametrize(
+    ("teams", "expected"),
+    [
+        (_teams((2707, True)), True),  # on our team's latest roster
+        (_teams((2707, False)), False),  # on an older roster of ours, not the latest
+        (_teams((91, True), (2707, False)), False),  # on another team now
+        (_teams((91, True)), False),  # never on ours
+        ([], False),  # on no roster zauth syncs
+        (_teams((2707, None)), None),  # zauth has no fetch of our roster on record
+    ],
+)
+def test_the_flag_is_what_zauth_reports_for_our_team(teams, expected):
+    services.store_profiles([_doc(zwiftpower_teams=teams)])
+
+    assert RiderProfile.objects.get(zwid=1001).on_zwiftpower_team is expected
+
+
+@pytest.mark.django_db
+def test_the_flag_is_unknown_without_a_team_or_a_block():
+    """No team id configured, or a document from before zauth sent rosters: no answer."""
+    with override_config(ZWIFTPOWER_TEAM_ID=0):
+        services.store_profiles([_doc(zwid=1001, zwiftpower_teams=_teams((2707, True)))])
+    with override_config(ZWIFTPOWER_TEAM_ID=2707):
+        services.store_profiles([_doc(zwid=1002)])  # no zwiftpower_teams key at all
+
+    assert RiderProfile.objects.get(zwid=1001).on_zwiftpower_team is None
+    assert RiderProfile.objects.get(zwid=1002).on_zwiftpower_team is None
+
+
+@pytest.mark.django_db
+@override_config(ZWIFTPOWER_TEAM_ID=2707)
+def test_the_flag_never_decides_whom_the_sync_asks_for():
+    """A cache cannot discover riders it does not hold, so the flag must not feed the request.
+
+    A row the sync has stopped refreshing also keeps its last answer, which is the other
+    reason nothing may treat this cache as the team's membership record.
+    """
+    services.store_profiles([_doc(zwid=1001, zwiftpower_teams=_teams((2707, True)))])
+
+    assert RiderProfile.objects.get(zwid=1001).on_zwiftpower_team is True
+    assert services.zwids_to_refresh() == []
+
+
+@pytest.mark.django_db
+@override_config(ZWIFTPOWER_TEAM_ID=2707)
+def test_the_sync_counts_the_riders_on_the_team():
+    docs = [
+        _doc(zwid=1001, zwiftpower_teams=_teams((2707, True))),
+        _doc(zwid=1002, zwiftpower_teams=_teams((2707, False))),
+    ]
+    with (
+        patch.object(client, "is_configured", return_value=True),
+        patch.object(client, "fetch_profiles", return_value=docs),
+    ):
+        result = sync_rider_profiles.func()
+
+    assert result["on_zwiftpower_team"] == 1
+
+
+@pytest.mark.django_db
+@override_config(ZWIFTPOWER_TEAM_ID=2707)
+def test_a_sync_that_finds_nobody_on_the_team_says_so():
+    """Every flag False or unknown means zauth does not have our roster, which needs a person."""
+    with (
+        patch.object(client, "is_configured", return_value=True),
+        patch.object(client, "fetch_profiles", return_value=[_doc(zwid=1001)]),
+        patch("apps.rider_data.tasks.logfire") as log,
+    ):
+        result = sync_rider_profiles.func()
+
+    assert result["on_zwiftpower_team"] == 0
+    log.warning.assert_called_once()
+    assert log.warning.call_args.kwargs == {"team_id": 2707, "fetched": 1}
+
+
 # --- the boundary this sync must not cross -------------------------------------------
 
 

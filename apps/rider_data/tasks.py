@@ -66,11 +66,21 @@ def sync_rider_profiles() -> dict:
         # reason to hold. Only the zwid list needs this: the riders resolved from
         # ``connected_app`` are exactly the ones that came back, and storing a row stamps it.
         stamped = services.mark_requested(requested)
+        on_team = RiderProfile.objects.filter(zwid__in=list(by_zwid), on_zwiftpower_team=True).count()
+        if profiles and not on_team and config.ZWIFTPOWER_TEAM_ID:
+            # Every flag False or unknown: zauth does not sync our team's roster, or has not
+            # fetched it successfully, so no rider can be told apart as a team rider.
+            logfire.warning(
+                "No synced rider is on the ZwiftPower team roster",
+                team_id=config.ZWIFTPOWER_TEAM_ID,
+                fetched=len(profiles),
+            )
         return {
             "fetched": len(profiles),
             "requested": len(requested),
             "connected": len(connected),
             "stamped": stamped,
+            "on_zwiftpower_team": on_team,
             **result,
         }
 

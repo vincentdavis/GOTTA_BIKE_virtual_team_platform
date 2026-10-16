@@ -62,6 +62,10 @@ def test_the_promoted_columns_are_only_the_ones_something_queries():
         "category_open", "category_women", "category_racing",
         "velo", "zwift_racing_score", "zp_skill", "compound_score",
         "phenotype_value", "club_id", "club_name",
+        # Promoted 2026-10-15 at Vincent's request, to tell riders on the team's ZwiftPower
+        # roster from the rest without reading every payload (filtered in the admin and
+        # counted by the sync).
+        "on_zwiftpower_team",
         "payload", "fetched_at", "last_requested_at", "sources", "has_account", "last_race_at",
     }
     assert columns == expected, (
@@ -150,7 +154,13 @@ def test_a_profile_without_the_new_blocks_reads_none(profile_factory):
 
 @pytest.mark.django_db
 def test_roster_membership_is_not_stored_here():
-    """Membership belongs to team. A cache row carrying it could never be evicted."""
+    """Membership belongs to team. A cache row carrying it could never be evicted.
+
+    ``on_zwiftpower_team`` is not membership in this sense: it repeats what zauth saw on the
+    team's latest ZwiftPower roster, every sync overwrites it, and nothing is lost when the
+    row goes. The team's own record -- who joined, who left, who is active, and when -- would
+    be, and stays off the cache.
+    """
     columns = {f.name for f in RiderProfile._meta.get_fields()}
     for forbidden in ("date_left", "is_active", "on_team", "first_seen", "joined"):
         assert forbidden not in columns, (

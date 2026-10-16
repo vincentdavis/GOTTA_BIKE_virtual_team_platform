@@ -131,6 +131,20 @@ class RiderProfile(models.Model):
     club_id = models.BigIntegerField(null=True, blank=True, db_index=True)
     club_name = models.CharField(max_length=200, blank=True)
 
+    # zauth's report of whether the rider was on the latest roster fetch of our ZwiftPower
+    # team (Constance ZWIFTPOWER_TEAM_ID); None when it cannot say. Every sync overwrites it,
+    # so it is not the team's membership record: it must never decide whom the sync asks for
+    # (a cache cannot discover riders it does not hold), and a row the sync has stopped
+    # refreshing keeps its last answer. Filtered on to tell team riders from the rest.
+    on_zwiftpower_team = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Seen on the latest ZwiftPower roster of the ZWIFTPOWER_TEAM_ID team, as zauth "
+            "reports it; empty when unknown"
+        ),
+    )
+
     # --- everything else, as returned -------------------------------------------------
     payload = models.JSONField(
         default=dict,

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import logfire
+from constance import config
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date, parse_datetime
@@ -76,7 +77,30 @@ def _num(value: object) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
-def to_row(profile: dict) -> dict | None:
+def on_zwiftpower_team(profile: dict, team_id: int) -> bool | None:
+    """Read from a ProfileFull document whether the rider is on our ZwiftPower team's roster.
+
+    Args:
+        profile: A ProfileFull document.
+        team_id: Our ZwiftPower team id (Constance ``ZWIFTPOWER_TEAM_ID``); 0 means unset.
+
+    Returns:
+        What zauth reports for that team: True or False, False when the rider is on none of
+        its rosters, and None when it cannot say -- no team id set, a document from before
+        zauth sent rosters, or no roster fetch on record for the team.
+
+    """
+    teams = profile.get("zwiftpower_teams")
+    if not team_id or not isinstance(teams, list):
+        return None
+    for team in teams:
+        if isinstance(team, dict) and team.get("id") == team_id:
+            current = team.get("current")
+            return current if isinstance(current, bool) else None
+    return False
+
+
+def to_row(profile: dict, *, zp_team_id: int = 0) -> dict | None:
     """Map a ProfileFull document onto RiderProfile field values.
 
     Only the promoted columns are pulled out; everything else is kept whole in ``payload``.
@@ -86,6 +110,7 @@ def to_row(profile: dict) -> dict | None:
 
     Args:
         profile: A ProfileFull document.
+        zp_team_id: Our ZwiftPower team id, for ``on_zwiftpower_team``; read once by the caller.
 
     Returns:
         Field values keyed for ``update_or_create``, or None if the document has no zwid.
@@ -124,6 +149,7 @@ def to_row(profile: dict) -> dict | None:
         "phenotype_value": (phenotype.get("value") if isinstance(phenotype, dict) else "") or "",
         "club_id": current_club.get("id"),
         "club_name": current_club.get("name") or "",
+        "on_zwiftpower_team": on_zwiftpower_team(profile, zp_team_id),
         "payload": profile,
         "sources": profile.get("sources") or {},
         "has_account": profile.get("has_account") or {},
@@ -144,8 +170,9 @@ def store_profiles(profiles: list[dict]) -> dict[str, int]:
 
     """
     created = updated = skipped = 0
+    zp_team_id = config.ZWIFTPOWER_TEAM_ID or 0
     for profile in profiles:
-        row = to_row(profile)
+        row = to_row(profile, zp_team_id=zp_team_id)
         if row is None:
             skipped += 1
             continue

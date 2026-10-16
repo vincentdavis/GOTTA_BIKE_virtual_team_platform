@@ -89,7 +89,14 @@ class RiderProfileAdmin(admin.ModelAdmin):
         "last_race_display",
         "freshness",
     )
-    list_filter = (EvictionRiskFilter, "fetched_at", "gender", "category_racing", "category_open")
+    list_filter = (
+        EvictionRiskFilter,
+        "on_zwiftpower_team",
+        "fetched_at",
+        "gender",
+        "category_racing",
+        "category_open",
+    )
     search_fields = ("name", "zwid", "club_name")
     ordering = ("-last_race_at", "name")
     list_per_page = 50
@@ -99,7 +106,7 @@ class RiderProfileAdmin(admin.ModelAdmin):
         ("Physical and power", {"fields": ("weight_kg", "height_cm", "ftp", "zftp")}),
         ("Category", {"fields": ("category_open", "category_women", "category_racing")}),
         ("Ratings", {"fields": ("velo", "zwift_racing_score", "zp_skill", "compound_score", "phenotype_value")}),
-        ("Club", {"fields": ("club_id", "club_name")}),
+        ("Club", {"fields": ("club_id", "club_name", "on_zwiftpower_team")}),
         (
             "Cache",
             {
