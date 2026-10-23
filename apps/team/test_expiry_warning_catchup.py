@@ -317,6 +317,53 @@ def test_an_opted_out_rider_is_not_counted_as_warned(rider):
     assert result["users_warned"] == []
 
 
+def _leave(rider, *, left=True):
+    """Record the rider as having left the Discord server, as the guild sync would."""
+    from apps.accounts.models import GuildMember
+
+    GuildMember.objects.update_or_create(
+        discord_id=rider.discord_id,
+        defaults={"username": "rider", "date_left": timezone.now() if left else None},
+    )
+
+
+@pytest.mark.django_db
+@override_config(EXPIRE_WARNING_DAYS="[15, 7, 3, 1, 0]")
+def test_a_rider_who_left_the_server_is_not_warned(rider, user_model):
+    """The reported bug: someone off the team kept being told to renew their weight."""
+    still_here = user_model.objects.create_user(
+        username="still_here", email="still_here@example.test", discord_id="777003",
+        first_name="Cy", last_name="Three",
+    )
+    _leave(rider)
+    _record(rider, days_left=15)
+    _record(still_here, days_left=15)
+    sent = []
+
+    result = _run(sent)
+
+    assert [discord_id for discord_id, _ in sent] == ["777003"], "only the rider still in the server"
+    assert result["warnings_sent"] == 1
+    assert result["skipped_departed"] == 1
+
+
+@pytest.mark.django_db
+@override_config(EXPIRE_WARNING_DAYS="[15, 7, 3, 1, 0]")
+def test_leaving_does_not_burn_the_threshold(rider):
+    """Nothing is stamped, so a rider who rejoins still gets the warning they are owed."""
+    _leave(rider)
+    _record(rider, days_left=15)
+    _run([])
+
+    assert RaceReadyRecord.objects.get(user=rider).last_warned_threshold is None
+
+    _leave(rider, left=False)
+    sent = []
+    _run(sent)
+
+    assert len(sent) == 1
+
+
 @pytest.mark.django_db
 @override_config(EXPIRE_WARNING_DAYS="[15, 7, 3, 1, 0]")
 def test_an_opt_out_does_not_burn_the_threshold(rider):

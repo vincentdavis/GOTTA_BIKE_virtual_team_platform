@@ -553,6 +553,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
         verified_by_user: dict[int, list[tuple[RaceReadyRecord, int]]] = {}
         skipped_already_warned = 0
         skipped_opted_out = 0
+        skipped_departed = 0
 
         from collections import defaultdict
 
@@ -575,6 +576,13 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
         # Required types for every rider in ONE batch (two queries for the whole run), so the
         # weight reconciliation below cannot reintroduce a per-rider ZwiftPower lookup.
         required_by_user = required_types_bulk(users_by_id.values())
+
+        # Riders who have left the Discord server: send_discord_dm would skip them, but here
+        # they are read once and counted apart, as opt-outs are, so warnings_sent still means
+        # DMs delivered.
+        from apps.accounts.membership import departed_discord_ids
+
+        departed = departed_discord_ids(user.discord_id for user in users_by_id.values())
 
         # The four expiry windows, read ONCE for the whole run. days_remaining goes through
         # validity_days, which reads all four from Constance on every access, and Constance
@@ -629,6 +637,9 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                 if record.user.discord_dm_opt_out:
                     skipped_opted_out += 1
                     continue
+                if str(record.user.discord_id) in departed:
+                    skipped_departed += 1
+                    continue
                 matching_records.append((record, remaining, due))
 
         logfire.info(
@@ -638,6 +649,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             matching=len(matching_records),
             skipped_already_warned=skipped_already_warned,
             skipped_opted_out=skipped_opted_out,
+            skipped_departed=skipped_departed,
             dry_run=dry_run,
         )
 
@@ -655,6 +667,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                 "total_checked": total_checked,
                 "warnings_sent": 0,
                 "skipped_opted_out": skipped_opted_out,
+                "skipped_departed": skipped_departed,
                 "users_warned": users_warned,
                 "errors": [],
             }
@@ -747,6 +760,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             "total_checked": total_checked,
             "warnings_sent": warnings_sent,
             "skipped_opted_out": skipped_opted_out,
+            "skipped_departed": skipped_departed,
             "users_warned": users_warned,
             "errors": errors,
         }

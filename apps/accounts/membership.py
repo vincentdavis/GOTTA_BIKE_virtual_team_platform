@@ -9,7 +9,8 @@ scheduled guild-member sync (``apps.accounts.services.apply_guild_member_sync``)
 The syncs clear the stamp again if they list the member in a list read after it. This
 module turns that stamp into an access decision, read by
 ``apps.accounts.middleware.DepartedMemberLogoutMiddleware`` for every signed-in request and by
-``apps.user_api.services.user_can_use_api`` for every API key.
+``apps.user_api.services.user_can_use_api`` for every API key -- and into a messaging one:
+``apps.accounts.discord_service.send_discord_dm`` sends nothing to a departed Discord id.
 
 Deliberately narrow:
 
@@ -20,8 +21,10 @@ Deliberately narrow:
   has never included, within its own sanity limit
   (``apps.accounts.services._record_unseen_accounts``), so someone who signs in and leaves
   before a sync sees them is caught by the next one.
-- **Staff and superusers are exempt.** ``/admin/`` keeps its username-and-password login, by the
-  owner's decision, and the account that runs it must not be locked out by a Discord sync.
+- **Staff and superusers are exempt** from the access decision. ``/admin/`` keeps its
+  username-and-password login, by the owner's decision, and the account that runs it must not be
+  locked out by a Discord sync. They are not exempt from the DM gate: a DM goes to the Discord
+  account, and a departed one is no longer in the server whoever owns it.
 - **The row is found by the user's current ``discord_id``**, not through the
   ``GuildMember.user`` link: when somebody moves to a new Discord account the link can still
   point at the old, departed one (see ``apps.accounts.services._release_user_link``).
@@ -34,6 +37,8 @@ from typing import TYPE_CHECKING
 from django.utils import timezone
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from apps.accounts.models import User
 
 
@@ -63,12 +68,48 @@ def has_left_guild(user: User) -> bool:
         True if a ``GuildMember`` row for ``user.discord_id`` has ``date_left`` set.
 
     """
+    return discord_id_has_left_guild(getattr(user, "discord_id", "") or "")
+
+
+def discord_id_has_left_guild(discord_id: str | int | None) -> bool:
+    """Whether the guild sync has marked this Discord id as departed.
+
+    The same rule as :func:`has_left_guild`, for callers holding an id rather than an account
+    (a DM is addressed to a Discord id). One indexed lookup; a blank id is answered without
+    touching the database, and an id with no ``GuildMember`` row has no verdict, so False.
+
+    Args:
+        discord_id: The Discord id to check.
+
+    Returns:
+        True if the ``GuildMember`` row for it has ``date_left`` set.
+
+    """
     from apps.accounts.models import GuildMember
 
-    discord_id = getattr(user, "discord_id", "") or ""
     if not discord_id:
         return False
-    return GuildMember.objects.filter(discord_id=discord_id, date_left__isnull=False).exists()
+    return GuildMember.objects.filter(discord_id=str(discord_id), date_left__isnull=False).exists()
+
+
+def departed_discord_ids(discord_ids: Iterable[str | int | None]) -> set[str]:
+    """Return which of these Discord ids the guild sync has marked as departed, in one query.
+
+    Args:
+        discord_ids: Discord ids; blanks are skipped.
+
+    Returns:
+        The departed ones, as strings.
+
+    """
+    from apps.accounts.models import GuildMember
+
+    wanted = {str(discord_id) for discord_id in discord_ids if discord_id}
+    if not wanted:
+        return set()
+    return set(
+        GuildMember.objects.filter(discord_id__in=wanted, date_left__isnull=False).values_list("discord_id", flat=True)
+    )
 
 
 def is_departed_member(user: User) -> bool:

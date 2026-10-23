@@ -176,8 +176,8 @@ def _post_with_retry(client: httpx.Client, url: str, **kwargs) -> httpx.Response
 def send_discord_dm(discord_id: str, message: str) -> bool:
     """Send a direct message to a Discord user.
 
-    A member who has opted out of DMs is skipped here, so every caller gets the behaviour
-    without having to know about it.
+    A member who has opted out of DMs, or has left the Discord server, is skipped here, so
+    every caller gets the behaviour without having to know about it.
 
     Args:
         discord_id: The Discord user ID to send the message to.
@@ -185,17 +185,24 @@ def send_discord_dm(discord_id: str, message: str) -> bool:
 
     Returns:
         True if there is nothing left to do -- the message was sent, or the member has opted
-        out. False only on an actual failure. A deliberate skip has to read as success:
-        callers use the return value to decide whether to retry and whether to stamp
-        "already warned", so returning False for an opt-out would re-send on every run.
+        out or left the server. False only on an actual failure. A deliberate skip has to read
+        as success: callers use the return value to decide whether to retry and whether to
+        stamp "already warned", so returning False for a skip would re-send on every run.
 
     """
     # One gate for every DM the app sends. Enforced here rather than at the five call sites
     # so a new caller cannot forget it.
+    from apps.accounts.membership import discord_id_has_left_guild
     from apps.accounts.models import User
 
     if User.objects.filter(discord_id=discord_id, discord_dm_opt_out=True).exists():
         logfire.info("DM skipped: member has opted out of Discord DMs", discord_id=discord_id)
+        return True
+    # Someone who has left the team's server is no longer on the team: no reminders, notices
+    # or confirmations, whatever their account still holds. The guild sync's stamp decides it,
+    # as it decides access (apps.accounts.membership).
+    if discord_id_has_left_guild(discord_id):
+        logfire.info("DM skipped: member has left the Discord server", discord_id=discord_id)
         return True
 
     bot_token = config.DISCORD_BOT_TOKEN
