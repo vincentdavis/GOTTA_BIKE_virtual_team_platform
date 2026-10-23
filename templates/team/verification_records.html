@@ -193,10 +193,11 @@
                 {% endif %}
                 {% if not row.can_open or not row.can_decide and record.is_pending %}
                   {% comment %}
-                    Visible text, not a tooltip. A record they cannot open gets the reason in
-                    place of View, whatever its status; one they can open but not decide (Other,
-                    for a reviewer who is not an admin) gets View with the reason beside it --
-                    while it is pending, which is when the decision is still to be made.
+                    Visible text, not a tooltip. A record they cannot open (same gender, or
+                    Other for a reviewer who is not an admin) gets the reason in place of View,
+                    whatever its status; one they can open but not decide (Power, for a reviewer
+                    outside the performance team) gets View with the reason beside it -- while
+                    it is pending, which is when the decision is still to be made.
                   {% endcomment %}
                   <span class="text-xs whitespace-nowrap">
                     <svg xmlns="http://www.w3.org/2000/svg" class="inline h-3 w-3 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">

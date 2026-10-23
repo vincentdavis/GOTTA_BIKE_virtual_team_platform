@@ -682,7 +682,7 @@ Falls back to original badges/SVGs when no emoji image is uploaded.
 1. User submits a `RaceReadyRecord` (weight, height, or power photo) via the web app
 2. Record includes `record_date` (date of the evidence) and optional `same_gender` flag (requires same-gender reviewer)
 3. Record starts in `pending` status
-4. Users with `approve_verification` permission review and verify/reject records; reviewers can edit `record_date` before acting
+4. Users with `approve_verification` permission review and verify/reject records; reviewers can edit `record_date` before acting. **A record submitted as Other ("Admin review") is opened, and decided, only by a reviewer who is also `app_admin`, or a superuser**: everyone else sees its row marked "Admins only", with no link, and is turned back from its page. One rule in `apps/team/services.py` (`ADMIN_REVIEW`, `blocks_opening=True`, beside same-gender; Power blocks only the decision), read by the list, the review page, the media endpoint and the badge. Guarded by `apps/team/test_verification_review_requirements.py`
 5. Users with `performance_verification_team` or `app_admin` permission can change the status of or delete any verification record (any status)
 6. Verified records expire based on `record_date` (not submission date) and Constance settings:
    - `WEIGHT_FULL_DAYS` (default: 120 days)

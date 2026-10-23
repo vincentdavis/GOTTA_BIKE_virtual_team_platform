@@ -56,6 +56,7 @@ from apps.team.rosterv2 import (
 )
 from apps.team.rosterv2 import search as roster_search
 from apps.team.services import (
+    SAME_GENDER_REVIEW,
     ZP_DIV_TO_CATEGORY,
     ZWIFT_LINK_NOT_RELEASED_MESSAGE,
     can_decide_verification_record,
@@ -1268,17 +1269,23 @@ def verification_record_detail_view(request: HttpRequest, pk: int) -> HttpRespon
     # Check if user can verify records (has permission)
     has_permission = request.user.can_approve_verification or request.user.is_superuser
 
-    # Requirements that block even opening the record -- today only same-gender, which the
-    # rider asked for. Superusers bypass it. See services.review_requirements.
+    # Requirements that block even opening the record: same-gender, which the rider asked for,
+    # and Admin review, for evidence submitted as Other. Superusers bypass both. See
+    # services.review_requirements.
     if not can_open_verification_record(request.user, record):
-        logfire.info(
-            "Same-gender restriction blocked verification review",
-            record_id=pk,
-            user_id=request.user.id,
-            user_gender=request.user.gender,
-            record_user_gender=record.user.gender,
-        )
-        messages.warning(request, "This record requires a same-gender reviewer.")
+        blocking = [req for req in unmet_review_requirements(request.user, record) if req.blocks_opening]
+        if SAME_GENDER_REVIEW in blocking:
+            logfire.info(
+                "Same-gender restriction blocked verification review",
+                record_id=pk,
+                user_id=request.user.id,
+                user_gender=request.user.gender,
+                record_user_gender=record.user.gender,
+            )
+            messages.warning(request, "This record requires a same-gender reviewer.")
+        else:
+            logfire.info("Admin review restriction blocked verification review", record_id=pk, user_id=request.user.id)
+            messages.warning(request, "This record was submitted as Other, so only an Admin can open it.")
         return redirect("team:verification_records")
 
     # Whether this reviewer may approve or reject: the Power rule and the Other rule both live

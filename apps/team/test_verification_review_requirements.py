@@ -1,8 +1,9 @@
 """Who may review a verification record, as one rule.
 
-A record submitted as "Other" may be approved or rejected only by an Admin (``app_admin``,
-which comes from the Discord roles in PERM_APP_ADMIN_ROLES) or a superuser. Other reviewers
-may still open it and see the evidence.
+A record submitted as "Other" may be opened, and approved or rejected, only by a reviewer
+(``approve_verification``) who is also an Admin (``app_admin``, which comes from the Discord
+roles in PERM_APP_ADMIN_ROLES), or by a superuser. Other reviewers see its row in the list,
+marked "Admins only", and nothing more.
 
 That joined two existing rules -- same-gender, which the rider asks for, and Power, which
 ``POWER_REQUIRES_PER_VER`` hands to the performance team -- and all three now live in
@@ -30,6 +31,7 @@ from apps.team.services import (
     SAME_GENDER_REVIEW,
     can_decide_verification_record,
     can_open_verification_record,
+    can_view_verification_media,
     records_decidable_by,
     review_requirements,
 )
@@ -174,10 +176,17 @@ def test_only_admins_and_superusers_decide_an_other_record(request, rider, who, 
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("who", ["reviewer", "team_member_pvt", "admin", "root"])
-def test_every_reviewer_may_still_open_an_other_record(request, rider, who):
-    """Looking is not deciding: a reviewer can still triage or flag it."""
-    assert can_open_verification_record(request.getfixturevalue(who), _record(rider, media_type="other"))
+@pytest.mark.parametrize(
+    ("who", "may_open"),
+    [("reviewer", False), ("team_member_pvt", False), ("admin", True), ("root", True)],
+)
+def test_only_admins_and_superusers_open_an_other_record(request, rider, who, may_open):
+    """Viewing it needs the same as deciding it: a reviewer who is also an Admin."""
+    user = request.getfixturevalue(who)
+    record = _record(rider, media_type="other")
+
+    assert can_open_verification_record(user, record) is may_open
+    assert can_view_verification_media(user, record) is may_open
 
 
 @pytest.mark.django_db
@@ -213,8 +222,10 @@ def test_the_power_rule_is_unchanged(request, rider, who, may_decide):
 def test_admin_alone_is_not_a_reviewer(db, user_model, rider):
     """The queue needs approve_verification; the Admin role is added on top, not instead."""
     admin_only = _make_user(user_model, username="admin_only", permissions={"app_admin": True})
+    record = _record(rider, media_type="other")
 
-    assert not can_decide_verification_record(admin_only, _record(rider, media_type="other"))
+    assert not can_open_verification_record(admin_only, record)
+    assert not can_decide_verification_record(admin_only, record)
 
 
 # --- the database twin agrees ------------------------------------------------------------------
@@ -317,18 +328,30 @@ def _text(markup):
 
 
 @pytest.mark.django_db
-def test_the_review_page_tells_a_reviewer_why_it_is_not_theirs(client, reviewer, rider):
+def test_the_review_page_turns_a_reviewer_away_and_says_why(client, reviewer, rider):
+    """Back to the list with the reason -- not the same-gender reason, which would be wrong."""
     record = _record(rider, media_type="other")
     client.force_login(reviewer)
 
-    response = client.get(reverse("team:verification_record_detail", args=[record.pk]))
+    response = client.get(reverse("team:verification_record_detail", args=[record.pk]), follow=True)
     text = _text(response.content.decode())
 
-    assert response.status_code == 200
-    assert "the decision belongs to the people named above" in text
-    # Named once, in the banner -- not repeated in the line beneath it.
-    assert text.count("an Admin or Super Admin has to approve or reject it") == 1
-    assert "Only Team Captains" not in text
+    assert response.redirect_chain[0][0] == reverse("team:verification_records")
+    assert "submitted as Other, so only an Admin can open it" in text
+    assert "same-gender reviewer" not in text
+    assert "https://example.test/evidence" not in text  # its evidence never reached them
+
+
+@pytest.mark.django_db
+def test_the_review_page_still_turns_away_a_same_gender_mismatch_with_its_own_reason(client, user_model, rider):
+    """A record carrying both requirements names the rider's request first."""
+    male_admin = _person(user_model, "male_admin", gender="male", app_admin=True)
+    record = _record(rider, media_type="other", same_gender=True)
+    client.force_login(male_admin)
+
+    text = _text(client.get(reverse("team:verification_record_detail", args=[record.pk]), follow=True).content.decode())
+
+    assert "requires a same-gender reviewer" in text
 
 
 @pytest.mark.django_db
@@ -354,13 +377,23 @@ def test_the_list_labels_an_other_record_in_words(client, reviewer, rider):
 
 
 @pytest.mark.django_db
-def test_the_list_tells_a_reviewer_it_is_admins_only_but_still_lets_them_look(client, reviewer, rider):
+def test_the_list_tells_a_reviewer_it_is_admins_only_and_offers_no_link(client, reviewer, rider):
     record = _record(rider, media_type="other")
     client.force_login(reviewer)
 
     body = client.get(reverse("team:verification_records")).content.decode()
 
     assert "Admins only" in _text(body)
+    assert reverse("team:verification_record_detail", args=[record.pk]) not in body
+
+
+@pytest.mark.django_db
+def test_the_list_links_an_admin_to_it(client, admin, rider):
+    record = _record(rider, media_type="other")
+    client.force_login(admin)
+
+    body = client.get(reverse("team:verification_records")).content.decode()
+
     assert reverse("team:verification_record_detail", args=[record.pk]) in body
 
 
@@ -417,19 +450,20 @@ def _link(record):
 
 
 @pytest.mark.django_db
+@override_config(POWER_REQUIRES_PER_VER=True)
 def test_the_mine_filter_leaves_out_what_a_reviewer_cannot_decide(client, reviewer, rider):
-    other = _record(rider, media_type="other")
+    power = _record(rider, verify_type="power", media_type="video")
     video = _record(rider, media_type="video")
     client.force_login(reviewer)
 
     unfiltered = client.get(reverse("team:verification_records")).content.decode()
     mine = client.get(reverse("team:verification_records") + "?reviewer=mine").content.decode()
 
-    # The reviewer CAN open the Other record, so it is on the unfiltered list -- which is what
-    # makes its absence below mean something.
-    assert _link(other) in unfiltered
+    # The reviewer CAN open the Power record (only its decision is the team's), so it is on the
+    # unfiltered list -- which is what makes its absence below mean something.
+    assert _link(power) in unfiltered
     assert _link(video) in mine
-    assert _link(other) not in mine
+    assert _link(power) not in mine
 
 
 @pytest.mark.django_db

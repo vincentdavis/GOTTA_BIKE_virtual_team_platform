@@ -884,9 +884,10 @@ class ReviewRequirement:
         only_label: What the list says to someone who does not meet it, in place of "View".
         explanation: The review page's sentence about it.
         blocks_opening: True when a reviewer who does not meet it may not even open the
-            record. Same-gender is the only one: the rider asked who may SEE their evidence.
-            The others restrict the decision and leave the evidence open to reviewers, so one
-            can still look, flag a problem, or leave a note.
+            record. Same-gender (the rider asked who may SEE their evidence) and Admin review
+            (evidence submitted as Other is for admins alone, by the team's decision). Power
+            restricts only the decision and leaves the evidence open to reviewers, so one can
+            still look, flag a problem, or leave a note.
 
     """
 
@@ -908,8 +909,8 @@ ADMIN_REVIEW = ReviewRequirement(
     key="admin",
     label="Admin review",
     only_label="Admins only",
-    explanation="Submitted as Other, so an Admin or Super Admin has to approve or reject it.",
-    blocks_opening=False,
+    explanation="Submitted as Other, so only an Admin or Super Admin can open it and approve or reject it.",
+    blocks_opening=True,
 )
 PERFORMANCE_TEAM_REVIEW = ReviewRequirement(
     key="performance_team",
@@ -947,8 +948,9 @@ def _meets_requirement(user: User, record: RaceReadyRecord, requirement: ReviewR
     Superusers satisfy all of them, as they always have for same-gender.
 
     Admin review is ``app_admin``, which comes from the Discord roles in PERM_APP_ADMIN_ROLES --
-    so the Discord Admin role is configured there, not here. The Performance Verification Team
-    does NOT satisfy it: that is the point of the requirement.
+    so the Discord Admin role is configured there, not here. It gates opening the record as well
+    as deciding it, and always on top of ``approve_verification`` (:func:`is_verification_reviewer`).
+    The Performance Verification Team does NOT satisfy it: that is the point of the requirement.
 
     The Power requirement also counts ``app_admin``. The review page's status-change path
     already let admins decide Power records whatever the setting said; counting them here keeps
@@ -1076,8 +1078,9 @@ def can_view_verification_media(user: User, record: RaceReadyRecord) -> bool:
     Three conditions, all required:
 
     1. The viewer reviews verifications at all (or is a superuser).
-    2. The same-gender restriction, when the rider asked for one, is satisfied. Superusers
-       bypass this, matching the review page.
+    2. Every requirement that blocks opening the record is met: same-gender, when the rider
+       asked for it, and Admin review, for evidence submitted as Other. Superusers bypass
+       both, matching the review page.
     3. The record is still pending, or the viewer is on the performance verification team.
        Once a record is decided, the evidence stops being visible to ordinary reviewers --
        it was uploaded to support a decision that has now been made.
