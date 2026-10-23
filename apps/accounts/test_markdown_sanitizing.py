@@ -7,6 +7,8 @@ XSS against whoever reads the page -- often an admin. ``render_markdown_untruste
 renders the same markdown and then strips everything outside an allowlist.
 """
 
+from html.parser import HTMLParser
+
 import pytest
 
 from apps.accounts.markdown_safe import render_untrusted_markdown
@@ -55,29 +57,87 @@ XSS_PAYLOADS = [
     "<scr<script>ipt>alert(1)</script>",
 ]
 
-# Substrings that must never survive sanitising, whatever the payload.
+# Substrings that must never survive sanitising, whatever the payload. A live tag starts with
+# "<name"; the same words kept as text are escaped to "&lt;name", which no browser runs.
 FORBIDDEN = ("<script", "<iframe", "<object", "<embed", "<svg", "<style", "<base", "<meta", "<form", "<link")
+FORBIDDEN_TAGS = frozenset(tag.lstrip("<") for tag in FORBIDDEN) | {"math"}
+DANGEROUS_SCHEMES = ("javascript:", "vbscript:", "data:")
+
+
+class _Elements(HTMLParser):
+    """Collect the elements a browser would build from the HTML: tags and attributes, not text."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.found: list[tuple[str, list[tuple[str, str | None]]]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.found.append((tag, attrs))
+
+    handle_startendtag = handle_starttag
+
+
+def _elements(html: str) -> list[tuple[str, list[tuple[str, str | None]]]]:
+    parser = _Elements()
+    parser.feed(html)
+    parser.close()
+    return parser.found
+
+
+def _scheme(value: str | None) -> str:
+    """Read a URL as a browser does: control characters and whitespace dropped, lower-cased.
+
+    Returns:
+        The value as a browser would match its scheme.
+
+    """
+    return "".join(ch for ch in value or "" if ch > " ").lower()
 
 
 @pytest.mark.parametrize("payload", XSS_PAYLOADS)
 def test_untrusted_markdown_renders_payloads_inert(payload: str) -> None:
-    """No payload survives as a live tag, handler, style or dangerous URL."""
+    """No payload survives as a live tag, handler, style or dangerous URL.
+
+    Handlers, styles and URLs live in attributes, so they are checked on the elements the
+    HTML builds rather than as substrings: the words can survive as escaped *text*, which is
+    inert -- Python-Markdown 3.11 escapes a tag it cannot parse rather than passing it through.
+    Checked this way, every ``on*`` attribute is refused, not only the ones named, and an
+    entity-encoded scheme (``&#106;avascript:``) is decoded before it is judged.
+    """
     html = render_untrusted_markdown(payload)
     lowered = html.lower()
 
     for tag in FORBIDDEN:
         assert tag not in lowered, f"{tag!r} survived in {html!r}"
-    assert "javascript:" not in lowered, html
-    assert "vbscript:" not in lowered, html
-    assert "data:" not in lowered, html
-    assert "onerror" not in lowered, html
-    assert "onload" not in lowered, html
-    assert "onclick" not in lowered, html
-    assert "onmouseover" not in lowered, html
-    assert "ontoggle" not in lowered, html
-    assert "style=" not in lowered, html
-    # `alert(1)` may legitimately remain as *text*; it must not remain as markup.
-    assert "<a href=\"javascript" not in lowered, html
+    for tag, attrs in _elements(html):
+        assert tag not in FORBIDDEN_TAGS, f"<{tag}> survived in {html!r}"
+        for name, value in attrs:
+            assert not name.startswith("on"), f"handler {name!r} on <{tag}> in {html!r}"
+            assert name != "style", f"style on <{tag}> in {html!r}"
+            assert not _scheme(value).startswith(DANGEROUS_SCHEMES), f"{name}={value!r} on <{tag}> in {html!r}"
+
+
+def test_a_tag_markdown_cannot_parse_comes_out_as_text() -> None:
+    """The case the old substring test could not tell apart: the handler is words, not markup.
+
+    Python-Markdown 3.11 no longer passes this malformed anchor through as HTML; it escapes it.
+    Either way nothing in it may become an element with a handler.
+    """
+    html = render_untrusted_markdown('<a href="https://ok.test\\" onmouseover=\\"alert(1)">quote break</a>')
+
+    assert all(not name.startswith("on") for _, attrs in _elements(html) for name, _ in attrs), html
+    assert "quote break" in html
+
+
+def test_the_element_check_sees_what_the_substring_check_missed() -> None:
+    """Guard the guard: a handler or an encoded scheme in markup is caught, in text it is not."""
+    live = '<a href="&#106;avascript:alert(1)" onfocus="x()">x</a>'
+    inert = "<p>&lt;a onmouseover=&quot;alert(1)&quot;&gt;</p>"
+
+    [(_, live_attrs)] = _elements(live)
+    assert any(name.startswith("on") for name, _ in live_attrs)
+    assert _scheme(dict(live_attrs)["href"]).startswith(DANGEROUS_SCHEMES)
+    assert all(not name.startswith("on") for _, attrs in _elements(inert) for name, _ in attrs)
 
 
 def test_untrusted_markdown_drops_only_the_href_of_a_dangerous_link() -> None:
