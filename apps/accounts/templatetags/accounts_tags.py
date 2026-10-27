@@ -396,49 +396,6 @@ def zr_category_badge(context, category):
     return mark_safe(f'<span class="badge badge-secondary badge-sm">{escaped_category}</span>')  # noqa: S308
 
 
-@register.simple_tag(takes_context=True)
-def zr_v2_category_badge(context, category):
-    """Render a rider's vELO 2 mixed category, to sit beside the ZR (vELO 1) category.
-
-    Both are tiers with the same names and the same artwork, so this one carries a visible
-    "v2" -- the artwork alone would leave a reader guessing which rating each gem belongs
-    to -- and an accessible name that says vELO 2 in full. A blank renders nothing rather
-    than ``zr_category_badge``'s dash: one dash for a missing ZR category is enough.
-
-    Args:
-        context: Template context (for site_settings access).
-        category: The category name (e.g., "Amethyst"), or blank.
-
-    Returns:
-        HTML string for the category, or an empty string.
-
-    """
-    if not category:
-        return ""
-
-    from django.utils.html import escape
-
-    escaped_category = escape(category)
-    name = f"vELO 2 {escaped_category}"
-
-    site_settings = context.get("site_settings")
-    if site_settings:
-        field_name = ZR_CATEGORY_EMOJI_FIELDS.get(category)
-        if field_name:
-            emoji_file = getattr(site_settings, field_name, None)
-            if emoji_file:
-                return mark_safe(  # noqa: S308
-                    f'<span class="inline-flex items-center gap-0.5 whitespace-nowrap">'
-                    f'<img src="{escape(emoji_file.url)}" alt="{name}" title="{name}" class="h-7 w-7">'
-                    f'<span class="text-xs font-semibold" aria-hidden="true">v2</span></span>'
-                )
-
-    return mark_safe(  # noqa: S308
-        f'<span class="badge badge-neutral badge-sm whitespace-nowrap">'
-        f'<span class="sr-only">{name}</span> <span aria-hidden="true">v2 {escaped_category}</span></span>'
-    )
-
-
 @register.filter
 def velo2_women(profile, gender: str | None = None) -> dict | None:
     """Return a profile's women's vELO 2 categories when the rider is a woman.

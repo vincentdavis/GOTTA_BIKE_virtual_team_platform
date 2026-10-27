@@ -6074,7 +6074,6 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         user_data_json[uid] = {
             "display_name": entry["display_name"],
             "zr_category": entry["zr_category"],
-            "zr_v2_category": entry["zr_v2_category"],
             "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
             "is_race_ready": entry["is_race_ready"],
         }
@@ -6096,7 +6095,6 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             user_data_json[user.pk] = {
                 "display_name": user.get_full_name() or user.discord_username,
                 "zr_category": zr["zr_category"],
-                "zr_v2_category": zr["zr_v2_category"],
                 "zr_rating": float(rating) if rating is not None else None,
                 "is_race_ready": user.is_race_ready,
             }

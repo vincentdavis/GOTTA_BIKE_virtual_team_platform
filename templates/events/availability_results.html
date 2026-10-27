@@ -968,14 +968,6 @@
       };
       label.append(input, ' ' + u.display_name);
       if (u.zr_category) label.append(span('badge badge-xs badge-outline', u.zr_category));
-      if (u.zr_v2_category) {
-        // vELO 2's mixed category beside ZR's (vELO 1's mixed one), marked "v2" as the popover marks it.
-        const velo2 = span('badge badge-xs badge-neutral whitespace-nowrap', '');
-        const shown = span('', 'v2 ' + u.zr_v2_category);
-        shown.setAttribute('aria-hidden', 'true');
-        velo2.append(span('sr-only', 'vELO 2 ' + u.zr_v2_category), shown);
-        label.append(velo2);
-      }
       if (u.zr_rating) label.append(span('text-xs text-base-content/50', u.zr_rating));
       if (note) label.append(span('text-xs text-warning', note));
       return label;

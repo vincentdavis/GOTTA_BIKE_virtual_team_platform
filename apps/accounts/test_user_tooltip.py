@@ -16,7 +16,6 @@ import re
 from pathlib import Path
 
 import pytest
-from django.template import Context, Template
 from django.template.loader import render_to_string
 from django.urls import reverse
 
@@ -113,40 +112,22 @@ def test_rendered_card_carries_the_hook():
     assert not unhooked, "a hover-card rendered without the hook the script looks for"
 
 
-# --- vELO 2's mixed category, beside the ZR (vELO 1) one ------------------------------------------
+# --- vELO 2's mixed category: in the popover, never in the name strip ----------------------------------
 
 
-def _render(source, **context):
-    return Template("{% load accounts_tags %}" + source).render(Context(context))
-
-
-def test_the_velo2_badge_is_marked_v2_and_named_in_full():
-    """Both ratings name their tiers alike, so the second one says which it is."""
-    badge = _render("{% zr_v2_category_badge cat %}", cat="Amethyst")
-
-    assert '<span class="sr-only">vELO 2 Amethyst</span>' in badge
-    assert '<span aria-hidden="true">v2 Amethyst</span>' in badge
-
-
-def test_the_velo2_badge_is_empty_without_a_category():
-    assert _render("{% zr_v2_category_badge cat %}", cat="").strip() == ""
-
-
-def test_the_velo2_badge_escapes_the_name():
-    badge = _render("{% zr_v2_category_badge cat %}", cat="<b>x</b>")
-
-    assert "<b>" not in badge
-    assert "&lt;b&gt;" in badge
-
-
-def test_the_popover_shows_both_mixed_categories_side_by_side():
+def test_the_name_strip_shows_velo1_only_and_the_popover_names_velo2():
+    """Vincent's call: after a name, the ZR (vELO 1) tier alone; vELO 2 is a line in the popover."""
     popover = render_to_string(
         "accounts/_user_tooltip.html",
         {"display_name": "Ana", "in_zwiftracing": True, "zr_category": "Ruby", "zr_v2": "Amethyst"},
     )
+    strip, card = popover.split('class="dropdown-content', 1)
 
-    assert popover.index("Ruby") < popover.index("vELO 2 Amethyst")
-    assert "vELO 2 Category: <span" in popover
+    assert "Ruby" in strip
+    assert "Amethyst" not in strip
+    assert "v2" not in strip
+    assert "vELO 2 Category: <span" in card
+    assert "Amethyst" in card
 
 
 def test_every_popover_given_a_zr_category_is_given_the_velo2_one_too():
