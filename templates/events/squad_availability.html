@@ -251,7 +251,7 @@
                 <ul class="dropdown dropdown-end menu menu-sm bg-base-100 rounded-box z-[60] w-44 p-1 shadow border border-base-300 text-left"
                     popover id="template-actions-{{ t.pk }}" style="position-anchor:--gear-tmpl-{{ t.pk }}">
                   <li><button type="button" onclick="document.getElementById('use-template-{{ t.pk }}').showModal()">Use</button></li>
-                  <li><button type="submit" form="share-template-{{ t.pk }}">{% if t.shared %}Stop sharing{% else %}Share with all squads{% endif %}</button></li>
+                  <li><button type="submit" form="share-template-{{ t.pk }}">{% if t.shared %}Stop sharing{% else %}Share within this event{% endif %}</button></li>
                   <li><button type="submit" form="delete-template-{{ t.pk }}" class="text-error">Delete</button></li>
                 </ul>
 
@@ -300,7 +300,7 @@
       {% if shared_templates %}
       <h3 class="font-semibold text-sm mt-4 mb-1">Shared templates</h3>
       <p class="text-xs text-base-content/60 mb-2">
-        Templates other squads have shared. They carry the times and timezone they were
+        Templates other squads in this event have shared. They carry the times and timezone they were
         built with &mdash; check both against your own squad before publishing.
       </p>
       <div class="overflow-x-auto">

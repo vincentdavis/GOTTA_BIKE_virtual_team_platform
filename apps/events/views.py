@@ -3576,12 +3576,14 @@ def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) 
 
     availability_grids = squad.availability_grids.all()
     availability_templates = squad.availability_templates.all()
-    # Templates other squads have shared. Excludes this squad's own, which are already
-    # listed above -- a squad's shared template should not appear twice to its owner.
+    # Templates other squads of this event have shared. Sharing never crosses events
+    # (Vincent's call): a template is built for one event's sessions. Excludes this
+    # squad's own, which are already listed above -- a squad's shared template should
+    # not appear twice to its owner.
     shared_templates = (
-        AvailabilityGridTemplate.objects.filter(shared=True)
+        AvailabilityGridTemplate.objects.filter(shared=True, squad__event=event)
         .exclude(squad=squad)
-        .select_related("squad", "squad__event")
+        .select_related("squad")
         .order_by("squad__name", "name")
     )
 
@@ -5432,11 +5434,13 @@ def availability_template_apply_view(
     """
     event = get_object_or_404(Event, pk=event_pk)
     squad = get_object_or_404(Squad, pk=squad_pk, event=event)
-    # Either this squad's own template, or one another squad has shared. Permission is
-    # still checked against the *target* squad below -- a template carries only grid
-    # configuration, never rider data, so borrowing one exposes nothing.
+    # Either this squad's own template, or one another squad of the same event has shared
+    # (sharing never crosses events). Permission is still checked against the *target*
+    # squad below -- a template carries only grid configuration, never rider data, so
+    # borrowing one exposes nothing.
     template = get_object_or_404(
-        AvailabilityGridTemplate.objects.filter(Q(squad=squad) | Q(shared=True)), pk=template_pk
+        AvailabilityGridTemplate.objects.filter(Q(squad=squad) | Q(shared=True, squad__event=event)),
+        pk=template_pk,
     )
 
     if not _can_manage_squad_availability(request.user, squad):
@@ -5548,7 +5552,7 @@ def availability_template_apply_view(
 def availability_template_share_view(
     request: HttpRequest, event_pk: int, squad_pk: int, template_pk: int
 ) -> HttpResponse:
-    """Toggle whether a template is offered to every squad.
+    """Toggle whether a template is offered to every squad of its event.
 
     Scoped to the owning squad: sharing is the owner's call, so another squad using a
     shared template cannot un-share it out from under them.
@@ -5591,8 +5595,8 @@ def availability_template_share_view(
     if template.shared:
         messages.success(
             request,
-            f'"{template.name}" is now shared. Other squads see its times and timezone, '
-            "so they are told to check both before publishing.",
+            f'"{template.name}" is now shared with the other squads in this event. They see '
+            "its times and timezone, so they are told to check both before publishing.",
         )
     else:
         messages.success(

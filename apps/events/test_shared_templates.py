@@ -1,8 +1,9 @@
-"""Availability grid templates shared across squads.
+"""Availability grid templates shared across the squads of one event.
 
 A shared template carries the times and timezone of the squad that built it, so the
 borrowing squad is warned to check both. Applying one only copies grid configuration --
 never rider data -- which is why a template from another squad is safe to offer at all.
+Sharing never crosses events (Vincent's call): a template is built for one event's sessions.
 """
 
 import json
@@ -70,6 +71,53 @@ def test_an_unshared_template_stays_private(client, event, event_admin) -> None:
     ).content.decode()
 
     assert "Private Thing" not in body
+
+
+def _another_event() -> Event:
+    """Build a second visible event, as next season's league would be.
+
+    Returns:
+        The event.
+
+    """
+    today = date.today()
+    return Event.objects.create(
+        title="ZRL next season", start_date=today, end_date=today + timedelta(days=30), visible=True,
+    )
+
+
+@pytest.mark.django_db
+def test_a_shared_template_is_not_offered_to_another_events_squad(client, event, event_admin) -> None:
+    owner = Squad.objects.create(event=event, name="Synthesis")
+    other_event = _another_event()
+    borrower = Squad.objects.create(event=other_event, name="Catalyst")
+    _template(owner, shared=True)
+    client.force_login(event_admin)
+
+    body = client.get(
+        reverse("events:squad_availability", args=[other_event.pk, borrower.pk])
+    ).content.decode()
+
+    assert "Shared templates" not in body
+    assert "Tuesday Nights" not in body
+
+
+@pytest.mark.django_db
+def test_another_events_squad_cannot_apply_a_shared_template(client, event, event_admin) -> None:
+    """The apply view is the real gate; the list only hides the button."""
+    owner = Squad.objects.create(event=event, name="Synthesis")
+    other_event = _another_event()
+    borrower = Squad.objects.create(event=other_event, name="Catalyst")
+    template = _template(owner, shared=True)
+    client.force_login(event_admin)
+
+    resp = client.post(
+        reverse("events:availability_template_apply", args=[other_event.pk, borrower.pk, template.pk]),
+        data={"start_date": "2026-09-01"},
+    )
+
+    assert resp.status_code == 404
+    assert not AvailabilityGrid.objects.filter(squad=borrower).exists()
 
 
 @pytest.mark.django_db
@@ -166,7 +214,7 @@ def test_the_menu_label_and_badge_follow_the_state(client, event, event_admin) -
     page = reverse("events:squad_availability", args=[event.pk, squad.pk])
 
     body = client.get(page).content.decode()
-    assert "Share with all squads" in body
+    assert "Share within this event" in body
     assert "badge-success" not in body
 
     template.shared = True

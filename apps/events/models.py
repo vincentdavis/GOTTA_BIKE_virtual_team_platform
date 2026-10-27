@@ -1956,7 +1956,8 @@ class AvailabilityGridTemplate(models.Model):
     optional questions) so captains can spin up a new draft grid for the squad without
     rebuilding the configuration each time. Times are stored as **local** "HH:MM" in
     ``timezone``; the apply flow converts them to UTC for the chosen dates so DST is
-    handled correctly. Blocked cells are not stored (set fresh per grid).
+    handled correctly. Blocked cells are not stored (set fresh per grid). A shared template
+    is offered to the other squads of the same event, never to another event's.
 
     Attributes:
         squad: The squad this template belongs to.
@@ -2022,7 +2023,7 @@ class AvailabilityGridTemplate(models.Model):
     shared = models.BooleanField(
         default=False,
         help_text=(
-            "Offer this template to every squad, not just this one. Shared templates "
+            "Offer this template to every squad in this event, not just this one. Shared templates "
             "carry the times and timezone they were built with, so the squad using one "
             "is told to check both."
         ),
