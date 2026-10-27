@@ -23,6 +23,7 @@ from apps.accounts.decorators import discord_permission_required, team_member_re
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
 from apps.accounts.utils import resolve_country
+from apps.rider_data.models import velo2_women_by_zwid
 from apps.rider_data.services import last_successful_sync
 from apps.rider_data.tasks import refresh_zwift_profile
 from apps.team.context_processors import SQUAD_EXPIRING_CACHE_PREFIX, SQUAD_EXPIRING_CACHE_TIMEOUT
@@ -1125,10 +1126,12 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     zwids = [r.user.zwid for r in records_list if r.user.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
     zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
+    women_by_zwid = velo2_women_by_zwid((r.user.zwid, r.user.gender) for r in records_list)
     for record in records_list:
         zwid = record.user.zwid
         zp = zp_by_zwid.get(zwid)
         zr = zr_by_zwid.get(zwid)
+        record.tt_zr_v2_women_category = (women_by_zwid.get(zwid) or {}).get("category") or ""
         record.tt_zp_category = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
         record.tt_zp_category_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
         record.tt_in_zwiftpower = zp is not None
@@ -2428,6 +2431,7 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
     if linked_zwids:
         zp_by_zwid = {zp.zwid: zp for zp in ZPTeamRiders.objects.filter(zwid__in=linked_zwids)}
         zr_by_zwid = {zr.zwid: zr for zr in ZRRider.objects.filter(zwid__in=linked_zwids)}
+    women_by_zwid = velo2_women_by_zwid((m.user.zwid, m.user.gender) for m in members_list if m.user)
 
     for member in members_list:
         role_names = []
@@ -2460,6 +2464,7 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
             member.tooltip_zp_category = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp else ""
             member.tooltip_zp_category_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and hasattr(zp, "divw") else ""
             member.tooltip_zr_category = (zr.race_current_category or "") if zr else ""
+            member.tooltip_zr_v2_women_category = (women_by_zwid.get(zwid) or {}).get("category") or ""
             member.tooltip_zr_rating = zr.race_current_rating if zr else ""
             member.tooltip_zr_phenotype = (zr.phenotype_value or "") if zr else ""
         elif member.user:
@@ -2478,6 +2483,7 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
             member.tooltip_zp_category = ""
             member.tooltip_zp_category_w = ""
             member.tooltip_zr_category = ""
+            member.tooltip_zr_v2_women_category = ""
             member.tooltip_zr_rating = ""
             member.tooltip_zr_phenotype = ""
 

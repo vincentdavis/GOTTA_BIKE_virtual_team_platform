@@ -1,11 +1,11 @@
 """The signups table's Zwift Racing figures, from the rider profile cache.
 
 The figures the table always had (vELO, its peaks and their categories, phenotype, age)
-now come from ``rider_data.RiderProfile``, as do the 50 columns the column menu adds:
-vELO 2 with its 30- and 90-day peaks, each with its category, and six factors, seed ratings, phenotype scores,
-terrain handicaps, power and race counts (``apps/events/rider_stats.py``). The added
-columns travel as JSON that the page builds cells from, and only to those who see the full
-table.
+now come from ``rider_data.RiderProfile``, as do the 53 columns the column menu adds:
+vELO 2 with its 30- and 90-day peaks, each with its open and (for a woman) women's category,
+and six factors, seed ratings, phenotype scores, terrain handicaps, power and race counts
+(``apps/events/rider_stats.py``). The added columns travel as JSON that the page builds cells
+from, and only to those who see the full table.
 """
 
 import json
@@ -64,6 +64,10 @@ def _profile(rider_profile_factory, zwid):
             "category": "Amethyst",
             "category_max30": "Amethyst",
             "category_max90": "Sapphire",
+            # Sent for every rider; shown for a woman only.
+            "category_women": "Emerald",
+            "category_women_max30": "Emerald",
+            "category_women_max90": "Ruby",
             "factors": {
                 "sprint": 452.0,
                 "punch": 440.5,
@@ -150,11 +154,18 @@ def test_the_column_menu_offers_every_group(client, event, event_admin, user_mod
 
     for group in ("vELO 2", "Seed", "Phenotype scores", "Terrain handicaps", "Power", "Races"):
         assert f'<li class="menu-title text-xs pt-2 text-base-content/70">{group}</li>' in body, group
-    assert body.count('class="checkbox checkbox-xs stat-col-toggle"') == len(rider_stats.STAT_COLUMNS) == 50
+    assert body.count('class="checkbox checkbox-xs stat-col-toggle"') == len(rider_stats.STAT_COLUMNS) == 53
     columns = _json(body, "signup-stat-columns")
     assert [c["key"] for c in columns] == [c.key for c in rider_stats.STAT_COLUMNS]
     # The category columns sort as text and show a badge; every other column is a number.
-    assert {c["key"] for c in columns if c["kind"] == "category"} == {"zr_v2_cat", "zr_v2_max30_cat", "zr_v2_max90_cat"}
+    assert {c["key"] for c in columns if c["kind"] == "category"} == {
+        "zr_v2_cat",
+        "zr_v2_cat_w",
+        "zr_v2_max30_cat",
+        "zr_v2_max30_cat_w",
+        "zr_v2_max90_cat",
+        "zr_v2_max90_cat_w",
+    }
 
 
 @pytest.mark.django_db
@@ -170,6 +181,8 @@ def test_every_added_column_carries_the_riders_figure(client, event, event_admin
     # vELO 2, its peaks, the category of each, and its six factors.
     assert [row[f"zr_v2_{k}"] for k in ("race", "max30", "max90")] == ["430", "450", "470"]
     assert [row[f"zr_v2_{k}"] for k in ("cat", "max30_cat", "max90_cat")] == ["Amethyst", "Amethyst", "Sapphire"]
+    # The factory's rider is a man, so the women's categories zwiftracing sent stay blank.
+    assert [row[f"zr_v2_{k}_w"] for k in ("cat", "max30_cat", "max90_cat")] == ["", "", ""]
     factors = ("sprint", "punch", "climb", "time_trial", "endurance", "pursuit")
     assert [row[f"zr_v2_{k}"] for k in factors] == ["452", "441", "401", "415", "398", "420"]  # halves round up
     # The seed: its race and time-trial ratings, and the factors it has.
@@ -199,3 +212,48 @@ def test_a_names_only_viewer_gets_none_of_the_figures(client, event, team_member
     assert "Ana" in body  # the names-only list
     assert _json(body, "signup-stat-values") is None
     assert "stat-col-toggle" not in body
+
+
+# --- the women's vELO 2 categories ------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_a_womans_row_carries_her_womens_velo2_categories(
+    client, event, event_admin, user_model, rider_profile_factory
+):
+    """Every rider gets a women's category from zwiftracing; the table shows a woman's only."""
+    woman = _signup(user_model, event, "ana", zwid=4242)
+    woman.user.gender = "female"
+    woman.user.save(update_fields=["gender"])
+    man = _signup(user_model, event, "bo", zwid=5151)
+    _profile(rider_profile_factory, 4242)
+    _profile(rider_profile_factory, 5151)
+    client.force_login(event_admin)
+
+    body = _page(client, event)
+    keys = [c["key"] for c in _json(body, "signup-stat-columns")]
+    values = _json(body, "signup-stat-values")
+    hers = dict(zip(keys, values[str(woman.pk)], strict=True))
+    his = dict(zip(keys, values[str(man.pk)], strict=True))
+
+    women_columns = ("zr_v2_cat_w", "zr_v2_max30_cat_w", "zr_v2_max90_cat_w")
+    assert [hers[k] for k in women_columns] == ["Emerald", "Emerald", "Ruby"]
+    assert [his[k] for k in women_columns] == ["", "", ""]
+    # Beside each ZR category -- vELO 1's mixed one -- her vELO 2 women's one, named in full.
+    assert " ".join(_cell(body, woman, "zr_cur_cat").split()) == "Diamond vELO 2 women's category Emerald W Emerald"
+    assert " ".join(_cell(body, woman, "zr_max90_cat").split()) == "Ruby vELO 2 women's category Ruby W Ruby"
+    assert _cell(body, man, "zr_cur_cat") == "Diamond"
+
+
+def test_zr_fields_gives_a_woman_her_womens_categories_and_nobody_else(db, rider_profile_factory):
+    profile = rider_profile_factory(
+        zwid=101, gender="", velo2={"race": 430.0, "category_women": "Emerald", "category_women_max30": "Ruby"}
+    )
+
+    hers = rider_stats.zr_fields(profile, gender="female")
+    assert (hers["zr_v2_women_category"], hers["zr_v2_women_max30_category"]) == ("Emerald", "Ruby")
+    assert hers["zr_v2_women_max90_category"] == ""
+    assert rider_stats.zr_fields(profile, gender="male")["zr_v2_women_category"] == ""
+    assert rider_stats.zr_fields(None, gender="female")["zr_v2_women_category"] == ""
+    # Every key the rider popover is handed exists, profile or not.
+    assert set(rider_stats.TOOLTIP_FIELDS) <= set(rider_stats.zr_fields(None)) & set(hers)

@@ -1,4 +1,4 @@
-{% load humanize %}
+{% load humanize accounts_tags %}
 {% comment %}
   The consolidated rider card, replacing the separate ZwiftPower, Zwift Racing and Racing
   Profile cards. One cached RiderProfile row instead of three fetches, two of them live.
@@ -17,7 +17,9 @@
 
   vELO 2 is a different scale from vELO (a rider might be 650 in vELO 2 and 1,600 in
   vELO 1), so it has its own section and is never set beside vELO as if comparable. Its
-  peaks and categories are zwiftracing's own.
+  peaks and categories are zwiftracing's own. Each carries its open category and, for a
+  woman, its women's one "(W)": zwiftracing sends those for every rider, and the
+  velo2_women filter keeps them to women, by the member's own gender and then zauth's.
 {% endcomment %}
 <div id="rider-profile-card" class="card bg-base-300 p-4">
   <h3 class="font-semibold mb-3 flex items-center gap-2">
@@ -197,14 +199,14 @@
         </div>
       {% endif %}
 
-      {% with velo2=rider_profile.velo2 %}
+      {% with velo2=rider_profile.velo2 women=rider_profile|velo2_women:profile_user.gender %}
         {% if velo2 %}
           <div class="space-y-1 pt-2 border-t border-base-content/10">
             {% if velo2.race is not None %}
               <div class="flex justify-between gap-3">
-                <span class="text-base-content/70">vELO 2</span>
+                <span class="text-base-content/70 whitespace-nowrap">vELO 2</span>
                 <span class="font-mono font-semibold text-right">
-                  {{ velo2.race|floatformat:0 }}{% if velo2.category %} <span class="font-sans font-normal">&middot; {{ velo2.category }}</span>{% endif %}
+                  {{ velo2.race|floatformat:0 }}{% if velo2.category %} <span class="font-sans font-normal">&middot; {{ velo2.category }}</span>{% endif %}{% if women.category %} <span class="font-sans font-normal">&middot; {{ women.category }} <span aria-hidden="true">(W)</span> <span class="sr-only">women's category</span></span>{% endif %}
                 </span>
               </div>
             {% endif %}
@@ -212,13 +214,13 @@
               <div class="flex justify-between gap-3">
                 <span class="text-base-content/70">vELO 2 30-day peak</span>
                 <span class="font-mono text-right">
-                  {% if velo2.max30 is not None %}{{ velo2.max30|floatformat:0 }}{% else %}&mdash;{% endif %}{% if velo2.category_max30 %} <span class="font-sans">&middot; {{ velo2.category_max30 }}</span>{% endif %}
+                  {% if velo2.max30 is not None %}{{ velo2.max30|floatformat:0 }}{% else %}&mdash;{% endif %}{% if velo2.category_max30 %} <span class="font-sans">&middot; {{ velo2.category_max30 }}</span>{% endif %}{% if women.max30 %} <span class="font-sans">&middot; {{ women.max30 }} <span aria-hidden="true">(W)</span> <span class="sr-only">women's category</span></span>{% endif %}
                 </span>
               </div>
               <div class="flex justify-between gap-3">
                 <span class="text-base-content/70">vELO 2 90-day peak</span>
                 <span class="font-mono text-right">
-                  {% if velo2.max90 is not None %}{{ velo2.max90|floatformat:0 }}{% else %}&mdash;{% endif %}{% if velo2.category_max90 %} <span class="font-sans">&middot; {{ velo2.category_max90 }}</span>{% endif %}
+                  {% if velo2.max90 is not None %}{{ velo2.max90|floatformat:0 }}{% else %}&mdash;{% endif %}{% if velo2.category_max90 %} <span class="font-sans">&middot; {{ velo2.category_max90 }}</span>{% endif %}{% if women.max90 %} <span class="font-sans">&middot; {{ women.max90 }} <span aria-hidden="true">(W)</span> <span class="sr-only">women's category</span></span>{% endif %}
                 </span>
               </div>
             {% endif %}

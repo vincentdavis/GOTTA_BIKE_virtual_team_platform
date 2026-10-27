@@ -17,9 +17,14 @@ away and re-fetched. Two consequences follow, and both are load-bearing:
   schema you have to migrate. The rule is the thing that stops that happening again.
 """
 
+from typing import TYPE_CHECKING
+
 from django.db import models
 
 from gotta_bike_platform.retention import RetentionPolicy
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 def _number(value: object) -> float | None:
@@ -53,9 +58,18 @@ _FACTORS = {
     "endurance": "endurance",
     "pursuit": "pursuit",
 }
+# vELO 2's category names, as zauth's velo2 block carries them: the open category of the
+# current rating and of each peak, then the women's. zwiftracing sends the women's ones for
+# every rider, so whether they apply is ours to decide -- see RiderProfile.velo2_women.
+_VELO2_CATEGORIES = (
+    "category",
+    "category_max30",
+    "category_max90",
+    "category_women",
+    "category_women_max30",
+    "category_women_max90",
+)
 # The same factors as the rider card names them, in zwiftracing's order.
-# vELO 2's category names, as zauth's velo2 block carries them.
-_VELO2_CATEGORIES = ("category", "category_max30", "category_max90")
 _FACTOR_LABELS = (
     ("sprint", "Sprint"),
     ("punch", "Punch"),
@@ -74,6 +88,27 @@ CURVE_DURATIONS = (
     (300, "5 min"),
     (1200, "20 min"),
 )
+
+# How the sources spell a woman: zauth passes Zwift's "F" or "female", the app's own profile
+# says "female", and the roster's filters say "women".
+WOMEN_GENDERS = frozenset({"f", "female", "w", "women"})
+
+
+def is_woman(*genders: str | None) -> bool:
+    """Whether a rider is a woman, by the first of these genders that says anything.
+
+    Callers pass the member's own answer first (``User.gender``) and zauth's after it
+    (``RiderProfile.gender``), so the rider's own word wins and zauth's fills a blank.
+
+    Returns:
+        True when the first non-blank gender is a woman's.
+
+    """
+    for gender in genders:
+        value = (gender or "").strip().casefold()
+        if value:
+            return value in WOMEN_GENDERS
+    return False
 
 
 class RiderProfile(models.Model):
@@ -473,7 +508,9 @@ class RiderProfile(models.Model):
         Returns:
             ``race``, ``max30``, ``max90`` and each factor (``sprint``, ``punch``, ``climb``,
             ``time_trial``, ``endurance``, ``pursuit``), None where missing, with the category
-            names ``category``, ``category_max30`` and ``category_max90``; or None when the
+            names ``category``, ``category_max30`` and ``category_max90`` and the women's
+            ``category_women``, ``category_women_max30`` and ``category_women_max90`` (sent for
+            every rider: :meth:`velo2_women` decides when they apply); or None when the
             profile has no vELO 2 figures.
 
         """
@@ -487,6 +524,33 @@ class RiderProfile(models.Model):
             return None
         categories = {key: block.get(key) if isinstance(block.get(key), str) else None for key in _VELO2_CATEGORIES}
         return {**found, **{key: value or None for key, value in categories.items()}}
+
+    def velo2_women(self, gender: str | None = None) -> dict | None:
+        """Return the women's vELO 2 categories, when they apply to this rider.
+
+        zwiftracing gives every rider a women's category beside the open one, so whether to
+        show it is ours to decide: only for a woman, judged by ``gender`` (the member's own
+        answer) and then by the profile's own, as :func:`is_woman` reads them.
+
+        Args:
+            gender: The member's gender when the rider has an account; blank leaves it to
+                the profile.
+
+        Returns:
+            ``category``, ``max30`` and ``max90`` -- the women's category of the current
+            rating and of each peak, None where missing -- or None when the rider is not a
+            woman or has none of them.
+
+        """
+        if not is_woman(gender, self.gender):
+            return None
+        velo2 = self.velo2 or {}
+        found = {
+            "category": velo2.get("category_women"),
+            "max30": velo2.get("category_women_max30"),
+            "max90": velo2.get("category_women_max90"),
+        }
+        return found if any(found.values()) else None
 
     @property
     def seed_ratings(self) -> dict | None:
@@ -572,3 +636,31 @@ class RiderProfile(models.Model):
             for seconds, name in CURVE_DURATIONS
             if seconds in wkg or seconds in watts
         ]
+
+
+def velo2_women_by_zwid(riders: Iterable[tuple[int | None, str | None]]) -> dict[int, dict]:
+    """Look up the women's vELO 2 categories of the women among some riders, in one query.
+
+    For the pages that do not otherwise load the riders' profiles. A rider whose gender is
+    given and is not a woman's is never looked up; a blank one is left to the profile's, as
+    :meth:`RiderProfile.velo2_women` does.
+
+    Args:
+        riders: ``(zwid, gender)`` pairs -- the gender each page already shows, else the
+            member's own; a blank zwid is skipped.
+
+    Returns:
+        ``{zwid: RiderProfile.velo2_women}`` for each rider it applies to.
+
+    """
+    wanted = {
+        zwid: gender or "" for zwid, gender in riders if zwid and (is_woman(gender) or not (gender or "").strip())
+    }
+    if not wanted:
+        return {}
+    found: dict[int, dict] = {}
+    for profile in RiderProfile.objects.filter(zwid__in=wanted).only("zwid", "gender", "payload"):
+        women = profile.velo2_women(wanted[profile.zwid])
+        if women:
+            found[profile.zwid] = women
+    return found

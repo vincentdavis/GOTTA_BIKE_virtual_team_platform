@@ -655,6 +655,10 @@ ZWIFTRACING = {
         "category": "Amethyst",
         "category_max30": "Amethyst",
         "category_max90": "Sapphire",
+        # Sent for every rider; the card shows them for a woman only, which this rider is not.
+        "category_women": "Emerald",
+        "category_women_max30": "Emerald",
+        "category_women_max90": "Ruby",
         "factors": {"sprint": 452.0, "punch": 440.5, "climb": 401.0, "timeTrial": 415, "endurance": 398.0},
     },
     "seed": {"race": 421.0, "timeTrial": 380.6, "factors": {"sprint": 460, "timeTrial": 401}},
@@ -689,6 +693,37 @@ def test_velo_2_has_its_own_section(client, full_profile, rider, team_member):
     factors = body[body.index('aria-label="vELO 2 factors"') :]
     factors = _text(factors[factors.index(">") + 1 : factors.index("</div>")])
     assert factors == "Sprint 452 Punch 441 Climb 401 TT 415 Endurance 398"  # no pursuit: zwiftracing sent none
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("member_gender", "zauth_gender"), [("female", ""), ("", "F")])
+def test_a_womans_velo_2_rows_carry_her_womens_categories(
+    client, full_profile, rider, team_member, member_gender, zauth_gender
+):
+    """Her own answer decides; a blank one is left to zauth's."""
+    rider.gender = member_gender
+    rider.save(update_fields=["gender"])
+    full_profile.gender = zauth_gender
+    full_profile.save(update_fields=["gender"])
+
+    body = _body(client, team_member, rider)
+
+    assert _row(body, "vELO 2") == "vELO 2 430 · Amethyst · Emerald (W) women's category"
+    assert _row(body, "vELO 2 30-day peak") == "vELO 2 30-day peak 450 · Amethyst · Emerald (W) women's category"
+    assert _row(body, "vELO 2 90-day peak") == "vELO 2 90-day peak 470 · Sapphire · Ruby (W) women's category"
+
+
+@pytest.mark.django_db
+def test_a_man_who_zauth_calls_a_woman_keeps_the_open_categories(client, full_profile, rider, team_member):
+    """The member's own answer wins over zauth's."""
+    rider.gender = "male"
+    rider.save(update_fields=["gender"])
+    full_profile.gender = "F"
+    full_profile.save(update_fields=["gender"])
+
+    body = _body(client, team_member, rider)
+
+    assert _row(body, "vELO 2") == "vELO 2 430 · Amethyst"
 
 
 @pytest.mark.django_db

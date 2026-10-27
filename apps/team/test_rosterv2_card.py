@@ -98,7 +98,8 @@ def test_a_missing_figure_is_an_em_dash(auth_client, roster_rider):
 
     body = auth_client.get(reverse("team:roster")).content.decode()
 
-    assert _text_of(_card_for(body, "Ada Racer")).count("—") == 3
+    # vELO, FTP and 20 min, and vELO 2, which the factory's rider has no block for.
+    assert _text_of(_card_for(body, "Ada Racer")).count("—") == 4
 
 
 @pytest.mark.django_db
@@ -108,7 +109,7 @@ def test_a_real_zero_is_printed_as_zero_not_as_missing(auth_client, roster_rider
     `|default_if_none` cannot fix it either: floatformat turns None into "", so the default
     never fires and the em dash never appears at all. Both bugs are silent.
     """
-    roster_rider(zwid=4242, name="Zero Rider", velo=0.0, ftp=0.0, wkg_20min=0.0)
+    roster_rider(zwid=4242, name="Zero Rider", velo=0.0, ftp=0.0, wkg_20min=0.0, velo2={"race": 0.0})
 
     body = auth_client.get(reverse("team:roster")).content.decode()
     card = _text_of(_card_for(body, "Zero Rider"))
@@ -116,6 +117,7 @@ def test_a_real_zero_is_printed_as_zero_not_as_missing(auth_client, roster_rider
     assert "—" not in card
     assert "0 W" in card
     assert "0.0 w/kg" in card
+    assert "vELO 2 0" in card
 
 
 @pytest.mark.django_db
@@ -796,3 +798,33 @@ def test_a_rider_with_no_account_still_shows_their_zwift_id(auth_client, roster_
     card = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Scouted Rider"))
 
     assert "ZWID 8675309" in card
+
+
+@pytest.mark.django_db
+def test_a_card_shows_velo_2_in_a_tile_of_its_own(auth_client, roster_rider):
+    """Another scale from vELO, so its own tile; the factory's rider is a man, so no women's category."""
+    roster_rider(
+        zwid=4242, name="Ada Racer", velo2={"race": 430.4, "category": "Amethyst", "category_women": "Emerald"}
+    )
+
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
+
+    assert "vELO 2 430 · Amethyst" in _text_of(card)
+    assert "Emerald" not in card
+
+
+@pytest.mark.django_db
+def test_a_womans_card_carries_her_velo_2_womens_category_beside_the_zr_one(auth_client, roster_rider):
+    roster_rider(
+        zwid=4242,
+        name="Ada Racer",
+        gender="F",
+        category_racing="Ruby",
+        velo2={"race": 430.4, "category": "Amethyst", "category_women": "Emerald"},
+    )
+
+    text = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
+
+    # No icons uploaded here, so both are the worded badges: vELO 1's mixed, then hers.
+    assert text.index("ZR Ruby") < text.index("vELO 2 Women's Emerald")
+    assert "vELO 2 430 · Amethyst" in text  # the tile keeps the open category

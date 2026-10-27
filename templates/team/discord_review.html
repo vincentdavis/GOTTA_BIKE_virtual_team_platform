@@ -362,7 +362,7 @@
                   </td>
                   <td>
                     {% if member.user %}
-                      {% include "accounts/_user_tooltip.html" with display_name=member.tooltip_display_name user_id=member.tooltip_user_id discord_id=member.tooltip_discord_id discord_avatar_url=member.tooltip_discord_avatar_url zwid=member.tooltip_zwid zp_category=member.tooltip_zp_category zp_category_w=member.tooltip_zp_category_w zr_category=member.tooltip_zr_category zr_rating=member.tooltip_zr_rating zr_phenotype=member.tooltip_zr_phenotype is_race_ready=member.tooltip_is_race_ready is_extra_verified=member.tooltip_is_extra_verified in_zwiftpower=member.tooltip_in_zwiftpower in_zwiftracing=member.tooltip_in_zwiftracing %}
+                      {% include "accounts/_user_tooltip.html" with display_name=member.tooltip_display_name user_id=member.tooltip_user_id discord_id=member.tooltip_discord_id discord_avatar_url=member.tooltip_discord_avatar_url zwid=member.tooltip_zwid zp_category=member.tooltip_zp_category zp_category_w=member.tooltip_zp_category_w zr_category=member.tooltip_zr_category zr_v2_w=member.tooltip_zr_v2_women_category zr_rating=member.tooltip_zr_rating zr_phenotype=member.tooltip_zr_phenotype is_race_ready=member.tooltip_is_race_ready is_extra_verified=member.tooltip_is_extra_verified in_zwiftpower=member.tooltip_in_zwiftpower in_zwiftracing=member.tooltip_in_zwiftracing %}
                     {% else %}
                       <span class="badge badge-ghost badge-sm">None</span>
                     {% endif %}

@@ -74,7 +74,7 @@
     {% endcomment %}
     {% site_icon_url "kit" row.account.kit_status as site_kit_icon %}
     {% firstof row.account.kit_icon_url site_kit_icon "" as kit_icon %}
-    {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.phenotype or row.card.age_bracket or kit_icon or row.card.country %}
+    {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.velo2_category_women or row.card.phenotype or row.card.age_bracket or kit_icon or row.card.country %}
       {# Every tag says in words what it is. Colour alone would carry the meaning otherwise. #}
       {% comment %}
         Where an icon is uploaded it stands alone -- no badge, no word. The word is carried
@@ -126,6 +126,23 @@
             </li>
           {% else %}
             <li class="badge badge-sm badge-outline">ZR {{ row.card.category_racing }}</li>
+          {% endif %}
+        {% endif %}
+        {% comment %}
+          A woman's vELO 2 women's category, beside the ZR one -- which is vELO 1's MIXED
+          category, a different rating, hence the words in the alt. zwiftracing sends one for
+          every rider; rosterv2 keeps it only for a rider the card shows as a woman. Same
+          artwork and pink ring as the women's Zwift category above, for the same reason.
+        {% endcomment %}
+        {% if row.card.velo2_category_women %}
+          {% site_icon_url "zr" row.card.velo2_category_women as zrw_icon %}
+          {% if zrw_icon %}
+            <li class="tooltip" data-tip="vELO 2 women's category {{ row.card.velo2_category_women }}">
+              <img src="{{ zrw_icon }}" alt="vELO 2 women's category {{ row.card.velo2_category_women }}"
+                   class="h-[2em] w-[2em] rounded-full ring-2 ring-pink-400">
+            </li>
+          {% else %}
+            <li class="badge badge-sm badge-outline">vELO 2 Women's {{ row.card.velo2_category_women }}</li>
           {% endif %}
         {% endif %}
         {% if row.card.phenotype %}
@@ -222,6 +239,16 @@
         {% if row.card.podiums_recent %}
           <dd class="text-xs text-base-content/70 tabular-nums">{{ row.card.podiums_recent }} podium{{ row.card.podiums_recent|pluralize }}</dd>
         {% endif %}
+      </div>
+      {% comment %}
+        vELO 2 is a different scale from vELO (650 in one beside 1,600 in the other), so it
+        has a tile of its own rather than a line in the vELO tile. Full width, so the two by
+        two above keeps its shape. Its category is the OPEN one; a woman's women's category
+        is up in the category row, beside the ZR one.
+      {% endcomment %}
+      <div class="col-span-2 rounded border border-base-300 px-1 py-2">
+        <dt class="text-xs text-base-content/70">vELO 2</dt>
+        <dd class="font-semibold tabular-nums">{% if row.card.velo2 is not None %}{{ row.card.velo2|floatformat:0 }}{% if row.card.velo2_category %}<span class="text-xs font-normal"> · {{ row.card.velo2_category }}</span>{% endif %}{% else %}—{% endif %}</dd>
       </div>
     </dl>
 

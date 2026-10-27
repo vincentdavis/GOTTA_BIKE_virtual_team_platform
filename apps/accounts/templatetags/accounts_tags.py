@@ -397,6 +397,71 @@ def zr_category_badge(context, category):
 
 
 @register.simple_tag(takes_context=True)
+def zr_women_category_badge(context, category, plain=False):
+    """Render a woman's vELO 2 women's category, to sit beside a Zwift Racing category.
+
+    Callers pass it only for a woman (``RiderProfile.velo2_women``), so a blank renders
+    nothing rather than ``zr_category_badge``'s dash. It reuses the ZR category artwork with
+    the pink ring the roster card gives a women's category, plus a visible "W", so the ring
+    is never the only thing telling it from the ZR badge beside it. The accessible name
+    spells it out: the badge next to it is vELO 1's mixed category, not this one's open one.
+
+    Args:
+        context: Template context (for site_settings access).
+        category: The category name (e.g., "Emerald"), or blank.
+        plain: Always the worded badge, never the artwork -- for table cells whose own
+            category is a worded badge.
+
+    Returns:
+        HTML string for the category, or an empty string.
+
+    """
+    if not category:
+        return ""
+
+    from django.utils.html import escape
+
+    escaped_category = escape(category)
+    name = f"vELO 2 women's category {escaped_category}"
+
+    site_settings = None if plain else context.get("site_settings")
+    if site_settings:
+        field_name = ZR_CATEGORY_EMOJI_FIELDS.get(category)
+        if field_name:
+            emoji_file = getattr(site_settings, field_name, None)
+            if emoji_file:
+                return mark_safe(  # noqa: S308
+                    f'<span class="inline-flex items-center gap-0.5 whitespace-nowrap">'
+                    f'<img src="{escape(emoji_file.url)}" alt="{name}" title="{name}" '
+                    f'class="h-7 w-7 rounded-full ring-2 ring-pink-400">'
+                    f'<span class="text-xs font-semibold" aria-hidden="true">W</span></span>'
+                )
+
+    return mark_safe(  # noqa: S308
+        f'<span class="badge badge-neutral badge-sm whitespace-nowrap ring-2 ring-pink-400">'
+        f'<span class="sr-only">{name}</span> <span aria-hidden="true">W {escaped_category}</span></span>'
+    )
+
+
+@register.filter
+def velo2_women(profile, gender: str | None = None) -> dict | None:
+    """Return a profile's women's vELO 2 categories when the rider is a woman.
+
+    ``{% with women=rider_profile|velo2_women:profile_user.gender %}`` -- see
+    ``RiderProfile.velo2_women`` for who counts.
+
+    Args:
+        profile: A ``RiderProfile``, or None.
+        gender: The member's own gender; blank leaves it to the profile.
+
+    Returns:
+        ``category``, ``max30`` and ``max90``, or None.
+
+    """
+    return profile.velo2_women(gender) if profile else None
+
+
+@register.simple_tag(takes_context=True)
 def phenotype_icon(context, phenotype):
     """Render a phenotype as an emoji image if a custom icon is uploaded.
 

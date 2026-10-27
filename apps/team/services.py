@@ -17,6 +17,7 @@ from django.db.models import Count, F, Max, Min, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.accounts.models import GuildMember, User
+from apps.rider_data.models import velo2_women_by_zwid
 from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView
 from apps.zwiftpower.models import ZPRiderResults, ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -1826,6 +1827,10 @@ def squad_expiring_summary(user) -> dict:
     return {"squads": groups, "rider_count": len(riders)}
 
 
+# UnifiedRider.gender's letters, as the words a member's own gender is stored in.
+_GENDER_WORDS = {"F": "female", "M": "male"}
+
+
 @dataclass
 class UnifiedRider:
     """Unified rider data from all sources."""
@@ -1856,6 +1861,9 @@ class UnifiedRider:
     in_zwiftracing: bool = False
     zr_name: str = ""
     zr_category: str = ""
+    # vELO 2's women's category, for a rider this roster shows as a woman; shown beside
+    # zr_category, which is vELO 1's mixed one. From the rider's cached RiderProfile.
+    zr_v2_women_category: str = ""
     zr_date_left: datetime | None = None
     zr_rating: Decimal | None = None
     zr_phenotype: str = ""
@@ -2080,6 +2088,12 @@ def get_unified_team_roster() -> list[UnifiedRider]:
 
         unified.append(rider)
 
+    # zwiftracing sends every rider a women's vELO 2 category; it applies to the riders this
+    # roster shows as women, and to those it cannot say about, if their profile says so.
+    women = velo2_women_by_zwid((r.zwid, r.user_gender or _GENDER_WORDS.get(r.gender, "")) for r in unified)
+    for rider in unified:
+        rider.zr_v2_women_category = (women.get(rider.zwid) or {}).get("category") or ""
+
     # Sort by display name
     sorted_roster = sorted(unified, key=lambda r: r.display_name.lower())
 
@@ -2129,6 +2143,7 @@ class PerformanceRider:
     in_zwiftpower: bool = False
     in_zwiftracing: bool = False
     zr_category: str = ""
+    zr_v2_women_category: str = ""
     zr_rating: Decimal | None = None
     zr_phenotype: str = ""
     zr_age: str = ""
@@ -2274,6 +2289,7 @@ def get_performance_review_data() -> list[PerformanceRider]:
             "in_zwiftpower": r.in_zwiftpower,
             "in_zwiftracing": r.in_zwiftracing,
             "zr_category": r.zr_category,
+            "zr_v2_women_category": r.zr_v2_women_category,
             "zr_rating": r.zr_rating,
             "zr_phenotype": r.zr_phenotype,
         }
@@ -2385,6 +2401,7 @@ def get_performance_review_data() -> list[PerformanceRider]:
             in_zwiftpower=info["in_zwiftpower"],
             in_zwiftracing=info["in_zwiftracing"],
             zr_category=info["zr_category"],
+            zr_v2_women_category=info["zr_v2_women_category"],
             zr_rating=info["zr_rating"],
             zr_phenotype=info["zr_phenotype"],
         )

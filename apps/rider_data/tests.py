@@ -12,7 +12,7 @@ import pytest
 from constance.test import override_config
 from django.utils import timezone
 
-from apps.rider_data.models import RiderProfile
+from apps.rider_data.models import RiderProfile, is_woman, velo2_women_by_zwid
 from apps.rider_data.tasks import purge_rider_profiles
 from gotta_bike_platform.retention import RetentionPolicy, policy_for
 
@@ -116,6 +116,9 @@ def test_velo2_seed_and_race_counts_are_read_from_the_payload(profile_factory):
                 "category": "Amethyst",
                 "category_max30": "Amethyst",
                 "category_max90": "",  # zauth sends None; an empty name is no category either
+                "category_women": "Emerald",
+                "category_women_max30": "Emerald",
+                "category_women_max90": None,
                 "factors": {"sprint": 452, "punch": 440.5, "climb": None, "timeTrial": 415, "endurance": 398},
             },
             "seed": {"race": 420.0, "timeTrial": 380.5, "factors": {"sprint": 460, "timeTrial": 401}},
@@ -137,6 +140,10 @@ def test_velo2_seed_and_race_counts_are_read_from_the_payload(profile_factory):
         "category": "Amethyst",
         "category_max30": "Amethyst",
         "category_max90": None,
+        # Passed on as sent, for any rider: velo2_women decides when they apply.
+        "category_women": "Emerald",
+        "category_women_max30": "Emerald",
+        "category_women_max90": None,
     }
     seed = profile.seed_ratings
     assert (seed["race"], seed["time_trial"]) == pytest.approx((420.0, 380.5))  # the time-trial rating
@@ -299,3 +306,82 @@ def test_admin_shows_which_rows_eviction_would_reach(profile_factory):
     assert _filtered("fresh") == {1}
     assert _filtered("aging") == {2}
     assert _filtered("evictable") == {3}
+
+
+# --- the women's vELO 2 categories -----------------------------------------------------------
+
+WOMEN_VELO2 = {
+    "race": 430.0,
+    "category": "Amethyst",
+    "category_women": "Emerald",
+    "category_women_max30": "Emerald",
+    "category_women_max90": "Ruby",
+}
+
+
+@pytest.mark.parametrize(
+    ("genders", "expected"),
+    [
+        (("female",), True),
+        (("F",), True),
+        ((" Women ",), True),
+        (("male",), False),
+        (("other",), False),
+        (("", "F"), True),  # a blank member answer leaves it to zauth's
+        ((None, "female"), True),
+        (("male", "F"), False),  # the member's own answer wins
+        (("", ""), False),
+        ((), False),
+    ],
+)
+def test_is_woman_reads_the_first_gender_that_says_anything(genders, expected):
+    assert is_woman(*genders) is expected
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("member_gender", "profile_gender", "applies"),
+    [
+        ("female", "male", True),
+        ("", "F", True),
+        ("male", "F", False),
+        ("", "M", False),
+        ("", "", False),
+    ],
+)
+def test_the_womens_velo2_categories_apply_only_to_women(profile_factory, member_gender, profile_gender, applies):
+    """Every rider gets a women's category from zwiftracing beside the open one; only a woman's is shown."""
+    profile = profile_factory(gender=profile_gender, payload={"velo2": WOMEN_VELO2})
+
+    expected = {"category": "Emerald", "max30": "Emerald", "max90": "Ruby"} if applies else None
+    assert profile.velo2_women(member_gender) == expected
+
+
+@pytest.mark.django_db
+def test_a_woman_without_womens_categories_gets_none(profile_factory):
+    """A payload stored before zauth sent them, or a rider zwiftracing has none for."""
+    profile = profile_factory(gender="F", payload={"velo2": {"race": 430.0, "category": "Amethyst"}})
+
+    assert profile.velo2_women() is None
+    assert profile_factory(zwid=1002, gender="F", payload={}).velo2_women() is None
+
+
+@pytest.mark.django_db
+def test_the_bulk_lookup_reads_only_the_women_in_one_query(profile_factory, django_assert_num_queries):
+    profile_factory(zwid=1, gender="F", payload={"velo2": WOMEN_VELO2})
+    profile_factory(zwid=2, gender="M", payload={"velo2": WOMEN_VELO2})
+    profile_factory(zwid=3, gender="", payload={"velo2": WOMEN_VELO2})
+
+    with django_assert_num_queries(1):
+        found = velo2_women_by_zwid([(1, ""), (2, "female"), (3, "male"), (None, "female"), (4, "female")])
+
+    # 1: no member answer, and zauth says F. 2: the member says female, which overrules zauth's M.
+    # 3: the member says male, so the row is not even read. 4: no profile at all.
+    assert set(found) == {1, 2}
+    assert found[1] == {"category": "Emerald", "max30": "Emerald", "max90": "Ruby"}
+
+
+@pytest.mark.django_db
+def test_the_bulk_lookup_asks_nothing_when_nobody_could_be_a_woman(django_assert_num_queries):
+    with django_assert_num_queries(0):
+        assert velo2_women_by_zwid([(1, "male"), (None, "female")]) == {}

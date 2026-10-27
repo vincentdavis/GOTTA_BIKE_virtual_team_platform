@@ -151,7 +151,7 @@
               <div class="cell-lane{% if entry %} cell-name{% endif %}">
                 {% if entry %}
                 {% if entry.racing %}<span class="cell-racing" role="img" aria-label="Racing {{ entry.racing }}" title="Racing {{ entry.racing }}">🏁</span>{% endif %}
-                {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=None zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=None zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2_w=entry.zr_v2_women_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                 {% endif %}
               </div>
               {% endfor %}
@@ -264,7 +264,7 @@
           {% for entry in enriched_responders %}
           <tr>
             <td>
-              {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+              {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2_w=entry.zr_v2_women_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
             </td>
             {% if grid.max_races_question %}
             <td class="text-center font-mono">{% if entry.max_races is not None %}{{ entry.max_races }}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
@@ -287,7 +287,7 @@
     <h3 class="text-sm font-semibold mb-2">Waiting Response ({{ enriched_non_responders|length }})</h3>
     <div class="flex flex-wrap gap-2">
       {% for entry in enriched_non_responders %}
-      {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+      {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2_w=entry.zr_v2_women_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
       {% endfor %}
     </div>
   </div>
@@ -953,11 +953,31 @@
       if (!u) return null;
       const label = document.createElement('label');
       label.className = 'flex items-center gap-2 cursor-pointer text-sm py-0.5';
-      let extra = '';
-      if (u.zr_category) extra += ' <span class="badge badge-xs badge-outline">' + u.zr_category + '</span>';
-      if (u.zr_rating) extra += ' <span class="text-xs text-base-content/50">' + u.zr_rating + '</span>';
-      if (note) extra += ' <span class="text-xs text-warning">' + note + '</span>';
-      label.innerHTML = '<input type="checkbox" name="' + inputName + '" value="' + uid + '" class="checkbox checkbox-xs ' + cssClass + '"' + (checked ? ' checked' : '') + '> ' + u.display_name + extra;
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.name = inputName;
+      input.value = uid;
+      input.className = 'checkbox checkbox-xs ' + cssClass;
+      input.defaultChecked = checked;
+      // The name and categories are rider data, so they go in as text, never as HTML.
+      const span = function(className, text) {
+        const el = document.createElement('span');
+        el.className = className;
+        el.textContent = text;
+        return el;
+      };
+      label.append(input, ' ' + u.display_name);
+      if (u.zr_category) label.append(span('badge badge-xs badge-outline', u.zr_category));
+      if (u.zr_v2_women_category) {
+        // A woman's vELO 2 women's category, beside the mixed ZR one (as the popover shows it).
+        const women = span('badge badge-xs badge-neutral whitespace-nowrap ring-1 ring-pink-400', '');
+        const shown = span('', 'W ' + u.zr_v2_women_category);
+        shown.setAttribute('aria-hidden', 'true');
+        women.append(span('sr-only', "vELO 2 women's category " + u.zr_v2_women_category), shown);
+        label.append(women);
+      }
+      if (u.zr_rating) label.append(span('text-xs text-base-content/50', u.zr_rating));
+      if (note) label.append(span('text-xs text-warning', note));
       return label;
     };
 

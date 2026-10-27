@@ -377,7 +377,7 @@
                       <tr>
                         <td data-col="sq_name">
                           {% if member.user.pk in squad.captain_pks %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif member.user.pk in squad.vice_captain_pks %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
-                          {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_id=member.user.discord_id discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready is_extra_verified=member.is_extra_verified in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
+                          {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_id=member.user.discord_id discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_v2_w=member.zr_v2_women_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready is_extra_verified=member.is_extra_verified in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
                         </td>
                         <td data-col="sq_gender">
                           {% if member.gender == "male" %}
@@ -465,6 +465,7 @@
                         <td data-col="sq_zr_cur_cat" style="display:none">
                           {% if member.zr_current_category %}<span class="badge badge-sm">{{ member.zr_current_category }}</span>
                           {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                          {% zr_women_category_badge member.zr_v2_women_category plain=True %}
                         </td>
                         <td data-col="sq_zr_max30_rating" style="display:none">
                           {% if member.zr_max30_rating %}<span class="font-mono text-sm">{{ member.zr_max30_rating }}</span>
@@ -473,6 +474,7 @@
                         <td data-col="sq_zr_max30_cat" style="display:none">
                           {% if member.zr_max30_category %}<span class="badge badge-sm">{{ member.zr_max30_category }}</span>
                           {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                          {% zr_women_category_badge member.zr_v2_women_max30_category plain=True %}
                         </td>
                         <td data-col="sq_zr_max90_rating" style="display:none">
                           {% if member.zr_max90_rating %}<span class="font-mono text-sm">{{ member.zr_max90_rating }}</span>
@@ -481,6 +483,7 @@
                         <td data-col="sq_zr_max90_cat" style="display:none">
                           {% if member.zr_max90_category %}<span class="badge badge-sm">{{ member.zr_max90_category }}</span>
                           {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                          {% zr_women_category_badge member.zr_v2_women_max90_category plain=True %}
                         </td>
                         <td data-col="sq_zr_phenotype" style="display:none">
                           {% if member.zr_phenotype %}<span class="text-sm">{{ member.zr_phenotype }}</span>
@@ -645,7 +648,7 @@
               {% with withdrawn=entry.signup.is_withdrawn %}
               <tr data-signup-pk="{{ entry.signup.pk }}" data-name="{{ entry.user.get_full_name|default:entry.user.discord_username }}"{% if withdrawn %} data-signup-withdrawn class="opacity-60"{% endif %}>
                 <td data-col="name" data-sort-value="{{ entry.user.get_full_name|default:entry.user.discord_username }}">
-                  {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                  {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2_w=entry.zr_v2_women_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                   {% if withdrawn %}<span class="badge badge-ghost badge-sm ml-1 whitespace-nowrap">Withdrawn</span>{% endif %}
                   {% if answer_facets %}<div class="md:hidden text-xs text-base-content/60 mt-1 max-w-48 empty:hidden" data-answer-focus></div>{% endif %}
                 </td>
@@ -788,6 +791,7 @@
                 <td data-col="zr_cur_cat" style="display:none">
                   {% if entry.zr_current_category %}<span class="badge badge-sm">{{ entry.zr_current_category }}</span>
                   {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                  {% zr_women_category_badge entry.zr_v2_women_category plain=True %}
                 </td>
                 <td data-col="zr_max30_rating" style="display:none">
                   {% if entry.zr_max30_rating %}<span class="font-mono text-sm">{{ entry.zr_max30_rating }}</span>
@@ -796,6 +800,7 @@
                 <td data-col="zr_max30_cat" style="display:none">
                   {% if entry.zr_max30_category %}<span class="badge badge-sm">{{ entry.zr_max30_category }}</span>
                   {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                  {% zr_women_category_badge entry.zr_v2_women_max30_category plain=True %}
                 </td>
                 <td data-col="zr_max90_rating" style="display:none">
                   {% if entry.zr_max90_rating %}<span class="font-mono text-sm">{{ entry.zr_max90_rating }}</span>
@@ -804,6 +809,7 @@
                 <td data-col="zr_max90_cat" style="display:none">
                   {% if entry.zr_max90_category %}<span class="badge badge-sm">{{ entry.zr_max90_category }}</span>
                   {% else %}<span class="text-base-content/30">-</span>{% endif %}
+                  {% zr_women_category_badge entry.zr_v2_women_max90_category plain=True %}
                 </td>
                 <td data-col="zr_phenotype" style="display:none">
                   {% if entry.zr_phenotype %}<span class="text-sm">{{ entry.zr_phenotype }}</span>
@@ -885,7 +891,7 @@
       <div class="mt-2 flex flex-wrap gap-2">
         {% for entry in signups %}
         <div class="badge badge-ghost badge-lg gap-1 py-3">
-          {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+          {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2_w=entry.zr_v2_women_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
         </div>
         {% endfor %}
       </div>

@@ -54,7 +54,7 @@ from django_countries.fields import Country
 
 from apps.accounts.models import GuildMember, User
 from apps.accounts.utils import resolve_country
-from apps.rider_data.models import RiderProfile
+from apps.rider_data.models import WOMEN_GENDERS, RiderProfile, is_woman
 from apps.rider_data.services import zwids_to_refresh
 from apps.team.kits import current_kit
 
@@ -204,7 +204,7 @@ CATEGORY_ORDER = ("A+", "A", "B", "C", "D", "E")
 # Upstream says "M"/"F"; zauth has passed through "male"/"female" as well. Both are read,
 # and ANYTHING else is unknown -- never quietly counted as men, which is what the roster
 # this replaces does in four separate places.
-_WOMEN = frozenset({"f", "female", "w", "women"})
+_WOMEN = WOMEN_GENDERS
 _MEN = frozenset({"m", "male", "men"})
 
 # Coarse on purpose. Fine-grained power steps narrow the weight recoverable from
@@ -260,6 +260,12 @@ class RiderCard:
         wkg_1min: One-minute watts per kilo, as reported.
         last_race_at: Derived upstream from race results; stale for riders zauth has not
             re-fetched, which is why the 30-day counts come from ZwiftPower in a later step.
+        velo2: zwiftracing's vELO 2 race rating -- a different scale from ``velo``, so it
+            gets its own tile and is never set beside it as if comparable.
+        velo2_category: vELO 2's open category for that rating.
+        velo2_category_women: vELO 2's women's category, for a rider the card shows as a
+            woman and blank for anyone else: zwiftracing sends one for every rider. Shown
+            beside ``category_racing``, which is vELO 1's mixed category.
 
     """
 
@@ -274,6 +280,9 @@ class RiderCard:
     phenotype: str = ""
     velo: float | None = None
     velo_max90: float | None = None
+    velo2: float | None = None
+    velo2_category: str = ""
+    velo2_category_women: str = ""
     zwift_racing_score: float | None = None
     zp_skill: float | None = None
     compound_score: float | None = None
@@ -459,6 +468,19 @@ def _number(value: object) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
+def _text(value: object) -> str:
+    """Read a payload string, treating anything else as absent.
+
+    Args:
+        value: The raw value.
+
+    Returns:
+        The string, or "".
+
+    """
+    return value if isinstance(value, str) else ""
+
+
 def _block(payload: dict, *path: str) -> dict:
     """Walk into a payload by key, tolerating missing or wrongly-typed levels.
 
@@ -518,6 +540,7 @@ def _card(row: dict, payload: dict, record: RaceRecord | None = None) -> RiderCa
     record = record or RaceRecord()
     totals = _block(payload, "totals")
     metres = _number(totals.get("distance_km"))  # MISNAMED upstream: the value is metres.
+    velo2 = _block(payload, "velo2")
 
     return RiderCard(
         zwid=row["zwid"],
@@ -532,6 +555,10 @@ def _card(row: dict, payload: dict, record: RaceRecord | None = None) -> RiderCa
         phenotype=row["phenotype_value"] or "",
         velo=row["velo"],
         velo_max90=_number(_block(payload, "ratings").get("rating_max90")),
+        velo2=_number(velo2.get("race")),
+        velo2_category=_text(velo2.get("category")),
+        # zwiftracing sends a women's category for everyone; it applies to women only.
+        velo2_category_women=_text(velo2.get("category_women")) if is_woman(row["gender"]) else "",
         zwift_racing_score=row["zwift_racing_score"],
         zp_skill=row["zp_skill"],
         compound_score=row["compound_score"],

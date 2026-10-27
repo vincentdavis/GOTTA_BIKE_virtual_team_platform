@@ -712,7 +712,7 @@ def _enrich_squad_members(event):
             "z_map": user.z_map,
             "z_ftp_wkg": user.z_ftp_wkg,
             "z_map_wkg": user.z_map_wkg,
-            **rider_stats.zr_fields(profiles.get(zwid)),
+            **rider_stats.zr_fields(profiles.get(zwid), gender=user.gender),
             "has_discord_role": has_discord_role,
             "has_captain_role": has_captain_role,
         }
@@ -966,7 +966,7 @@ def _enrich_signups(signups, event=None):
             "z_map": user.z_map,
             "z_ftp_wkg": user.z_ftp_wkg,
             "z_map_wkg": user.z_map_wkg,
-            **rider_stats.zr_fields(profile),
+            **rider_stats.zr_fields(profile, gender=user.gender),
             "rider_profile": profile,
             "assigned_squads": user_squads,
             "role_badges": role_badges,
@@ -1071,7 +1071,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
     def _enrich(user: User) -> dict:
         zwid = user.zwid
         zp = zp_by_zwid.get(zwid) if zwid else None
-        zr = rider_stats.zr_fields(profiles.get(zwid) if zwid else None)
+        zr = rider_stats.zr_fields(profiles.get(zwid) if zwid else None, gender=user.gender)
         return {
             "user": user,
             "zwid": zwid,
@@ -1080,7 +1080,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             "in_zwiftpower": zp is not None,
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
-            **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_age", "zr_phenotype")},
+            **{key: zr[key] for key in rider_stats.TOOLTIP_FIELDS},
         }
 
     enriched_by_user_id = {pk: _enrich(u) for pk, u in users_for_lookup.items()}
@@ -2445,7 +2445,7 @@ def _build_scheduled_race_slots(
     def _enrich(user: User) -> dict:
         zwid = user.zwid
         zp = zp_by_zwid.get(zwid) if zwid else None
-        zr = rider_stats.zr_fields(profiles.get(zwid) if zwid else None)
+        zr = rider_stats.zr_fields(profiles.get(zwid) if zwid else None, gender=user.gender)
         return {
             "user": user,
             "zwid": zwid,
@@ -2454,7 +2454,7 @@ def _build_scheduled_race_slots(
             "in_zwiftpower": zp is not None,
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
-            **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_age", "zr_phenotype")},
+            **{key: zr[key] for key in rider_stats.TOOLTIP_FIELDS},
         }
 
     enriched_by_user_id = {pk: _enrich(u) for pk, u in users_for_lookup.items()}
@@ -5906,7 +5906,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     response_by_user: dict[int, AvailabilityResponse] = {r.user.pk: r for r in responses}
     for user in responder_users:
         zp = zp_by_zwid.get(user.zwid)
-        zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None)
+        zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None, gender=user.gender)
         display_name = user.get_full_name() or user.discord_username
         zp_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
         zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
@@ -5926,6 +5926,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "zp_category_w": zp_cat_w,
             "in_zwiftracing": zr["in_zwiftracing"],
             "zr_category": zr_cat,
+            "zr_v2_women_category": zr["zr_v2_women_category"],
             "zr_rating": zr_rating,
             "zr_phenotype": zr_phenotype,
             "zr_age": zr_age,
@@ -5938,7 +5939,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     enriched_non_responders = []
     for user in non_responder_users:
         zp = zp_by_zwid.get(user.zwid)
-        zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None)
+        zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None, gender=user.gender)
         enriched_non_responders.append({
             "user": user,
             "display_name": user.get_full_name() or user.discord_username,
@@ -5948,7 +5949,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "in_zwiftpower": zp is not None,
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
-            **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_phenotype", "zr_age")},
+            **{key: zr[key] for key in rider_stats.TOOLTIP_FIELDS},
         })
 
     # Aggregate user IDs keyed by UTC cell
@@ -6072,6 +6073,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         user_data_json[uid] = {
             "display_name": entry["display_name"],
             "zr_category": entry["zr_category"],
+            "zr_v2_women_category": entry["zr_v2_women_category"],
             "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
             "is_race_ready": entry["is_race_ready"],
         }
@@ -6088,11 +6090,12 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         extra_zwids = [u.zwid for u in missing_roster if u.zwid]
         extra_profiles = rider_stats.profiles_by_zwid(extra_zwids)
         for user in missing_roster:
-            zr = rider_stats.zr_fields(extra_profiles.get(user.zwid) if user.zwid else None)
+            zr = rider_stats.zr_fields(extra_profiles.get(user.zwid) if user.zwid else None, gender=user.gender)
             rating = zr["zr_rating"]
             user_data_json[user.pk] = {
                 "display_name": user.get_full_name() or user.discord_username,
                 "zr_category": zr["zr_category"],
+                "zr_v2_women_category": zr["zr_v2_women_category"],
                 "zr_rating": float(rating) if rating is not None else None,
                 "is_race_ready": user.is_race_ready,
             }
@@ -6122,7 +6125,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         enriched_sel_users = []
         for user in sel.selected_users.all():
             zp = zp_by_zwid.get(user.zwid)
-            zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None)
+            zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None, gender=user.gender)
             zp_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
             zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
             enriched_sel_users.append({
@@ -6134,7 +6137,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
                 "in_zwiftpower": zp is not None,
                 "zp_category": zp_cat,
                 "zp_category_w": zp_cat_w,
-                **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_phenotype", "zr_age")},
+                **{key: zr[key] for key in rider_stats.TOOLTIP_FIELDS},
             })
         utc_dt = datetime.combine(
             sel.slot_date,
@@ -8321,7 +8324,7 @@ def _render_slot_selections_partial(
         enriched_users = []
         for user in sel.selected_users.all():
             zp = zp_by_zwid.get(user.zwid)
-            zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None)
+            zr = rider_stats.zr_fields(profiles.get(user.zwid) if user.zwid else None, gender=user.gender)
             zp_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
             zp_cat_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
             enriched_users.append({
@@ -8333,7 +8336,7 @@ def _render_slot_selections_partial(
                 "in_zwiftpower": zp is not None,
                 "zp_category": zp_cat,
                 "zp_category_w": zp_cat_w,
-                **{key: zr[key] for key in ("in_zwiftracing", "zr_category", "zr_rating", "zr_phenotype", "zr_age")},
+                **{key: zr[key] for key in rider_stats.TOOLTIP_FIELDS},
             })
         # Convert slot time to display timezone
         from datetime import datetime as dt

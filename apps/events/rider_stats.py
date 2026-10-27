@@ -5,8 +5,11 @@ The rider tables on the event pages take their Zwift Racing figures from
 ``zr_*`` keys the templates have always read (:func:`zr_fields`), and the extra columns
 the signups table offers (:data:`STAT_GROUPS`). Those extra columns travel as compact JSON
 (:func:`stat_rows`) that the page turns into cells, rather than as cells hidden in every
-row: there are 50 of them, and a big event would carry hundreds of kilobytes of markup
+row: there are 53 of them, and a big event would carry hundreds of kilobytes of markup
 nobody had asked to see.
+
+zwiftracing gives every rider a women's vELO 2 category beside the open one; the pages show
+it only for women (``RiderProfile.velo2_women``), beside each Zwift Racing category.
 
 Squad eligibility still reads the zwiftracing table (``views._rider_categories``): moving
 the rule that decides who may join a squad is a separate decision.
@@ -42,14 +45,17 @@ def _whole(value: float | None) -> int | None:
     return round(value) if value is not None else None
 
 
-def zr_fields(profile: RiderProfile | None) -> dict:
+def zr_fields(profile: RiderProfile | None, gender: str | None = None) -> dict:
     """Return the ``zr_*`` keys the event templates read, from a rider's profile.
 
     Ratings are whole numbers, as zwiftracing shows them. ``in_zwiftracing`` says whether
-    zauth holds a Zwift Racing record for the rider.
+    zauth holds a Zwift Racing record for the rider. The ``zr_v2_women_*`` keys are the
+    women's vELO 2 categories, filled only for a woman -- shown beside the categories above,
+    which are vELO 1's mixed ones.
 
     Args:
         profile: The rider's cached profile, or None.
+        gender: The member's own gender (``User.gender``); blank leaves it to the profile.
 
     Returns:
         The keys, blank without a profile.
@@ -59,6 +65,9 @@ def zr_fields(profile: RiderProfile | None) -> dict:
         return {
             "in_zwiftracing": False,
             "zr_category": "",
+            "zr_v2_women_category": "",
+            "zr_v2_women_max30_category": "",
+            "zr_v2_women_max90_category": "",
             "zr_rating": None,
             "zr_age": "",
             "zr_current_rating": None,
@@ -71,10 +80,14 @@ def zr_fields(profile: RiderProfile | None) -> dict:
         }
     peaks = profile.peak_ratings or {}
     categories = profile.peak_categories or {}
+    women = profile.velo2_women(gender) or {}
     rating = _whole(profile.velo)
     return {
         "in_zwiftracing": bool((profile.has_account or {}).get("zwiftracing")),
         "zr_category": profile.category_racing,
+        "zr_v2_women_category": women.get("category") or "",
+        "zr_v2_women_max30_category": women.get("max30") or "",
+        "zr_v2_women_max90_category": women.get("max90") or "",
         "zr_rating": rating,
         "zr_age": profile.age,
         "zr_current_rating": rating,
@@ -85,6 +98,10 @@ def zr_fields(profile: RiderProfile | None) -> dict:
         "zr_max90_category": categories.get("max90", ""),
         "zr_phenotype": profile.phenotype_value,
     }
+
+
+# The keys of zr_fields that the rider popover (accounts/_user_tooltip.html) is given.
+TOOLTIP_FIELDS = ("in_zwiftracing", "zr_category", "zr_v2_women_category", "zr_rating", "zr_age", "zr_phenotype")
 
 
 # --- the extra columns on the signups table --------------------------------------------------
@@ -113,8 +130,9 @@ class StatGroup:
 class _Blocks:
     """A profile's blocks, each read once however many columns use it."""
 
-    def __init__(self, profile: RiderProfile) -> None:
+    def __init__(self, profile: RiderProfile, gender: str | None = None) -> None:
         self.velo2 = profile.velo2 or {}
+        self.velo2_women = profile.velo2_women(gender) or {}
         self.seed = profile.seed_ratings or {}
         self.phenotype = profile.phenotype_scores or {}
         self.handicaps = profile.handicaps or {}
@@ -163,6 +181,15 @@ STAT_GROUPS: tuple[StatGroup, ...] = (
         (
             StatColumn("zr_v2_race", "Race rating", "vELO 2", 0, _from("velo2", "race")),
             StatColumn("zr_v2_cat", "Category", "vELO 2 Cat", 0, _name_from("velo2", "category"), "category"),
+            # The women's categories are blank for anyone but a woman: see RiderProfile.velo2_women.
+            StatColumn(
+                "zr_v2_cat_w",
+                "Women's category",
+                "vELO 2 Cat (W)",
+                0,
+                _name_from("velo2_women", "category"),
+                "category",
+            ),
             StatColumn("zr_v2_max30", "30-day peak", "vELO 2 Max30", 0, _from("velo2", "max30")),
             StatColumn(
                 "zr_v2_max30_cat",
@@ -172,6 +199,14 @@ STAT_GROUPS: tuple[StatGroup, ...] = (
                 _name_from("velo2", "category_max30"),
                 "category",
             ),
+            StatColumn(
+                "zr_v2_max30_cat_w",
+                "30-day peak women's category",
+                "vELO 2 Max30 Cat (W)",
+                0,
+                _name_from("velo2_women", "max30"),
+                "category",
+            ),
             StatColumn("zr_v2_max90", "90-day peak", "vELO 2 Max90", 0, _from("velo2", "max90")),
             StatColumn(
                 "zr_v2_max90_cat",
@@ -179,6 +214,14 @@ STAT_GROUPS: tuple[StatGroup, ...] = (
                 "vELO 2 Max90 Cat",
                 0,
                 _name_from("velo2", "category_max90"),
+                "category",
+            ),
+            StatColumn(
+                "zr_v2_max90_cat_w",
+                "90-day peak women's category",
+                "vELO 2 Max90 Cat (W)",
+                0,
+                _name_from("velo2_women", "max90"),
                 "category",
             ),
             *(
@@ -273,17 +316,18 @@ def _display(value: float, decimals: int) -> str:
     return str(Decimal(repr(value)).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP))
 
 
-def stat_values(profile: RiderProfile) -> list[str]:
+def stat_values(profile: RiderProfile, gender: str | None = None) -> list[str]:
     """Return a rider's extra columns as the cells show them, in :data:`STAT_COLUMNS` order.
 
     Args:
         profile: The rider's cached profile.
+        gender: The member's own gender, which decides the women's categories.
 
     Returns:
         One string per column; empty where the profile has no value.
 
     """
-    blocks = _Blocks(profile)
+    blocks = _Blocks(profile, gender)
     values = []
     for column in STAT_COLUMNS:
         value = column.read(blocks)
@@ -307,7 +351,7 @@ def stat_rows(entries: Iterable[dict]) -> dict[str, list[str]]:
 
     """
     return {
-        str(entry["signup"].pk): stat_values(entry["rider_profile"])
+        str(entry["signup"].pk): stat_values(entry["rider_profile"], entry.get("gender"))
         for entry in entries
         if entry.get("rider_profile") is not None
     }

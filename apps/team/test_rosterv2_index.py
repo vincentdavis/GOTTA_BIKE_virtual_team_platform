@@ -51,6 +51,10 @@ EXPECTED_CARD_FIELDS = (
     "phenotype",
     "velo",
     "velo_max90",
+    # vELO 2 and its categories: racing ratings like velo, public on zwiftracing.app.
+    "velo2",
+    "velo2_category",
+    "velo2_category_women",
     "zwift_racing_score",
     "zp_skill",
     "compound_score",

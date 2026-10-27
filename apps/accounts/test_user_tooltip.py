@@ -16,6 +16,8 @@ import re
 from pathlib import Path
 
 import pytest
+from django.template import Context, Template
+from django.template.loader import render_to_string
 from django.urls import reverse
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
@@ -109,3 +111,56 @@ def test_rendered_card_carries_the_hook():
     assert _MARKUP_MARKER in html
     unhooked = re.findall(r'class="dropdown dropdown-hover dropdown-bottom"(?! data-user-tooltip)', html)
     assert not unhooked, "a hover-card rendered without the hook the script looks for"
+
+
+# --- a woman's vELO 2 women's category, beside the ZR one ------------------------------------------
+
+
+def _render(source, **context):
+    return Template("{% load accounts_tags %}" + source).render(Context(context))
+
+
+def test_the_womens_category_badge_names_itself_in_full():
+    """The visible "W" is short; the accessible name says which rating and which field."""
+    badge = _render("{% zr_women_category_badge cat %}", cat="Emerald")
+
+    assert "<span class=\"sr-only\">vELO 2 women's category Emerald</span>" in badge
+    assert '<span aria-hidden="true">W Emerald</span>' in badge
+
+
+def test_the_womens_category_badge_is_empty_for_anyone_else():
+    """Callers pass a blank for anyone who is not a woman, and that must render nothing."""
+    assert _render("{% zr_women_category_badge cat %}", cat="").strip() == ""
+
+
+def test_the_womens_category_badge_escapes_the_name():
+    badge = _render("{% zr_women_category_badge cat %}", cat="<b>x</b>")
+
+    assert "<b>" not in badge
+    assert "&lt;b&gt;" in badge
+
+
+def test_the_popover_puts_a_womans_category_beside_the_zr_one():
+    popover = render_to_string(
+        "accounts/_user_tooltip.html",
+        {"display_name": "Ana", "in_zwiftracing": True, "zr_category": "Ruby", "zr_v2_w": "Emerald"},
+    )
+
+    assert popover.index("Ruby") < popover.index("vELO 2 women's category Emerald")
+    assert "vELO 2 Women's: <span" in popover
+
+
+def test_every_popover_given_a_zr_category_is_given_the_womens_one_too():
+    """A page showing a rider's ZR category shows a woman's vELO 2 women's category beside it.
+
+    The ladder planner is not scanned: its riders, ours and the opponents', come from
+    zwiftracing's club data, which carries vELO 1 ranks rather than our profiles.
+    """
+    missing = [
+        str(path.relative_to(_ROOT))
+        for path in (_ROOT / "templates").rglob("*.html")
+        for include in re.findall(r'\{% include "accounts/_user_tooltip\.html" with [^%]*%\}', path.read_text())
+        if "zr_category=" in include and "zr_v2_w=" not in include
+    ]
+
+    assert missing == []
