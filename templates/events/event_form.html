@@ -388,6 +388,41 @@
           </label>
         </div>
 
+        <!-- Availability: how squads ask their riders -->
+        <fieldset class="flex flex-col gap-2 mt-2">
+          <legend class="label-text font-medium mb-2">Availability</legend>
+          <div class="grid gap-3 sm:grid-cols-2">
+            {% for radio in form.availability_type %}
+            <label class="flex items-start gap-3 rounded-box border-2 border-base-300 bg-base-100 p-4 cursor-pointer has-checked:border-primary">
+              {{ radio.tag }}
+              <span class="flex flex-col gap-1">
+                <span class="font-semibold">{{ radio.choice_label }}</span>
+                <span class="text-sm text-base-content/80">
+                  {% if radio.data.value == "series" %}
+                  You list the stages. Each squad sets its own date and time for every stage, and riders answer
+                  Available, Maybe or No per stage.
+                  {% else %}
+                  Captains publish a date &times; time grid and riders mark every slot they can race. For ladders and
+                  leagues where the squad picks its own times.
+                  {% endif %}
+                </span>
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+          {% for error in form.availability_type.errors %}
+          <p class="rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>
+          {% endfor %}
+          <p class="text-xs text-base-content/80">Fixed once any squad publishes a sheet: a weekly answer can't be read as a stage answer.</p>
+          {% if event and event.is_race_series %}
+          <div>
+            <a href="{% url 'events:series_stages' event.pk %}" class="btn btn-sm btn-outline">Edit stages ({{ event.series_stages.count }})</a>
+          </div>
+          {% elif not event %}
+          <p class="text-xs text-base-content/80">For a race series, you add the stages right after creating the event.</p>
+          {% endif %}
+        </fieldset>
+
         <!-- ===== Discord Config ===== -->
         <div class="divider"></div>
         <h3 class="text-lg font-semibold">Discord Config</h3>

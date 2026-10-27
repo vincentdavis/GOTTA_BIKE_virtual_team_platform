@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Stages - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-ghost btn-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Back to Edit Event
+    </a>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body gap-4">
+      <div>
+        <h2 class="card-title text-2xl mb-1">Stages</h2>
+        <p class="text-base-content/70 text-sm">{{ event.title }}</p>
+      </div>
+      <p class="text-sm text-base-content/80 max-w-3xl">
+        Each squad sets its own date and time for every stage, and riders answer Available, Maybe or No per stage.
+        The window is a guide for captains: a date outside it gets a warning, not an error.
+      </p>
+
+      {% if not event.is_race_series %}
+      <div role="alert" class="alert">
+        <span>This event collects <strong>weekly availability</strong>, so squads don't see these stages. Switch it to
+          <strong>Race series</strong> under Availability on the <a href="{% url 'events:event_edit' event.pk %}" class="link">event's setup page</a>.</span>
+      </div>
+      {% endif %}
+
+      <form method="post" id="stages-form" class="flex flex-col gap-4">
+        {% csrf_token %}
+        {{ formset.management_form }}
+
+        {% if formset.non_form_errors %}
+        <div role="alert" class="alert alert-error">
+          <div>{% for error in formset.non_form_errors %}<p>{{ error }}</p>{% endfor %}</div>
+        </div>
+        {% endif %}
+
+        <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col"><span class="sr-only">Order</span></th>
+                <th scope="col">Name</th>
+                <th scope="col">Type</th>
+                <th scope="col">Route</th>
+                <th scope="col">Laps</th>
+                <th scope="col">Window</th>
+                <th scope="col">Riders</th>
+                <th scope="col">Remove</th>
+              </tr>
+            </thead>
+            <tbody id="stage-rows">
+              {% for row in rows %}
+              {% include "events/_series_stage_row.html" with form=row.form number=row.number answered=row.answered summary=row.summary %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <template id="stage-row-template">
+          {% include "events/_series_stage_row.html" with form=formset.empty_form number="" answered=False summary="" %}
+        </template>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <button type="button" class="btn btn-sm btn-outline" id="add-stage">+ Add stage</button>
+          <p class="text-xs text-base-content/70">A stage riders have answered can be renamed or moved, but not removed.</p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-accent">Save stages</button>
+          <a href="{% url 'events:event_detail' event.pk %}" class="btn btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var form = document.getElementById('stages-form');
+  var body = document.getElementById('stage-rows');
+  var total = form.querySelector('input[name$="-TOTAL_FORMS"]');
+
+  // Rows carry their position in a hidden order field; the server keeps it 0..n-1. Number
+  // the visible "#" column and the up/down buttons' labels to match what is on screen.
+  function renumber() {
+    var rows = body.querySelectorAll('tr[data-stage-row]');
+    rows.forEach(function (row, index) {
+      row.querySelector('[data-stage-order]').value = index;
+      row.querySelector('[data-stage-number]').textContent = index + 1;
+      row.querySelectorAll('[data-move]').forEach(function (button) {
+        var direction = button.getAttribute('data-move');
+        button.setAttribute('aria-label', 'Move stage ' + (index + 1) + ' ' + direction);
+        button.disabled = direction === 'up' ? index === 0 : index === rows.length - 1;
+      });
+    });
+  }
+
+  body.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-move]');
+    if (!button) { return; }
+    var row = button.closest('tr');
+    if (button.getAttribute('data-move') === 'up' && row.previousElementSibling) {
+      body.insertBefore(row, row.previousElementSibling);
+    } else if (button.getAttribute('data-move') === 'down' && row.nextElementSibling) {
+      body.insertBefore(row.nextElementSibling, row);
+    }
+    renumber();
+    // Keep focus with the row that moved. At the top or bottom the pressed arrow is now
+    // disabled and cannot hold focus, so hand it to the row's other arrow.
+    var target = button.disabled ? row.querySelector('[data-move]:not([disabled])') : button;
+    if (target) { target.focus(); }
+  });
+
+  document.getElementById('add-stage').addEventListener('click', function () {
+    var index = parseInt(total.value, 10);
+    var html = document.getElementById('stage-row-template').innerHTML.replace(/__prefix__/g, index);
+    body.insertAdjacentHTML('beforeend', html);
+    total.value = index + 1;
+    renumber();
+    var added = body.lastElementChild.querySelector('input[name$="-name"]');
+    if (added) { added.focus(); }
+  });
+
+  form.addEventListener('submit', renumber);
+  renumber();
+})();
+</script>
+{% endblock %}

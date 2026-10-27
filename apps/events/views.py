@@ -39,7 +39,7 @@ from apps.accounts.discord_service import (
     sync_user_discord_roles,
 )
 from apps.accounts.models import Permissions, User
-from apps.events import ds_service, grid_defaults, rider_stats
+from apps.events import ds_service, grid_defaults, rider_stats, series
 from apps.events.answer_facets import answers_payload, build_facets, panel_starts_open
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
 from apps.events.channel_access import can_view
@@ -53,6 +53,7 @@ from apps.events.models import (
     AvailabilitySlotSelection,
     Event,
     EventSignup,
+    SheetStage,
     SignupQuestion,
     SlotDS,
     Squad,
@@ -1024,7 +1025,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
     grids = AvailabilityGrid.objects.filter(
         squad__event_id__in=signup_event_ids + squad_event_ids,
         status__in=[AvailabilityGrid.Status.PUBLISHED, AvailabilityGrid.Status.CLOSED],
-    ).select_related("squad")
+    ).select_related("squad", "squad__event")
     grids_by_squad: dict[int, list] = {}
     for grid in grids:
         grids_by_squad.setdefault(grid.squad_id, []).append(grid)
@@ -1037,6 +1038,12 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
     )
 
     all_squad_ids = [sq.pk for squads in squads_by_event.values() for sq in squads]
+
+    # A series sheet counts as answered only once every timed stage has an answer for its
+    # current time, and each one lists the rider's stages on the squad's card.
+    from apps.events.series_views import my_series_stages  # local import: series_views imports this module
+
+    series_by_squad = my_series_stages(request, [grid for grid in grids if grid.squad_id in all_squad_ids])
 
     user_tz = getattr(request.user, "timezone", "") or ""
 
@@ -1161,7 +1168,10 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             squad_ended_count = 0
             has_current_grids = False
             for g in squad_grids:
-                g.user_responded = g.pk in responded_grid_ids
+                if g.is_series and squad.pk in series_by_squad:
+                    g.user_responded = not series_by_squad[squad.pk]["needs_answer"]
+                else:
+                    g.user_responded = g.pk in responded_grid_ids
                 # A grid is "ended" once the availability window it collected for has fully passed.
                 g.is_ended = g.end_date < today_local
                 if g.is_ended:
@@ -1183,6 +1193,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
                 "ended_key": f"s{squad.pk}",
                 "members": members_by_squad.get(squad.pk, []),
                 "user_slot_selections": slot_selections_by_squad.get(squad.pk, []),
+                "series": series_by_squad.get(squad.pk),
                 "can_manage_availability": _can_manage_squad_availability(request.user, squad),
             })
         event_pending = sum(sq["pending_availability_count"] for sq in squad_data)
@@ -1492,6 +1503,10 @@ def event_create_view(request: HttpRequest) -> HttpResponse:
                 user_id=request.user.id,
                 username=request.user.username,
             )
+            if event.is_race_series:
+                # A series is not usable until it has stages, so go straight to them.
+                messages.success(request, "Event created. Now add its stages.")
+                return redirect("events:series_stages", pk=event.pk)
             messages.success(request, "Event created successfully!")
             return redirect("events:event_detail", pk=event.pk)
     else:
@@ -2044,6 +2059,11 @@ def _availability_state(grid: AvailabilityGrid, slots: int | None) -> dict:
     """
     if slots is None:
         return {"state": "none", "label": "\u2013", "detail": "No response yet"}
+    if grid.is_series:
+        # For a series sheet ``slots`` counts the stages the rider is Available for.
+        if slots == 0:
+            return {"state": "no", "label": "No", "detail": "Responded: not available for any stage"}
+        return {"state": "yes", "label": "Yes", "detail": f"Available for {slots} stage{'s' if slots != 1 else ''}"}
     if slots == 0:
         # A response with nothing marked. On a single-slot grid that is literally the
         # "No" button; on a full grid it is a rider saying no date works.
@@ -2356,12 +2376,24 @@ def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetim
     # rather than a bool because a submitted response with nothing marked is a
     # deliberate "no", which reads very differently from never having answered.
     grid_ids = [col["grid"].pk for cols in grids_by_squad.values() for col in cols]
+    # A series sheet's "slots" are the stages the rider is Available for at their current time.
+    series_ids = {col["grid"].pk for cols in grids_by_squad.values() for col in cols if col["grid"].is_series}
+    sheet_stages: dict = defaultdict(list)
+    for sheet_stage in SheetStage.objects.filter(grid_id__in=series_ids) if series_ids else []:
+        sheet_stages[sheet_stage.grid_id].append(sheet_stage)
     marked_slots: dict[tuple, int] = {}
     if grid_ids:
-        for grid_id, user_id, cells in AvailabilityResponse.objects.filter(
+        for grid_id, user_id, cells, stage_answers in AvailabilityResponse.objects.filter(
             grid_id__in=grid_ids
-        ).values_list("grid_id", "user_id", "available_cells"):
-            marked_slots[grid_id, user_id] = len(cells or [])
+        ).values_list("grid_id", "user_id", "available_cells", "stage_answers"):
+            if grid_id in series_ids:
+                marked_slots[grid_id, user_id] = sum(
+                    1
+                    for sheet_stage in sheet_stages[grid_id]
+                    if series.answer_state(stage_answers, sheet_stage) == series.ANSWER.AVAILABLE
+                )
+            else:
+                marked_slots[grid_id, user_id] = len(cells or [])
 
     # Enriched squad members (ZP/ZR data for the rider tooltip) grouped by
     # squad, with each rider's race tallies merged in.
@@ -3596,6 +3628,8 @@ def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) 
             "availability_grids": availability_grids,
             "availability_templates": availability_templates,
             "shared_templates": shared_templates,
+            # A race series has one sheet of stage times per squad instead of grids.
+            "series_sheet": next((grid for grid in availability_grids if grid.is_series), None),
             # Only the shared-template dialog offers a timezone; a squad's own template
             # already carries its own clock.
             "timezone_choices": TIMEZONE_CHOICES,
@@ -4407,6 +4441,12 @@ def availability_create_view(request: HttpRequest, event_pk: int, squad_pk: int)
         messages.error(request, "You don't have permission to manage availability.")
         return redirect("events:event_detail", pk=event_pk)
 
+    if event.is_race_series:
+        # A race series asks per stage: the squad has one sheet of stage times, not grids.
+        if request.method == "POST":
+            return JsonResponse({"error": "This event collects availability per stage, not on grids."}, status=400)
+        return redirect("events:series_sheet", event_pk=event_pk, squad_pk=squad_pk)
+
     if request.method == "POST":
         return _handle_availability_save(request, event, squad)
 
@@ -4465,6 +4505,11 @@ def availability_edit_view(request: HttpRequest, event_pk: int, squad_pk: int, g
             return JsonResponse({"error": "Permission denied."}, status=403)
         messages.error(request, "You don't have permission to manage availability.")
         return redirect("events:event_detail", pk=event_pk)
+
+    if grid.is_series:
+        if request.method == "POST":
+            return JsonResponse({"error": "A series sheet is edited on its stage times page."}, status=400)
+        return redirect("events:series_sheet", event_pk=event_pk, squad_pk=squad_pk)
 
     # A closed sheet is a finished record; draft and published stay editable, with the
     # shape frozen on anything already answered (see _changed_shape_fields).
@@ -5252,6 +5297,11 @@ def availability_copy_view(request: HttpRequest, event_pk: int, squad_pk: int, g
         messages.error(request, "You don't have permission to manage availability.")
         return redirect("events:event_detail", pk=event_pk)
 
+    if source.is_series:
+        # A squad has one sheet of stage times; a second copy would put two races on each stage.
+        messages.error(request, "A series sheet can't be copied. Edit its stage times instead.")
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
+
     try:
         new_start_date = date.fromisoformat(request.POST.get("start_date", ""))
         new_end_date = date.fromisoformat(request.POST.get("end_date", ""))
@@ -5453,6 +5503,10 @@ def availability_template_apply_view(
         )
         messages.error(request, "You don't have permission to manage availability.")
         return redirect("events:event_detail", pk=event_pk)
+
+    if event.is_race_series:
+        messages.error(request, "This event collects availability per stage, so templates don't apply.")
+        return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
     try:
         start_date = date.fromisoformat(request.POST.get("start_date", ""))
@@ -5679,6 +5733,11 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
         messages.error(request, "This availability grid is not open for responses.")
         return redirect("events:event_detail", pk=event_pk)
 
+    if grid.is_series:
+        from apps.events.series_views import series_respond  # local import: series_views imports this module
+
+        return series_respond(request, event, squad, grid)
+
     race_verified_required = bool(event.require_race_verified_availability or grid.require_race_verified_availability)
     user_is_race_ready = bool(getattr(request.user, "is_race_ready", False))
 
@@ -5821,6 +5880,35 @@ def availability_respond_view(request: HttpRequest, event_pk: int, squad_pk: int
     )
 
 
+def _slot_modal_selections(slot_selections: list[AvailabilitySlotSelection]) -> dict[str, dict]:
+    """Describe a grid's scheduled races the way the race dialog prefills from them.
+
+    Args:
+        slot_selections: The grid's races, riders and substitutes prefetched.
+
+    Returns:
+        ``{"<utc date>|<utc time>": {the race's editable fields}}``.
+
+    """
+    return {
+        f"{sel.slot_date.isoformat()}|{sel.slot_time}": {
+            "id": sel.pk,
+            "name": sel.name,
+            "status": sel.status,
+            "opponent": sel.opponent,
+            "event_invite_url": sel.event_invite_url,
+            "course_url": sel.course_url,
+            "thread_link": sel.thread_link,
+            "laps": sel.laps,
+            "custom_finish_km": str(sel.custom_finish_km) if sel.custom_finish_km is not None else "",
+            "powerups": sel.powerups or [],
+            "selected_user_ids": [u.pk for u in sel.selected_users.all()],
+            "substitute_ids": [u.pk for u in sel.substitutes.all()],
+        }
+        for sel in slot_selections
+    }
+
+
 def _results_row_in_lanes(time_slot: str, cells: list[dict], lane_order: dict[int, int]) -> dict:
     """Lay one time slot of the results heatmap out in rider lanes.
 
@@ -5884,6 +5972,11 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     if grid.status not in (AvailabilityGrid.Status.PUBLISHED, AvailabilityGrid.Status.CLOSED):
         messages.error(request, "Results are not available for this grid.")
         return redirect("events:event_detail", pk=event_pk)
+
+    if grid.is_series:
+        from apps.events.series_views import series_results  # local import: series_views imports this module
+
+        return series_results(request, event, squad, grid)
 
     # Current members only. This one query feeds the responders list, the heatmap and the
     # race-slot picker, so filtering it here is what keeps a rider who has left from being
@@ -6104,23 +6197,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             }
 
     # Slot selections with selected user IDs for pre-filling the modal
-    selections_json = {}
-    for sel in slot_selections:
-        utc_key = f"{sel.slot_date.isoformat()}|{sel.slot_time}"
-        selections_json[utc_key] = {
-            "id": sel.pk,
-            "name": sel.name,
-            "status": sel.status,
-            "opponent": sel.opponent,
-            "event_invite_url": sel.event_invite_url,
-            "course_url": sel.course_url,
-            "thread_link": sel.thread_link,
-            "laps": sel.laps,
-            "custom_finish_km": str(sel.custom_finish_km) if sel.custom_finish_km is not None else "",
-            "powerups": sel.powerups or [],
-            "selected_user_ids": list(sel.selected_users.values_list("pk", flat=True)),
-            "substitute_ids": list(sel.substitutes.values_list("pk", flat=True)),
-        }
+    selections_json = _slot_modal_selections(slot_selections)
 
     # Build enriched slot selections for initial render
     enriched_selections = []
@@ -8290,25 +8367,23 @@ def slot_selection_delete_thread_view(
     return _render_slot_selections_partial(request, event, squad, grid)
 
 
-def _render_slot_selections_partial(
-    request: HttpRequest, event: Event, squad: Squad, grid: AvailabilityGrid
-) -> HttpResponse:
-    """Render the slot selections partial for HTMX responses.
+def _enriched_slot_selections(request: HttpRequest, grid: AvailabilityGrid) -> tuple[list[dict], str]:
+    """Build the scheduled-race cards ``_slot_selections_container.html`` renders.
+
+    Shared by the HTMX partial below and the race-series results page, which renders the
+    same container on first load.
 
     Args:
-        request: The HTTP request.
-        event: The parent event.
-        squad: The squad.
-        grid: The availability grid.
+        request: The HTTP request, for the viewer's timezone.
+        grid: The availability grid whose races to list.
 
     Returns:
-        Rendered HTML partial of all slot selection cards.
+        ``(enriched_selections, display_timezone)``.
 
     """
     from apps.zwiftpower.models import ZPTeamRiders
 
     selections = list(grid.slot_selections.prefetch_related("selected_users", "directeurs_sportifs"))
-    is_event_admin = _can_manage_squad_availability(request.user, squad)
 
     # Determine display timezone
     user_tz = getattr(request.user, "timezone", "") or ""
@@ -8359,7 +8434,25 @@ def _render_slot_selections_partial(
             "local_time": local_dt.strftime("%H:%M"),
             "local_day": local_dt.strftime("%a"),
         })
+    return enriched_selections, display_tz
 
+
+def _render_slot_selections_partial(
+    request: HttpRequest, event: Event, squad: Squad, grid: AvailabilityGrid
+) -> HttpResponse:
+    """Render the slot selections partial for HTMX responses.
+
+    Args:
+        request: The HTTP request.
+        event: The parent event.
+        squad: The squad.
+        grid: The availability grid.
+
+    Returns:
+        Rendered HTML partial of all slot selection cards.
+
+    """
+    enriched_selections, display_tz = _enriched_slot_selections(request, grid)
     html = render_to_string(
         "events/_slot_selections_container.html",
         {
@@ -8367,8 +8460,9 @@ def _render_slot_selections_partial(
             "event": event,
             "squad": squad,
             "grid": grid,
-            "is_event_admin": is_event_admin,
+            "is_event_admin": _can_manage_squad_availability(request.user, squad),
             "display_timezone": display_tz,
+            "schedule_hint": "Use a stage's Lineup button to schedule its race." if grid.is_series else "",
         },
         request=request,
     )

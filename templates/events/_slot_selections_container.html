@@ -78,5 +78,5 @@
   </div>
 </div>
 {% empty %}
-<p class="text-sm text-base-content/50">No races scheduled yet.{% if is_event_admin %} Click a cell in the heatmap to schedule one.{% endif %}</p>
+<p class="text-sm text-base-content/50">No races scheduled yet.{% if is_event_admin %} {{ schedule_hint|default:"Click a cell in the heatmap to schedule one." }}{% endif %}</p>
 {% endfor %}

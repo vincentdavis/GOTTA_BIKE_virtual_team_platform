@@ -1,15 +1,27 @@
 """Forms for events app."""
 
 import json
+from datetime import UTC, datetime
 from typing import ClassVar
 
 from django import forms
 from django.contrib.auth import get_user_model
 
+from apps.events import series
+
 # GRID_DEFAULT_SETTINGS comes from grid_defaults so the form and the enforcement
 # logic cannot drift on which toggles an event governs.
 from apps.events.grid_defaults import SETTINGS as GRID_DEFAULT_SETTINGS
-from apps.events.models import SQUAD_GENDER_CHOICES, Event, EventSignup, SignupQuestion, Squad
+from apps.events.models import (
+    SQUAD_GENDER_CHOICES,
+    AvailabilityGrid,
+    AvailabilityResponse,
+    Event,
+    EventSignup,
+    SeriesStage,
+    SignupQuestion,
+    Squad,
+)
 from apps.events.signup_questions import MAX_OPTIONS_PER_QUESTION
 from apps.events.squad_tags import (
     MAX_SQUAD_TAGS,
@@ -18,6 +30,7 @@ from apps.events.squad_tags import (
     event_tag_spellings,
     normalize_tags,
 )
+from apps.events.tz_utils import TIMEZONE_CHOICES
 from apps.team.models import DiscordChannel, DiscordRole
 
 User = get_user_model()
@@ -200,6 +213,7 @@ class EventForm(forms.ModelForm):
             "logo",
             "description",
             "config_option",
+            "availability_type",
             "start_date",
             "end_date",
             "url",
@@ -254,6 +268,9 @@ class EventForm(forms.ModelForm):
             ),
             "config_option": forms.Select(
                 attrs={"class": "select select-bordered w-full"},
+            ),
+            "availability_type": forms.RadioSelect(
+                attrs={"class": "radio radio-sm radio-primary"},
             ),
             "visible": forms.CheckboxInput(
                 attrs={"class": "checkbox"},
@@ -313,6 +330,9 @@ class EventForm(forms.ModelForm):
     def __init__(self, *args, **kwargs) -> None:
         """Initialize form with Discord channel choices."""
         super().__init__(*args, **kwargs)
+        # Not required so a post that leaves it out keeps the stored type rather than failing
+        # (see clean_availability_type).
+        self.fields["availability_type"].required = False
         # The chip script reads its limits from here so it cannot drift from clean_squad_tags.
         self.fields["squad_tags"].widget.attrs.update(
             {"data-max-length": MAX_TAG_LENGTH, "data-max-tags": MAX_SQUAD_TAGS}
@@ -425,6 +445,34 @@ class EventForm(forms.ModelForm):
             return int(value)
         except (ValueError, TypeError):
             return 0
+
+    def clean_availability_type(self) -> str:
+        """Keep the stored type when none is posted, and hold it once squads have asked.
+
+        A weekly answer is a set of cells and a series answer a set of stages; neither can
+        be read as the other. So once any squad has published a sheet, the type is fixed.
+
+        Returns:
+            The availability type to save.
+
+        Raises:
+            forms.ValidationError: If the type changes after a squad has published.
+
+        """
+        stored = self.instance.availability_type or Event.AvailabilityType.WEEKLY
+        value = self.cleaned_data.get("availability_type") or stored
+        if (
+            self.instance.pk
+            and value != stored
+            and AvailabilityGrid.objects.filter(squad__event=self.instance)
+            .exclude(status=AvailabilityGrid.Status.DRAFT)
+            .exists()
+        ):
+            raise forms.ValidationError(
+                "Squads have already published availability for this event, so how it is "
+                "collected can no longer change."
+            )
+        return value
 
     def clean_squad_tags(self) -> list[str]:
         """Type-check, normalise and bound the event's squad tags.
@@ -1579,3 +1627,278 @@ class SignupQuestionForm(forms.ModelForm):
         else:
             cleaned["options"] = []
         return cleaned
+
+
+def stage_route_choices() -> list:
+    """Build the stage route picker's choices: every cycling route, grouped by world.
+
+    Built once per page and handed to each stage row, rather than each row running its
+    own query over three hundred routes.
+
+    Returns:
+        Choices with one optgroup per world, after a blank "No route" choice.
+
+    """
+    from apps.zwift_data.models import ZwiftRoute  # local import avoids a cross-app import cycle
+
+    groups: dict[str, list[tuple[int, str]]] = {}
+    for pk, name, world in (
+        ZwiftRoute.objects.filter(sport=ZwiftRoute.Sport.CYCLING)
+        .order_by("world", "name")
+        .values_list("pk", "name", "world")
+    ):
+        groups.setdefault(world, []).append((pk, name))
+    return [("", "No route"), *groups.items()]
+
+
+class SeriesStageForm(forms.ModelForm):
+    """One stage row on a race-series event's Stages page."""
+
+    class Meta:
+        """Meta options for SeriesStageForm."""
+
+        model = SeriesStage
+        fields: ClassVar[list[str]] = [
+            "name",
+            "stage_type",
+            "route",
+            "laps",
+            "window_start",
+            "window_end",
+            "riders_min",
+            "riders_max",
+            "order",
+        ]
+        widgets: ClassVar[dict] = {
+            "name": forms.TextInput(attrs={"class": "input input-sm w-44", "placeholder": "Stage name"}),
+            "stage_type": forms.Select(attrs={"class": "select select-sm w-44"}),
+            "route": forms.Select(attrs={"class": "select select-sm w-56"}),
+            "laps": forms.NumberInput(attrs={"class": "input input-sm w-20", "min": 1}),
+            "window_start": forms.DateInput(attrs={"class": "input input-sm w-40", "type": "date"}, format="%Y-%m-%d"),
+            "window_end": forms.DateInput(attrs={"class": "input input-sm w-40", "type": "date"}, format="%Y-%m-%d"),
+            "riders_min": forms.NumberInput(attrs={"class": "input input-sm w-16", "min": 1}),
+            "riders_max": forms.NumberInput(attrs={"class": "input input-sm w-16", "min": 1}),
+            "order": forms.HiddenInput(attrs={"data-stage-order": ""}),
+        }
+
+    def __init__(self, *args, route_choices: list | None = None, **kwargs) -> None:
+        """Initialize the row, sharing one route choice list across the page.
+
+        Args:
+            *args: Passed to ModelForm.
+            route_choices: ``stage_route_choices()``, built once by the page.
+            **kwargs: Passed to ModelForm.
+
+        """
+        super().__init__(*args, **kwargs)
+        self.fields["order"].required = False
+        self.fields["route"].required = False
+        if route_choices is not None:
+            # The queryset still validates the pick; the choices only spare the query.
+            self.fields["route"].choices = route_choices
+
+    def has_changed(self) -> bool:
+        """Ignore the hidden position when deciding whether a blank row was filled in.
+
+        The page's script numbers every row before submitting, an empty "add" row too; that
+        alone must not turn the row into a stage the admin never typed. A saved stage whose
+        only change is its position has changed, though: that is a reorder.
+
+        Returns:
+            True if a saved stage changed at all, or a new row got anything but a position.
+
+        """
+        if self.instance.pk:
+            return super().has_changed()
+        return any(name != "order" for name in self.changed_data)
+
+    def clean(self) -> dict:
+        """Check the window and the rider counts read the right way round.
+
+        Returns:
+            The cleaned data dict.
+
+        """
+        cleaned = super().clean()
+        start, end = cleaned.get("window_start"), cleaned.get("window_end")
+        if start and end and end < start:
+            self.add_error("window_end", "The window ends before it starts.")
+        low, high = cleaned.get("riders_min"), cleaned.get("riders_max")
+        if low and high and high < low:
+            self.add_error("riders_max", "The most riders can't be fewer than the fewest.")
+        laps = cleaned.get("laps")
+        if laps is not None and laps < 1:
+            self.add_error("laps", "A stage is at least one lap.")
+        return cleaned
+
+
+class BaseSeriesStageFormSet(forms.BaseInlineFormSet):
+    """The Stages page's rows: refuses to remove a stage riders have already answered."""
+
+    def __init__(self, *args, answered_ids: frozenset[int] | set[int] = frozenset(), **kwargs) -> None:
+        """Initialize the rows.
+
+        Args:
+            *args: Passed to BaseInlineFormSet.
+            answered_ids: Stages with stored answers (``series.answered_stage_ids``).
+            **kwargs: Passed to BaseInlineFormSet.
+
+        """
+        super().__init__(*args, **kwargs)
+        self.answered_ids = set(answered_ids)
+
+    def add_fields(self, form: forms.Form, index: int | None) -> None:
+        """Style the remove box like the rest of the page.
+
+        Args:
+            form: The row.
+            index: The row's index, None for the empty form.
+
+        """
+        super().add_fields(form, index)
+        if "DELETE" in form.fields:
+            form.fields["DELETE"].widget.attrs["class"] = "checkbox checkbox-sm"
+
+    def clean(self) -> None:
+        """Refuse removing an answered stage.
+
+        Django skips a row's own validation once it is marked for deletion, so the check
+        has to live here: deleting the stage would delete every squad's time for it, and
+        the riders' answers would quietly stop meaning anything.
+
+        Raises:
+            forms.ValidationError: If an answered stage is marked for removal.
+
+        """
+        super().clean()
+        refused = [
+            form.instance.name
+            for form in self.forms
+            if form.instance.pk in self.answered_ids and self._should_delete_form(form)
+        ]
+        if refused:
+            raise forms.ValidationError(
+                f"Riders have answered {', '.join(refused)}, so it can't be removed. "
+                "You can still rename it or change its route and dates."
+            )
+
+
+SeriesStageFormSet = forms.inlineformset_factory(
+    Event,
+    SeriesStage,
+    form=SeriesStageForm,
+    formset=BaseSeriesStageFormSet,
+    extra=1,
+    can_delete=True,
+    can_delete_extra=False,
+)
+
+
+class SheetTimesForm(forms.Form):
+    """A captain's time for each of the event's stages, on the squad's series sheet.
+
+    One ``racing_<pk>`` / ``date_<pk>`` / ``time_<pk>`` / ``reason_<pk>`` group per stage,
+    entered in the chosen timezone. The parsed UTC start of every stage given a date and
+    time ends up in ``starts`` (not-racing stages keep theirs, so switching a stage back
+    on restores its time and the answers given for it).
+    """
+
+    timezone = forms.ChoiceField(
+        choices=TIMEZONE_CHOICES,
+        widget=forms.Select(attrs={"class": "select select-sm w-full"}),
+    )
+    notify_moved = forms.BooleanField(
+        required=False,
+        initial=True,
+        widget=forms.CheckboxInput(attrs={"class": "checkbox checkbox-sm mt-0.5"}),
+    )
+
+    def __init__(self, *args, stages: list[SeriesStage], **kwargs) -> None:
+        """Add the per-stage fields.
+
+        Args:
+            *args: Passed to Form.
+            stages: The event's stages, in series order.
+            **kwargs: Passed to Form.
+
+        """
+        super().__init__(*args, **kwargs)
+        self.stages = stages
+        self.starts: dict[int, datetime] = {}
+        # A squad timezone outside the short list is still offered, so the form can save.
+        current = self.data.get("timezone") if self.is_bound else self.initial.get("timezone")
+        if current and current not in dict(TIMEZONE_CHOICES) and series.zone(current).key == current:
+            self.fields["timezone"].choices = [*TIMEZONE_CHOICES, (current, current)]
+        for stage in stages:
+            self.fields[f"racing_{stage.pk}"] = forms.BooleanField(
+                required=False,
+                widget=forms.CheckboxInput(attrs={"class": "toggle toggle-sm toggle-success", "data-racing": ""}),
+            )
+            self.fields[f"date_{stage.pk}"] = forms.DateField(
+                required=False,
+                widget=forms.DateInput(attrs={"class": "input input-sm w-40", "type": "date"}, format="%Y-%m-%d"),
+            )
+            self.fields[f"time_{stage.pk}"] = forms.TimeField(
+                required=False,
+                widget=forms.TimeInput(attrs={"class": "input input-sm w-32", "type": "time"}, format="%H:%M"),
+            )
+            self.fields[f"reason_{stage.pk}"] = forms.CharField(
+                required=False,
+                max_length=200,
+                widget=forms.TextInput(attrs={"class": "input input-sm w-72", "placeholder": "e.g. Bye week"}),
+            )
+
+    def clean(self) -> dict:
+        """Turn each stage's date and time into a UTC start, and check the set holds together.
+
+        Returns:
+            The cleaned data dict.
+
+        Raises:
+            forms.ValidationError: If the squad races no stage at all.
+
+        """
+        cleaned = super().clean()
+        tz = series.zone(cleaned.get("timezone"))
+        starts: dict[int, datetime] = {}
+        for stage in self.stages:
+            day, clock = cleaned.get(f"date_{stage.pk}"), cleaned.get(f"time_{stage.pk}")
+            if day and clock:
+                starts[stage.pk] = datetime.combine(day, clock, tzinfo=tz).astimezone(UTC)
+            elif cleaned.get(f"racing_{stage.pk}"):
+                self.add_error(f"date_{stage.pk}", "Give the stage a date and time, or switch it to not racing.")
+        racing = [stage for stage in self.stages if cleaned.get(f"racing_{stage.pk}")]
+        if not racing:
+            raise forms.ValidationError("Race at least one stage.")
+        # Two stages at one moment would also be two scheduled races on one slot, which the
+        # races are unique on.
+        taken: dict[datetime, SeriesStage] = {}
+        for stage in racing:
+            starts_at = starts.get(stage.pk)
+            if starts_at is None:
+                continue
+            if starts_at in taken:
+                self.add_error(f"time_{stage.pk}", f"{taken[starts_at].name} already starts at this time.")
+            else:
+                taken[starts_at] = stage
+        self.starts = starts
+        return cleaned
+
+
+class SeriesAnswerForm(forms.Form):
+    """A rider's answers to a series sheet: ``answer_<pk>`` and ``note_<pk>`` per open stage."""
+
+    def __init__(self, *args, stage_ids: list[int], **kwargs) -> None:
+        """Add a field pair per stage the rider can answer.
+
+        Args:
+            *args: Passed to Form.
+            stage_ids: Stage pks of the sheet's open stages.
+            **kwargs: Passed to Form.
+
+        """
+        super().__init__(*args, **kwargs)
+        choices = [("", "No answer"), *AvailabilityResponse.StageAnswer.choices]
+        for pk in stage_ids:
+            self.fields[f"answer_{pk}"] = forms.ChoiceField(required=False, choices=choices)
+            self.fields[f"note_{pk}"] = forms.CharField(required=False, max_length=series.NOTE_MAX_LENGTH)

@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}{{ grid.title }} - Results{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_detail' event.pk %}" class="link text-sm">&larr; Back to Event</a>
+  </div>
+
+  <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+    <div>
+      <h1 class="text-2xl font-bold mb-1">{{ grid.title }}</h1>
+      <p class="text-base-content/80">{{ event.title }} &mdash; {{ squad.name }} &middot; times in {{ display_timezone }}</p>
+    </div>
+    {% if is_event_admin %}
+    <div class="flex flex-wrap gap-2">
+      {% if not grid.is_closed %}
+      <a href="{% url 'events:series_sheet' event.pk squad.pk %}" class="btn btn-sm">Edit stage times</a>
+      {% endif %}
+      <a href="{% url 'events:squad_availability' event.pk squad.pk %}" class="btn btn-sm btn-ghost">Manage availability</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
+    <span class="badge badge-neutral">{{ complete_count }} of {{ member_count }} rider{{ member_count|pluralize }} answered every stage</span>
+    {% if stale_count %}<span class="badge badge-warning">{{ stale_count }} answer{{ stale_count|pluralize }} to re-confirm after a time change</span>{% endif %}
+    {% if unanswered %}<span class="text-base-content/80">No answer yet: {{ unanswered|join:", " }}</span>{% endif %}
+  </div>
+
+  {% if columns %}
+  <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200 mb-3">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th scope="col" class="sticky left-0 z-[6] bg-base-200 align-bottom text-base-content">Rider</th>
+          {% for column in columns %}
+          <th scope="col" class="align-top min-w-40 text-base-content font-normal">
+            <div class="flex flex-col items-center gap-1 text-center">
+              <span class="badge badge-neutral badge-sm">Stage {{ column.number }}</span>
+              <span class="text-sm font-semibold">{{ column.stage.name }}</span>
+              <span class="text-xs text-base-content/80">{{ column.stage.get_stage_type_display }}</span>
+              <span class="text-xs tabular-nums">{{ column.when }}</span>
+              {% if column.is_open and is_event_admin %}
+              <button type="button" class="btn btn-xs btn-outline mt-1"
+                      onclick="openSlotModal('{{ column.utc_date }}', '{{ column.utc_time }}')"
+                      aria-label="Pick the lineup for stage {{ column.number }}, {{ column.stage.name }}">Lineup</button>
+              {% endif %}
+            </div>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody class="bg-base-100">
+        {% for row in rows %}
+        <tr>
+          <th scope="row" class="sticky left-0 z-[5] bg-base-100 font-normal whitespace-nowrap">
+            {% include "accounts/_user_tooltip.html" with display_name=row.display_name user_id=row.user.pk discord_id=row.user.discord_id discord_avatar_url=row.user.discord_avatar_url zwid=row.zwid zp_category=row.zp_category zp_category_w=row.zp_category_w zr_category=row.zr_category zr_v2=row.zr_v2_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype zr_age=row.zr_age is_race_ready=row.is_race_ready is_extra_verified=row.is_extra_verified in_zwiftpower=row.in_zwiftpower in_zwiftracing=row.in_zwiftracing %}
+          </th>
+          {% for cell in row.cells %}
+          <td class="text-center">
+            {% if cell.badge %}<span class="{{ cell.badge }} whitespace-nowrap">{{ cell.label }}</span>{% else %}<span class="text-base-content/70">{{ cell.label }}</span>{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{{ columns|length|add:1 }}" class="text-base-content/80">This squad has no members yet.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="text-base-content">
+        <tr>
+          <th scope="row" class="sticky left-0 z-[5] bg-base-200">Available &middot; Maybe</th>
+          {% for column in columns %}
+          <td class="text-center tabular-nums">{% if column.is_open %}{{ column.counts.available }} &middot; {{ column.counts.maybe }}{% else %}&mdash;{% endif %}</td>
+          {% endfor %}
+        </tr>
+        <tr>
+          <th scope="row" class="sticky left-0 z-[5] bg-base-200">Riders needed</th>
+          {% for column in columns %}
+          <td class="text-center">
+            {% if column.is_open and column.status %}
+            <span class="{{ column.status_class }}">{{ column.status }}</span>
+            <span class="block text-xs mt-1">{{ column.stage.riders_min }}{% if column.stage.riders_max %}&ndash;{{ column.stage.riders_max }}{% endif %} riders</span>
+            {% elif column.is_open %}&mdash;{% else %}<span class="text-xs">{{ column.when }}</span>{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        <tr>
+          <th scope="row" class="sticky left-0 z-[5] bg-base-200">Lineup</th>
+          {% for column in columns %}
+          <td class="text-center text-xs">{% if column.is_open %}{{ column.race_label }}{% else %}&mdash;{% endif %}</td>
+          {% endfor %}
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  <p class="text-xs text-base-content/80 mb-6">
+    Answers count current squad members only. "Old time" is an answer given before the stage moved; "Tight" means the
+    stage needs some of its Maybes.
+  </p>
+  {% else %}
+  <p class="text-sm text-base-content/80 mb-6">This event has no stages yet.</p>
+  {% endif %}
+
+  {% if notes %}
+  <div class="mb-6">
+    <h2 class="text-sm font-semibold mb-2">Notes from riders</h2>
+    <ul class="flex flex-col gap-2">
+      {% for note in notes %}
+      <li class="rounded-box bg-base-200 px-3 py-2 text-sm">
+        <span class="font-medium">{{ note.rider }}</span> &middot; {{ note.stage }} &middot; {{ note.answer }}
+        <span class="block mt-0.5">{{ note.note }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="mb-6">
+    <h2 class="text-sm font-semibold mb-2">Scheduled Races</h2>
+    <div id="slot-selections-container">
+      {% include "events/_slot_selections_container.html" with enriched_selections=slot_selections_enriched %}
+    </div>
+  </div>
+</div>
+
+{% if is_event_admin %}{% include "events/_slot_modal.html" %}{% endif %}
+{% endblock %}

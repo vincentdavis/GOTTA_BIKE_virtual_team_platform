@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Series Board - {{ event.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_detail' event.pk %}" class="link text-sm">&larr; Back to Event</a>
+  </div>
+
+  <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+    <div>
+      <h1 class="text-2xl font-bold mb-1">Series board</h1>
+      <p class="text-base-content/80">{{ event.title }} &middot; {{ rows|length }} squad{{ rows|length|pluralize }} &middot; {{ columns|length }} stage{{ columns|length|pluralize }}</p>
+    </div>
+    <form method="get" class="flex items-center gap-2 text-sm">
+      <label for="board-tz">Times</label>
+      <select id="board-tz" name="tz" class="select select-sm" onchange="this.form.submit()">
+        <option value="">Each squad's own timezone</option>
+        <option value="mine"{% if mine %} selected{% endif %}>My timezone ({{ viewer_timezone }})</option>
+      </select>
+      <noscript><button type="submit" class="btn btn-sm">Show</button></noscript>
+    </form>
+  </div>
+
+  {% if columns %}
+  <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200 mb-3">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th scope="col" class="sticky left-0 z-[6] bg-base-200 align-bottom text-base-content">Squad</th>
+          {% for column in columns %}
+          <th scope="col" class="align-top min-w-44 text-base-content font-normal">
+            <div class="flex flex-col gap-0.5">
+              <span class="badge badge-neutral badge-sm">Stage {{ column.number }}</span>
+              <span class="text-sm font-semibold">{{ column.stage.name }}</span>
+              <span class="text-xs text-base-content/80">{{ column.stage.get_stage_type_display }}{% if column.route %} &middot; {{ column.route }}{% endif %}</span>
+              <span class="text-xs text-base-content/80">{% if column.window %}Window {{ column.window }} &middot; {% endif %}{{ column.racing }}</span>
+            </div>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody class="bg-base-100">
+        {% for row in rows %}
+        <tr class="align-top">
+          <th scope="row" class="sticky left-0 z-[5] bg-base-100 font-normal">
+            <div class="flex flex-col gap-0.5">
+              {% if row.link %}
+              <a href="{{ row.link }}" class="link font-semibold">{{ row.squad.name }}</a>
+              {% else %}
+              <span class="font-semibold">{{ row.squad.name }}</span>
+              {% endif %}
+              <span class="text-xs text-base-content/80">{{ row.member_count }} rider{{ row.member_count|pluralize }}</span>
+              <span class="text-xs text-base-content/80">{{ row.tz }}</span>
+            </div>
+          </th>
+          {% for cell in row.cells %}
+          <td>
+            <div class="flex flex-col items-start gap-1">
+              <span class="text-sm font-semibold tabular-nums">{{ cell.when }}</span>
+              {% if cell.counts %}<span class="text-xs tabular-nums text-base-content/80">{{ cell.counts }}</span>{% endif %}
+              {% if cell.chip %}<span class="{{ cell.chip_class }}">{{ cell.chip }}</span>{% endif %}
+              {% if cell.extra %}<span class="text-xs">{{ cell.extra }}</span>{% endif %}
+            </div>
+          </td>
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{{ columns|length|add:1 }}" class="text-base-content/80">This event has no squads yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="flex flex-wrap items-center gap-2 text-xs mb-6">
+    <span class="text-base-content/80">Key:</span>
+    <span class="badge badge-success badge-sm">Lineup set</span>
+    <span class="badge badge-info badge-sm">Picking</span>
+    <span class="badge badge-success badge-sm">Enough riders</span>
+    <span class="badge badge-warning badge-sm">Tight</span>
+    <span class="badge badge-error badge-sm">Short</span>
+    <span class="badge badge-ghost badge-sm">Not racing</span>
+    <span class="badge badge-dash badge-sm">Draft</span>
+    <span class="text-base-content/80">Counts are current squad members. Tight means the stage needs some of its Maybes.</span>
+  </div>
+  {% else %}
+  <p class="text-sm text-base-content/80 mb-6">This event has no stages yet.</p>
+  {% endif %}
+
+  <section class="card bg-base-200" aria-labelledby="attention-title">
+    <div class="card-body gap-3">
+      <h2 id="attention-title" class="card-title text-lg">Needs attention</h2>
+      {% if attention %}
+      <ul class="flex flex-col gap-2">
+        {% for item in attention %}
+        <li class="flex flex-wrap items-center gap-2 text-sm">
+          <span class="{{ item.cls }}">{{ item.tag }}</span>
+          <span>{{ item.text }}</span>
+          {% if item.url %}<a href="{{ item.url }}" class="link text-sm">Open results</a>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm text-base-content/80">Nothing needs attention: every squad has published times and enough riders.</p>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

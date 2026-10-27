@@ -80,6 +80,24 @@
                   Eligibility
                 </a>
               </li>
+              {% if event.is_race_series %}
+              <li{% if not is_event_admin %} class="menu-disabled"{% endif %}>
+                <a {% if is_event_admin %}href="{% url 'events:series_stages' event.pk %}"{% else %}title="Requires the event admin permission"{% endif %}>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21V5m0 0h11l-2 4 2 4H3" />
+                  </svg>
+                  Stages
+                </a>
+              </li>
+              <li{% if not can_view_v_report %} class="menu-disabled"{% endif %}>
+                <a {% if can_view_v_report %}href="{% url 'events:series_board' event.pk %}"{% else %}title="Requires event admin, head captain, or squad captain"{% endif %}>
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5h16v14H4zM4 10h16M9 5v14" />
+                  </svg>
+                  Series board
+                </a>
+              </li>
+              {% endif %}
               <li{% if not can_add_members %} class="menu-disabled"{% endif %}>
                 <button type="button"
                         {% if can_add_members %}onclick="document.getElementById('add_members_modal').showModal()"{% else %}disabled title="Requires the event head captain role, app admin, or superuser"{% endif %}>

@@ -12,6 +12,8 @@ from apps.events.models import (
     EventSignup,
     Race,
     RaceRegistration,
+    SeriesStage,
+    SheetStage,
     Squad,
     SquadMember,
 )
@@ -41,6 +43,25 @@ class EventSignupInline(admin.TabularInline):
     show_change_link = True
 
 
+class SeriesStageInline(admin.TabularInline):
+    """Inline admin for a race-series event's stages."""
+
+    model = SeriesStage
+    extra = 0
+    fields: ClassVar[list[str]] = [
+        "order",
+        "name",
+        "stage_type",
+        "route",
+        "laps",
+        "window_start",
+        "window_end",
+        "riders_min",
+        "riders_max",
+    ]
+    autocomplete_fields: ClassVar[list[str]] = ["route"]
+
+
 class EventAdminForm(forms.ModelForm):
     """Event change form, holding squad tags to the same rules as the event edit page.
 
@@ -67,15 +88,16 @@ class EventAdmin(admin.ModelAdmin):
         "title",
         "start_date",
         "end_date",
+        "availability_type",
         "visible",
         "signups_open",
         "created_by",
     ]
-    list_filter: ClassVar[list[str]] = ["visible", "signups_open", "start_date"]
+    list_filter: ClassVar[list[str]] = ["visible", "signups_open", "availability_type", "start_date"]
     search_fields: ClassVar[list[str]] = ["title", "description"]
     readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
     ordering: ClassVar[list[str]] = ["-start_date"]
-    inlines: ClassVar[list] = [SquadInline, EventSignupInline]
+    inlines: ClassVar[list] = [SeriesStageInline, SquadInline, EventSignupInline]
 
     def save_related(self, request, form, formsets, change) -> None:
         """Prune every squad's tags to the event's list once the squad inline is saved too.
@@ -260,8 +282,16 @@ class AvailabilityResponseInline(admin.TabularInline):
 
     model = AvailabilityResponse
     extra = 0
-    fields: ClassVar[list[str]] = ["user", "available_cells", "created_at", "updated_at"]
+    fields: ClassVar[list[str]] = ["user", "available_cells", "stage_answers", "created_at", "updated_at"]
     readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
+
+
+class SheetStageInline(admin.TabularInline):
+    """Inline admin for a series sheet's stage times."""
+
+    model = SheetStage
+    extra = 0
+    fields: ClassVar[list[str]] = ["stage", "racing", "starts_at", "not_racing_reason"]
 
 
 @admin.register(AvailabilityGrid)
@@ -271,6 +301,7 @@ class AvailabilityGridAdmin(admin.ModelAdmin):
     list_display: ClassVar[list[str]] = [
         "squad",
         "title",
+        "kind",
         "status",
         "grid_timezone",
         "start_date",
@@ -278,10 +309,10 @@ class AvailabilityGridAdmin(admin.ModelAdmin):
         "response_count",
         "created_by",
     ]
-    list_filter: ClassVar[list[str]] = ["status", "squad__event"]
+    list_filter: ClassVar[list[str]] = ["kind", "status", "squad__event"]
     search_fields: ClassVar[list[str]] = ["title", "squad__name", "squad__event__title"]
     readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
-    inlines: ClassVar[list] = [AvailabilityResponseInline]
+    inlines: ClassVar[list] = [SheetStageInline, AvailabilityResponseInline]
 
 
 @admin.register(AvailabilityResponse)

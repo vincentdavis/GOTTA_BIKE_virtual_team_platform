@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Stage Times - {{ squad.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <a href="{% url 'events:squad_availability' event.pk squad.pk %}" class="btn btn-ghost btn-sm mb-4">&larr; Back to Manage Availability</a>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body gap-5">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 class="card-title text-2xl mb-1">Stage times</h2>
+          <p class="text-sm text-base-content/70">{{ squad.name }} &mdash; {{ event.title }}</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          {% if not sheet or sheet.is_draft %}
+          <span class="badge badge-ghost">Draft</span>
+          {% elif sheet.is_published %}
+          <span class="badge badge-success">Published</span>
+          {% endif %}
+          {% if sheet %}<span class="badge badge-neutral">{{ sheet.response_count }} responded</span>{% endif %}
+        </div>
+      </div>
+
+      <p class="text-sm text-base-content/80 max-w-2xl">
+        Set when {{ squad.name }} races each stage. Riders see every time in their own timezone and answer
+        Available, Maybe or No per stage. Moving a stage later asks the riders who answered it again.
+      </p>
+
+      {# Prefill helpers: plain GET forms, so nothing is saved until Save below. #}
+      <div class="grid gap-4 sm:grid-cols-2">
+        <form method="get" class="flex flex-col gap-1 text-sm">
+          <span id="fill-label" class="font-medium">Fill every stage</span>
+          <div class="flex flex-wrap gap-2" role="group" aria-labelledby="fill-label">
+            <select name="fill_day" class="select select-sm flex-1 min-w-32" aria-label="Weekday">
+              {% for name in weekdays %}<option value="{{ forloop.counter0 }}">{{ name }}</option>{% endfor %}
+            </select>
+            <input type="time" name="fill_time" value="19:30" class="input input-sm w-32" aria-label="Start time" required>
+            <button type="submit" class="btn btn-sm">Fill</button>
+          </div>
+          <span class="text-xs text-base-content/70">Picks that day inside each stage's window.</span>
+        </form>
+        {% if copy_sources %}
+        <form method="get" class="flex flex-col gap-1 text-sm">
+          <span id="copy-label" class="font-medium">Copy times from a squad</span>
+          <div class="flex flex-wrap gap-2" role="group" aria-labelledby="copy-label">
+            <select name="copy_from" class="select select-sm flex-1 min-w-32" aria-label="Squad to copy from">
+              {% for other in copy_sources %}<option value="{{ other.pk }}">{{ other.name }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm">Copy</button>
+          </div>
+          <span class="text-xs text-base-content/70">For squads racing in the same time slot.</span>
+        </form>
+        {% endif %}
+      </div>
+
+      <form method="post" class="flex flex-col gap-4" id="sheet-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <div role="alert" class="alert alert-error">
+          <div>{% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>
+        </div>
+        {% endif %}
+
+        <label class="flex flex-col gap-1 text-sm max-w-xs">
+          <span class="font-medium">Times are in</span>
+          {{ form.timezone }}
+        </label>
+
+        {% for row in rows %}
+        <fieldset class="rounded-box border border-base-300 bg-base-100 p-4 flex flex-wrap items-start gap-x-6 gap-y-3" data-stage-row>
+          <legend class="sr-only">Stage {{ row.number }}: {{ row.stage.name }}</legend>
+          <div class="min-w-0 flex-1 basis-64">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="badge badge-neutral badge-sm">Stage {{ row.number }}</span>
+              <span class="font-semibold">{{ row.stage.name }}</span>
+            </div>
+            <p class="mt-1 text-sm text-base-content/80">
+              {{ row.stage.get_stage_type_display }}{% if row.route %} &middot; {{ row.route }}{% endif %}{% if row.window %} &middot; Window {{ row.window }}{% endif %}
+            </p>
+            {% if row.answered or row.race %}
+            <div class="mt-2 flex flex-wrap gap-1">
+              {% if row.answered %}<span class="badge badge-outline badge-sm">{{ row.answered }} answered</span>{% endif %}
+              {% if row.race %}<span class="badge badge-info badge-sm">Race scheduled{% if row.race.thread_link %}, with a Discord thread{% endif %}</span>{% endif %}
+            </div>
+            {% endif %}
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer text-sm pt-1">
+            {{ row.racing }}
+            <span>Racing this stage</span>
+          </label>
+          <div class="flex flex-wrap items-end gap-3" data-when>
+            <label class="flex flex-col gap-1 text-xs">
+              <span>Date</span>
+              {{ row.date }}
+            </label>
+            <label class="flex flex-col gap-1 text-xs">
+              <span>Start time</span>
+              {{ row.time }}
+            </label>
+          </div>
+          <label class="flex flex-col gap-1 text-xs" data-reason>
+            <span>Reason riders see (optional)</span>
+            {{ row.reason }}
+          </label>
+          {% if row.date.errors or row.time.errors or row.reason.errors %}
+          <div class="basis-full flex flex-col gap-1">
+            {% for error in row.date.errors %}<p class="rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+            {% for error in row.time.errors %}<p class="rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+            {% for error in row.reason.errors %}<p class="rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+          </div>
+          {% endif %}
+        </fieldset>
+        {% endfor %}
+
+        {% if sheet and sheet.is_published and squad.discord_channel_id %}
+        <label class="flex items-start gap-2 cursor-pointer text-sm">
+          {{ form.notify_moved }}
+          <span>If a stage that riders have answered moves, post the change in the squad's Discord channel and mention those riders.</span>
+        </label>
+        {% endif %}
+
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-accent">Save stage times</button>
+          <a href="{% url 'events:squad_availability' event.pk squad.pk %}" class="btn btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  // A stage the squad sits out needs no date or time, only an optional reason. Without
+  // script both stay visible and the server sorts it out.
+  document.querySelectorAll('[data-stage-row]').forEach(function (row) {
+    var toggle = row.querySelector('[data-racing]');
+    var when = row.querySelector('[data-when]');
+    var reason = row.querySelector('[data-reason]');
+    function apply() {
+      when.classList.toggle('hidden', !toggle.checked);
+      reason.classList.toggle('hidden', toggle.checked);
+    }
+    toggle.addEventListener('change', apply);
+    apply();
+  });
+})();
+</script>
+{% endblock %}

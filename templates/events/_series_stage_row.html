@@ -1,0 +1,63 @@
+{% comment %}
+One stage row on the Stages page, also used (with the formset's empty form) as the template
+the "Add stage" button clones. Context: form, number, answered (riders have answered it, so
+it cannot be removed), summary (the route's laps and distance, for a saved stage).
+{% endcomment %}
+<tr data-stage-row>
+  <td class="align-top pt-3 font-semibold tabular-nums">
+    <span data-stage-number>{{ number }}</span>
+    {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+  </td>
+  <td class="align-top">
+    <div class="flex gap-1">
+      <button type="button" class="btn btn-ghost btn-xs btn-square" data-move="up" aria-label="Move stage {{ number }} up">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>
+      </button>
+      <button type="button" class="btn btn-ghost btn-xs btn-square" data-move="down" aria-label="Move stage {{ number }} down">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+    </div>
+  </td>
+  <td class="align-top">
+    <label><span class="sr-only">Stage name</span>{{ form.name }}</label>
+    {% for error in form.name.errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+    {% for error in form.non_field_errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+  </td>
+  <td class="align-top">
+    <label><span class="sr-only">Stage type</span>{{ form.stage_type }}</label>
+  </td>
+  <td class="align-top">
+    <label><span class="sr-only">Route</span>{{ form.route }}</label>
+    {% if summary %}<p class="mt-1 text-xs text-base-content/70">{{ summary }}</p>{% endif %}
+    {% for error in form.route.errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+  </td>
+  <td class="align-top">
+    <label><span class="sr-only">Laps</span>{{ form.laps }}</label>
+    {% for error in form.laps.errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+  </td>
+  <td class="align-top">
+    <div class="flex items-center gap-1">
+      <label><span class="sr-only">Window starts</span>{{ form.window_start }}</label>
+      <span aria-hidden="true">&ndash;</span>
+      <label><span class="sr-only">Window ends</span>{{ form.window_end }}</label>
+    </div>
+    {% for error in form.window_end.errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+  </td>
+  <td class="align-top">
+    <div class="flex items-center gap-1">
+      <label><span class="sr-only">Fewest riders</span>{{ form.riders_min }}</label>
+      <span aria-hidden="true">&ndash;</span>
+      <label><span class="sr-only">Most riders</span>{{ form.riders_max }}</label>
+    </div>
+    {% for error in form.riders_max.errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+  </td>
+  <td class="align-top pt-3">
+    {% if answered %}
+    <span class="badge badge-ghost badge-sm">Answered</span>
+    {% elif form.DELETE %}
+    <label class="inline-flex items-center gap-2 cursor-pointer">{{ form.DELETE }}<span class="sr-only">Remove this stage</span></label>
+    {% else %}
+    <span class="text-base-content/70" aria-hidden="true">&mdash;</span>
+    {% endif %}
+  </td>
+</tr>

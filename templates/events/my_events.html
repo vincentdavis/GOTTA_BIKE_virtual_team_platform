@@ -185,6 +185,49 @@
                       {% endif %}
                     </div>
 
+                    {% if sq.series %}
+                    {# A race series: every stage with what it means for this rider. #}
+                    <div class="mt-3 pt-3 border-t border-base-300">
+                      <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <h3 class="text-xs font-semibold text-base-content/80 uppercase tracking-wide">My stages</h3>
+                        {% if sq.series.grid.is_published %}
+                        <a href="{% url 'events:availability_respond' item.event.pk sq.squad.pk sq.series.grid.pk %}"
+                           class="btn btn-xs {% if sq.series.needs_answer %}btn-warning{% else %}btn-outline{% endif %}">{% if sq.series.needs_answer %}Answer stages{% else %}Change answers{% endif %}</a>
+                        {% endif %}
+                      </div>
+                      <ol class="flex flex-col gap-2">
+                        {% for st in sq.series.stages %}
+                        <li class="flex gap-3 rounded-md bg-base-100 p-2">
+                          <div class="w-12 shrink-0 flex flex-col items-center justify-center rounded bg-base-200 py-1 text-center" aria-hidden="true">
+                            {% if st.day %}
+                            <span class="text-[11px] font-semibold uppercase tracking-wide">{{ st.dow }}</span>
+                            <span class="text-lg font-bold leading-tight tabular-nums">{{ st.day }}</span>
+                            <span class="text-[11px] font-semibold uppercase tracking-wide">{{ st.month }}</span>
+                            {% else %}
+                            <span>&mdash;</span>
+                            {% endif %}
+                          </div>
+                          <div class="min-w-0 flex-1 flex flex-col gap-1">
+                            <div class="flex flex-wrap items-center gap-1">
+                              <span class="badge badge-neutral badge-sm">Stage {{ st.number }}</span>
+                              <span class="{{ st.badge }}">{{ st.label }}</span>
+                            </div>
+                            <p class="font-medium break-words">{{ st.stage.name }}</p>
+                            <p class="text-xs text-base-content/80">{% if st.time %}{{ st.dow }} {{ st.day }} {{ st.month }} &middot; {{ st.time }} &middot; {% endif %}{{ st.stage.get_stage_type_display }}{% if st.reason %} &middot; {{ st.reason }}{% endif %}</p>
+                            {% if st.race %}
+                            <p class="text-xs flex flex-wrap gap-x-3 gap-y-1">
+                              {% if st.race.thread_link %}<a href="{{ st.race.thread_link }}" target="_blank" rel="noopener" class="link">Discord thread</a>{% endif %}
+                              {% if st.race.event_invite_url %}<a href="{{ st.race.event_invite_url }}" target="_blank" rel="noopener" class="link">Event invite</a>{% endif %}
+                              {% if st.ics_url %}<a href="{{ st.ics_url }}" class="link">Add to calendar</a>{% endif %}
+                            </p>
+                            {% endif %}
+                          </div>
+                        </li>
+                        {% endfor %}
+                      </ol>
+                    </div>
+                    {% endif %}
+
                     {% if sq.user_slot_selections %}
                     <div class="mt-3 pt-3 border-t border-base-300">
                       <p class="text-xs font-semibold text-base-content/60 uppercase tracking-wide mb-2">Scheduled Races</p>

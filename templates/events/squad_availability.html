@@ -67,7 +67,7 @@
                   anyone has answered. Only a closed sheet is locked outright.
                   {% endcomment %}
                   {% if not grid.is_closed %}
-                  <li><a href="{% url 'events:availability_edit' event.pk squad.pk grid.pk %}">Edit</a></li>
+                  <li><a href="{% if grid.is_series %}{% url 'events:series_sheet' event.pk squad.pk %}{% else %}{% url 'events:availability_edit' event.pk squad.pk grid.pk %}{% endif %}">{% if grid.is_series %}Edit stage times{% else %}Edit{% endif %}</a></li>
                   {% endif %}
                   {% if grid.is_draft %}
                   <li><button type="button" onclick="document.getElementById('publish-modal-{{ grid.pk }}').showModal()">Publish</button></li>
@@ -87,7 +87,9 @@
                   {% endif %}
                   <li><button type="submit" form="close-grid-{{ grid.pk }}">Close</button></li>
                   {% endif %}
+                  {% if not grid.is_series %}
                   <li><button type="button" onclick="document.getElementById('copy-modal-{{ grid.pk }}').showModal()">Copy</button></li>
+                  {% endif %}
                   <li><button type="submit" form="delete-grid-{{ grid.pk }}" class="text-error">Delete</button></li>
                 </ul>
 
@@ -208,9 +210,10 @@
         </table>
       </div>
       {% else %}
-      <p class="text-sm text-base-content/50">No availability grids yet.</p>
+      <p class="text-sm text-base-content/70">{% if event.is_race_series %}No stage times yet. Set them to ask riders about each stage.{% else %}No availability grids yet.{% endif %}</p>
       {% endif %}
 
+      {% if not event.is_race_series %}
       <div class="divider">Templates</div>
       <p class="text-xs text-base-content/60 mb-2">
         Reusable starting points for this squad. Build a grid and click <strong>Save as Template</strong> to add one,
@@ -381,11 +384,20 @@
       </div>
       {% endif %}
 
+      {% endif %}
+
       <div class="divider"></div>
       <div class="flex justify-between items-center">
         <a href="{% url 'events:squad_manage' event.pk %}" class="link link-primary">Back to Squads</a>
+        {% if event.is_race_series %}
+        {% if not series_sheet or not series_sheet.is_closed %}
+        <a href="{% url 'events:series_sheet' event.pk squad.pk %}"
+           class="btn btn-secondary btn-sm btn-outline">{% if series_sheet %}Edit stage times{% else %}Set stage times{% endif %}</a>
+        {% endif %}
+        {% else %}
         <a href="{% url 'events:availability_create' event.pk squad.pk %}"
            class="btn btn-secondary btn-sm btn-outline">New Availability</a>
+        {% endif %}
       </div>
     </div>
   </div>

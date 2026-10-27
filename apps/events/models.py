@@ -9,6 +9,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.events.squad_tags import tags_in_event
+from gotta_bike_platform.retention import RetentionPolicy
 
 ZR_CATEGORY_ORDER = [
     "Diamond",
@@ -87,6 +88,12 @@ class Event(models.Model):
         SERIES = "SERIES", "Series"
         TTT = "TTT", "TTT"
 
+    class AvailabilityType(models.TextChoices):
+        """How the event's squads collect availability."""
+
+        WEEKLY = "weekly", "Weekly availability"
+        SERIES = "series", "Race series"
+
     prefixes = models.JSONField(
         default=list,
         blank=True,
@@ -101,6 +108,17 @@ class Event(models.Model):
         blank=True,
         default="",
         help_text="Configuration profile used to enable optional event behaviors",
+    )
+    # Kept apart from config_option on purpose: that one says what kind of racing this is,
+    # this one how squads ask their riders. A TTT league can be a series of stages too.
+    availability_type = models.CharField(
+        max_length=10,
+        choices=AvailabilityType.choices,
+        default=AvailabilityType.WEEKLY,
+        help_text=(
+            "Weekly: captains publish date x time grids. Race series: the event lists its stages, "
+            "each squad sets a time per stage, and riders answer per stage."
+        ),
     )
     title = models.CharField(max_length=200, help_text="Event title")
     description = models.TextField(blank=True, help_text="Event description (supports Markdown)")
@@ -280,6 +298,117 @@ class Event(models.Model):
 
         """
         return self.title
+
+    @property
+    def is_race_series(self) -> bool:
+        """Whether squads collect availability per stage rather than on weekly grids.
+
+        Returns:
+            True for a race-series event.
+
+        """
+        return self.availability_type == self.AvailabilityType.SERIES
+
+
+class SeriesStage(models.Model):
+    """One stage of a race-series event: what is raced, and where.
+
+    The event lists its stages; each squad then gives every stage its own date and time
+    on its series sheet (``SheetStage``), and riders answer per stage. Nothing here is
+    about a squad or a rider.
+
+    Attributes:
+        event: The race-series event.
+        order: Position in the series; the stages page keeps it 0..n-1.
+        name: Stage name shown to riders, e.g. "Innsbruck Points".
+        stage_type: The race format.
+        route: The Zwift route, when the stage is on one.
+        laps: Laps of the route.
+        window_start: First day squads should race it (a guide, not a rule).
+        window_end: Last day squads should race it.
+        riders_min: Fewest riders a squad must start, or None for no requirement.
+        riders_max: Most riders a squad may start, or None.
+
+    """
+
+    retention = RetentionPolicy.keep(
+        "Event configuration: stage names, formats, routes and dates. No personal content."
+    )
+
+    class StageType(models.TextChoices):
+        """Race formats a stage can have."""
+
+        POINTS = "points", "Points race"
+        SCRATCH = "scratch", "Scratch race"
+        TTT = "ttt", "Team time trial"
+        ITT = "itt", "Individual time trial"
+        CLIMB = "climb", "Climb"
+        CRIT = "crit", "Crit"
+        OTHER = "other", "Other"
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="series_stages",
+        help_text="The race-series event this stage belongs to",
+    )
+    order = models.PositiveSmallIntegerField(default=0, help_text="Position in the series, first stage lowest")
+    name = models.CharField(max_length=100, help_text="Stage name shown to riders")
+    stage_type = models.CharField(
+        max_length=10,
+        choices=StageType.choices,
+        default=StageType.POINTS,
+        help_text="Race format",
+    )
+    route = models.ForeignKey(
+        "zwift_data.ZwiftRoute",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="series_stages",
+        help_text="The Zwift route, if the stage is on one",
+    )
+    laps = models.PositiveSmallIntegerField(default=1, help_text="Laps of the route")
+    window_start = models.DateField(null=True, blank=True, help_text="First day squads should race this stage")
+    window_end = models.DateField(null=True, blank=True, help_text="Last day squads should race this stage")
+    riders_min = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Fewest riders a squad must start (blank: no requirement)"
+    )
+    riders_max = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Most riders a squad may start (blank: no limit)"
+    )
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the stage was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the stage was last updated")
+
+    class Meta:
+        """Meta options for SeriesStage model."""
+
+        ordering = ["order", "pk"]  # noqa: RUF012
+        verbose_name = "Series Stage"
+        verbose_name_plural = "Series Stages"
+
+    def __str__(self) -> str:
+        """Return the stage name.
+
+        Returns:
+            The stage name.
+
+        """
+        return self.name
+
+    def in_window(self, day: date) -> bool:
+        """Whether a squad racing on ``day`` is inside this stage's window.
+
+        Args:
+            day: The race day, in the squad's own timezone.
+
+        Returns:
+            False only when the stage has a window and the day falls outside it.
+
+        """
+        if self.window_start and day < self.window_start:
+            return False
+        return not (self.window_end and day > self.window_end)
 
 
 class Race(models.Model):
@@ -1390,12 +1519,29 @@ class AvailabilityGrid(models.Model):
         PUBLISHED = "published", "Published"
         CLOSED = "closed", "Closed"
 
+    class Kind(models.TextChoices):
+        """What a sheet asks riders."""
+
+        WEEKLY = "weekly", "Weekly grid"
+        SERIES = "series", "Race series stages"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     squad = models.ForeignKey(
         Squad,
         on_delete=models.CASCADE,
         related_name="availability_grids",
         help_text="The squad this availability grid belongs to",
+    )
+    # A series sheet keeps the grid's lifecycle (draft/published/closed, notifications, the
+    # pending badge) but asks about stages instead of cells: its times are SheetStage rows,
+    # its answers AvailabilityResponse.stage_answers. Its date/time span is kept equal to its
+    # first and last racing stage (apps.events.series.sync_sheet_span), so code that only
+    # reads the span -- the participation report, My Events, the badge -- needs no branch.
+    kind = models.CharField(
+        max_length=10,
+        choices=Kind.choices,
+        default=Kind.WEEKLY,
+        help_text="Weekly date x time grid, or a race series sheet of stage times",
     )
     title = models.CharField(max_length=200, blank=True, help_text="Optional label for this grid")
     start_date = models.DateField(help_text="Grid start date")
@@ -1593,6 +1739,16 @@ class AvailabilityGrid(models.Model):
         return self.active_responses().count()
 
     @property
+    def is_series(self) -> bool:
+        """Check if this is a race series sheet of stage times.
+
+        Returns:
+            True for a series sheet.
+
+        """
+        return self.kind == self.Kind.SERIES
+
+    @property
     def is_draft(self) -> bool:
         """Check if grid is in draft status.
 
@@ -1662,6 +1818,70 @@ class AvailabilityGrid(models.Model):
         return self.end_date + timedelta(days=(self.end_date - self.start_date).days + 1)
 
 
+class SheetStage(models.Model):
+    """A squad's date and time for one stage of a race series, on its series sheet.
+
+    Attributes:
+        grid: The squad's series sheet (an ``AvailabilityGrid`` of kind series).
+        stage: The event's stage.
+        racing: False when the squad sits this stage out.
+        starts_at: When the squad races it (UTC), or None while it has no time.
+        not_racing_reason: Shown to riders when the squad is not racing the stage.
+
+    """
+
+    retention = RetentionPolicy.keep(
+        "A squad's race schedule: one start time per stage. No personal content."
+    )
+
+    grid = models.ForeignKey(
+        AvailabilityGrid,
+        on_delete=models.CASCADE,
+        related_name="sheet_stages",
+        help_text="The squad's series sheet",
+    )
+    stage = models.ForeignKey(
+        SeriesStage,
+        on_delete=models.CASCADE,
+        related_name="sheet_stages",
+        help_text="The event's stage",
+    )
+    racing = models.BooleanField(default=True, help_text="Whether the squad races this stage")
+    starts_at = models.DateTimeField(null=True, blank=True, help_text="When the squad races the stage (UTC)")
+    not_racing_reason = models.CharField(
+        max_length=200, blank=True, help_text="Shown to riders when the squad is not racing this stage"
+    )
+
+    class Meta:
+        """Meta options for SheetStage model."""
+
+        ordering = ["stage__order", "stage__pk"]  # noqa: RUF012
+        unique_together = [("grid", "stage")]  # noqa: RUF012
+        verbose_name = "Sheet Stage"
+        verbose_name_plural = "Sheet Stages"
+
+    def __str__(self) -> str:
+        """Return the stage and its time.
+
+        Returns:
+            String in format "Stage name @ start" or "Stage name (not racing)".
+
+        """
+        if not self.racing:
+            return f"{self.stage} (not racing)"
+        return f"{self.stage} @ {self.starts_at:%Y-%m-%d %H:%M} UTC" if self.starts_at else f"{self.stage} (no time)"
+
+    @property
+    def is_open(self) -> bool:
+        """Whether riders can answer this stage: the squad races it and has timed it.
+
+        Returns:
+            True when racing with a start time.
+
+        """
+        return self.racing and self.starts_at is not None
+
+
 class AvailabilityResponse(models.Model):
     """A single member's availability selections for an availability grid.
 
@@ -1672,10 +1892,18 @@ class AvailabilityResponse(models.Model):
         grid: The availability grid this response belongs to.
         user: The responding member.
         available_cells: JSON list of cells the user marked as available.
+        stage_answers: Series sheets only: the rider's answer to each stage.
         created_at: When the response was created.
         updated_at: When the response was last modified.
 
     """
+
+    class StageAnswer(models.TextChoices):
+        """A rider's answer to one stage of a series sheet."""
+
+        AVAILABLE = "available", "Available"
+        MAYBE = "maybe", "Maybe"
+        NO = "no", "No"
 
     grid = models.ForeignKey(
         AvailabilityGrid,
@@ -1703,6 +1931,17 @@ class AvailabilityResponse(models.Model):
         null=True,
         blank=True,
         help_text="Number of rest days required between races",
+    )
+    # Keyed by SeriesStage pk. "for" is the stage's start time the answer was given for
+    # (apps.events.series.stamp); once the squad moves the stage the answer no longer
+    # matches and the rider is asked again. Only real answers are stored, never blanks.
+    stage_answers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            'Series sheets only: {"<stage id>": {"answer": "available|maybe|no", "note": "...", '
+            '"for": "<start time answered for>"}}'
+        ),
     )
     created_at = models.DateTimeField(default=timezone.now, help_text="When the response was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the response was last updated")
