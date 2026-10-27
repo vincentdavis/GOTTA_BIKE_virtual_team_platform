@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from apps.accounts.decorators import team_member_required
-from apps.rider_data.models import velo2_women_by_zwid
+from apps.rider_data.models import velo2_categories_by_zwid
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPEvent, ZPRiderResults, ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -109,7 +109,7 @@ def _enrich_results_by_zwid(zwids: list[int]) -> dict[int, dict]:
     matched_zwids = list(users_by_zwid.keys())
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=matched_zwids)}
     zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=matched_zwids)}
-    women_by_zwid = velo2_women_by_zwid((zwid, user.gender) for zwid, user in users_by_zwid.items())
+    velo2_by_zwid = velo2_categories_by_zwid((zwid, user.gender) for zwid, user in users_by_zwid.items())
 
     enriched: dict[int, dict] = {}
     for zwid, user in users_by_zwid.items():
@@ -129,7 +129,7 @@ def _enrich_results_by_zwid(zwids: list[int]) -> dict[int, dict]:
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
             "in_zwiftracing": zr is not None,
             "zr_category": getattr(zr, "race_current_category", "") or "" if zr else "",
-            "zr_v2_women_category": (women_by_zwid.get(zwid) or {}).get("category") or "",
+            "zr_v2_category": velo2_by_zwid[zwid].mixed if zwid in velo2_by_zwid else "",
             "zr_rating": getattr(zr, "race_current_rating", None) if zr else None,
             "zr_phenotype": getattr(zr, "phenotype_value", "") or "" if zr else "",
             "zr_age": getattr(zr, "age", "") or "" if zr else "",

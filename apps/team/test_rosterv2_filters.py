@@ -385,3 +385,29 @@ def test_the_country_chip_names_the_country_rather_than_its_code(auth_client, ro
 
     assert "Country: United Kingdom" in body
     assert "Country: GB" not in body
+
+
+# --- vELO 2 tiers ------------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_the_velo2_filters_narrow_by_the_mixed_and_the_womens_tier(roster_rider):
+    roster_rider(zwid=1, name="Woman", gender="F", velo2={"category": "Amethyst", "category_women": "Emerald"})
+    roster_rider(zwid=2, name="Man", gender="M", velo2={"category": "Amethyst", "category_women": "Emerald"})
+    roster_rider(zwid=3, name="Faster", gender="M", velo2={"category": "Ruby"})
+
+    assert sorted(_names(_rows(velo2="Amethyst"))) == ["Man", "Woman"]
+    # zwiftracing sends the man a women's tier too; the card keeps it for women only.
+    assert _names(_rows(velo2_women="Emerald")) == ["Woman"]
+    options = filter_options(build_roster_index().rows)
+    assert (options["velo2"], options["velo2_women"]) == (["Ruby", "Amethyst"], ["Emerald"])
+
+
+@pytest.mark.django_db
+def test_a_velo2_filter_shows_as_a_chip(auth_client, roster_rider):
+    roster_rider(zwid=1, name="Woman", gender="F", velo2={"category": "Amethyst", "category_women": "Emerald"})
+
+    body = auth_client.get(reverse("team:roster") + "?velo2_women=Emerald").content.decode()
+
+    assert "vELO 2 women&#x27;s" in body
+    assert '<option value="Emerald" selected>Emerald</option>' in body

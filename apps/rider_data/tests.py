@@ -12,7 +12,7 @@ import pytest
 from constance.test import override_config
 from django.utils import timezone
 
-from apps.rider_data.models import RiderProfile, is_woman, velo2_women_by_zwid
+from apps.rider_data.models import RiderProfile, Velo2Categories, is_woman, velo2_categories_by_zwid
 from apps.rider_data.tasks import purge_rider_profiles
 from gotta_bike_platform.retention import RetentionPolicy, policy_for
 
@@ -367,21 +367,27 @@ def test_a_woman_without_womens_categories_gets_none(profile_factory):
 
 
 @pytest.mark.django_db
-def test_the_bulk_lookup_reads_only_the_women_in_one_query(profile_factory, django_assert_num_queries):
+def test_the_bulk_lookup_gives_everyone_the_mixed_tier_and_women_theirs(profile_factory, django_assert_num_queries):
+    """The mixed tier is shown by default for everyone; the women's one only ever filters."""
     profile_factory(zwid=1, gender="F", payload={"velo2": WOMEN_VELO2})
     profile_factory(zwid=2, gender="M", payload={"velo2": WOMEN_VELO2})
-    profile_factory(zwid=3, gender="", payload={"velo2": WOMEN_VELO2})
+    profile_factory(zwid=3, gender="F", payload={"velo2": WOMEN_VELO2})
+    profile_factory(zwid=5, gender="", payload={"velo2": None})
 
     with django_assert_num_queries(1):
-        found = velo2_women_by_zwid([(1, ""), (2, "female"), (3, "male"), (None, "female"), (4, "female")])
+        found = velo2_categories_by_zwid([(1, ""), (2, "female"), (3, "male"), (None, "female"), (4, ""), (5, "")])
 
-    # 1: no member answer, and zauth says F. 2: the member says female, which overrules zauth's M.
-    # 3: the member says male, so the row is not even read. 4: no profile at all.
-    assert set(found) == {1, 2}
-    assert found[1] == {"category": "Emerald", "max30": "Emerald", "max90": "Ruby"}
+    # 1: no answer given, and zauth says F. 2: the given female overrules zauth's M.
+    # 3: the given male overrules zauth's F. 4: no profile. 5: no vELO 2 at all.
+    assert found == {
+        1: Velo2Categories("Amethyst", "Emerald"),
+        2: Velo2Categories("Amethyst", "Emerald"),
+        3: Velo2Categories("Amethyst", ""),
+        5: Velo2Categories("", ""),
+    }
 
 
 @pytest.mark.django_db
-def test_the_bulk_lookup_asks_nothing_when_nobody_could_be_a_woman(django_assert_num_queries):
+def test_the_bulk_lookup_asks_nothing_without_a_zwid(django_assert_num_queries):
     with django_assert_num_queries(0):
-        assert velo2_women_by_zwid([(1, "male"), (None, "female")]) == {}
+        assert velo2_categories_by_zwid([(None, "female"), (0, "male")]) == {}

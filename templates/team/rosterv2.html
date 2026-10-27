@@ -117,6 +117,27 @@
               </div>
 
               <div>
+                <label class="label py-1" for="f-velo2"><span class="label-text">vELO 2 tier</span></label>
+                <select class="select select-bordered w-full" id="f-velo2" name="velo2">
+                  <option value="">Any tier</option>
+                  {% for value in options.velo2 %}
+                    <option value="{{ value }}" {% if filters.velo2 == value %}selected{% endif %}>{{ value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                {# Only women have one, so picking a tier here also narrows to women. #}
+                <label class="label py-1" for="f-velo2-women"><span class="label-text">vELO 2 women's tier</span></label>
+                <select class="select select-bordered w-full" id="f-velo2-women" name="velo2_women">
+                  <option value="">Any tier</option>
+                  {% for value in options.velo2_women %}
+                    <option value="{{ value }}" {% if filters.velo2_women == value %}selected{% endif %}>{{ value }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
                 <label class="label py-1" for="f-gender"><span class="label-text">Gender</span></label>
                 <select class="select select-bordered w-full" id="f-gender" name="gender">
                   <option value="">Any</option>

@@ -74,7 +74,7 @@
           <td class="text-right font-mono">{{ r.pos|default:"-" }}</td>
           <td>
             {% if r.enriched %}
-              {% include "accounts/_user_tooltip.html" with display_name=r.enriched.display_name user_id=r.enriched.user_id discord_id=r.enriched.discord_id discord_avatar_url=r.enriched.discord_avatar_url zwid=r.enriched.zwid zp_category=r.enriched.zp_category zp_category_w=r.enriched.zp_category_w zr_category=r.enriched.zr_category zr_v2_w=r.enriched.zr_v2_women_category zr_rating=r.enriched.zr_rating zr_phenotype=r.enriched.zr_phenotype zr_age=r.enriched.zr_age is_race_ready=r.enriched.is_race_ready is_extra_verified=r.enriched.is_extra_verified in_zwiftpower=r.enriched.in_zwiftpower in_zwiftracing=r.enriched.in_zwiftracing %}
+              {% include "accounts/_user_tooltip.html" with display_name=r.enriched.display_name user_id=r.enriched.user_id discord_id=r.enriched.discord_id discord_avatar_url=r.enriched.discord_avatar_url zwid=r.enriched.zwid zp_category=r.enriched.zp_category zp_category_w=r.enriched.zp_category_w zr_category=r.enriched.zr_category zr_v2=r.enriched.zr_v2_category zr_rating=r.enriched.zr_rating zr_phenotype=r.enriched.zr_phenotype zr_age=r.enriched.zr_age is_race_ready=r.enriched.is_race_ready is_extra_verified=r.enriched.is_extra_verified in_zwiftpower=r.enriched.in_zwiftpower in_zwiftracing=r.enriched.in_zwiftracing %}
             {% else %}
               {{ r.name }}
             {% endif %}

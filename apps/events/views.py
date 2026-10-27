@@ -1430,6 +1430,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "signup_stat_groups": rider_stats.STAT_GROUPS if can_view_signup_table else (),
             "signup_stat_columns": rider_stats.stat_columns_json() if can_view_signup_table else [],
             "signup_stat_values": rider_stats.stat_rows(enriched_signups) if can_view_signup_table else {},
+            "signup_velo2_options": rider_stats.velo2_filter_options(enriched_signups) if can_view_signup_table else {},
             "can_view_signup_notes": can_view_signup_notes,
             # Narrower than viewing the table: the export is a bulk extract of every
             # rider's details, so only the people running the event get the button.
@@ -5926,7 +5927,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "zp_category_w": zp_cat_w,
             "in_zwiftracing": zr["in_zwiftracing"],
             "zr_category": zr_cat,
-            "zr_v2_women_category": zr["zr_v2_women_category"],
+            "zr_v2_category": zr["zr_v2_category"],
             "zr_rating": zr_rating,
             "zr_phenotype": zr_phenotype,
             "zr_age": zr_age,
@@ -6073,7 +6074,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
         user_data_json[uid] = {
             "display_name": entry["display_name"],
             "zr_category": entry["zr_category"],
-            "zr_v2_women_category": entry["zr_v2_women_category"],
+            "zr_v2_category": entry["zr_v2_category"],
             "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
             "is_race_ready": entry["is_race_ready"],
         }
@@ -6095,7 +6096,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             user_data_json[user.pk] = {
                 "display_name": user.get_full_name() or user.discord_username,
                 "zr_category": zr["zr_category"],
-                "zr_v2_women_category": zr["zr_v2_women_category"],
+                "zr_v2_category": zr["zr_v2_category"],
                 "zr_rating": float(rating) if rating is not None else None,
                 "is_race_ready": user.is_race_ready,
             }

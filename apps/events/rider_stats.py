@@ -8,8 +8,10 @@ the signups table offers (:data:`STAT_GROUPS`). Those extra columns travel as co
 row: there are 53 of them, and a big event would carry hundreds of kilobytes of markup
 nobody had asked to see.
 
-zwiftracing gives every rider a women's vELO 2 category beside the open one; the pages show
-it only for women (``RiderProfile.velo2_women``), beside each Zwift Racing category.
+vELO 2's mixed category is shown beside each Zwift Racing category (vELO 1's mixed one).
+zwiftracing also gives every rider a women's vELO 2 category; that one is kept for women
+(``RiderProfile.velo2_women``) and appears only where it is asked for: the signups table's
+optional columns and its filter.
 
 Squad eligibility still reads the zwiftracing table (``views._rider_categories``): moving
 the rule that decides who may join a squad is a separate decision.
@@ -21,7 +23,7 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
-from apps.rider_data.models import CURVE_DURATIONS, RiderProfile
+from apps.rider_data.models import CURVE_DURATIONS, ZR_TIERS, RiderProfile
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -49,9 +51,9 @@ def zr_fields(profile: RiderProfile | None, gender: str | None = None) -> dict:
     """Return the ``zr_*`` keys the event templates read, from a rider's profile.
 
     Ratings are whole numbers, as zwiftracing shows them. ``in_zwiftracing`` says whether
-    zauth holds a Zwift Racing record for the rider. The ``zr_v2_women_*`` keys are the
-    women's vELO 2 categories, filled only for a woman -- shown beside the categories above,
-    which are vELO 1's mixed ones.
+    zauth holds a Zwift Racing record for the rider. ``zr_v2_category`` is vELO 2's mixed
+    category, shown beside ``zr_category`` (vELO 1's mixed one); ``zr_v2_women_category`` is a
+    woman's women's category, blank for anyone else, which only the signups table's filter reads.
 
     Args:
         profile: The rider's cached profile, or None.
@@ -65,9 +67,8 @@ def zr_fields(profile: RiderProfile | None, gender: str | None = None) -> dict:
         return {
             "in_zwiftracing": False,
             "zr_category": "",
+            "zr_v2_category": "",
             "zr_v2_women_category": "",
-            "zr_v2_women_max30_category": "",
-            "zr_v2_women_max90_category": "",
             "zr_rating": None,
             "zr_age": "",
             "zr_current_rating": None,
@@ -85,9 +86,8 @@ def zr_fields(profile: RiderProfile | None, gender: str | None = None) -> dict:
     return {
         "in_zwiftracing": bool((profile.has_account or {}).get("zwiftracing")),
         "zr_category": profile.category_racing,
+        "zr_v2_category": (profile.velo2 or {}).get("category") or "",
         "zr_v2_women_category": women.get("category") or "",
-        "zr_v2_women_max30_category": women.get("max30") or "",
-        "zr_v2_women_max90_category": women.get("max90") or "",
         "zr_rating": rating,
         "zr_age": profile.age,
         "zr_current_rating": rating,
@@ -101,7 +101,26 @@ def zr_fields(profile: RiderProfile | None, gender: str | None = None) -> dict:
 
 
 # The keys of zr_fields that the rider popover (accounts/_user_tooltip.html) is given.
-TOOLTIP_FIELDS = ("in_zwiftracing", "zr_category", "zr_v2_women_category", "zr_rating", "zr_age", "zr_phenotype")
+TOOLTIP_FIELDS = ("in_zwiftracing", "zr_category", "zr_v2_category", "zr_rating", "zr_age", "zr_phenotype")
+
+
+def velo2_filter_options(entries: Iterable[dict]) -> dict[str, list[str]]:
+    """Return the vELO 2 tiers the signups table can be filtered to: the ones its riders hold.
+
+    Args:
+        entries: Enriched signups, each carrying :func:`zr_fields`' keys.
+
+    Returns:
+        ``mixed`` and ``women`` tier lists, best tier first; a name zwiftracing adds later
+        goes at the end rather than being dropped.
+
+    """
+    entries = list(entries)
+    options = {}
+    for name, key in (("mixed", "zr_v2_category"), ("women", "zr_v2_women_category")):
+        held = {entry.get(key) for entry in entries} - {"", None}
+        options[name] = [tier for tier in ZR_TIERS if tier in held] + sorted(held - set(ZR_TIERS))
+    return options
 
 
 # --- the extra columns on the signups table --------------------------------------------------

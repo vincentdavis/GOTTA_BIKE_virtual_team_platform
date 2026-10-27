@@ -17,7 +17,7 @@ from django.db.models import Count, F, Max, Min, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.accounts.models import GuildMember, User
-from apps.rider_data.models import velo2_women_by_zwid
+from apps.rider_data.models import velo2_categories_by_zwid
 from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView
 from apps.zwiftpower.models import ZPRiderResults, ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -1861,8 +1861,9 @@ class UnifiedRider:
     in_zwiftracing: bool = False
     zr_name: str = ""
     zr_category: str = ""
-    # vELO 2's women's category, for a rider this roster shows as a woman; shown beside
-    # zr_category, which is vELO 1's mixed one. From the rider's cached RiderProfile.
+    # vELO 2's categories, from the rider's cached RiderProfile: the mixed one, shown beside
+    # zr_category (vELO 1's mixed one), and a woman's women's one, which only filters.
+    zr_v2_category: str = ""
     zr_v2_women_category: str = ""
     zr_date_left: datetime | None = None
     zr_rating: Decimal | None = None
@@ -2088,11 +2089,12 @@ def get_unified_team_roster() -> list[UnifiedRider]:
 
         unified.append(rider)
 
-    # zwiftracing sends every rider a women's vELO 2 category; it applies to the riders this
-    # roster shows as women, and to those it cannot say about, if their profile says so.
-    women = velo2_women_by_zwid((r.zwid, r.user_gender or _GENDER_WORDS.get(r.gender, "")) for r in unified)
+    # vELO 2's mixed category for everyone. The women's one comes for every rider too, and is
+    # kept for the riders this roster shows as women -- or, when it cannot say, whose profile does.
+    velo2 = velo2_categories_by_zwid((r.zwid, r.user_gender or _GENDER_WORDS.get(r.gender, "")) for r in unified)
     for rider in unified:
-        rider.zr_v2_women_category = (women.get(rider.zwid) or {}).get("category") or ""
+        if rider.zwid in velo2:
+            rider.zr_v2_category, rider.zr_v2_women_category = velo2[rider.zwid]
 
     # Sort by display name
     sorted_roster = sorted(unified, key=lambda r: r.display_name.lower())
@@ -2143,7 +2145,7 @@ class PerformanceRider:
     in_zwiftpower: bool = False
     in_zwiftracing: bool = False
     zr_category: str = ""
-    zr_v2_women_category: str = ""
+    zr_v2_category: str = ""
     zr_rating: Decimal | None = None
     zr_phenotype: str = ""
     zr_age: str = ""
@@ -2289,7 +2291,7 @@ def get_performance_review_data() -> list[PerformanceRider]:
             "in_zwiftpower": r.in_zwiftpower,
             "in_zwiftracing": r.in_zwiftracing,
             "zr_category": r.zr_category,
-            "zr_v2_women_category": r.zr_v2_women_category,
+            "zr_v2_category": r.zr_v2_category,
             "zr_rating": r.zr_rating,
             "zr_phenotype": r.zr_phenotype,
         }
@@ -2401,7 +2403,7 @@ def get_performance_review_data() -> list[PerformanceRider]:
             in_zwiftpower=info["in_zwiftpower"],
             in_zwiftracing=info["in_zwiftracing"],
             zr_category=info["zr_category"],
-            zr_v2_women_category=info["zr_v2_women_category"],
+            zr_v2_category=info["zr_v2_category"],
             zr_rating=info["zr_rating"],
             zr_phenotype=info["zr_phenotype"],
         )

@@ -98,7 +98,7 @@ the squad's name here and each rider's name from their row.
         {% for row in group.rows %}
         <tr data-rider-name="{{ row.user.get_full_name|default:row.user.discord_username }}">
           <td class="font-medium whitespace-nowrap">
-            {% include "accounts/_user_tooltip.html" with display_name=row.user.get_full_name|default:row.user.discord_username user_id=row.user.pk discord_id=row.user.discord_id discord_avatar_url=row.user.discord_avatar_url zwid=row.zwid zp_category=row.zp_category zp_category_w=row.zp_category_w zr_category=row.zr_category zr_v2_w=row.zr_v2_women_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype zr_age=row.zr_age is_race_ready=row.is_race_ready is_extra_verified=row.is_extra_verified in_zwiftpower=row.in_zwiftpower in_zwiftracing=row.in_zwiftracing %}
+            {% include "accounts/_user_tooltip.html" with display_name=row.user.get_full_name|default:row.user.discord_username user_id=row.user.pk discord_id=row.user.discord_id discord_avatar_url=row.user.discord_avatar_url zwid=row.zwid zp_category=row.zp_category zp_category_w=row.zp_category_w zr_category=row.zr_category zr_v2=row.zr_v2_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype zr_age=row.zr_age is_race_ready=row.is_race_ready is_extra_verified=row.is_extra_verified in_zwiftpower=row.in_zwiftpower in_zwiftracing=row.in_zwiftracing %}
           </td>
           {% for a in row.availability %}
           <td class="text-center" data-col="availability" style="display:none" title="{{ a.detail }}">

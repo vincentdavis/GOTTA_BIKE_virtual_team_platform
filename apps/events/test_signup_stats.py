@@ -214,14 +214,14 @@ def test_a_names_only_viewer_gets_none_of_the_figures(client, event, team_member
     assert "stat-col-toggle" not in body
 
 
-# --- the women's vELO 2 categories ------------------------------------------------------------------
+# --- vELO 2's mixed and women's categories -----------------------------------------------------------
 
 
 @pytest.mark.django_db
-def test_a_womans_row_carries_her_womens_velo2_categories(
+def test_a_womans_row_carries_her_womens_velo2_categories_only_where_asked(
     client, event, event_admin, user_model, rider_profile_factory
 ):
-    """Every rider gets a women's category from zwiftracing; the table shows a woman's only."""
+    """Every rider gets a women's category from zwiftracing; the table offers a woman's as an option."""
     woman = _signup(user_model, event, "ana", zwid=4242)
     woman.user.gender = "female"
     woman.user.save(update_fields=["gender"])
@@ -239,21 +239,67 @@ def test_a_womans_row_carries_her_womens_velo2_categories(
     women_columns = ("zr_v2_cat_w", "zr_v2_max30_cat_w", "zr_v2_max90_cat_w")
     assert [hers[k] for k in women_columns] == ["Emerald", "Emerald", "Ruby"]
     assert [his[k] for k in women_columns] == ["", "", ""]
-    # Beside each ZR category -- vELO 1's mixed one -- her vELO 2 women's one, named in full.
-    assert " ".join(_cell(body, woman, "zr_cur_cat").split()) == "Diamond vELO 2 women's category Emerald W Emerald"
-    assert " ".join(_cell(body, woman, "zr_max90_cat").split()) == "Ruby vELO 2 women's category Ruby W Ruby"
+    # The ZR columns show the mixed category alone, for her as for him.
+    assert _cell(body, woman, "zr_cur_cat") == "Diamond"
     assert _cell(body, man, "zr_cur_cat") == "Diamond"
 
 
-def test_zr_fields_gives_a_woman_her_womens_categories_and_nobody_else(db, rider_profile_factory):
+@pytest.mark.django_db
+def test_the_table_filters_by_velo2_mixed_and_womens_tiers(
+    client, event, event_admin, user_model, rider_profile_factory
+):
+    woman = _signup(user_model, event, "ana", zwid=4242)
+    woman.user.gender = "female"
+    woman.user.save(update_fields=["gender"])
+    man = _signup(user_model, event, "bo", zwid=5151)
+    _profile(rider_profile_factory, 4242)
+    _profile(rider_profile_factory, 5151)
+    client.force_login(event_admin)
+
+    body = _page(client, event)
+
+    # Each row says its tiers; a man's women's tier is blank, so that filter never keeps him.
+    assert f'data-signup-pk="{woman.pk}"' in body
+    assert re.search(rf'data-signup-pk="{woman.pk}"[^>]*data-velo2="Amethyst" data-velo2-women="Emerald"', body)
+    assert re.search(rf'data-signup-pk="{man.pk}"[^>]*data-velo2="Amethyst" data-velo2-women=""', body)
+    # The selects offer only the tiers this event's riders hold.
+    assert '<option value="Amethyst">vELO 2: Amethyst</option>' in body
+    assert '<option value="Emerald">vELO 2 women\'s: Emerald</option>' in body
+    assert "vELO 2 women's: Ruby" not in body
+
+
+@pytest.mark.django_db
+def test_a_names_only_viewer_gets_no_velo2_filters(client, event, team_member, user_model, rider_profile_factory):
+    _signup(user_model, event, "ana", zwid=4242)
+    _profile(rider_profile_factory, 4242)
+    client.force_login(team_member)
+
+    # The script is on every page; the selects, and the rows' tiers, are not.
+    body = _page(client, event)
+    assert 'data-signup-velo2-filter="' not in body
+    assert 'data-velo2="' not in body
+
+
+def test_zr_fields_gives_everyone_the_mixed_tier_and_a_woman_hers(db, rider_profile_factory):
     profile = rider_profile_factory(
-        zwid=101, gender="", velo2={"race": 430.0, "category_women": "Emerald", "category_women_max30": "Ruby"}
+        zwid=101, gender="", velo2={"race": 430.0, "category": "Amethyst", "category_women": "Emerald"}
     )
 
     hers = rider_stats.zr_fields(profile, gender="female")
-    assert (hers["zr_v2_women_category"], hers["zr_v2_women_max30_category"]) == ("Emerald", "Ruby")
-    assert hers["zr_v2_women_max90_category"] == ""
-    assert rider_stats.zr_fields(profile, gender="male")["zr_v2_women_category"] == ""
-    assert rider_stats.zr_fields(None, gender="female")["zr_v2_women_category"] == ""
+    his = rider_stats.zr_fields(profile, gender="male")
+    assert (hers["zr_v2_category"], hers["zr_v2_women_category"]) == ("Amethyst", "Emerald")
+    assert (his["zr_v2_category"], his["zr_v2_women_category"]) == ("Amethyst", "")
+    assert rider_stats.zr_fields(None, gender="female")["zr_v2_category"] == ""
     # Every key the rider popover is handed exists, profile or not.
     assert set(rider_stats.TOOLTIP_FIELDS) <= set(rider_stats.zr_fields(None)) & set(hers)
+
+
+def test_the_filters_offer_the_tiers_held_best_first():
+    entries = [
+        {"zr_v2_category": "Gold", "zr_v2_women_category": ""},
+        {"zr_v2_category": "Diamond", "zr_v2_women_category": "Ruby"},
+        {"zr_v2_category": "Gold", "zr_v2_women_category": ""},
+        {"zr_v2_category": "Nova", "zr_v2_women_category": ""},  # a tier zwiftracing adds later
+    ]
+
+    assert rider_stats.velo2_filter_options(entries) == {"mixed": ["Diamond", "Gold", "Nova"], "women": ["Ruby"]}

@@ -113,45 +113,44 @@ def test_rendered_card_carries_the_hook():
     assert not unhooked, "a hover-card rendered without the hook the script looks for"
 
 
-# --- a woman's vELO 2 women's category, beside the ZR one ------------------------------------------
+# --- vELO 2's mixed category, beside the ZR (vELO 1) one ------------------------------------------
 
 
 def _render(source, **context):
     return Template("{% load accounts_tags %}" + source).render(Context(context))
 
 
-def test_the_womens_category_badge_names_itself_in_full():
-    """The visible "W" is short; the accessible name says which rating and which field."""
-    badge = _render("{% zr_women_category_badge cat %}", cat="Emerald")
+def test_the_velo2_badge_is_marked_v2_and_named_in_full():
+    """Both ratings name their tiers alike, so the second one says which it is."""
+    badge = _render("{% zr_v2_category_badge cat %}", cat="Amethyst")
 
-    assert "<span class=\"sr-only\">vELO 2 women's category Emerald</span>" in badge
-    assert '<span aria-hidden="true">W Emerald</span>' in badge
-
-
-def test_the_womens_category_badge_is_empty_for_anyone_else():
-    """Callers pass a blank for anyone who is not a woman, and that must render nothing."""
-    assert _render("{% zr_women_category_badge cat %}", cat="").strip() == ""
+    assert '<span class="sr-only">vELO 2 Amethyst</span>' in badge
+    assert '<span aria-hidden="true">v2 Amethyst</span>' in badge
 
 
-def test_the_womens_category_badge_escapes_the_name():
-    badge = _render("{% zr_women_category_badge cat %}", cat="<b>x</b>")
+def test_the_velo2_badge_is_empty_without_a_category():
+    assert _render("{% zr_v2_category_badge cat %}", cat="").strip() == ""
+
+
+def test_the_velo2_badge_escapes_the_name():
+    badge = _render("{% zr_v2_category_badge cat %}", cat="<b>x</b>")
 
     assert "<b>" not in badge
     assert "&lt;b&gt;" in badge
 
 
-def test_the_popover_puts_a_womans_category_beside_the_zr_one():
+def test_the_popover_shows_both_mixed_categories_side_by_side():
     popover = render_to_string(
         "accounts/_user_tooltip.html",
-        {"display_name": "Ana", "in_zwiftracing": True, "zr_category": "Ruby", "zr_v2_w": "Emerald"},
+        {"display_name": "Ana", "in_zwiftracing": True, "zr_category": "Ruby", "zr_v2": "Amethyst"},
     )
 
-    assert popover.index("Ruby") < popover.index("vELO 2 women's category Emerald")
-    assert "vELO 2 Women's: <span" in popover
+    assert popover.index("Ruby") < popover.index("vELO 2 Amethyst")
+    assert "vELO 2 Category: <span" in popover
 
 
-def test_every_popover_given_a_zr_category_is_given_the_womens_one_too():
-    """A page showing a rider's ZR category shows a woman's vELO 2 women's category beside it.
+def test_every_popover_given_a_zr_category_is_given_the_velo2_one_too():
+    """A page showing a rider's ZR category (vELO 1's mixed one) shows vELO 2's beside it.
 
     The ladder planner is not scanned: its riders, ours and the opponents', come from
     zwiftracing's club data, which carries vELO 1 ranks rather than our profiles.
@@ -160,7 +159,7 @@ def test_every_popover_given_a_zr_category_is_given_the_womens_one_too():
         str(path.relative_to(_ROOT))
         for path in (_ROOT / "templates").rglob("*.html")
         for include in re.findall(r'\{% include "accounts/_user_tooltip\.html" with [^%]*%\}', path.read_text())
-        if "zr_category=" in include and "zr_v2_w=" not in include
+        if "zr_category=" in include and "zr_v2=" not in include
     ]
 
     assert missing == []

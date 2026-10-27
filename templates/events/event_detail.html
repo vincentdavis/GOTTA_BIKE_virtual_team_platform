@@ -377,7 +377,7 @@
                       <tr>
                         <td data-col="sq_name">
                           {% if member.user.pk in squad.captain_pks %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif member.user.pk in squad.vice_captain_pks %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
-                          {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_id=member.user.discord_id discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_v2_w=member.zr_v2_women_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready is_extra_verified=member.is_extra_verified in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
+                          {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_id=member.user.discord_id discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_v2=member.zr_v2_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready is_extra_verified=member.is_extra_verified in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
                         </td>
                         <td data-col="sq_gender">
                           {% if member.gender == "male" %}
@@ -465,7 +465,6 @@
                         <td data-col="sq_zr_cur_cat" style="display:none">
                           {% if member.zr_current_category %}<span class="badge badge-sm">{{ member.zr_current_category }}</span>
                           {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                          {% zr_women_category_badge member.zr_v2_women_category plain=True %}
                         </td>
                         <td data-col="sq_zr_max30_rating" style="display:none">
                           {% if member.zr_max30_rating %}<span class="font-mono text-sm">{{ member.zr_max30_rating }}</span>
@@ -474,7 +473,6 @@
                         <td data-col="sq_zr_max30_cat" style="display:none">
                           {% if member.zr_max30_category %}<span class="badge badge-sm">{{ member.zr_max30_category }}</span>
                           {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                          {% zr_women_category_badge member.zr_v2_women_max30_category plain=True %}
                         </td>
                         <td data-col="sq_zr_max90_rating" style="display:none">
                           {% if member.zr_max90_rating %}<span class="font-mono text-sm">{{ member.zr_max90_rating }}</span>
@@ -483,7 +481,6 @@
                         <td data-col="sq_zr_max90_cat" style="display:none">
                           {% if member.zr_max90_category %}<span class="badge badge-sm">{{ member.zr_max90_category }}</span>
                           {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                          {% zr_women_category_badge member.zr_v2_women_max90_category plain=True %}
                         </td>
                         <td data-col="sq_zr_phenotype" style="display:none">
                           {% if member.zr_phenotype %}<span class="text-sm">{{ member.zr_phenotype }}</span>
@@ -548,7 +545,23 @@
       {% if can_view_signup_table %}
       <div class="mt-2">
         <div class="flex items-center gap-2 mb-2">
-          <div class="ml-auto flex items-center gap-2">
+          <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {% comment %}
+              vELO 2 tier filters: the mixed tier, and the women's tier only women have (a man's
+              row carries none). Only the tiers this event's riders hold are offered.
+            {% endcomment %}
+            {% if signup_velo2_options.mixed %}
+            <select class="select select-bordered select-sm w-auto" data-signup-velo2-filter="velo2" aria-label="Filter signups by vELO 2 tier">
+              <option value="">vELO 2: any</option>
+              {% for tier in signup_velo2_options.mixed %}<option value="{{ tier }}">vELO 2: {{ tier }}</option>{% endfor %}
+            </select>
+            {% endif %}
+            {% if signup_velo2_options.women %}
+            <select class="select select-bordered select-sm w-auto" data-signup-velo2-filter="velo2Women" aria-label="Filter signups by vELO 2 women's tier">
+              <option value="">vELO 2 women's: any</option>
+              {% for tier in signup_velo2_options.women %}<option value="{{ tier }}">vELO 2 women's: {{ tier }}</option>{% endfor %}
+            </select>
+            {% endif %}
             <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
             {% if can_export_signups %}
             <a href="{% url 'events:signup_export' event.pk %}" class="btn btn-outline btn-sm btn-square"
@@ -646,9 +659,9 @@
             <tbody>
               {% for entry in signups %}
               {% with withdrawn=entry.signup.is_withdrawn %}
-              <tr data-signup-pk="{{ entry.signup.pk }}" data-name="{{ entry.user.get_full_name|default:entry.user.discord_username }}"{% if withdrawn %} data-signup-withdrawn class="opacity-60"{% endif %}>
+              <tr data-signup-pk="{{ entry.signup.pk }}" data-name="{{ entry.user.get_full_name|default:entry.user.discord_username }}" data-velo2="{{ entry.zr_v2_category }}" data-velo2-women="{{ entry.zr_v2_women_category }}"{% if withdrawn %} data-signup-withdrawn class="opacity-60"{% endif %}>
                 <td data-col="name" data-sort-value="{{ entry.user.get_full_name|default:entry.user.discord_username }}">
-                  {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2_w=entry.zr_v2_women_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+                  {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2=entry.zr_v2_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                   {% if withdrawn %}<span class="badge badge-ghost badge-sm ml-1 whitespace-nowrap">Withdrawn</span>{% endif %}
                   {% if answer_facets %}<div class="md:hidden text-xs text-base-content/60 mt-1 max-w-48 empty:hidden" data-answer-focus></div>{% endif %}
                 </td>
@@ -791,7 +804,6 @@
                 <td data-col="zr_cur_cat" style="display:none">
                   {% if entry.zr_current_category %}<span class="badge badge-sm">{{ entry.zr_current_category }}</span>
                   {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                  {% zr_women_category_badge entry.zr_v2_women_category plain=True %}
                 </td>
                 <td data-col="zr_max30_rating" style="display:none">
                   {% if entry.zr_max30_rating %}<span class="font-mono text-sm">{{ entry.zr_max30_rating }}</span>
@@ -800,7 +812,6 @@
                 <td data-col="zr_max30_cat" style="display:none">
                   {% if entry.zr_max30_category %}<span class="badge badge-sm">{{ entry.zr_max30_category }}</span>
                   {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                  {% zr_women_category_badge entry.zr_v2_women_max30_category plain=True %}
                 </td>
                 <td data-col="zr_max90_rating" style="display:none">
                   {% if entry.zr_max90_rating %}<span class="font-mono text-sm">{{ entry.zr_max90_rating }}</span>
@@ -809,7 +820,6 @@
                 <td data-col="zr_max90_cat" style="display:none">
                   {% if entry.zr_max90_category %}<span class="badge badge-sm">{{ entry.zr_max90_category }}</span>
                   {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                  {% zr_women_category_badge entry.zr_v2_women_max90_category plain=True %}
                 </td>
                 <td data-col="zr_phenotype" style="display:none">
                   {% if entry.zr_phenotype %}<span class="text-sm">{{ entry.zr_phenotype }}</span>
@@ -891,7 +901,7 @@
       <div class="mt-2 flex flex-wrap gap-2">
         {% for entry in signups %}
         <div class="badge badge-ghost badge-lg gap-1 py-3">
-          {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2_w=entry.zr_v2_women_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+          {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2=entry.zr_v2_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
         </div>
         {% endfor %}
       </div>
@@ -1657,10 +1667,10 @@ function switchCategorySource(source) {
 <script>
 (function() {
   // Search
-  // A row can be hidden by the name search and by the answer facets independently;
-  // both write a flag and this decides, so neither can un-hide the other's rows.
+  // A row can be hidden by the name search, the answer facets and the vELO 2 filters
+  // independently; each writes a flag and this decides, so none can un-hide another's rows.
   window.applyRowVisibility = function(row) {
-    row.style.display = (row.dataset.searchHidden || row.dataset.answerHidden) ? 'none' : '';
+    row.style.display = (row.dataset.searchHidden || row.dataset.answerHidden || row.dataset.velo2Hidden) ? 'none' : '';
   };
 
   function cellSortText(row, colIdx) {
@@ -1685,6 +1695,26 @@ function switchCategorySource(source) {
       // searchHidden, so they have to be recomputed here too.
       if (typeof window.answerFacetsRender === 'function') window.answerFacetsRender();
     });
+  });
+
+  // vELO 2 tier filters. A select's data-signup-velo2-filter names the row attribute it
+  // matches: "velo2" reads data-velo2, "velo2Women" reads data-velo2-women.
+  document.querySelectorAll('[data-signup-table="detail"]').forEach(function(table) {
+    var selects = Array.from(document.querySelectorAll('[data-signup-velo2-filter]'));
+    if (!selects.length) return;
+    var applyVelo2 = function() {
+      table.querySelectorAll('tbody tr[data-signup-pk]').forEach(function(row) {
+        var match = selects.every(function(select) {
+          return !select.value || row.dataset[select.dataset.signupVelo2Filter] === select.value;
+        });
+        row.dataset.velo2Hidden = match ? '' : '1';
+        applyRowVisibility(row);
+      });
+      if (typeof window.answerFacetsRender === 'function') window.answerFacetsRender();
+    };
+    selects.forEach(function(select) { select.addEventListener('change', applyVelo2); });
+    // A browser can restore a choice on Back; filter to it rather than show every row under it.
+    if (selects.some(function(select) { return select.value; })) applyVelo2();
   });
 
   // Sort

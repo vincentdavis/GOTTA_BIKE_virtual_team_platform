@@ -74,7 +74,7 @@
     {% endcomment %}
     {% site_icon_url "kit" row.account.kit_status as site_kit_icon %}
     {% firstof row.account.kit_icon_url site_kit_icon "" as kit_icon %}
-    {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.velo2_category_women or row.card.phenotype or row.card.age_bracket or kit_icon or row.card.country %}
+    {% if row.card.category_open or row.card.category_women or row.card.category_racing or row.card.velo2_category or row.card.phenotype or row.card.age_bracket or kit_icon or row.card.country %}
       {# Every tag says in words what it is. Colour alone would carry the meaning otherwise. #}
       {% comment %}
         Where an icon is uploaded it stands alone -- no badge, no word. The word is carried
@@ -129,20 +129,22 @@
           {% endif %}
         {% endif %}
         {% comment %}
-          A woman's vELO 2 women's category, beside the ZR one -- which is vELO 1's MIXED
-          category, a different rating, hence the words in the alt. zwiftracing sends one for
-          every rider; rosterv2 keeps it only for a rider the card shows as a woman. Same
-          artwork and pink ring as the women's Zwift category above, for the same reason.
+          vELO 2's MIXED category, beside the ZR one (vELO 1's mixed category). The two ratings
+          name their tiers alike and share the artwork, so this one carries a visible "v2" as
+          well as the words in its alt: two Ruby gems side by side would leave a reader to
+          guess which is which. The women's tier is never drawn; it only filters.
         {% endcomment %}
-        {% if row.card.velo2_category_women %}
-          {% site_icon_url "zr" row.card.velo2_category_women as zrw_icon %}
-          {% if zrw_icon %}
-            <li class="tooltip" data-tip="vELO 2 women's category {{ row.card.velo2_category_women }}">
-              <img src="{{ zrw_icon }}" alt="vELO 2 women's category {{ row.card.velo2_category_women }}"
-                   class="h-[2em] w-[2em] rounded-full ring-2 ring-pink-400">
+        {% if row.card.velo2_category %}
+          {% site_icon_url "zr" row.card.velo2_category as zr2_icon %}
+          {% if zr2_icon %}
+            <li class="tooltip" data-tip="Zwift Racing vELO 2 {{ row.card.velo2_category }}">
+              <span class="inline-flex items-center gap-0.5">
+                <img src="{{ zr2_icon }}" alt="Zwift Racing vELO 2 {{ row.card.velo2_category }}" class="h-[2em] w-[2em]">
+                <span class="font-semibold" aria-hidden="true">v2</span>
+              </span>
             </li>
           {% else %}
-            <li class="badge badge-sm badge-outline">vELO 2 Women's {{ row.card.velo2_category_women }}</li>
+            <li class="badge badge-sm badge-outline">ZR v2 {{ row.card.velo2_category }}</li>
           {% endif %}
         {% endif %}
         {% if row.card.phenotype %}

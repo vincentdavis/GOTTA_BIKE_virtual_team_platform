@@ -814,7 +814,8 @@ def test_a_card_shows_velo_2_in_a_tile_of_its_own(auth_client, roster_rider):
 
 
 @pytest.mark.django_db
-def test_a_womans_card_carries_her_velo_2_womens_category_beside_the_zr_one(auth_client, roster_rider):
+def test_the_card_shows_both_mixed_tiers_side_by_side_and_never_the_womens(auth_client, roster_rider):
+    """Both mixed tiers, vELO 1's and vELO 2's, each labelled; a woman's women's tier only filters."""
     roster_rider(
         zwid=4242,
         name="Ada Racer",
@@ -823,8 +824,10 @@ def test_a_womans_card_carries_her_velo_2_womens_category_beside_the_zr_one(auth
         velo2={"race": 430.4, "category": "Amethyst", "category_women": "Emerald"},
     )
 
-    text = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
+    card = _card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer")
+    text = _text_of(card)
 
-    # No icons uploaded here, so both are the worded badges: vELO 1's mixed, then hers.
-    assert text.index("ZR Ruby") < text.index("vELO 2 Women's Emerald")
-    assert "vELO 2 430 · Amethyst" in text  # the tile keeps the open category
+    # No icons uploaded here, so both are the worded badges: vELO 1's mixed, then vELO 2's.
+    assert text.index("ZR Ruby") < text.index("ZR v2 Amethyst")
+    assert "vELO 2 430 · Amethyst" in text
+    assert "Emerald" not in card

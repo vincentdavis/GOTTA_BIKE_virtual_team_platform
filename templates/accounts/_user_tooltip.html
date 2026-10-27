@@ -44,8 +44,8 @@
     {% if in_zwiftracing %}
       {% zr_category_badge zr_category %}
     {% endif %}
-    {# zr_v2_w: a woman's vELO 2 women's category, blank for anyone else (RiderProfile.velo2_women). #}
-    {% zr_women_category_badge zr_v2_w %}
+    {# zr_v2: vELO 2's mixed category, beside ZR's (vELO 1's mixed one) and marked "v2". #}
+    {% zr_v2_category_badge zr_v2 %}
     {% if zr_phenotype %}{% phenotype_icon zr_phenotype %}{% endif %}
     </span>
   </a>
@@ -61,8 +61,8 @@
       {% if zr_category %}
       <p>ZR Category: <span class="font-medium text-base-content">{{ zr_category }}</span></p>
       {% endif %}
-      {% if zr_v2_w %}
-      <p>vELO 2 Women's: <span class="font-medium text-base-content">{{ zr_v2_w }}</span></p>
+      {% if zr_v2 %}
+      <p>vELO 2 Category: <span class="font-medium text-base-content">{{ zr_v2 }}</span></p>
       {% endif %}
       {% if zr_rating %}
       <p>ZR Rating: <span class="font-medium text-base-content">{{ zr_rating }}</span></p>
@@ -73,7 +73,7 @@
       {% if zr_age %}
       <p>Age: <span class="font-medium text-base-content">{{ zr_age }}</span></p>
       {% endif %}
-      {% if not zp_category and not zp_category_w and not zr_category %}
+      {% if not zp_category and not zp_category_w and not zr_category and not zr_v2 %}
       <p class="text-base-content/40">No ZP/ZR data</p>
       {% endif %}
       {% if not hide_verification %}

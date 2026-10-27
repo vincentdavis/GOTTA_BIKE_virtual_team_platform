@@ -17,7 +17,7 @@ away and re-fetched. Two consequences follow, and both are load-bearing:
   schema you have to migrate. The rule is the thing that stops that happening again.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from django.db import models
 
@@ -88,6 +88,10 @@ CURVE_DURATIONS = (
     (300, "5 min"),
     (1200, "20 min"),
 )
+
+# zwiftracing's tiers, highest first. vELO 1 and vELO 2 use the same names, mixed and women's
+# alike. Sorting them alphabetically puts Diamond, the top tier, sixth.
+ZR_TIERS = ("Diamond", "Ruby", "Emerald", "Sapphire", "Amethyst", "Platinum", "Gold", "Silver", "Bronze", "Copper")
 
 # How the sources spell a woman: zauth passes Zwift's "F" or "female", the app's own profile
 # says "female", and the roster's filters say "women".
@@ -638,29 +642,45 @@ class RiderProfile(models.Model):
         ]
 
 
-def velo2_women_by_zwid(riders: Iterable[tuple[int | None, str | None]]) -> dict[int, dict]:
-    """Look up the women's vELO 2 categories of the women among some riders, in one query.
+class Velo2Categories(NamedTuple):
+    """A rider's vELO 2 categories, as the pages without a loaded profile get them.
 
-    For the pages that do not otherwise load the riders' profiles. A rider whose gender is
-    given and is not a woman's is never looked up; a blank one is left to the profile's, as
-    :meth:`RiderProfile.velo2_women` does.
+    Attributes:
+        mixed: The mixed (open) category, which every page shows by default.
+        women: A woman's women's category, "" for anyone else -- for filters and columns.
+
+    """
+
+    mixed: str
+    women: str
+
+
+def velo2_categories_by_zwid(riders: Iterable[tuple[int | None, str | None]]) -> dict[int, Velo2Categories]:
+    """Look up the vELO 2 categories of some riders, in one query.
+
+    For the pages that do not otherwise load the riders' profiles. Only the two names are
+    read out of each payload, not the whole document, so a page listing the team stays one
+    light query. The women's category is kept for a woman, by :func:`is_woman` -- the given
+    gender first, the profile's when that is blank.
 
     Args:
         riders: ``(zwid, gender)`` pairs -- the gender each page already shows, else the
             member's own; a blank zwid is skipped.
 
     Returns:
-        ``{zwid: RiderProfile.velo2_women}`` for each rider it applies to.
+        ``{zwid: Velo2Categories}`` for each rider with a cached profile.
 
     """
-    wanted = {
-        zwid: gender or "" for zwid, gender in riders if zwid and (is_woman(gender) or not (gender or "").strip())
-    }
-    if not wanted:
+    genders = {zwid: gender or "" for zwid, gender in riders if zwid}
+    if not genders:
         return {}
-    found: dict[int, dict] = {}
-    for profile in RiderProfile.objects.filter(zwid__in=wanted).only("zwid", "gender", "payload"):
-        women = profile.velo2_women(wanted[profile.zwid])
-        if women:
-            found[profile.zwid] = women
-    return found
+    rows = RiderProfile.objects.filter(zwid__in=genders).values_list(
+        "zwid", "gender", "payload__velo2__category", "payload__velo2__category_women"
+    )
+    return {
+        zwid: Velo2Categories(
+            mixed if isinstance(mixed, str) else "",
+            women if isinstance(women, str) and is_woman(genders[zwid], profile_gender) else "",
+        )
+        for zwid, profile_gender, mixed, women in rows
+    }

@@ -23,7 +23,7 @@ from apps.accounts.decorators import discord_permission_required, team_member_re
 from apps.accounts.discord_service import send_verification_notification
 from apps.accounts.models import User
 from apps.accounts.utils import resolve_country
-from apps.rider_data.models import velo2_women_by_zwid
+from apps.rider_data.models import velo2_categories_by_zwid
 from apps.rider_data.services import last_successful_sync
 from apps.rider_data.tasks import refresh_zwift_profile
 from apps.team.context_processors import SQUAD_EXPIRING_CACHE_PREFIX, SQUAD_EXPIRING_CACHE_TIMEOUT
@@ -44,6 +44,7 @@ from apps.team.rosterv2 import (
     RACE_WINDOW_DAYS,
     SORTS,
     WKG_STEPS,
+    ZR_CATEGORY_ORDER,
     apply_filters,
     build_link_rows,
     filter_options,
@@ -135,6 +136,8 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
     search_query = request.GET.get("q", "").strip()
     zp_category_filter = request.GET.get("zp_category", "")
     zr_category_filter = request.GET.get("zr_category", "")
+    velo2_filter = request.GET.get("velo2", "")
+    velo2_women_filter = request.GET.get("velo2_women", "")
     gender_filter = request.GET.get("gender", "")
     race_ready_filter = request.GET.get("race_ready", "")
 
@@ -147,6 +150,8 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
     zp_divs_present = sorted({r.zp_div for r in roster if r.in_zwiftpower and r.zp_div})
     zp_categories = [(div, ZP_DIV_TO_CATEGORY.get(div, str(div))) for div in zp_divs_present]
     zr_categories = sorted({r.zr_category for r in roster if r.in_zwiftracing and r.zr_category})
+    velo2_categories = [tier for tier in ZR_CATEGORY_ORDER if tier in {r.zr_v2_category for r in roster}]
+    velo2_women_categories = [tier for tier in ZR_CATEGORY_ORDER if tier in {r.zr_v2_women_category for r in roster}]
 
     # Apply search filter (by zwid or name)
     if search_query:
@@ -164,6 +169,12 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
     # Apply Zwift Racing category filter
     if zr_category_filter:
         roster = [r for r in roster if r.in_zwiftracing and r.zr_category == zr_category_filter]
+
+    # vELO 2: the mixed tier, and the women's tier only women have.
+    if velo2_filter:
+        roster = [r for r in roster if r.zr_v2_category == velo2_filter]
+    if velo2_women_filter:
+        roster = [r for r in roster if r.zr_v2_women_category == velo2_women_filter]
 
     # Apply gender filter
     if gender_filter:
@@ -366,6 +377,8 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
         "q": search_query,
         "zp_category": zp_category_filter,
         "zr_category": zr_category_filter,
+        "velo2": velo2_filter,
+        "velo2_women": velo2_women_filter,
         "gender": gender_filter,
         "race_ready": race_ready_filter,
     }
@@ -384,10 +397,14 @@ def team_roster_view(request: HttpRequest) -> HttpResponse:
             "search_query": search_query,
             "zp_category_filter": zp_category_filter,
             "zr_category_filter": zr_category_filter,
+            "velo2_filter": velo2_filter,
+            "velo2_women_filter": velo2_women_filter,
             "gender_filter": gender_filter,
             "race_ready_filter": race_ready_filter,
             "zp_categories": zp_categories,
             "zr_categories": zr_categories,
+            "velo2_categories": velo2_categories,
+            "velo2_women_categories": velo2_women_categories,
             "zp_distribution": zp_distribution,
             "zp_distribution_max": zp_distribution_max,
             "zr_distribution": zr_distribution,
@@ -528,6 +545,8 @@ _CHIP_LABELS = {
     "q": "Search",
     "category": "Category",
     "zr": "Zwift Racing",
+    "velo2": "vELO 2",
+    "velo2_women": "vELO 2 women's",
     "gender": "Gender",
     "phenotype": "Phenotype",
     "verified": "Race Verified",
@@ -1126,12 +1145,12 @@ def verification_records_view(request: HttpRequest) -> HttpResponse:
     zwids = [r.user.zwid for r in records_list if r.user.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
     zr_by_zwid = {r.zwid: r for r in ZRRider.objects.filter(zwid__in=zwids)} if zwids else {}
-    women_by_zwid = velo2_women_by_zwid((r.user.zwid, r.user.gender) for r in records_list)
+    velo2_by_zwid = velo2_categories_by_zwid((r.user.zwid, r.user.gender) for r in records_list)
     for record in records_list:
         zwid = record.user.zwid
         zp = zp_by_zwid.get(zwid)
         zr = zr_by_zwid.get(zwid)
-        record.tt_zr_v2_women_category = (women_by_zwid.get(zwid) or {}).get("category") or ""
+        record.tt_zr_v2_category = velo2_by_zwid[zwid].mixed if zwid in velo2_by_zwid else ""
         record.tt_zp_category = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else ""
         record.tt_zp_category_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else ""
         record.tt_in_zwiftpower = zp is not None
@@ -2431,7 +2450,7 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
     if linked_zwids:
         zp_by_zwid = {zp.zwid: zp for zp in ZPTeamRiders.objects.filter(zwid__in=linked_zwids)}
         zr_by_zwid = {zr.zwid: zr for zr in ZRRider.objects.filter(zwid__in=linked_zwids)}
-    women_by_zwid = velo2_women_by_zwid((m.user.zwid, m.user.gender) for m in members_list if m.user)
+    velo2_by_zwid = velo2_categories_by_zwid((m.user.zwid, m.user.gender) for m in members_list if m.user)
 
     for member in members_list:
         role_names = []
@@ -2464,7 +2483,7 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
             member.tooltip_zp_category = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp else ""
             member.tooltip_zp_category_w = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and hasattr(zp, "divw") else ""
             member.tooltip_zr_category = (zr.race_current_category or "") if zr else ""
-            member.tooltip_zr_v2_women_category = (women_by_zwid.get(zwid) or {}).get("category") or ""
+            member.tooltip_zr_v2_category = velo2_by_zwid[zwid].mixed if zwid in velo2_by_zwid else ""
             member.tooltip_zr_rating = zr.race_current_rating if zr else ""
             member.tooltip_zr_phenotype = (zr.phenotype_value or "") if zr else ""
         elif member.user:
@@ -2483,7 +2502,7 @@ def _get_filtered_guild_members(request: HttpRequest) -> dict:
             member.tooltip_zp_category = ""
             member.tooltip_zp_category_w = ""
             member.tooltip_zr_category = ""
-            member.tooltip_zr_v2_women_category = ""
+            member.tooltip_zr_v2_category = ""
             member.tooltip_zr_rating = ""
             member.tooltip_zr_phenotype = ""
 

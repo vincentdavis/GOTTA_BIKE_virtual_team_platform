@@ -397,20 +397,17 @@ def zr_category_badge(context, category):
 
 
 @register.simple_tag(takes_context=True)
-def zr_women_category_badge(context, category, plain=False):
-    """Render a woman's vELO 2 women's category, to sit beside a Zwift Racing category.
+def zr_v2_category_badge(context, category):
+    """Render a rider's vELO 2 mixed category, to sit beside the ZR (vELO 1) category.
 
-    Callers pass it only for a woman (``RiderProfile.velo2_women``), so a blank renders
-    nothing rather than ``zr_category_badge``'s dash. It reuses the ZR category artwork with
-    the pink ring the roster card gives a women's category, plus a visible "W", so the ring
-    is never the only thing telling it from the ZR badge beside it. The accessible name
-    spells it out: the badge next to it is vELO 1's mixed category, not this one's open one.
+    Both are tiers with the same names and the same artwork, so this one carries a visible
+    "v2" -- the artwork alone would leave a reader guessing which rating each gem belongs
+    to -- and an accessible name that says vELO 2 in full. A blank renders nothing rather
+    than ``zr_category_badge``'s dash: one dash for a missing ZR category is enough.
 
     Args:
         context: Template context (for site_settings access).
-        category: The category name (e.g., "Emerald"), or blank.
-        plain: Always the worded badge, never the artwork -- for table cells whose own
-            category is a worded badge.
+        category: The category name (e.g., "Amethyst"), or blank.
 
     Returns:
         HTML string for the category, or an empty string.
@@ -422,9 +419,9 @@ def zr_women_category_badge(context, category, plain=False):
     from django.utils.html import escape
 
     escaped_category = escape(category)
-    name = f"vELO 2 women's category {escaped_category}"
+    name = f"vELO 2 {escaped_category}"
 
-    site_settings = None if plain else context.get("site_settings")
+    site_settings = context.get("site_settings")
     if site_settings:
         field_name = ZR_CATEGORY_EMOJI_FIELDS.get(category)
         if field_name:
@@ -432,14 +429,13 @@ def zr_women_category_badge(context, category, plain=False):
             if emoji_file:
                 return mark_safe(  # noqa: S308
                     f'<span class="inline-flex items-center gap-0.5 whitespace-nowrap">'
-                    f'<img src="{escape(emoji_file.url)}" alt="{name}" title="{name}" '
-                    f'class="h-7 w-7 rounded-full ring-2 ring-pink-400">'
-                    f'<span class="text-xs font-semibold" aria-hidden="true">W</span></span>'
+                    f'<img src="{escape(emoji_file.url)}" alt="{name}" title="{name}" class="h-7 w-7">'
+                    f'<span class="text-xs font-semibold" aria-hidden="true">v2</span></span>'
                 )
 
     return mark_safe(  # noqa: S308
-        f'<span class="badge badge-neutral badge-sm whitespace-nowrap ring-2 ring-pink-400">'
-        f'<span class="sr-only">{name}</span> <span aria-hidden="true">W {escaped_category}</span></span>'
+        f'<span class="badge badge-neutral badge-sm whitespace-nowrap">'
+        f'<span class="sr-only">{name}</span> <span aria-hidden="true">v2 {escaped_category}</span></span>'
     )
 
 

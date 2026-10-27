@@ -54,7 +54,7 @@ from django_countries.fields import Country
 
 from apps.accounts.models import GuildMember, User
 from apps.accounts.utils import resolve_country
-from apps.rider_data.models import WOMEN_GENDERS, RiderProfile, is_woman
+from apps.rider_data.models import WOMEN_GENDERS, ZR_TIERS, RiderProfile, is_woman
 from apps.rider_data.services import zwids_to_refresh
 from apps.team.kits import current_kit
 
@@ -193,12 +193,9 @@ def as_zwid(query: str) -> int | None:
     return int(text) if text.isascii() and text.isdigit() else None
 
 
-# Highest to lowest. Sorting these alphabetically is a live bug on the roster this
-# replaces (Amethyst, Bronze, Copper...), which puts the top tier sixth.
-ZR_CATEGORY_ORDER = (
-    "Diamond", "Ruby", "Emerald", "Sapphire", "Amethyst",
-    "Platinum", "Gold", "Silver", "Bronze", "Copper",
-)
+# Highest to lowest, for vELO 1 and vELO 2 alike. Sorting these alphabetically is a live bug
+# on the roster this replaces (Amethyst, Bronze, Copper...), which puts the top tier sixth.
+ZR_CATEGORY_ORDER = ZR_TIERS
 CATEGORY_ORDER = ("A+", "A", "B", "C", "D", "E")
 
 # Upstream says "M"/"F"; zauth has passed through "male"/"female" as well. Both are read,
@@ -262,10 +259,11 @@ class RiderCard:
             re-fetched, which is why the 30-day counts come from ZwiftPower in a later step.
         velo2: zwiftracing's vELO 2 race rating -- a different scale from ``velo``, so it
             gets its own tile and is never set beside it as if comparable.
-        velo2_category: vELO 2's open category for that rating.
+        velo2_category: vELO 2's mixed category, shown beside ``category_racing`` (vELO 1's
+            mixed one) and in the vELO 2 tile.
         velo2_category_women: vELO 2's women's category, for a rider the card shows as a
-            woman and blank for anyone else: zwiftracing sends one for every rider. Shown
-            beside ``category_racing``, which is vELO 1's mixed category.
+            woman and blank for anyone else: zwiftracing sends one for every rider. Never
+            drawn on the card -- only the "vELO 2 women's tier" filter reads it.
 
     """
 
@@ -1143,7 +1141,9 @@ class RosterFilters:
 
     Attributes:
         category: A ZwiftPower category, matched against the open OR the women's field.
-        zr: A Zwift Racing tier.
+        zr: A Zwift Racing tier (vELO 1's mixed category).
+        velo2: A vELO 2 mixed tier.
+        velo2_women: A vELO 2 women's tier, which only women have.
         gender: "women", "men" or "unknown" -- three states, never two.
         phenotype: A phenotype label.
         verified: "verified" or "extra".
@@ -1166,6 +1166,8 @@ class RosterFilters:
 
     category: str = ""
     zr: str = ""
+    velo2: str = ""
+    velo2_women: str = ""
     gender: str = ""
     phenotype: str = ""
     verified: str = ""
@@ -1187,7 +1189,7 @@ class RosterFilters:
 
         """
         return any(value not in ("", None) for value in (
-            self.category, self.zr, self.gender, self.phenotype,
+            self.category, self.zr, self.velo2, self.velo2_women, self.gender, self.phenotype,
             self.verified, self.age, self.account, self.wkg, self.ftp, self.joined, self.racing,
             self.country, self.link,
         ))
@@ -1255,6 +1257,8 @@ def parse_filters(params, rows: tuple[RosterRow, ...]) -> RosterFilters:
     return RosterFilters(
         category=_one_of(params, "category", options["categories"]),
         zr=_one_of(params, "zr", options["zr"]),
+        velo2=_one_of(params, "velo2", options["velo2"]),
+        velo2_women=_one_of(params, "velo2_women", options["velo2_women"]),
         gender=_one_of(params, "gender", ("women", "men", "unknown")),
         phenotype=_one_of(params, "phenotype", options["phenotypes"]),
         verified=_one_of(params, "verified", ("verified", "extra")),
@@ -1280,6 +1284,8 @@ def filter_options(rows: tuple[RosterRow, ...]) -> dict[str, list]:
     """
     categories = {row.card.category_open for row in rows} | {row.card.category_women for row in rows}
     zr = {row.card.category_racing for row in rows}
+    velo2 = {row.card.velo2_category for row in rows}
+    velo2_women = {row.card.velo2_category_women for row in rows}
     phenotypes = {row.card.phenotype for row in rows}
     ages = {row.card.age_bracket for row in rows}
     # Keyed by the resolved code so the four UK subdivisions collapse into one option, and
@@ -1292,6 +1298,8 @@ def filter_options(rows: tuple[RosterRow, ...]) -> dict[str, list]:
     return {
         "categories": [c for c in CATEGORY_ORDER if c in categories],
         "zr": [c for c in ZR_CATEGORY_ORDER if c in zr],
+        "velo2": [c for c in ZR_CATEGORY_ORDER if c in velo2],
+        "velo2_women": [c for c in ZR_CATEGORY_ORDER if c in velo2_women],
         "phenotypes": sorted(p for p in phenotypes if p),
         "ages": [a for a in AGE_BRACKETS_ORDER if a in ages],
         "countries": sorted(countries.items(), key=lambda pair: pair[1]),
@@ -1317,6 +1325,10 @@ def apply_filters(rows: list[RosterRow], filters: RosterFilters) -> list[RosterR
         if filters.category and filters.category not in (card.category_open, card.category_women):
             return False
         if filters.zr and card.category_racing != filters.zr:
+            return False
+        if filters.velo2 and card.velo2_category != filters.velo2:
+            return False
+        if filters.velo2_women and card.velo2_category_women != filters.velo2_women:
             return False
         if filters.gender and gender_bucket(card.gender) != filters.gender:
             return False
