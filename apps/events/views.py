@@ -1509,6 +1509,8 @@ def event_create_view(request: HttpRequest) -> HttpResponse:
                 return redirect("events:series_stages", pk=event.pk)
             messages.success(request, "Event created successfully!")
             return redirect("events:event_detail", pk=event.pk)
+        # Field names only: a refused save is otherwise invisible in Logfire.
+        logfire.info("Event create refused", user_id=request.user.id, fields=sorted(form.errors))
     else:
         form = EventForm()
 
@@ -1570,6 +1572,8 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
             )
             messages.success(request, "Event updated successfully!")
             return redirect("events:event_detail", pk=pk)
+        # Field names only: a refused save is otherwise invisible in Logfire.
+        logfire.info("Event edit refused", event_id=pk, user_id=request.user.id, fields=sorted(form.errors))
     else:
         form = EventForm(instance=event)
 

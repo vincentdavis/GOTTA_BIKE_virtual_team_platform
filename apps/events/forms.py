@@ -447,30 +447,34 @@ class EventForm(forms.ModelForm):
             return 0
 
     def clean_availability_type(self) -> str:
-        """Keep the stored type when none is posted, and hold it once squads have asked.
+        """Keep the stored type when none is posted, and keep a series that has asked a series.
 
-        A weekly answer is a set of cells and a series answer a set of stages; neither can
-        be read as the other. So once any squad has published a sheet, the type is fixed.
+        Every sheet keeps its own kind, so switching only decides what squads create next:
+        a published weekly sheet keeps working on a race-series event, and becoming a series
+        is always allowed. Going back is not -- on a weekly event a series sheet's stage
+        times can no longer be edited -- so once any squad has published stage times, the
+        event stays a series.
 
         Returns:
             The availability type to save.
 
         Raises:
-            forms.ValidationError: If the type changes after a squad has published.
+            forms.ValidationError: If a series with published stage times is switched back.
 
         """
         stored = self.instance.availability_type or Event.AvailabilityType.WEEKLY
         value = self.cleaned_data.get("availability_type") or stored
         if (
             self.instance.pk
+            and stored == Event.AvailabilityType.SERIES
             and value != stored
-            and AvailabilityGrid.objects.filter(squad__event=self.instance)
+            and AvailabilityGrid.objects.filter(squad__event=self.instance, kind=AvailabilityGrid.Kind.SERIES)
             .exclude(status=AvailabilityGrid.Status.DRAFT)
             .exists()
         ):
             raise forms.ValidationError(
-                "Squads have already published availability for this event, so how it is "
-                "collected can no longer change."
+                "Squads have already published stage times for this event, so it can't go back "
+                "to weekly availability."
             )
         return value
 

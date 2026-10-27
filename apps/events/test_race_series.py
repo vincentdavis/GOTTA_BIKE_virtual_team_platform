@@ -303,7 +303,9 @@ def test_a_post_without_the_type_keeps_it(client, event, event_admin) -> None:
 
 
 @pytest.mark.django_db
-def test_the_type_is_fixed_once_a_squad_has_published(client, event, event_admin, squad, stages) -> None:
+def test_a_series_with_published_stage_times_cannot_go_back_to_weekly(
+    client, event, event_admin, squad, stages
+) -> None:
     _sheet(squad, stages, [_when(11), _when(18), _when(25)])
     client.force_login(event_admin)
 
@@ -312,9 +314,49 @@ def test_the_type_is_fixed_once_a_squad_has_published(client, event, event_admin
     )
 
     assert response.status_code == 200
-    assert "can no longer change" in response.content.decode()
+    assert "can't go back to weekly" in response.context["form"].errors["availability_type"][0]
     event.refresh_from_db()
     assert event.is_race_series
+
+
+@pytest.mark.django_db
+def test_a_weekly_event_with_published_sheets_can_become_a_series(client, event, event_admin, squad) -> None:
+    event.availability_type = Event.AvailabilityType.WEEKLY
+    event.save()
+    weekly = AvailabilityGrid.objects.create(
+        squad=squad,
+        status=PUBLISHED,
+        start_date=date.today(),
+        end_date=date.today() + timedelta(days=6),
+        start_time="18:00",
+        end_time="20:00",
+        slot_duration=60,
+    )
+    client.force_login(event_admin)
+
+    response = client.post(
+        reverse("events:event_edit", args=[event.pk]), _event_post(event, availability_type="series")
+    )
+
+    assert response.status_code == 302
+    event.refresh_from_db()
+    weekly.refresh_from_db()
+    assert event.is_race_series
+    assert (weekly.kind, weekly.status) == (AvailabilityGrid.Kind.WEEKLY, PUBLISHED)  # untouched, still answerable
+
+
+@pytest.mark.django_db
+def test_a_refused_save_says_so_at_the_top_of_the_form(client, event, event_admin, squad, stages) -> None:
+    _sheet(squad, stages, [_when(11), _when(18), _when(25)])
+    client.force_login(event_admin)
+
+    body = client.post(
+        reverse("events:event_edit", args=[event.pk]), _event_post(event, availability_type="weekly")
+    ).content.decode()
+
+    summary = body.index('id="event-form-errors"')
+    assert "Not saved" in body[summary:]
+    assert summary < body.index('id="id_title"')  # above the first field, where the page opens
 
 
 @pytest.mark.django_db
