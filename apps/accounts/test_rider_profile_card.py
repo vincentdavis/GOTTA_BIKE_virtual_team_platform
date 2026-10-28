@@ -203,13 +203,27 @@ def _row(body, label):
     return _text(body[start : body.index("</div>", start)])
 
 
+HEADINGS = "Current 30-day peak 90-day peak"
+
+
+def _table(body, caption):
+    """Cut out the rating table with this caption.
+
+    Returns:
+        Each row's text, the column headings first.
+
+    """
+    start = body.index(f">{caption}</caption>")
+    table = body[start : body.index("</table>", start)]
+    return [_text(row[row.index(">") + 1 :]) for row in table.split("<tr")[1:]]
+
+
 @pytest.mark.django_db
 def test_a_peak_without_its_own_category_is_never_given_todays_tier(client, profile, rider, team_member):
     """Labelling a 90-day-old peak with today's tier would state something false rather than leave a gap."""
     body = _body(client, team_member, rider)
 
-    assert _row(body, "30-day peak") == "30-day peak 694"
-    assert _row(body, "90-day peak") == "90-day peak 768"
+    assert _table(body, "vELO") == [HEADINGS, "Rating 367 694 768", "Mixed Bronze — —"]
 
 
 @pytest.mark.django_db
@@ -222,8 +236,18 @@ def test_each_peak_carries_the_category_zwiftracing_gave_it(client, profile, rid
 
     body = _body(client, team_member, rider)
 
-    assert _row(body, "30-day peak") == "30-day peak 694 · Silver"
-    assert _row(body, "90-day peak") == "90-day peak 768 · Gold"
+    assert _table(body, "vELO")[2] == "Mixed Bronze Silver Gold"
+
+
+@pytest.mark.django_db
+def test_todays_tier_is_shown_once_in_the_velo_table(client, profile, rider, team_member):
+    """The tier is the current mixed category; a separate row would only repeat it."""
+    body = _body(client, team_member, rider)
+    card = body[body.index('id="rider-profile-card"') :]
+    card = card[: card.index("Update")]
+
+    assert "Racing tier" not in card
+    assert card.count("Bronze") == 1
 
 
 # ---------------------------------------------------------------- gates
@@ -682,48 +706,71 @@ def full_profile(profile):
 
 @pytest.mark.django_db
 def test_velo_2_has_its_own_section(client, full_profile, rider, team_member):
-    """The vELO 2 rating is another scale: never on the vELO row, never compared with it."""
+    """The vELO 2 rating is another scale: its own table, never set beside vELO's."""
     body = _body(client, team_member, rider)
 
-    assert _row(body, "vELO") == "vELO 367"
-    # Each with the category zwiftracing gave it, as the vELO 1 peaks are.
-    assert _row(body, "vELO 2") == "vELO 2 430 · Amethyst"
-    assert _row(body, "vELO 2 30-day peak") == "vELO 2 30-day peak 450 · Amethyst"
-    assert _row(body, "vELO 2 90-day peak") == "vELO 2 90-day peak 470 · Sapphire"
+    assert _table(body, "vELO") == [HEADINGS, "Rating 367 694 768", "Mixed Bronze — —"]
+    # Each peak with the category zwiftracing gave it, as vELO's are.
+    assert _table(body, "vELO 2") == [HEADINGS, "Rating 430 450 470", "Mixed Amethyst Amethyst Sapphire"]
     factors = body[body.index('aria-label="vELO 2 factors"') :]
     factors = _text(factors[factors.index(">") + 1 : factors.index("</div>")])
     assert factors == "Sprint 452 Punch 441 Climb 401 TT 415 Endurance 398"  # no pursuit: zwiftracing sent none
 
 
 @pytest.mark.django_db
+def test_the_rating_tables_head_their_rows_and_columns(client, full_profile, rider, team_member):
+    body = _body(client, team_member, rider)
+
+    for caption in ("vELO", "vELO 2"):
+        start = body.index(f">{caption}</caption>")
+        table = body[start : body.index("</table>", start)]
+        assert table.count('<th scope="col"') == 3
+        assert table.count('<th scope="row"') == 2
+
+
+# zauth's vELO women's categories: the current one beside category.racing, the peaks' beside
+# the open ones. Sent for every rider, like vELO 2's.
+VELO_WOMEN = {
+    "category": {"racing": "Bronze", "racing_women": "Sapphire"},
+    "ratings": {**PAYLOAD["ratings"], "category_women_max30": "Emerald"},
+}
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize(("member_gender", "zauth_gender"), [("female", ""), ("", "F")])
-def test_a_womans_velo_2_rows_carry_her_womens_categories(
+def test_a_womans_tables_carry_her_womens_categories(
     client, full_profile, rider, team_member, member_gender, zauth_gender
 ):
     """Her own answer decides; a blank one is left to zauth's."""
     rider.gender = member_gender
     rider.save(update_fields=["gender"])
     full_profile.gender = zauth_gender
-    full_profile.save(update_fields=["gender"])
+    full_profile.payload = {**full_profile.payload, **VELO_WOMEN}
+    full_profile.save(update_fields=["gender", "payload"])
 
     body = _body(client, team_member, rider)
 
-    assert _row(body, "vELO 2") == "vELO 2 430 · Amethyst · Emerald (W) women's category"
-    assert _row(body, "vELO 2 30-day peak") == "vELO 2 30-day peak 450 · Amethyst · Emerald (W) women's category"
-    assert _row(body, "vELO 2 90-day peak") == "vELO 2 90-day peak 470 · Sapphire · Ruby (W) women's category"
+    assert _table(body, "vELO")[1:] == ["Rating 367 694 768", "Mixed Bronze — —", "Women's Sapphire Emerald —"]
+    assert _table(body, "vELO 2")[1:] == [
+        "Rating 430 450 470",
+        "Mixed Amethyst Amethyst Sapphire",
+        "Women's Emerald Emerald Ruby",
+    ]
 
 
 @pytest.mark.django_db
-def test_a_man_who_zauth_calls_a_woman_keeps_the_open_categories(client, full_profile, rider, team_member):
+def test_a_man_who_zauth_calls_a_woman_keeps_the_mixed_categories(client, full_profile, rider, team_member):
     """The member's own answer wins over zauth's."""
     rider.gender = "male"
     rider.save(update_fields=["gender"])
     full_profile.gender = "F"
-    full_profile.save(update_fields=["gender"])
+    full_profile.payload = {**full_profile.payload, **VELO_WOMEN}
+    full_profile.save(update_fields=["gender", "payload"])
 
     body = _body(client, team_member, rider)
 
-    assert _row(body, "vELO 2") == "vELO 2 430 · Amethyst"
+    assert _table(body, "vELO")[-1] == "Mixed Bronze — —"
+    assert _table(body, "vELO 2")[-1] == "Mixed Amethyst Amethyst Sapphire"
 
 
 @pytest.mark.django_db

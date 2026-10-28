@@ -397,21 +397,39 @@ def zr_category_badge(context, category):
 
 
 @register.filter
-def velo2_women(profile, gender: str | None = None) -> dict | None:
-    """Return a profile's women's vELO 2 categories when the rider is a woman.
+def velo_table(profile, gender: str | None = None) -> list:
+    """Return a profile's vELO table rows, with the women's row for a woman only.
 
-    ``{% with women=rider_profile|velo2_women:profile_user.gender %}`` -- see
-    ``RiderProfile.velo2_women`` for who counts.
+    ``{% with rows=rider_profile|velo_table:profile_user.gender %}`` -- see
+    ``RiderProfile.velo_table``, and ``RiderProfile.velo_women`` for who counts.
 
     Args:
         profile: A ``RiderProfile``, or None.
         gender: The member's own gender; blank leaves it to the profile.
 
     Returns:
-        ``category``, ``max30`` and ``max90``, or None.
+        The ``RatingRow`` list, empty without a profile.
 
     """
-    return profile.velo2_women(gender) if profile else None
+    return profile.velo_table(gender) if profile else []
+
+
+@register.filter
+def velo2_table(profile, gender: str | None = None) -> list:
+    """Return a profile's vELO 2 table rows, with the women's row for a woman only.
+
+    ``{% with rows=rider_profile|velo2_table:profile_user.gender %}`` -- see
+    ``RiderProfile.velo2_table``, and ``RiderProfile.velo2_women`` for who counts.
+
+    Args:
+        profile: A ``RiderProfile``, or None.
+        gender: The member's own gender; blank leaves it to the profile.
+
+    Returns:
+        The ``RatingRow`` list, empty without a profile.
+
+    """
+    return profile.velo2_table(gender) if profile else []
 
 
 @register.simple_tag(takes_context=True)

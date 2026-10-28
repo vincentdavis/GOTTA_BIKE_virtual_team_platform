@@ -1,0 +1,31 @@
+{% comment %}
+  One rating scale on the rider card: the rows from RiderProfile.velo_table or velo2_table,
+  each across the current value and the 30- and 90-day peaks. vELO and vELO 2 are different
+  scales, so each has its own table and they are never set in one.
+
+  Sized to fit a 375px phone: the longest tier names ("Amethyst", "Platinum") in three columns
+  need about 280px at 14px and the card leaves 263, so phones get 12px and headings that wrap.
+{% endcomment %}
+<div class="overflow-x-auto">
+  <table class="table table-xs">
+    <caption class="text-left text-base-content/70 pb-1">{{ caption }}</caption>
+    <thead>
+      <tr class="text-xs text-base-content/70">
+        <td class="px-0"></td>
+        <th scope="col" class="font-normal text-right align-bottom whitespace-normal pl-2 pr-0">Current</th>
+        <th scope="col" class="font-normal text-right align-bottom whitespace-normal pl-2 pr-0">30-day peak</th>
+        <th scope="col" class="font-normal text-right align-bottom whitespace-normal pl-2 pr-0">90-day peak</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+        <tr>
+          <th scope="row" class="font-normal text-xs sm:text-sm text-base-content/70 px-0">{{ row.label }}</th>
+          {% for cell in row.cells %}
+            <td class="text-xs sm:text-sm text-right pl-2 pr-0{% if row.numeric %} font-mono{% endif %}{% if forloop.first %} font-semibold{% endif %}">{% if cell is None %}&mdash;{% elif row.numeric %}{{ cell|floatformat:0 }}{% else %}{{ cell }}{% endif %}</td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

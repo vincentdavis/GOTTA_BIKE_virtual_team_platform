@@ -115,6 +115,42 @@ def is_woman(*genders: str | None) -> bool:
     return False
 
 
+def _category_name(value: object) -> str | None:
+    """Read a payload value as a category name.
+
+    Returns:
+        The value when it is a non-empty string, else None.
+
+    """
+    return value if isinstance(value, str) and value else None
+
+
+class RatingRow(NamedTuple):
+    """One row of a rating table on the rider card.
+
+    Attributes:
+        label: "Rating", "Mixed" or "Women's".
+        cells: The current value, then the 30- and 90-day peaks', None where missing.
+        numeric: Whether the cells are ratings rather than category names.
+
+    """
+
+    label: str
+    cells: tuple[float | str | None, float | str | None, float | str | None]
+    numeric: bool
+
+
+def _rating_rows(ratings: tuple, mixed: tuple, women: tuple) -> list[RatingRow]:
+    """Lay out one scale's ratings and categories, now and at each peak, as table rows.
+
+    Returns:
+        The rating, mixed and women's rows, each kept only when it has a value.
+
+    """
+    rows = (RatingRow("Rating", ratings, True), RatingRow("Mixed", mixed, False), RatingRow("Women's", women, False))
+    return [row for row in rows if any(cell is not None for cell in row.cells)]
+
+
 class RiderProfile(models.Model):
     """One rider's merged profile, as last returned by zauth.
 
@@ -555,6 +591,74 @@ class RiderProfile(models.Model):
             "max90": velo2.get("category_women_max90"),
         }
         return found if any(found.values()) else None
+
+    def velo_women(self, gender: str | None = None) -> dict | None:
+        """Return the women's vELO categories, when they apply to this rider.
+
+        vELO 1's counterpart of :meth:`velo2_women`, under the same rule. The current one is
+        zauth's ``category.racing_women``, beside ``category.racing`` (``category_racing``);
+        the peaks' are ``ratings.category_women_max30``/``90``, beside the mixed ones that
+        :attr:`peak_categories` reads.
+
+        Args:
+            gender: The member's gender when the rider has an account; blank leaves it to
+                the profile.
+
+        Returns:
+            ``category``, ``max30`` and ``max90``, None where missing, or None when the rider
+            is not a woman or has none of them.
+
+        """
+        if not is_woman(gender, self.gender):
+            return None
+        category = self._block("category") or {}
+        ratings = self._block("ratings") or {}
+        found = {
+            "category": _category_name(category.get("racing_women")),
+            "max30": _category_name(ratings.get("category_women_max30")),
+            "max90": _category_name(ratings.get("category_women_max90")),
+        }
+        return found if any(found.values()) else None
+
+    def velo_table(self, gender: str | None = None) -> list[RatingRow]:
+        """Lay out vELO's rating and categories, now and at its 30- and 90-day peaks, for the card's table.
+
+        Each peak keeps the category zwiftracing gave it, never today's tier: a peak without
+        one is a gap, not ``category_racing``.
+
+        Args:
+            gender: The member's gender, which decides the women's row as in :meth:`velo_women`.
+
+        Returns:
+            The rows with something in them; empty when the rider has no vELO figures.
+
+        """
+        peaks = self.peak_ratings or {}
+        mixed = self.peak_categories or {}
+        women = self.velo_women(gender) or {}
+        return _rating_rows(
+            (self.velo, peaks.get("max30"), peaks.get("max90")),
+            (self.category_racing or None, mixed.get("max30") or None, mixed.get("max90") or None),
+            (women.get("category"), women.get("max30"), women.get("max90")),
+        )
+
+    def velo2_table(self, gender: str | None = None) -> list[RatingRow]:
+        """Lay out vELO 2's race rating and categories, now and at its peaks, for the card's table.
+
+        Args:
+            gender: The member's gender, which decides the women's row as in :meth:`velo2_women`.
+
+        Returns:
+            The rows with something in them; empty when the rider has no vELO 2 figures.
+
+        """
+        velo2 = self.velo2 or {}
+        women = self.velo2_women(gender) or {}
+        return _rating_rows(
+            (velo2.get("race"), velo2.get("max30"), velo2.get("max90")),
+            (velo2.get("category"), velo2.get("category_max30"), velo2.get("category_max90")),
+            (women.get("category"), women.get("max30"), women.get("max90")),
+        )
 
     @property
     def seed_ratings(self) -> dict | None:

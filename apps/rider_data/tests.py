@@ -12,7 +12,7 @@ import pytest
 from constance.test import override_config
 from django.utils import timezone
 
-from apps.rider_data.models import RiderProfile, Velo2Categories, is_woman, velo2_categories_by_zwid
+from apps.rider_data.models import RatingRow, RiderProfile, Velo2Categories, is_woman, velo2_categories_by_zwid
 from apps.rider_data.tasks import purge_rider_profiles
 from gotta_bike_platform.retention import RetentionPolicy, policy_for
 
@@ -391,3 +391,69 @@ def test_the_bulk_lookup_gives_everyone_the_mixed_tier_and_women_theirs(profile_
 def test_the_bulk_lookup_asks_nothing_without_a_zwid(django_assert_num_queries):
     with django_assert_num_queries(0):
         assert velo2_categories_by_zwid([(None, "female"), (0, "male")]) == {}
+
+
+# --- the women's vELO categories, and both scales as the card's tables -------------------------
+
+# The current one beside category.racing, the peaks' beside the open ones in ratings.
+WOMEN_VELO = {
+    "category": {"racing": "Gold", "racing_women": "Ruby"},
+    "ratings": {"rating_max30": 1520.0, "category_max30": "Platinum", "category_women_max30": "Emerald"},
+}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("member_gender", "profile_gender", "applies"),
+    [
+        ("female", "male", True),
+        ("", "F", True),
+        ("male", "F", False),
+        ("", "M", False),
+        ("", "", False),
+    ],
+)
+def test_the_womens_velo_categories_apply_only_to_women(profile_factory, member_gender, profile_gender, applies):
+    """The same rule as vELO 2's: zwiftracing labels every rider, only a woman's is shown."""
+    profile = profile_factory(gender=profile_gender, payload=WOMEN_VELO)
+
+    expected = {"category": "Ruby", "max30": "Emerald", "max90": None} if applies else None
+    assert profile.velo_women(member_gender) == expected
+
+
+@pytest.mark.django_db
+def test_a_woman_without_womens_velo_categories_gets_none(profile_factory):
+    """A payload stored before zauth sent them, or one of the wrong shape."""
+    odd = {"category": {"racing_women": ""}, "ratings": {"category_women_max30": {"name": "Ruby"}}}
+
+    assert profile_factory(gender="F", payload={"category": {"racing": "Gold"}}).velo_women() is None
+    assert profile_factory(zwid=1002, gender="F", payload=odd).velo_women() is None
+
+
+@pytest.mark.django_db
+def test_each_scale_is_laid_out_now_and_at_its_peaks(profile_factory):
+    """A row with nothing in it is left out; the women's rows are a woman's only."""
+    profile = profile_factory(
+        gender="F", velo=1480.4, category_racing="Gold", payload={**WOMEN_VELO, "velo2": WOMEN_VELO2}
+    )
+
+    assert profile.velo_table() == [
+        RatingRow("Rating", (1480.4, 1520.0, None), numeric=True),
+        RatingRow("Mixed", ("Gold", "Platinum", None), numeric=False),
+        RatingRow("Women's", ("Ruby", "Emerald", None), numeric=False),
+    ]
+    assert profile.velo2_table() == [
+        RatingRow("Rating", (430.0, None, None), numeric=True),
+        RatingRow("Mixed", ("Amethyst", None, None), numeric=False),
+        RatingRow("Women's", ("Emerald", "Emerald", "Ruby"), numeric=False),
+    ]
+    assert [row.label for row in profile.velo_table("male")] == ["Rating", "Mixed"]
+    assert [row.label for row in profile.velo2_table("male")] == ["Rating", "Mixed"]
+
+
+@pytest.mark.django_db
+def test_a_profile_without_ratings_has_empty_tables(profile_factory):
+    profile = profile_factory(gender="F", payload={})
+
+    assert profile.velo_table() == []
+    assert profile.velo2_table() == []

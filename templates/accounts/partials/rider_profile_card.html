@@ -11,15 +11,15 @@
     * ZwiftPower rank            -- zauth's ZpRider has no such column
     * best-ever rating           -- needs a history table; this is an evictable snapshot
     * gender/country mismatch    -- needs Zwift's raw values to disagree with
-  Each vELO peak carries the category zwiftracing gave it (zauth's category_max30/90), never
-  today's racing tier: labelling a 90-day-old rating with the current tier would be a lie
-  rather than a gap, so a peak with no category of its own is shown bare.
+  vELO and vELO 2 each get a table: the rating, its mixed category and, for a woman, its
+  women's category, now and at the 30- and 90-day peaks. Each peak carries the category
+  zwiftracing gave it, never today's tier: labelling a 90-day-old rating with the current
+  tier would be a lie rather than a gap, so a peak with no category of its own shows a dash.
+  zwiftracing sends the women's categories for every rider; the velo_table and velo2_table
+  filters keep that row to women, by the member's own gender and then zauth's.
 
   vELO 2 is a different scale from vELO (a rider might be 650 in vELO 2 and 1,600 in
-  vELO 1), so it has its own section and is never set beside vELO as if comparable. Its
-  peaks and categories are zwiftracing's own. Each carries its open category and, for a
-  woman, its women's one "(W)": zwiftracing sends those for every rider, and the
-  velo2_women filter keeps them to women, by the member's own gender and then zauth's.
+  vELO 1), so it has its own section and is never set beside vELO as if comparable.
 {% endcomment %}
 <div id="rider-profile-card" class="card bg-base-300 p-4">
   <h3 class="font-semibold mb-3 flex items-center gap-2">
@@ -49,7 +49,11 @@
         </div>
       {% endif %}
 
-      {% if rider_profile.category_open or rider_profile.category_women or rider_profile.category_racing or rider_profile.zwift_racing_score %}
+      {% comment %}
+        Zwift's pen categories (A-E). zwiftracing's tier is the vELO table's current mixed
+        category below, so it is not repeated here.
+      {% endcomment %}
+      {% if rider_profile.category_open or rider_profile.category_women or rider_profile.zwift_racing_score %}
         <div class="space-y-1 pt-2 border-t border-base-content/10">
           {% if rider_profile.category_open %}
             <div class="flex justify-between gap-3">
@@ -61,12 +65,6 @@
             <div class="flex justify-between gap-3">
               <span class="text-base-content/70">Category (W)</span>
               <span class="font-semibold">{{ rider_profile.category_women }}</span>
-            </div>
-          {% endif %}
-          {% if rider_profile.category_racing %}
-            <div class="flex justify-between gap-3">
-              <span class="text-base-content/70">Racing tier</span>
-              <span class="font-semibold">{{ rider_profile.category_racing }}</span>
             </div>
           {% endif %}
           {% if rider_profile.zwift_racing_score %}
@@ -143,30 +141,12 @@
         {% endif %}
       {% endwith %}
 
-      {% if rider_profile.velo or rider_profile.peak_ratings or rider_profile.zp_skill or rider_profile.compound_score or rider_profile.race_counts %}
+      {% with velo_rows=rider_profile|velo_table:profile_user.gender %}
+      {% if velo_rows or rider_profile.zp_skill or rider_profile.compound_score or rider_profile.race_counts %}
         <div class="space-y-1 pt-2 border-t border-base-content/10">
-          {% if rider_profile.velo %}
-            <div class="flex justify-between gap-3">
-              <span class="text-base-content/70">vELO</span>
-              <span class="font-mono font-semibold">{{ rider_profile.velo|floatformat:0 }}</span>
-            </div>
+          {% if velo_rows %}
+            {% include "accounts/partials/_rating_table.html" with caption="vELO" rows=velo_rows %}
           {% endif %}
-          {% with peaks=rider_profile.peak_ratings categories=rider_profile.peak_categories %}
-            {% if peaks %}
-              <div class="flex justify-between gap-3">
-                <span class="text-base-content/70">30-day peak</span>
-                <span class="font-mono text-right">
-                  {% if peaks.max30 %}{{ peaks.max30|floatformat:0 }}{% else %}&mdash;{% endif %}{% if categories.max30 %} <span class="font-sans">&middot; {{ categories.max30 }}</span>{% endif %}
-                </span>
-              </div>
-              <div class="flex justify-between gap-3">
-                <span class="text-base-content/70">90-day peak</span>
-                <span class="font-mono text-right">
-                  {% if peaks.max90 %}{{ peaks.max90|floatformat:0 }}{% else %}&mdash;{% endif %}{% if categories.max90 %} <span class="font-sans">&middot; {{ categories.max90 }}</span>{% endif %}
-                </span>
-              </div>
-            {% endif %}
-          {% endwith %}
           {% if rider_profile.zp_skill %}
             <div class="flex justify-between gap-3">
               <span class="text-base-content/70">ZP skill</span>
@@ -198,41 +178,21 @@
           {% endwith %}
         </div>
       {% endif %}
+      {% endwith %}
 
-      {% with velo2=rider_profile.velo2 women=rider_profile|velo2_women:profile_user.gender %}
-        {% if velo2 %}
+      {% with velo2_rows=rider_profile|velo2_table:profile_user.gender factors=rider_profile.velo2_factors %}
+        {% if velo2_rows or factors %}
           <div class="space-y-1 pt-2 border-t border-base-content/10">
-            {% if velo2.race is not None %}
-              <div class="flex justify-between gap-3">
-                <span class="text-base-content/70 whitespace-nowrap">vELO 2</span>
-                <span class="font-mono font-semibold text-right">
-                  {{ velo2.race|floatformat:0 }}{% if velo2.category %} <span class="font-sans font-normal">&middot; {{ velo2.category }}</span>{% endif %}{% if women.category %} <span class="font-sans font-normal">&middot; {{ women.category }} <span aria-hidden="true">(W)</span> <span class="sr-only">women's category</span></span>{% endif %}
-                </span>
+            {% if velo2_rows %}
+              {% include "accounts/partials/_rating_table.html" with caption="vELO 2" rows=velo2_rows %}
+            {% endif %}
+            {% if factors %}
+              <div class="flex flex-wrap gap-1 pt-1" role="group" aria-label="vELO 2 factors">
+                {% for label, value in factors %}
+                  <span class="badge badge-sm badge-ghost font-mono">{{ label }} {{ value|floatformat:0 }}</span>
+                {% endfor %}
               </div>
             {% endif %}
-            {% if velo2.max30 is not None or velo2.max90 is not None %}
-              <div class="flex justify-between gap-3">
-                <span class="text-base-content/70">vELO 2 30-day peak</span>
-                <span class="font-mono text-right">
-                  {% if velo2.max30 is not None %}{{ velo2.max30|floatformat:0 }}{% else %}&mdash;{% endif %}{% if velo2.category_max30 %} <span class="font-sans">&middot; {{ velo2.category_max30 }}</span>{% endif %}{% if women.max30 %} <span class="font-sans">&middot; {{ women.max30 }} <span aria-hidden="true">(W)</span> <span class="sr-only">women's category</span></span>{% endif %}
-                </span>
-              </div>
-              <div class="flex justify-between gap-3">
-                <span class="text-base-content/70">vELO 2 90-day peak</span>
-                <span class="font-mono text-right">
-                  {% if velo2.max90 is not None %}{{ velo2.max90|floatformat:0 }}{% else %}&mdash;{% endif %}{% if velo2.category_max90 %} <span class="font-sans">&middot; {{ velo2.category_max90 }}</span>{% endif %}{% if women.max90 %} <span class="font-sans">&middot; {{ women.max90 }} <span aria-hidden="true">(W)</span> <span class="sr-only">women's category</span></span>{% endif %}
-                </span>
-              </div>
-            {% endif %}
-            {% with factors=rider_profile.velo2_factors %}
-              {% if factors %}
-                <div class="flex flex-wrap gap-1 pt-1" role="group" aria-label="vELO 2 factors">
-                  {% for label, value in factors %}
-                    <span class="badge badge-sm badge-ghost font-mono">{{ label }} {{ value|floatformat:0 }}</span>
-                  {% endfor %}
-                </div>
-              {% endif %}
-            {% endwith %}
           </div>
         {% endif %}
       {% endwith %}
