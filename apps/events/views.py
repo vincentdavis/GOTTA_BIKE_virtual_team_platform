@@ -84,8 +84,6 @@ from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
 from gotta_bike_platform.csv_utils import csv_safe
 
-CATEGORY_COLUMNS = ["A+", "A", "B", "C", "D", "E"]
-
 # Upper bound for the numeric availability answers. Both are counts bounded by a year --
 # more races than days, or more rest than a year between them, is a typo. It also keeps
 # the value inside the column: max_races and rest_days are PositiveSmallIntegerField,
@@ -707,13 +705,13 @@ def _enrich_squad_members(event):
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
             "zp_ftp": zp_ftp,
-            "zp_rank": zp.rank if zp else None,
             "wkg": wkg,
             "z_ftp": user.z_ftp,
             "z_map": user.z_map,
             "z_ftp_wkg": user.z_ftp_wkg,
             "z_map_wkg": user.z_map_wkg,
             **rider_stats.zr_fields(profiles.get(zwid), gender=user.gender),
+            "rider_profile": profiles.get(zwid),
             "has_discord_role": has_discord_role,
             "has_captain_role": has_captain_role,
         }
@@ -1365,47 +1363,9 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         # auto-escaped, never |safe).
         squad.tags_json = json.dumps(squad.tag_list)
 
-    # Aggregate ZP and ZR category counts per squad
-    zp_by_squad = []
-    zp_totals = defaultdict(int)
-    zp_total_all = 0
-    zr_by_squad = []
-    zr_totals = defaultdict(int)
-    zr_total_all = 0
-    all_ranks = []
-    all_ratings = []
-    for squad in squads:
-        zp_counts = defaultdict(int)
-        zr_counts = defaultdict(int)
-        squad_ranks = []
-        squad_ratings = []
-        for member in squad.enriched_members:
-            zp_cat = member["zp_category_w"] or member["zp_category"] or "-"
-            zp_counts[zp_cat] += 1
-            zr_cat = member["zr_category"] or "-"
-            zr_counts[zr_cat] += 1
-            if member["zp_rank"] is not None:
-                squad_ranks.append(member["zp_rank"])
-            if member["zr_rating"] is not None:
-                squad_ratings.append(member["zr_rating"])
-        avg_rank = round(sum(squad_ranks) / len(squad_ranks), 1) if squad_ranks else None
-        avg_rating = round(sum(squad_ratings) / len(squad_ratings), 1) if squad_ratings else None
-        all_ranks.extend(squad_ranks)
-        all_ratings.extend(squad_ratings)
-        zp_total = sum(zp_counts.values())
-        zp_by_squad.append({"squad": squad, "counts": dict(zp_counts), "total": zp_total, "avg_rank": avg_rank})
-        for cat, count in zp_counts.items():
-            zp_totals[cat] += count
-        zp_total_all += zp_total
-        zr_total = sum(zr_counts.values())
-        zr_by_squad.append({"squad": squad, "counts": dict(zr_counts), "total": zr_total, "avg_rating": avg_rating})
-        for cat, count in zr_counts.items():
-            zr_totals[cat] += count
-        zr_total_all += zr_total
-    zp_totals = dict(zp_totals)
-    zr_totals = dict(zr_totals)
-    zp_avg_rank_all = round(sum(all_ranks) / len(all_ranks), 1) if all_ranks else None
-    zr_avg_rating_all = round(sum(all_ratings) / len(all_ratings), 1) if all_ratings else None
+    # The By Category tab: each squad's members counted on Zwift's categories, vELO 1's tiers
+    # and vELO 2's, mixed and (for a woman) women's, all from the rider profile cache.
+    category_tables = rider_stats.category_tables(squads)
 
     signup_questions = active_questions(event)
     signup_question_fields = build_question_fields(
@@ -1457,16 +1417,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "is_event_admin": request.user.is_event_admin,
             "can_view_signups": can_view_signups,
             "guild_id": config.GUILD_ID,
-            "zp_category_columns": CATEGORY_COLUMNS,
-            "zp_by_squad": zp_by_squad,
-            "zp_totals": zp_totals,
-            "zp_total_all": zp_total_all,
-            "zp_avg_rank_all": zp_avg_rank_all,
-            "zr_category_columns": ZR_CATEGORY_ORDER,
-            "zr_by_squad": zr_by_squad,
-            "zr_totals": zr_totals,
-            "zr_total_all": zr_total_all,
-            "zr_avg_rating_all": zr_avg_rating_all,
+            "category_tables": category_tables,
             "can_manage_roles": _can_manage_event_roles(request.user, event),
             "can_view_squad_manage": _can_view_squad_manage(request.user, event),
             "can_add_members": _can_add_members(request.user, event),

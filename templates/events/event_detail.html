@@ -7,10 +7,11 @@
 <style>
 .tooltip::before,.tooltip::after{transition-delay:0s!important;transition-duration:75ms!important}
 .squad-assign-ctrl{display:none}
-/* Squad tag filter: the pressed tag also shows a check mark, so its state never rests on the
+/* Squad tag filter and By Category scales: the pressed one also shows a check mark, so its state never rests on the
    fill alone (btn-neutral sits close to the card colour in the dark theme). The second
    declaration hides the glyph from screen readers, which already hear "pressed". */
-#squad-tag-filter button[aria-pressed="true"]::before{content:"\2713";content:"\2713" / ""}
+#squad-tag-filter button[aria-pressed="true"]::before,
+#category-source button[aria-pressed="true"]::before{content:"\2713";content:"\2713" / ""}
 /* Event sections: folder tabs joined to the box of the panel they switch, so a tab reads as
    part of the table below it; on a phone the four sit in a two-by-two grid above the box.
    Styled on aria-selected, which the tab script keeps current. The selected count is
@@ -781,140 +782,70 @@
       </div>
 
       <div role="tabpanel" id="panel-category" data-tab-panel="category" aria-labelledby="tab-category">
-      {% if zp_by_squad %}
+      {% if squads %}
       <h3 class="sr-only">By Category</h3>
       <div id="category-content">
-        <div class="flex items-center gap-1 mb-3">
-          <span class="text-sm text-base-content/70 mr-1">Source:</span>
-          <button type="button" class="btn btn-xs btn-primary" id="cat-toggle-zp" onclick="switchCategorySource('zp')">ZwiftPower</button>
-          <button type="button" class="btn btn-xs btn-ghost" id="cat-toggle-zr" onclick="switchCategorySource('zr')">Zwift Racing</button>
+        {% comment %}
+          Three scales, all from the rider profile cache (rider_stats.category_tables): Zwift's
+          own category, vELO 1's tier and vELO 2's. Each counts every rider by their mixed
+          category and every woman again by her women's, shown after a slash.
+        {% endcomment %}
+        <div class="flex flex-wrap items-center gap-2 mb-3" role="group" id="category-source" aria-labelledby="category-source-label">
+          <span id="category-source-label" class="text-sm text-base-content/70">Count by</span>
+          {% for table in category_tables %}
+          <button type="button" class="btn btn-xs {% if forloop.first %}btn-neutral{% else %}btn-outline{% endif %}"
+                  data-category-source="{{ table.key }}" aria-pressed="{% if forloop.first %}true{% else %}false{% endif %}">{{ table.label }}</button>
+          {% endfor %}
         </div>
-
-        {# ZwiftPower table #}
-        <div id="cat-table-zp" class="overflow-x-auto">
-          <table class="table table-sm" data-cat-table>
+        {% for table in category_tables %}
+        <div id="cat-table-{{ table.key }}"{% if not forloop.first %} hidden{% endif %}>
+          {# Outside the scrolling box, so it wraps on a phone instead of scrolling away with the table. #}
+          {% if table.has_women %}
+          <p class="text-sm text-base-content/70 mb-2" id="cat-note-{{ table.key }}">Each count is riders by mixed category / women by women's category.</p>
+          {% endif %}
+          <div class="overflow-x-auto">
+          <table class="table table-sm" data-cat-table{% if table.has_women %} aria-describedby="cat-note-{{ table.key }}"{% endif %}>
             <thead>
               <tr>
                 <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>
                 <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
-                {% for cat in zp_category_columns %}
+                {% for cat in table.columns %}
                 <th class="text-center">{{ cat }}</th>
                 {% endfor %}
-                <th class="text-center">-</th>
-                <th data-sort="num" data-default-sort="desc" class="text-center cursor-pointer hover:text-primary select-none">Avg Rank</th>
+                <th class="text-center">None</th>
+                <th data-sort="num" data-default-sort="desc" class="text-center cursor-pointer hover:text-primary select-none">{{ table.score_label }}</th>
                 <th class="text-center">Total</th>
               </tr>
             </thead>
             <tbody>
-              {% for row in zp_by_squad %}
+              {% for row in table.rows %}
               <tr>
                 <td class="font-semibold">{{ row.squad.name }}</td>
                 <td>{{ row.squad.squad_timezone|default:"-" }}</td>
-                {% for cat in zp_category_columns %}
-                <td class="text-center">
-                  {% with val=row.counts|get_item:cat %}
-                  {% if val %}<span class="badge badge-primary badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
-                  {% endwith %}
-                </td>
+                {% for count in row.cells %}
+                <td class="text-center">{% include "events/_category_count.html" %}</td>
                 {% endfor %}
-                <td class="text-center">
-                  {% with val=row.counts|get_item:"-" %}
-                  {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
-                  {% endwith %}
-                </td>
-                <td class="text-center">
-                  {% if row.avg_rank %}<span class="font-mono text-sm">{{ row.avg_rank }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td class="text-center"><span class="badge badge-neutral badge-sm">{{ row.total }}</span></td>
+                <td class="text-center">{% include "events/_category_count.html" with count=row.none %}</td>
+                <td class="text-center">{% if row.avg is not None %}<span class="font-mono text-sm">{{ row.avg }}</span>{% else %}<span class="text-base-content/70">-</span>{% endif %}</td>
+                <td class="text-center font-semibold">{% include "events/_category_count.html" with count=row.total %}</td>
               </tr>
               {% endfor %}
             </tbody>
             <tfoot>
               <tr class="font-semibold">
                 <td colspan="2">Total</td>
-                {% for cat in zp_category_columns %}
-                <td class="text-center">
-                  {% with val=zp_totals|get_item:cat %}
-                  {% if val %}<span class="badge badge-primary badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
-                  {% endwith %}
-                </td>
+                {% for count in table.totals.cells %}
+                <td class="text-center">{% include "events/_category_count.html" %}</td>
                 {% endfor %}
-                <td class="text-center">
-                  {% with val=zp_totals|get_item:"-" %}
-                  {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
-                  {% endwith %}
-                </td>
-                <td class="text-center">
-                  {% if zp_avg_rank_all %}<span class="font-mono text-sm">{{ zp_avg_rank_all }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td class="text-center"><span class="badge badge-neutral badge-sm">{{ zp_total_all }}</span></td>
+                <td class="text-center">{% include "events/_category_count.html" with count=table.totals.none %}</td>
+                <td class="text-center">{% if table.totals.avg is not None %}<span class="font-mono text-sm">{{ table.totals.avg }}</span>{% else %}<span class="text-base-content/70">-</span>{% endif %}</td>
+                <td class="text-center">{% include "events/_category_count.html" with count=table.totals.total %}</td>
               </tr>
             </tfoot>
           </table>
+          </div>
         </div>
-
-        {# Zwift Racing table #}
-        <div id="cat-table-zr" class="overflow-x-auto" style="display:none">
-          <table class="table table-sm" data-cat-table>
-            <thead>
-              <tr>
-                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad</th>
-                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
-                {% for cat in zr_category_columns %}
-                <th class="text-center">{{ cat }}</th>
-                {% endfor %}
-                <th class="text-center">-</th>
-                <th data-sort="num" data-default-sort="desc" class="text-center cursor-pointer hover:text-primary select-none">Avg Rating</th>
-                <th class="text-center">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in zr_by_squad %}
-              <tr>
-                <td class="font-semibold">{{ row.squad.name }}</td>
-                <td>{{ row.squad.squad_timezone|default:"-" }}</td>
-                {% for cat in zr_category_columns %}
-                <td class="text-center">
-                  {% with val=row.counts|get_item:cat %}
-                  {% if val %}<span class="badge badge-primary badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
-                  {% endwith %}
-                </td>
-                {% endfor %}
-                <td class="text-center">
-                  {% with val=row.counts|get_item:"-" %}
-                  {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
-                  {% endwith %}
-                </td>
-                <td class="text-center">
-                  {% if row.avg_rating %}<span class="font-mono text-sm">{{ row.avg_rating }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td class="text-center"><span class="badge badge-neutral badge-sm">{{ row.total }}</span></td>
-              </tr>
-              {% endfor %}
-            </tbody>
-            <tfoot>
-              <tr class="font-semibold">
-                <td colspan="2">Total</td>
-                {% for cat in zr_category_columns %}
-                <td class="text-center">
-                  {% with val=zr_totals|get_item:cat %}
-                  {% if val %}<span class="badge badge-primary badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
-                  {% endwith %}
-                </td>
-                {% endfor %}
-                <td class="text-center">
-                  {% with val=zr_totals|get_item:"-" %}
-                  {% if val %}<span class="badge badge-ghost badge-sm">{{ val }}</span>{% else %}<span class="text-base-content/30">0</span>{% endif %}
-                  {% endwith %}
-                </td>
-                <td class="text-center">
-                  {% if zr_avg_rating_all %}<span class="font-mono text-sm">{{ zr_avg_rating_all }}</span>{% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td class="text-center"><span class="badge badge-neutral badge-sm">{{ zr_total_all }}</span></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        {% endfor %}
       </div>
       {% else %}
       <p class="text-sm text-base-content/70">Category counts appear once the event has squads.</p>
@@ -1202,23 +1133,23 @@ function syncSquadExpandAllLabel() {
   button.textContent = allOpen ? 'Collapse all' : 'Expand all';
 }
 
-function switchCategorySource(source) {
-  var zpTable = document.getElementById('cat-table-zp');
-  var zrTable = document.getElementById('cat-table-zr');
-  var zpBtn = document.getElementById('cat-toggle-zp');
-  var zrBtn = document.getElementById('cat-toggle-zr');
-  if (source === 'zr') {
-    zpTable.style.display = 'none';
-    zrTable.style.display = '';
-    zpBtn.className = 'btn btn-xs btn-ghost';
-    zrBtn.className = 'btn btn-xs btn-primary';
-  } else {
-    zpTable.style.display = '';
-    zrTable.style.display = 'none';
-    zpBtn.className = 'btn btn-xs btn-primary';
-    zrBtn.className = 'btn btn-xs btn-ghost';
-  }
-}
+// By Category: one scale's table at a time, its button pressed.
+(function() {
+  var buttons = Array.prototype.slice.call(document.querySelectorAll('[data-category-source]'));
+  buttons.forEach(function(button) {
+    button.addEventListener('click', function() {
+      buttons.forEach(function(other) {
+        var on = other === button;
+        other.setAttribute('aria-pressed', on ? 'true' : 'false');
+        other.classList.toggle('btn-neutral', on);
+        other.classList.toggle('btn-outline', !on);
+        var table = document.getElementById('cat-table-' + other.getAttribute('data-category-source'));
+        if (table) table.hidden = !on;
+      });
+    });
+  });
+})();
+
 
 // Column toggler for signup table
 (function() {
@@ -1474,7 +1405,7 @@ function switchCategorySource(source) {
   });
 })();
 
-// Category table sorting (both ZP and ZR tables)
+// Category table sorting (every scale's table)
 (function() {
   function getColIdx(th) {
     return Array.from(th.parentNode.children).indexOf(th);

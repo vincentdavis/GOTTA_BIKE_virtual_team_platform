@@ -1,0 +1,6 @@
+{% comment %}
+  One count on the By Category tab (rider_stats.CategoryCount): riders by their mixed category,
+  then, where there are any, women by their women's category after a slash. Read out as
+  "2 riders, 1 women's", since a bare slash means nothing to a screen reader.
+{% endcomment %}
+{% if count.mixed or count.women %}<span class="tabular-nums">{{ count.mixed }}</span>{% if count.women %}<span class="text-base-content/70" aria-hidden="true"> / </span><span class="sr-only"> riders, </span><span class="tabular-nums">{{ count.women }}</span><span class="sr-only"> women's</span>{% endif %}{% else %}<span class="text-base-content/70">0</span>{% endif %}

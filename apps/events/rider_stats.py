@@ -13,6 +13,9 @@ zwiftracing also gives every rider a women's vELO 2 category; that one is kept f
 (``RiderProfile.velo2_women``) and appears only where it is asked for: the signups table's
 optional columns and its filter.
 
+The By Category tab counts each squad's members on three scales (:func:`category_tables`):
+Zwift's own category, vELO 1's tier and vELO 2's, each mixed and, for a woman, women's.
+
 Squad eligibility still reads the zwiftracing table (``views._rider_categories``): moving
 the rule that decides who may join a squad is a separate decision.
 """
@@ -21,9 +24,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
-from apps.rider_data.models import CURVE_DURATIONS, ZR_TIERS, RiderProfile
+from apps.rider_data.models import CURVE_DURATIONS, ZR_TIERS, RiderProfile, is_woman
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -374,3 +377,141 @@ def stat_rows(entries: Iterable[dict]) -> dict[str, list[str]]:
         for entry in entries
         if entry.get("rider_profile") is not None
     }
+
+
+# --- the By Category tab ------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CategoryScale:
+    """One scale the By Category tab counts riders on.
+
+    Attributes:
+        key: Names its table and its button in the page.
+        label: What the button says.
+        order: Its categories, best first; a name it does not list is added after them.
+        score_label: The heading of the average beside the counts.
+
+    """
+
+    key: str
+    label: str
+    order: tuple[str, ...]
+    score_label: str
+
+
+CATEGORY_SCALES: tuple[CategoryScale, ...] = (
+    CategoryScale("zwift", "Zwift", ("A+", "A", "B", "C", "D", "E"), "Avg Racing Score"),
+    CategoryScale("velo1", "vELO 1", ZR_TIERS, "Avg rating"),
+    CategoryScale("velo2", "vELO 2", ZR_TIERS, "Avg vELO 2"),
+)
+
+
+class CategoryCount(NamedTuple):
+    """One count on the By Category tab: riders by their mixed category, women by their women's."""
+
+    mixed: int = 0
+    women: int = 0
+
+
+def rider_categories(profile: RiderProfile | None, gender: str | None = None) -> dict:
+    """Put one rider in a category on each scale.
+
+    Zwift's category is zauth's (Zwift's own, then ZwiftPower's), not the ZwiftPower table's. A
+    women's category is a woman's only, judged by her own gender and then zauth's, as everywhere.
+
+    Args:
+        profile: The rider's cached profile, or None.
+        gender: The member's own gender; blank leaves it to the profile.
+
+    Returns:
+        ``woman``, and per scale key ``(mixed category, women's category, score)``: "" where
+        there is no category, None where there is no score.
+
+    """
+    woman = is_woman(gender, profile.gender if profile else None)
+    if profile is None:
+        return {"woman": woman, **{scale.key: ("", "", None) for scale in CATEGORY_SCALES}}
+    velo2 = profile.velo2 or {}
+    velo1_women = (profile.velo_women(gender) or {}).get("category") or ""
+    velo2_women = (profile.velo2_women(gender) or {}).get("category") or ""
+    return {
+        "woman": woman,
+        "zwift": (profile.category_open, profile.category_women if woman else "", profile.zwift_racing_score),
+        "velo1": (profile.category_racing, velo1_women, profile.velo),
+        "velo2": (velo2.get("category") or "", velo2_women, velo2.get("race")),
+    }
+
+
+def _count(riders: list[dict], key: str, columns: list[str]) -> dict:
+    """Count riders on one scale: everyone by mixed category, each woman again by her women's.
+
+    Returns:
+        ``cells`` in column order, ``none`` (no category), ``total`` (riders, women) and ``avg``.
+
+    """
+    mixed = dict.fromkeys(columns, 0)
+    women = dict.fromkeys(columns, 0)
+    mixed_none = women_none = woman_count = 0
+    scores = []
+    for rider in riders:
+        category, women_category, score = rider[key]
+        if category:
+            mixed[category] += 1
+        else:
+            mixed_none += 1
+        if score is not None:
+            scores.append(score)
+        if rider["woman"]:
+            woman_count += 1
+            if women_category:
+                women[women_category] += 1
+            else:
+                women_none += 1
+    return {
+        "cells": [CategoryCount(mixed[name], women[name]) for name in columns],
+        "none": CategoryCount(mixed_none, women_none),
+        "total": CategoryCount(len(riders), woman_count),
+        "avg": round(sum(scores) / len(scores)) if scores else None,
+    }
+
+
+def category_tables(squads: Iterable) -> list[dict]:
+    """Count each squad's members by category on every scale, for the By Category tab.
+
+    Every rider is counted once by their mixed category, or under none, and every woman once
+    more by her women's category, so a cell is a :class:`CategoryCount` and a row's total is its
+    riders and its women.
+
+    Args:
+        squads: Squads with ``enriched_members`` (``views._enrich_squad_members``), each member
+            carrying its ``rider_profile`` and ``gender``.
+
+    Returns:
+        A table per scale, in :data:`CATEGORY_SCALES` order: ``key``, ``label``,
+        ``score_label``, ``columns``, ``has_women``, ``rows`` (each ``squad`` with its counts)
+        and ``totals`` (the same counts for every squad).
+
+    """
+    squads = list(squads)
+    placed = {
+        squad.pk: [rider_categories(m.get("rider_profile"), m.get("gender")) for m in squad.enriched_members]
+        for squad in squads
+    }
+    everyone = [rider for squad in squads for rider in placed[squad.pk]]
+    tables = []
+    for scale in CATEGORY_SCALES:
+        # A name the scale does not list still gets a column, so no rider drops out of the counts.
+        seen = {name for rider in everyone for name in rider[scale.key][:2] if name}
+        columns = [*scale.order, *sorted(seen - set(scale.order))]
+        totals = _count(everyone, scale.key, columns)
+        tables.append({
+            "key": scale.key,
+            "label": scale.label,
+            "score_label": scale.score_label,
+            "columns": columns,
+            "rows": [{"squad": squad, **_count(placed[squad.pk], scale.key, columns)} for squad in squads],
+            "totals": totals,
+            "has_women": totals["total"].women > 0,
+        })
+    return tables
