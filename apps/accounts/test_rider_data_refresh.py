@@ -8,12 +8,14 @@ invisible to the next request. The tests below pin both ends of it: that it star
 it stops.
 """
 
+import re
 from unittest.mock import patch
 
 import pytest
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.accounts.templatetags.accounts_tags import SOCIAL_LINK_FIELDS
 from apps.accounts.views import RIDER_CARD_RECHECKS
 from apps.rider_data.models import RiderProfile
 
@@ -242,3 +244,90 @@ def test_refreshing_requires_a_login(client, rider):
     with patch("apps.accounts.views.request_profile_refresh") as trigger:
         assert client.post(_url(rider)).status_code == 302
     trigger.assert_not_called()
+
+
+# --- keeping a keyboard user's place -------------------------------------------------
+
+
+def _control_ids(markup):
+    """List the id of every link and button in some markup.
+
+    Returns:
+        The ids in order, None for a control without one.
+
+    """
+    ids = []
+    for tag in re.findall(r"<(?:a|button)\b[^>]*>", markup):
+        found = re.search(r'\sid="([^"]+)"', tag)
+        ids.append(found.group(1) if found else None)
+    return ids
+
+
+@pytest.mark.django_db
+def test_every_control_the_swaps_replace_keeps_its_id(client, team_member, rider, profile):
+    """After a swap, htmx puts focus back on the element with the id that had it; one without an id loses it."""
+    rider.strava_url = "https://www.strava.com/athletes/1"
+    rider.save(update_fields=["strava_url"])
+    client.force_login(team_member)
+
+    page = client.get(reverse("accounts:public_profile", args=[rider.pk])).content.decode()
+    page = page[page.index('id="rider-profile-card"') : page.index("<!-- YouTube Videos -->")]
+    recheck = client.get(_url(rider), {"check": "1"}).content.decode()
+
+    expected = ["rider-link-zwiftpower", "rider-link-zwiftracing", "rider-link-strava", "rider-data-update"]
+    assert _control_ids(page) == expected
+    assert _control_ids(recheck) == expected
+
+
+@pytest.mark.django_db
+def test_each_of_the_members_links_has_its_own_id(client, team_member, rider):
+    for field in SOCIAL_LINK_FIELDS:
+        setattr(rider, field, f"https://example.test/{field}")
+    rider.save()
+    client.force_login(team_member)
+
+    ids = _control_ids(client.get(_url(rider), {"check": str(RIDER_CARD_RECHECKS)}).content.decode())
+
+    assert None not in ids
+    assert len(set(ids)) == len(ids) == len(SOCIAL_LINK_FIELDS) + 3  # ZwiftPower, ZwiftRacing, Update
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("outcome", "message"),
+    [(QUEUED, "Checking ZwiftRacing for new data"), (UNREACHABLE, "Could not reach the rider data service")],
+)
+def test_a_press_is_answered_out_loud(client, team_member, rider, profile, outcome, message):
+    """The answer replaces the button too, so it is read out from the live region outside the cards."""
+    client.force_login(team_member)
+    with patch("apps.accounts.views.request_profile_refresh", return_value=outcome):
+        body = client.post(_url(rider)).content.decode()
+
+    announcer = body[body.index('<div id="rider-data-announcer"') :]
+    assert body.count('id="rider-data-announcer"') == 1
+    assert body.index('id="rider-data-announcer"') > body.index('id="rider-data-update"')
+    assert announcer.startswith('<div id="rider-data-announcer" hx-swap-oob="innerHTML">')
+    assert message in announcer
+    assert 'role="alert"' not in body  # once, from the live region, not twice
+
+
+@pytest.mark.django_db
+def test_a_recheck_is_not_read_out(client, team_member, rider, profile):
+    """Nobody asked for it, and every 45 seconds is too often to talk."""
+    client.force_login(team_member)
+    body = client.get(_url(rider), {"check": "1"}).content.decode()
+
+    assert "rider-data-announcer" not in body
+
+
+@pytest.mark.django_db
+def test_both_pages_carry_the_live_region_and_the_refocus_once(client, team_member, rider, profile):
+    """Outside the cards, once: inside, each swap would add the listeners again."""
+    client.force_login(team_member)
+    public = client.get(reverse("accounts:public_profile", args=[rider.pk])).content.decode()
+    client.force_login(rider)
+    edit = client.get(reverse("accounts:profile_edit")).content.decode()
+
+    for body in (public, edit):
+        assert body.count('<div id="rider-data-announcer" role="status" class="sr-only"></div>') == 1
+        assert body.count('elt.id === "rider-data-update"') == 1

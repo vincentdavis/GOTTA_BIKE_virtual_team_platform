@@ -1,10 +1,11 @@
 {% comment %}
   The member's own links, as outline buttons, for the Elsewhere strip of the rider data
   cards. The fields, and the order they are listed in, are accounts_tags.SOCIAL_LINK_FIELDS;
-  the has_social_links filter decides whether the strip has any to show.
+  the has_social_links filter decides whether the strip has any to show. Each carries an id so
+  focus survives the swaps of the cards (see rider_data_cards.html).
 {% endcomment %}
 {% if profile_user.youtube_channel %}
-  <a href="{{ profile_user.youtube_channel }}" target="_blank" rel="noopener"
+  <a id="rider-link-youtube" href="{{ profile_user.youtube_channel }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path
@@ -14,7 +15,7 @@
   </a>
 {% endif %}
 {% if profile_user.twitch_channel %}
-  <a href="{{ profile_user.twitch_channel }}" target="_blank" rel="noopener"
+  <a id="rider-link-twitch" href="{{ profile_user.twitch_channel }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path
@@ -24,7 +25,7 @@
   </a>
 {% endif %}
 {% if profile_user.strava_url %}
-  <a href="{{ profile_user.strava_url }}" target="_blank" rel="noopener"
+  <a id="rider-link-strava" href="{{ profile_user.strava_url }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path
@@ -34,7 +35,7 @@
   </a>
 {% endif %}
 {% if profile_user.garmin_url %}
-  <a href="{{ profile_user.garmin_url }}" target="_blank" rel="noopener"
+  <a id="rider-link-garmin" href="{{ profile_user.garmin_url }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path
@@ -44,7 +45,7 @@
   </a>
 {% endif %}
 {% if profile_user.instagram_url %}
-  <a href="{{ profile_user.instagram_url }}" target="_blank" rel="noopener"
+  <a id="rider-link-instagram" href="{{ profile_user.instagram_url }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path
@@ -54,7 +55,7 @@
   </a>
 {% endif %}
 {% if profile_user.facebook_url %}
-  <a href="{{ profile_user.facebook_url }}" target="_blank" rel="noopener"
+  <a id="rider-link-facebook" href="{{ profile_user.facebook_url }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path
@@ -64,7 +65,7 @@
   </a>
 {% endif %}
 {% if profile_user.twitter_url %}
-  <a href="{{ profile_user.twitter_url }}" target="_blank" rel="noopener"
+  <a id="rider-link-twitter" href="{{ profile_user.twitter_url }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path
@@ -74,7 +75,7 @@
   </a>
 {% endif %}
 {% if profile_user.tiktok_url %}
-  <a href="{{ profile_user.tiktok_url }}" target="_blank" rel="noopener"
+  <a id="rider-link-tiktok" href="{{ profile_user.tiktok_url }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path
@@ -84,7 +85,7 @@
   </a>
 {% endif %}
 {% if profile_user.bluesky_url %}
-  <a href="{{ profile_user.bluesky_url }}" target="_blank" rel="noopener"
+  <a id="rider-link-bluesky" href="{{ profile_user.bluesky_url }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path
@@ -94,7 +95,7 @@
   </a>
 {% endif %}
 {% if profile_user.mastodon_url %}
-  <a href="{{ profile_user.mastodon_url }}" target="_blank" rel="noopener"
+  <a id="rider-link-mastodon" href="{{ profile_user.mastodon_url }}" target="_blank" rel="noopener"
      class="btn btn-sm btn-outline gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path

@@ -338,6 +338,11 @@
   background task, so the response carries no new data and the region re-checks itself.
   The strip also renders for an update's message alone: a stale POST for a rider who has
   since lost the verification has no links to show, but still gets told why nothing happened.
+
+  Every swap of the region replaces the strip, so each link and the button carries a stable id:
+  htmx puts focus back on the element with the id that had it, so a keyboard user is not
+  dropped to the top of the page by a re-check. Pressing Update itself is handled by
+  _rider_data_update_script.html, which also reads its answer out.
 {% endcomment %}
 {% if profile_user.has_accepted_zwid_verification and profile_user.zwid or profile_user|has_social_links or refresh_level == "error" or recheck_in %}
   <div class="card bg-base-300 p-4 md:col-span-2">
@@ -346,12 +351,12 @@
         <h3 class="font-semibold mr-1">Elsewhere</h3>
         {% if profile_user.has_accepted_zwid_verification and profile_user.zwid %}
           {% if rider_profile.zwift_user_id %}
-            <a href="https://www.zwift.com/uk/athlete/{{ rider_profile.zwift_user_id }}"
+            <a id="rider-link-zwift" href="https://www.zwift.com/uk/athlete/{{ rider_profile.zwift_user_id }}"
                target="_blank" rel="noopener" class="btn btn-sm btn-outline">Zwift</a>
           {% endif %}
-          <a href="https://zwiftpower.com/profile.php?z={{ profile_user.zwid }}"
+          <a id="rider-link-zwiftpower" href="https://zwiftpower.com/profile.php?z={{ profile_user.zwid }}"
              target="_blank" rel="noopener" class="btn btn-sm btn-outline">ZwiftPower</a>
-          <a href="https://www.zwiftracing.app/riders/{{ profile_user.zwid }}"
+          <a id="rider-link-zwiftracing" href="https://www.zwiftracing.app/riders/{{ profile_user.zwid }}"
              target="_blank" rel="noopener" class="btn btn-sm btn-outline">ZwiftRacing</a>
         {% endif %}
         {% include "accounts/partials/_social_links.html" %}
@@ -365,7 +370,8 @@
           {% endif %}
           <span class="tooltip tooltip-top"
                 data-tip="Checks ZwiftPower and ZwiftRacing for updates. Can take about 60 seconds.">
-            <button hx-post="{% url 'accounts:refresh_rider_data' profile_user.id %}"
+            <button id="rider-data-update"
+                    hx-post="{% url 'accounts:refresh_rider_data' profile_user.id %}"
                     hx-target="#rider-profile-card"
                     hx-swap="outerHTML"
                     hx-disabled-elt="this"
@@ -382,8 +388,11 @@
     </div>
 
     {% if refresh_level == "error" %}
-      {# A solid alert: error-coloured text on the card fails contrast in the light theme. #}
-      <div role="alert" class="alert alert-error text-sm py-2 mt-3">{{ refresh_message }}</div>
+      {% comment %}
+        A solid alert: error-coloured text on the card fails contrast in the light theme. No
+        role: #rider-data-announcer reads the same message out, and an alert would say it twice.
+      {% endcomment %}
+      <div class="alert alert-error text-sm py-2 mt-3">{{ refresh_message }}</div>
     {% endif %}
 
     {% comment %}
@@ -404,3 +413,7 @@
   </div>
 {% endif %}
 </div>
+{% if refresh_message %}
+  {# A press's answer, out of band: fills the live region outside the cards, which keeps its role. #}
+  <div id="rider-data-announcer" hx-swap-oob="innerHTML">{{ refresh_message }}</div>
+{% endif %}

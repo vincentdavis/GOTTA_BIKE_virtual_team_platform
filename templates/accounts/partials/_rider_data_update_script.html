@@ -1,0 +1,31 @@
+{% comment %}
+  Pressing Update, for a keyboard user. The answer replaces #rider-profile-card, the button with
+  it, so focus would drop to the top of the page: it goes back to the new button instead, and
+  what happened is read out from #rider-data-announcer, which the answer fills out of band
+  (rider_data_cards.html). Only when the button had focus as it was pressed: a mouse click does
+  not focus a button in Safari, and should not end on a focus ring there.
+
+  Whether it had focus is read on htmx:beforeRequest, before hx-disabled-elt disables it: a
+  browser may move focus off a button as it is disabled, which would also defeat htmx's own
+  restore-by-id at the swap. The re-checks that follow a press are covered by that restore (the
+  strip's controls all carry ids), not by this.
+
+  Included once per page, outside the cards: inside, every swap would add the listeners again.
+  The TTT planner's Optimize works the same way (ttt_planner/planner_detail.html).
+{% endcomment %}
+<div id="rider-data-announcer" role="status" class="sr-only"></div>
+<script>
+  (function () {
+    var refocus = false;
+    document.body.addEventListener("htmx:beforeRequest", function (e) {
+      var elt = e.detail.elt;
+      if (elt && elt.id === "rider-data-update") refocus = document.activeElement === elt;
+    });
+    document.body.addEventListener("htmx:afterSettle", function (e) {
+      if (!refocus || !e.target || e.target.id !== "rider-profile-card") return;
+      refocus = false;
+      var button = document.getElementById("rider-data-update");
+      if (button) button.focus();
+    });
+  })();
+</script>
