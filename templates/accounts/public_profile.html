@@ -89,192 +89,163 @@
         </div>
 
         <!-- Info Cards -->
+        {% comment %}
+          Info cards, two to a row from md up. Rider and Verification come first: what the member
+          enters about themselves, and what the team has checked. The rider data cards after
+          them come from zauth's cache and refresh in place, so they are one include, shared with
+          the edit page, whose wrapper is display: contents -- its cards sit in this grid.
+
+          Groups inside a card are divided by divide-y (see rider_data_cards.html).
+        {% endcomment %}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <!-- Zwift & Race Verified Status -->
           <div class="card bg-base-300 p-4">
             <h3 class="font-semibold mb-3 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-                   stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              Zwift Status
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><circle cx="12" cy="8" r="4" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+              Rider
             </h3>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="text-base-content/70">Zwift Verified</span>
-                {% if profile_user.has_accepted_zwid_verification %}
-                  <span class="badge badge-success badge-sm">Yes</span>
-                {% else %}
-                  <span class="badge badge-ghost badge-sm">No</span>
-                {% endif %}
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-base-content/70">Race Verified</span>
-                {% if profile_user.is_extra_verified %}
-                  {% if site_settings.extra_verified_emoji %}
-                    <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
-                  {% else %}
-                    <span class="badge badge-warning badge-sm">EV</span>
-                  {% endif %}
-                {% elif profile_user.is_race_ready %}
-                  {% if site_settings.verified_emoji %}
-                    <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
-                  {% else %}
-                    <span class="badge badge-success badge-sm">Yes</span>
-                  {% endif %}
-                {% else %}
-                  {% if site_settings.not_verified_emoji %}
-                    <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
-                  {% else %}
-                    <span class="badge badge-ghost badge-sm">No</span>
-                  {% endif %}
-                {% endif %}
-              </div>
+            <div class="text-sm divide-y divide-base-content/10">
               {% if profile_user.gender %}
-                <div class="flex items-center justify-between">
-                  <span class="text-base-content/70">Gender</span>
-                  <span>{{ profile_user.get_gender_display }}</span>
+                <div class="py-2 first:pt-0 last:pb-0">
+                  <div class="flex justify-between gap-3">
+                    <span class="text-base-content/70">Gender</span>
+                    <span class="text-right">{{ profile_user.get_gender_display }}</span>
+                  </div>
                 </div>
               {% endif %}
-            </div>
-          </div>
-
-          <!-- Training Equipment -->
-          <div class="card bg-base-300 p-4">
-            <h3 class="font-semibold mb-3 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24"
-                   stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/>
-              </svg>
-              Training Equipment
-            </h3>
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="text-base-content/70">Trainer</span>
-                <span>{{ profile_user.trainer|default:"-" }}</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-base-content/70">Power Meter</span>
-                <span>{{ profile_user.powermeter|default:"-" }}</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-base-content/70">HR Monitor</span>
-                <span>{{ profile_user.heartrate_monitor|default:"-" }}</span>
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-base-content/70">Dual Recording</span>
-                {% if profile_user.dual_recording is not None %}
-                  {% if profile_user.dual_recording %}
+              <div class="space-y-1 py-2 first:pt-0 last:pb-0">
+                <div class="flex justify-between gap-3">
+                  <span class="text-base-content/70">Trainer</span>
+                  <span class="text-right">{{ profile_user.trainer|default:"&mdash;" }}</span>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <span class="text-base-content/70">Power Meter</span>
+                  <span class="text-right">{{ profile_user.powermeter|default:"&mdash;" }}</span>
+                </div>
+                <div class="flex justify-between gap-3">
+                  <span class="text-base-content/70">HR Monitor</span>
+                  <span class="text-right">{{ profile_user.heartrate_monitor|default:"&mdash;" }}</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-base-content/70">Dual Recording</span>
+                  {% if profile_user.dual_recording is None %}
+                    <span>&mdash;</span>
+                  {% elif profile_user.dual_recording %}
                     <span class="badge badge-success badge-sm">Yes</span>
                   {% else %}
                     <span class="badge badge-ghost badge-sm">No</span>
                   {% endif %}
-                {% else %}
-                  <span>-</span>
-                {% endif %}
+                </div>
               </div>
             </div>
           </div>
 
-          <!-- Consolidated rider data: replaces the ZwiftPower, Zwift Racing and
-               Racing Profile cards, which each fetched their own source. -->
-          {% include "accounts/partials/rider_profile_card.html" %}
-
-          <!-- Verification Records -->
-          {% if verification_summary or pending_records %}
           <div class="card bg-base-300 p-4">
             <h3 class="font-semibold mb-3 flex items-center gap-2">
-              {% if profile_user.is_extra_verified %}
-                {% if site_settings.extra_verified_emoji %}
-                  <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
-                {% else %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                {% endif %}
-              {% elif profile_user.is_race_ready %}
-                {% if site_settings.verified_emoji %}
-                  <img src="{{ site_settings.verified_emoji.url }}" alt="Race Verified" class="h-5 w-5">
-                {% else %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                {% endif %}
-              {% else %}
-                {% if site_settings.not_verified_emoji %}
-                  <img src="{{ site_settings.not_verified_emoji.url }}" alt="Not Race Verified" class="h-5 w-5">
-                {% else %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                {% endif %}
-              {% endif %}
-              Verification Records
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4"/></svg>
+              Verification
             </h3>
-            <div class="space-y-2">
-              {% if verification_summary.weight_full %}
-                <div class="flex items-center justify-between">
-                  <span class="text-base-content/70">Weight Full</span>
-                  <span class="font-mono text-sm">
-                    {% if verification_summary.weight_full.days_remaining is not None %}
-                      {% if verification_summary.weight_full.days_remaining > 0 %}
-                        <span class="text-success">{{ verification_summary.weight_full.days_remaining }}d remaining</span>
-                      {% else %}
-                        <span class="text-error">Expired</span>
-                      {% endif %}
+            <div class="text-sm divide-y divide-base-content/10">
+              <div class="space-y-1 py-2 first:pt-0 last:pb-0">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-base-content/70">Zwift Verified</span>
+                  {% if profile_user.has_accepted_zwid_verification %}
+                    <span class="badge badge-success badge-sm">Yes</span>
+                  {% else %}
+                    <span class="badge badge-ghost badge-sm">No</span>
+                  {% endif %}
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span class="text-base-content/70">Race Verified</span>
+                  {% if profile_user.is_extra_verified %}
+                    {% if site_settings.extra_verified_emoji %}
+                      <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
                     {% else %}
-                      <span class="text-success">No expiry</span>
+                      <span class="badge badge-warning badge-sm">EV</span>
                     {% endif %}
-                  </span>
-                </div>
-              {% endif %}
-              {% if verification_summary.weight_light %}
-                <div class="flex items-center justify-between">
-                  <span class="text-base-content/70">Weight Light</span>
-                  <span class="font-mono text-sm">
-                    {% if verification_summary.weight_light.days_remaining is not None %}
-                      {% if verification_summary.weight_light.days_remaining > 0 %}
-                        <span class="text-success">{{ verification_summary.weight_light.days_remaining }}d remaining</span>
-                      {% else %}
-                        <span class="text-error">Expired</span>
-                      {% endif %}
+                  {% elif profile_user.is_race_ready %}
+                    {% if site_settings.verified_emoji %}
+                      <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
                     {% else %}
-                      <span class="text-success">No expiry</span>
+                      <span class="badge badge-success badge-sm">Yes</span>
                     {% endif %}
-                  </span>
-                </div>
-              {% endif %}
-              {% if verification_summary.height %}
-                <div class="flex items-center justify-between">
-                  <span class="text-base-content/70">Height</span>
-                  <span class="font-mono text-sm text-base-content/70">{{ verification_summary.height.record_date|date:"M j, Y" }}</span>
-                </div>
-              {% endif %}
-              {% if verification_summary.power %}
-                <div class="flex items-center justify-between">
-                  <span class="text-base-content/70">Power</span>
-                  <span class="font-mono text-sm">
-                    {% if verification_summary.power.days_remaining is not None %}
-                      {% if verification_summary.power.days_remaining > 0 %}
-                        <span class="text-success">{{ verification_summary.power.days_remaining }}d remaining</span>
-                      {% else %}
-                        <span class="text-error">Expired</span>
-                      {% endif %}
+                  {% else %}
+                    {% if site_settings.not_verified_emoji %}
+                      <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
                     {% else %}
-                      <span class="text-success">No expiry</span>
+                      <span class="badge badge-ghost badge-sm">No</span>
                     {% endif %}
-                  </span>
+                  {% endif %}
                 </div>
-              {% endif %}
-              {% if not verification_summary %}
-                <p class="text-base-content/50 text-sm">No verified records</p>
-              {% endif %}
+              </div>
+
+              {% comment %}
+                The latest verified record of each type. Days left are plain text and an expired
+                record is a solid badge: status-coloured text on the card fell under 4.5:1 in the
+                light theme. days_remaining reads the validity windows from Constance on every
+                access, so each row reads it once.
+              {% endcomment %}
+              <div class="space-y-1 py-2 first:pt-0 last:pb-0">
+                {% with record=verification_summary.weight_full %}
+                  {% if record %}
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="text-base-content/70">Weight Full</span>
+                      {% with days=record.days_remaining %}
+                        {% if days is None %}
+                          <span>No expiry</span>
+                        {% elif days > 0 %}
+                          <span class="font-mono">{{ days }} day{{ days|pluralize }} left</span>
+                        {% else %}
+                          <span class="badge badge-error badge-sm">Expired</span>
+                        {% endif %}
+                      {% endwith %}
+                    </div>
+                  {% endif %}
+                {% endwith %}
+                {% with record=verification_summary.weight_light %}
+                  {% if record %}
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="text-base-content/70">Weight Light</span>
+                      {% with days=record.days_remaining %}
+                        {% if days is None %}
+                          <span>No expiry</span>
+                        {% elif days > 0 %}
+                          <span class="font-mono">{{ days }} day{{ days|pluralize }} left</span>
+                        {% else %}
+                          <span class="badge badge-error badge-sm">Expired</span>
+                        {% endif %}
+                      {% endwith %}
+                    </div>
+                  {% endif %}
+                {% endwith %}
+                {% if verification_summary.height %}
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="text-base-content/70">Height</span>
+                    <span class="font-mono">{{ verification_summary.height.record_date|date:"M j, Y" }}</span>
+                  </div>
+                {% endif %}
+                {% with record=verification_summary.power %}
+                  {% if record %}
+                    <div class="flex items-center justify-between gap-3">
+                      <span class="text-base-content/70">Power</span>
+                      {% with days=record.days_remaining %}
+                        {% if days is None %}
+                          <span>No expiry</span>
+                        {% elif days > 0 %}
+                          <span class="font-mono">{{ days }} day{{ days|pluralize }} left</span>
+                        {% else %}
+                          <span class="badge badge-error badge-sm">Expired</span>
+                        {% endif %}
+                      {% endwith %}
+                    </div>
+                  {% endif %}
+                {% endwith %}
+                {% if not verification_summary %}
+                  <p class="text-base-content/70">No verified records</p>
+                {% endif %}
+              </div>
               {% if pending_records %}
-                <div class="divider my-1"></div>
-                <div>
-                  <span class="text-sm text-base-content/70">Pending</span>
+                <div class="py-2 first:pt-0 last:pb-0">
+                  <div class="text-base-content/70">Pending</div>
                   <div class="flex flex-wrap gap-1 mt-1">
                     {% for record in pending_records %}
                       <span class="badge badge-warning badge-sm">{{ record.get_verify_type_display }}</span>
@@ -284,7 +255,8 @@
               {% endif %}
             </div>
           </div>
-          {% endif %}
+
+          {% include "accounts/partials/rider_data_cards.html" %}
         </div>
 
         <!-- YouTube Videos -->
@@ -324,115 +296,6 @@
                 </a>
               </div>
             {% endif %}
-          </div>
-        {% endif %}
-
-        <!-- Social Links -->
-        {% if profile_user.youtube_channel or profile_user.twitch_channel or profile_user.strava_url or profile_user.garmin_url or profile_user.instagram_url or profile_user.facebook_url or profile_user.twitter_url or profile_user.tiktok_url or profile_user.bluesky_url or profile_user.mastodon_url %}
-          <div class="mb-6">
-            <h3 class="font-semibold mb-3">Social Links</h3>
-            <div class="flex flex-wrap gap-2">
-              {% if profile_user.youtube_channel %}
-                <a href="{{ profile_user.youtube_channel }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                  </svg>
-                  YouTube
-                </a>
-              {% endif %}
-              {% if profile_user.twitch_channel %}
-                <a href="{{ profile_user.twitch_channel }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
-                  </svg>
-                  Twitch
-                </a>
-              {% endif %}
-              {% if profile_user.strava_url %}
-                <a href="{{ profile_user.strava_url }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
-                  </svg>
-                  Strava
-                </a>
-              {% endif %}
-              {% if profile_user.garmin_url %}
-                <a href="{{ profile_user.garmin_url }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 21.6c-5.292 0-9.6-4.308-9.6-9.6S6.708 2.4 12 2.4s9.6 4.308 9.6 9.6-4.308 9.6-9.6 9.6zm0-16.8c-3.972 0-7.2 3.228-7.2 7.2s3.228 7.2 7.2 7.2 7.2-3.228 7.2-7.2-3.228-7.2-7.2-7.2z"/>
-                  </svg>
-                  Garmin
-                </a>
-              {% endif %}
-              {% if profile_user.instagram_url %}
-                <a href="{{ profile_user.instagram_url }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
-                  </svg>
-                  Instagram
-                </a>
-              {% endif %}
-              {% if profile_user.facebook_url %}
-                <a href="{{ profile_user.facebook_url }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                  </svg>
-                  Facebook
-                </a>
-              {% endif %}
-              {% if profile_user.twitter_url %}
-                <a href="{{ profile_user.twitter_url }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-                  </svg>
-                  X
-                </a>
-              {% endif %}
-              {% if profile_user.tiktok_url %}
-                <a href="{{ profile_user.tiktok_url }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
-                  </svg>
-                  TikTok
-                </a>
-              {% endif %}
-              {% if profile_user.bluesky_url %}
-                <a href="{{ profile_user.bluesky_url }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M12 10.8c-1.087-2.114-4.046-6.053-6.798-7.995C2.566.944 1.561 1.266.902 1.565.139 1.908 0 3.08 0 3.768c0 .69.378 5.65.624 6.479.815 2.736 3.713 3.66 6.383 3.364.136-.02.275-.039.415-.056-.138.022-.276.04-.415.056-3.912.58-7.387 2.005-2.83 7.078 5.013 5.19 6.87-1.113 7.823-4.308.953 3.195 2.05 9.271 7.733 4.308 4.267-4.308 1.172-6.498-2.74-7.078a8.741 8.741 0 0 1-.415-.056c.14.017.279.036.415.056 2.67.297 5.568-.628 6.383-3.364.246-.828.624-5.79.624-6.478 0-.69-.139-1.861-.902-2.206-.659-.298-1.664-.62-4.3 1.24C16.046 4.748 13.087 8.687 12 10.8Z"/>
-                  </svg>
-                  Bluesky
-                </a>
-              {% endif %}
-              {% if profile_user.mastodon_url %}
-                <a href="{{ profile_user.mastodon_url }}" target="_blank" rel="noopener"
-                   class="btn btn-sm btn-outline gap-2">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path
-                        d="M23.268 5.313c-.35-2.578-2.617-4.61-5.304-5.004C17.51.242 15.792 0 11.813 0h-.03c-3.98 0-4.835.242-5.288.309C3.882.692 1.496 2.518.917 5.127.64 6.412.61 7.837.661 9.143c.074 1.874.088 3.745.26 5.611.118 1.24.325 2.47.62 3.68.55 2.237 2.777 4.098 4.96 4.857 2.336.792 4.849.923 7.256.38.265-.061.527-.132.786-.213.585-.184 1.27-.39 1.774-.753a.057.057 0 0 0 .023-.043v-1.809a.052.052 0 0 0-.02-.041.053.053 0 0 0-.046-.01 20.282 20.282 0 0 1-4.709.545c-2.73 0-3.463-1.284-3.674-1.818a5.593 5.593 0 0 1-.319-1.433.053.053 0 0 1 .066-.054c1.517.363 3.072.546 4.632.546.376 0 .75 0 1.125-.01 1.57-.044 3.224-.124 4.768-.422.038-.008.077-.015.11-.024 2.435-.464 4.753-1.92 4.989-5.604.008-.145.03-1.52.03-1.67.002-.512.167-3.63-.024-5.545zm-3.748 9.195h-2.561V8.29c0-1.309-.55-1.976-1.67-1.976-1.23 0-1.846.79-1.846 2.35v3.403h-2.546V8.663c0-1.56-.617-2.35-1.848-2.35-1.112 0-1.668.668-1.668 1.977v6.218H4.822V8.102c0-1.31.337-2.35 1.011-3.12.696-.77 1.608-1.164 2.74-1.164 1.311 0 2.302.5 2.962 1.498l.638 1.06.638-1.06c.66-.999 1.65-1.498 2.96-1.498 1.13 0 2.043.395 2.74 1.164.675.77 1.012 1.81 1.012 3.12z"/>
-                  </svg>
-                  Mastodon
-                </a>
-              {% endif %}
-            </div>
           </div>
         {% endif %}
 

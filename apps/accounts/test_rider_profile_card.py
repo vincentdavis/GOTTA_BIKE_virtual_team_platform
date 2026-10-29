@@ -1,12 +1,13 @@
-"""The consolidated rider card, on the public profile and the edit page.
+"""The rider data cards, on the public profile and the edit page.
 
-Replaces three cards that each fetched their own source -- ZwiftPower, Zwift Racing, and a
+They replace three cards that each fetched their own source -- ZwiftPower, Zwift Racing, and a
 live per-render call to zauth for the official Racing Profile -- with one cached RiderProfile
-row.
+row, shown as Ratings, Power, Rider type and Race record, then the Elsewhere strip. Which row
+sits in which card is pinned in test_profile_card_layout.py.
 
-Two things are worth testing beyond "the values appear". First, most of what the card shows
+Two things are worth testing beyond "the values appear". First, most of what the cards show
 lives in the JSON payload rather than in a column, so a change to zauth's document shape
-breaks the card silently: the accessor tests below pin the paths. Second, the card must not
+breaks them silently: the accessor tests below pin the paths. Second, the cards must not
 become a verification signal -- RiderProfile carries no verification state by design, and
 `zwift_connection.status` reports whether a Zwift account exists service-wide, not whether
 this rider is still linked to us.
@@ -162,7 +163,6 @@ def test_the_accessors_survive_a_null_or_wrongly_typed_block(rider):
 def test_the_card_renders_the_promoted_columns(client, profile, rider, team_member):
     body = _body(client, team_member, rider)
 
-    assert "Racing &amp; Performance" in body
     for expected in ("COALITION", "Bronze", "78.5 kg", "165 cm", "5351"):
         assert expected in body, f"{expected!r} missing from the card"
 
@@ -190,6 +190,16 @@ def test_lifetime_climbed_is_rendered_in_metres_not_kilometres(client, profile, 
 
 def _text(markup):
     return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", markup)).split())
+
+
+def _headings(markup):
+    """List the card headings in some markup, in order.
+
+    Returns:
+        Each ``<h3>``'s text.
+
+    """
+    return [_text(heading) for heading in re.findall(r"<h3[^>]*>(.*?)</h3>", markup, re.S)]
 
 
 def _row(body, label):
@@ -312,7 +322,7 @@ def test_the_card_does_not_invent_the_data_riderprofile_cannot_supply(client, pr
     reintroducing the per-source fetches the consolidation removed.
     """
     body = _body(client, team_member, rider)
-    card = body[body.index("Racing &amp; Performance") :]
+    card = body[body.index('id="rider-profile-card"') :]
     card = card[: card.index("Recent Results")] if "Recent Results" in card else card
 
     for absent in ("Best seen", "Rank"):
@@ -428,27 +438,31 @@ def _edit_body(client, viewer):
 
 
 def _card_region(body: str) -> str:
-    """Slice out the card so assertions do not accidentally match the surrounding form.
+    """Slice out the cards so assertions do not accidentally match the surrounding form.
 
     Args:
         body: The rendered page.
 
     Returns:
-        The markup from the card heading to the end of its section.
+        The markup from the cards' wrapper to the end of their section.
 
     """
-    start = body.index("Racing &amp; Performance")
+    start = body.index('id="rider-profile-card"')
     end = body.find("Required fields", start)
     return body[start : end if end != -1 else len(body)]
 
 
 @pytest.mark.django_db
-def test_the_edit_page_shows_the_same_card_as_the_public_profile(client, profile, rider):
+def test_the_edit_page_shows_the_same_cards_as_the_public_profile(client, profile, rider, team_member):
     """A rider should be able to see what the rest of the team sees about them."""
     body = _edit_body(client, rider)
+    public = _body(client, team_member, rider)
+    public = public[public.index('id="rider-profile-card"') : public.index("<!-- YouTube Videos -->")]
 
     assert "Your Racing Data" in body
-    for expected in ("Racing &amp; Performance", "COALITION", "Bronze", "165 cm", "Terrain handicaps"):
+    assert _headings(_card_region(body)) == _headings(public)
+    assert _headings(public) == ["Ratings", "Power", "Rider type", "Race record", "Elsewhere"]
+    for expected in ("COALITION", "Bronze", "165 cm", "Terrain handicaps"):
         assert expected in body, f"{expected!r} missing from the edit page"
 
 
@@ -797,7 +811,8 @@ def test_a_seed_without_a_time_trial_rating_shows_the_race_rating_alone(client, 
 @pytest.mark.django_db
 def test_the_power_curve_is_a_table_by_duration(client, full_profile, rider, team_member):
     body = _body(client, team_member, rider)
-    table = body[body.index("Best power (Zwift Racing)") : body.index("</table>")]
+    start = body.index("Best power (Zwift Racing)")
+    table = body[start : body.index("</table>", start)]
     rows = [_text(row[row.index(">") + 1 :]) for row in table.split("<tr")[2:]]
 
     assert '<th scope="col"' in table and '<th scope="row"' in table
@@ -832,6 +847,6 @@ def test_the_card_text_keeps_its_contrast(client, full_profile, rider, team_memb
     assert "text-base-content/50" not in card
     assert "text-base-content/40" not in card
     handicaps = card[card.index("Terrain handicaps") :]
-    handicaps = handicaps[: handicaps.index("</div>\n          </div>")]
+    handicaps = handicaps[: handicaps.index("Race record")]  # the card after Rider type
     assert "badge-outline" not in handicaps
     assert "flat +16.4" in " ".join(handicaps.split())  # the sign written out, not left to the colour

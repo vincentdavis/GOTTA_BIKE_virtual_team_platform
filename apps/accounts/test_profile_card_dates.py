@@ -1,9 +1,10 @@
 """Profile cards show when their data was last updated.
 
 The own-profile page still renders the ZwiftPower and Zwift Racing pair. The public profile
-no longer does: its three source cards were replaced by one consolidated card fed by
-RiderProfile, which carries a single fetched_at. So the two pages legitimately show a
-different number of dates, and each is asserted against what it actually renders.
+no longer does: its three source cards were replaced by the rider data cards, fed by one
+RiderProfile row, which carries a single fetched_at shown once, beside the Update button.
+So the two pages legitimately show a different number of dates, and each is asserted against
+what it actually renders.
 """
 
 import pytest
@@ -54,7 +55,7 @@ def test_own_profile_cards_show_the_update_date(client, verified_rider, monkeypa
 
 @pytest.mark.django_db
 def test_public_profile_card_shows_the_update_date(client, verified_rider, team_member) -> None:
-    """One card, one date -- sourced from RiderProfile.fetched_at, not the ZP/ZR rows."""
+    """One row, one date -- sourced from RiderProfile.fetched_at, not the ZP/ZR rows."""
     # Needs something the card actually displays: a row carrying only a name renders the
     # "not synced" state, since `name` is never shown on the card.
     RiderProfile.objects.create(
@@ -65,7 +66,7 @@ def test_public_profile_card_shows_the_update_date(client, verified_rider, team_
 
     body = client.get(reverse("accounts:public_profile", args=[verified_rider.pk])).content.decode()
 
-    assert body.count(f"Updated {_today()}") == 1
+    assert body.count(f"Rider data updated {_today()}") == 1
 
 
 @pytest.mark.django_db
@@ -83,4 +84,4 @@ def test_no_date_is_shown_without_the_underlying_row(client, user_model, team_me
 
     body = client.get(reverse("accounts:public_profile", args=[bare.pk])).content.decode()
 
-    assert f"Updated {_today()}" not in body
+    assert f"updated {_today()}" not in body.lower()

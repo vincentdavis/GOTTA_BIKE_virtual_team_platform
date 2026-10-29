@@ -173,7 +173,7 @@ def _zauth_status_context(user: User) -> dict:
 
 
 def _rider_profile_for(profile_user):
-    """Return the cached RiderProfile backing the consolidated card, or None.
+    """Return the cached RiderProfile backing the rider data cards, or None.
 
     Gated on the SAME verification state the ZwiftPower and ZwiftRacing cards used (read
     through the cutover policy), and deliberately not on anything in the profile itself.
@@ -200,7 +200,7 @@ def _rider_profile_for(profile_user):
     return RiderProfile.objects.filter(zwid=profile_user.zwid).first()
 
 
-# How many times the card comes back for a fresh copy of itself after an update is
+# How many times the cards come back for a fresh copy of themselves after an update is
 # requested, and how far apart. A self-terminating chain carried in the URL rather than a
 # server-side "in progress" flag: the cache is per-process (LocMem) so a flag would be
 # invisible to the other web workers, and a chain needs no cleanup when the rider closes the
@@ -213,12 +213,12 @@ _SOURCE_LABELS = {"zwiftpower": "ZwiftPower", "zwiftracing": "ZwiftRacing"}
 
 
 def _rider_card_context(profile_user: User, *, check: int = 0, message: str = "", level: str = "") -> dict:
-    """Build the context for one render of the consolidated rider card.
+    """Build the context for one render of the rider data cards.
 
     Args:
-        profile_user: The rider the card describes.
+        profile_user: The rider the cards describe.
         check: Which re-check this render is; 0 for the first response after the button.
-        message: Status line to show above the card, if any.
+        message: Status line to show beside the Update button, if any.
         level: DaisyUI alert modifier for that line ("info", "error").
 
     Returns:
@@ -239,9 +239,9 @@ def _rider_card_context(profile_user: User, *, check: int = 0, message: str = ""
 @login_required
 @require_http_methods(["GET", "POST"])
 def refresh_rider_data(request: HttpRequest, user_id: int) -> HttpResponse:
-    """Ask zauth to re-check a rider at ZwiftPower and ZwiftRacing, and re-render their card.
+    """Ask zauth to re-check a rider at ZwiftPower and ZwiftRacing, and re-render their cards.
 
-    POST triggers; GET is the card fetching a fresh copy of itself while the service works,
+    POST triggers; GET is the cards fetching a fresh copy of themselves while the service works,
     so the rider sees the new numbers without reloading. Both return the same partial, which
     is why the two methods share a view -- the swap target and the markup must not drift.
 
@@ -251,10 +251,10 @@ def refresh_rider_data(request: HttpRequest, user_id: int) -> HttpResponse:
 
     Args:
         request: The HTTP request.
-        user_id: The rider whose card is being refreshed.
+        user_id: The rider whose cards are being refreshed.
 
     Returns:
-        The rendered rider profile card partial.
+        The rendered rider data cards partial.
 
     Raises:
         PermissionDenied: When viewing someone else without team_member.
@@ -272,14 +272,14 @@ def refresh_rider_data(request: HttpRequest, user_id: int) -> HttpResponse:
 
     if request.method == "GET":
         context = _rider_card_context(profile_user, check=check)
-        return render(request, "accounts/partials/rider_profile_card.html", context)
+        return render(request, "accounts/partials/rider_data_cards.html", context)
 
     if not (profile_user.has_accepted_zwid_verification and profile_user.zwid):
         # No button is rendered in this state, so this is a tampered or stale POST. Say so
         # plainly rather than triggering a refresh for a zwid nobody has confirmed.
         return render(
             request,
-            "accounts/partials/rider_profile_card.html",
+            "accounts/partials/rider_data_cards.html",
             _rider_card_context(
                 profile_user,
                 message="This rider has no verified Zwift account to update.",
@@ -309,7 +309,7 @@ def refresh_rider_data(request: HttpRequest, user_id: int) -> HttpResponse:
 
     return render(
         request,
-        "accounts/partials/rider_profile_card.html",
+        "accounts/partials/rider_data_cards.html",
         _rider_card_context(profile_user, message=message, level=level),
     )
 
@@ -771,7 +771,7 @@ def public_profile_view(request: HttpRequest, user_id: int) -> HttpResponse:
     is_own_profile = profile_user == request.user
 
     # Recent results still come from ZwiftPower: they are race records, not rider attributes,
-    # so the consolidated RiderProfile card cannot supply them and this query stays.
+    # so the RiderProfile cards cannot supply them and this query stays.
     recent_results = []
     if profile_user.has_accepted_zwid_verification and profile_user.zwid:
         recent_results = ZPRiderResults.objects.filter(zwid=profile_user.zwid).select_related("event")[:5]

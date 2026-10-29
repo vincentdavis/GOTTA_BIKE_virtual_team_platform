@@ -468,9 +468,10 @@
             </div>
 
             {% comment %}
-              The same consolidated card the public profile shows, so a rider can see exactly
-              what their teammates see about them. Read-only: it is a cache of what zauth
-              returned, and the next sync would overwrite anything edited here.
+              The same rider data cards the public profile shows, so a rider can see exactly
+              what their teammates see about them. Read-only: they are a cache of what zauth
+              returned, and the next sync would overwrite anything edited here. The partial's
+              wrapper is display: contents, so the grid here lays its cards out two by two.
 
               profile_user is passed explicitly because the partial is written for the public
               profile, where the subject is not the logged-in user.
@@ -478,12 +479,13 @@
             <div class="divider"></div>
             <div class="mb-6">
                 <h3 class="text-lg font-semibold mb-3">Your Racing Data</h3>
-                <p class="text-sm text-base-content/60 mb-3">
-                    Synced from Zwift, ZwiftPower and ZwiftRacing. This is what teammates see on
-                    your profile &mdash; it is not editable here.
+                <p class="text-sm text-base-content/70 mb-3">
+                    This is what teammates see on your profile. The rider data is synced from Zwift,
+                    ZwiftPower and ZwiftRacing and is not editable here; the links are the ones you
+                    entered above.
                 </p>
-                <div class="max-w-md">
-                    {% include "accounts/partials/rider_profile_card.html" with profile_user=user %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% include "accounts/partials/rider_data_cards.html" with profile_user=user %}
                 </div>
             </div>
 

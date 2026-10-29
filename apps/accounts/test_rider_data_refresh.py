@@ -1,8 +1,8 @@
-"""The Update button on the rider card, and the poll that collects its result.
+"""The Update button on the rider data cards, and the poll that collects its result.
 
 Pressing Update cannot return new data in its own response -- zauth answers the trigger
-immediately and fetches on its own worker -- so the card asks for a fresh copy of itself a few
-times afterwards. That chain is carried in the URL rather than in a server-side "in progress"
+immediately and fetches on its own worker -- so the cards ask for a fresh copy of themselves a
+few times afterwards. That chain is carried in the URL rather than in a server-side "in progress"
 flag, because the cache is per-process (LocMem) and a flag written by one web worker would be
 invisible to the next request. The tests below pin both ends of it: that it starts, and that
 it stops.
@@ -185,7 +185,10 @@ def test_a_recheck_reads_the_card_without_triggering_anything(client, team_membe
         body = client.get(_url(rider), {"check": "1"}).content.decode()
 
     trigger.assert_not_called()
-    assert "Racing &amp; Performance" in body  # the whole card came back, not just a status line
+    # The whole region came back, cards included, not just a status line -- and as the one
+    # top-level element, which is what the outerHTML swap replaces the old region with.
+    assert body.lstrip().startswith('<div id="rider-profile-card"')
+    assert ">vELO</caption>" in body
     assert f"{_url(rider)}?check=2" in body
 
 

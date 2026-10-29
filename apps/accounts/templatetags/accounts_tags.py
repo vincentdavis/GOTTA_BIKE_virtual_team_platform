@@ -432,6 +432,36 @@ def velo2_table(profile, gender: str | None = None) -> list:
     return profile.velo2_table(gender) if profile else []
 
 
+# The member's own links that their profile shows, in the order
+# ``accounts/partials/_social_links.html`` lists them.
+SOCIAL_LINK_FIELDS = (
+    "youtube_channel",
+    "twitch_channel",
+    "strava_url",
+    "garmin_url",
+    "instagram_url",
+    "facebook_url",
+    "twitter_url",
+    "tiktok_url",
+    "bluesky_url",
+    "mastodon_url",
+)
+
+
+@register.filter
+def has_social_links(user) -> bool:
+    """Return whether a member has filled in any of the links their profile shows.
+
+    Args:
+        user: The member, or None.
+
+    Returns:
+        True when at least one of ``SOCIAL_LINK_FIELDS`` is set.
+
+    """
+    return any(getattr(user, field, "") for field in SOCIAL_LINK_FIELDS)
+
+
 @register.simple_tag(takes_context=True)
 def phenotype_icon(context, phenotype):
     """Render a phenotype as an emoji image if a custom icon is uploaded.
