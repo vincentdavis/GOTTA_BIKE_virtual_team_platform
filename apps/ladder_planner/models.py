@@ -16,7 +16,12 @@ from django.db import models
 
 
 class CourseProfile(models.TextChoices):
-    """Terrain profile of the course, selecting which ZR handicap to apply."""
+    """Terrain profile of the course: a description only.
+
+    It used to pick the Zwift Racing terrain handicap the projected score applied; zwiftracing
+    removed those handicaps from its API on 2026-10-29 and the projection now ranks on
+    route-weighted vELO 2 (``services.compute.projected_score``).
+    """
 
     FLAT = "flat", "Flat"
     ROLLING = "rolling", "Rolling"
@@ -51,7 +56,7 @@ class LadderMatchup(models.Model):
         max_length=20,
         choices=CourseProfile.choices,
         default=CourseProfile.ROLLING,
-        help_text="Terrain profile; selects which ZR handicap drives the projected score",
+        help_text="Terrain profile of the course (descriptive; the projection ranks on vELO 2)",
     )
     cda_coef = models.FloatField(
         null=True,

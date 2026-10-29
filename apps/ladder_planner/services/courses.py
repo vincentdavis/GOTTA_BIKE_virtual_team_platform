@@ -3,8 +3,8 @@
 Routes come from the canonical ``zwift_data.ZwiftRoute`` library, which carries
 distance and elevation but no terrain type. ``derive_profile`` estimates a terrain
 profile from climbing density (metres of climb per km) so picking a route can suggest
-the ``CourseProfile`` that drives the projected-score handicap. The suggestion stays
-editable — it is only a prefill.
+its ``CourseProfile``, which describes the course; the projected score ranks on the
+route's vELO 2 factor weights instead. The suggestion stays editable — it is only a prefill.
 """
 
 from __future__ import annotations

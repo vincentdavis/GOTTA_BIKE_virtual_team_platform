@@ -199,45 +199,70 @@
   {# ===== Projected Score ===== #}
   <input type="radio" name="ladder_tabs" role="tab" class="tab" aria-label="Projected Score" checked />
   <div role="tabpanel" class="tab-content bg-base-100 border-base-300 rounded-box p-4">
-    <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
+    {% with projected=summary.projected %}
+    {# pr-8 keeps the text clear of the "Copy tab as image" button pinned in the panel's top-right corner. #}
+    <div class="flex flex-wrap items-end justify-between gap-3 mb-4 pr-8">
       <div>
-        <div class="text-sm text-base-content/60">Course profile: <span class="font-medium">{{ summary.projected.profile }}</span>{% if matchup.course_name %} · {{ matchup.course_name }}{% endif %}</div>
-        {% if summary.projected.favored %}
-          <div class="text-lg font-bold">Projected winner: <span class="text-primary">{{ summary.projected.favored }}</span></div>
+        {% comment %}
+          What the ranking rests on (compute.projected_score): the route's vELO 2 factor weights
+          when it has them, else the vELO 2 race rating. The course profile no longer enters it:
+          zwiftracing removed terrain handicaps from its API on 2026-10-29.
+        {% endcomment %}
+        <p class="text-sm text-base-content/70">
+          {% if projected.weights %}
+            Ranked on vELO 2 weighted for <span class="font-medium">{{ projected.route_name }}</span>:
+            {% for w in projected.weights %}{{ w.label }} {{ w.percent }}%{% if not forloop.last %} &middot; {% endif %}{% endfor %}
+          {% elif projected.route_name %}
+            Ranked on vELO 2 race rating: Zwift Racing has no factor weights for <span class="font-medium">{{ projected.route_name }}</span>.
+          {% else %}
+            Ranked on vELO 2 race rating. Pick a route to weight it by what the route rewards.
+          {% endif %}
+        </p>
+        {% if projected.favored %}
+          <div class="text-lg font-bold">Projected winner: <span class="text-primary">{{ projected.favored }}</span></div>
         {% else %}
           <div class="text-lg font-bold">Projected: tied</div>
         {% endif %}
       </div>
       <div class="flex gap-4 text-center">
-        <div><div class="text-xs text-base-content/60">{{ summary.projected.our_label }}</div><div class="text-2xl font-bold">{{ summary.projected.our_points }}</div></div>
-        <div><div class="text-xs text-base-content/60">{{ summary.projected.opp_label }}</div><div class="text-2xl font-bold">{{ summary.projected.opp_points }}</div></div>
+        <div><div class="text-xs text-base-content/60">{{ projected.our_label }}</div><div class="text-2xl font-bold">{{ projected.our_points }}</div></div>
+        <div><div class="text-xs text-base-content/60">{{ projected.opp_label }}</div><div class="text-2xl font-bold">{{ projected.opp_points }}</div></div>
       </div>
     </div>
     <div class="overflow-x-auto">
       <table class="table table-sm table-zebra">
         <thead>
           <tr>
-            <th>Rider</th><th>Team</th><th class="text-right">vELO</th><th class="text-right">Handicap</th>
-            <th class="text-right">vELO w/Handicap</th><th class="text-right">Finish</th><th class="text-right">Points</th>
+            <th>Rider</th><th>Team</th><th class="text-right">vELO 2</th>
+            {% if projected.weights %}<th class="text-right">Route rating</th>{% endif %}
+            <th class="text-right">Finish</th><th class="text-right">Points</th>
           </tr>
         </thead>
         <tbody>
-          {% for row in summary.projected.rows %}
+          {% for row in projected.rows %}
           <tr class="{% if row.side == Side.OURS %}bg-primary/5{% endif %}">
             <td class="font-medium">{% include "accounts/_user_tooltip.html" with display_name=row.name zwid=row.zwid zp_category=row.zp_category zr_category=row.zr_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype in_zwiftpower=row.zp_category in_zwiftracing=True hide_verification=True %}</td>
             <td>{{ row.team }}</td>
-            <td class="text-right">{{ row.rating }}</td>
-            <td class="text-right">{{ row.handicap }}</td>
-            <td class="text-right font-semibold">{{ row.handicapped }}</td>
+            <td class="text-right{% if not projected.weights %} font-semibold{% endif %}">{{ row.velo2|default_if_none:"&mdash;" }}</td>
+            {% if projected.weights %}
+              <td class="text-right font-semibold">{% if row.approx %}<span aria-hidden="true">~</span><span class="sr-only">race rating </span>{% endif %}{{ row.score }}</td>
+            {% endif %}
             <td class="text-right">{{ row.finish }}</td>
             <td class="text-right">{{ row.points }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="7" class="text-center text-base-content/60 py-6">Add riders with a Zwift Racing rating to project a score.</td></tr>
+          <tr><td colspan="{% if projected.weights %}6{% else %}5{% endif %}" class="text-center text-base-content/70 py-6">Add riders with a vELO 2 rating to project a score.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    {% if projected.any_approx %}
+      <p class="text-xs text-base-content/70 mt-2">~ Ranked on their vELO 2 race rating: Zwift Racing has no value for a factor this route weights.</p>
+    {% endif %}
+    {% if projected.unranked %}
+      <p class="text-xs text-base-content/70 mt-2">Not ranked, no vELO 2 rating: {{ projected.unranked|join:", " }}</p>
+    {% endif %}
+    {% endwith %}
   </div>
 
   {# ===== Power Comparison ===== #}

@@ -69,9 +69,10 @@ API_RIDER = {
 def _zr_data(
     *,
     rating: float,
-    handicaps: dict[str, float],
+    handicaps: dict[str, float] | None = None,
     wkg: dict[str, float] | None = None,
     w: dict[str, int] | None = None,
+    velo: dict[str, float] | None = None,
     name: str = "R",
 ) -> dict[str, Any]:
     """Build a minimal normalized rider dict for tests.
@@ -83,11 +84,13 @@ def _zr_data(
     blank = normalize._blank()
     blank["name"] = name
     blank["rating_current"] = rating
-    blank["handicaps"] = {**blank["handicaps"], **handicaps}
+    blank["handicaps"] = {**blank["handicaps"], **(handicaps or {})}
     if wkg:
         blank["wkg"] = {**blank["wkg"], **wkg}
     if w:
         blank["w"] = {**blank["w"], **w}
+    if velo:
+        blank["velo"] = {**blank["velo"], **velo}
     return blank
 
 
@@ -187,46 +190,121 @@ def test_from_zrrider_reads_model_fields():
 # ----- projected score ---------------------------------------------------------------------------
 
 
+# Zwift Racing's vELO 2 Race factors, as the snapshot keys them.
+CLIMBER = {"race": 620, "sprint": 500, "punch": 560, "climb": 760, "endurance": 640, "pursuit": 600}
+SPRINTER = {"race": 650, "sprint": 820, "punch": 700, "climb": 520, "endurance": 600, "pursuit": 610}
+# A route's imported vELO 2 Race weights, in percent.
+HILLY_WEIGHTS = {"velo_sprint": 0, "velo_punch": 20, "velo_climb": 60, "velo_endurance": 20, "velo_pursuit": 0}
+
+
 @pytest.mark.django_db
-def test_projected_score_ranks_by_handicapped_velo(team_member):
-    matchup = _make_matchup(team_member)
-    # ours: 1500 + 50 = 1550 ; theirs: 1600 - 100 = 1500
-    _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={"rolling": 50}, name="Ours"))
-    _add(matchup, Side.OPPONENT, _zr_data(rating=1600, handicaps={"rolling": -100}, name="Theirs"))
+def test_projected_score_ranks_on_the_routes_weighting_of_velo2(team_member):
+    """Zwift Racing's event rating: each factor times the route's percentage for it, summed."""
+    route = make_route(name="Hilly Loop", **HILLY_WEIGHTS)
+    matchup = _make_matchup(team_member, route=route)
+    _add(matchup, Side.OURS, _zr_data(rating=1500, velo=CLIMBER, name="Climber"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1700, velo=SPRINTER, name="Sprinter"))
 
     result = compute.projected_score(matchup)
     rows = result["rows"]
-    assert [r["name"] for r in rows] == ["Ours", "Theirs"]  # ours sorts first (1550 > 1500)
-    assert rows[0]["finish"] == 1 and rows[0]["points"] == 10
-    assert rows[1]["finish"] == 2 and rows[1]["points"] == 9
-    assert result["our_points"] == 10
-    assert result["opp_points"] == 9
-    assert result["favored"] == "Us"
+
+    # Climber: .2*560 + .6*760 + .2*640 = 696 ; Sprinter: .2*700 + .6*520 + .2*600 = 572
+    assert [(r["name"], r["score"], r["velo2"]) for r in rows] == [("Climber", 696, 620), ("Sprinter", 572, 650)]
+    assert [(r["finish"], r["points"]) for r in rows] == [(1, 10), (2, 9)]
+    assert (result["our_points"], result["opp_points"], result["favored"]) == (10, 9, "Us")
+    assert result["weights"] == [
+        {"label": "Climb", "percent": 60},
+        {"label": "Punch", "percent": 20},
+        {"label": "Endurance", "percent": 20},
+    ]
+    assert result["route_name"] == "Hilly Loop"
 
 
 @pytest.mark.django_db
-def test_projected_score_profile_changes_ranking(team_member):
-    matchup = _make_matchup(team_member, course_profile=CourseProfile.MOUNTAINOUS)
-    # On mountainous: ours 1500-200=1300 ; theirs 1450+100=1550 -> theirs favored
-    _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={"rolling": 50, "mountainous": -200}, name="Ours"))
-    _add(matchup, Side.OPPONENT, _zr_data(rating=1450, handicaps={"rolling": -100, "mountainous": 100}, name="Theirs"))
+def test_weights_that_do_not_add_to_100_stay_on_the_factors_scale(team_member):
+    route = make_route(
+        name="Rounded", velo_sprint=0, velo_punch=33.3, velo_climb=33.3, velo_endurance=33.3, velo_pursuit=0
+    )
+    matchup = _make_matchup(team_member, route=route)
+    _add(matchup, Side.OURS, _zr_data(rating=1, velo=CLIMBER, name="Climber"))
+
+    # The plain mean of punch, climb and endurance: (560 + 760 + 640) / 3
+    assert compute.projected_score(matchup)["rows"][0]["score"] == 653
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("with_route", [False, True])
+def test_without_route_weights_the_race_rating_ranks(team_member, with_route):
+    """No route, or one zwiftracing gave no weights: its default rating for drafting races."""
+    route = make_route(name="Unweighted") if with_route else None
+    matchup = _make_matchup(team_member, route=route)
+    _add(matchup, Side.OURS, _zr_data(rating=1500, velo=CLIMBER, name="Climber"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1700, velo=SPRINTER, name="Sprinter"))
 
     result = compute.projected_score(matchup)
-    assert result["rows"][0]["name"] == "Theirs"
+
+    assert [(r["name"], r["score"]) for r in result["rows"]] == [("Sprinter", 650), ("Climber", 620)]
+    assert result["weights"] == []
     assert result["favored"] == "Them"
 
 
 @pytest.mark.django_db
-def test_projected_score_excludes_non_racing_and_unrated(team_member):
-    matchup = _make_matchup(team_member)
-    _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={"rolling": 0}, name="Racing"))
-    _add(matchup, Side.OURS, _zr_data(rating=1900, handicaps={"rolling": 0}, name="Benched"), racing=False, order=1)
-    unrated = _zr_data(rating=1500, handicaps={"rolling": 0}, name="Unrated")
-    unrated["rating_current"] = None
-    _add(matchup, Side.OPPONENT, unrated)
+def test_a_rider_missing_a_weighted_factor_is_ranked_on_the_race_rating(team_member):
+    route = make_route(name="Hilly Loop", **HILLY_WEIGHTS)
+    matchup = _make_matchup(team_member, route=route)
+    _add(matchup, Side.OURS, _zr_data(rating=1, velo={**CLIMBER, "climb": None}, name="No climb"))
 
     result = compute.projected_score(matchup)
+    row = result["rows"][0]
+
+    assert (row["score"], row["approx"]) == (620, True)
+    assert result["any_approx"] is True
+
+
+@pytest.mark.django_db
+def test_terrain_handicaps_no_longer_move_the_ranking(team_member):
+    """Zwift Racing removed them from its API on 2026-10-29; old snapshots still carry them."""
+    matchup = _make_matchup(team_member, course_profile=CourseProfile.MOUNTAINOUS)
+    _add(matchup, Side.OURS, _zr_data(rating=1500, handicaps={"mountainous": 300}, velo=CLIMBER, name="Climber"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1500, handicaps={"mountainous": -300}, velo=SPRINTER, name="Sprinter"))
+
+    assert [r["name"] for r in compute.projected_score(matchup)["rows"]] == ["Sprinter", "Climber"]
+
+
+@pytest.mark.django_db
+def test_projected_score_excludes_non_racing_and_names_the_unrated(team_member):
+    matchup = _make_matchup(team_member)
+    _add(matchup, Side.OURS, _zr_data(rating=1500, velo=CLIMBER, name="Racing"))
+    _add(matchup, Side.OURS, _zr_data(rating=1900, velo=SPRINTER, name="Benched"), racing=False, order=1)
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1500, name="Unrated"))
+
+    result = compute.projected_score(matchup)
+
     assert [r["name"] for r in result["rows"]] == ["Racing"]
+    assert result["unranked"] == ["Unrated"]
+
+
+@pytest.mark.django_db
+def test_the_projected_tab_says_what_the_ranking_rests_on(auth_client, team_member):
+    from django.urls import reverse
+
+    route = make_route(name="Hilly Loop", **HILLY_WEIGHTS)
+    matchup = _make_matchup(team_member, route=route)
+    _add(matchup, Side.OURS, _zr_data(rating=1500, velo=CLIMBER, name="Climber"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1700, velo={**SPRINTER, "climb": None}, name="Sprinter"))
+    _add(matchup, Side.OPPONENT, _zr_data(rating=1700, name="Unrated"), order=1)
+
+    body = auth_client.get(reverse("ladder_planner:detail", args=[matchup.pk])).content.decode()
+    tab = body[body.index('aria-label="Projected Score"') : body.index('aria-label="Power Comparison"')]
+    text = " ".join(tab.replace("&middot;", "·").split())
+
+    assert "Ranked on vELO 2 weighted for" in text
+    assert "Climb 60% · Punch 20% · Endurance 20%" in text
+    assert ">Route rating</th>" in tab
+    assert "Handicap" not in tab
+    assert '<span aria-hidden="true">~</span><span class="sr-only">race rating </span>650' in tab
+    assert "~ Ranked on their vELO 2 race rating" in text
+    assert "Not ranked, no vELO 2 rating: Unrated" in text
 
 
 # ----- power comparison --------------------------------------------------------------------------

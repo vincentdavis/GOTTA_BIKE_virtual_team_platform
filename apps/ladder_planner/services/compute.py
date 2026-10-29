@@ -92,50 +92,116 @@ def _round_wkg(value: float | None) -> float | None:
 # ----- Projected score ---------------------------------------------------------------------------
 
 
-def projected_score(matchup: LadderMatchup) -> dict[str, Any]:
-    """Rank all racing riders by course-handicapped vELO and project a team score.
-
-    Handicapped rating = ``rating_current + handicap[course_profile]`` (a missing
-    handicap counts as 0). Riders sort highest-first; finish positions run 1..N
-    and points run N..1 (1st place earns N points). Each side's points are summed;
-    the higher total is the favoured team.
+def _route_weights(matchup: LadderMatchup) -> list[tuple[str, str, float]]:
+    """Return the vELO 2 Race factor weights of the matchup's route, largest first.
 
     Args:
         matchup: The matchup.
 
     Returns:
-        A dict with ``rows`` (ranked riders), per-side ``our_points`` /
-        ``opp_points`` totals, ``favored`` side label, and team labels.
+        ``(key, label, percent)`` for each factor the route weights; empty when the matchup
+        has no route or zwiftracing gave its route no weights.
+
+    """
+    route = matchup.route
+    if route is None or not route.has_velo_factors:
+        return []
+    weights = []
+    for key, label, _color, _icon in route.VELO_FACTOR_META:
+        raw = getattr(route, f"velo_{key}")
+        weight = float(raw) if raw is not None else 0.0
+        if weight > 0:
+            weights.append((key, label, weight))
+    weights.sort(key=lambda w: w[2], reverse=True)
+    return weights
+
+
+def _route_rating(velo: dict[str, Any], weights: list[tuple[str, str, float]]) -> float | None:
+    """Blend a rider's vELO 2 factors by a route's weights.
+
+    zwiftracing's event rating: each factor times its percentage, summed. Divided by the
+    weights' total, which is 100 for every imported route, so a rounding in the import
+    cannot move the result off the factors' scale.
+
+    Args:
+        velo: The rider's normalized ``velo`` block.
+        weights: The route's weights (``_route_weights``).
+
+    Returns:
+        The blended rating, or None when the rider has no value for a factor the route weights.
+
+    """
+    values = [velo.get(key) for key, _label, _weight in weights]
+    total = sum(weight for _key, _label, weight in weights)
+    if not total or any(value is None for value in values):
+        return None
+    return sum(float(value) * weight for value, (_key, _label, weight) in zip(values, weights, strict=True)) / total
+
+
+def projected_score(matchup: LadderMatchup) -> dict[str, Any]:
+    """Rank all racing riders on route-weighted vELO 2 and project a team score.
+
+    A rider's score is zwiftracing's own event rating (its vELO 2 reference): each Race
+    factor times the route's weight for it, summed, with the weights imported onto
+    ``ZwiftRoute`` that the Event Factors tab shows. Without route weights, or for a rider
+    missing a factor the route weights, the vELO 2 race rating stands in -- zwiftracing's
+    default for drafting races -- and a rider with neither is not ranked but named.
+    Distance is not modelled: zwiftracing also shifts the weights with it, and a matchup
+    has no laps.
+
+    This replaced vELO 1 plus a terrain handicap for the course profile: zwiftracing
+    removed terrain handicaps from its API on 2026-10-29, so the course profile no longer
+    changes the projection.
+
+    Riders sort highest-first; finish positions run 1..N and 1st place earns
+    ``PROJECTED_TOP_POINTS``, one fewer per place, floored at 0. Each side's points are
+    summed; the higher total is the favoured team.
+
+    Args:
+        matchup: The matchup.
+
+    Returns:
+        A dict with ``rows`` (ranked riders), per-side ``our_points`` / ``opp_points``
+        totals, the ``favored`` side label, team labels, the route's ``weights`` (empty when
+        ranked on the race rating) with ``route_name``, and ``unranked`` (names of racing
+        riders with no vELO 2 rating).
 
     """
     our_label, opp_label = _labels(matchup)
-    profile = matchup.course_profile
     ours, opp = _racing(matchup)
+    weights = _route_weights(matchup)
 
     entries: list[dict[str, Any]] = []
+    unranked: list[str] = []
     for side, label, riders in ((Side.OURS, our_label, ours), (Side.OPPONENT, opp_label, opp)):
         for rider in riders:
             data = rider.zr_data or {}
-            rating = data.get("rating_current")
-            if rating is None:
+            velo = data.get("velo") or {}
+            race = velo.get("race")
+            route_rating = _route_rating(velo, weights) if weights else None
+            score = route_rating if route_rating is not None else race
+            if score is None:
+                unranked.append(rider.name)
                 continue
-            handicap = (data.get("handicaps") or {}).get(profile) or 0.0
+            velo1 = data.get("rating_current")
             entries.append({
                 "name": rider.name,
                 "side": side,
                 "team": label,
-                "rating": round(rating, 1),
-                "handicap": round(handicap, 1),
-                "handicapped": round(rating + handicap, 1),
-                # Fields consumed by the user tooltip (links + badges).
+                "velo2": _round_score(race),
+                "score": _round_score(score),
+                "sort_score": float(score),
+                # On a weighted route, ranked on the race rating for want of a factor.
+                "approx": bool(weights) and route_rating is None,
+                # Fields consumed by the user tooltip (links + badges): vELO 1's tier and rating.
                 "zwid": rider.zwid,
                 "zp_category": data.get("zp_category") or "",
                 "zr_category": data.get("rank") or "",
-                "zr_rating": round(rating, 1),
+                "zr_rating": round(velo1, 1) if velo1 is not None else None,
                 "zr_phenotype": data.get("phenotype") or "",
             })
 
-    entries.sort(key=lambda e: e["handicapped"], reverse=True)
+    entries.sort(key=lambda e: e["sort_score"], reverse=True)
     our_points = opp_points = 0
     for finish, entry in enumerate(entries, start=1):
         entry["finish"] = finish
@@ -154,6 +220,7 @@ def projected_score(matchup: LadderMatchup) -> dict[str, Any]:
     else:
         favored = None
 
+    route = matchup.route
     return {
         "rows": entries,
         "our_label": our_label,
@@ -161,7 +228,10 @@ def projected_score(matchup: LadderMatchup) -> dict[str, Any]:
         "our_points": our_points,
         "opp_points": opp_points,
         "favored": favored,
-        "profile": matchup.get_course_profile_display(),
+        "route_name": route.name if route else "",
+        "weights": [{"label": label, "percent": round(weight)} for _key, label, weight in weights],
+        "any_approx": any(entry["approx"] for entry in entries),
+        "unranked": unranked,
     }
 
 
