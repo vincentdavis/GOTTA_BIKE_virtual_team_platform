@@ -230,12 +230,89 @@
         </a>
       </div>
       <div class="event-panels">
+      {% if signup_stat_groups %}
+      {{ signup_stat_columns|json_script:"signup-stat-columns" }}
+      {{ signup_stat_values|json_script:"signup-stat-values" }}
+      <script>
+        // The extra Zwift Racing columns (apps/events/rider_stats.py), for the signups table and
+        // the By Squad rider tables: built in the page from the JSON above rather than sent as
+        // cells hidden in every row. Each table's own boxes show and hide its columns, remembered
+        // in this browser under its own key. Ahead of both tables, so both can call it.
+        window.addStatColumns = function (options) {
+          var columns = JSON.parse(document.getElementById('signup-stat-columns').textContent);
+          var values = JSON.parse(document.getElementById('signup-stat-values').textContent);
+          var saved = {};
+          try { saved = JSON.parse(localStorage.getItem(options.storageKey)) || {}; } catch (e) {}
+          var tables = Array.prototype.filter.call(options.tables, function (table) { return table.tHead; });
+
+          tables.forEach(function (table) {
+            var head = table.tHead.rows[0];
+            columns.forEach(function (column) {
+              var th = document.createElement('th');
+              th.dataset.col = options.prefix + column.key;
+              if (options.sortable) {
+                th.dataset.sort = column.kind === 'category' ? 'text' : 'num';
+                th.className = 'cursor-pointer hover:text-primary select-none whitespace-nowrap';
+              } else {
+                th.className = 'whitespace-nowrap';
+              }
+              th.textContent = column.header;
+              th.style.display = saved[column.key] ? '' : 'none';
+              head.appendChild(th);
+            });
+            // Rows of its own tbody only: a squad's rider table sits in the squads table's tbody,
+            // so "tbody tr" also matches the rider table's header row.
+            Array.prototype.filter.call(table.querySelectorAll(options.rows), function (row) {
+              return row.parentNode.tagName === 'TBODY' && row.parentNode.parentNode === table;
+            }).forEach(function (row) {
+              // A row with no key (a squad member with no signup) still gets its cells, blank,
+              // or every column after it would shift.
+              var rowValues = values[row.getAttribute(options.rowKey)] || [];
+              columns.forEach(function (column, i) {
+                var td = document.createElement('td');
+                td.dataset.col = options.prefix + column.key;
+                if (rowValues[i] && column.kind === 'category') {
+                  // A badge, as the vELO 1 category cells are; the name is set as text, never HTML.
+                  var badge = document.createElement('span');
+                  badge.className = 'badge badge-sm';
+                  badge.textContent = rowValues[i];
+                  td.appendChild(badge);
+                } else if (rowValues[i]) {
+                  td.className = 'font-mono text-sm text-right';
+                  td.textContent = rowValues[i];
+                } else {
+                  td.className = 'text-base-content/70';
+                  td.textContent = '-';
+                }
+                td.style.display = saved[column.key] ? '' : 'none';
+                row.appendChild(td);
+              });
+            });
+          });
+
+          document.querySelectorAll(options.toggles).forEach(function (box) {
+            var key = box.dataset.statCol;
+            box.checked = !!saved[key];
+            box.addEventListener('change', function () {
+              saved[key] = box.checked;
+              try { localStorage.setItem(options.storageKey, JSON.stringify(saved)); } catch (e) {}
+              tables.forEach(function (table) {
+                table.querySelectorAll('[data-col="' + options.prefix + key + '"]').forEach(function (el) {
+                  el.style.display = box.checked ? '' : 'none';
+                });
+              });
+            });
+          });
+        };
+      </script>
+      {% endif %}
 
       <div role="tabpanel" id="panel-squads" data-tab-panel="squads" aria-labelledby="tab-squads">
       {% if squads or is_event_admin %}
       <div class="flex flex-wrap items-center justify-end gap-2 mb-4">
         <h3 class="sr-only">Squads{% if squads %} ({{ squads|length }}){% endif %}</h3>
-        <div class="flex flex-wrap items-center gap-2">
+        {# justify-end: a button that wraps stays at the right, so its dropdown-end menu opens on screen. #}
+        <div class="flex flex-wrap items-center justify-end gap-2">
           {% if squads %}
           <button type="button" class="btn btn-outline btn-sm" id="squad-expand-all"
                   onclick="toggleAllSquadMembers()">Expand all</button>
@@ -260,17 +337,31 @@
           </div>
           <div class="dropdown dropdown-end">
             <label tabindex="0" class="btn btn-outline btn-sm">Rider columns</label>
-            <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-56 max-h-72 overflow-y-auto">
-              <li class="menu-title text-xs">Shown when a squad is expanded</li>
+            {# flex-nowrap: a daisyUI menu wraps into side-by-side columns at its height limit, which cut the labels short. #}
+            <ul tabindex="0" class="dropdown-content menu flex-nowrap bg-base-200 rounded-box shadow-lg z-50 p-2 w-72 max-w-[calc(100vw-4rem)] max-h-96 overflow-y-auto">
+              <li class="menu-title text-xs text-base-content/70">Shown when a squad is expanded</li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_name" checked> Name</label></li>
+              {% if can_view_signup_table %}
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zwid"> ZWID</label></li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_timezone"> Timezone</label></li>
+              {% if event.squad_gender_required %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_squad_gender"> Squad Gender</label></li>{% endif %}
+              {% endif %}
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_gender" checked> Gender</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_category" checked> ZP Category</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_rating" checked> ZR Category</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_ftp" checked> FTP</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_wkg" checked> WKG</label></li>
+              {% if can_view_signup_table %}
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zftp"> zFTP</label></li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zmap"> zMAP</label></li>
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zauth"> Zauth</label></li>
+              {% endif %}
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_verified" checked> Verified</label></li>
+              {% if can_view_signup_table and event.event_role %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_event_role"> Event Role</label></li>{% endif %}
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_has_role" checked> Has Role</label></li>
-              <li class="menu-title text-xs pt-2">Zwift Racing</li>
+              {% if can_view_signup_table and can_view_signup_notes %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_notes"> Notes</label></li>{% endif %}
+              {% if can_view_signup_table and signup_questions %}<li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_custom_answers"> Answers</label></li>{% endif %}
+              <li class="menu-title text-xs pt-2 text-base-content/70">Zwift Racing</li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zr_age"> Age</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zr_cur_rating"> Current Rating</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zr_cur_cat"> Current Cat</label></li>
@@ -279,6 +370,13 @@
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zr_max90_rating"> Max90 Rating</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zr_max90_cat"> Max90 Cat</label></li>
               <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zr_phenotype"> Phenotype</label></li>
+              {# Empty unless the viewer gets the full signup table: these carry everyone's power. #}
+              {% for group in signup_stat_groups %}
+              <li class="menu-title text-xs pt-2 text-base-content/70">{{ group.title }}</li>
+              {% for column in group.columns %}
+              <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-stat-col-toggle" data-stat-col="{{ column.key }}"> {{ column.label }}</label></li>
+              {% endfor %}
+              {% endfor %}
             </ul>
           </div>
           {# Eligibility and Manage Squads moved to the header gear menu. #}
@@ -397,13 +495,26 @@
                     <thead>
                       <tr>
                         <th data-col="sq_name">Name</th>
+                        {% if can_view_signup_table %}
+                        <th data-col="sq_zwid">ZWID</th>
+                        <th data-col="sq_timezone">Timezone</th>
+                        {% if event.squad_gender_required %}<th data-col="sq_squad_gender">Squad Gender</th>{% endif %}
+                        {% endif %}
                         <th data-col="sq_gender">Gender</th>
                         <th data-col="sq_category">ZP Category</th>
                         <th data-col="sq_rating">ZR Category</th>
                         <th data-col="sq_ftp">FTP</th>
                         <th data-col="sq_wkg">WKG</th>
+                        {% if can_view_signup_table %}
+                        <th data-col="sq_zftp">zFTP</th>
+                        <th data-col="sq_zmap">zMAP</th>
+                        <th data-col="sq_zauth">Zauth</th>
+                        {% endif %}
                         <th data-col="sq_verified">Verified</th>
+                        {% if can_view_signup_table and event.event_role %}<th data-col="sq_event_role">Event Role</th>{% endif %}
                         {% if squad.team_discord_role %}<th data-col="sq_has_role">Has Role</th>{% endif %}
+                        {% if can_view_signup_table and can_view_signup_notes %}<th data-col="sq_notes">Notes</th>{% endif %}
+                        {% if can_view_signup_table and signup_questions %}<th data-col="sq_custom_answers">Answers</th>{% endif %}
                         <th data-col="sq_zr_age" style="display:none">Age</th>
                         <th data-col="sq_zr_cur_rating" style="display:none">Current Rating</th>
                         <th data-col="sq_zr_cur_cat" style="display:none">Current Cat</th>
@@ -416,73 +527,12 @@
                     </thead>
                     <tbody>
                       {% for member in squad.enriched_members %}
-                      <tr>
+                      <tr{% if member.signup_entry %} data-member-signup="{{ member.signup_entry.signup.pk }}"{% endif %}>
                         <td data-col="sq_name">
                           {% if member.user.pk in squad.captain_pks %}<span class="tooltip" data-tip="Captain">🎖️</span>{% elif member.user.pk in squad.vice_captain_pks %}<span class="tooltip" data-tip="Vice Captain">🎖️</span>{% endif %}
                           {% include "accounts/_user_tooltip.html" with display_name=member.user.get_full_name|default:member.user.discord_username user_id=member.user.pk discord_id=member.user.discord_id discord_avatar_url=member.user.discord_avatar_url zwid=member.zwid zp_category=member.zp_category zp_category_w=member.zp_category_w zr_category=member.zr_category zr_v2=member.zr_v2_category zr_rating=member.zr_rating zr_phenotype=member.zr_phenotype zr_age=member.zr_age is_race_ready=member.is_race_ready is_extra_verified=member.is_extra_verified in_zwiftpower=member.in_zwiftpower in_zwiftracing=member.in_zwiftracing %}
                         </td>
-                        <td data-col="sq_gender">
-                          {% if member.gender == "male" %}
-                          <span class="badge badge-info badge-sm">M</span>
-                          {% elif member.gender == "female" %}
-                          <span class="badge badge-secondary badge-sm">F</span>
-                          {% else %}
-                          <span class="text-base-content/30">-</span>
-                          {% endif %}
-                        </td>
-                        <td data-col="sq_category">
-                          {% if member.in_zwiftpower %}
-                            {% if member.zp_category_w %}
-                            {% zp_category_badge member.zp_category_w is_women=True %}
-                            {% else %}
-                            {% zp_category_badge member.zp_category|default:"-" %}
-                            {% endif %}
-                          {% else %}
-                          <span class="text-base-content/30">-</span>
-                          {% endif %}
-                        </td>
-                        <td data-col="sq_rating">
-                          {% if member.in_zwiftracing %}
-                          <span class="badge badge-secondary badge-sm">{{ member.zr_category|default:"N/A" }}</span>
-                          {% else %}
-                          <span class="text-base-content/30">-</span>
-                          {% endif %}
-                        </td>
-                        <td data-col="sq_ftp">
-                          {% if member.zp_ftp %}
-                          <span class="font-mono text-sm">{{ member.zp_ftp }}</span>
-                          {% else %}
-                          <span class="text-base-content/30">-</span>
-                          {% endif %}
-                        </td>
-                        <td data-col="sq_wkg">
-                          {% if member.wkg %}
-                          <span class="font-mono text-sm">{{ member.wkg }}</span>
-                          {% else %}
-                          <span class="text-base-content/30">-</span>
-                          {% endif %}
-                        </td>
-                        <td data-col="sq_verified">
-                          {% if member.is_extra_verified %}
-                            {% if site_settings.extra_verified_emoji %}
-                            <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
-                            {% else %}
-                            <span class="badge badge-warning badge-sm">EV</span>
-                            {% endif %}
-                          {% elif member.is_race_ready %}
-                            {% if site_settings.verified_emoji %}
-                            <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
-                            {% else %}
-                            <span class="badge badge-success badge-sm">Yes</span>
-                            {% endif %}
-                          {% else %}
-                            {% if site_settings.not_verified_emoji %}
-                            <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
-                            {% else %}
-                            <span class="badge badge-error badge-sm">No</span>
-                            {% endif %}
-                          {% endif %}
-                        </td>
+                        {% include "events/_rider_cells.html" with e=member.signup_entry|default:member p="sq_" full=can_view_signup_table %}
                         {% if squad.team_discord_role %}
                         <td data-col="sq_has_role">
                           {% if can_manage_roles %}
@@ -496,38 +546,7 @@
                           {% endif %}
                         </td>
                         {% endif %}
-                        <td data-col="sq_zr_age" style="display:none">
-                          {% if member.zr_age %}<span class="text-sm">{{ member.zr_age }}</span>
-                          {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                        </td>
-                        <td data-col="sq_zr_cur_rating" style="display:none">
-                          {% if member.zr_current_rating %}<span class="font-mono text-sm">{{ member.zr_current_rating }}</span>
-                          {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                        </td>
-                        <td data-col="sq_zr_cur_cat" style="display:none">
-                          {% if member.zr_current_category %}<span class="badge badge-sm">{{ member.zr_current_category }}</span>
-                          {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                        </td>
-                        <td data-col="sq_zr_max30_rating" style="display:none">
-                          {% if member.zr_max30_rating %}<span class="font-mono text-sm">{{ member.zr_max30_rating }}</span>
-                          {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                        </td>
-                        <td data-col="sq_zr_max30_cat" style="display:none">
-                          {% if member.zr_max30_category %}<span class="badge badge-sm">{{ member.zr_max30_category }}</span>
-                          {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                        </td>
-                        <td data-col="sq_zr_max90_rating" style="display:none">
-                          {% if member.zr_max90_rating %}<span class="font-mono text-sm">{{ member.zr_max90_rating }}</span>
-                          {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                        </td>
-                        <td data-col="sq_zr_max90_cat" style="display:none">
-                          {% if member.zr_max90_category %}<span class="badge badge-sm">{{ member.zr_max90_category }}</span>
-                          {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                        </td>
-                        <td data-col="sq_zr_phenotype" style="display:none">
-                          {% if member.zr_phenotype %}<span class="text-sm">{{ member.zr_phenotype }}</span>
-                          {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                        </td>
+                        {% include "events/_rider_cells_more.html" with e=member.signup_entry|default:member p="sq_" full=can_view_signup_table %}
                       </tr>
                       {% endfor %}
                     </tbody>
@@ -543,6 +562,15 @@
           </tbody>
         </table>
       </div>
+      {% if signup_stat_groups %}
+      <script>
+        addStatColumns({
+          tables: document.querySelectorAll('.squad-member-table'),
+          rows: 'tbody tr', rowKey: 'data-member-signup', prefix: 'sq_',
+          storageKey: 'event_squad_stat_cols', toggles: '.squad-stat-col-toggle', sortable: false
+        });
+      </script>
+      {% endif %}
       {% endif %}
       {% else %}
       <p class="text-sm text-base-content/70">No squads yet.</p>
@@ -617,7 +645,7 @@
             <div class="dropdown dropdown-end">
               <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>
               {# flex-nowrap: a daisyUI menu wraps into side-by-side columns at its height limit, which cut the labels short. #}
-              <ul tabindex="0" class="dropdown-content menu flex-nowrap bg-base-200 rounded-box shadow-lg z-50 p-2 w-64 max-h-96 overflow-y-auto">
+              <ul tabindex="0" class="dropdown-content menu flex-nowrap bg-base-200 rounded-box shadow-lg z-50 p-2 w-72 max-w-[calc(100vw-4rem)] max-h-96 overflow-y-auto">
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="name" checked> Name</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zwid" checked> ZWID</label></li>
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="timezone" checked> Timezone</label></li>
@@ -646,7 +674,7 @@
                 <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs col-toggle" data-col="zr_phenotype"> Phenotype</label></li>
                 {% comment %}
                   The rest of the Zwift Racing figures, from the rider profile cache. Their cells are built
-                  in the page from #signup-stat-values (below the table), so these boxes carry
+                  in the page from #signup-stat-values (at the top of the panels), so these boxes carry
                   data-stat-col, not data-col: the toggler above hides everything with a matching
                   data-col, which would take the box itself.
                 {% endcomment %}
@@ -708,166 +736,13 @@
                   {% if withdrawn %}<span class="badge badge-ghost badge-sm ml-1 whitespace-nowrap">Withdrawn</span>{% endif %}
                   {% if answer_facets %}<div class="md:hidden text-xs text-base-content/60 mt-1 max-w-48 empty:hidden" data-answer-focus></div>{% endif %}
                 </td>
-                <td data-col="zwid">
-                  {% if entry.zwid %}
-                  <span class="font-mono text-sm">{{ entry.zwid }}</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="timezone">{% if entry.signup.signup_timezone %}{% for tz in entry.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
-                {% if event.squad_gender_required %}<td data-col="squad_gender">{% if entry.signup.signup_squad_gender %}{% for g in entry.signup.signup_squad_gender %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ g }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
-                <td data-col="gender">
-                  {% if entry.gender == "male" %}
-                  <span class="badge badge-info badge-sm">M</span>
-                  {% elif entry.gender == "female" %}
-                  <span class="badge badge-secondary badge-sm">F</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="category">
-                  {% if entry.in_zwiftpower %}
-                    {% if entry.zp_category_w %}
-                    {% zp_category_badge entry.zp_category_w is_women=True %}
-                    {% else %}
-                    {% zp_category_badge entry.zp_category|default:"-" %}
-                    {% endif %}
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="rating">
-                  {% if entry.in_zwiftracing %}
-                  <span class="badge badge-secondary badge-sm">{{ entry.zr_category|default:"N/A" }}</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="ftp">
-                  {% if entry.zp_ftp %}
-                  <span class="font-mono text-sm">{{ entry.zp_ftp }}</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="wkg">
-                  {% if entry.wkg %}
-                  <span class="font-mono text-sm">{{ entry.wkg }}</span>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="zftp" data-sort-value="{{ entry.z_ftp|default_if_none:0 }}">
-                  {% if entry.z_ftp %}
-                  <span class="font-mono text-sm">{{ entry.z_ftp|floatformat:0 }}w</span>
-                  {% if entry.z_ftp_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ entry.z_ftp_wkg|floatformat:2 }}</span>{% endif %}
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="zmap" data-sort-value="{{ entry.z_map|default_if_none:0 }}">
-                  {% if entry.z_map %}
-                  <span class="font-mono text-sm">{{ entry.z_map|floatformat:0 }}w</span>
-                  {% if entry.z_map_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ entry.z_map_wkg|floatformat:2 }}</span>{% endif %}
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="zauth" data-sort-value="{% if entry.user.is_zauth_verified %}1{% elif entry.user.zwid_verified %}2{% else %}3{% endif %}">
-                  {% if entry.user.is_zauth_verified %}
-                  <span class="badge badge-success badge-sm" title="Connected through Zwift OAuth">Zauth</span>
-                  {% elif entry.user.zwid_verified %}
-                  <span class="badge badge-warning badge-sm badge-outline" title="Verified, but not through Zwift OAuth -- fails a squad that requires zauth">{{ entry.user.get_zwid_verification_method_display|default:"Other" }}</span>
-                  {% else %}
-                  <span class="text-base-content/30" title="Zwift account not verified">-</span>
-                  {% endif %}
-                </td>
-                <td data-col="verified">
-                  {% if entry.is_extra_verified %}
-                    {% if site_settings.extra_verified_emoji %}
-                    <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
-                    {% else %}
-                    <span class="badge badge-warning badge-sm">EV</span>
-                    {% endif %}
-                  {% elif entry.is_race_ready %}
-                    {% if site_settings.verified_emoji %}
-                    <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
-                    {% else %}
-                    <span class="badge badge-success badge-sm">Yes</span>
-                    {% endif %}
-                  {% else %}
-                    {% if site_settings.not_verified_emoji %}
-                    <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
-                    {% else %}
-                    <span class="badge badge-error badge-sm">No</span>
-                    {% endif %}
-                  {% endif %}
-                </td>
-                {% if event.event_role %}
-                <td data-col="event_role">
-                  {% if entry.has_event_role %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
-                  {% else %}
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-error" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                  {% endif %}
-                </td>
-                {% endif %}
+                {% include "events/_rider_cells.html" with e=entry p="" full=True %}
                 {% if squads %}
                 <td data-col="squad" id="squad-cell-{{ entry.signup.pk }}">
                   {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk %}
                 </td>
                 {% endif %}
-                {% if can_view_signup_notes %}
-                <td data-col="notes">
-                  {% if entry.signup.notes %}
-                  <div class="tooltip tooltip-left" data-tip="{{ entry.signup.notes }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-info cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
-                  </div>
-                  {% else %}
-                  <span class="text-base-content/30">-</span>
-                  {% endif %}
-                </td>
-                {% endif %}
-                {% if signup_questions %}
-                <td data-col="custom_answers" class="align-top">
-                  <div class="max-w-xs space-y-0.5">
-                    {% for a in entry.custom_answers %}{% if a.answered %}<div class="text-xs" data-aq="{{ a.question.pk }}"><span class="text-base-content/50">{{ a.label|render_markdown_inline }}:</span> <span data-aq-value>{{ a.display }}</span></div>{% endif %}{% endfor %}
-                  </div>
-                </td>
-                {% endif %}
-                <td data-col="zr_age" style="display:none">
-                  {% if entry.zr_age %}<span class="text-sm">{{ entry.zr_age }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_cur_rating" style="display:none">
-                  {% if entry.zr_current_rating %}<span class="font-mono text-sm">{{ entry.zr_current_rating }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_cur_cat" style="display:none">
-                  {% if entry.zr_current_category %}<span class="badge badge-sm">{{ entry.zr_current_category }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_max30_rating" style="display:none">
-                  {% if entry.zr_max30_rating %}<span class="font-mono text-sm">{{ entry.zr_max30_rating }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_max30_cat" style="display:none">
-                  {% if entry.zr_max30_category %}<span class="badge badge-sm">{{ entry.zr_max30_category }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_max90_rating" style="display:none">
-                  {% if entry.zr_max90_rating %}<span class="font-mono text-sm">{{ entry.zr_max90_rating }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_max90_cat" style="display:none">
-                  {% if entry.zr_max90_category %}<span class="badge badge-sm">{{ entry.zr_max90_category }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
-                <td data-col="zr_phenotype" style="display:none">
-                  {% if entry.zr_phenotype %}<span class="text-sm">{{ entry.zr_phenotype }}</span>
-                  {% else %}<span class="text-base-content/30">-</span>{% endif %}
-                </td>
+                {% include "events/_rider_cells_more.html" with e=entry p="" full=True %}
               </tr>
               {% endwith %}
               {% endfor %}
@@ -875,67 +750,13 @@
           </table>
         </div>
         {% if signup_stat_groups %}
-        {{ signup_stat_columns|json_script:"signup-stat-columns" }}
-        {{ signup_stat_values|json_script:"signup-stat-values" }}
         <script>
-          // The extra Zwift Racing columns (apps/events/rider_stats.py): built here from the JSON
-          // above rather than sent as cells hidden in every row, all at once and hidden, before the
-          // sort script further down binds every th[data-sort]. Shown and hidden by .stat-col-toggle,
-          // remembered in this browser.
-          (function () {
-            var table = document.querySelector('[data-signup-table="detail"]');
-            var columns = JSON.parse(document.getElementById('signup-stat-columns').textContent);
-            var values = JSON.parse(document.getElementById('signup-stat-values').textContent);
-            var STORAGE_KEY = 'event_signup_stat_cols';
-            var saved = {};
-            try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) {}
-            if (!table || !table.tHead) return;
-
-            var head = table.tHead.rows[0];
-            columns.forEach(function (column) {
-              var th = document.createElement('th');
-              th.dataset.col = column.key;
-              th.dataset.sort = column.kind === 'category' ? 'text' : 'num';
-              th.className = 'cursor-pointer hover:text-primary select-none whitespace-nowrap';
-              th.textContent = column.header;
-              th.style.display = saved[column.key] ? '' : 'none';
-              head.appendChild(th);
-            });
-            table.querySelectorAll('tbody tr[data-signup-pk]').forEach(function (row) {
-              var rowValues = values[row.dataset.signupPk] || [];
-              columns.forEach(function (column, i) {
-                var td = document.createElement('td');
-                td.dataset.col = column.key;
-                if (rowValues[i] && column.kind === 'category') {
-                  // A badge, as the vELO 1 category cells are; the name is set as text, never HTML.
-                  var badge = document.createElement('span');
-                  badge.className = 'badge badge-sm';
-                  badge.textContent = rowValues[i];
-                  td.appendChild(badge);
-                } else if (rowValues[i]) {
-                  td.className = 'font-mono text-sm text-right';
-                  td.textContent = rowValues[i];
-                } else {
-                  td.className = 'text-base-content/70';
-                  td.textContent = '-';
-                }
-                td.style.display = saved[column.key] ? '' : 'none';
-                row.appendChild(td);
-              });
-            });
-
-            document.querySelectorAll('.stat-col-toggle').forEach(function (box) {
-              var key = box.dataset.statCol;
-              box.checked = !!saved[key];
-              box.addEventListener('change', function () {
-                saved[key] = box.checked;
-                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) {}
-                table.querySelectorAll('[data-col="' + key + '"]').forEach(function (el) {
-                  el.style.display = box.checked ? '' : 'none';
-                });
-              });
-            });
-          })();
+          // Before the sort script further down binds every th[data-sort].
+          addStatColumns({
+            tables: document.querySelectorAll('[data-signup-table="detail"]'),
+            rows: 'tbody tr[data-signup-pk]', rowKey: 'data-signup-pk', prefix: '',
+            storageKey: 'event_signup_stat_cols', toggles: '.stat-col-toggle', sortable: true
+          });
         </script>
         {% endif %}
         </div>
@@ -1471,8 +1292,9 @@ function switchCategorySource(source) {
   function syncColspan() {
     var table = document.getElementById('squad-table');
     if (!table) return;
+    // Its own header cells: the rider tables nested in the expanded rows have theirs too.
     var visible = Array.from(table.querySelectorAll('thead th')).filter(function(th) {
-      return th.style.display !== 'none';
+      return th.closest('table') === table && th.style.display !== 'none';
     }).length;
     table.querySelectorAll('tr[id^="squad-members-"] > td').forEach(function(td) {
       td.setAttribute('colspan', visible);
@@ -1506,6 +1328,8 @@ function switchCategorySource(source) {
   var DEFAULTS = {
     sq_name: true, sq_gender: true, sq_category: true, sq_rating: true,
     sq_ftp: false, sq_wkg: false, sq_verified: false, sq_has_role: true,
+    sq_zwid: false, sq_timezone: false, sq_squad_gender: false, sq_zftp: false, sq_zmap: false,
+    sq_zauth: false, sq_event_role: false, sq_notes: false, sq_custom_answers: false,
     sq_zr_age: false, sq_zr_cur_rating: false, sq_zr_cur_cat: false,
     sq_zr_max30_rating: false, sq_zr_max30_cat: false,
     sq_zr_max90_rating: false, sq_zr_max90_cat: false, sq_zr_phenotype: false

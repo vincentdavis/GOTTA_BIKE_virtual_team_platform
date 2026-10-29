@@ -1,0 +1,121 @@
+{% load accounts_tags %}
+{% comment %}
+  A rider's cells from ZWID to Event Role, shared by the signups table and the By Squad rider
+  tables so the two offer the same columns; _rider_cells_more.html has the rest. Each table
+  puts its own cell between the two: the Squad column on the signups table, Has Role on a squad.
+
+    e     an enriched signup (views._enrich_signups); on a squad, the member's own dict when
+          the viewer gets no signup row or the rider has none
+    p     prefixes every column key: "" on the signups table, "sq_" on the squad tables, which
+          have their own column menu
+    full  the columns only the full signup table shows (can_view_signup_table)
+{% endcomment %}
+{% if full %}
+<td data-col="{{ p }}zwid">
+  {% if e.zwid %}
+  <span class="font-mono text-sm">{{ e.zwid }}</span>
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+<td data-col="{{ p }}timezone">{% if e.signup.signup_timezone %}{% for tz in e.signup.signup_timezone %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ tz }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
+{% if event.squad_gender_required %}<td data-col="{{ p }}squad_gender">{% if e.signup.signup_squad_gender %}{% for g in e.signup.signup_squad_gender %}<span class="badge badge-outline badge-sm mr-1 whitespace-nowrap">{{ g }}</span>{% endfor %}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>{% endif %}
+{% endif %}
+<td data-col="{{ p }}gender">
+  {% if e.gender == "male" %}
+  <span class="badge badge-info badge-sm">M</span>
+  {% elif e.gender == "female" %}
+  <span class="badge badge-secondary badge-sm">F</span>
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+<td data-col="{{ p }}category">
+  {% if e.in_zwiftpower %}
+    {% if e.zp_category_w %}
+    {% zp_category_badge e.zp_category_w is_women=True %}
+    {% else %}
+    {% zp_category_badge e.zp_category|default:"-" %}
+    {% endif %}
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+<td data-col="{{ p }}rating">
+  {% if e.in_zwiftracing %}
+  <span class="badge badge-secondary badge-sm">{{ e.zr_category|default:"N/A" }}</span>
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+<td data-col="{{ p }}ftp">
+  {% if e.zp_ftp %}
+  <span class="font-mono text-sm">{{ e.zp_ftp }}</span>
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+<td data-col="{{ p }}wkg">
+  {% if e.wkg %}
+  <span class="font-mono text-sm">{{ e.wkg }}</span>
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+{% if full %}
+<td data-col="{{ p }}zftp" data-sort-value="{{ e.z_ftp|default_if_none:0 }}">
+  {% if e.z_ftp %}
+  <span class="font-mono text-sm">{{ e.z_ftp|floatformat:0 }}w</span>
+  {% if e.z_ftp_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ e.z_ftp_wkg|floatformat:2 }}</span>{% endif %}
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+<td data-col="{{ p }}zmap" data-sort-value="{{ e.z_map|default_if_none:0 }}">
+  {% if e.z_map %}
+  <span class="font-mono text-sm">{{ e.z_map|floatformat:0 }}w</span>
+  {% if e.z_map_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ e.z_map_wkg|floatformat:2 }}</span>{% endif %}
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+<td data-col="{{ p }}zauth" data-sort-value="{% if e.user.is_zauth_verified %}1{% elif e.user.zwid_verified %}2{% else %}3{% endif %}">
+  {% if e.user.is_zauth_verified %}
+  <span class="badge badge-success badge-sm" title="Connected through Zwift OAuth">Zauth</span>
+  {% elif e.user.zwid_verified %}
+  <span class="badge badge-warning badge-sm badge-outline" title="Verified, but not through Zwift OAuth -- fails a squad that requires zauth">{{ e.user.get_zwid_verification_method_display|default:"Other" }}</span>
+  {% else %}
+  <span class="text-base-content/30" title="Zwift account not verified">-</span>
+  {% endif %}
+</td>
+{% endif %}
+<td data-col="{{ p }}verified">
+  {% if e.is_extra_verified %}
+    {% if site_settings.extra_verified_emoji %}
+    <img src="{{ site_settings.extra_verified_emoji.url }}" alt="Extra Verified" class="h-5 w-5">
+    {% else %}
+    <span class="badge badge-warning badge-sm">EV</span>
+    {% endif %}
+  {% elif e.is_race_ready %}
+    {% if site_settings.verified_emoji %}
+    <img src="{{ site_settings.verified_emoji.url }}" alt="Yes" class="h-5 w-5">
+    {% else %}
+    <span class="badge badge-success badge-sm">Yes</span>
+    {% endif %}
+  {% else %}
+    {% if site_settings.not_verified_emoji %}
+    <img src="{{ site_settings.not_verified_emoji.url }}" alt="No" class="h-5 w-5">
+    {% else %}
+    <span class="badge badge-error badge-sm">No</span>
+    {% endif %}
+  {% endif %}
+</td>
+{% if full and event.event_role %}
+<td data-col="{{ p }}event_role">
+  {% if e.has_event_role %}
+  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
+  {% else %}
+  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-error" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+  {% endif %}
+</td>
+{% endif %}

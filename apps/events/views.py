@@ -1346,8 +1346,15 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     # none, all three are left out.
     event_squad_tags = normalize_tags(event.squad_tags)
 
+    # The By Squad view offers the signup table's rider columns to the same viewers, so each
+    # member carries their signup's row: its timezone, notes and answers, and the key the
+    # Zwift Racing columns are looked up by. Nobody else's members get one.
+    signup_entries = {entry["user"].pk: entry for entry in enriched_signups} if can_view_signup_table else {}
+
     for squad in squads:
         squad.enriched_members = squad_members_data.get(squad.pk, [])
+        for member in squad.enriched_members:
+            member["signup_entry"] = signup_entries.get(member["user"].pk)
         names = [m["user"].get_full_name() or m["user"].discord_username for m in squad.enriched_members]
         squad.member_names_tooltip = ", ".join(names) if names else "No members"
         squad.user_is_member = squad.pk in user_squad_ids

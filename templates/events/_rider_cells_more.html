@@ -1,0 +1,55 @@
+{% load accounts_tags %}
+{% comment %}
+  The rest of a rider's cells, after the table's own column: notes, answers and the Zwift
+  Racing figures. See _rider_cells.html for e, p and full.
+{% endcomment %}
+{% if full and can_view_signup_notes %}
+<td data-col="{{ p }}notes">
+  {% if e.signup.notes %}
+  <div class="tooltip tooltip-left" data-tip="{{ e.signup.notes }}">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-info cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" /></svg>
+  </div>
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+{% endif %}
+{% if full and signup_questions %}
+<td data-col="{{ p }}custom_answers" class="align-top">
+  <div class="max-w-xs space-y-0.5">
+    {% for a in e.custom_answers %}{% if a.answered %}<div class="text-xs" data-aq="{{ a.question.pk }}"><span class="text-base-content/50">{{ a.label|render_markdown_inline }}:</span> <span data-aq-value>{{ a.display }}</span></div>{% endif %}{% endfor %}
+  </div>
+</td>
+{% endif %}
+<td data-col="{{ p }}zr_age" style="display:none">
+  {% if e.zr_age %}<span class="text-sm">{{ e.zr_age }}</span>
+  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+</td>
+<td data-col="{{ p }}zr_cur_rating" style="display:none">
+  {% if e.zr_current_rating %}<span class="font-mono text-sm">{{ e.zr_current_rating }}</span>
+  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+</td>
+<td data-col="{{ p }}zr_cur_cat" style="display:none">
+  {% if e.zr_current_category %}<span class="badge badge-sm">{{ e.zr_current_category }}</span>
+  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+</td>
+<td data-col="{{ p }}zr_max30_rating" style="display:none">
+  {% if e.zr_max30_rating %}<span class="font-mono text-sm">{{ e.zr_max30_rating }}</span>
+  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+</td>
+<td data-col="{{ p }}zr_max30_cat" style="display:none">
+  {% if e.zr_max30_category %}<span class="badge badge-sm">{{ e.zr_max30_category }}</span>
+  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+</td>
+<td data-col="{{ p }}zr_max90_rating" style="display:none">
+  {% if e.zr_max90_rating %}<span class="font-mono text-sm">{{ e.zr_max90_rating }}</span>
+  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+</td>
+<td data-col="{{ p }}zr_max90_cat" style="display:none">
+  {% if e.zr_max90_category %}<span class="badge badge-sm">{{ e.zr_max90_category }}</span>
+  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+</td>
+<td data-col="{{ p }}zr_phenotype" style="display:none">
+  {% if e.zr_phenotype %}<span class="text-sm">{{ e.zr_phenotype }}</span>
+  {% else %}<span class="text-base-content/30">-</span>{% endif %}
+</td>
