@@ -238,5 +238,5 @@ def test_no_counts_row_under_the_signup_button(client, event, team_member, user_
     for label in (">signup</dt>", ">signups</dt>", ">male</dt>", ">female</dt>", ">squad</dt>", ">squads</dt>"):
         assert label not in body, f"{label} belongs to the removed counts row"
     # The counts a reader still gets, on the tabs.
-    assert re.search(r">Squads\s*<span[^>]*>\s*1\s*</span>", body)
+    assert re.search(r">By Squad\s*<span[^>]*>\s*1\s*</span>", body)
     assert re.search(r">Signups\s*<span[^>]*>\s*1\s*</span>", body)

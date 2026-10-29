@@ -11,6 +11,24 @@
    fill alone (btn-neutral sits close to the card colour in the dark theme). The second
    declaration hides the glyph from screen readers, which already hear "pressed". */
 #squad-tag-filter button[aria-pressed="true"]::before{content:"\2713";content:"\2713" / ""}
+/* Event sections: folder tabs joined to the box of the panel they switch, so a tab reads as
+   part of the table below it; on a phone the four sit in a two-by-two grid above the box.
+   Styled on aria-selected, which the tab script keeps current. The selected count is
+   base-content on base-100 rather than primary, which fails contrast in the dark theme. */
+.event-tabs,.event-panels{--event-tab-line:color-mix(in oklab,var(--color-base-content) 22%,transparent)}
+.event-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.375rem;margin-bottom:.5rem}
+.event-tab{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.25rem .5rem;min-height:2.75rem;padding:.25rem .5rem;text-align:center;border:1px solid var(--event-tab-line);border-radius:var(--radius-field);background:var(--color-base-300);color:var(--color-base-content);font-size:.9375rem;font-weight:500;text-decoration:none}
+.event-tab[aria-selected="true"]{background:var(--color-base-100);border-color:var(--color-base-content);box-shadow:inset 0 0 0 1px var(--color-base-content);font-weight:600}
+.event-tab-count{display:inline-block;min-width:1.5rem;padding:0 .5rem;border-radius:999px;font-size:.75rem;line-height:1.25rem;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;background:color-mix(in oklab,var(--color-base-content) 12%,transparent)}
+.event-tab[aria-selected="true"] .event-tab-count{background:var(--color-base-content);color:var(--color-base-100)}
+.event-panels{--pin-col-bg:var(--color-base-100);background:var(--color-base-100);border:1px solid var(--event-tab-line);border-radius:var(--radius-box);padding:1rem}
+@media(min-width:640px){
+  .event-tabs{display:flex;flex-wrap:wrap;align-items:flex-end;gap:.125rem;margin-bottom:0}
+  .event-tab{flex-wrap:nowrap;white-space:nowrap;justify-content:flex-start;padding:0 1.25rem;background:transparent;border-color:transparent;border-bottom-width:0;border-radius:.625rem .625rem 0 0;color:color-mix(in oklab,var(--color-base-content) 80%,transparent)}
+  .event-tab:hover{background:color-mix(in oklab,var(--color-base-content) 7%,transparent);color:var(--color-base-content)}
+  .event-tab[aria-selected="true"]{position:relative;z-index:1;margin-bottom:-1px;background:var(--color-base-100);border-color:var(--event-tab-line);border-bottom-color:var(--color-base-100);border-bottom-width:1px;box-shadow:none;color:var(--color-base-content)}
+  .event-panels{border-top-left-radius:0;padding:1.25rem}
+}
 @media(max-width:767px){
   [data-signup-table] [data-col="zwid"],
   [data-signup-table] [data-col="ftp"],
@@ -26,7 +44,7 @@
   #squad-table thead th:nth-child(2),
   #squad-table tr.squad-row td:nth-child(1),
   #squad-table tr.squad-row td:nth-child(2){
-    position:sticky; background:var(--color-base-200); z-index:5;
+    position:sticky; background:var(--color-base-100); z-index:5;
   }
   #squad-table thead th:nth-child(1),
   #squad-table tr.squad-row td:nth-child(1){ left:0; }
@@ -179,38 +197,44 @@
         reads it whole, and degrades to today's behaviour -- everything stacked -- if the
         script never runs. The URL still carries ?tab= so a link opens on the right panel.
 
-        aria-selected as well as the visual tab-active: daisyUI styles the tab but does not
-        set the state, so on its own it tells assistive tech nothing.
+        The look is keyed on aria-selected (the .event-tab rules above), so the state assistive
+        tech hears and the one on screen cannot disagree. The tab names its panel, so each
+        panel's heading is for screen readers only.
+
+        Signups comes first and opens by default; a viewer who cannot see the signups opens on
+        By Squad instead (data-default-tab). By Category has no count: it counts squad members,
+        and beside the signup count it read as a second total of the same riders. The panels
+        keep their old order, which only the no-JS fallback shows.
       {% endcomment %}
-      <div class="divider mt-6"></div>
-      <div role="tablist" class="tabs tabs-box mb-4" id="event-tabs">
-        <a role="tab" href="?tab=squads" data-tab="squads" id="tab-squads"
-           aria-controls="panel-squads" aria-selected="false"
-           class="tab">Squads
-          <span class="badge badge-sm badge-neutral tabular-nums ml-2">{{ squads|length }}</span>
-        </a>
+      {# One block, so the card body's gap cannot open between a tab and its box. #}
+      <div class="mt-8">
+      <div role="tablist" class="event-tabs" id="event-tabs"
+           data-default-tab="{% if can_view_signups %}signups{% else %}squads{% endif %}">
         <a role="tab" href="?tab=signups" data-tab="signups" id="tab-signups"
            aria-controls="panel-signups" aria-selected="false"
-           class="tab">Signups
-          <span class="badge badge-sm badge-neutral tabular-nums ml-2">{{ signup_count }}</span>
+           class="event-tab">Signups
+          <span class="event-tab-count">{{ signup_count }}</span>
+        </a>
+        <a role="tab" href="?tab=squads" data-tab="squads" id="tab-squads"
+           aria-controls="panel-squads" aria-selected="false"
+           class="event-tab">By Squad
+          <span class="event-tab-count">{{ squads|length }}</span>
         </a>
         <a role="tab" href="?tab=category" data-tab="category" id="tab-category"
            aria-controls="panel-category" aria-selected="false"
-           class="tab">By Category
-          <span class="badge badge-sm badge-neutral tabular-nums ml-2">{{ zp_total_all }}</span>
-        </a>
+           class="event-tab">By Category</a>
         <a role="tab" href="?tab=races" data-tab="races" id="tab-races"
            aria-controls="panel-races" aria-selected="false"
-           class="tab">Races
-          <span class="badge badge-sm badge-neutral tabular-nums ml-2">{{ races|length }}</span>
+           class="event-tab">Races
+          <span class="event-tab-count">{{ races|length }}</span>
         </a>
       </div>
+      <div class="event-panels">
 
       <div role="tabpanel" id="panel-squads" data-tab-panel="squads" aria-labelledby="tab-squads">
       {% if squads or is_event_admin %}
-      <div class="divider mt-6"></div>
-      <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <h3 class="text-lg font-semibold">Squads{% if squads %} ({{ squads|length }}){% endif %}</h3>
+      <div class="flex flex-wrap items-center justify-end gap-2 mb-4">
+        <h3 class="sr-only">Squads{% if squads %} ({{ squads|length }}){% endif %}</h3>
         <div class="flex flex-wrap items-center gap-2">
           {% if squads %}
           <button type="button" class="btn btn-outline btn-sm" id="squad-expand-all"
@@ -520,20 +544,21 @@
         </table>
       </div>
       {% endif %}
+      {% else %}
+      <p class="text-sm text-base-content/70">No squads yet.</p>
       {% endif %}
       </div>
 
       <div role="tabpanel" id="panel-signups" data-tab-panel="signups" aria-labelledby="tab-signups">
       {# Event Signup Section #}
-      <div class="divider mt-6"></div>
-      <div class="flex items-center gap-2 mb-4">
-        <h3 class="text-lg font-semibold">Signups</h3>
+      <div class="flex items-center gap-2 mb-3">
+        <h3 class="sr-only">Signups</h3>
         {% comment %}
           Gated on `signups`, not `signup_count`: the count is registered-only, so an event
           where everyone withdrew would render the table with no way to open it.
         {% endcomment %}
         {% if can_view_signups and signups %}
-        <span class="badge badge-neutral tabular-nums" id="signup-count-badge">{{ signup_count }}</span>
+        <p class="text-sm text-base-content/70"><span class="font-semibold text-base-content tabular-nums" id="signup-count-badge">{{ signup_count }}</span> signed up</p>
         {% endif %}
         {% if event.signups_open %}
           {% comment %}
@@ -925,6 +950,10 @@
       </div>
       {% endif %}
       </div>
+      {% elif can_view_signups %}
+      <p class="text-sm text-base-content/70">No one has signed up yet.</p>
+      {% else %}
+      <p class="text-sm text-base-content/70">Only event admins, coordinators and squad captains can see who has signed up.</p>
       {% endif %}
 
 
@@ -932,11 +961,7 @@
 
       <div role="tabpanel" id="panel-category" data-tab-panel="category" aria-labelledby="tab-category">
       {% if zp_by_squad %}
-      <div class="divider mt-6"></div>
-      <div class="flex items-center gap-2 mb-4">
-        <h3 class="text-lg font-semibold">By Category</h3>
-        <span class="badge badge-neutral" id="category-total-badge">{{ zp_total_all }}</span>
-      </div>
+      <h3 class="sr-only">By Category</h3>
       <div id="category-content">
         <div class="flex items-center gap-1 mb-3">
           <span class="text-sm text-base-content/70 mr-1">Source:</span>
@@ -1070,22 +1095,14 @@
           </table>
         </div>
       </div>
+      {% else %}
+      <p class="text-sm text-base-content/70">Category counts appear once the event has squads.</p>
       {% endif %}
       </div>
 
-
-      <div class="mt-6">
-        <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">&larr; Back to Events</a>
-      </div>
-    </div>
-  </div>
-</div>
-
-
       <div role="tabpanel" id="panel-races" data-tab-panel="races" aria-labelledby="tab-races">
       {% if races %}
-      <div class="divider mt-6"></div>
-      <h3 class="text-lg font-semibold mb-4">Races</h3>
+      <h3 class="sr-only">Races</h3>
       <div class="space-y-3">
         {% for race in races %}
         <div class="card bg-base-300">
@@ -1140,8 +1157,20 @@
         </div>
         {% endfor %}
       </div>
+      {% else %}
+      <p class="text-sm text-base-content/70">No races have been added to this event.</p>
       {% endif %}
       </div>
+      </div>
+      </div>
+
+      <div class="mt-6">
+        <a href="{% url 'events:event_list' %}" class="btn btn-ghost btn-sm">&larr; Back to Events</a>
+      </div>
+    </div>
+  </div>
+</div>
+
 
       {% comment %}
         Dialogs sit at the end, outside every panel, because the controls that open them
@@ -1920,17 +1949,17 @@ function switchCategorySource(source) {
     if (!tabs.length || !panels.length) return;
 
     var known = tabs.map(function (a) { return a.dataset.tab; });
+    // Signups by default, but By Squad for a viewer who cannot see the signups.
+    var fallback = known.indexOf(bar.dataset.defaultTab) !== -1 ? bar.dataset.defaultTab : known[0];
     function wanted() {
       var q = new URLSearchParams(window.location.search).get('tab');
-      return known.indexOf(q) !== -1 ? q : known[0];
+      return known.indexOf(q) !== -1 ? q : fallback;
     }
 
     function show(key) {
       panels.forEach(function (panel) { panel.hidden = panel.dataset.tabPanel !== key; });
       tabs.forEach(function (tab) {
         var on = tab.dataset.tab === key;
-        tab.classList.toggle('tab-active', on);
-        tab.classList.toggle('font-semibold', on);
         tab.setAttribute('aria-selected', on ? 'true' : 'false');
       });
     }
