@@ -88,7 +88,7 @@ def warm_club(
             return {"status": "rate_limited", "club_id": club_id, "retry_after": retry_after}
 
         riders = (data or {}).get("riders", []) if isinstance(data, dict) else []
-        club_name = (data or {}).get("name", "") if isinstance(data, dict) else ""
+        club_name = normalize.clean_text(data.get("name")) if isinstance(data, dict) else ""
 
         datas = [normalize.from_api(r) for r in riders if isinstance(r, dict) and r.get("riderId")]
         written = cache.upsert_riders(datas, source=CachedRider.Source.CLUB)

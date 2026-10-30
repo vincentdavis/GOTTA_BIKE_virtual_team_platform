@@ -1158,3 +1158,50 @@ def test_climb_panel_endpoint_renders(auth_client, team_member):
     resp = auth_client.get(reverse("ladder_planner:climb", args=[matchup.pk]))
     assert resp.status_code == 200
     assert b"Climb advantage" in resp.content
+
+
+# ----- names zwiftracing sends HTML-encoded ------------------------------------------------------
+
+ENCODED_NAME = "Sam &quot;The Climber&quot; Lane &#128062;"
+DECODED_NAME = 'Sam "The Climber" Lane \U0001f43e'
+
+
+def test_from_api_decodes_html_entities_in_names():
+    data = normalize.from_api({"riderId": 1, "name": ENCODED_NAME, "club": {"id": 2, "name": "Rise &amp; Shine"}})
+
+    assert data["name"] == DECODED_NAME
+    assert data["club_name"] == "Rise & Shine"
+
+
+@pytest.mark.django_db
+def test_the_migration_decodes_stored_ladder_names(team_member):
+    import importlib
+
+    from django.apps import apps as django_apps
+
+    migration = importlib.import_module("apps.ladder_planner.migrations.0009_decode_html_entities_in_names")
+    snapshot = {"name": ENCODED_NAME, "club_name": "Rise &amp; Shine"}
+    CachedRider.objects.create(
+        zwid=1, name=ENCODED_NAME, club_name="Rise &amp; Shine", zr_data=dict(snapshot), fetched_at=timezone.now()
+    )
+    CachedClub.objects.create(club_id=2, name="Rise &amp; Shine")
+    matchup = _make_matchup(team_member)
+    LadderRider.objects.create(matchup=matchup, side=Side.OPPONENT, zwid=1, name=ENCODED_NAME, zr_data=dict(snapshot))
+    # Only the snapshot's club name is encoded: the row is still found.
+    LadderRider.objects.create(
+        matchup=matchup, side=Side.OURS, zwid=3, name="Plain & simple", zr_data={"club_name": "A &amp; B"}
+    )
+
+    migration._decode_entities(django_apps, None)
+
+    cached = CachedRider.objects.get(zwid=1)
+    assert (cached.name, cached.club_name, cached.zr_data) == (
+        DECODED_NAME,
+        "Rise & Shine",
+        {"name": DECODED_NAME, "club_name": "Rise & Shine"},
+    )
+    assert CachedClub.objects.get(club_id=2).name == "Rise & Shine"
+    opponent = LadderRider.objects.get(zwid=1)
+    assert (opponent.name, opponent.zr_data["name"]) == (DECODED_NAME, DECODED_NAME)
+    ours = LadderRider.objects.get(zwid=3)
+    assert (ours.name, ours.zr_data["club_name"]) == ("Plain & simple", "A & B")

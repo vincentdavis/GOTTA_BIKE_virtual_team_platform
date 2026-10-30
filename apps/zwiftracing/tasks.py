@@ -3,6 +3,7 @@
 Uses Django 6.0 background tasks feature with django-tasks database backend.
 """
 
+import html
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -46,6 +47,25 @@ def _parse_int(value: int | str | None) -> int | None:
         return None
 
 
+def _clean_str(value: object) -> str:
+    """Normalize a display string from the Zwift Racing API.
+
+    Decodes HTML numeric/named entities (e.g. ``&quot;`` -> ``"``) and trims whitespace.
+    zwiftracing sends names with HTML entities, as ZwiftPower does; stored as sent, a
+    template auto-escapes them again and the user sees the literal entity.
+
+    Args:
+        value: The raw API value.
+
+    Returns:
+        A clean string (empty string if ``value`` is None or empty).
+
+    """
+    if value is None:
+        return ""
+    return html.unescape(str(value)).strip()
+
+
 def _map_rider_to_model(rider: dict) -> dict:
     """Map API rider data to ZRRider model fields.
 
@@ -74,7 +94,7 @@ def _map_rider_to_model(rider: dict) -> dict:
 
     return {
         # Basic info
-        "name": rider.get("name") or "",
+        "name": _clean_str(rider.get("name")),
         "gender": rider.get("gender") or "",
         "country": rider.get("country") or "",
         "age": rider.get("age") or "",
@@ -145,7 +165,7 @@ def _map_rider_to_model(rider: dict) -> dict:
         "phenotype_tt": _parse_decimal(phenotype_scores.get("tt")),
         # Club info
         "club_id": _parse_int(club.get("id")),
-        "club_name": club.get("name") or "",
+        "club_name": _clean_str(club.get("name")),
         # Seed ratings
         "seed_race": _parse_decimal(seed.get("race")),
         "seed_time_trial": _parse_decimal(seed.get("timeTrial")),

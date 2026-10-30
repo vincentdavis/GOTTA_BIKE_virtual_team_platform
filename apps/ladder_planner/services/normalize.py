@@ -8,6 +8,7 @@ regardless of whether a rider is on our team (``ZRRider``) or an opponent
 
 from __future__ import annotations
 
+import html
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -59,6 +60,23 @@ def _f(value: Any) -> float | None:
         return float(value)
     except TypeError, ValueError:
         return None
+
+
+def clean_text(value: Any) -> str:
+    """Decode the HTML entities zwiftracing sends in names, and trim them.
+
+    Stored as sent, ``&quot;`` is auto-escaped again by the template and shows as itself.
+
+    Args:
+        value: The raw API value.
+
+    Returns:
+        The decoded string, "" for None or empty.
+
+    """
+    if value is None:
+        return ""
+    return html.unescape(str(value)).strip()
 
 
 def _i(value: Any) -> int | None:
@@ -190,7 +208,7 @@ def from_api(payload: dict[str, Any]) -> dict[str, Any]:
     """
     data = _blank()
     data["zwid"] = _i(payload.get("riderId"))
-    data["name"] = payload.get("name") or ""
+    data["name"] = clean_text(payload.get("name"))
     data["weight_kg"] = _f(payload.get("weight"))
     data["height_cm"] = _i(payload.get("height"))
     data["zp_ftp"] = _i(payload.get("zpFTP"))
@@ -198,7 +216,7 @@ def from_api(payload: dict[str, Any]) -> dict[str, Any]:
 
     club = payload.get("club") or {}
     data["club_id"] = _i(club.get("id"))
-    data["club_name"] = club.get("name") or ""
+    data["club_name"] = clean_text(club.get("name"))
 
     power = payload.get("power") or {}
     for key in DURATION_KEYS:
