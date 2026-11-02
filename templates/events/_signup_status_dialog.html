@@ -1,0 +1,52 @@
+{% comment %}
+  The page's one status dialog. Each Status link (_signup_status_cell.html) fetches its
+  signup's form into the box (HX-Target status-dialog-body); the script opens the
+  dialog as the request starts, so a slow answer still shows something at once, and puts
+  focus on the form when it arrives. Saving is an ordinary post that comes back to this page.
+  Cancel, Escape and the backdrop close it, and focus goes back to the link that opened it.
+  A bottom sheet on a phone, a centred box from 640px.
+{% endcomment %}
+<dialog id="status-dialog" class="modal modal-bottom sm:modal-middle" aria-labelledby="status-dialog-title">
+  <div class="modal-box" id="status-dialog-body"></div>
+  <form method="dialog" class="modal-backdrop"><button type="submit" tabindex="-1">Close</button></form>
+</dialog>
+<script>
+(function () {
+  var dialog = document.getElementById('status-dialog');
+  var body = document.getElementById('status-dialog-body');
+  if (!dialog || !body) return;
+  var opener = null;
+
+  function say(text) {
+    var p = document.createElement('p');
+    p.className = 'text-sm';
+    p.setAttribute('role', 'status');
+    p.textContent = text;
+    body.replaceChildren(p);
+  }
+
+  document.addEventListener('htmx:beforeRequest', function (event) {
+    if (event.detail.target !== body) return;
+    opener = event.detail.elt;
+    say('Loading…');
+    if (!dialog.open) dialog.showModal();
+  });
+  document.addEventListener('htmx:afterSwap', function (event) {
+    if (event.detail.target !== body) return;
+    var first = body.querySelector('input[type=radio]:checked') || body.querySelector('textarea, button');
+    if (first) first.focus();
+  });
+  function failed(event) {
+    if (event.detail.target !== body) return;
+    say('The status could not be loaded. Close this and try again.');
+  }
+  document.addEventListener('htmx:responseError', failed);
+  document.addEventListener('htmx:sendError', failed);
+  body.addEventListener('click', function (event) {
+    if (event.target.closest('[data-status-cancel]')) dialog.close();
+  });
+  dialog.addEventListener('close', function () {
+    if (opener && document.contains(opener)) opener.focus();
+  });
+})();
+</script>

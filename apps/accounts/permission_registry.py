@@ -139,6 +139,8 @@ PERMISSION_REGISTRY: dict[str, dict] = {
             "/events/{id}/squads/{squad_id}/delete/ - Delete squad",
             "/events/{id}/squads/assign/ - Assign users to squads",
             "/events/{id}/assign-riders/ - Dedicated squad assignment page",
+            "/events/{id}/signup-statuses/ - Manage an event's own list of signup statuses",
+            "/events/{id}/signups/{signup_id}/status/ - Set a signup's status (also head captain / coordinators)",
             "/events/{id}/squads/{squad_id}/regenerate-token/ - Generate/regenerate squad invite link",
             "/events/{id}/availability/ - Manage availability",
             "/events/{id}/squads/{squad_id}/availability/{grid_id}/repost/ - Re-post an availability sheet to Discord",

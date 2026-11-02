@@ -9,6 +9,7 @@
   <div class="mb-4 flex flex-wrap gap-2">
     <a href="{% url 'events:squad_manage' event.pk %}" class="btn btn-primary btn-sm">Manage Squads</a>
     <a href="{% url 'events:signup_questions' event.pk %}" class="btn btn-outline btn-sm">Signup Questions</a>
+    <a href="{% url 'events:signup_statuses' event.pk %}" class="btn btn-outline btn-sm">Signup Statuses</a>
   </div>
   {% endif %}
 
@@ -327,6 +328,28 @@
           <label class="label">
             <span class="label-text-alt">When on, only Race Verified members can submit an availability response for this event.</span>
           </label>
+        </div>
+
+        {% comment %}
+          Signup statuses: the event's own list (signup_status_views.signup_statuses_view), on a
+          page of its own like Signup Questions. A new event has none, so before it is saved
+          this only says where they will be.
+        {% endcomment %}
+        <div class="rounded-box border border-base-300 p-4">
+          <h4 class="text-sm font-semibold">Signup statuses</h4>
+          <p class="text-sm text-base-content/80 mt-1">What event staff can mark a signup as on this event. Withdrawn and Left the team are on every event, so they aren't listed.</p>
+          {% if event %}
+          {% if signup_statuses %}
+          <div class="flex flex-wrap items-center gap-2 mt-3">
+            {% for status in signup_statuses %}{% include "events/_signup_status_badge.html" with status=status withdrawn=False departed=False %}{% endfor %}
+          </div>
+          {% else %}
+          <p class="text-sm mt-2">None yet.</p>
+          {% endif %}
+          <div class="mt-3"><a href="{% url 'events:signup_statuses' event.pk %}" class="btn btn-sm btn-outline">{% if signup_statuses %}Edit statuses ({{ signup_statuses|length }}){% else %}Add statuses{% endif %}</a></div>
+          {% else %}
+          <p class="text-xs text-base-content/80 mt-2">You add them after creating the event.</p>
+          {% endif %}
         </div>
 
         <!-- ===== Squads ===== -->

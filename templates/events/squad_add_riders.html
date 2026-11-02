@@ -21,6 +21,21 @@
   </div>
   {% endif %}
 
+  {% comment %}
+    Riders waiting for a squad in this squad's timezone -- often why the squad was made. Any
+    waiting status counts, whatever its name: the match is on the timezones they picked.
+  {% endcomment %}
+  {% if waiting_here %}
+  <div class="flex flex-wrap items-center gap-3 rounded-box border border-base-300 bg-base-200 p-3 mb-4">
+    <span class="badge badge-info gap-1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>{{ waiting_here|length }} waiting</span>
+    <p class="text-sm flex-1 min-w-60">
+      {% for entry in waiting_here|slice:":3" %}{{ entry.user.get_full_name|default:entry.user.discord_username }}{% if not forloop.last %}{% if forloop.revcounter == 2 and waiting_here|length <= 3 %} and {% else %}, {% endif %}{% endif %}{% endfor %}{% if waiting_here|length > 3 %} and {{ waiting_here|length|add:"-3" }} more{% endif %}
+      {% if waiting_here|length == 1 %}is{% else %}are{% endif %} waiting for a squad in {{ squad.squad_timezone }}, this squad's timezone. Adding them clears their status.
+    </p>
+    <button type="button" class="btn btn-sm btn-outline" id="show-waiting-here">Show only them</button>
+  </div>
+  {% endif %}
+
   <div class="card bg-base-200 shadow-md">
     <div class="card-body p-4">
       <div class="flex items-center justify-between mb-3">
@@ -35,6 +50,12 @@
           <input type="checkbox" id="filter-eligible" class="checkbox checkbox-sm" onchange="applyFilters()">
           <span class="label-text text-sm">Eligible only</span>
         </label>
+        <select id="filter-status" class="select select-bordered select-sm" onchange="applyFilters()" aria-label="Filter by status">
+          <option value="taking" selected>Taking part ({{ taking_part_count }})</option>
+          {% for bucket in status_counts %}<option value="{{ bucket.key }}">{{ bucket.label }} ({{ bucket.count }})</option>{% endfor %}
+          {% if waiting_here %}<option value="here">Waiting for a squad in {{ squad.squad_timezone }} ({{ waiting_here|length }})</option>{% endif %}
+          <option value="">Everyone listed ({{ enriched_signups|length }})</option>
+        </select>
         <select id="filter-assigned" class="select select-bordered select-sm" onchange="applyFilters()">
           <option value="">Any squad status</option>
           <option value="0">Unassigned</option>
@@ -90,6 +111,7 @@
           <thead>
             <tr>
               <th data-sort="text" class="cursor-pointer select-none hover:text-primary">Name</th>
+              <th data-sort="text" class="cursor-pointer select-none hover:text-primary">Status</th>
               <th data-sort="text" class="cursor-pointer select-none hover:text-primary">Gender</th>
               <th data-sort="text" class="cursor-pointer select-none hover:text-primary">ZP</th>
               <th data-sort="text" class="cursor-pointer select-none hover:text-primary">ZR</th>
@@ -103,6 +125,7 @@
           <tbody>
             {% for entry in enriched_signups %}
             <tr data-signup-pk="{{ entry.signup.pk }}"
+                data-status-bucket="{{ entry.bucket }}"{% if entry.waiting_here %} data-waiting-here="1"{% endif %}
                 data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}"
                 data-name-display="{{ entry.user.get_full_name|default:entry.user.discord_username }}"
                 data-gender="{{ entry.gender }}"
@@ -146,6 +169,9 @@
                   {% endif %}
                 </span>
               </td>
+              <td data-sort-value="{{ entry.status_text }}">
+                {% include "events/_signup_status_badge.html" with withdrawn=entry.withdrawn departed=entry.departed status=entry.staff_status %}
+              </td>
               <td class="text-xs">{{ entry.gender|default:"-" }}</td>
               <td class="text-xs">{{ entry.zp_category|default:"-" }}{% if entry.zp_category_w %} / {{ entry.zp_category_w }}{% endif %}</td>
               <td class="text-xs">{{ entry.zr_category|default:"-" }}</td>
@@ -183,6 +209,12 @@
       </div>
       {% else %}
       <p class="text-sm text-base-content/50">Every registered rider is already in this squad.</p>
+      {% endif %}
+      {% if left_count or withdrawn_count %}
+      <p class="text-xs text-base-content/80 mt-3">
+        Not listed:
+        {% if left_count %}{{ left_count }} rider{{ left_count|pluralize }} who left the team (they can't be added){% endif %}{% if left_count and withdrawn_count %} and {% endif %}{% if withdrawn_count %}{{ withdrawn_count }} who withdrew{% endif %}.
+      </p>
       {% endif %}
     </div>
   </div>
@@ -249,9 +281,14 @@
     return el ? el.value : '';
   }
 
+  // The riders squads are still filled from (signup_status.TAKING_PART): the status
+  // filter's default. "here" is the banner's "Show only them".
+  var TAKING_PART = ['needs', 'waiting', 'in_squad'];
+
   window.applyFilters = function () {
     var q = val('signup-search').toLowerCase();
     var eligibleOnly = document.getElementById('filter-eligible').checked;
+    var status = val('filter-status');
     var assigned = val('filter-assigned');
     var gender = val('filter-gender');
     var zp = val('filter-zp');
@@ -265,6 +302,9 @@
       var show = true;
       if (q && row.dataset.name.indexOf(q) === -1) { show = false; }
       if (eligibleOnly && row.dataset.eligible !== '1') { show = false; }
+      if (status === 'taking') { if (TAKING_PART.indexOf(row.dataset.statusBucket) === -1) { show = false; } }
+      else if (status === 'here') { if (row.dataset.waitingHere !== '1') { show = false; } }
+      else if (status && row.dataset.statusBucket !== status) { show = false; }
       if (assigned && row.dataset.assigned !== assigned) { show = false; }
       if (gender && row.dataset.gender !== gender) { show = false; }
       if (zp && row.dataset.zp !== zp) { show = false; }
@@ -293,6 +333,7 @@
     gender: 'filter-gender',
     zp: 'filter-zp',
     zr: 'filter-zr',
+    status: 'filter-status',
     assigned: 'filter-assigned',
     tz: 'filter-timezone',
     unit: 'filter-power-unit',
@@ -306,7 +347,12 @@
     var params = new URLSearchParams(window.location.search);
     Object.keys(FILTER_FIELDS).forEach(function (key) {
       var el = document.getElementById(FILTER_FIELDS[key]);
-      // "wkg" is the unit default; writing it would put noise in every URL.
+      // "wkg" and "taking" are the defaults; writing them would put noise in every URL.
+      // "Everyone" is an empty status, so it is written as "all" or it would read as the default.
+      if (key === 'status') {
+        if (el && el.value !== 'taking') { params.set(key, el.value || 'all'); } else { params.delete(key); }
+        return;
+      }
       if (el && el.value && !(key === 'unit' && el.value === 'wkg')) { params.set(key, el.value); }
       else { params.delete(key); }
     });
@@ -320,9 +366,19 @@
     var params = new URLSearchParams(window.location.search);
     Object.keys(FILTER_FIELDS).forEach(function (key) {
       var el = document.getElementById(FILTER_FIELDS[key]);
-      if (el && params.has(key)) { el.value = params.get(key); }
+      if (el && params.has(key)) { el.value = key === 'status' && params.get(key) === 'all' ? '' : params.get(key); }
     });
     document.getElementById('filter-eligible').checked = params.get('eligible') === '1';
+  }
+
+  // The waiting-riders banner's "Show only them".
+  var onlyThem = document.getElementById('show-waiting-here');
+  if (onlyThem) {
+    onlyThem.addEventListener('click', function () {
+      document.getElementById('filter-status').value = 'here';
+      window.applyFilters();
+      document.getElementById('filter-status').focus();
+    });
   }
 
   // `next` is rendered server-side and so predates any filtering done since. Rewrite it
@@ -341,6 +397,7 @@
       var el = document.getElementById(id);
       if (el) { el.value = ''; }
     });
+    document.getElementById('filter-status').value = 'taking';
     document.getElementById('filter-power-unit').value = 'wkg';
     window.applyFilters();
   };

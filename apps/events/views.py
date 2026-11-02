@@ -39,7 +39,7 @@ from apps.accounts.discord_service import (
     sync_user_discord_roles,
 )
 from apps.accounts.models import Permissions, User
-from apps.events import ds_service, grid_defaults, rider_stats, series
+from apps.events import ds_service, grid_defaults, rider_stats, series, signup_status
 from apps.events.answer_facets import answers_payload, build_facets, panel_starts_open
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
 from apps.events.channel_access import can_view
@@ -55,6 +55,7 @@ from apps.events.models import (
     EventSignup,
     SheetStage,
     SignupQuestion,
+    SignupStatus,
     SlotDS,
     Squad,
     SquadMember,
@@ -469,6 +470,7 @@ def _apply_squad_leadership(
                 if created:
                     _assign_discord_role(user, squad.team_discord_role, squad.name, admin_user_id=admin_user_id)
                     _assign_region_role(user, squad, admin_user_id=admin_user_id)
+                    signup_status.clear_waiting(squad.event, user)
 
     for user in User.objects.filter(pk__in=was_leading - still_leading):
         _unassign_discord_role(user, squad.discord_captain_role, admin_user_id=admin_user_id)
@@ -679,6 +681,9 @@ def _enrich_squad_members(event):
     zwids = [sm.user.zwid for sm in all_sms if sm.user.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
     profiles = rider_stats.profiles_by_zwid(zwids)
+    # A member who has left the team's Discord server still holds their place until someone
+    # frees it, so the squad panels say so beside the name.
+    departed = signup_status.departed_user_ids(sm.user for sm in all_sms)
 
     by_squad = {}
     for sm in all_sms:
@@ -714,6 +719,7 @@ def _enrich_squad_members(event):
             "rider_profile": profiles.get(zwid),
             "has_discord_role": has_discord_role,
             "has_captain_role": has_captain_role,
+            "departed": user.pk in departed,
         }
         by_squad.setdefault(sm.squad_id, []).append(entry)
 
@@ -782,10 +788,11 @@ def _mark_eligibility(squad, signups, categories) -> None:
 
 
 def _group_available_signups(available_signups, squad_names_by_user) -> list[tuple[str, list]]:
-    """Group assignable signups by the squad they already belong to, unassigned first.
+    """Group assignable signups by where they stand: needing a squad, waiting, then by squad.
 
     Riders can hold membership in more than one squad, so a rider assigned to two squads is
-    listed under each of them.
+    listed under each of them. A rider in no squad whose signup carries a waiting status
+    (``waiting_status``, set by the caller) is listed apart, after those who need a squad.
 
     Args:
         available_signups: Signups that may be added to the squad being rendered, already
@@ -793,24 +800,60 @@ def _group_available_signups(available_signups, squad_names_by_user) -> list[tup
         squad_names_by_user: Map of user id to the names of the squads they belong to.
 
     Returns:
-        List of ``(group label, signups)`` pairs: "Unassigned" first, then squads A-Z.
+        List of ``(group label, signups)`` pairs: "Needs a squad" first, then "Waiting for a
+        squad", then squads A-Z.
 
     """
-    unassigned = []
+    needs = []
+    waiting = []
     by_squad: dict[str, list] = {}
     for signup in available_signups:
         names = squad_names_by_user.get(signup.user_id) or []
         if not names:
-            unassigned.append(signup)
+            (waiting if getattr(signup, "waiting_status", None) else needs).append(signup)
             continue
         for name in sorted(names):
             by_squad.setdefault(name, []).append(signup)
 
     groups: list[tuple[str, list]] = []
-    if unassigned:
-        groups.append(("Unassigned", unassigned))
+    if needs:
+        groups.append((signup_status.LABELS[signup_status.NEEDS], needs))
+    if waiting:
+        groups.append((signup_status.LABELS[signup_status.WAITING], waiting))
     groups.extend((name, by_squad[name]) for name in sorted(by_squad))
     return groups
+
+
+def _placeable_signups(event, signups) -> list:
+    """Pick the signups the add-rider pickers offer: registered, still on the team, not set aside.
+
+    A withdrawn rider and one who has left the team's Discord server cannot be put in a squad
+    at all (``squad_assign_view`` refuses both); a set-aside rider is held back until someone
+    changes their status. Each signup kept carries ``waiting_status`` -- its waiting status,
+    or None -- which ``_group_available_signups`` groups by.
+
+    Args:
+        event: The event.
+        signups: The event's signups, with ``user`` already selected.
+
+    Returns:
+        The signups, in the order given.
+
+    """
+    statuses = signup_status.statuses_by_id(event)
+    departed = signup_status.departed_user_ids(s.user for s in signups)
+    placeable = []
+    for signup in signups:
+        status = statuses.get(signup.staff_status_id)
+        if (
+            signup.status != EventSignup.Status.REGISTERED
+            or signup.user_id in departed
+            or (status is not None and not status.is_waiting)
+        ):
+            continue
+        signup.waiting_status = status
+        placeable.append(signup)
+    return placeable
 
 
 def _build_manage_squad_context(request, event, squad):
@@ -838,7 +881,7 @@ def _build_manage_squad_context(request, event, squad):
 
     member_user_ids = {m["user"].pk for m in members}
     available_signups = sorted(
-        (s for s in all_signups if s.user_id not in member_user_ids),
+        (s for s in _placeable_signups(event, all_signups) if s.user_id not in member_user_ids),
         key=lambda s: (s.user.get_full_name() or s.user.discord_username or "").lower(),
     )
     _mark_eligibility(squad, available_signups, _rider_categories(available_signups))
@@ -914,6 +957,10 @@ def _enrich_signups(signups, event=None):
 
     event_role_id = str(event.event_role) if event and event.event_role else ""
     signup_questions = active_questions(event) if event else []
+    # Where each signup stands (apps.events.signup_status): the event's statuses in one
+    # query rather than one per row, and who has left the team's Discord server in another.
+    statuses = signup_status.statuses_by_id(event) if event else {}
+    departed = signup_status.departed_user_ids(s.user for s in signups)
 
     # Build captain/VC lookup: user_id -> set of squad PKs where they are captain/VC
     captain_squads: dict[int, set] = {}
@@ -948,6 +995,17 @@ def _enrich_signups(signups, event=None):
                     "has_role": user.has_discord_role(sq.discord_captain_role),
                 })
 
+        staff_status = statuses.get(signup.staff_status_id)
+        is_departed = user.pk in departed
+        withdrawn = signup.status == EventSignup.Status.WITHDRAWN
+        bucket = signup_status.bucket(signup, staff_status, in_squad=bool(user_squads), departed=is_departed)
+        if withdrawn:
+            status_text = "Withdrawn"
+        elif is_departed:
+            status_text = "Left the team"
+        else:
+            status_text = staff_status.name if staff_status else "no status"
+
         enriched.append({
             "signup": signup,
             "user": user,
@@ -970,6 +1028,14 @@ def _enrich_signups(signups, event=None):
             "assigned_squads": user_squads,
             "role_badges": role_badges,
             "custom_answers": resolve_signup_answers(signup, signup_questions),
+            "staff_status": staff_status,
+            "departed": is_departed,
+            "withdrawn": withdrawn,
+            "bucket": bucket,
+            "status_text": status_text,
+            # Neither a withdrawn rider nor one who has left the team can be put in a squad
+            # (squad_assign_view refuses both), so their rows offer no squad picker.
+            "can_add_to_squad": not withdrawn and not is_departed,
         })
     return enriched
 
@@ -1332,6 +1398,24 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     can_view_signup_notes = request.user.is_event_admin or _can_export_event_signups(request.user, event)
     enriched_signups = _enrich_signups(signups, event=event) if can_view_signups else []
 
+    # Signup statuses (apps.events.signup_status). Everyone who sees the full table sees each
+    # rider's status; event staff can change it, and only they see the notes behind it -- the
+    # same people who see the riders' own notes.
+    can_set_status = _can_manage_event_squads(request.user, event)
+    table_entries = enriched_signups if can_view_signup_table else []
+    status_counts = signup_status.bucket_counts(table_entries)
+    status_still_placed = [e for e in table_entries if e["departed"] and e["assigned_squads"] and not e["withdrawn"]]
+    status_key = {
+        "waiting": any(e["bucket"] == signup_status.WAITING for e in table_entries),
+        "set_aside": any(e["bucket"] == signup_status.SET_ASIDE for e in table_entries),
+        "withdrawn": any(e["withdrawn"] for e in table_entries),
+        "left": any(e["bucket"] == signup_status.LEFT for e in table_entries),
+    }
+    # The rider's own status, when it carries a message for them. The staff note never does.
+    my_status = None
+    if user_signup and user_signup.status == EventSignup.Status.REGISTERED and user_signup.staff_status_id:
+        my_status = SignupStatus.objects.filter(pk=user_signup.staff_status_id).exclude(rider_message="").first()
+
     # Attach enriched member data and tooltip to each squad
     squad_members_data = _enrich_squad_members(event) if squads else {}
     user_squad_ids = set(
@@ -1422,6 +1506,12 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "can_view_squad_manage": _can_view_squad_manage(request.user, event),
             "can_add_members": _can_add_members(request.user, event),
             "can_view_v_report": _can_view_v_report(request.user, event),
+            "can_set_status": can_set_status,
+            "status_counts": status_counts,
+            "status_still_placed": status_still_placed,
+            "status_key": status_key,
+            "status_next": reverse("events:event_detail", args=[event.pk]) + "?tab=signups",
+            "my_status": my_status,
         },
     )
 
@@ -1565,6 +1655,8 @@ def event_edit_view(request: HttpRequest, pk: int) -> HttpResponse:
             # Rendered server-side from the SAVED options, so the selects never drift out
             # of sync with the client-side timezone chip editor above them.
             "timezone_role_rows": _timezone_role_rows(event),
+            # The Signup section lists the statuses staff can give a signup on this event.
+            "signup_statuses": list(event.signup_statuses.filter(retired=False)),
         },
     )
 
@@ -1946,6 +2038,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             squad_names_by_user.setdefault(m["user"].pk, []).append(sq.name)
 
     rider_categories = _rider_categories(all_signups)
+    placeable = _placeable_signups(event, all_signups)
     for s in squads:
         s.channel_name = channel_names.get(str(s.discord_channel_id), "") if s.discord_channel_id else ""
         s.audio_name = channel_names.get(str(s.audio_channel_id), "") if s.audio_channel_id else ""
@@ -1976,7 +2069,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         s.enriched_members = members
         member_user_ids = {m["user"].pk for m in members}
         s.available_signups = sorted(
-            (su for su in all_signups if su.user_id not in member_user_ids),
+            (su for su in placeable if su.user_id not in member_user_ids),
             key=lambda su: (su.user.get_full_name() or su.user.discord_username or "").lower(),
         )
         # Categories are batched once for the whole event above; eligibility is
@@ -2972,7 +3065,11 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.error(request, "Signups are not open for this event.")
         return redirect("events:event_detail", pk=pk)
 
-    if event.signups.filter(user=request.user).exists():
+    # Withdrawing keeps the row, and the pair is unique, so signing up again brings that row
+    # back rather than adding a second. Only a live signup means "already signed up" -- the
+    # page offers a withdrawn rider the Sign up button, which used to end right here.
+    existing = event.signups.filter(user=request.user).first()
+    if existing and existing.status == EventSignup.Status.REGISTERED:
         messages.warning(request, "You are already signed up for this event.")
         return redirect("events:event_detail", pk=pk)
 
@@ -3017,14 +3114,20 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
         messages.error(request, answer_error)
         return redirect("events:event_detail", pk=pk)
 
-    signup = EventSignup.objects.create(
-        event=event,
-        user=request.user,
-        signup_timezone=signup_timezone,
-        signup_squad_gender=signup_squad_gender,
-        notes=notes,
-        custom_answers=custom_answers,
-    )
+    answers = {
+        "signup_timezone": signup_timezone,
+        "signup_squad_gender": signup_squad_gender,
+        "notes": notes,
+        "custom_answers": custom_answers,
+    }
+    if existing:
+        for field, value in answers.items():
+            setattr(existing, field, value)
+        existing.status = EventSignup.Status.REGISTERED
+        existing.save(update_fields=[*answers, "status", "updated_at"])
+        signup = existing
+    else:
+        signup = EventSignup.objects.create(event=event, user=request.user, **answers)
     logfire.info(
         "Event signup created",
         event_id=pk,
@@ -3032,6 +3135,7 @@ def event_signup_view(request: HttpRequest, pk: int) -> HttpResponse:
         user_id=request.user.id,
         signup_timezone=signup_timezone,
         signup_squad_gender=signup_squad_gender,
+        signed_up_again=existing is not None,
     )
     from apps.events.tasks import enqueue_signup_notification
 
@@ -3355,9 +3459,8 @@ def event_signup_withdraw_view(request: HttpRequest, event_pk: int, signup_pk: i
         return redirect("events:event_detail", pk=event_pk)
 
     signup = get_object_or_404(EventSignup, pk=signup_pk, event=event)
-    removed_squads, _ = SquadMember.objects.filter(squad__event=event, user=signup.user).delete()
-    signup.status = EventSignup.Status.WITHDRAWN
-    signup.save(update_fields=["status", "updated_at"])
+    removed_squads = signup_status.withdraw(signup)
+    signup.save(update_fields=["status", "staff_status", "updated_at"])
     logfire.info(
         "Event signup withdrawn",
         event_id=event_pk,
@@ -3758,6 +3861,31 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 messages.info(request, f"{signup.user} was not assigned to any squad.")
     else:
         squad = target_squad
+        # A withdrawn rider is not racing, and one who has left the team's Discord server can
+        # neither see the squad's channel nor be given its roles: neither may be put in a squad.
+        # A withdrawn rider is brought back from the status dialog first.
+        if signup.status == EventSignup.Status.WITHDRAWN:
+            refusal = "they have withdrawn from the event"
+        elif signup_status.departed_user_ids([signup.user]):
+            refusal = "they have left the team's Discord server"
+        else:
+            refusal = ""
+        if refusal:
+            logfire.info(
+                "Squad assignment refused by signup status",
+                event_id=event_pk,
+                squad_id=squad.pk,
+                user_id=signup.user_id,
+                admin_user_id=request.user.id,
+                withdrawn=signup.status == EventSignup.Status.WITHDRAWN,
+            )
+            block_msg = f"Cannot add {signup.user} to {squad.name}: {refusal}."
+            if is_htmx:
+                resp = HttpResponse(status=204)
+                resp["HX-Trigger"] = json.dumps({"showToast": [{"message": block_msg, "tags": "error"}]})
+                return resp
+            messages.error(request, block_msg)
+            return redirect("events:event_detail", pk=event_pk)
         rider_zr = ""
         rider_zwift_cat = ""
         rider_womens_cat = ""
@@ -3802,6 +3930,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             user=signup.user,
             defaults={"status": SquadMember.Status.MEMBER},
         )
+        signup_status.clear_waiting(event, signup.user)
         _assign_discord_role(signup.user, squad.team_discord_role, squad.name, admin_user_id=request.user.id)
         _assign_region_role(signup.user, squad, admin_user_id=request.user.id)
         logfire.info(
@@ -3839,6 +3968,8 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 "squads": all_squads,
                 "event_pk": event_pk,
                 "signup_id": signup.pk,
+                "can_add": signup.status == EventSignup.Status.REGISTERED
+                and not signup_status.departed_user_ids([signup.user]),
             },
             request=request,
         )
@@ -7133,6 +7264,7 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
         user=request.user,
         defaults={"status": SquadMember.Status.MEMBER},
     )
+    signup_status.clear_waiting(event, request.user)
 
     if sm_created:
         logfire.info(
@@ -7277,15 +7409,33 @@ def squad_add_riders_view(request: HttpRequest, event_pk: int, squad_pk: int) ->
             "user_id", flat=True
         )
     )
-    signups = [
+    registered = [
         s
         for s in EventSignup.objects.filter(
             event=event, status=EventSignup.Status.REGISTERED
         ).select_related("user")
         if s.user_id not in member_ids
     ]
+    # Riders who have left the team's Discord server cannot be added (squad_assign_view
+    # refuses them), so they are left out of the list and counted under it instead.
+    departed = signup_status.departed_user_ids(s.user for s in registered)
+    signups = [s for s in registered if s.user_id not in departed]
     _mark_eligibility(squad, signups, _rider_categories(signups))
     enriched = _enrich_signups(signups, event=event)
+    status_counts = signup_status.bucket_counts(enriched)
+    # The riders waiting for a squad in this squad's timezone: the reason a new squad is
+    # often made, so the page names them above the list.
+    waiting_here = (
+        [
+            e
+            for e in enriched
+            if e["bucket"] == signup_status.WAITING and squad.squad_timezone in (e["signup"].signup_timezone or [])
+        ]
+        if squad.squad_timezone
+        else []
+    )
+    for entry in waiting_here:
+        entry["waiting_here"] = True
 
     # Facets are gated on managing this squad, same as the page: the payload carries
     # every listed rider's answers, so it must not outrun the permission to see them.
@@ -7328,6 +7478,11 @@ def squad_add_riders_view(request: HttpRequest, event_pk: int, squad_pk: int) ->
             "answer_payload": answer_payload,
             "answer_panel_open": panel_starts_open(signup_questions) if signup_questions else False,
             "answer_facets_table": "add-riders",
+            "status_counts": status_counts,
+            "taking_part_count": sum(c["count"] for c in status_counts if c["key"] in signup_status.TAKING_PART),
+            "waiting_here": waiting_here,
+            "left_count": len(departed),
+            "withdrawn_count": EventSignup.objects.filter(event=event, status=EventSignup.Status.WITHDRAWN).count(),
         },
     )
 
@@ -7386,6 +7541,9 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     )
 
     is_event_admin = request.user.is_event_admin or request.user.is_superuser
+    # The status filter starts on the riders squads are still filled from; the rest are
+    # counted in a line under it, so nobody wonders where they went.
+    status_counts = signup_status.bucket_counts(enriched_signups)
     logfire.debug("Squad assign page viewed", user_id=request.user.id, event_id=event_pk)
     return render(
         request,
@@ -7400,6 +7558,11 @@ def squad_assign_page_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             "squad_genders": squad_genders,
             "zr_categories": ZR_CATEGORY_ORDER,
             "metrics_updated_at": metrics_updated_at,
+            "status_counts": status_counts,
+            "taking_part_count": sum(c["count"] for c in status_counts if c["key"] in signup_status.TAKING_PART),
+            "status_hidden": [c for c in status_counts if c["key"] not in signup_status.TAKING_PART],
+            "can_set_status": _can_manage_event_squads(request.user, event),
+            "status_next": reverse("events:squad_assign_page", args=[event.pk]),
         },
     )
 

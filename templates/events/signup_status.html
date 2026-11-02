@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Status for {{ name }} - {{ event.title }}{% endblock %}
+
+{% block content %}
+{# The status form as a page of its own: what the Status link opens without JavaScript. #}
+<div class="max-w-lg mx-auto">
+  <a href="{{ next }}" class="link link-hover text-sm">&larr; Back</a>
+  <div class="card bg-base-200 shadow-md mt-3">
+    <div class="card-body">
+      {% include "events/_signup_status_form.html" %}
+    </div>
+  </div>
+</div>
+{% endblock %}

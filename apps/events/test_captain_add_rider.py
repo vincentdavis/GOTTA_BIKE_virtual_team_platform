@@ -116,7 +116,7 @@ def test_captain_cannot_clear_a_rider_from_every_squad(client, event, user_model
 
 
 @pytest.mark.django_db
-def test_add_rider_picker_groups_unassigned_first_then_by_squad(client, event, user_model) -> None:
+def test_add_rider_picker_groups_riders_needing_a_squad_first_then_by_squad(client, event, user_model) -> None:
     admin = user_model.objects.create_user(
         username="ea", email="ea@example.test",
         permission_overrides={"team_member": True, "event_admin": True},
@@ -135,11 +135,11 @@ def test_add_rider_picker_groups_unassigned_first_then_by_squad(client, event, u
 
     alpha_squad = next(s for s in resp.context["squads"] if s.pk == alpha.pk)
     labels = [label for label, _ in alpha_squad.available_groups]
-    assert labels == ["Unassigned", "Bravo"]  # unassigned first, then squads A-Z
+    assert labels == ["Needs a squad", "Bravo"]  # riders in no squad first, then squads A-Z
     groups = dict(alpha_squad.available_groups)
-    assert [s.user_id for s in groups["Unassigned"]] == [free.pk]
+    assert [s.user_id for s in groups["Needs a squad"]] == [free.pk]
     assert [s.user_id for s in groups["Bravo"]] == [in_bravo.pk]
-    assert "<optgroup label=\"Unassigned\">" in resp.content.decode()
+    assert "<optgroup label=\"Needs a squad\">" in resp.content.decode()
 
 
 @pytest.mark.django_db

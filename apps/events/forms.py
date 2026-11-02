@@ -20,6 +20,7 @@ from apps.events.models import (
     EventSignup,
     SeriesStage,
     SignupQuestion,
+    SignupStatus,
     Squad,
 )
 from apps.events.signup_questions import MAX_OPTIONS_PER_QUESTION
@@ -1906,3 +1907,64 @@ class SeriesAnswerForm(forms.Form):
         for pk in stage_ids:
             self.fields[f"answer_{pk}"] = forms.ChoiceField(required=False, choices=choices)
             self.fields[f"note_{pk}"] = forms.CharField(required=False, max_length=series.NOTE_MAX_LENGTH)
+
+
+class SignupStatusForm(forms.ModelForm):
+    """Add a status to an event's list, or edit one.
+
+    Names are unique on an event whatever their case, so a copy from another event can skip
+    the ones already there by name. The kind and colour are radios on the page, rendered from
+    the choices, so the widgets here only matter to validation.
+    """
+
+    class Meta:
+        """Meta options for SignupStatusForm."""
+
+        model = SignupStatus
+        fields: ClassVar[list[str]] = ["name", "kind", "colour", "rider_message"]
+        widgets: ClassVar[dict] = {
+            "kind": forms.RadioSelect,
+            "colour": forms.RadioSelect,
+            "rider_message": forms.Textarea(attrs={"rows": 3, "maxlength": 300}),
+        }
+
+    def __init__(self, *args, event: Event, **kwargs) -> None:
+        """Bind the form to the event whose list it changes.
+
+        Args:
+            *args: Positional arguments passed to ModelForm.
+            event: The event.
+            **kwargs: Keyword arguments passed to ModelForm.
+
+        """
+        super().__init__(*args, **kwargs)
+        self.event = event
+
+    def clean_name(self) -> str:
+        """Refuse a blank name, or one the event's list already has in any case.
+
+        Returns:
+            The name, trimmed.
+
+        Raises:
+            ValidationError: If the name is blank or taken.
+
+        """
+        name = " ".join((self.cleaned_data.get("name") or "").split())
+        if not name:
+            raise forms.ValidationError("Give the status a name.")
+        taken = SignupStatus.objects.filter(event=self.event, name__iexact=name)
+        if self.instance.pk:
+            taken = taken.exclude(pk=self.instance.pk)
+        if taken.exists():
+            raise forms.ValidationError("This event already has a status with that name.")
+        return name
+
+    def clean_rider_message(self) -> str:
+        """Trim the rider's message.
+
+        Returns:
+            The message, or ``""`` to keep the status to event staff.
+
+        """
+        return (self.cleaned_data.get("rider_message") or "").strip()

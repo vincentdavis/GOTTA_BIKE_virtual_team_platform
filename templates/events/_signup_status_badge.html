@@ -1,0 +1,16 @@
+{% comment %}
+  A signup's status as a badge: Withdrawn, Left the team, or the staff status from the event's
+  own list -- in that order, as apps.events.signup_status.bucket ranks them. Nothing for a rider
+  with none. Each kind has its own icon, so a badge never rests on its colour alone.
+    withdrawn  the signup is withdrawn
+    departed   the rider has left the team's Discord server
+    status     the signup's SignupStatus, or None
+    size       "sm" (default) or "md"
+{% endcomment %}
+{% if withdrawn %}
+<span class="badge badge-ghost border-base-300 {% if size != 'md' %}badge-sm {% endif %}gap-1 whitespace-nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path></svg>Withdrawn</span>
+{% elif departed %}
+<span class="badge badge-neutral {% if size != 'md' %}badge-sm {% endif %}gap-1 whitespace-nowrap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path><path d="m10 17 5-5-5-5"></path><path d="M15 12H3"></path></svg>Left the team</span>
+{% elif status %}
+<span class="badge {{ status.badge_class }} {% if size != 'md' %}badge-sm {% endif %}gap-1 whitespace-nowrap">{% if status.is_waiting %}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>{% else %}<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>{% endif %}{{ status.name }}</span>
+{% endif %}

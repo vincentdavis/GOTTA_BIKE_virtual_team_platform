@@ -52,10 +52,12 @@
               {% for tz in signup_timezones %}<option value="{{ tz }}">{{ tz }}</option>{% endfor %}
             </select>
             {% endif %}
-            <label class="label cursor-pointer gap-1.5">
-              <input type="checkbox" id="filter-unassigned" class="checkbox checkbox-sm" onchange="applyFilters()">
-              <span class="label-text text-sm">Unassigned</span>
-            </label>
+            {# Starts on the riders squads are still filled from; "Needs a squad" is the old Unassigned. #}
+            <select id="filter-status" class="select select-bordered select-sm" onchange="applyFilters()" aria-label="Filter by status">
+              <option value="taking" selected>Taking part ({{ taking_part_count }})</option>
+              {% for bucket in status_counts %}<option value="{{ bucket.key }}">{{ bucket.label }} ({{ bucket.count }})</option>{% endfor %}
+              <option value="">Everyone ({{ enriched_signups|length }})</option>
+            </select>
             <select id="filter-power-unit" class="select select-bordered select-sm" onchange="applyFilters()"
                     title="Unit for the zFTP / zMAP bounds">
               <option value="wkg">W/kg</option>
@@ -73,6 +75,13 @@
                    class="input input-bordered input-sm w-20" oninput="applyFilters()">
             <button type="button" class="btn btn-ghost btn-sm" onclick="clearFilters()">Clear</button>
           </div>
+          {% if status_hidden %}
+          <p class="text-xs text-base-content/80 -mt-2 mb-3" id="status-hidden-note">
+            Not shown while Taking part is chosen:
+            {% for bucket in status_hidden %}{{ bucket.count }} {{ bucket.label|lower }}{% if not forloop.last %}, {% endif %}{% endfor %}.
+            Choose Everyone to see them.
+          </p>
+          {% endif %}
           <p class="text-xs text-base-content/60 -mt-2 mb-3">
             {% if metrics_updated_at %}
             zFTP/zMAP mirrored from Zwift {{ metrics_updated_at|timesince }} ago.
@@ -88,12 +97,13 @@
                 <tr>
                   <th>Name</th>
                   <th>Gender</th>
+                  <th>Status</th>
                   <th>Squads</th>
                 </tr>
               </thead>
               <tbody>
                 {% for entry in enriched_signups %}
-                <tr data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}" data-gender="{{ entry.gender }}" data-zp="{{ entry.zp_category_w|default:entry.zp_category }}" data-zr="{{ entry.zr_category }}" data-timezone="{{ entry.signup.signup_timezone|join:',' }}" data-zftp-w="{{ entry.z_ftp|default_if_none:'' }}" data-zftp-wkg="{{ entry.z_ftp_wkg|floatformat:2|default_if_none:'' }}" data-zmap-w="{{ entry.z_map|default_if_none:'' }}" data-zmap-wkg="{{ entry.z_map_wkg|floatformat:2|default_if_none:'' }}">
+                <tr data-name="{{ entry.user.get_full_name|default:entry.user.discord_username|lower }}" data-status-bucket="{{ entry.bucket }}" data-gender="{{ entry.gender }}" data-zp="{{ entry.zp_category_w|default:entry.zp_category }}" data-zr="{{ entry.zr_category }}" data-timezone="{{ entry.signup.signup_timezone|join:',' }}" data-zftp-w="{{ entry.z_ftp|default_if_none:'' }}" data-zftp-wkg="{{ entry.z_ftp_wkg|floatformat:2|default_if_none:'' }}" data-zmap-w="{{ entry.z_map|default_if_none:'' }}" data-zmap-wkg="{{ entry.z_map_wkg|floatformat:2|default_if_none:'' }}">
                   <td>
                     {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2=entry.zr_v2_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                     {% include "events/_role_badges.html" with signup_id=entry.signup.pk role_badges=entry.role_badges oob=False %}
@@ -107,8 +117,11 @@
                     <span class="text-base-content/30">-</span>
                     {% endif %}
                   </td>
+                  <td>
+                    {% include "events/_signup_status_cell.html" with e=entry can_set=can_set_status next=status_next %}
+                  </td>
                   <td id="squad-cell-{{ entry.signup.pk }}">
-                    {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk %}
+                    {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk can_add=entry.can_add_to_squad %}
                   </td>
                 </tr>
                 {% endfor %}
@@ -152,7 +165,12 @@
   </div>
 </div>
 
+{% if can_set_status %}{% include "events/_signup_status_dialog.html" %}{% endif %}
 <script>
+var TAKING_PART = ['needs', 'waiting', 'in_squad'];
+// The status filter starts on Taking part, so the list is filtered from the first paint;
+// pageshow also re-applies whatever the browser restored into the fields on Back.
+window.addEventListener('pageshow', function() { applyFilters(); });
 // A blank box is "no bound" -- distinct from 0, which is a real (if useless) floor.
 function numOrNull(id) {
   var raw = document.getElementById(id).value.trim();
@@ -178,7 +196,7 @@ function applyFilters() {
   var zr = document.getElementById('filter-zr').value;
   var tzEl = document.getElementById('filter-timezone');
   var tz = tzEl ? tzEl.value : '';
-  var unassigned = document.getElementById('filter-unassigned').checked;
+  var status = document.getElementById('filter-status').value;
   var unit = document.getElementById('filter-power-unit').value;
   var zftpMin = numOrNull('filter-zftp-min'), zftpMax = numOrNull('filter-zftp-max');
   var zmapMin = numOrNull('filter-zmap-min'), zmapMax = numOrNull('filter-zmap-max');
@@ -195,9 +213,11 @@ function applyFilters() {
     if (tz && row.dataset.timezone.split(',').indexOf(tz) === -1) show = false;
     if (!powerInBounds(row, 'zftp', zftpMin, zftpMax, unit)) show = false;
     if (!powerInBounds(row, 'zmap', zmapMin, zmapMax, unit)) show = false;
-    if (unassigned) {
-      var cell = row.querySelector('[id^="squad-cell-"]');
-      if (cell && !cell.querySelector('.no-squad-dash')) show = false;
+    // "taking" is every rider squads are still filled from (signup_status.TAKING_PART).
+    if (status === 'taking') {
+      if (TAKING_PART.indexOf(row.dataset.statusBucket) === -1) show = false;
+    } else if (status && row.dataset.statusBucket !== status) {
+      show = false;
     }
     row.style.display = show ? '' : 'none';
     if (show) visible++;
@@ -227,12 +247,13 @@ function clearFilters() {
   document.getElementById('filter-zr').value = '';
   var tzEl = document.getElementById('filter-timezone');
   if (tzEl) tzEl.value = '';
-  document.getElementById('filter-unassigned').checked = false;
+  document.getElementById('filter-status').value = 'taking';
   document.getElementById('filter-power-unit').value = 'wkg';
   ['filter-zftp-min', 'filter-zftp-max', 'filter-zmap-min', 'filter-zmap-max'].forEach(function(id) {
     document.getElementById(id).value = '';
   });
   applyFilters();
 }
+if (document.getElementById('signup-table')) applyFilters();
 </script>
 {% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Signup Statuses - {{ event.title }}{% endblock %}
+
+{% block content %}
+{% comment %}
+  An event's own list of signup statuses (signup_status_views.signup_statuses_view), linked
+  from the event's edit page. A new event has none; Withdrawn and Left the team are on every
+  event and listed only to say so. Every change is a small form that comes back here.
+{% endcomment %}
+<div class="max-w-4xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:event_edit' event.pk %}" class="btn btn-ghost btn-sm">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 19-7-7 7-7"></path></svg>
+      Back to Edit Event
+    </a>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h1 class="card-title text-2xl">Signup Statuses</h1>
+      <p class="text-sm text-base-content/80">{{ event.title }}</p>
+      <p class="text-sm text-base-content/80 mt-1 max-w-prose">
+        The statuses event staff can give a signup on this event, from the signup table or Assign Riders.
+        A rider sees a status on their event page only when it has a message for them.
+      </p>
+
+      {% if not at_limit %}
+      <details class="mt-3"{% if add_open %} open{% endif %}>
+        <summary class="btn btn-neutral btn-sm w-fit">Add a status</summary>
+        <form method="post" action="{% url 'events:signup_statuses' event.pk %}" class="card bg-base-300 p-4 mt-3">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add">
+          {% include "events/_signup_status_fields.html" with form=add_form %}
+          <button type="submit" class="btn btn-neutral btn-sm mt-3 w-fit">Add</button>
+        </form>
+      </details>
+      {% else %}
+      <p class="text-sm mt-3">This event has {{ max_statuses }} statuses, the most it can have. Retiring one doesn't make room; deleting an unused one does.</p>
+      {% endif %}
+
+      <div class="rounded-box bg-base-300 p-3 mt-3">
+        {% if sources %}
+        <form method="post" action="{% url 'events:signup_statuses' event.pk %}" class="flex flex-wrap items-end gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="copy">
+          <div>
+            <label for="status-copy" class="text-sm font-medium">Copy statuses from another event</label>
+            <select id="status-copy" name="source" class="select select-sm w-auto block mt-1 max-w-full">
+              {% for source in sources %}<option value="{{ source.pk }}">{{ source.title }}</option>{% endfor %}
+            </select>
+          </div>
+          <button type="submit" class="btn btn-sm btn-outline">Copy</button>
+          <p class="text-xs text-base-content/80 basis-full">Adds that event's statuses to this one, skipping any whose name is already here.</p>
+        </form>
+        {% else %}
+        <p class="text-sm text-base-content/80">No other event has statuses to copy yet.</p>
+        {% endif %}
+      </div>
+
+      {% if not status_count %}
+      <p class="text-sm mt-4">This event has no statuses of its own yet. Add one above, or copy another event's.</p>
+      {% endif %}
+
+      {% if waiting %}
+      <h2 class="font-semibold mt-6">Waiting for a squad</h2>
+      <p class="text-sm text-base-content/80 mb-2">Still offered when placing riders, after the riders who need a squad. Cleared when they join one.</p>
+      <div class="space-y-3">
+        {% for status in waiting %}
+        {% include "events/_signup_status_card.html" with first=forloop.first last=forloop.last %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if set_aside %}
+      <h2 class="font-semibold mt-6">Set aside</h2>
+      <p class="text-sm text-base-content/80 mb-2">Not offered when placing riders until someone changes the status. They keep any squad place they have.</p>
+      <div class="space-y-3">
+        {% for status in set_aside %}
+        {% include "events/_signup_status_card.html" with first=forloop.first last=forloop.last %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <h2 class="font-semibold mt-6">Built in</h2>
+      <p class="text-sm text-base-content/80 mb-2">Every event has these. The app acts on them, so they can't be changed or retired.</p>
+      <div class="space-y-3">
+        <div class="card bg-base-300 p-4">
+          {% include "events/_signup_status_badge.html" with withdrawn=True departed=False status=None size="md" %}
+          <p class="text-sm mt-2">Not racing this event. Takes the rider out of every squad in the event; the signup stays on the list.</p>
+          <p class="text-sm mt-1"><span class="font-medium">Rider sees:</span> You're not racing this event: your signup was withdrawn. Changed your mind? Sign up again.</p>
+        </div>
+        <div class="card bg-base-300 p-4">
+          {% include "events/_signup_status_badge.html" with departed=True withdrawn=False status=None size="md" %}
+          <p class="text-sm mt-2">Set by the app when a rider leaves the team's Discord server, and gone again if they rejoin. Nobody sets it by hand.</p>
+        </div>
+      </div>
+      <p class="text-xs text-base-content/80 mt-4">Needs a squad and In a squad aren't on this list: the app works them out from the squads.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

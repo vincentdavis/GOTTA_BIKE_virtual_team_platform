@@ -1,0 +1,123 @@
+{% comment %}
+  One signup's status and note: the status dialog's contents (embedded), or the body of its own
+  page (signup_status.html) without JavaScript. A rider who has left the team gets a shorter
+  form -- the app sets their status, so only withdrawing and the note can change.
+
+  Each option's badge passes withdrawn/departed/status explicitly: an include sees this whole
+  context, and the signup's own withdrawn flag would otherwise label every option "Withdrawn".
+  In the dialog, Cancel is a plain button the dialog script closes: a submit button would
+  become the form's default and answer Enter on a radio by closing the dialog.
+{% endcomment %}
+{% if embedded %}
+<h3 id="status-dialog-title" class="font-semibold text-lg">Status for {{ name }}</h3>
+{% else %}
+<h1 id="status-dialog-title" class="text-2xl font-bold">Status for {{ name }}</h1>
+{% endif %}
+<p class="text-sm text-base-content/80 mb-3">
+  Signed up {{ signup.created_at|date:"j M" }}{% if signup.signup_timezone %} &middot; picked {{ signup.signup_timezone|join:", " }}{% endif %}
+  &middot; {% if squads %}in {% for squad in squads %}{{ squad.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}not in a squad{% endif %}
+</p>
+
+<form method="post" action="{% url 'events:signup_status' event.pk signup.pk %}">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}">
+
+  {% if departed %}
+  {% include "events/_signup_status_badge.html" with departed=True withdrawn=False status=None size="md" %}
+  <p class="text-sm mt-3">{{ name }} left the team's Discord server{% if left_on %} on {{ left_on|date:"j M" }}{% endif %}. The app sets this status itself: it can't be changed here, and it goes away if they rejoin.</p>
+  {% if withdrawn %}
+  <p class="text-sm mt-2">Their signup is withdrawn too.</p>
+  {% elif squads %}
+  <div class="alert alert-warning text-sm mt-4">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+    <span>{{ name }} still has a place in {% for squad in squads %}{{ squad.name }}{% if not forloop.last %}, {% endif %}{% endfor %}. Withdrawing frees it.</span>
+  </div>
+  {% endif %}
+
+  {% else %}
+  {% if unmatched_timezones %}
+  <div class="flex items-start gap-2 rounded-box bg-base-200 p-3 text-sm mb-4">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="shrink-0 mt-0.5"><circle cx="12" cy="12" r="9"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+    <span>None of this event's {{ squad_count }} squad{{ squad_count|pluralize }} is in {{ unmatched_timezones|join:" or " }}.</span>
+  </div>
+  {% endif %}
+  {% if withdrawn %}
+  <p class="text-sm mb-3">{{ name }} is withdrawn. Choosing anything else brings them back on the event.</p>
+  {% endif %}
+
+  <fieldset>
+    <legend class="text-sm font-semibold mb-1">Status</legend>
+    <div class="flex flex-col gap-1">
+      <label class="flex items-center gap-3 rounded-box border border-base-300 px-3 py-1.5 cursor-pointer has-[:checked]:border-base-content has-[:checked]:bg-base-200">
+        <input type="radio" name="choice" value="" class="radio radio-sm"{% if choice == "" %} checked{% endif %}>
+        <span class="font-medium">Needs a squad</span>
+        <span class="text-sm text-base-content/80">no status</span>
+      </label>
+      {% if waiting_statuses %}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-xs font-semibold text-base-content/80 px-1 mt-2 mb-1">Waiting for a squad</legend>
+        {% for status in waiting_statuses %}
+        <label class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-box border border-base-300 px-3 py-1.5 cursor-pointer has-[:checked]:border-base-content has-[:checked]:bg-base-200">
+          <input type="radio" name="choice" value="{{ status.pk }}" class="radio radio-sm"{% if choice == status.pk|stringformat:"s" %} checked{% endif %}>
+          {% include "events/_signup_status_badge.html" with status=status withdrawn=False departed=False %}
+          {% if status.retired %}<span class="text-xs text-base-content/80">retired</span>{% endif %}
+        </label>
+        {% endfor %}
+      </fieldset>
+      {% endif %}
+      {% if set_aside_statuses %}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-xs font-semibold text-base-content/80 px-1 mt-2 mb-1">Set aside</legend>
+        {% for status in set_aside_statuses %}
+        <label class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-box border border-base-300 px-3 py-1.5 cursor-pointer has-[:checked]:border-base-content has-[:checked]:bg-base-200">
+          <input type="radio" name="choice" value="{{ status.pk }}" class="radio radio-sm"{% if choice == status.pk|stringformat:"s" %} checked{% endif %}>
+          {% include "events/_signup_status_badge.html" with status=status withdrawn=False departed=False %}
+          {% if status.retired %}<span class="text-xs text-base-content/80">retired</span>{% endif %}
+        </label>
+        {% endfor %}
+      </fieldset>
+      {% endif %}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-xs font-semibold text-base-content/80 px-1 mt-2 mb-1">Not racing</legend>
+        <label class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-box border border-base-300 px-3 py-1.5 cursor-pointer has-[:checked]:border-base-content has-[:checked]:bg-base-200">
+          <input type="radio" name="choice" value="withdrawn" class="radio radio-sm"{% if choice == "withdrawn" %} checked{% endif %}>
+          {% include "events/_signup_status_badge.html" with withdrawn=True departed=False status=None %}
+          <span class="text-sm text-base-content/80">{% if squads %}takes them out of {% for squad in squads %}{{ squad.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% else %}the signup stays on the list{% endif %}</span>
+        </label>
+      </fieldset>
+    </div>
+  </fieldset>
+  {% if not waiting_statuses and not set_aside_statuses %}
+  <p class="text-sm text-base-content/80 mt-2">This event has no statuses of its own yet.{% if can_manage_list %} <a href="{% url 'events:signup_statuses' event.pk %}" class="link">Add some</a>.{% endif %}</p>
+  {% endif %}
+  {% endif %}
+
+  <div class="mt-4">
+    <label for="status-note" class="text-sm font-semibold">Note for event staff</label>
+    <textarea id="status-note" name="note" class="textarea w-full mt-1" rows="2" maxlength="{{ note_max_length }}" aria-describedby="status-note-help">{{ signup.status_note }}</textarea>
+    <p id="status-note-help" class="text-xs text-base-content/80 mt-1">Only event staff see it. Riders never do.</p>
+  </div>
+
+  {% if signup.status_set_at %}
+  <p class="text-xs text-base-content/80 mt-3">Last changed{% if signup.status_set_by %} by {{ signup.status_set_by.get_full_name|default:signup.status_set_by.discord_username|default:signup.status_set_by.username }}{% endif %} on {{ signup.status_set_at|date:"j M" }}</p>
+  {% endif %}
+
+  <div class="flex flex-wrap items-center justify-end gap-2 mt-4">
+    {% if can_manage_list and not departed %}
+    <a href="{% url 'events:signup_statuses' event.pk %}" class="link text-sm mr-auto">Manage statuses</a>
+    {% endif %}
+    {% if embedded %}
+    <button type="button" class="btn btn-sm btn-ghost" data-status-cancel>Cancel</button>
+    {% else %}
+    <a href="{{ next }}" class="btn btn-sm btn-ghost">Cancel</a>
+    {% endif %}
+    {% if departed %}
+    <button type="submit" name="choice" value="keep" class="btn btn-sm btn-outline">Save note</button>
+    {% if not withdrawn %}
+    <button type="submit" name="choice" value="withdrawn" class="btn btn-sm btn-neutral">Withdraw {{ name }}</button>
+    {% endif %}
+    {% else %}
+    <button type="submit" class="btn btn-sm btn-neutral">Save</button>
+    {% endif %}
+  </div>
+</form>

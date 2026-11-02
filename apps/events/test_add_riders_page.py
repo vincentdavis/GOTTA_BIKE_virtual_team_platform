@@ -351,7 +351,7 @@ def test_columns_are_sortable_and_the_filter_offers_squad_status(
     body = client.get(_url(event, squad)).content.decode()
 
     header = body.split("<thead>")[1].split("</thead>")[0]
-    assert header.count('data-sort="text"') == 4   # name, gender, ZP, ZR
+    assert header.count('data-sort="text"') == 5   # name, status, gender, ZP, ZR
     assert header.count('data-sort="num"') == 4    # zFTP, zMAP, Squads, Eligible
     assert 'id="filter-assigned"' in body
     assert ">Unassigned<" in body

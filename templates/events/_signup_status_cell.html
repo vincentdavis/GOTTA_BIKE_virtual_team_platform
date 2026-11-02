@@ -1,0 +1,29 @@
+{% comment %}
+  A signup row's Status cell, on the event page's signup table and on Assign Riders. Event
+  staff get the badge as a link that opens the status dialog (_signup_status_dialog.html),
+  and see their note under it; everyone else sees the badge alone. Without JavaScript the
+  link opens the status page itself.
+    e        an enriched signup (views._enrich_signups)
+    can_set  whether the viewer may set statuses (views._can_manage_event_squads)
+    next     where saving goes back to
+{% endcomment %}
+{% with name=e.user.get_full_name|default:e.user.discord_username %}
+{% if can_set %}
+<a href="{% url 'events:signup_status' e.signup.event_id e.signup.pk %}?next={{ next|urlencode }}"
+   hx-get="{% url 'events:signup_status' e.signup.event_id e.signup.pk %}?next={{ next|urlencode }}"
+   hx-target="#status-dialog-body" hx-swap="innerHTML" data-status-open
+   class="btn btn-ghost btn-xs h-auto min-h-6 gap-1 px-1"
+   aria-label="Status for {{ name }}: {{ e.status_text }}. Change">
+  {% include "events/_signup_status_badge.html" with withdrawn=e.withdrawn departed=e.departed status=e.staff_status %}
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+</a>
+{% else %}
+{% include "events/_signup_status_badge.html" with withdrawn=e.withdrawn departed=e.departed status=e.staff_status %}
+{% endif %}
+{% if e.departed and e.assigned_squads and not e.withdrawn %}
+<div class="mt-1"><span class="badge badge-warning badge-sm whitespace-nowrap">Still has a squad place</span></div>
+{% endif %}
+{% if can_set and e.signup.status_note %}
+<div class="text-xs text-base-content/80 mt-0.5 max-w-56 line-clamp-2 break-words">{{ e.signup.status_note }}</div>
+{% endif %}
+{% endwith %}

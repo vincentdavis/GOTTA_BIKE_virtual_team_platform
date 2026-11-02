@@ -14,6 +14,7 @@ from apps.events.models import (
     RaceRegistration,
     SeriesStage,
     SheetStage,
+    SignupStatus,
     Squad,
     SquadMember,
 )
@@ -62,6 +63,14 @@ class SeriesStageInline(admin.TabularInline):
     autocomplete_fields: ClassVar[list[str]] = ["route"]
 
 
+class SignupStatusInline(admin.TabularInline):
+    """Inline admin for an event's own list of signup statuses."""
+
+    model = SignupStatus
+    extra = 0
+    fields: ClassVar[list[str]] = ["order", "name", "kind", "colour", "rider_message", "retired"]
+
+
 class EventAdminForm(forms.ModelForm):
     """Event change form, holding squad tags to the same rules as the event edit page.
 
@@ -97,7 +106,7 @@ class EventAdmin(admin.ModelAdmin):
     search_fields: ClassVar[list[str]] = ["title", "description"]
     readonly_fields: ClassVar[list[str]] = ["created_at", "updated_at"]
     ordering: ClassVar[list[str]] = ["-start_date"]
-    inlines: ClassVar[list] = [SeriesStageInline, SquadInline, EventSignupInline]
+    inlines: ClassVar[list] = [SeriesStageInline, SignupStatusInline, SquadInline, EventSignupInline]
 
     def save_related(self, request, form, formsets, change) -> None:
         """Prune every squad's tags to the event's list once the squad inline is saved too.

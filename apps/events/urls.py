@@ -4,6 +4,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from apps.events.series_views import series_board_view, series_sheet_view, series_stages_view
+from apps.events.signup_status_views import signup_status_view, signup_statuses_view
 from apps.events.views import (
     add_members_search_view,
     add_members_view,
@@ -87,6 +88,8 @@ urlpatterns = [
     path("<int:pk>/delete/", event_delete_view, name="event_delete"),
     path("<int:pk>/signup/", event_signup_view, name="event_signup"),
     path("<int:pk>/signup-questions/", signup_questions_view, name="signup_questions"),
+    path("<int:pk>/signup-statuses/", signup_statuses_view, name="signup_statuses"),
+    path("<int:event_pk>/signups/<int:signup_pk>/status/", signup_status_view, name="signup_status"),
     path("<int:pk>/stages/", series_stages_view, name="series_stages"),
     path("<int:pk>/series/", series_board_view, name="series_board"),
     path(

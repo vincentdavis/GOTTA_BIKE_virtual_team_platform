@@ -1,0 +1,72 @@
+{% comment %}
+  One status on the event's Signup Statuses page: its badge, what riders see, how many signups
+  have it, and its actions. A status in use is retired rather than deleted, so those signups
+  keep it. Move up and down stay within its kind, the group it is listed in.
+    status  a SignupStatus, annotated with ``uses`` and given its Edit ``form`` by the view
+    first   whether it is first in its group
+    last    whether it is last in its group
+{% endcomment %}
+<div class="card bg-base-300 p-4">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <div class="flex flex-wrap items-center gap-2">
+        {% include "events/_signup_status_badge.html" with status=status withdrawn=False departed=False size="md" %}
+        {% if status.retired %}<span class="badge badge-ghost border-base-300 badge-sm">Retired</span>{% endif %}
+      </div>
+      {% if status.rider_message %}
+      <p class="text-sm mt-2 break-words"><span class="font-medium">Rider sees:</span> {{ status.rider_message }}</p>
+      {% else %}
+      <p class="text-sm mt-2">Event staff only</p>
+      {% endif %}
+      <p class="text-xs text-base-content/80 mt-1">
+        {% if status.uses %}On {{ status.uses }} signup{{ status.uses|pluralize }}{% if status.retired %}, which keep it. Not offered when setting a status.{% endif %}{% else %}Not used yet{% endif %}
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-1 shrink-0">
+      {% if not status.retired %}
+      <form method="post" action="{% url 'events:signup_statuses' event.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="up">
+        <input type="hidden" name="status" value="{{ status.pk }}">
+        <button type="submit" class="btn btn-ghost btn-sm btn-square" aria-label="Move {{ status.name }} up"{% if first %} disabled{% endif %}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18 15-6-6-6 6"></path></svg>
+        </button>
+      </form>
+      <form method="post" action="{% url 'events:signup_statuses' event.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="down">
+        <input type="hidden" name="status" value="{{ status.pk }}">
+        <button type="submit" class="btn btn-ghost btn-sm btn-square" aria-label="Move {{ status.name }} down"{% if last %} disabled{% endif %}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        </button>
+      </form>
+      {% endif %}
+      {% if status.uses %}
+      <form method="post" action="{% url 'events:signup_statuses' event.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="{% if status.retired %}restore{% else %}retire{% endif %}">
+        <input type="hidden" name="status" value="{{ status.pk }}">
+        <button type="submit" class="btn btn-sm btn-ghost">{% if status.retired %}Restore{% else %}Retire{% endif %}<span class="sr-only"> {{ status.name }}</span></button>
+      </form>
+      {% else %}
+      <form method="post" action="{% url 'events:signup_statuses' event.pk %}"
+            onsubmit="return confirm('Delete {{ status.name|escapejs }}?')">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="delete">
+        <input type="hidden" name="status" value="{{ status.pk }}">
+        <button type="submit" class="btn btn-sm btn-ghost">Delete<span class="sr-only"> {{ status.name }}</span></button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  <details class="mt-3"{% if status.form_open %} open{% endif %}>
+    <summary class="text-sm link link-hover w-fit">Edit<span class="sr-only"> {{ status.name }}</span></summary>
+    <form method="post" action="{% url 'events:signup_statuses' event.pk %}" class="mt-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="edit">
+      <input type="hidden" name="status" value="{{ status.pk }}">
+      {% include "events/_signup_status_fields.html" with form=status.form %}
+      <button type="submit" class="btn btn-neutral btn-sm mt-3">Save</button>
+    </form>
+  </details>
+</div>

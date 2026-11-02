@@ -546,6 +546,136 @@ class RaceRegistration(models.Model):
         return f"{self.user} - {self.race.title}"
 
 
+#: Each status colour's badge classes, spelled out in full so the stylesheet build (which scans
+#: Python files too) keeps every one. All are daisyUI solid colours whose text passes contrast
+#: in both themes; grey's ghost badge gets a border so it still reads on a base-200 card.
+STATUS_BADGE_CLASSES = {
+    "info": "badge-info",
+    "success": "badge-success",
+    "warning": "badge-warning",
+    "error": "badge-error",
+    "neutral": "badge-neutral",
+    "ghost": "badge-ghost border-base-300",
+}
+
+
+class SignupStatus(models.Model):
+    """A status event staff can give a signup, from one event's own list.
+
+    Each event keeps its own list, empty until staff add to it or copy another event's. A
+    status's kind decides what the app does with the riders who have it: *waiting* riders are
+    still offered when placing riders, after those who need a squad, and lose the status when
+    they join one; *set aside* riders are not offered until someone changes it. Withdrawn and
+    "left the team" are not rows here: the first is the signup's own ``status``, the second is
+    worked out from the Discord server (``apps.events.signup_status``).
+
+    Attributes:
+        event: The event whose list this is on.
+        name: The label on the badge.
+        kind: What having this status does.
+        colour: The badge colour, a ``Colour`` value.
+        rider_message: Shown to a rider who has this status; blank keeps it to event staff.
+        order: Position in the list.
+        retired: No longer offered when setting a status; signups that have it keep it.
+
+    """
+
+    retention = RetentionPolicy.keep(
+        "Event configuration: status names, colours and the message riders see, written by event staff. "
+        "No personal content."
+    )
+
+    MAX_NAME_LENGTH = 24
+    MAX_PER_EVENT = 20
+
+    class Kind(models.TextChoices):
+        """What a status does to the riders who have it."""
+
+        WAITING = "waiting", "Waiting for a squad"
+        SET_ASIDE = "set_aside", "Set aside"
+
+    class Colour(models.TextChoices):
+        """Badge colours; the values are daisyUI colour names (``STATUS_BADGE_CLASSES``)."""
+
+        BLUE = "info", "Blue"
+        GREEN = "success", "Green"
+        YELLOW = "warning", "Yellow"
+        RED = "error", "Red"
+        DARK = "neutral", "Dark"
+        GREY = "ghost", "Grey"
+
+    event = models.ForeignKey(
+        Event,
+        on_delete=models.CASCADE,
+        related_name="signup_statuses",
+        help_text="The event whose list this status is on",
+    )
+    name = models.CharField(max_length=MAX_NAME_LENGTH, help_text="The label on the badge")
+    kind = models.CharField(
+        max_length=12,
+        choices=Kind.choices,
+        default=Kind.WAITING,
+        help_text="What having this status does",
+    )
+    colour = models.CharField(
+        max_length=10,
+        choices=Colour.choices,
+        default=Colour.BLUE,
+        help_text="The badge colour",
+    )
+    rider_message = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text="Shown to a rider who has this status; leave blank to keep it to event staff",
+    )
+    order = models.PositiveSmallIntegerField(default=0, help_text="Position in the list (lower first)")
+    retired = models.BooleanField(
+        default=False,
+        help_text="No longer offered when setting a status; signups that have it keep it",
+    )
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the status was added")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the status was last changed")
+
+    class Meta:
+        """Meta options for SignupStatus model."""
+
+        ordering = ["order", "id"]  # noqa: RUF012
+        verbose_name = "Signup Status"
+        verbose_name_plural = "Signup Statuses"
+        constraints = [  # noqa: RUF012
+            models.UniqueConstraint(fields=["event", "name"], name="unique_signup_status_name_per_event"),
+        ]
+
+    def __str__(self) -> str:
+        """Return the status's name.
+
+        Returns:
+            The label on the badge.
+
+        """
+        return self.name
+
+    @property
+    def is_waiting(self) -> bool:
+        """Whether riders with this status are waiting for a squad.
+
+        Returns:
+            True for the waiting kind.
+
+        """
+        return self.kind == self.Kind.WAITING
+
+    @property
+    def badge_class(self) -> str:
+        """The badge classes for this status's colour.
+
+        Returns:
+            daisyUI classes, without the size.
+
+        """
+        return STATUS_BADGE_CLASSES.get(self.colour, STATUS_BADGE_CLASSES[self.Colour.BLUE])
+
+
 class EventSignup(models.Model):
     """Links a user to an event they have signed up for.
 
@@ -558,6 +688,10 @@ class EventSignup(models.Model):
         signup_timezone: Selected timezone from event's timezone_options.
         status: Signup status (registered or withdrawn).
         notes: Optional notes.
+        staff_status: The status event staff gave the signup, from the event's own list.
+        status_note: Event staff's note on the signup; never shown to the rider.
+        status_set_by: Who last set the status or note.
+        status_set_at: When they did.
         created_at: When the signup was created.
         updated_at: When the signup was last modified.
 
@@ -599,6 +733,28 @@ class EventSignup(models.Model):
         blank=True,
         help_text="Answers to the event's custom signup questions, keyed by question id (as a string)",
     )
+    staff_status = models.ForeignKey(
+        SignupStatus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="signups",
+        help_text="The status event staff gave this signup, from the event's own list",
+    )
+    status_note = models.TextField(
+        blank=True,
+        max_length=500,
+        help_text="Event staff's note on this signup; never shown to the rider",
+    )
+    status_set_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Who last set this signup's status or note",
+    )
+    status_set_at = models.DateTimeField(null=True, blank=True, help_text="When the status or note was last set")
     created_at = models.DateTimeField(default=timezone.now, help_text="When the signup was created")
     updated_at = models.DateTimeField(auto_now=True, help_text="When the signup was last updated")
 

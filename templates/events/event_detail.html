@@ -11,7 +11,11 @@
    fill alone (btn-neutral sits close to the card colour in the dark theme). The second
    declaration hides the glyph from screen readers, which already hear "pressed". */
 #squad-tag-filter button[aria-pressed="true"]::before,
-#category-source button[aria-pressed="true"]::before{content:"\2713";content:"\2713" / ""}
+#category-source button[aria-pressed="true"]::before,
+#status-filter button[aria-pressed="true"]::before{content:"\2713";content:"\2713" / ""}
+/* The signup status filter's counts: a pill in the button's own text colour, so it reads in
+   both the pressed (neutral) and the outline buttons. */
+.status-count{display:inline-block;min-width:1.25rem;padding:0 .375rem;border-radius:999px;font-size:.6875rem;line-height:1.125rem;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;background:color-mix(in oklab,currentColor 16%,transparent)}
 /* Event sections: folder tabs joined to the box of the panel they switch, so a tab reads as
    part of the table below it; on a phone they sit in a two-column grid above the box, a
    fifth (a race series' Series board) leaving the last one the full width.
@@ -188,6 +192,21 @@
           {% endif %}
         {% else %}
         <p class="text-sm text-base-content/70">Signups are closed for this event.</p>
+        {% endif %}
+        {% comment %}
+          The rider's own status, when it has something to tell them: a withdrawn signup, or a
+          staff status with a message for riders. Staff notes are never shown here.
+        {% endcomment %}
+        {% if user_signup.status == "withdrawn" %}
+        <div class="rounded-box bg-base-200 p-3 mt-3 flex flex-col items-start gap-2">
+          {% include "events/_signup_status_badge.html" with withdrawn=True departed=False status=None %}
+          <p class="text-sm">You're not racing this event: your signup was withdrawn.{% if event.signups_open %} Changed your mind? Sign up again.{% endif %}</p>
+        </div>
+        {% elif my_status %}
+        <div class="rounded-box bg-base-200 p-3 mt-3 flex flex-col items-start gap-2">
+          {% include "events/_signup_status_badge.html" with status=my_status withdrawn=False departed=False %}
+          <p class="text-sm break-words">{{ my_status.rider_message }}</p>
+        </div>
         {% endif %}
       </div>
 
@@ -696,6 +715,31 @@
             </div>
           </div>
         </div>
+        {% comment %}
+          Signup status filter: one bucket at a time (apps.events.signup_status.BUCKETS), only
+          the buckets someone is in. Like the squad tag filter, the pressed button also shows a
+          check mark, so its state never rests on the fill alone.
+        {% endcomment %}
+        {% if status_counts|length > 1 %}
+        <div class="flex flex-wrap items-center gap-2 mb-2" role="group" id="status-filter" aria-labelledby="status-filter-label">
+          <span id="status-filter-label" class="text-sm font-semibold">Status</span>
+          <button type="button" class="btn btn-xs btn-neutral gap-1" data-status-filter="" aria-pressed="true">All <span class="status-count">{{ signups|length }}</span></button>
+          {% for bucket in status_counts %}
+          <button type="button" class="btn btn-xs btn-outline gap-1" data-status-filter="{{ bucket.key }}" aria-pressed="false">{{ bucket.label }} <span class="status-count">{{ bucket.count }}</span></button>
+          {% endfor %}
+        </div>
+        <p id="status-filter-status" role="status" class="sr-only"></p>
+        {% endif %}
+        {% if status_still_placed %}
+        <div class="flex flex-wrap items-center gap-2 text-sm mb-3">
+          <span class="badge badge-warning badge-sm gap-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>Needs attention</span>
+          <span>
+            {% for entry in status_still_placed|slice:":3" %}{{ entry.user.get_full_name|default:entry.user.discord_username }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if status_still_placed|length > 3 %} and {{ status_still_placed|length|add:"-3" }} more{% endif %}
+            {% if status_still_placed|length == 1 %}left the team but still has a squad place.{% else %}left the team but still have squad places.{% endif %}
+          </span>
+          {% if status_counts|length > 1 %}<button type="button" class="link text-sm" data-status-filter-shortcut="left">Show them</button>{% endif %}
+        </div>
+        {% endif %}
         {% if answer_facets %}
         {% include "events/_answer_facets.html" %}
         {{ answer_payload|json_script:"answer-payload" }}
@@ -709,6 +753,7 @@
             <thead>
               <tr>
                 <th data-col="name" data-sort="text" class="cursor-pointer hover:text-primary select-none">Name</th>
+                <th data-sort="text" class="cursor-pointer hover:text-primary select-none">Status</th>
                 <th data-col="zwid" data-sort="num" class="cursor-pointer hover:text-primary select-none">ZWID</th>
                 <th data-col="timezone" data-sort="text" class="cursor-pointer hover:text-primary select-none">Timezone</th>
                 {% if event.squad_gender_required %}<th data-col="squad_gender" data-sort="text" class="cursor-pointer hover:text-primary select-none">Squad Gender</th>{% endif %}
@@ -738,16 +783,19 @@
             <tbody>
               {% for entry in signups %}
               {% with withdrawn=entry.signup.is_withdrawn %}
-              <tr data-signup-pk="{{ entry.signup.pk }}" data-name="{{ entry.user.get_full_name|default:entry.user.discord_username }}" data-velo2="{{ entry.zr_v2_category }}" data-velo2-women="{{ entry.zr_v2_women_category }}"{% if withdrawn %} data-signup-withdrawn class="opacity-60"{% endif %}>
+              {# Riders who withdrew or left the team are tinted as well as labelled in the Status cell. #}
+              <tr data-signup-pk="{{ entry.signup.pk }}" data-name="{{ entry.user.get_full_name|default:entry.user.discord_username }}" data-velo2="{{ entry.zr_v2_category }}" data-velo2-women="{{ entry.zr_v2_women_category }}" data-status-bucket="{{ entry.bucket }}"{% if withdrawn %} data-signup-withdrawn{% endif %}{% if withdrawn or entry.departed %} class="bg-base-200"{% endif %}>
                 <td data-col="name" data-sort-value="{{ entry.user.get_full_name|default:entry.user.discord_username }}">
                   {% include "accounts/_user_tooltip.html" with display_name=entry.user.get_full_name|default:entry.user.discord_username user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2=entry.zr_v2_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
-                  {% if withdrawn %}<span class="badge badge-ghost badge-sm ml-1 whitespace-nowrap">Withdrawn</span>{% endif %}
                   {% if answer_facets %}<div class="md:hidden text-xs text-base-content/60 mt-1 max-w-48 empty:hidden" data-answer-focus></div>{% endif %}
+                </td>
+                <td data-sort-value="{{ entry.status_text }}">
+                  {% include "events/_signup_status_cell.html" with e=entry can_set=can_set_status next=status_next %}
                 </td>
                 {% include "events/_rider_cells.html" with e=entry p="" full=True %}
                 {% if squads %}
                 <td data-col="squad" id="squad-cell-{{ entry.signup.pk }}">
-                  {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk %}
+                  {% include "events/_squad_cell.html" with assigned_squads=entry.assigned_squads squads=squads event_pk=event.pk signup_id=entry.signup.pk can_add=entry.can_add_to_squad %}
                 </td>
                 {% endif %}
                 {% include "events/_rider_cells_more.html" with e=entry p="" full=True %}
@@ -757,6 +805,24 @@
             </tbody>
           </table>
         </div>
+        {# What the Status badges mean -- only the kinds someone in the table has. #}
+        {% if status_key.waiting or status_key.set_aside or status_key.withdrawn or status_key.left %}
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs mt-3">
+          <span class="text-base-content/80">Key:</span>
+          {% if status_key.waiting %}
+          <span class="inline-flex items-center gap-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Waiting for a squad: still offered when placing riders, after those who need one</span>
+          {% endif %}
+          {% if status_key.set_aside %}
+          <span class="inline-flex items-center gap-1"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>Set aside: not offered until someone changes the status</span>
+          {% endif %}
+          {% if status_key.withdrawn %}
+          <span class="inline-flex flex-wrap items-center gap-1">{% include "events/_signup_status_badge.html" with withdrawn=True departed=False status=None %} not racing; the signup is kept</span>
+          {% endif %}
+          {% if status_key.left %}
+          <span class="inline-flex flex-wrap items-center gap-1">{% include "events/_signup_status_badge.html" with departed=True withdrawn=False status=None %} set by the app when a rider leaves the Discord server</span>
+          {% endif %}
+        </div>
+        {% endif %}
         {% if signup_stat_groups %}
         <script>
           // Before the sort script further down binds every th[data-sort].
@@ -956,6 +1022,9 @@
         inside a display:none panel cannot be opened by showModal(), so keeping them out
         here is what lets the panels be hidden without breaking the buttons.
       {% endcomment %}
+      {% if can_set_status and can_view_signup_table %}
+      {% include "events/_signup_status_dialog.html" %}
+      {% endif %}
       {% if event.signups_open %}
         {% if user_signup and user_signup.status == "registered" %}
         <dialog id="edit_signup_modal" class="modal">
@@ -1495,10 +1564,11 @@ function syncSquadExpandAllLabel() {
 <script>
 (function() {
   // Search
-  // A row can be hidden by the name search, the answer facets and the vELO 2 filters
-  // independently; each writes a flag and this decides, so none can un-hide another's rows.
+  // A row can be hidden by the name search, the answer facets, the vELO 2 filters and the
+  // status filter independently; each writes a flag and this decides, so none can un-hide
+  // another's rows.
   window.applyRowVisibility = function(row) {
-    row.style.display = (row.dataset.searchHidden || row.dataset.answerHidden || row.dataset.velo2Hidden) ? 'none' : '';
+    row.style.display = (row.dataset.searchHidden || row.dataset.answerHidden || row.dataset.velo2Hidden || row.dataset.statusHidden) ? 'none' : '';
   };
 
   function cellSortText(row, colIdx) {
@@ -1544,6 +1614,51 @@ function syncSquadExpandAllLabel() {
     // A browser can restore a choice on Back; filter to it rather than show every row under it.
     if (selects.some(function(select) { return select.value; })) applyVelo2();
   });
+
+  // Signup status filter: one bucket at a time, "All" (or the pressed one again) clears it.
+  // Each row carries its bucket (apps.events.signup_status.bucket) in data-status-bucket.
+  (function() {
+    var group = document.getElementById('status-filter');
+    var table = document.querySelector('[data-signup-table="detail"]');
+    if (!group || !table) return;
+    var buttons = Array.from(group.querySelectorAll('[data-status-filter]'));
+    var status = document.getElementById('status-filter-status');
+    function choose(key) {
+      buttons.forEach(function(button) {
+        var pressed = button.dataset.statusFilter === key;
+        button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        button.classList.toggle('btn-neutral', pressed);
+        button.classList.toggle('btn-outline', !pressed);
+      });
+      var shown = 0;
+      table.querySelectorAll('tbody tr[data-signup-pk]').forEach(function(row) {
+        var match = !key || row.dataset.statusBucket === key;
+        row.dataset.statusHidden = match ? '' : '1';
+        applyRowVisibility(row);
+        if (match) shown++;
+      });
+      if (typeof window.answerFacetsRender === 'function') window.answerFacetsRender();
+      if (status) {
+        var label = key ? buttons.find(function(b) { return b.dataset.statusFilter === key; }).firstChild.textContent.trim() : '';
+        status.textContent = key ? shown + ' signup' + (shown === 1 ? '' : 's') + ': ' + label : 'Showing every signup';
+      }
+    }
+    buttons.forEach(function(button) {
+      button.addEventListener('click', function() {
+        var key = button.dataset.statusFilter;
+        choose(button.getAttribute('aria-pressed') === 'true' ? '' : key);
+      });
+    });
+    // "Show them" beside a riders-who-left warning presses that bucket.
+    document.querySelectorAll('[data-status-filter-shortcut]').forEach(function(link) {
+      link.addEventListener('click', function() {
+        var key = link.dataset.statusFilterShortcut;
+        choose(key);
+        var target = buttons.find(function(b) { return b.dataset.statusFilter === key; });
+        if (target) target.focus();
+      });
+    });
+  })();
 
   // Sort
   document.querySelectorAll('[data-signup-table]').forEach(function(table) {

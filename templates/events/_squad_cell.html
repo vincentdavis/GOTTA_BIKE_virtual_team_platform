@@ -13,6 +13,8 @@
 {% empty %}
 <span class="text-base-content/30 no-squad-dash">-</span>
 {% endfor %}
+{# No picker for a rider who has withdrawn or left the team: squad_assign_view refuses both. #}
+{% if can_add %}
 <form method="post" action="{% url 'events:squad_assign' event_pk %}" class="squad-assign-ctrl mt-1"
       hx-post="{% url 'events:squad_assign' event_pk %}" hx-target="#squad-cell-{{ signup_id }}" hx-swap="innerHTML">
   {% csrf_token %}
@@ -24,3 +26,4 @@
     {% endfor %}
   </select>
 </form>
+{% endif %}
