@@ -9,7 +9,17 @@
     <a href="{% url 'events:event_detail' event.pk %}" class="link link-primary text-sm">&larr; Back to Event</a>
   </div>
 
-  <h2 class="text-xl font-bold mb-3">{{ event.title }}</h2>
+  <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+    <h2 class="text-xl font-bold">{{ event.title }}</h2>
+    {% if can_view_series_board %}
+    <a href="{% url 'events:series_board' event.pk %}" class="btn btn-sm btn-outline gap-1">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5h16v14H4zM4 10h16M9 5v14" />
+      </svg>
+      Series board
+    </a>
+    {% endif %}
+  </div>
 
   <div role="tablist" class="tabs tabs-border">
     {# ===== All Races ===== #}

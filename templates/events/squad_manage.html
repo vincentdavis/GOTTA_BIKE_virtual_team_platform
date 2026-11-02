@@ -54,6 +54,27 @@
               Participation
             </a>
           </li>
+          {% if event.is_race_series %}
+          {% if can_view_series_board %}
+          <li>
+            <a href="{% url 'events:series_board' event.pk %}">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5h16v14H4zM4 10h16M9 5v14" />
+              </svg>
+              Series board
+            </a>
+          </li>
+          {% else %}
+          <li class="menu-disabled">
+            <span title="Requires event admin, head captain, coordinator, or a squad's captain or vice-captain">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              Series board
+            </span>
+          </li>
+          {% endif %}
+          {% endif %}
 
           <li class="menu-title">Manage</li>
           {% if can_assign_riders %}

@@ -19,9 +19,11 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count
+from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.cache import patch_vary_headers
 from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.accounts.decorators import team_member_required
@@ -74,6 +76,9 @@ MODAL_NOTE = {
     series.STALE: "(answered for the old time)",
     series.UNANSWERED: "(no answer)",
 }
+
+#: The event page's Series board tab panel, which asks for the board with this HX-Target.
+BOARD_PANEL_ID = "series-board-panel"
 
 #: Badges for ``series.riders_status``.
 STATUS_BADGE = {
@@ -942,7 +947,9 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
     """Show every squad's time, answers and lineup for every stage of a race series.
 
     For the people running the event: gated like the Eligibility page, the set that already
-    sees its internals. Answers count current squad members only.
+    sees its internals. Answers count current squad members only. The event page's Series
+    board tab asks with ``HX-Target: series-board-panel`` and gets the board alone, without
+    the page around it.
 
     Args:
         request: The HTTP request. ``?tz=mine`` shows every time in the viewer's timezone
@@ -952,13 +959,23 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
     Returns:
         The board, or a redirect when not allowed or not a series.
 
+    Raises:
+        Http404: For the tab, when the event is not a series.
+
     """
     event = get_object_or_404(Event, pk=pk)
+    htmx = getattr(request, "htmx", None)
+    embedded = bool(htmx and htmx.target == BOARD_PANEL_ID)
     if not _can_view_v_report(request.user, event):
-        logfire.warning("Unauthorized series board access", event_id=pk, user_id=request.user.id)
+        logfire.warning("Unauthorized series board access", event_id=pk, user_id=request.user.id, embedded=embedded)
+        if embedded:
+            # htmx follows a redirect, and would fill the tab with the whole event page.
+            return HttpResponseForbidden()
         messages.error(request, "You don't have permission to view the series board.")
         return redirect("events:event_detail", pk=pk)
     if not event.is_race_series:
+        if embedded:
+            raise Http404
         messages.info(request, "This event collects weekly availability, so it has no series board.")
         return redirect("events:event_detail", pk=pk)
 
@@ -1092,10 +1109,12 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
         }
         for index, stage in enumerate(stages)
     ]
-    logfire.debug("Series board viewed", event_id=pk, user_id=request.user.id, squads=len(squads))
-    return render(
+    logfire.debug(
+        "Series board viewed", event_id=pk, user_id=request.user.id, squads=len(squads), embedded=embedded
+    )
+    response = render(
         request,
-        "events/series_board.html",
+        "events/_series_board.html" if embedded else "events/series_board.html",
         {
             "event": event,
             "columns": columns,
@@ -1103,8 +1122,13 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
             "attention": attention,
             "mine": mine,
             "viewer_timezone": viewer_tz.key,
+            "embedded": embedded,
+            "panel_id": BOARD_PANEL_ID,
         },
     )
+    # One URL answers with a whole page or with the tab's fragment, so a cache must keep them apart.
+    patch_vary_headers(response, ("HX-Request",))
+    return response
 
 
 def my_series_stages(request: HttpRequest, grids: list[AvailabilityGrid]) -> dict[int, dict]:

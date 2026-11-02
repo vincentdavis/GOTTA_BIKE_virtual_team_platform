@@ -2001,6 +2001,8 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
             # also covers head captains and coordinators). Mirror its gate exactly so the
             # button isn't shown to people who would just get a 403.
             "can_assign_riders": request.user.is_event_admin,
+            # Narrower than this page: a squad's Discord captain role opens Manage Squads but not the board.
+            "can_view_series_board": event.is_race_series and _can_view_v_report(request.user, event),
             "squad_timezones": squad_timezones,
             "squad_genders": squad_genders,
         },
@@ -2662,6 +2664,8 @@ def event_all_races_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 "display_timezone": str(tz_obj),
                 "active_tab": request.GET.get("tab") or "races",
                 "guild_id": config.GUILD_ID,
+                # Anyone who can see the event sees this page; the board is for those running it.
+                "can_view_series_board": event.is_race_series and _can_view_v_report(request.user, event),
             },
         )
     # One URL answers with a whole page or with a fragment, so a cache must keep them apart.

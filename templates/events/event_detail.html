@@ -13,12 +13,14 @@
 #squad-tag-filter button[aria-pressed="true"]::before,
 #category-source button[aria-pressed="true"]::before{content:"\2713";content:"\2713" / ""}
 /* Event sections: folder tabs joined to the box of the panel they switch, so a tab reads as
-   part of the table below it; on a phone the four sit in a two-by-two grid above the box.
+   part of the table below it; on a phone they sit in a two-column grid above the box, a
+   fifth (a race series' Series board) leaving the last one the full width.
    Styled on aria-selected, which the tab script keeps current. The selected count is
    base-content on base-100 rather than primary, which fails contrast in the dark theme. */
 .event-tabs,.event-panels{--event-tab-line:color-mix(in oklab,var(--color-base-content) 22%,transparent)}
 .event-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.375rem;margin-bottom:.5rem}
 .event-tab{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.25rem .5rem;min-height:2.75rem;padding:.25rem .5rem;text-align:center;border:1px solid var(--event-tab-line);border-radius:var(--radius-field);background:var(--color-base-300);color:var(--color-base-content);font-size:.9375rem;font-weight:500;text-decoration:none}
+.event-tab:last-child:nth-child(odd){grid-column:1/-1}
 .event-tab[aria-selected="true"]{background:var(--color-base-100);border-color:var(--color-base-content);box-shadow:inset 0 0 0 1px var(--color-base-content);font-weight:600}
 .event-tab-count{display:inline-block;min-width:1.5rem;padding:0 .5rem;border-radius:999px;font-size:.75rem;line-height:1.25rem;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;background:color-mix(in oklab,var(--color-base-content) 12%,transparent)}
 .event-tab[aria-selected="true"] .event-tab-count{background:var(--color-base-content);color:var(--color-base-100)}
@@ -224,6 +226,11 @@
         <a role="tab" href="?tab=category" data-tab="category" id="tab-category"
            aria-controls="panel-category" aria-selected="false"
            class="event-tab">By Category</a>
+        {% if event.is_race_series and can_view_v_report %}
+        <a role="tab" href="?tab=series" data-tab="series" id="tab-series"
+           aria-controls="panel-series" aria-selected="false"
+           class="event-tab">Series board</a>
+        {% endif %}
         <a role="tab" href="?tab=races" data-tab="races" id="tab-races"
            aria-controls="panel-races" aria-selected="false"
            class="event-tab">Races
@@ -851,6 +858,25 @@
       <p class="text-sm text-base-content/70">Category counts appear once the event has squads.</p>
       {% endif %}
       </div>
+
+      {% if event.is_race_series and can_view_v_report %}
+      {% comment %}
+        The series board is fetched the first time its tab is shown (intersect fires once the
+        panel is visible), not built on every visit to this page. series_board_view answers
+        this element's id as HX-Target (series_views.BOARD_PANEL_ID) with the board alone.
+      {% endcomment %}
+      <div role="tabpanel" id="panel-series" data-tab-panel="series" aria-labelledby="tab-series">
+        <div id="series-board-panel"
+             hx-get="{% url 'events:series_board' event.pk %}" hx-trigger="intersect once"
+             hx-target="this" hx-swap="innerHTML">
+          <p class="flex flex-wrap items-center gap-2 text-sm text-base-content/80">
+            <span class="loading loading-spinner loading-sm" aria-hidden="true"></span>
+            <span role="status" data-board-status>Loading the series board&hellip;</span>
+            <a href="{% url 'events:series_board' event.pk %}" class="link">Open it on its own page</a>
+          </p>
+        </div>
+      </div>
+      {% endif %}
 
       <div role="tabpanel" id="panel-races" data-tab-panel="races" aria-labelledby="tab-races">
       {% if races %}
@@ -1747,6 +1773,21 @@ function syncSquadExpandAllLabel() {
 
     show(wanted());
     window.addEventListener('popstate', function () { show(wanted()); });
+  })();
+
+  // The Series board tab loads on first open; if that fails, say so instead of spinning on.
+  (function () {
+    var panel = document.getElementById('series-board-panel');
+    if (!panel) return;
+    function failed() {
+      var status = panel.querySelector('[data-board-status]');
+      if (!status) return;
+      status.textContent = 'The series board could not be loaded.';
+      var spinner = panel.querySelector('.loading');
+      if (spinner) spinner.remove();
+    }
+    panel.addEventListener('htmx:responseError', failed);
+    panel.addEventListener('htmx:sendError', failed);
   })();
 </script>
 
