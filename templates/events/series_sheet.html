@@ -79,6 +79,22 @@
             <p class="mt-1 text-sm text-base-content/80">
               {{ row.stage.get_stage_type_display }}{% if row.route %} &middot; {{ row.route }}{% endif %}{% if row.window %} &middot; Window {{ row.window }}{% endif %}
             </p>
+            {% if row.course %}
+            {# The stage has course options: the squad races the one picked here. Radios, so each #}
+            {# option's route and distance wrap rather than being cut short at large text sizes. #}
+            <fieldset class="mt-2">
+              <legend class="text-xs mb-1">Course</legend>
+              <div class="flex flex-col gap-1">
+                {% for choice in row.course %}
+                <label class="flex items-start gap-2 min-h-6 cursor-pointer text-sm">
+                  {{ choice.tag }}
+                  <span>{{ choice.choice_label }}</span>
+                </label>
+                {% endfor %}
+              </div>
+            </fieldset>
+            {% for error in row.course.errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+            {% endif %}
             {% if row.answered or row.race %}
             <div class="mt-2 flex flex-wrap gap-1">
               {% if row.answered %}<span class="badge badge-outline badge-sm">{{ row.answered }} answered</span>{% endif %}

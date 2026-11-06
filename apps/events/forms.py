@@ -2,6 +2,7 @@
 
 import json
 from datetime import UTC, datetime
+from decimal import Decimal
 from typing import ClassVar
 
 from django import forms
@@ -22,6 +23,7 @@ from apps.events.models import (
     SignupQuestion,
     SignupStatus,
     Squad,
+    StageCourse,
 )
 from apps.events.signup_questions import MAX_OPTIONS_PER_QUESTION
 from apps.events.squad_tags import (
@@ -1666,8 +1668,6 @@ class SeriesStageForm(forms.ModelForm):
         fields: ClassVar[list[str]] = [
             "name",
             "stage_type",
-            "route",
-            "laps",
             "window_start",
             "window_end",
             "riders_min",
@@ -1677,14 +1677,34 @@ class SeriesStageForm(forms.ModelForm):
         widgets: ClassVar[dict] = {
             "name": forms.TextInput(attrs={"class": "input input-sm w-44", "placeholder": "Stage name"}),
             "stage_type": forms.Select(attrs={"class": "select select-sm w-44"}),
-            "route": forms.Select(attrs={"class": "select select-sm w-56"}),
-            "laps": forms.NumberInput(attrs={"class": "input input-sm w-20", "min": 1}),
             "window_start": forms.DateInput(attrs={"class": "input input-sm w-40", "type": "date"}, format="%Y-%m-%d"),
             "window_end": forms.DateInput(attrs={"class": "input input-sm w-40", "type": "date"}, format="%Y-%m-%d"),
             "riders_min": forms.NumberInput(attrs={"class": "input input-sm w-16", "min": 1}),
             "riders_max": forms.NumberInput(attrs={"class": "input input-sm w-16", "min": 1}),
             "order": forms.HiddenInput(attrs={"data-stage-order": ""}),
         }
+
+    # The stage's course, for the usual stage that has only one (StageCourse). A stage with
+    # several named options shows them instead, and they are edited on its own page.
+    route = forms.ModelChoiceField(
+        queryset=None,
+        required=False,
+        widget=forms.Select(attrs={"class": "select select-sm w-56"}),
+    )
+    laps = forms.IntegerField(
+        required=False,
+        initial=1,
+        min_value=1,
+        max_value=999,
+        widget=forms.NumberInput(attrs={"class": "input input-sm w-24", "min": 1, "max": 999}),
+    )
+    distance_km = forms.DecimalField(
+        required=False,
+        max_digits=6,
+        decimal_places=1,
+        min_value=Decimal("0.1"),
+        widget=forms.NumberInput(attrs={"class": "input input-sm w-24", "min": "0.1", "step": "0.1"}),
+    )
 
     def __init__(self, *args, route_choices: list | None = None, **kwargs) -> None:
         """Initialize the row, sharing one route choice list across the page.
@@ -1695,12 +1715,36 @@ class SeriesStageForm(forms.ModelForm):
             **kwargs: Passed to ModelForm.
 
         """
+        from apps.zwift_data.models import ZwiftRoute  # local import avoids a cross-app import cycle
+
         super().__init__(*args, **kwargs)
         self.fields["order"].required = False
-        self.fields["route"].required = False
+        self.fields["route"].queryset = ZwiftRoute.objects.all()
         if route_choices is not None:
             # The queryset still validates the pick; the choices only spare the query.
             self.fields["route"].choices = route_choices
+        self.courses = list(self.instance.courses.all()) if self.instance.pk else []
+        self.has_options = len(self.courses) > 1
+        if len(self.courses) == 1:
+            course = self.courses[0]
+            self.initial.update({"route": course.route_id, "laps": course.laps, "distance_km": course.distance_km})
+        if self.has_options:
+            for name in ("route", "laps", "distance_km"):
+                self.fields[name].disabled = True
+
+    def save_course(self) -> None:
+        """Write the row's route, laps and distance to the stage's one course.
+
+        Called once the stage itself is saved. A stage with several course options is left
+        alone: its row does not show them, and its own page edits them.
+        """
+        if self.has_options or not self.instance.pk:
+            return
+        course = self.courses[0] if self.courses else StageCourse(stage=self.instance, order=0)
+        course.route = self.cleaned_data.get("route")
+        course.laps = self.cleaned_data.get("laps") or 1
+        course.distance_km = self.cleaned_data.get("distance_km")
+        course.save()
 
     def has_changed(self) -> bool:
         """Ignore the hidden position when deciding whether a blank row was filled in.
@@ -1799,6 +1843,135 @@ SeriesStageFormSet = forms.inlineformset_factory(
 )
 
 
+class StageCourseForm(forms.ModelForm):
+    """One course option on a stage's Course options page."""
+
+    class Meta:
+        """Meta options for StageCourseForm."""
+
+        model = StageCourse
+        fields: ClassVar[list[str]] = ["name", "route", "laps", "distance_km", "order"]
+        widgets: ClassVar[dict] = {
+            "name": forms.TextInput(attrs={"class": "input input-sm w-40", "placeholder": "e.g. Long"}),
+            "route": forms.Select(attrs={"class": "select select-sm w-56"}),
+            "laps": forms.NumberInput(attrs={"class": "input input-sm w-24", "min": 1}),
+            "distance_km": forms.NumberInput(attrs={"class": "input input-sm w-24", "min": "0.1", "step": "0.1"}),
+            "order": forms.HiddenInput(attrs={"data-course-order": ""}),
+        }
+
+    def __init__(self, *args, route_choices: list | None = None, **kwargs) -> None:
+        """Initialize the row, sharing one route choice list across the page.
+
+        Args:
+            *args: Passed to ModelForm.
+            route_choices: ``stage_route_choices()``, built once by the page.
+            **kwargs: Passed to ModelForm.
+
+        """
+        super().__init__(*args, **kwargs)
+        self.fields["order"].required = False
+        self.fields["route"].required = False
+        # A course that finishes on distance has no use for laps, so a cleared box means one.
+        self.fields["laps"].required = False
+        self.fields["laps"].widget.attrs["max"] = 999
+        if route_choices is not None:
+            self.fields["route"].choices = route_choices
+
+    def has_changed(self) -> bool:
+        """Ignore the hidden position when deciding whether the blank "add" row was filled in.
+
+        Returns:
+            True if a saved option changed at all, or the new row got anything but a position.
+
+        """
+        if self.instance.pk:
+            return super().has_changed()
+        return any(name != "order" for name in self.changed_data)
+
+    def clean_name(self) -> str:
+        """Tidy the option's name.
+
+        Returns:
+            The name, with its spaces collapsed.
+
+        """
+        return " ".join((self.cleaned_data.get("name") or "").split())
+
+    def clean(self) -> dict:
+        """Check the laps and distance make sense.
+
+        Returns:
+            The cleaned data dict.
+
+        """
+        cleaned = super().clean()
+        laps = cleaned.get("laps")
+        if laps is None and "laps" not in self.errors:
+            cleaned["laps"] = 1
+        elif laps is not None and laps < 1:
+            self.add_error("laps", "A course is at least one lap.")
+        elif laps is not None and laps > 999:
+            self.add_error("laps", "Give at most 999 laps.")
+        distance = cleaned.get("distance_km")
+        if distance is not None and distance <= 0:
+            self.add_error("distance_km", "Leave the distance empty, or give it in kilometres.")
+        return cleaned
+
+
+class BaseStageCourseFormSet(forms.BaseInlineFormSet):
+    """A stage's course options: at least one, and named apart once there are several."""
+
+    def add_fields(self, form: forms.Form, index: int | None) -> None:
+        """Style the remove box like the rest of the page.
+
+        Args:
+            form: The row.
+            index: The row's index, None for the empty form.
+
+        """
+        super().add_fields(form, index)
+        if "DELETE" in form.fields:
+            form.fields["DELETE"].widget.attrs["class"] = "checkbox checkbox-sm"
+
+    def clean(self) -> None:
+        """Refuse a stage with no course, and options a captain could not tell apart.
+
+        Raises:
+            forms.ValidationError: If no course would be left, or two kept options share a
+                name (in any case), or one of several is unnamed.
+
+        """
+        super().clean()
+        kept = [
+            form
+            for form in self.forms
+            if (form.instance.pk or form.has_changed()) and not self._should_delete_form(form)
+        ]
+        if not kept:
+            raise forms.ValidationError("A stage needs a course. Keep at least one.")
+        if len(kept) == 1:
+            return
+        names = [(form.cleaned_data.get("name") or "").strip() for form in kept]
+        if not all(names):
+            raise forms.ValidationError("Give every course option a name, so captains can tell them apart.")
+        seen: set[str] = set()
+        for name in names:
+            if name.casefold() in seen:
+                raise forms.ValidationError(f"Two course options are called {name}. Give each its own name.")
+            seen.add(name.casefold())
+
+
+StageCourseFormSet = forms.inlineformset_factory(
+    SeriesStage,
+    StageCourse,
+    form=StageCourseForm,
+    formset=BaseStageCourseFormSet,
+    extra=1,
+    can_delete=True,
+    can_delete_extra=False,
+)
+
+
 class SheetTimesForm(forms.Form):
     """A captain's time for each of the event's stages, on the squad's series sheet.
 
@@ -1852,6 +2025,17 @@ class SheetTimesForm(forms.Form):
                 max_length=200,
                 widget=forms.TextInput(attrs={"class": "input input-sm w-72", "placeholder": "e.g. Bye week"}),
             )
+            # A stage with several course options asks which one this squad races. Radios,
+            # not a select: an option's route and distance wrap where a select cut them short.
+            courses = series.stage_courses(stage)
+            if len(courses) > 1:
+                self.fields[f"course_{stage.pk}"] = forms.TypedChoiceField(
+                    required=False,
+                    coerce=int,
+                    empty_value=None,
+                    choices=[(course.pk, series.course_label(course, named=True)) for course in courses],
+                    widget=forms.RadioSelect(attrs={"class": "radio radio-sm"}),
+                )
 
     def clean(self) -> dict:
         """Turn each stage's date and time into a UTC start, and check the set holds together.

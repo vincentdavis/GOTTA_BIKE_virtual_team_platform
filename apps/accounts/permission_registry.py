@@ -133,6 +133,8 @@ PERMISSION_REGISTRY: dict[str, dict] = {
         "views": [
             "/events/create/ - Create new event",
             "/events/{id}/edit/ - Edit event",
+            "/events/{id}/stages/ - A race series' stages",
+            "/events/{id}/stages/{stage_id}/courses/ - A stage's course options",
             "/events/{id}/delete/ - Delete event",
             "/events/{id}/squads/add/ - Create squad",
             "/events/{id}/squads/{squad_id}/edit/ - Edit squad",

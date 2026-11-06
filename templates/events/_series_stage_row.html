@@ -1,7 +1,9 @@
 {% comment %}
 One stage row on the Stages page, also used (with the formset's empty form) as the template
 the "Add stage" button clones. Context: form, number, answered (riders have answered it, so
-it cannot be removed), summary (the route's laps and distance, for a saved stage).
+it cannot be removed), summary (its one course's laps and distance, for a saved stage),
+options (each course option's label, for a stage with several -- its row then lists them,
+and they are edited on the stage's own Course options page).
 {% endcomment %}
 <tr data-stage-row>
   <td class="align-top pt-3 font-semibold tabular-nums">
@@ -27,13 +29,32 @@ it cannot be removed), summary (the route's laps and distance, for a saved stage
     <label><span class="sr-only">Stage type</span>{{ form.stage_type }}</label>
   </td>
   <td class="align-top">
+    {% if options %}
+    <ul class="flex flex-col gap-1 text-sm pt-1">
+      {% for option in options %}<li>{{ option }}</li>{% endfor %}
+    </ul>
+    <a href="{% url 'events:stage_courses' form.instance.event_id form.instance.pk %}" class="link text-xs" data-course-options>Edit course options<span class="sr-only"> for {{ form.instance.name }}</span></a>
+    {% else %}
     <label><span class="sr-only">Route</span>{{ form.route }}</label>
-    {% if summary %}<p class="mt-1 text-xs text-base-content/70">{{ summary }}</p>{% endif %}
+    {% if summary %}<p class="mt-1 text-xs text-base-content/80">{{ summary }}</p>{% endif %}
     {% for error in form.route.errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+    {% if form.instance.pk %}
+    <a href="{% url 'events:stage_courses' form.instance.event_id form.instance.pk %}" class="link text-xs block mt-1" data-course-options>Add a course option<span class="sr-only"> for {{ form.instance.name }}</span></a>
+    {% endif %}
+    {% endif %}
   </td>
   <td class="align-top">
-    <label><span class="sr-only">Laps</span>{{ form.laps }}</label>
+    {% if options %}
+    <span class="text-base-content/80 text-sm">Per option</span>
+    {% else %}
+    {# Laps, or where the race finishes when it ends on distance: one box under the other. #}
+    <div class="flex flex-col gap-1">
+      <label class="flex items-center gap-1"><span class="sr-only">Laps</span>{{ form.laps }}<span class="text-xs text-base-content/80" aria-hidden="true">laps</span></label>
+      <label class="flex items-center gap-1"><span class="sr-only">Or a finish distance in km</span>{{ form.distance_km }}<span class="text-xs text-base-content/80" aria-hidden="true">km</span></label>
+    </div>
     {% for error in form.laps.errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+    {% for error in form.distance_km.errors %}<p class="mt-1 rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
+    {% endif %}
   </td>
   <td class="align-top">
     <div class="flex items-center gap-1">

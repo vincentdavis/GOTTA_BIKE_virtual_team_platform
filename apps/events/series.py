@@ -29,7 +29,7 @@ from apps.events.models import AvailabilityGrid, AvailabilityResponse, Availabil
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from apps.events.models import Event, SeriesStage, SheetStage, Squad
+    from apps.events.models import Event, SeriesStage, SheetStage, Squad, StageCourse
 
 NOTE_MAX_LENGTH = 200
 #: A series sheet still fills the grid's required slot length. Nothing reads it.
@@ -104,27 +104,121 @@ def when_label(starts_at: datetime, tz: ZoneInfo) -> str:
     return f"{local:%a} {local.day} {local:%b} · {local:%H:%M}"
 
 
-def route_summary(stage: SeriesStage) -> str:
-    """Describe a stage's course: "Innsbruckring · 3 laps · 26.4 km".
+def course_summary(course: StageCourse | None) -> str:
+    """Describe a course: "Innsbruckring · 3 laps · 26.4 km".
 
-    The distance is the route's laps without the lead-in, which is what riders compare.
+    The distance is the route's laps without the lead-in, which is what riders compare. A
+    course that finishes on distance gives that distance instead, and no laps.
 
     Args:
-        stage: The stage, with its route loaded.
+        course: The course, with its route loaded, or None.
 
     Returns:
-        The summary, or "" when the stage has no route.
+        The summary, or "" when there is nothing to say.
 
     """
-    if not stage.route:
+    if course is None:
         return ""
-    parts = [stage.route.name]
-    if stage.laps > 1:
-        parts.append(f"{stage.laps} laps")
-    distance = stage.route.distance_km * stage.laps
-    if distance:
-        parts.append(f"{distance:.1f} km")
+    parts = [course.route.name] if course.route else []
+    if course.distance_km:
+        parts.append(f"{float(course.distance_km):.1f} km")
+    elif course.route:
+        if course.laps > 1:
+            parts.append(f"{course.laps} laps")
+        distance = course.route.distance_km * course.laps
+        if distance:
+            parts.append(f"{distance:.1f} km")
     return " · ".join(parts)
+
+
+def course_label(course: StageCourse | None, *, named: bool) -> str:
+    """Describe a course for a page about one squad: led by the option's name when it has one.
+
+    Args:
+        course: The course, or None.
+        named: Whether the stage has several options, so the name tells them apart.
+
+    Returns:
+        "Short: Innsbruckring · 2 laps · 17.6 km", or the summary alone.
+
+    """
+    summary = course_summary(course)
+    if not (named and course is not None and course.name):
+        return summary
+    return f"{course.name}: {summary}" if summary else course.name
+
+
+def stage_courses(stage: SeriesStage) -> list[StageCourse]:
+    """List a stage's courses, in order (prefetched by ``event_stages``).
+
+    Args:
+        stage: The stage.
+
+    Returns:
+        The courses; usually one.
+
+    """
+    return list(stage.courses.all())
+
+
+def stage_summary(stage: SeriesStage) -> str:
+    """Describe where a stage is raced, for a page about every squad.
+
+    Args:
+        stage: The stage, with its courses prefetched.
+
+    Returns:
+        The one course's summary, or "Long or Short" for a stage with options.
+
+    """
+    courses = stage_courses(stage)
+    if len(courses) > 1:
+        return " or ".join(course.name for course in courses)
+    return course_summary(courses[0]) if courses else ""
+
+
+def squad_courses(stages: list[SeriesStage], picks: dict[int, int | None]) -> dict[int, StageCourse | None]:
+    """Work out which course a squad races on each stage.
+
+    The captain's pick where they made one. Otherwise the option named like their last pick
+    on an earlier stage, so a squad that chose "Short" once stays on "Short" wherever a
+    stage offers it; a fallback never becomes the name carried on. Otherwise the stage's
+    first course.
+
+    Args:
+        stages: The event's stages, in order, with their courses prefetched.
+        picks: The squad's picked course id per stage pk (``SheetStage.course_id``).
+
+    Returns:
+        ``{stage pk: course}``; None for a stage with no course at all.
+
+    """
+    chosen: dict[int, StageCourse | None] = {}
+    carried = ""
+    for stage in stages:
+        courses = stage_courses(stage)
+        course = next((c for c in courses if c.pk == picks.get(stage.pk)), None)
+        if course is not None and len(courses) > 1:
+            carried = course.name.casefold()
+        elif course is None and carried:
+            course = next((c for c in courses if c.name.casefold() == carried), None)
+        if course is None and courses:
+            course = courses[0]
+        chosen[stage.pk] = course
+    return chosen
+
+
+def sheet_picks(sheet_stages: dict[int, SheetStage]) -> dict[int, int | None]:
+    """Read a squad's course picks off its sheet's stage rows.
+
+    Args:
+        sheet_stages: The squad's ``SheetStage`` rows by stage pk.
+
+    Returns:
+        ``{stage pk: course id or None}``.
+
+    """
+    return {stage_pk: ss.course_id for stage_pk, ss in sheet_stages.items()}
 
 
 def window_label(stage: SeriesStage) -> str:
@@ -180,7 +274,7 @@ def event_stages(event: Event) -> list[SeriesStage]:
         The stages, first stage first.
 
     """
-    return list(event.series_stages.select_related("route"))
+    return list(event.series_stages.prefetch_related("courses__route"))
 
 
 def series_sheet(squad: Squad) -> AvailabilityGrid | None:

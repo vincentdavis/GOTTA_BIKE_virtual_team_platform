@@ -315,15 +315,14 @@ class SeriesStage(models.Model):
 
     The event lists its stages; each squad then gives every stage its own date and time
     on its series sheet (``SheetStage``), and riders answer per stage. Nothing here is
-    about a squad or a rider.
+    about a squad or a rider. Where a stage is raced lives in its ``courses``
+    (``StageCourse``): usually one, or several named options squads choose between.
 
     Attributes:
         event: The race-series event.
         order: Position in the series; the stages page keeps it 0..n-1.
         name: Stage name shown to riders, e.g. "Innsbruck Points".
         stage_type: The race format.
-        route: The Zwift route, when the stage is on one.
-        laps: Laps of the route.
         window_start: First day squads should race it (a guide, not a rule).
         window_end: Last day squads should race it.
         riders_min: Fewest riders a squad must start, or None for no requirement.
@@ -360,15 +359,6 @@ class SeriesStage(models.Model):
         default=StageType.POINTS,
         help_text="Race format",
     )
-    route = models.ForeignKey(
-        "zwift_data.ZwiftRoute",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="series_stages",
-        help_text="The Zwift route, if the stage is on one",
-    )
-    laps = models.PositiveSmallIntegerField(default=1, help_text="Laps of the route")
     window_start = models.DateField(null=True, blank=True, help_text="First day squads should race this stage")
     window_end = models.DateField(null=True, blank=True, help_text="Last day squads should race this stage")
     riders_min = models.PositiveSmallIntegerField(
@@ -409,6 +399,76 @@ class SeriesStage(models.Model):
         if self.window_start and day < self.window_start:
             return False
         return not (self.window_end and day > self.window_end)
+
+
+class StageCourse(models.Model):
+    """One course a race-series stage can be raced on.
+
+    A stage has one, and needs no name for it. With more than one, each is a named option
+    ("Long", "Short") the event admin sets up on the stage's Course options page, and each
+    squad's captain picks the one their squad races on its stage times page
+    (``SheetStage.course``). ``apps.events.series.squad_courses`` decides which a squad is on.
+
+    Attributes:
+        stage: The stage.
+        name: The option's name; blank for a stage's only course.
+        route: The Zwift route, when the course is on one.
+        laps: Laps of the route.
+        distance_km: Where the race finishes, when it ends on distance rather than laps.
+        order: Position among the stage's courses.
+
+    """
+
+    retention = RetentionPolicy.keep(
+        "Event configuration: course names, routes, laps and distances. No personal content."
+    )
+
+    MAX_NAME_LENGTH = 40
+
+    stage = models.ForeignKey(
+        SeriesStage,
+        on_delete=models.CASCADE,
+        related_name="courses",
+        help_text="The stage this course is for",
+    )
+    name = models.CharField(
+        max_length=MAX_NAME_LENGTH,
+        blank=True,
+        help_text="The option's name, such as Long or Short; blank for a stage's only course",
+    )
+    route = models.ForeignKey(
+        "zwift_data.ZwiftRoute",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stage_courses",
+        help_text="The Zwift route, if the course is on one",
+    )
+    laps = models.PositiveSmallIntegerField(default=1, help_text="Laps of the route")
+    distance_km = models.DecimalField(
+        max_digits=6,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="Where the race finishes (km), when it ends on distance rather than laps",
+    )
+    order = models.PositiveSmallIntegerField(default=0, help_text="Position among the stage's courses")
+
+    class Meta:
+        """Meta options for StageCourse model."""
+
+        ordering = ["order", "pk"]  # noqa: RUF012
+        verbose_name = "Stage Course"
+        verbose_name_plural = "Stage Courses"
+
+    def __str__(self) -> str:
+        """Return the course's name, or its stage's for an unnamed course.
+
+        Returns:
+            The name.
+
+        """
+        return self.name or f"{self.stage} course"
 
 
 class Race(models.Model):
@@ -1983,6 +2043,8 @@ class SheetStage(models.Model):
         racing: False when the squad sits this stage out.
         starts_at: When the squad races it (UTC), or None while it has no time.
         not_racing_reason: Shown to riders when the squad is not racing the stage.
+        course: The course option the squad races, when the stage has more than one. None
+            means none was picked (``apps.events.series.squad_courses`` fills the gap).
 
     """
 
@@ -2006,6 +2068,14 @@ class SheetStage(models.Model):
     starts_at = models.DateTimeField(null=True, blank=True, help_text="When the squad races the stage (UTC)")
     not_racing_reason = models.CharField(
         max_length=200, blank=True, help_text="Shown to riders when the squad is not racing this stage"
+    )
+    course = models.ForeignKey(
+        StageCourse,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sheet_stages",
+        help_text="The course option the squad races, when the stage has more than one",
     )
 
     class Meta:

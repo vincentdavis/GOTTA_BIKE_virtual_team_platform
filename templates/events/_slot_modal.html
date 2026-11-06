@@ -9,7 +9,7 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
   user_data_json         {user id: {display_name, zr_category, zr_rating, is_race_ready}}
   squad_roster_ids_json  [user ids] for "Everyone else on this squad"
   selections_json        {"<date>|<time>": the existing race's fields}
-  slot_defaults_json     optional: {"<date>|<time>": {name, laps, course_url}} prefilling a new race
+  slot_defaults_json     optional: {"<date>|<time>": {name, laps, course_url, custom_finish_km}} prefilling a new race
   utc_cell_notes_json    optional: {"<date>|<time>": {user id: note}} replacing "(not available)"
 {% endcomment %}
 <!-- Slot Selection Modal -->
@@ -246,7 +246,7 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
       eventInviteInput.value = '';
       courseInput.value = defaults.course_url || '';
       lapsInput.value = (defaults.laps !== null && defaults.laps !== undefined) ? defaults.laps : '';
-      customFinishInput.value = '';
+      customFinishInput.value = (defaults.custom_finish_km !== null && defaults.custom_finish_km !== undefined) ? defaults.custom_finish_km : '';
       threadInput.value = '';
       form.setAttribute('hx-post', createUrl);
     }

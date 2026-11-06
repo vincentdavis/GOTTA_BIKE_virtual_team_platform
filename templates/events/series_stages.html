@@ -22,6 +22,8 @@
       <p class="text-sm text-base-content/80 max-w-3xl">
         Each squad sets its own date and time for every stage, and riders answer Available, Maybe or No per stage.
         The window is a guide for captains: a date outside it gets a warning, not an error.
+        A course is a route and its laps, or a finish distance when the race ends on distance rather than laps.
+        A stage raced on more than one course gets named course options, and each squad's captain picks theirs.
       </p>
 
       {% if not event.is_race_series %}
@@ -49,8 +51,8 @@
                 <th scope="col"><span class="sr-only">Order</span></th>
                 <th scope="col">Name</th>
                 <th scope="col">Type</th>
-                <th scope="col">Route</th>
-                <th scope="col">Laps</th>
+                <th scope="col">Course</th>
+                <th scope="col">Laps or distance</th>
                 <th scope="col">Window</th>
                 <th scope="col">Riders</th>
                 <th scope="col">Remove</th>
@@ -58,14 +60,14 @@
             </thead>
             <tbody id="stage-rows">
               {% for row in rows %}
-              {% include "events/_series_stage_row.html" with form=row.form number=row.number answered=row.answered summary=row.summary %}
+              {% include "events/_series_stage_row.html" with form=row.form number=row.number answered=row.answered summary=row.summary options=row.options %}
               {% endfor %}
             </tbody>
           </table>
         </div>
 
         <template id="stage-row-template">
-          {% include "events/_series_stage_row.html" with form=formset.empty_form number="" answered=False summary="" %}
+          {% include "events/_series_stage_row.html" with form=formset.empty_form number="" answered=False summary="" options=None %}
         </template>
 
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -105,6 +107,18 @@
     });
   }
 
+  // A stage's course options are on a page of their own, so following that link drops
+  // whatever has not been saved here yet: ask first.
+  var unsaved = false;
+  form.addEventListener('input', function () { unsaved = true; });
+  form.addEventListener('change', function () { unsaved = true; });
+  body.addEventListener('click', function (event) {
+    var link = event.target.closest('a[data-course-options]');
+    if (link && unsaved && !window.confirm('Your changes to the stages are not saved yet. Leave this page without them?')) {
+      event.preventDefault();
+    }
+  });
+
   body.addEventListener('click', function (event) {
     var button = event.target.closest('[data-move]');
     if (!button) { return; }
@@ -114,6 +128,7 @@
     } else if (button.getAttribute('data-move') === 'down' && row.nextElementSibling) {
       body.insertBefore(row.nextElementSibling, row);
     }
+    unsaved = true;
     renumber();
     // Keep focus with the row that moved. At the top or bottom the pressed arrow is now
     // disabled and cannot hold focus, so hand it to the row's other arrow.
@@ -126,6 +141,7 @@
     var html = document.getElementById('stage-row-template').innerHTML.replace(/__prefix__/g, index);
     body.insertAdjacentHTML('beforeend', html);
     total.value = index + 1;
+    unsaved = true;
     renumber();
     var added = body.lastElementChild.querySelector('input[name$="-name"]');
     if (added) { added.focus(); }

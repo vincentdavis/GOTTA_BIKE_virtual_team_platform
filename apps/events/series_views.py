@@ -32,7 +32,13 @@ from apps.accounts.models import User
 from apps.events import rider_stats, series
 from apps.events.calendar_utils import race_calendar_urls
 from apps.events.context_processors import PENDING_AVAILABILITY_CACHE_PREFIX
-from apps.events.forms import SeriesAnswerForm, SeriesStageFormSet, SheetTimesForm, stage_route_choices
+from apps.events.forms import (
+    SeriesAnswerForm,
+    SeriesStageFormSet,
+    SheetTimesForm,
+    StageCourseFormSet,
+    stage_route_choices,
+)
 from apps.events.models import (
     AvailabilityGrid,
     AvailabilityResponse,
@@ -42,6 +48,7 @@ from apps.events.models import (
     SheetStage,
     Squad,
     SquadMember,
+    StageCourse,
 )
 from apps.events.squads import squad_member_users as squad_roster_users
 from apps.events.views import (
@@ -159,7 +166,7 @@ def series_stages_view(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("events:event_detail", pk=pk)
 
     answered = series.answered_stage_ids(event)
-    queryset = event.series_stages.select_related("route")
+    queryset = event.series_stages.prefetch_related("courses__route")
     kwargs = {
         "instance": event,
         "queryset": queryset,
@@ -171,6 +178,12 @@ def series_stages_view(request: HttpRequest, pk: int) -> HttpResponse:
         if formset.is_valid():
             with transaction.atomic():
                 formset.save()
+                # A row's route, laps and distance are its stage's one course, written once
+                # the stage itself exists.
+                deleted = formset.deleted_forms
+                for form in formset.forms:
+                    if form.instance.pk and form.has_changed() and form not in deleted:
+                        form.save_course()
                 _renumber_stages(event)
             logfire.info(
                 "Series stages saved",
@@ -190,7 +203,9 @@ def series_stages_view(request: HttpRequest, pk: int) -> HttpResponse:
             "form": form,
             "number": number,
             "answered": bool(form.instance.pk and form.instance.pk in answered),
-            "summary": series.route_summary(form.instance) if form.instance.pk else "",
+            # A stage with several options lists them; its row cannot edit them.
+            "options": [series.course_label(course, named=True) for course in form.courses] if form.has_options else [],
+            "summary": series.course_summary(form.courses[0]) if len(form.courses) == 1 else "",
         }
         for number, form in enumerate(formset.forms, 1)
     ]
@@ -199,6 +214,89 @@ def series_stages_view(request: HttpRequest, pk: int) -> HttpResponse:
         "events/series_stages.html",
         {"event": event, "formset": formset, "rows": rows},
     )
+
+
+@login_required
+@team_member_required()
+@require_http_methods(["GET", "POST"])
+def stage_courses_view(request: HttpRequest, pk: int, stage_pk: int) -> HttpResponse:
+    """List, add, rename, reorder and remove one stage's course options.
+
+    Gated like the Stages page, which links here. A stage with one course needs no name for
+    it; with several, each is named and every squad's captain picks theirs on the stage
+    times page. Removing an option a squad picked puts that squad back on what
+    ``series.squad_courses`` gives it, which the page says.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+        stage_pk: The stage primary key.
+
+    Returns:
+        The Course options page, or a redirect after saving or when not allowed.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    if not _can_edit_event(request.user):
+        logfire.warning("Unauthorized stage courses access", event_id=pk, user_id=request.user.id)
+        messages.error(request, "You don't have permission to edit this event's stages.")
+        return redirect("events:event_detail", pk=pk)
+    stage = get_object_or_404(SeriesStage, pk=stage_pk, event=event)
+
+    queryset = stage.courses.select_related("route")
+    kwargs = {"instance": stage, "queryset": queryset, "form_kwargs": {"route_choices": stage_route_choices()}}
+    if request.method == "POST":
+        formset = StageCourseFormSet(request.POST, **kwargs)
+        if formset.is_valid():
+            removed_ids = [form.instance.pk for form in formset.deleted_forms if form.instance.pk]
+            squads_moved = SheetStage.objects.filter(course_id__in=removed_ids).count() if removed_ids else 0
+            with transaction.atomic():
+                formset.save()
+                _renumber_courses(stage)
+            logfire.info(
+                "Stage courses saved",
+                event_id=pk,
+                stage_id=stage.pk,
+                user_id=request.user.id,
+                added=len(formset.new_objects),
+                changed=len(formset.changed_objects),
+                removed=len(formset.deleted_objects),
+                squads_moved=squads_moved,
+            )
+            messages.success(request, "Course options saved.")
+            if squads_moved:
+                messages.info(
+                    request,
+                    f"{squads_moved} squad{'s' if squads_moved != 1 else ''} had picked a removed option. "
+                    "Until their captain picks again, they're on the option named like their last pick, "
+                    "or the first one.",
+                )
+            return redirect("events:series_stages", pk=pk)
+    else:
+        formset = StageCourseFormSet(initial=[{"order": queryset.count()}], **kwargs)
+
+    number = list(event.series_stages.values_list("pk", flat=True)).index(stage.pk) + 1
+    return render(
+        request,
+        "events/series_stage_courses.html",
+        {"event": event, "stage": stage, "number": number, "formset": formset},
+    )
+
+
+def _renumber_courses(stage: SeriesStage) -> None:
+    """Renumber a stage's courses 0..n-1 in the order the Course options page left them.
+
+    Args:
+        stage: The stage.
+
+    """
+    changed = []
+    for position, course in enumerate(sorted(stage.courses.all(), key=lambda c: (c.order, c.pk))):
+        if course.order != position:
+            course.order = position
+            changed.append(course)
+    if changed:
+        StageCourse.objects.bulk_update(changed, ["order"])
 
 
 def _sheet_initial(
@@ -244,8 +342,13 @@ def _sheet_initial(
             messages.warning(request, "That squad has no stage times to copy.")
 
     initial: dict = {"timezone": tz_name, "notify_moved": True}
+    # The squad's own course on each stage with options -- never copied from another squad,
+    # which may race a different one.
+    courses = series.squad_courses(stages, series.sheet_picks(existing))
     for stage in stages:
         ss = source.get(stage.pk)
+        if courses.get(stage.pk) is not None and len(series.stage_courses(stage)) > 1:
+            initial[f"course_{stage.pk}"] = courses[stage.pk].pk
         initial[f"racing_{stage.pk}"] = ss.racing if ss else True
         initial[f"reason_{stage.pk}"] = ss.not_racing_reason if ss else ""
         if ss and ss.starts_at:
@@ -334,10 +437,13 @@ def series_sheet_view(request: HttpRequest, event_pk: int, squad_pk: int) -> Htt
     rows = []
     for number, stage in enumerate(stages, 1):
         ss = existing.get(stage.pk)
+        has_options = f"course_{stage.pk}" in form.fields
         rows.append({
             "stage": stage,
             "number": number,
-            "route": series.route_summary(stage),
+            # With options, the picker shows each one's course; otherwise the stage's own.
+            "route": "" if has_options else series.stage_summary(stage),
+            "course": form[f"course_{stage.pk}"] if has_options else None,
             "window": series.window_label(stage),
             "racing": form[f"racing_{stage.pk}"],
             "date": form[f"date_{stage.pk}"],
@@ -415,6 +521,8 @@ def _save_sheet(
             ss.racing = cleaned[f"racing_{stage.pk}"]
             ss.starts_at = form.starts.get(stage.pk)
             ss.not_racing_reason = "" if ss.racing else cleaned[f"reason_{stage.pk}"].strip()
+            if cleaned.get(f"course_{stage.pk}"):
+                ss.course_id = cleaned[f"course_{stage.pk}"]
             if old is not None and not ss.is_open:
                 dropped.append((stage, old))
             elif old is not None and ss.starts_at != old:
@@ -568,6 +676,29 @@ def _post_stage_moves(
     return True
 
 
+def _race_defaults(request: HttpRequest, number: int, stage: SeriesStage, course: StageCourse | None) -> dict:
+    """Fill a new scheduled race from the stage and the course the squad races it on.
+
+    Args:
+        request: The HTTP request, to build the route page's full URL.
+        number: The stage's position in the series.
+        stage: The stage.
+        course: The squad's course on it, or None.
+
+    Returns:
+        The race dialog's defaults: name, laps, course_url and custom_finish_km.
+
+    """
+    route = course.route if course is not None else None
+    on_distance = course is not None and course.distance_km is not None
+    return {
+        "name": f"Stage {number}: {stage.name}",
+        "laps": course.laps if route is not None and not on_distance else None,
+        "course_url": request.build_absolute_uri(reverse("routes:detail", args=[route.name_hash])) if route else "",
+        "custom_finish_km": float(course.distance_km) if on_distance else None,
+    }
+
+
 def series_respond(request: HttpRequest, event: Event, squad: Squad, grid: AvailabilityGrid) -> HttpResponse:
     """Show a rider a series sheet's stages, or save their answers.
 
@@ -659,10 +790,12 @@ def series_respond(request: HttpRequest, event: Event, squad: Squad, grid: Avail
     user_tz = getattr(request.user, "timezone", "") or ""
     tz = series.zone(user_tz or grid.grid_timezone)
     squad_tz = series.zone(grid.grid_timezone)
+    courses = series.squad_courses(stages, series.sheet_picks(sheet_stages))
     rows = []
     for number, stage in enumerate(stages, 1):
         ss = sheet_stages.get(stage.pk)
-        row = {"number": number, "stage": stage, "route": series.route_summary(stage)}
+        named = len(series.stage_courses(stage)) > 1
+        row = {"number": number, "stage": stage, "route": series.course_label(courses.get(stage.pk), named=named)}
         if ss is not None and not ss.racing:
             row.update({"status": "off", "reason": ss.not_racing_reason})
         elif ss is None or not ss.is_open:
@@ -803,10 +936,18 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
     answers_by_user = {r.user_id: r.stage_answers or {} for r in grid.active_responses()}
     races = series.selections_by_key(grid)
 
+    courses = series.squad_courses(stages, series.sheet_picks(sheet_stages))
     columns = []
     for number, stage in enumerate(stages, 1):
         ss = sheet_stages.get(stage.pk)
-        column = {"number": number, "stage": stage, "route": series.route_summary(stage), "ss": ss}
+        course = courses.get(stage.pk)
+        column = {
+            "number": number,
+            "stage": stage,
+            "route": series.course_label(course, named=len(series.stage_courses(stage)) > 1),
+            "course": course,
+            "ss": ss,
+        }
         if ss is not None and ss.is_open:
             utc_date, utc_time = series.slot_key(ss.starts_at)
             counts = series.tally(ss, answers_by_user, member_ids)
@@ -893,16 +1034,9 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             "user_data_json": user_data,
             "squad_roster_ids_json": [user.pk for user in roster],
             "selections_json": _slot_modal_selections(list(races.values())),
+            # A new race starts from the squad's own course on the stage.
             "slot_defaults_json": {
-                column["key"]: {
-                    "name": f"Stage {column['number']}: {column['stage'].name}",
-                    "laps": column["stage"].laps if column["stage"].route_id else None,
-                    "course_url": (
-                        request.build_absolute_uri(reverse("routes:detail", args=[column["stage"].route.name_hash]))
-                        if column["stage"].route_id
-                        else ""
-                    ),
-                }
+                column["key"]: _race_defaults(request, column["number"], column["stage"], column["course"])
                 for column in open_columns
             },
             "powerup_choices": _powerup_choices(),
@@ -1103,7 +1237,9 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
         {
             "number": index + 1,
             "stage": stage,
-            "route": series.route_summary(stage),
+            # The board is about stages, never which course option a squad picked (Vincent's
+            # call): a stage with options is described by their names.
+            "route": series.stage_summary(stage),
             "window": series.window_label(stage),
             "racing": f"{racing[index]} of {len(squads)} racing",
         }

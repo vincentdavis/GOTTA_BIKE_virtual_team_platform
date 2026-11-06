@@ -17,6 +17,7 @@ from apps.events.models import (
     SignupStatus,
     Squad,
     SquadMember,
+    StageCourse,
 )
 from apps.events.squad_tags import clean_event_tags, clean_tag_list, prune_squad_tags
 
@@ -45,7 +46,7 @@ class EventSignupInline(admin.TabularInline):
 
 
 class SeriesStageInline(admin.TabularInline):
-    """Inline admin for a race-series event's stages."""
+    """Inline admin for a race-series event's stages; each one's courses are on its own page."""
 
     model = SeriesStage
     extra = 0
@@ -53,14 +54,31 @@ class SeriesStageInline(admin.TabularInline):
         "order",
         "name",
         "stage_type",
-        "route",
-        "laps",
         "window_start",
         "window_end",
         "riders_min",
         "riders_max",
     ]
+    show_change_link = True
+
+
+class StageCourseInline(admin.TabularInline):
+    """Inline admin for a stage's courses."""
+
+    model = StageCourse
+    extra = 0
+    fields: ClassVar[list[str]] = ["order", "name", "route", "laps", "distance_km"]
     autocomplete_fields: ClassVar[list[str]] = ["route"]
+
+
+@admin.register(SeriesStage)
+class SeriesStageAdmin(admin.ModelAdmin):
+    """Admin for a race-series stage, with its courses."""
+
+    list_display: ClassVar[list[str]] = ["name", "event", "order", "stage_type"]
+    list_filter: ClassVar[list[str]] = ["event"]
+    search_fields: ClassVar[list[str]] = ["name", "event__title"]
+    inlines: ClassVar[list] = [StageCourseInline]
 
 
 class SignupStatusInline(admin.TabularInline):

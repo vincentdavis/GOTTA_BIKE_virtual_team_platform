@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Course options - {{ stage.name }} - {{ event.title }}{% endblock %}
+
+{% block content %}
+{% comment %}
+  One stage's course options (series_views.stage_courses_view), linked from the Stages page.
+  One course needs no name; with several, each is named and every squad's captain picks
+  theirs on the stage times page. The first is where a squad starts until its captain picks.
+{% endcomment %}
+<div class="max-w-5xl mx-auto">
+  <div class="mb-4">
+    <a href="{% url 'events:series_stages' event.pk %}" class="btn btn-ghost btn-sm">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+      Back to Stages
+    </a>
+  </div>
+
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body gap-4">
+      <div>
+        <h1 class="card-title text-2xl mb-1">Course options</h1>
+        <p class="text-base-content/80 text-sm">Stage {{ number }}: {{ stage.name }} &middot; {{ event.title }}</p>
+      </div>
+      <p class="text-sm text-base-content/80 max-w-3xl">
+        Add an option for each course the stage is raced on, such as Long and Short, and name each one.
+        Every squad's captain picks theirs when setting the squad's stage times. A squad starts on the
+        option named like its pick on an earlier stage, or else the first one.
+      </p>
+
+      <form method="post" id="courses-form" class="flex flex-col gap-4">
+        {% csrf_token %}
+        {{ formset.management_form }}
+
+        {% if formset.non_form_errors %}
+        <div role="alert" class="alert alert-error">
+          <div>{% for error in formset.non_form_errors %}<p>{{ error }}</p>{% endfor %}</div>
+        </div>
+        {% endif %}
+
+        <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th scope="col"><span class="sr-only">Order</span></th>
+                <th scope="col">Name</th>
+                <th scope="col">Route</th>
+                <th scope="col">Laps or distance</th>
+                <th scope="col">Remove</th>
+              </tr>
+            </thead>
+            <tbody id="course-rows">
+              {% for form in formset.forms %}
+              {% include "events/_stage_course_row.html" %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <template id="course-row-template">
+          {% include "events/_stage_course_row.html" with form=formset.empty_form %}
+        </template>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <button type="button" class="btn btn-sm btn-outline" id="add-course">+ Add a course option</button>
+          <p class="text-xs text-base-content/80">The distance is optional: set it when the race finishes on distance rather than laps.</p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-accent">Save course options</button>
+          <a href="{% url 'events:series_stages' event.pk %}" class="btn btn-ghost">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var form = document.getElementById('courses-form');
+  var body = document.getElementById('course-rows');
+  var total = form.querySelector('input[name$="-TOTAL_FORMS"]');
+
+  // Rows carry their position in a hidden order field; the server keeps it 0..n-1. The
+  // up and down buttons say which option they move, and the ends are disabled.
+  function renumber() {
+    var rows = body.querySelectorAll('tr[data-course-row]');
+    rows.forEach(function (row, index) {
+      row.querySelector('[data-course-order]').value = index;
+      row.querySelectorAll('[data-move]').forEach(function (button) {
+        var direction = button.getAttribute('data-move');
+        button.setAttribute('aria-label', 'Move option ' + (index + 1) + ' ' + direction);
+        button.disabled = direction === 'up' ? index === 0 : index === rows.length - 1;
+      });
+    });
+  }
+
+  body.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-move]');
+    if (!button) { return; }
+    var row = button.closest('tr');
+    if (button.getAttribute('data-move') === 'up' && row.previousElementSibling) {
+      body.insertBefore(row, row.previousElementSibling);
+    } else if (button.getAttribute('data-move') === 'down' && row.nextElementSibling) {
+      body.insertBefore(row.nextElementSibling, row);
+    }
+    renumber();
+    var target = button.disabled ? row.querySelector('[data-move]:not([disabled])') : button;
+    if (target) { target.focus(); }
+  });
+
+  document.getElementById('add-course').addEventListener('click', function () {
+    var index = parseInt(total.value, 10);
+    var html = document.getElementById('course-row-template').innerHTML.replace(/__prefix__/g, index);
+    body.insertAdjacentHTML('beforeend', html);
+    total.value = index + 1;
+    renumber();
+    var added = body.lastElementChild.querySelector('input[name$="-name"]');
+    if (added) { added.focus(); }
+  });
+
+  form.addEventListener('submit', renumber);
+  renumber();
+})();
+</script>
+{% endblock %}

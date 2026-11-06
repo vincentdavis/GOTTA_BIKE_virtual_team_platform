@@ -25,6 +25,7 @@ from apps.events.models import (
     SheetStage,
     Squad,
     SquadMember,
+    StageCourse,
 )
 from apps.zwift_data.models import ZwiftRoute
 from conftest import _make_user
@@ -79,18 +80,18 @@ def stages(event, route) -> list[SeriesStage]:
 
     """
     first = date.today() + timedelta(days=10)
+    opener = SeriesStage.objects.create(
+        event=event,
+        order=0,
+        name="Opener",
+        stage_type="points",
+        window_start=first,
+        window_end=first + timedelta(days=6),
+        riders_min=2,
+    )
+    StageCourse.objects.create(stage=opener, route=route, laps=3)
     return [
-        SeriesStage.objects.create(
-            event=event,
-            order=0,
-            name="Opener",
-            stage_type="points",
-            route=route,
-            laps=3,
-            window_start=first,
-            window_end=first + timedelta(days=6),
-            riders_min=2,
-        ),
+        opener,
         SeriesStage.objects.create(
             event=event,
             order=1,
@@ -423,7 +424,10 @@ def test_stages_are_added_in_the_order_given(client, event, event_admin, route) 
 
     assert response.status_code == 302
     assert [(s.name, s.order) for s in event.series_stages.all()] == [("First", 0), ("Second", 1)]
-    assert event.series_stages.get(name="Second").route == route
+    # Each new stage gets its one course, where the row's route and laps live.
+    second = event.series_stages.get(name="Second").courses.get()
+    assert (second.name, second.route, second.laps) == ("", route, 3)
+    assert event.series_stages.get(name="First").courses.get().route is None
 
 
 @pytest.mark.django_db
@@ -730,7 +734,7 @@ def test_captains_get_notes_and_a_lineup_dialog_prefilled_from_the_stage(
     assert response.context["utc_cell_users_json"][key] == [ana.pk]
     assert response.context["utc_cell_notes_json"][key] == {str(bo.pk): "(maybe)"}
     defaults = response.context["slot_defaults_json"][key]
-    assert (defaults["name"], defaults["laps"]) == ("Stage 1: Opener", 3)
+    assert (defaults["name"], defaults["laps"], defaults["custom_finish_km"]) == ("Stage 1: Opener", 3, None)
     assert defaults["course_url"].endswith(reverse("routes:detail", args=["volcano"]))
     assert "openSlotModal" in response.content.decode()
 
