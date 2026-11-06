@@ -10,6 +10,22 @@
   input.answer-available:checked { --btn-color: var(--color-success); --btn-fg: var(--color-success-content); }
   input.answer-maybe:checked { --btn-color: var(--color-warning); --btn-fg: var(--color-warning-content); }
   input.answer-no:checked { --btn-color: var(--color-error); --btn-fg: var(--color-error-content); }
+
+  /* The three answers sit side by side while they fit, which takes about 13.7rem. At the
+     largest text size on a phone the stage box is narrower than that, and the buttons used to
+     widen it and push the whole page sideways (WCAG 1.4.10). The container measures the box,
+     in rem, so it follows the reader's text size rather than the screen: below 14rem the
+     answers stack, with daisyUI's join-vertical corners. Its size containment also stops the
+     buttons from widening the box at all. */
+  .answer-choices { container-type: inline-size; }
+  @container (max-width: 14rem) {
+    .answer-choices .join { flex-direction: column; }
+    /* flex-1 would now squash each button's height; keep h-11's. */
+    .answer-choices .join > .join-item { flex: none; }
+    .answer-choices .join > .join-item:first-child { --join-ss: var(--radius-field); --join-se: var(--radius-field); --join-es: 0; --join-ee: 0; }
+    .answer-choices .join > .join-item:last-child { --join-ss: 0; --join-se: 0; --join-es: var(--radius-field); --join-ee: var(--radius-field); }
+    .answer-choices .join > .join-item:not(:first-child) { margin-block-start: calc(var(--border, 1px) * -1); margin-inline-start: 0; }
+  }
 </style>
 {% endblock %}
 
@@ -82,7 +98,7 @@
     {% csrf_token %}
     {% for row in rows %}
     {% if row.status == "open" %}
-    <fieldset class="rounded-box bg-base-200 p-4 flex flex-col gap-3" data-answer-group>
+    <fieldset class="rounded-box bg-base-200 p-4 flex flex-col gap-3 min-w-0" data-answer-group>
       <legend class="sr-only">Stage {{ row.number }}: {{ row.stage.name }}. Can you race?</legend>
       <div class="flex flex-wrap items-center gap-2">
         <span class="badge badge-neutral badge-sm">Stage {{ row.number }}</span>
@@ -98,11 +114,13 @@
         <strong>New time.</strong> This stage moved after you answered {{ row.stale_answer }}. Please answer again.
       </p>
       {% endif %}
-      <div class="join w-full">
-        {% for value, label in answer_choices %}
-        <input type="radio" class="join-item btn flex-1 h-11 answer-{{ value }}" name="answer_{{ row.stage.pk }}"
-               value="{{ value }}" aria-label="{{ label }}"{% if row.selected == value %} checked{% endif %}>
-        {% endfor %}
+      <div class="answer-choices">
+        <div class="join w-full">
+          {% for value, label in answer_choices %}
+          <input type="radio" class="join-item btn flex-1 h-11 answer-{{ value }}" name="answer_{{ row.stage.pk }}"
+                 value="{{ value }}" aria-label="{{ label }}"{% if row.selected == value %} checked{% endif %}>
+          {% endfor %}
+        </div>
       </div>
       <details class="text-sm"{% if row.note %} open{% endif %}>
         <summary class="cursor-pointer w-fit">{% if row.note %}Your note{% else %}Add a note for your captain{% endif %}</summary>

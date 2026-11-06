@@ -637,6 +637,25 @@ def test_a_bad_answer_saves_nothing(client, event, user_model, squad, stages) ->
 
 
 @pytest.mark.django_db
+def test_the_answers_stack_rather_than_push_the_page_sideways(client, event, user_model, squad, stages) -> None:
+    """At the largest text size on a phone, Available / Maybe / No no longer fit side by side.
+
+    They used to widen each stage's box, and the page scrolled sideways (WCAG 1.4.10). The box
+    may now shrink, and a container query in rem stacks the answers when it is too narrow.
+    """
+    rider = _member(user_model, squad, "ana")
+    grid = _sheet(squad, stages, [_when(11), _when(18), None])
+    client.force_login(rider)
+
+    page = client.get(reverse("events:availability_respond", args=[event.pk, squad.pk, grid.pk])).content.decode()
+
+    assert 'class="rounded-box bg-base-200 p-4 flex flex-col gap-3 min-w-0" data-answer-group' in page
+    assert page.count('<div class="answer-choices">') == 2  # one per open stage
+    assert ".answer-choices { container-type: inline-size; }" in page
+    assert "@container (max-width: 14rem)" in page
+
+
+@pytest.mark.django_db
 def test_a_stage_that_has_started_is_shown_but_not_asked(client, event, user_model, squad, stages) -> None:
     rider = _member(user_model, squad, "ana")
     grid = _sheet(squad, stages, [_when(-2), _when(18), None])
