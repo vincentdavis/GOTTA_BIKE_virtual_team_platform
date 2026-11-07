@@ -495,7 +495,7 @@ uv run pytest --create-db                   # rebuild a Postgres test DB (SQLite
 
 Ruff configuration in `ruff.toml`:
 
-- Python 3.14 target
+- Python 3.14 target, pinned in `.python-version` (production's `python3.14-alpine` image takes each new 3.14 patch on deploy). **3.15 waits on pi-heif**, which has no 3.15 wheel yet (1.4.0): uv would build it from source, which needs libheif, and HEIC evidence photos depend on it. Everything else passed the suite on 3.15.2 (2026-11-07). uv 0.13+ defaults to 3.15 when it creates an environment, so the pin matters. To move: a pi-heif release with cp315 wheels, then the pin, the Dockerfile tag, `requires-python` and ruff's `target-version`
 - Line length: 120
 - Enforces: Django (DJ), security (S), docstrings (D), isort (I), bugbear (B), and more
 - Docstrings required (Google style, D212 format)

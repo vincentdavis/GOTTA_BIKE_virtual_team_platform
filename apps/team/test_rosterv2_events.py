@@ -545,10 +545,14 @@ def test_a_logo_that_storage_cannot_name_costs_the_chip_its_picture_not_the_page
     event = _logo(_event("Tour de Coalition"))
     _signup(event, _member(user_model, "ada", 4242))
 
-    def _refuse(_name):
+    def _refuse(_storage, _name):
         raise ValueError("no base URL")
 
-    monkeypatch.setattr(Event._meta.get_field("logo").storage, "url", _refuse)
+    # On the lazy default-storage proxy's class, not the proxy: since pytest 9.2 undoing a
+    # patch on an instance deletes it again, and the proxy forwards that delete to whatever
+    # storage it wraps by then -- a new one, once the settings fixture has put MEDIA_ROOT back.
+    # The proxy class has no url of its own (the proxy forwards it), hence raising=False.
+    monkeypatch.setattr(type(Event._meta.get_field("logo").storage), "url", _refuse, raising=False)
 
     response = auth_client.get(reverse("team:roster"))
 
