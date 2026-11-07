@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import httpx
@@ -16,6 +17,56 @@ if TYPE_CHECKING:
     from apps.accounts.models import User
 
 DISCORD_API_BASE = "https://discord.com/api/v10"
+
+# Discord's own JSON error codes (the ``code`` in an error body) that tell a person what to
+# fix: https://discord.com/developers/docs/topics/opcodes-and-status-codes#json
+DISCORD_UNKNOWN_CHANNEL = 10003
+DISCORD_MISSING_ACCESS = 50001  # the bot cannot see the channel at all
+DISCORD_NON_TEXT_CHANNEL = 50008  # "Cannot send messages in a non-text channel"
+DISCORD_MISSING_PERMISSIONS = 50013  # it can see the channel but may not do this there
+
+
+@dataclass(frozen=True)
+class ChannelPostResult:
+    """What became of one channel message (``post_discord_channel_message``).
+
+    Attributes:
+        ok: The message was posted.
+        status_code: Discord's HTTP status, or None when nothing was sent or no answer came.
+        discord_code: The ``code`` in Discord's error body, such as 50001 (Missing Access) or
+            50013 (Missing Permissions); None when it gave none.
+        skipped: Why nothing was sent: ``"no_channel"`` or ``"no_token"``; ``""`` otherwise.
+
+    """
+
+    ok: bool
+    status_code: int | None = None
+    discord_code: int | None = None
+    skipped: str = ""
+
+
+def _discord_error(response: httpx.Response) -> tuple[int | None, str]:
+    """Read Discord's error code and message out of a failed response.
+
+    The message is Discord's own short text ("Missing Access"), never the content sent, so it
+    is safe to log. Anything that is not Discord's JSON error shape gives nothing.
+
+    Args:
+        response: The failed response.
+
+    Returns:
+        ``(code, message)``; ``(None, "")`` when the body says neither.
+
+    """
+    try:
+        body = response.json()
+    except ValueError:
+        return None, ""
+    if not isinstance(body, dict):
+        return None, ""
+    code = body.get("code")
+    return (code if isinstance(code, int) else None), str(body.get("message") or "")[:200]
+
 
 _BOT_USER_ID_CACHE_KEY = "discord_bot_user_id"
 _BOT_ROLE_IDS_CACHE_KEY = "discord_bot_role_ids"  # per-guild suffix appended
@@ -266,6 +317,9 @@ def send_discord_channel_message(
 ) -> bool:
     """Send a message to a Discord channel.
 
+    The plain yes/no form of ``post_discord_channel_message``, for callers with nobody to
+    explain a failure to; that function logs Discord's reason either way.
+
     Args:
         channel_id: The Discord channel ID to send the message to.
         message: The message content to send.
@@ -283,14 +337,49 @@ def send_discord_channel_message(
         True if the message was sent successfully, False otherwise.
 
     """
+    return post_discord_channel_message(
+        channel_id,
+        message,
+        silent=silent,
+        allowed_user_ids=allowed_user_ids,
+        allowed_role_ids=allowed_role_ids,
+    ).ok
+
+
+def post_discord_channel_message(
+    channel_id: str | int,
+    message: str,
+    *,
+    silent: bool = False,
+    allowed_user_ids: list[str] | None = None,
+    allowed_role_ids: list[str] | None = None,
+) -> ChannelPostResult:
+    """Send a message to a Discord channel, and say what became of it.
+
+    On a refusal it logs, and returns, Discord's own error code, which tells "the bot cannot
+    see the channel" (50001) from "it can see it but may not post" (50013) -- the 403 alone
+    does not.
+
+    Args:
+        channel_id: The Discord channel ID to send the message to.
+        message: The message content to send.
+        silent: If True, suppress push/desktop notifications for this message.
+        allowed_user_ids: Discord user IDs whose @mentions should notify (see
+            ``send_discord_channel_message``).
+        allowed_role_ids: Discord role IDs whose @mentions should notify.
+
+    Returns:
+        The result: posted or not, with Discord's status and error code when it answered.
+
+    """
     if not channel_id or channel_id == 0:
         logfire.debug("Channel ID is 0 or not set, skipping channel message")
-        return False
+        return ChannelPostResult(ok=False, skipped="no_channel")
 
     bot_token = config.DISCORD_BOT_TOKEN
     if not bot_token:
         logfire.warning("DISCORD_BOT_TOKEN not configured, skipping channel message")
-        return False
+        return ChannelPostResult(ok=False, skipped="no_token")
 
     headers = {
         "Authorization": f"Bot {bot_token}",
@@ -318,23 +407,26 @@ def send_discord_channel_message(
             )
             response.raise_for_status()
             logfire.info("Discord channel message sent", channel_id=str(channel_id), silent=silent)
-            return True
+            return ChannelPostResult(ok=True, status_code=response.status_code)
 
     except httpx.HTTPStatusError as e:
+        discord_code, discord_message = _discord_error(e.response)
         logfire.error(
             "Failed to send Discord channel message",
             channel_id=str(channel_id),
             status_code=e.response.status_code,
+            discord_code=discord_code,
+            discord_message=discord_message,
             error=str(e),
         )
-        return False
+        return ChannelPostResult(ok=False, status_code=e.response.status_code, discord_code=discord_code)
     except httpx.RequestError as e:
         logfire.error(
             "Discord API request failed for channel message",
             channel_id=str(channel_id),
             error=str(e),
         )
-        return False
+        return ChannelPostResult(ok=False)
 
 
 def create_discord_thread(

@@ -7,6 +7,7 @@ import re
 from collections import Counter, defaultdict
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
+from http import HTTPStatus
 from zoneinfo import ZoneInfo, available_timezones
 
 import logfire
@@ -28,11 +29,17 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.accounts.decorators import discord_permission_required, team_member_required
 from apps.accounts.discord_service import (
+    DISCORD_MISSING_ACCESS,
+    DISCORD_MISSING_PERMISSIONS,
+    DISCORD_NON_TEXT_CHANNEL,
+    DISCORD_UNKNOWN_CHANNEL,
+    ChannelPostResult,
     add_discord_role,
     archive_discord_thread,
     bot_has_role,
     create_discord_thread,
     delete_discord_thread,
+    post_discord_channel_message,
     remove_discord_role,
     rename_discord_thread,
     send_discord_channel_message,
@@ -5046,9 +5053,10 @@ def _post_grid_published_notification(
 ) -> bool | str:
     """Post a Discord channel message about an availability grid, pinging the squad role.
 
-    Returns ``True`` on success or a short error string on failure. Failures are
-    logged via Logfire; the caller decides whether to surface the error to the
-    user. The grid's publish state is independent of this call.
+    Returns ``True`` on success, or on failure a sentence or two for the person who pressed
+    the button: what went wrong and what would fix it (``_channel_post_problem``). Failures
+    are logged via Logfire with Discord's own error code. The grid's publish state is
+    independent of this call.
 
     ``reminder`` changes only the wording. The mention, the channel and the link are
     identical, because the point of a re-post is to reach exactly the people the first
@@ -5069,11 +5077,11 @@ def _post_grid_published_notification(
         reminder: Word it as a reminder about an already-published sheet.
 
     Returns:
-        ``True`` on success, otherwise a string describing the failure.
+        ``True`` on success, otherwise the explanation to show.
 
     """
     if not squad.discord_channel_id:
-        return "Squad has no Discord channel"
+        return "This squad has no Discord channel. Pick one on the Edit Squad page."
 
     try:
         grid_tz = ZoneInfo(grid.grid_timezone) if grid.grid_timezone else ZoneInfo("UTC")
@@ -5114,12 +5122,12 @@ def _post_grid_published_notification(
         role_id=str(squad.team_discord_role) if squad.team_discord_role else None,
         reminder=reminder,
     ):
-        ok = send_discord_channel_message(
+        result = post_discord_channel_message(
             squad.discord_channel_id,
             body,
             allowed_role_ids=allowed_role_ids,
         )
-    if ok:
+    if result.ok:
         # Stamped only on success. A failed send reached nobody, so leaving the stamp
         # alone lets the captain press the button again straight away instead of waiting
         # out a cooldown for a message that was never delivered.
@@ -5132,7 +5140,49 @@ def _post_grid_published_notification(
             reminder=reminder,
         )
         return True
-    return "Discord API call failed (see Logfire)"
+    return _channel_post_problem(result)
+
+
+#: What would fix a squad channel the bot may not post in; said for every refusal.
+_CHANNEL_ACCESS_FIX = (
+    "Ask a Discord admin to give the bot View Channel and Send Messages in that channel, "
+    "or pick another channel on the Edit Squad page."
+)
+
+
+def _channel_post_problem(result: ChannelPostResult) -> str:
+    """Say why a post to a squad's Discord channel failed, and what would fix it.
+
+    Written for the captain who pressed the button. Discord's own error code is what tells
+    "the bot cannot see the channel" (50001) from "it can see it but may not post" (50013):
+    a 403 carries either. Anything not worth a captain's time points at Logfire.
+
+    Args:
+        result: The failed post.
+
+    Returns:
+        One or two sentences, ending with a full stop.
+
+    """
+    code, status = result.discord_code, result.status_code
+    if result.skipped == "no_token":
+        return "The Discord bot isn't set up on this site, so nothing can be posted. An app admin must add its token."
+    if code == DISCORD_MISSING_ACCESS:
+        return f"The bot can't see this squad's Discord channel. {_CHANNEL_ACCESS_FIX}"
+    if code == DISCORD_MISSING_PERMISSIONS:
+        return f"The bot can see this squad's Discord channel but isn't allowed to post in it. {_CHANNEL_ACCESS_FIX}"
+    if status == HTTPStatus.FORBIDDEN:
+        return f"Discord won't let the bot post in this squad's channel. {_CHANNEL_ACCESS_FIX}"
+    if code == DISCORD_UNKNOWN_CHANNEL or status == HTTPStatus.NOT_FOUND:
+        return "This squad's Discord channel no longer exists. Pick another one on the Edit Squad page."
+    if code == DISCORD_NON_TEXT_CHANNEL:
+        return (
+            "This squad's Discord channel doesn't take messages: it may be a forum, category or voice "
+            "channel. Pick a text channel on the Edit Squad page."
+        )
+    if status == HTTPStatus.TOO_MANY_REQUESTS:
+        return "Discord is limiting how fast the bot can post. Try again in a minute."
+    return "Discord didn't take the message. Try again shortly; if it keeps failing, the reason is in Logfire."
 
 
 @login_required
@@ -5200,8 +5250,8 @@ def availability_status_view(request: HttpRequest, event_pk: int, squad_pk: int,
         else:
             messages.warning(
                 request,
-                f'Grid "{grid.title}" is now published, but the Discord notification failed: '
-                f'{notification_result}.',
+                f'Grid "{grid.title}" is now published, but the squad wasn\'t notified in Discord. '
+                f"{notification_result}",
             )
         return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
@@ -5303,7 +5353,7 @@ def availability_repost_view(request: HttpRequest, event_pk: int, squad_pk: int,
         # Hand the claim back. The message reached nobody, so holding the captain to a
         # cooldown for it would punish them for our failure.
         AvailabilityGrid.objects.filter(pk=grid.pk).update(last_notified_at=grid.last_notified_at)
-        messages.warning(request, f"The Discord reminder could not be posted: {result}.")
+        messages.warning(request, f"Nothing was posted to Discord. {result}")
     return back
 
 

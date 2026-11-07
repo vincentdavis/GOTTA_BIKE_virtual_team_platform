@@ -13,10 +13,13 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.accounts.discord_service import ChannelPostResult
 from apps.events.models import AVAILABILITY_REPOST_COOLDOWN, AvailabilityGrid, Event, Squad
 
 CHANNEL = 555000111
 ROLE = 777000222
+POSTED = ChannelPostResult(ok=True, status_code=200)
+FAILED = ChannelPostResult(ok=False, status_code=500)
 
 
 @pytest.fixture
@@ -90,7 +93,7 @@ def _url(grid) -> str:
 def test_the_reminder_pings_the_same_role_in_the_same_channel(client, event_admin, grid):
     """The point of a re-post is to reach exactly the people the first post reached."""
     client.force_login(event_admin)
-    with patch("apps.events.views.send_discord_channel_message", return_value=True) as send:
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED) as send:
         client.post(_url(grid))
 
     channel, body = send.call_args.args
@@ -105,7 +108,7 @@ def test_the_reminder_does_not_read_as_a_second_sheet(client, event_admin, grid)
     grid.last_notified_at = timezone.now() - AVAILABILITY_REPOST_COOLDOWN - timedelta(minutes=1)
     grid.save(update_fields=["last_notified_at"])
     client.force_login(event_admin)
-    with patch("apps.events.views.send_discord_channel_message", return_value=True) as send:
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED) as send:
         client.post(_url(grid))
 
     body = send.call_args.args[1]
@@ -118,7 +121,7 @@ def test_the_reminder_does_not_read_as_a_second_sheet(client, event_admin, grid)
 def test_the_reminder_still_links_to_the_sheet(client, event_admin, grid):
     """A reminder with no link is just noise -- the whole point is one tap back to the grid."""
     client.force_login(event_admin)
-    with patch("apps.events.views.send_discord_channel_message", return_value=True) as send:
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED) as send:
         client.post(_url(grid))
 
     assert str(grid.pk) in send.call_args.args[1]
@@ -135,7 +138,7 @@ def test_only_a_published_sheet_can_be_reposted(client, event_admin, grid, statu
     grid.save(update_fields=["status"])
     client.force_login(event_admin)
 
-    with patch("apps.events.views.send_discord_channel_message") as send:
+    with patch("apps.events.views.post_discord_channel_message") as send:
         response = client.post(_url(grid))
 
     send.assert_not_called()
@@ -149,7 +152,7 @@ def test_only_a_published_sheet_can_be_reposted(client, event_admin, grid, statu
 def test_a_second_click_inside_the_cooldown_sends_nothing(client, event_admin, grid):
     """A double-click is not a duplicate row somewhere quiet -- it is everyone's phone, twice."""
     client.force_login(event_admin)
-    with patch("apps.events.views.send_discord_channel_message", return_value=True) as send:
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED) as send:
         client.post(_url(grid))
         client.post(_url(grid))
 
@@ -163,7 +166,7 @@ def test_the_cooldown_lapses(client, event_admin, grid):
     grid.save(update_fields=["last_notified_at"])
     client.force_login(event_admin)
 
-    with patch("apps.events.views.send_discord_channel_message", return_value=True) as send:
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED) as send:
         client.post(_url(grid))
 
     assert send.call_count == 1
@@ -180,7 +183,7 @@ def test_publishing_starts_the_cooldown(client, event_admin, grid):
         kwargs={"event_pk": grid.squad.event_id, "squad_pk": grid.squad_id, "grid_pk": grid.pk},
     )
 
-    with patch("apps.events.views.send_discord_channel_message", return_value=True) as send:
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED) as send:
         client.post(status_url, {"status": "published", "notify": "1"})
         client.post(_url(grid))
 
@@ -191,15 +194,67 @@ def test_publishing_starts_the_cooldown(client, event_admin, grid):
 def test_a_failed_send_does_not_start_the_cooldown(client, event_admin, grid):
     """The message reached nobody, so making the captain wait 30 minutes would be punitive."""
     client.force_login(event_admin)
-    with patch("apps.events.views.send_discord_channel_message", return_value=False):
+    with patch("apps.events.views.post_discord_channel_message", return_value=FAILED):
         client.post(_url(grid))
 
     grid.refresh_from_db()
     assert grid.last_notified_at is None
 
-    with patch("apps.events.views.send_discord_channel_message", return_value=True) as send:
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED) as send:
         client.post(_url(grid))
     assert send.call_count == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("status_code", "discord_code", "expected"),
+    [
+        (403, 50001, "The bot can't see this squad's Discord channel. Ask a Discord admin"),
+        (403, 50013, "The bot can see this squad's Discord channel but isn't allowed to post in it."),
+        (403, None, "Discord won't let the bot post in this squad's channel."),
+        (404, 10003, "This squad's Discord channel no longer exists."),
+        (400, 50008, "This squad's Discord channel doesn't take messages"),
+        (429, None, "Try again in a minute."),
+        (500, None, "the reason is in Logfire."),
+    ],
+)
+def test_a_refused_post_says_why_and_what_would_fix_it(client, event_admin, grid, status_code, discord_code, expected):
+    """A 403 alone cannot tell "can't see the channel" from "can't post there"; Discord's code can.
+
+    Production's first report of this said only "Discord API call failed (see Logfire)", which
+    the captain who pressed the button can do nothing with.
+    """
+    client.force_login(event_admin)
+    refused = ChannelPostResult(ok=False, status_code=status_code, discord_code=discord_code)
+
+    with patch("apps.events.views.post_discord_channel_message", return_value=refused):
+        response = client.post(_url(grid), follow=True)
+
+    text = " ".join(str(m) for m in response.context["messages"])
+    assert "Nothing was posted to Discord." in text
+    assert expected in text
+    assert ("View Channel and Send Messages" in text) == (status_code == 403)
+
+
+@pytest.mark.django_db
+def test_publishing_says_why_the_squad_was_not_notified(client, event_admin, grid):
+    """The sheet is published either way; the warning says why Discord was not told and what to do."""
+    grid.status = AvailabilityGrid.Status.DRAFT
+    grid.save(update_fields=["status"])
+    client.force_login(event_admin)
+    status_url = reverse(
+        "events:availability_status",
+        kwargs={"event_pk": grid.squad.event_id, "squad_pk": grid.squad_id, "grid_pk": grid.pk},
+    )
+    refused = ChannelPostResult(ok=False, status_code=403, discord_code=50001)
+
+    with patch("apps.events.views.post_discord_channel_message", return_value=refused):
+        response = client.post(status_url, {"status": "published", "notify": "1"}, follow=True)
+
+    grid.refresh_from_db()
+    text = " ".join(str(m) for m in response.context["messages"])
+    assert grid.status == AvailabilityGrid.Status.PUBLISHED
+    assert "is now published, but the squad wasn't notified in Discord. The bot can't see" in text
 
 
 # --- who may fire it ------------------------------------------------------------------
@@ -209,7 +264,7 @@ def test_a_failed_send_does_not_start_the_cooldown(client, event_admin, grid):
 def test_a_plain_team_member_cannot_repost(client, team_member, grid):
     """Riders see the response page too; the button's gate has to hold at the view."""
     client.force_login(team_member)
-    with patch("apps.events.views.send_discord_channel_message") as send:
+    with patch("apps.events.views.post_discord_channel_message") as send:
         client.post(_url(grid))
     send.assert_not_called()
 
@@ -220,7 +275,7 @@ def test_a_squad_captain_can_repost(client, team_member, grid):
     grid.squad.captains.add(team_member)
     client.force_login(team_member)
 
-    with patch("apps.events.views.send_discord_channel_message", return_value=True) as send:
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED) as send:
         client.post(_url(grid))
 
     assert send.call_count == 1
@@ -229,7 +284,7 @@ def test_a_squad_captain_can_repost(client, team_member, grid):
 @pytest.mark.django_db
 def test_repost_requires_a_login(client, grid):
     """Anonymous callers must not be able to make the bot ping a squad role."""
-    with patch("apps.events.views.send_discord_channel_message") as send:
+    with patch("apps.events.views.post_discord_channel_message") as send:
         assert client.post(_url(grid)).status_code == 302
     send.assert_not_called()
 
@@ -238,7 +293,7 @@ def test_repost_requires_a_login(client, grid):
 def test_get_is_rejected(client, event_admin, grid):
     """A link-preview crawler or a prefetch must never be able to fire a squad-wide ping."""
     client.force_login(event_admin)
-    with patch("apps.events.views.send_discord_channel_message") as send:
+    with patch("apps.events.views.post_discord_channel_message") as send:
         assert client.get(_url(grid)).status_code == 405
     send.assert_not_called()
 
@@ -250,7 +305,7 @@ def test_get_is_rejected(client, event_admin, grid):
 def test_return_to_respond_comes_back_to_the_response_page(client, event_admin, grid):
     """The button on the response page has to leave the captain where they were."""
     client.force_login(event_admin)
-    with patch("apps.events.views.send_discord_channel_message", return_value=True):
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED):
         response = client.post(_url(grid), {"return_to": "respond"})
 
     assert response.status_code == 302
@@ -261,7 +316,7 @@ def test_return_to_respond_comes_back_to_the_response_page(client, event_admin, 
 def test_an_unknown_return_to_falls_back_to_the_squad_page(client, event_admin, grid):
     """return_to is chosen by name, never used as a URL, so tampering cannot redirect off-site."""
     client.force_login(event_admin)
-    with patch("apps.events.views.send_discord_channel_message", return_value=True):
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED):
         response = client.post(_url(grid), {"return_to": "https://evil.test/"})
 
     assert response.url == reverse(
@@ -338,9 +393,9 @@ def test_two_overlapping_clicks_send_once(client, event_admin, grid):
         if len(sent) == 1:
             # Arrives while the first request is still inside the Discord call.
             client.post(_url(grid))
-        return True
+        return POSTED
 
-    with patch("apps.events.views.send_discord_channel_message", side_effect=_send_then_reenter):
+    with patch("apps.events.views.post_discord_channel_message", side_effect=_send_then_reenter):
         client.post(_url(grid))
 
     assert len(sent) == 1
@@ -362,7 +417,7 @@ def test_a_silently_published_sheet_is_announced_not_re_reminded(client, event_a
     )
     client.post(status_url, {"status": "published"})  # no notify -> nothing posted
 
-    with patch("apps.events.views.send_discord_channel_message", return_value=True) as send:
+    with patch("apps.events.views.post_discord_channel_message", return_value=POSTED) as send:
         client.post(_url(grid))
 
     body = send.call_args.args[1]
@@ -377,7 +432,7 @@ def test_the_wait_is_rounded_up(client, event_admin, grid):
     grid.save(update_fields=["last_notified_at"])
     client.force_login(event_admin)
 
-    with patch("apps.events.views.send_discord_channel_message"):
+    with patch("apps.events.views.post_discord_channel_message"):
         response = client.post(_url(grid), follow=True)
 
     text = " ".join(str(m) for m in response.context["messages"])
