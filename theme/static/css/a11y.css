@@ -138,3 +138,27 @@
 .tabs .tab:not(.tab-active):not(.tab-disabled):not([disabled]) {
   color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
 }
+
+/*
+ * Show where an unchecked radio or checkbox is.
+ * --------------------------------------------
+ * daisyUI draws a radio's and a checkbox's border in base-content at 20%: 1.53:1 against the
+ * light theme's page and 1.87:1 against the dark one, under the 3:1 a control's outline needs
+ * (WCAG 1.4.11 Non-text Contrast). A checked control was always clear -- its dot or tick is at
+ * full strength -- but an empty circle or box was hard to find at all.
+ *
+ * 60% gives 4.42:1 or better in light and 6.19:1 or better in dark, on base-100, -200 and -300
+ * alike. A radio's border follows the text colour around it, and the margin keeps 3:1 even
+ * where that text is dimmed to 80%, as in a muted label. Each rule is daisyUI's own expression
+ * with only the percentage raised, so a coloured variant (radio-primary and the like set
+ * --input-color) keeps its full colour. A checked radio keeps daisyUI's full-strength border,
+ * hence the :not(:checked); daisyUI gives a checkbox one border in every state, so this does
+ * too. Toggles already draw theirs at 50% (3.27:1 or better) and are left alone.
+ */
+.radio:not(:checked):not([aria-checked="true"]) {
+  border-color: var(--input-color, color-mix(in srgb, currentColor 60%, #0000));
+}
+
+.checkbox {
+  border-color: var(--input-color, color-mix(in oklab, var(--color-base-content) 60%, #0000));
+}
