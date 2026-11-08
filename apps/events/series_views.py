@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import time
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 import logfire
 from django.contrib import messages
@@ -40,6 +41,7 @@ from apps.events.forms import (
     stage_route_choices,
 )
 from apps.events.models import (
+    DEFAULT_SQUAD_GENDER_OPTIONS,
     AvailabilityGrid,
     AvailabilityResponse,
     AvailabilitySlotSelection,
@@ -86,6 +88,9 @@ MODAL_NOTE = {
 
 #: The event page's Series board tab panel, which asks for the board with this HX-Target.
 BOARD_PANEL_ID = "series-board-panel"
+
+#: The board's place on its own page, which its choices swap in place with this HX-Target.
+BOARD_PAGE_ID = "series-board"
 
 #: Badges for ``series.riders_status``.
 STATUS_BADGE = {
@@ -1083,38 +1088,49 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
     For the people running the event: gated like the Eligibility page, the set that already
     sees its internals. Answers count current squad members only. The event page's Series
     board tab asks with ``HX-Target: series-board-panel`` and gets the board alone, without
-    the page around it.
+    the page around it; the board's own page asks with ``HX-Target: series-board`` when one
+    of its choices changes, swaps the board in place and keeps the address bar in step.
 
     Args:
-        request: The HTTP request. ``?tz=mine`` shows every time in the viewer's timezone
-            rather than each squad's own.
+        request: The HTTP request. ``?gender=male|female|coed`` shows only the squads of that
+            gender, when any squad has it; ``?tz=mine`` shows every time in the viewer's
+            timezone rather than each squad's own.
         pk: The event primary key.
 
     Returns:
         The board, or a redirect when not allowed or not a series.
 
     Raises:
-        Http404: For the tab, when the event is not a series.
+        Http404: For the tab or an in-place swap, when the event is not a series.
 
     """
     event = get_object_or_404(Event, pk=pk)
     htmx = getattr(request, "htmx", None)
-    embedded = bool(htmx and htmx.target == BOARD_PANEL_ID)
+    target = htmx.target if htmx else None
+    embedded = target == BOARD_PANEL_ID
+    # The board alone, for the tab or for the page's own choices.
+    fragment = embedded or target == BOARD_PAGE_ID
     if not _can_view_v_report(request.user, event):
         logfire.warning("Unauthorized series board access", event_id=pk, user_id=request.user.id, embedded=embedded)
-        if embedded:
-            # htmx follows a redirect, and would fill the tab with the whole event page.
+        if fragment:
+            # htmx follows a redirect, and would fill the board's place with the whole event page.
             return HttpResponseForbidden()
         messages.error(request, "You don't have permission to view the series board.")
         return redirect("events:event_detail", pk=pk)
     if not event.is_race_series:
-        if embedded:
+        if fragment:
             raise Http404
         messages.info(request, "This event collects weekly availability, so it has no series board.")
         return redirect("events:event_detail", pk=pk)
 
     stages = series.event_stages(event)
-    squads = list(event.squads.order_by("name"))
+    every_squad = list(event.squads.order_by("name"))
+    # A squad's gender is one of the fixed options or blank; the filter offers those in use, and
+    # one no squad has shows every squad, as a stale link would expect.
+    in_use = {squad.gender for squad in every_squad}
+    genders = {option.lower(): option for option in DEFAULT_SQUAD_GENDER_OPTIONS if option in in_use}
+    gender = genders.get((request.GET.get("gender") or "").strip().lower(), "")
+    squads = [squad for squad in every_squad if not gender or squad.gender == gender]
     sheets: dict[int, AvailabilityGrid] = {}
     for grid in (
         AvailabilityGrid.objects
@@ -1245,12 +1261,18 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
         }
         for index, stage in enumerate(stages)
     ]
+    noun = "squad" if len(squads) == 1 else "squads"
     logfire.debug(
-        "Series board viewed", event_id=pk, user_id=request.user.id, squads=len(squads), embedded=embedded
+        "Series board viewed",
+        event_id=pk,
+        user_id=request.user.id,
+        squads=len(squads),
+        gender=gender or "all",
+        embedded=embedded,
     )
     response = render(
         request,
-        "events/_series_board.html" if embedded else "events/series_board.html",
+        "events/_series_board.html" if fragment else "events/series_board.html",
         {
             "event": event,
             "columns": columns,
@@ -1259,10 +1281,32 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
             "mine": mine,
             "viewer_timezone": viewer_tz.key,
             "embedded": embedded,
-            "panel_id": BOARD_PANEL_ID,
+            "board_target": BOARD_PANEL_ID if embedded else BOARD_PAGE_ID,
+            "gender": gender,
+            "gender_options": [
+                {
+                    "value": value,
+                    "label": option,
+                    "count": sum(1 for squad in every_squad if squad.gender == option),
+                    "chosen": option == gender,
+                }
+                for value, option in genders.items()
+            ],
+            "squad_total": len(every_squad),
+            "squad_summary": (
+                f"{len(squads)} {gender} {noun} of {len(every_squad)}" if gender else f"{len(squads)} {noun}"
+            ),
+            # What a changed choice now shows; the tab opening (no choice yet) says nothing.
+            "announce": fragment and ("gender" in request.GET or "tz" in request.GET),
         },
     )
-    # One URL answers with a whole page or with the tab's fragment, so a cache must keep them apart.
+    if fragment and not embedded:
+        # The page's address follows its choices, minus any left at their default.
+        query = urlencode([
+            (name, value) for name, value in (("gender", gender.lower()), ("tz", "mine" if mine else "")) if value
+        ])
+        response["HX-Replace-Url"] = reverse("events:series_board", args=[event.pk]) + (f"?{query}" if query else "")
+    # One URL answers with a whole page or with the board alone, so a cache must keep them apart.
     patch_vary_headers(response, ("HX-Request",))
     return response
 

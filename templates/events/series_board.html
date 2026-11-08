@@ -8,6 +8,10 @@
     <a href="{% url 'events:event_detail' event.pk %}" class="link text-sm">&larr; Back to Event</a>
   </div>
 
-  {% include "events/_series_board.html" %}
+  {# The board's choices swap it in place (series_views.BOARD_PAGE_ID) and say here, outside it, what it now shows. #}
+  <p id="series-board-announcer" class="sr-only" role="status" aria-live="polite"></p>
+  <div id="{{ board_target }}">
+    {% include "events/_series_board.html" %}
+  </div>
 </div>
 {% endblock %}

@@ -929,9 +929,11 @@
       {% comment %}
         The series board is fetched the first time its tab is shown (intersect fires once the
         panel is visible), not built on every visit to this page. series_board_view answers
-        this element's id as HX-Target (series_views.BOARD_PANEL_ID) with the board alone.
+        this element's id as HX-Target (series_views.BOARD_PANEL_ID) with the board alone. The
+        board's choices say what it now shows in the announcer, outside the panel they replace.
       {% endcomment %}
       <div role="tabpanel" id="panel-series" data-tab-panel="series" aria-labelledby="tab-series">
+        <p id="series-board-announcer" class="sr-only" role="status" aria-live="polite"></p>
         <div id="series-board-panel"
              hx-get="{% url 'events:series_board' event.pk %}" hx-trigger="intersect once"
              hx-target="this" hx-swap="innerHTML">

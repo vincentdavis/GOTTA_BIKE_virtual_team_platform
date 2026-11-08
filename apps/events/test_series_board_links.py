@@ -166,7 +166,12 @@ def test_the_board_page_still_stands_alone(client, series_event, event_admin):
     body = response.content.decode()
     assert "Back to Event" in body
     assert "<h1" in body
-    assert 'onchange="this.submit()"' in body
+    # Its choices swap the board in place (test_series_board_gender.py), with a button without JS.
+    action = re.escape(_board_url(series_event))
+    form = re.search(rf'<form[^>]*action="{action}"[^>]*>', body).group(0)
+    assert 'hx-target="#series-board"' in form
+    assert "onchange" not in form
+    assert '<noscript><button type="submit" class="btn btn-sm">Show</button></noscript>' in body
 
 
 @pytest.mark.django_db
