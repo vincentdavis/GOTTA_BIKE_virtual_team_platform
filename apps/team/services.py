@@ -17,7 +17,7 @@ from django.db.models import Count, F, Max, Min, OuterRef, Q, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.accounts.models import GuildMember, User
-from apps.rider_data.models import velo2_categories_by_zwid
+from apps.rider_data.models import RiderProfile, rider_gender, velo2_categories_by_zwid
 from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView
 from apps.zwiftpower.models import ZPRiderResults, ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -1846,6 +1846,8 @@ class UnifiedRider:
     discord_avatar_url: str = ""
     zwid_verified: bool = False
     user_gender: str = ""
+    # zauth's answer (RiderProfile.gender): Zwift's own, then ZwiftPower's, then zwiftracing's.
+    profile_gender: str = ""
 
     # ZwiftPower data
     in_zwiftpower: bool = False
@@ -1860,6 +1862,7 @@ class UnifiedRider:
     # Zwift Racing data
     in_zwiftracing: bool = False
     zr_name: str = ""
+    zr_gender: str = ""
     zr_category: str = ""
     # vELO 2's categories, from the rider's cached RiderProfile: the mixed one, shown beside
     # zr_category (vELO 1's mixed one), and a woman's women's one, which only filters.
@@ -1899,25 +1902,21 @@ class UnifiedRider:
 
     @property
     def gender(self) -> str:
-        """Gender with fallback logic.
+        """Gender by the one rule, ``rider_data.models.rider_gender``.
 
-        Priority: user profile gender > ZP divw (if > 0 = F, else M).
+        The member's own account first, then zauth's profile (Zwift's own answer, then
+        ZwiftPower's, then zwiftracing's), then our own ZwiftPower row -- a women's category
+        means female -- and zwiftracing row, for a rider zauth has not profiled. A rider none
+        of them answers for is unknown: having no women's category used to count as male.
 
         Returns:
-            'M' for male, 'F' for female, or '' if unknown.
+            'M' for male, 'F' for female, or '' if unknown (an account's 'other' included).
 
         """
-        # First check user profile gender (normalize from 'male'/'female' to 'M'/'F')
-        if self.user_gender:
-            if self.user_gender == "male":
-                return "M"
-            if self.user_gender == "female":
-                return "F"
-            return ""  # 'other' or unknown
-        # Fall back to ZwiftPower: if divw > 0, they are female
-        if self.in_zwiftpower:
-            return "F" if self.zp_divw > 0 else "M"
-        return ""
+        decided = rider_gender(
+            self.user_gender, self.profile_gender, "female" if self.zp_divw > 0 else "", self.zr_gender
+        )
+        return {"female": "F", "male": "M"}.get(decided, "")
 
     @property
     def is_active_member(self) -> bool:
@@ -2012,7 +2011,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
         "zwid", "name", "div", "divw", "date_left", "rank", "ftp", "weight"
     )
     zr_riders = ZRRider.objects.all().values(
-        "zwid", "name", "race_current_category", "date_left", "race_current_rating", "phenotype_value",
+        "zwid", "name", "race_current_category", "date_left", "race_current_rating", "phenotype_value", "gender",
     )
 
     # Get result counts per rider
@@ -2034,11 +2033,16 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     zwid_set.update(zp_by_zwid.keys())
     zwid_set.update(zr_by_zwid.keys())
 
+    # zauth's gender for each rider it has profiled, one query (rider_gender's second source).
+    profile_gender_by_zwid: dict[int, str] = dict(
+        RiderProfile.objects.filter(zwid__in=zwid_set).exclude(gender="").values_list("zwid", "gender")
+    )
+
     # Build unified list
     unified: list[UnifiedRider] = []
 
     for zwid in zwid_set:
-        rider = UnifiedRider(zwid=zwid)
+        rider = UnifiedRider(zwid=zwid, profile_gender=profile_gender_by_zwid.get(zwid, ""))
 
         # User data
         if zwid in user_by_zwid:
@@ -2081,6 +2085,7 @@ def get_unified_team_roster() -> list[UnifiedRider]:
             rider.zr_date_left = zr["date_left"]
             rider.zr_rating = zr["race_current_rating"]
             rider.zr_phenotype = zr["phenotype_value"] or ""
+            rider.zr_gender = zr["gender"] or ""
 
         # Results data
         if zwid in results_by_zwid:

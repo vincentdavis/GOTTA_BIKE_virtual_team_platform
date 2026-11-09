@@ -93,13 +93,43 @@ CURVE_DURATIONS = (
 # alike. Sorting them alphabetically puts Diamond, the top tier, sixth.
 ZR_TIERS = ("Diamond", "Ruby", "Emerald", "Sapphire", "Amethyst", "Platinum", "Gold", "Silver", "Bronze", "Copper")
 
-# How the sources spell a woman: zauth passes Zwift's "F" or "female", the app's own profile
-# says "female", and the roster's filters say "women".
+# How the sources spell a gender: zauth serves "male"/"female" (it once passed zwiftracing's
+# "M"/"F" through), the app's own profile says "male"/"female", and the roster's filters say
+# "women"/"men".
 WOMEN_GENDERS = frozenset({"f", "female", "w", "women"})
+MEN_GENDERS = frozenset({"m", "male", "men"})
+
+
+def rider_gender(*genders: str | None) -> str:
+    """Decide a rider's gender by the first source that says anything.
+
+    The one rule, everywhere a rider's gender is shown, filtered or checked (Vincent's call):
+    the member's own account first (``User.gender``), then zauth's profile
+    (``RiderProfile.gender``, itself Zwift's own answer, then ZwiftPower's, then zwiftracing's),
+    then, where a page holds them, our own ZwiftPower and zwiftracing rows for a rider zauth has
+    not profiled. Callers pass the sources in that order.
+
+    Args:
+        *genders: Each source's answer, in any spelling the sources use.
+
+    Returns:
+        "female", "male", "other" for an answer that is neither (it still wins: an account's
+        "other" is never overruled by Zwift's two choices), or "" when no source says.
+
+    """
+    for gender in genders:
+        value = (gender or "").strip().casefold()
+        if value:
+            if value in WOMEN_GENDERS:
+                return "female"
+            if value in MEN_GENDERS:
+                return "male"
+            return "other"
+    return ""
 
 
 def is_woman(*genders: str | None) -> bool:
-    """Whether a rider is a woman, by the first of these genders that says anything.
+    """Whether a rider is a woman, by :func:`rider_gender`'s rule.
 
     Callers pass the member's own answer first (``User.gender``) and zauth's after it
     (``RiderProfile.gender``), so the rider's own word wins and zauth's fills a blank.
@@ -108,11 +138,7 @@ def is_woman(*genders: str | None) -> bool:
         True when the first non-blank gender is a woman's.
 
     """
-    for gender in genders:
-        value = (gender or "").strip().casefold()
-        if value:
-            return value in WOMEN_GENDERS
-    return False
+    return rider_gender(*genders) == "female"
 
 
 def _category_name(value: object) -> str | None:
@@ -788,3 +814,28 @@ def velo2_categories_by_zwid(riders: Iterable[tuple[int | None, str | None]]) ->
         )
         for zwid, profile_gender, mixed, women in rows
     }
+
+
+def member_gender(user: object, profile_gender: str | None = None) -> str:
+    """Decide a member's gender by the one rule: their own answer, else zauth's for their zwid.
+
+    For the event pages, whose riders are members: a squad's gender check, the gender shown
+    beside a signup, the category a signup notice names. zauth's answer is read only when the
+    account has none, so a member who has answered costs no query.
+
+    Args:
+        user: The member (a ``User``).
+        profile_gender: Their ``RiderProfile.gender`` when the caller already holds it ("" when
+            they have no profile); None looks it up.
+
+    Returns:
+        "female", "male", "other" or "", as :func:`rider_gender`.
+
+    """
+    own = (getattr(user, "gender", "") or "").strip()
+    if own or profile_gender is not None:
+        return rider_gender(own, profile_gender)
+    zwid = getattr(user, "zwid", None)
+    if not zwid:
+        return ""
+    return rider_gender(RiderProfile.objects.filter(zwid=zwid).values_list("gender", flat=True).first())

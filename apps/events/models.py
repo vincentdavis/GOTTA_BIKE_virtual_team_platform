@@ -1364,7 +1364,8 @@ class Squad(models.Model):
         is configured.
 
         Args:
-            user_gender: The rider's ``User.gender`` value ("male"/"female"/"other"/blank).
+            user_gender: The rider's gender by the one rule, ``rider_data.models.member_gender``
+                (their own answer, else zauth's): "male"/"female"/"other"/blank.
 
         Returns:
             ``(ok, reason)`` where ``reason`` is a human-readable explanation when ``ok`` is False.

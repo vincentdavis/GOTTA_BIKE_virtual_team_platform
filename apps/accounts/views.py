@@ -25,7 +25,7 @@ from apps.accounts.decorators import team_member_required
 from apps.accounts.forms import ProfileForm
 from apps.accounts.models import BlockedDiscordId, User
 from apps.accounts.services import ZWIFT_LINK_KEY, delete_user_account
-from apps.rider_data.models import RiderProfile
+from apps.rider_data.models import RiderProfile, member_gender
 from apps.rider_data.tasks import refresh_zwift_profile, request_profile_refresh
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import (
@@ -102,8 +102,10 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
     if user.has_accepted_zwid_verification and user.zwid:
         zp_rider = ZPTeamRiders.objects.filter(zwid=user.zwid).first()
         if zp_rider:
-            # Use divw for females, div for everyone else
-            div = zp_rider.divw if user.gender == "female" else zp_rider.div
+            # A woman's category is divw, everyone else's div; who is a woman follows the one
+            # gender rule (the account first, then zauth's profile).
+            is_female = member_gender(user) == "female"
+            div = zp_rider.divw if is_female else zp_rider.div
             zp_data = {
                 "category": ZP_DIV_TO_CATEGORY.get(div, ""),
                 "rank": zp_rider.rank,
@@ -111,7 +113,7 @@ def _build_zwift_status_context(user: User, *, zr_refresh_error: bool = False) -
                 "updated": zp_rider.date_modified,
             }
             # Include women's category for female riders
-            if user.gender == "female" and zp_rider.div:
+            if is_female and zp_rider.div:
                 zp_data["category_mixed"] = ZP_DIV_TO_CATEGORY.get(zp_rider.div, "")
 
         zr_rider = ZRRider.objects.filter(zwid=user.zwid).first()

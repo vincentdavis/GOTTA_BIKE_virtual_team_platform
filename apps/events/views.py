@@ -86,6 +86,7 @@ from apps.events.tz_utils import (
     convert_utc_to_local_config,
     drop_fully_blocked_days,
 )
+from apps.rider_data.models import member_gender
 from apps.team.rosterv2 import fold
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
@@ -493,7 +494,7 @@ def _apply_squad_leadership(
     warnings: list[str] = []
     for user in User.objects.filter(pk__in=still_leading):
         for ok, reason in (
-            squad.check_gender_eligibility(user.gender),
+            squad.check_gender_eligibility(member_gender(user)),
             squad.check_zauth_eligibility(user.is_zauth_verified),
             squad.check_zftp_eligibility(user.z_ftp, user.z_ftp_wkg),
             squad.check_zmap_eligibility(user.z_map, user.z_map_wkg),
@@ -710,7 +711,7 @@ def _enrich_squad_members(event):
         entry = {
             "user": user,
             "zwid": zwid,
-            "gender": user.gender or "",
+            "gender": member_gender(user, getattr(profiles.get(zwid), "gender", "")),
             "is_race_ready": user.is_race_ready,
             "is_extra_verified": user.is_extra_verified,
             "in_zwiftpower": zp is not None,
@@ -783,7 +784,7 @@ def _mark_eligibility(squad, signups, categories) -> None:
         signup.is_eligible = all(
             ok
             for ok, _reason in (
-                squad.check_gender_eligibility(user.gender),
+                squad.check_gender_eligibility(member_gender(user)),
                 squad.check_zwift_eligibility(cats.get("zp", "")),
                 squad.check_womens_zwift_eligibility(cats.get("zp_w", "")),
                 squad.check_zr_eligibility(cats.get("zr", "")),
@@ -1017,7 +1018,7 @@ def _enrich_signups(signups, event=None):
             "signup": signup,
             "user": user,
             "zwid": zwid,
-            "gender": user.gender or "",
+            "gender": member_gender(user, getattr(profile, "gender", "")),
             "is_race_ready": user.is_race_ready,
             "is_extra_verified": user.is_extra_verified,
             "has_event_role": user.has_discord_role(event_role_id) if event_role_id else False,
@@ -3904,7 +3905,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 rider_zwift_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp.div else ""
                 rider_womens_cat = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp.divw else ""
         for ok, reason in (
-            squad.check_gender_eligibility(signup.user.gender),
+            squad.check_gender_eligibility(member_gender(signup.user)),
             squad.check_zwift_eligibility(rider_zwift_cat),
             squad.check_womens_zwift_eligibility(rider_womens_cat),
             squad.check_zr_eligibility(rider_zr),
@@ -7276,7 +7277,7 @@ def squad_invite_view(request: HttpRequest, token: str) -> HttpResponse:
             rider_zwift_cat = ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp.div else ""
             rider_womens_cat = ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp.divw else ""
     for ok, reason in (
-        squad.check_gender_eligibility(request.user.gender),
+        squad.check_gender_eligibility(member_gender(request.user)),
         squad.check_zwift_eligibility(rider_zwift_cat),
         squad.check_womens_zwift_eligibility(rider_womens_cat),
         squad.check_zr_eligibility(rider_zr),

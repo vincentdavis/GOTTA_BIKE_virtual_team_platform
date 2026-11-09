@@ -10,6 +10,7 @@ from django.utils import timezone
 from apps.accounts.discord_service import send_discord_channel_message, send_discord_dm
 from apps.events import ds_service
 from apps.events.models import EventSignup, SlotDS
+from apps.rider_data.models import member_gender
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
@@ -44,7 +45,7 @@ def _format_signup_message(signup: EventSignup, profile_url: str | None) -> str:
     if user.zwid:
         zp = ZPTeamRiders.objects.filter(zwid=user.zwid).first()
         if zp:
-            zp_cat = ZP_DIV_TO_CATEGORY.get(zp.divw if user.gender == "female" else zp.div, "")
+            zp_cat = ZP_DIV_TO_CATEGORY.get(zp.divw if member_gender(user) == "female" else zp.div, "")
     if zp_cat:
         lines.append(f"ZP: **{zp_cat}**")
 

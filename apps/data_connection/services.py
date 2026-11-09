@@ -8,8 +8,37 @@ from django.utils import timezone
 from apps.accounts.models import User
 from apps.data_connection import gs_client
 from apps.data_connection.models import DataConnection
+from apps.rider_data.models import RiderProfile, rider_gender
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
+
+# The gender filter's values, as rider_gender's words.
+_FILTER_GENDERS = {"M": "male", "F": "female"}
+
+
+def _decided_gender(user: dict | None, zp: dict | None, zr: dict | None, profile_gender: str = "") -> str:
+    """Decide a rider's gender by the one rule, ``rider_data.models.rider_gender``.
+
+    The member's own account first, then zauth's profile (Zwift's own answer, then
+    ZwiftPower's, then zwiftracing's), then our own ZwiftPower row (a women's category means
+    female) and zwiftracing row, for a rider zauth has not profiled.
+
+    Args:
+        user: User data dict (or None).
+        zp: ZwiftPower data dict (or None).
+        zr: Zwift Racing data dict (or None).
+        profile_gender: The rider's ``RiderProfile.gender``, or "".
+
+    Returns:
+        "female", "male", "other" or "".
+
+    """
+    return rider_gender(
+        user.get("gender") if user else "",
+        profile_gender,
+        "female" if zp and (zp.get("divw") or 0) > 0 else "",
+        zr.get("gender") if zr else "",
+    )
 
 
 def _get_field_value(
@@ -20,6 +49,7 @@ def _get_field_value(
     race_ready_by_zwid: dict[int, bool] | None = None,
     verification_by_zwid: dict[int, dict[str, bool]] | None = None,
     sync_timestamp: str = "",
+    profile_gender: str = "",
 ) -> str:
     """Get value for a field key from the appropriate source.
 
@@ -31,6 +61,7 @@ def _get_field_value(
         race_ready_by_zwid: Mapping of zwid to race_ready status (for computed property).
         verification_by_zwid: Mapping of zwid to dict of verification type booleans.
         sync_timestamp: Timestamp string returned for the ``sync_timestamp`` field.
+        profile_gender: The rider's ``RiderProfile.gender``, for the ``gender`` field.
 
     Returns:
         String value for the field, or empty string if not found.
@@ -68,7 +99,8 @@ def _get_field_value(
     if field_key == "country":
         return str(user.get("country", "") or "") if user else ""
     if field_key == "gender":
-        return str(user.get("gender", "") or "") if user else ""
+        # Every rider's, not only a member's: the one rule, which puts the member's own first.
+        return _decided_gender(user, zp, zr, profile_gender)
     if field_key == "youtube_channel":
         return str(user.get("youtube_channel", "") or "") if user else ""
     if field_key == "guild_join_date":
@@ -109,6 +141,7 @@ def _passes_filters(
     user: dict | None,
     zp: dict | None,
     zr: dict | None,
+    profile_gender: str = "",
 ) -> bool:
     """Check if a rider passes all configured filters.
 
@@ -117,6 +150,7 @@ def _passes_filters(
         user: User data dict (or None).
         zp: ZwiftPower data dict (or None).
         zr: Zwift Racing data dict (or None).
+        profile_gender: The rider's ``RiderProfile.gender``, for the gender filter.
 
     Returns:
         True if rider passes all filters, False otherwise.
@@ -125,12 +159,11 @@ def _passes_filters(
     if not filters:
         return True
 
-    # Gender filter (check user gender or ZR gender)
+    # Gender filter, by the one rule. It used to compare "M"/"F" with the member's "male"/
+    # "female", which never matched, so only zwiftracing's answer ever counted.
     if "gender" in filters:
-        gender = filters["gender"]
-        user_gender = user.get("gender") if user else None
-        zr_gender = zr.get("gender") if zr else None
-        if user_gender != gender and zr_gender != gender:
+        wanted = _FILTER_GENDERS.get(filters["gender"])
+        if wanted and _decided_gender(user, zp, zr, profile_gender) != wanted:
             return False
 
     # ZP Division filter
@@ -377,6 +410,9 @@ def sync_connection(connection: DataConnection) -> int:
         zwid_set.update(user_by_zwid.keys())
         zwid_set.update(zp_by_zwid.keys())
         zwid_set.update(zr_by_zwid.keys())
+        profile_gender_by_zwid: dict[int, str] = dict(
+            RiderProfile.objects.filter(zwid__in=zwid_set).exclude(gender="").values_list("zwid", "gender")
+        )
 
         # Build rows (applying filters)
         filters = connection.filters or {}
@@ -385,15 +421,16 @@ def sync_connection(connection: DataConnection) -> int:
             user = user_by_zwid.get(zwid)
             zp = zp_by_zwid.get(zwid)
             zr = zr_by_zwid.get(zwid)
+            profile_gender = profile_gender_by_zwid.get(zwid, "")
 
             # Skip riders that don't pass filters
-            if not _passes_filters(filters, user, zp, zr):
+            if not _passes_filters(filters, user, zp, zr, profile_gender):
                 continue
 
             row = [
                 _get_field_value(
                     field, user, zp, zr, race_ready_by_zwid, verification_by_zwid,
-                    sync_timestamp=sync_timestamp,
+                    sync_timestamp=sync_timestamp, profile_gender=profile_gender,
                 )
                 for field in all_fields
             ]

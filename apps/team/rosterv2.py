@@ -54,7 +54,7 @@ from django_countries.fields import Country
 
 from apps.accounts.models import GuildMember, User
 from apps.accounts.utils import resolve_country
-from apps.rider_data.models import WOMEN_GENDERS, ZR_TIERS, RiderProfile, is_woman
+from apps.rider_data.models import ZR_TIERS, RiderProfile, rider_gender
 from apps.rider_data.services import zwids_to_refresh
 from apps.team.kits import current_kit
 
@@ -107,6 +107,8 @@ ACCOUNT_COLUMNS = (
     "discord_id",
     "discord_avatar",
     "team_kit",
+    # The member's own answer, which comes before zauth's (rider_data.models.rider_gender).
+    "gender",
 )
 
 GUILD_COLUMNS = ("user_id", "joined_at", "nickname", "display_name", "username")
@@ -198,12 +200,6 @@ def as_zwid(query: str) -> int | None:
 ZR_CATEGORY_ORDER = ZR_TIERS
 CATEGORY_ORDER = ("A+", "A", "B", "C", "D", "E")
 
-# Upstream says "M"/"F"; zauth has passed through "male"/"female" as well. Both are read,
-# and ANYTHING else is unknown -- never quietly counted as men, which is what the roster
-# this replaces does in four separate places.
-_WOMEN = WOMEN_GENDERS
-_MEN = frozenset({"m", "male", "men"})
-
 # Coarse on purpose. Fine-grained power steps narrow the weight recoverable from
 # zFTP over W/kg, and nobody browses a roster by the watt.
 # How far back the card's counts look. Ninety days is wide enough to catch a rider between
@@ -220,21 +216,20 @@ JOINED_WINDOWS = (30, 90)
 
 
 def gender_bucket(raw: str) -> str:
-    """Bucket a stored gender into the three states the roster actually has.
+    """Bucket a rider's gender into the three states the roster's filter has.
+
+    Read through ``rider_gender``, so every spelling a source uses lands in the same bucket.
+    Anything that is neither a woman's nor a man's -- blank, or an account's "other" -- is
+    unknown: never quietly counted as men.
 
     Args:
-        raw: The stored value, in whatever spelling upstream used.
+        raw: The card's gender.
 
     Returns:
         "women", "men", or "unknown".
 
     """
-    value = (raw or "").strip().casefold()
-    if value in _WOMEN:
-        return "women"
-    if value in _MEN:
-        return "men"
-    return "unknown"
+    return {"female": "women", "male": "men"}.get(rider_gender(raw), "unknown")
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,7 +244,8 @@ class RiderCard:
     Attributes:
         zwid: Zwift id. Also the join key, and an exact search term.
         name: The rider's Zwift name, or "Unknown rider" -- never their zwid as a name.
-        gender: "male", "female" or "" -- three states. Blank is never rounded up to male.
+        gender: "female", "male", "other" or "", by ``rider_gender``: the member's own account
+            first, then zauth's. Blank is never rounded up to male.
         country: The raw upstream flag string, which includes subdivisions like "gb-wls".
         age_bracket: A bracket label from ``AGE_BRACKETS_SHOWN``, or "" -- never a number.
         zftp: Watts. Shown beside W/kg, which is the pair Vincent chose over weight.
@@ -523,19 +519,22 @@ def _wkg(payload: dict, seconds: str) -> float | None:
     return round(value, 1) if value is not None else None
 
 
-def _card(row: dict, payload: dict, record: RaceRecord | None = None) -> RiderCard:
+def _card(row: dict, payload: dict, record: RaceRecord | None = None, member_gender: str = "") -> RiderCard:
     """Build one card from an allow-listed row, its (discarded) payload and its results.
 
     Args:
         row: A ``.values(*CARD_COLUMNS)`` row, with ``payload`` already removed.
         payload: The ProfileFull document, read here and not retained.
         record: The rider's recent racing, or None when we hold no results for them.
+        member_gender: The gender on the rider's own account, when one has been shown to be
+            theirs. It comes before zauth's.
 
     Returns:
         The rider's card.
 
     """
     record = record or RaceRecord()
+    gender = rider_gender(member_gender, row["gender"])
     totals = _block(payload, "totals")
     metres = _number(totals.get("distance_km"))  # MISNAMED upstream: the value is metres.
     velo2 = _block(payload, "velo2")
@@ -544,7 +543,7 @@ def _card(row: dict, payload: dict, record: RaceRecord | None = None) -> RiderCa
         zwid=row["zwid"],
         # Never f"Rider {zwid}", the v1 fallback, which prints the zwid as a name.
         name=row["name"] or "Unknown rider",
-        gender=row["gender"] or "",
+        gender=gender,
         country=row["country"] or "",
         age_bracket=row["age"] if row["age"] in AGE_BRACKETS_SHOWN else "",
         category_open=row["category_open"] or "",
@@ -556,7 +555,7 @@ def _card(row: dict, payload: dict, record: RaceRecord | None = None) -> RiderCa
         velo2=_number(velo2.get("race")),
         velo2_category=_text(velo2.get("category")),
         # zwiftracing sends a women's category for everyone; it applies to women only.
-        velo2_category_women=_text(velo2.get("category_women")) if is_woman(row["gender"]) else "",
+        velo2_category_women=_text(velo2.get("category_women")) if gender == "female" else "",
         zwift_racing_score=row["zwift_racing_score"],
         zp_skill=row["zp_skill"],
         compound_score=row["compound_score"],
@@ -1866,9 +1865,10 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
     cached = RiderProfile.objects.filter(zwid__in=roster_zwids).order_by().values(*CARD_COLUMNS)
     for row in cached.iterator(chunk_size=500):
         payload = row.pop("payload") or {}
-        card = _card(row, payload, records.get(row["zwid"]))
+        claims = claimants.get(row["zwid"], ())
+        # Only an account shown to be this rider's may speak for them, as in the join below.
+        card = _card(row, payload, records.get(row["zwid"]), claims[0]["gender"] if len(claims) == 1 else "")
 
-        claims = claimants.get(card.zwid, ())
         account = None
         claimed: dict | None = None
         guild: dict | None = None
