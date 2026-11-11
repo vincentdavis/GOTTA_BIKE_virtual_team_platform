@@ -4,28 +4,86 @@
 
 {% block extra_css %}
 <style>
-  /* daisyUI paints a checked radio button in primary, which fails contrast in the dark
-     theme and says nothing about the answer. Each answer gets its own solid colour with its
-     matching content colour instead; the word is always there too. */
-  input.answer-available:checked { --btn-color: var(--color-success); --btn-fg: var(--color-success-content); }
-  input.answer-maybe:checked { --btn-color: var(--color-warning); --btn-fg: var(--color-warning-content); }
-  input.answer-no:checked { --btn-color: var(--color-error); --btn-fg: var(--color-error-content); }
-
-  /* The three answers sit side by side while they fit, which takes about 13.7rem. At the
-     largest text size on a phone the stage box is narrower than that, and the buttons used to
-     widen it and push the whole page sideways (WCAG 1.4.10). The container measures the box,
-     in rem, so it follows the reader's text size rather than the screen: below 14rem the
-     answers stack, with daisyUI's join-vertical corners. Its size containment also stops the
-     buttons from widening the box at all. */
-  .answer-choices { container-type: inline-size; }
-  @container (max-width: 14rem) {
-    .answer-choices .join { flex-direction: column; }
-    /* flex-1 would now squash each button's height; keep h-11's. */
-    .answer-choices .join > .join-item { flex: none; }
-    .answer-choices .join > .join-item:first-child { --join-ss: var(--radius-field); --join-se: var(--radius-field); --join-es: 0; --join-ee: 0; }
-    .answer-choices .join > .join-item:last-child { --join-ss: 0; --join-se: 0; --join-es: var(--radius-field); --join-ee: var(--radius-field); }
-    .answer-choices .join > .join-item:not(:first-child) { margin-block-start: calc(var(--border, 1px) * -1); margin-inline-start: 0; }
+  /* Each answer is a row of a radio list: the radio, the word with a hint under it, and an
+     icon. The row is the label, so all of it is the target. A picked row takes its answer's
+     colour on its border, radio and icon, with a tint behind it; the radio and the word say
+     the same thing, so colour is never the only sign. */
+  .answer-option {
+    --answer-ink: color-mix(in oklab, var(--answer) 60%, var(--color-base-content));
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 3rem;
+    padding: 0.5rem 0.75rem;
+    border: 2px solid color-mix(in oklab, var(--color-base-content) 50%, transparent);
+    border-radius: var(--radius-field);
+    background: var(--color-base-100);
+    cursor: pointer;
   }
+  .answer-available { --answer: var(--color-success); }
+  .answer-maybe { --answer: var(--color-warning); }
+  .answer-no { --answer: var(--color-error); }
+  /* daisyUI's success, warning and error are under 3:1 on the light theme's white. Mixed with
+     the text colour they come out darker on light and lighter on dark, over 4:1 on both. */
+  .answer-option:has(input:checked) {
+    border-color: var(--answer-ink);
+    background: color-mix(in oklab, var(--answer) 18%, var(--color-base-100));
+  }
+  .answer-option input:checked { --input-color: var(--answer-ink); }
+  .answer-option:has(input:checked) .answer-icon { color: var(--answer-ink); }
+  .answer-option:has(input:focus-visible) { outline: 2px solid var(--color-base-content); outline-offset: 2px; }
+  .answer-hint { color: color-mix(in oklab, var(--color-base-content) 80%, transparent); }
+
+  /* A stage left blank when Submit was pressed. The words carry it; the outline only helps
+     the eye find the stage. */
+  .answer-stage[data-flagged] {
+    outline: 3px solid color-mix(in oklab, var(--color-warning) 60%, var(--color-base-content));
+    outline-offset: 2px;
+  }
+  .answer-error,
+  .answer-warning:not(:empty) {
+    padding: 0.375rem 0.625rem;
+    border-radius: var(--radius-field);
+    font-weight: 600;
+    background: var(--color-warning);
+    color: var(--color-warning-content);
+  }
+
+  /* The count and Submit stay in view while the rider scrolls the stages, stuck to the bottom
+     of the screen until the end of the form brings them back into place. On a phone, base.html's
+     scroller keeps 4rem of padding under the content for the tab bar, and a sticky box stops at
+     that padding, so bottom: 0 sits just above the tab bar. */
+  .answer-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 0.75rem;
+    border: 1px solid var(--color-base-300);
+    border-radius: var(--radius-box);
+    background: var(--color-base-100);
+    box-shadow: 0 -0.25rem 1rem rgb(0 0 0 / 0.12);
+  }
+  @media (min-width: 40rem) {
+    .answer-bar { bottom: 1rem; }
+  }
+  /* From 64rem, where base.html opens the sidebar, its drawer makes the page's scroller a
+     whole window tall below the header, so the scroller's bottom edge is off-screen and a bar
+     stuck to it would be hidden. There the bar stays at the end of the form. */
+  @media (min-width: 64rem) {
+    .answer-bar { position: static; }
+  }
+  /* Side by side while both fit, the status taking the spare room; where they don't, the
+     button takes a line of its own, full width. */
+  .answer-status { flex: 999 1 8rem; min-width: 0; }
+  .answer-bar > button { flex: 1 0 auto; }
+  /* At the two largest text sizes a bar that stuck would cover much of a phone's screen
+     (WCAG 1.4.10), so there it stays at the end of the form. */
+  :root[data-text-size="larger"] .answer-bar,
+  :root[data-text-size="largest"] .answer-bar { position: static; }
 </style>
 {% endblock %}
 
@@ -85,11 +143,12 @@
   <p class="text-sm text-base-content/80 mb-1">
     Times are shown in <strong>{{ display_timezone }}</strong>.{% if tz_is_default %} <a href="{% url 'accounts:profile_edit' %}" class="link">Set your timezone</a> to see them in your own.{% endif %}
   </p>
-  <p class="text-sm mb-4" role="status" id="answer-progress"
-     data-open="{{ open_count }}">{{ answered_count }} of {{ open_count }} stage{{ open_count|pluralize }} answered{% if stale_count %} &middot; {{ stale_count }} moved and need{{ stale_count|pluralize:"s," }} a new answer{% endif %}</p>
+  {% if stale_count %}
+  <p class="text-sm mb-1">{{ stale_count }} stage{{ stale_count|pluralize }} moved and need{{ stale_count|pluralize:"s," }} a new answer.</p>
+  {% endif %}
 
   {% if open_count %}
-  <div class="mb-4">
+  <div class="mt-3 mb-4">
     <button type="button" class="btn btn-sm btn-outline" id="available-for-all">Available for all stages</button>
   </div>
   {% endif %}
@@ -98,11 +157,12 @@
     {% csrf_token %}
     {% for row in rows %}
     {% if row.status == "open" %}
-    <fieldset class="rounded-box bg-base-200 p-4 flex flex-col gap-3 min-w-0" data-answer-group>
-      <legend class="sr-only">Stage {{ row.number }}: {{ row.stage.name }}. Can you race?</legend>
+    <section class="answer-stage rounded-box bg-base-200 p-4 flex flex-col gap-3 min-w-0" id="stage-{{ row.stage.pk }}"
+             aria-label="Stage {{ row.number }}: {{ row.stage.name }}" data-answer-group{% if row.answer_errors %} data-flagged{% endif %}>
       <div class="flex flex-wrap items-center gap-2">
         <span class="badge badge-neutral badge-sm">Stage {{ row.number }}</span>
         <span class="badge badge-outline badge-sm">{{ row.stage.get_stage_type_display }}</span>
+        <span class="badge badge-warning badge-sm ms-auto" data-blank-badge{% if row.selected %} hidden{% endif %}>No answer yet</span>
       </div>
       <div>
         <p class="font-semibold text-base">{{ row.stage.name }}</p>
@@ -114,24 +174,32 @@
         <strong>New time.</strong> This stage moved after you answered {{ row.stale_answer }}. Please answer again.
       </p>
       {% endif %}
-      <div class="answer-choices">
-        <div class="join w-full">
-          {% for value, label in answer_choices %}
-          <input type="radio" class="join-item btn flex-1 h-11 answer-{{ value }}" name="answer_{{ row.stage.pk }}"
-                 value="{{ value }}" aria-label="{{ label }}"{% if row.selected == value %} checked{% endif %}>
+      <fieldset class="min-w-0"{% if row.answer_errors %} aria-describedby="answer-error-{{ row.stage.pk }}"{% endif %}>
+        <legend class="font-semibold mb-2"><span class="sr-only">Stage {{ row.number }}, {{ row.stage.name }}: </span>Can you race this stage?</legend>
+        <div class="flex flex-col gap-2">
+          {% for option in answer_options %}
+          <label class="answer-option answer-{{ option.value }}">
+            <input type="radio" class="radio shrink-0" name="answer_{{ row.stage.pk }}" value="{{ option.value }}"{% if row.selected == option.value %} checked{% endif %}>
+            <span class="flex-1 min-w-0">
+              <span class="block font-semibold">{{ option.label }}</span>
+              <span class="answer-hint block text-sm">{{ option.hint }}</span>
+            </span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="answer-icon h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{ option.icon }}"/></svg>
+          </label>
           {% endfor %}
         </div>
-      </div>
-      <details class="text-sm"{% if row.note %} open{% endif %}>
+        <p class="answer-error text-sm mt-2" id="answer-error-{{ row.stage.pk }}" data-answer-error{% if not row.answer_errors %} hidden{% endif %}>{{ row.answer_errors.0|default:"Choose Available, Maybe or No." }}</p>
+      </fieldset>
+      <details class="text-sm"{% if row.note or row.note_errors %} open{% endif %}>
         <summary class="cursor-pointer w-fit">{% if row.note %}Your note{% else %}Add a note for your captain{% endif %}</summary>
         <label class="mt-2 flex flex-col gap-1">
           <span class="text-xs text-base-content/80">Only your squad's captains see it.</span>
           <input type="text" name="note_{{ row.stage.pk }}" value="{{ row.note|default:'' }}" maxlength="{{ note_max_length }}"
                  class="input input-sm w-full" placeholder="e.g. Might join late">
         </label>
+        {% for error in row.note_errors %}<p class="rounded px-2 py-1 mt-2 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
       </details>
-      {% for error in row.errors %}<p class="rounded px-2 py-1 text-xs bg-error text-error-content">{{ error }}</p>{% endfor %}
-    </fieldset>
+    </section>
     {% elif row.status == "past" %}
     <section class="rounded-box border border-base-300 p-4 flex flex-col gap-1" aria-label="Stage {{ row.number }}: {{ row.stage.name }}">
       <div class="flex flex-wrap items-center gap-2">
@@ -157,8 +225,19 @@
     {% endif %}
     {% endfor %}
 
-    <div class="flex flex-wrap items-center gap-2 mt-2 mb-6">
-      <button type="submit" class="btn btn-success"{% if race_verified_required and not user_is_race_ready or not open_count %} disabled{% endif %}>Submit availability</button>
+    {% if open_count %}
+    <div class="answer-bar mt-2">
+      <div class="answer-status text-sm">
+        <div id="answer-count" role="status"{% if refused and blank_count %} hidden{% endif %}>
+          <p class="font-semibold" data-count>{{ answered_count }} of {{ open_count }} answered</p>
+          <p class="text-base-content/80" data-left>{% if blank_count %}{{ blank_count }} still to answer{% else %}Ready to submit{% endif %}</p>
+        </div>
+        <p id="answer-warning" class="answer-warning" aria-live="assertive">{% if refused and blank_count %}{{ blank_count }} stage{{ blank_count|pluralize }} still need{{ blank_count|pluralize:"s," }} an answer{% endif %}</p>
+      </div>
+      <button type="submit" class="btn btn-success"{% if race_verified_required and not user_is_race_ready %} disabled{% endif %}>Submit availability</button>
+    </div>
+    {% endif %}
+    <div class="mt-2 mb-6">
       <a href="{% url 'events:availability_results' event.pk squad.pk grid.pk %}" class="btn btn-outline">View results</a>
     </div>
   </form>
@@ -169,22 +248,62 @@
 <script>
 (function () {
   var form = document.getElementById('series-answers');
-  var progress = document.getElementById('answer-progress');
-  if (!form || !progress) { return; }
-  var groups = form.querySelectorAll('[data-answer-group]');
-  var total = parseInt(progress.getAttribute('data-open'), 10) || 0;
+  var count = document.getElementById('answer-count');
+  var warning = document.getElementById('answer-warning');
+  if (!form || !count || !warning) { return; }
+  var groups = Array.prototype.slice.call(form.querySelectorAll('[data-answer-group]'));
+  var total = groups.length;
+
+  function answered(group) { return Boolean(group.querySelector('input[type="radio"]:checked')); }
+  function blanks() { return groups.filter(function (group) { return !answered(group); }); }
+  function stillNeed(n) { return n + (n === 1 ? ' stage still needs' : ' stages still need') + ' an answer'; }
+
+  // Mark a stage as left blank when Submit was pressed, or clear the mark.
+  function flag(group, on) {
+    var error = group.querySelector('[data-answer-error]');
+    var fieldset = group.querySelector('fieldset');
+    group.toggleAttribute('data-flagged', on);
+    if (!error || !fieldset) { return; }
+    error.hidden = !on;
+    if (on) { fieldset.setAttribute('aria-describedby', error.id); } else { fieldset.removeAttribute('aria-describedby'); }
+  }
+
+  // Take the rider to a blank stage, with focus on its first answer. The page scrolls inside
+  // base.html's .drawer-content; scrollIntoView would scroll the window too, pushing the
+  // whole layout up and leaving a gap above the phone's tab bar.
+  function goTo(group, instant) {
+    var smooth = !instant && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var behavior = smooth ? 'smooth' : 'auto';
+    var box = group.closest('.drawer-content');
+    if (box) {
+      var top = group.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop - 16;
+      box.scrollTo({ top: top, behavior: behavior });
+    } else {
+      group.scrollIntoView({ block: 'start', behavior: behavior });
+    }
+    var first = group.querySelector('input[type="radio"]');
+    if (first) { first.focus({ preventScroll: true }); }
+  }
 
   function update() {
-    var answered = 0;
+    var left = blanks();
     groups.forEach(function (group) {
-      if (group.querySelector('input[type="radio"]:checked')) { answered += 1; }
+      var done = answered(group);
+      var badge = group.querySelector('[data-blank-badge]');
+      if (badge) { badge.hidden = done; }
+      if (done && group.hasAttribute('data-flagged')) { flag(group, false); }
     });
-    progress.textContent = answered + ' of ' + total + ' stage' + (total === 1 ? '' : 's') + ' answered';
+    count.querySelector('[data-count]').textContent = (total - left.length) + ' of ' + total + ' answered';
+    count.querySelector('[data-left]').textContent = left.length ? left.length + ' still to answer' : 'Ready to submit';
+    // After a refused Submit the bar says what is still missing, until nothing is.
+    if (warning.textContent) { warning.textContent = left.length ? stillNeed(left.length) : ''; }
+    count.hidden = Boolean(warning.textContent);
   }
 
   form.addEventListener('change', function (event) {
     if (event.target && event.target.type === 'radio') { update(); }
   });
+
   var all = document.getElementById('available-for-all');
   if (all) {
     all.addEventListener('click', function () {
@@ -192,6 +311,23 @@
       update();
     });
   }
+
+  form.addEventListener('submit', function (event) {
+    var left = blanks();
+    if (!left.length) { return; }
+    event.preventDefault();
+    left.forEach(function (group) { flag(group, true); });
+    // Emptied first, so pressing Submit again with the same blanks is read out again.
+    warning.textContent = '';
+    count.hidden = true;
+    window.setTimeout(function () { warning.textContent = stillNeed(left.length); }, 50);
+    goTo(left[0]);
+  });
+
+  // The server refused a submit (no script, or a stage opened meanwhile): go to the first one.
+  // Instantly, after the first paint; Chrome drops a smooth scroll asked for while loading.
+  var refused = form.querySelector('[data-flagged]');
+  if (refused) { window.requestAnimationFrame(function () { goTo(refused, true); }); }
 })();
 </script>
 {% endblock %}

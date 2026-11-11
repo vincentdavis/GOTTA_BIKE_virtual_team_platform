@@ -2075,7 +2075,14 @@ class SheetTimesForm(forms.Form):
 
 
 class SeriesAnswerForm(forms.Form):
-    """A rider's answers to a series sheet: ``answer_<pk>`` and ``note_<pk>`` per open stage."""
+    """A rider's answers to a series sheet: ``answer_<pk>`` and ``note_<pk>`` per open stage.
+
+    Every open stage needs an answer (Vincent's call): a blank refuses the whole submit, so a
+    captain never sees one. Maybe is the answer for "not sure yet". A stage that moved after
+    the rider answered it comes back blank, so it is asked again here too.
+    """
+
+    BLANK_ANSWER = "Choose Available, Maybe or No."
 
     def __init__(self, *args, stage_ids: list[int], **kwargs) -> None:
         """Add a field pair per stage the rider can answer.
@@ -2087,9 +2094,11 @@ class SeriesAnswerForm(forms.Form):
 
         """
         super().__init__(*args, **kwargs)
-        choices = [("", "No answer"), *AvailabilityResponse.StageAnswer.choices]
         for pk in stage_ids:
-            self.fields[f"answer_{pk}"] = forms.ChoiceField(required=False, choices=choices)
+            self.fields[f"answer_{pk}"] = forms.ChoiceField(
+                choices=AvailabilityResponse.StageAnswer.choices,
+                error_messages={"required": self.BLANK_ANSWER},
+            )
             self.fields[f"note_{pk}"] = forms.CharField(required=False, max_length=series.NOTE_MAX_LENGTH)
 
 

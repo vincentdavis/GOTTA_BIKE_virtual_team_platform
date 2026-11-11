@@ -610,15 +610,20 @@ def test_a_rider_answers_each_stage(client, event, user_model, squad, stages) ->
     page = client.get(url).content.decode()
     response = client.post(
         url,
-        {f"answer_{stages[0].pk}": "available", f"note_{stages[0].pk}": "Might join late"},
+        {
+            f"answer_{stages[0].pk}": "available",
+            f"note_{stages[0].pk}": "Might join late",
+            f"answer_{stages[1].pk}": "maybe",
+        },
     )
 
-    assert 'aria-label="Available"' in page
+    assert page.count("Can you race this stage?") == 2  # asked on screen, not only to screen readers
     assert "A1 isn't racing this stage." in page
     assert response.url == url
     answers = AvailabilityResponse.objects.get(grid=grid, user=rider).stage_answers
     assert answers == {
-        str(stages[0].pk): {"answer": "available", "for": series.stamp(_when(11)), "note": "Might join late"}
+        str(stages[0].pk): {"answer": "available", "for": series.stamp(_when(11)), "note": "Might join late"},
+        str(stages[1].pk): {"answer": "maybe", "for": series.stamp(_when(18))},
     }
 
 
@@ -628,20 +633,73 @@ def test_a_bad_answer_saves_nothing(client, event, user_model, squad, stages) ->
     grid = _sheet(squad, stages, [_when(11), _when(18), None])
     client.force_login(rider)
     url = reverse("events:availability_respond", args=[event.pk, squad.pk, grid.pk])
+    second = {f"answer_{stages[1].pk}": "no"}
 
-    too_long = client.post(url, {f"answer_{stages[0].pk}": "maybe", f"note_{stages[0].pk}": "x" * 201})
-    unknown = client.post(url, {f"answer_{stages[0].pk}": "yes"})
+    too_long = client.post(url, {f"answer_{stages[0].pk}": "maybe", f"note_{stages[0].pk}": "x" * 201, **second})
+    unknown = client.post(url, {f"answer_{stages[0].pk}": "yes", **second})
 
     assert (too_long.status_code, unknown.status_code) == (200, 200)
     assert not AvailabilityResponse.objects.filter(grid=grid, user=rider).exists()
 
 
 @pytest.mark.django_db
-def test_the_answers_stack_rather_than_push_the_page_sideways(client, event, user_model, squad, stages) -> None:
-    """At the largest text size on a phone, Available / Maybe / No no longer fit side by side.
+def test_a_blank_stage_saves_nothing_and_is_marked(client, event, user_model, squad, stages) -> None:
+    """Every open stage needs an answer (Vincent's call, 2026-11-11); Maybe is for not sure yet.
 
-    They used to widen each stage's box, and the page scrolled sideways (WCAG 1.4.10). The box
-    may now shrink, and a container query in rem stacks the answers when it is too narrow.
+    The page's script stops the submit first. This is the server's half, for a rider without
+    the script or a stage that opened while the page was up.
+    """
+    rider = _member(user_model, squad, "ana")
+    grid = _sheet(squad, stages, [_when(11), _when(18), None])
+    _answer(grid, rider, stages[0], "no")
+    before = AvailabilityResponse.objects.get(grid=grid, user=rider).stage_answers
+    client.force_login(rider)
+    url = reverse("events:availability_respond", args=[event.pk, squad.pk, grid.pk])
+
+    response = client.post(url, {f"answer_{stages[0].pk}": "available", f"note_{stages[0].pk}": "Late"})
+
+    assert response.status_code == 200
+    assert AvailabilityResponse.objects.get(grid=grid, user=rider).stage_answers == before
+    page = response.content.decode()
+    assert "Nothing was saved: 1 stage still needs an answer." in page
+    assert f'aria-describedby="answer-error-{stages[1].pk}"' in page
+    assert f'aria-describedby="answer-error-{stages[0].pk}"' not in page
+    # What the rider did choose is still chosen, so only the blank needs doing.
+    assert f'name="answer_{stages[0].pk}" value="available" checked' in page
+    assert 'value="Late"' in page
+    assert 'aria-live="assertive">1 stage still needs an answer</p>' in page
+
+
+@pytest.mark.django_db
+def test_a_stage_that_moved_must_be_answered_again(client, event, user_model, squad, stages) -> None:
+    rider = _member(user_model, squad, "ana")
+    grid = _sheet(squad, stages, [_when(11), _when(18), None])
+    _answer(grid, rider, stages[0], "available", at=_when(10))  # given for the stage's old time
+    _answer(grid, rider, stages[1], "no")
+    client.force_login(rider)
+    url = reverse("events:availability_respond", args=[event.pk, squad.pk, grid.pk])
+
+    page = client.get(url).content.decode()
+    refused = client.post(url, {f"answer_{stages[1].pk}": "no"})
+    saved = client.post(url, {f"answer_{stages[0].pk}": "maybe", f"answer_{stages[1].pk}": "no"})
+
+    assert "This stage moved after you answered Available." in page
+    assert f'name="answer_{stages[0].pk}" value="available" checked' not in page
+    assert refused.status_code == 200
+    assert saved.url == url
+    answers = AvailabilityResponse.objects.get(grid=grid, user=rider).stage_answers
+    assert answers[str(stages[0].pk)] == {"answer": "maybe", "for": series.stamp(_when(11))}
+
+
+@pytest.mark.django_db
+def test_the_answers_are_a_radio_list_that_cannot_push_the_page_sideways(
+    client, event, user_model, squad, stages
+) -> None:
+    """Available, Maybe and No are rows of a radio list (Vincent's call, 2026-11-11).
+
+    They were three buttons side by side, which read as a label more than a choice, and at the
+    largest text size on a phone they widened the stage's box until the page scrolled sideways
+    (WCAG 1.4.10). Rows stacked one above another never need that width.
     """
     rider = _member(user_model, squad, "ana")
     grid = _sheet(squad, stages, [_when(11), _when(18), None])
@@ -649,10 +707,40 @@ def test_the_answers_stack_rather_than_push_the_page_sideways(client, event, use
 
     page = client.get(reverse("events:availability_respond", args=[event.pk, squad.pk, grid.pk])).content.decode()
 
-    assert 'class="rounded-box bg-base-200 p-4 flex flex-col gap-3 min-w-0" data-answer-group' in page
-    assert page.count('<div class="answer-choices">') == 2  # one per open stage
-    assert ".answer-choices { container-type: inline-size; }" in page
-    assert "@container (max-width: 14rem)" in page
+    assert page.count('<label class="answer-option answer-') == 6  # three rows per open stage
+    assert page.count('<fieldset class="min-w-0">') == 2
+    assert 'class="answer-stage rounded-box bg-base-200 p-4 flex flex-col gap-3 min-w-0"' in page
+
+
+@pytest.mark.django_db
+def test_the_count_and_submit_stay_in_view(client, event, user_model, squad, stages) -> None:
+    rider = _member(user_model, squad, "ana")
+    grid = _sheet(squad, stages, [_when(11), _when(18), None])
+    client.force_login(rider)
+
+    page = client.get(reverse("events:availability_respond", args=[event.pk, squad.pk, grid.pk])).content.decode()
+
+    assert '<div class="answer-bar mt-2">' in page
+    assert "position: sticky;" in page
+    assert '<p class="font-semibold" data-count>0 of 2 answered</p>' in page
+    # Empty, but already on the page, so a refused submit is read out when it fills.
+    assert 'class="answer-warning" aria-live="assertive"></p>' in page
+
+
+@pytest.mark.django_db
+def test_a_sheet_with_nothing_to_answer_has_no_submit(client, event, user_model, squad, stages) -> None:
+    rider = _member(user_model, squad, "ana")
+    grid = _sheet(squad, stages, [None, None, None])
+    client.force_login(rider)
+    url = reverse("events:availability_respond", args=[event.pk, squad.pk, grid.pk])
+
+    page = client.get(url).content.decode()
+    response = client.post(url, {})
+
+    assert '<div class="answer-bar' not in page
+    assert "Submit availability" not in page
+    assert response.url == url
+    assert not AvailabilityResponse.objects.filter(grid=grid, user=rider).exists()
 
 
 @pytest.mark.django_db

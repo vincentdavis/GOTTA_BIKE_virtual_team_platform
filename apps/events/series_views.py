@@ -78,6 +78,14 @@ CELL = {
     series.UNANSWERED: ("No answer", "badge badge-dash badge-sm"),
 }
 
+#: How each answer reads on the rider's sheet: the hint under its word and the icon beside it
+#: (an SVG path on a 24-unit grid). Its colour when picked is the page's CSS, keyed on the value.
+ANSWER_LOOK = {
+    series.ANSWER.AVAILABLE: ("I can race this stage", "M5 12l5 5L20 7"),
+    series.ANSWER.MAYBE: ("I'm not sure yet", "M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"),
+    series.ANSWER.NO: ("I can't race this stage", "M18 6L6 18M6 6l12 12"),
+}
+
 #: What the race dialog says beside a rider who did not answer Available.
 MODAL_NOTE = {
     series.ANSWER.MAYBE: "(maybe)",
@@ -708,8 +716,9 @@ def series_respond(request: HttpRequest, event: Event, squad: Squad, grid: Avail
     """Show a rider a series sheet's stages, or save their answers.
 
     Reached through ``availability_respond_view``, which has already checked the sheet is
-    published. Only real answers are stored: a stage left unanswered keeps whatever the
-    rider said before, a stale answer included, which is what keeps asking them again.
+    published. A submit must answer every open stage (``SeriesAnswerForm``); one with a blank
+    saves nothing and shows the page again with the blank stages marked. Answers to stages no
+    longer open stay as they were.
 
     Args:
         request: The HTTP request.
@@ -748,47 +757,48 @@ def series_respond(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             messages.error(request, "You must be Race Verified to submit availability for this event.")
             return here
         form = SeriesAnswerForm(request.POST, stage_ids=open_ids)
+        if not open_ids:
+            messages.info(request, "No stage is open for answers right now.")
+            return here
         if form.is_valid():
-            given = 0
             for pk in open_ids:
-                choice = form.cleaned_data[f"answer_{pk}"]
-                if not choice:
-                    continue
-                entry = {"answer": choice, "for": series.stamp(sheet_stages[pk].starts_at)}
+                entry = {"answer": form.cleaned_data[f"answer_{pk}"], "for": series.stamp(sheet_stages[pk].starts_at)}
                 if form.cleaned_data[f"note_{pk}"]:
                     entry["note"] = form.cleaned_data[f"note_{pk}"]
                 answers[str(pk)] = entry
-                given += 1
-            if given or response is not None:
-                AvailabilityResponse.objects.update_or_create(
-                    grid=grid, user=request.user, defaults={"stage_answers": answers}
-                )
-                # The badge would otherwise keep asking for up to a minute after the answer.
-                cache.delete(f"{PENDING_AVAILABILITY_CACHE_PREFIX}:{request.user.pk}")
-                outstanding = sum(
-                    1
-                    for pk in open_ids
-                    if series.answer_state(answers, sheet_stages[pk]) in {series.UNANSWERED, series.STALE}
-                )
-                logfire.info(
-                    "Series availability saved",
-                    grid_id=str(grid.id),
-                    squad_id=squad.pk,
-                    event_id=event.pk,
-                    user_id=request.user.id,
-                    answered=given,
-                    outstanding=outstanding,
-                )
-                if outstanding:
-                    messages.success(
-                        request,
-                        f"Availability saved. {outstanding} stage{'s' if outstanding != 1 else ''} still "
-                        f"need{'' if outstanding != 1 else 's'} an answer.",
-                    )
-                else:
-                    messages.success(request, "Availability saved.")
-                return here
-            messages.warning(request, "Choose Available, Maybe or No for at least one stage.")
+            AvailabilityResponse.objects.update_or_create(
+                grid=grid, user=request.user, defaults={"stage_answers": answers}
+            )
+            # The badge would otherwise keep asking for up to a minute after the answer.
+            cache.delete(f"{PENDING_AVAILABILITY_CACHE_PREFIX}:{request.user.pk}")
+            logfire.info(
+                "Series availability saved",
+                grid_id=str(grid.id),
+                squad_id=squad.pk,
+                event_id=event.pk,
+                user_id=request.user.id,
+                answered=len(open_ids),
+            )
+            messages.success(request, "Availability saved.")
+            return here
+        blank = sum(1 for pk in open_ids if not form.data.get(f"answer_{pk}"))
+        logfire.info(
+            "Series availability refused",
+            grid_id=str(grid.id),
+            squad_id=squad.pk,
+            event_id=event.pk,
+            user_id=request.user.id,
+            blank=blank,
+            invalid_fields=len(form.errors),
+        )
+        if blank:
+            messages.warning(
+                request,
+                f"Nothing was saved: {blank} stage{'s' if blank != 1 else ''} still "
+                f"need{'' if blank != 1 else 's'} an answer.",
+            )
+        else:
+            messages.warning(request, "Nothing was saved. Fix the marked stage and submit again.")
     else:
         form = SeriesAnswerForm(stage_ids=open_ids)
 
@@ -825,10 +835,12 @@ def series_respond(request: HttpRequest, event: Event, squad: Squad, grid: Avail
                 "selected": answer_field.value() if form.is_bound else (state if state in series.ANSWER_VALUES else ""),
                 "stale_answer": series.ANSWER(entry["answer"]).label if state == series.STALE else "",
                 "note": note_field.value() if form.is_bound else entry.get("note", ""),
-                "errors": [*answer_field.errors, *note_field.errors],
+                "answer_errors": answer_field.errors,
+                "note_errors": note_field.errors,
             })
         rows.append(row)
     open_rows = [row for row in rows if row["status"] == "open"]
+    answered_count = sum(1 for row in open_rows if row["selected"])
 
     logfire.debug(
         "Series respond page viewed",
@@ -845,9 +857,14 @@ def series_respond(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             "squad": squad,
             "grid": grid,
             "rows": rows,
-            "answer_choices": series.ANSWER.choices,
+            "answer_options": [
+                {"value": value, "label": label, "hint": ANSWER_LOOK[value][0], "icon": ANSWER_LOOK[value][1]}
+                for value, label in series.ANSWER.choices
+            ],
             "open_count": len(open_rows),
-            "answered_count": sum(1 for row in open_rows if row["selected"]),
+            "answered_count": answered_count,
+            "blank_count": len(open_rows) - answered_count,
+            "refused": form.is_bound and bool(form.errors),
             "stale_count": sum(1 for row in open_rows if row["stale_answer"] and not row["selected"]),
             "display_timezone": tz.key,
             "tz_is_default": not user_tz,
