@@ -507,12 +507,12 @@ When handling API responses that may contain `None` values for string fields, us
 
 ## Personal Data & GDPR
 
-The repo is **public** — never commit real rider data. Sensitive here: weight, height, power, heart rate, verification media, birth year, emergency contacts — and much of it concerns people who never signed up (ZwiftPower/ZwiftRacing rows and their `Historical*` shadows, `RiderProfile`).
+The repo is **public** — never commit real rider data, much of which concerns people who never signed up (ZwiftPower/ZwiftRacing rows and their `Historical*` shadows, `RiderProfile`). Sensitive here: heart rate, verification media, birth year, emergency contacts. Weight, height, power and gender are not sensitive: a Zwift racing team runs on them (Vincent's call, 2026-11-11).
 
 - **Every new model declares `retention = RetentionPolicy.keep|cascade|strip|delete("<why, over 30 chars>")`** (`gotta_bike_platform/retention.py`; `strip`/`delete` also take `anchor=` and a Constance `setting=`). `gotta_bike_platform/test_retention_policy.py` fails otherwise — it lives outside `apps/`, so `pytest apps/<app>` won't catch it — and its `UNCLASSIFIED` list may only shrink. A timed policy's task must be `scheduled=True` in `task_registry.py` (nothing tests that).
 - **Retention windows** are Constance `*_DAYS` settings in the `Compliance` fieldset (see Dynamic Settings).
 - **New personal data must be erasable**: `CASCADE` from `User`, handled in `apps/accounts/services.py:delete_user_account` (anything keyed by `discord_id`/`zwid`, or behind `SET_NULL`), or listed as kept in `_deletion_effects.html`.
-- **Minimise what leaves the database.** Logfire gets ids (`user_id`, `discord_id`, `zwid`) — never names, email, birth year, measurements or free text. Discord posts and task kwargs carry ids, labels and links, not values. No new third-party script, pixel or CDN in `base.html` without consent handling.
+- **Minimise what leaves the database.** Logfire gets ids (`user_id`, `discord_id`, `zwid`) — never names, email, birth year or free text. Discord posts and task kwargs carry ids, labels and links, not values. No new third-party script, pixel or CDN in `base.html` without consent handling.
 - **Exports**: gate no wider than the page showing those rows, log `user_id` and the row count, and pass rider-chosen text through `gotta_bike_platform/csv_utils.csv_safe`; a new personal column re-opens the question of who may export. Public profiles: see Public User Profiles.
 - **Standing instruction:** whenever you touch personal data, look for GDPR improvements — retention, erasure gaps, over-logging, over-broad exports, third-party sharing, consent, transparency, subject access. **Report** each to the user with file:line evidence and a suggested fix rather than silently implementing it: deletions and sweeps are one-way, and several are open policy decisions. (TODO.md "Privacy & Data Protection" tracks some, but is partly stale.)
 
@@ -525,7 +525,7 @@ Env vars: `LOGFIRE_TOKEN` (optional), `LOGFIRE_ENVIRONMENT`. Usage: `import logf
 
 ### Logging Requirements
 
-Add logfire logging for: API calls, error handlers, auth/permission checks, background tasks, data operations, form submissions. Never silently catch exceptions — always `logfire.error("msg", error=str(e))`. Use `logfire.span()` for multi-step operations. Include context: `user_id`, `discord_id`, `zwid` — ids only, never names, email, birth year, measurements or free text (see Personal Data & GDPR).
+Add logfire logging for: API calls, error handlers, auth/permission checks, background tasks, data operations, form submissions. Never silently catch exceptions — always `logfire.error("msg", error=str(e))`. Use `logfire.span()` for multi-step operations. Include context: `user_id`, `discord_id`, `zwid` — ids only, never names, email, birth year or free text (see Personal Data & GDPR).
 
 Levels: `error` (failures/exceptions), `warning` (rate limits/fallbacks), `info` (operations/actions), `debug` (counts/diagnostics).
 
