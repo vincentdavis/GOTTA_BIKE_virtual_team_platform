@@ -50,6 +50,10 @@
           useless; the server's version leaves out an empty query). hx-sync drops an answer
           that a newer keystroke has overtaken. The hidden inputs carry the filters in force,
           so a search narrows within them rather than quietly clearing them.
+
+          The field asks for 12rem, or the whole row when that is less: 12rem is 288px at the
+          largest text size, wider than a 320px phone leaves, and a plain min-w-48 pushed the
+          page 28px sideways (WCAG 1.4.10). Search wraps below it when the two do not fit.
         {% endcomment %}
         <form method="get" role="search" class="mt-4 flex flex-wrap items-end gap-2"
               action="{% url 'team:roster' %}"
@@ -59,7 +63,7 @@
               hx-swap="outerHTML"
               hx-sync="this:replace"
               hx-indicator="#roster-searching">
-          <div class="flex-1 min-w-48">
+          <div class="flex-1 min-w-[min(12rem,100%)]">
             <label class="label py-1" for="roster-search">
               <span class="label-text">Search riders</span>
             </label>

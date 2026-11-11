@@ -69,8 +69,17 @@
 </a>
 <!-- Site-wide Banners (full width, above everything) -->
 {% if config.SITE_ANNOUNCEMENT %}
-  <div
-      class="bg-primary text-primary-content text-center py-2 px-4 text-sm font-medium prose prose-sm max-w-none prose-a:text-primary-content prose-a:underline flex-shrink-0">
+  {% comment %}
+    Admin-written Markdown on a coloured surface (WCAG 1.4.3). daisyUI colours prose's bold,
+    headings, table headers, quotes, kbd and list numbers from base-content, which was about
+    2:1 here, so each follows the banner's own text colour instead. Code and mark bring their
+    own background and keep their colours.
+
+    The surface is primary with a tenth of black: daisyUI's dark primary is too light for its
+    own content colour (4.13:1). Now 8.1:1 in light and 5.2:1 in dark.
+  {% endcomment %}
+  <div id="site-announcement"
+      class="bg-[color-mix(in_oklab,var(--color-primary)_90%,black)] text-primary-content text-center py-2 px-4 text-sm font-medium prose prose-sm max-w-none prose-a:text-primary-content prose-a:underline prose-strong:text-primary-content prose-headings:text-primary-content prose-blockquote:text-primary-content prose-kbd:text-primary-content marker:text-primary-content flex-shrink-0">
     {{ config.SITE_ANNOUNCEMENT|render_markdown }}
   </div>
 {% endif %}
@@ -129,7 +138,8 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
       <div class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
         <div class="flex items-center gap-2">
           <span class="px-1.5 py-0.5 text-xs font-bold bg-info-content text-info rounded shrink-0">Z</span>
-          <span class="prose prose-sm max-w-none prose-a:text-info-content prose-a:underline">
+          {# .prose sets its own text colour (base-content), so without these the message was 1.76:1 in dark. #}
+          <span class="prose prose-sm max-w-none text-info-content prose-a:text-info-content prose-a:underline prose-strong:text-info-content prose-headings:text-info-content prose-blockquote:text-info-content prose-kbd:text-info-content marker:text-info-content">
             {{ config.ZAUTH_BANNER_MESSAGE|render_markdown }}
           </span>
         </div>
@@ -294,7 +304,7 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
         </div>
         <div class="dropdown dropdown-end">
           <div tabindex="0" role="button"
-               class="btn btn-ghost btn-circle avatar {% if not user.discord_avatar_url %}placeholder{% endif %}"
+               class="btn btn-ghost btn-circle avatar {% if not user.discord_avatar_url %}avatar-placeholder{% endif %}"
                {% if pending_availability_count %}aria-label="{{ pending_availability_count }} availability response(s) pending" title="{{ pending_availability_count }} availability response(s) pending"{% endif %}>
             {% if user.discord_avatar_url %}
               <div class="w-10 rounded-full">

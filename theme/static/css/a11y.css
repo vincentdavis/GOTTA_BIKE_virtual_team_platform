@@ -72,6 +72,20 @@
 }
 
 /*
+ * On base.html's coloured banners the ring sits on the banner, not on the page background, and
+ * base-content can vanish into it: about 2:1 on the site announcement (primary) in the light
+ * theme and on the Zwift banner (info) in the dark theme. Inside each banner the ring takes the
+ * banner's own text colour, which that surface is built to contrast with (5.2:1 or better).
+ */
+#site-announcement :focus-visible {
+  outline-color: var(--color-primary-content) !important;
+}
+
+#zauth-banner :focus-visible {
+  outline-color: var(--color-info-content) !important;
+}
+
+/*
  * Text size preference.
  * --------------------
  * Scales the whole UI from one declaration, because every size in the stack is rem:
