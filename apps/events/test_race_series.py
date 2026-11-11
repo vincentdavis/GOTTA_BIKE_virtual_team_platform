@@ -839,11 +839,53 @@ def test_captains_get_notes_and_a_lineup_dialog_prefilled_from_the_stage(
     key = "{}|{}".format(*series.slot_key(_when(11)))
     assert [note["note"] for note in response.context["notes"]] == ["Might join late"]
     assert response.context["utc_cell_users_json"][key] == [ana.pk]
-    assert response.context["utc_cell_notes_json"][key] == {str(bo.pk): "(maybe)"}
+    assert response.context["utc_cell_answers_json"][key] == {
+        str(ana.pk): {"state": "available", "note": "Might join late"},
+        str(bo.pk): {"state": "maybe", "note": ""},
+    }
     defaults = response.context["slot_defaults_json"][key]
     assert (defaults["name"], defaults["laps"], defaults["custom_finish_km"]) == ("Stage 1: Opener", 3, None)
     assert defaults["course_url"].endswith(reverse("routes:detail", args=["volcano"]))
     assert "openSlotModal" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_the_lineup_dialog_shows_each_riders_answer_to_the_stage(
+    client, event, event_admin, user_model, squad, stages
+) -> None:
+    """Picking a stage's lineup shows what every rider said (Vincent's call, 2026-11-11).
+
+    The dialog used to list only the riders who answered Available, with everyone else
+    behind "Everyone else on this squad". It now gets each member's answer, with the note
+    or the answer given before the stage moved, and the results grid's words and badges.
+    """
+    ana = _member(user_model, squad, "ana")
+    bo = _member(user_model, squad, "bo")
+    cy = _member(user_model, squad, "cy")
+    di = _member(user_model, squad, "di")
+    grid = _sheet(squad, stages, [_when(11), _when(18), None])
+    _answer(grid, ana, stages[0], "no", note="Away that weekend")
+    _answer(grid, bo, stages[0], "available", at=_when(10))  # given before the stage moved
+    _answer(grid, di, stages[0], "maybe")
+    client.force_login(event_admin)
+
+    response = client.get(reverse("events:availability_results", args=[event.pk, squad.pk, grid.pk]))
+
+    key = "{}|{}".format(*series.slot_key(_when(11)))
+    assert response.context["utc_cell_answers_json"][key] == {
+        str(ana.pk): {"state": "no", "note": "Away that weekend"},
+        str(bo.pk): {"state": "stale", "said": "Available"},
+        str(cy.pk): {"state": "none"},
+        str(di.pk): {"state": "maybe", "note": ""},
+    }
+    legend = response.context["answer_legend_json"]
+    assert legend["order"] == ["available", "maybe", "stale", "none", "no"]
+    labels = [legend["labels"][state] for state in legend["order"]]
+    assert labels == ["Available", "Maybe", "Old time", "No answer", "No"]
+    assert legend["badges"]["available"] == "badge badge-success badge-sm"
+    page = response.content.decode()
+    assert 'id="utc-cell-answers-data"' in page
+    assert 'id="slot-modal-answer-summary"' in page
 
 
 # --- The series board --------------------------------------------------------------------------

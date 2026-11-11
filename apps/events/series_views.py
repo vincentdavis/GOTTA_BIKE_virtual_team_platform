@@ -86,12 +86,12 @@ ANSWER_LOOK = {
     series.ANSWER.NO: ("I can't race this stage", "M18 6L6 18M6 6l12 12"),
 }
 
-#: What the race dialog says beside a rider who did not answer Available.
-MODAL_NOTE = {
-    series.ANSWER.MAYBE: "(maybe)",
-    series.ANSWER.NO: "(said no)",
-    series.STALE: "(answered for the old time)",
-    series.UNANSWERED: "(no answer)",
+#: The race dialog's badges, in the order its rider lists are sorted. The results grid's words
+#: and colours, so a captain reads an answer the same way in both.
+ANSWER_LEGEND = {
+    "order": [series.ANSWER.AVAILABLE, series.ANSWER.MAYBE, series.STALE, series.UNANSWERED, series.ANSWER.NO],
+    "labels": {state: label for state, (label, _badge) in CELL.items()},
+    "badges": {state: badge for state, (_label, badge) in CELL.items()},
 }
 
 #: The event page's Series board tab panel, which asks for the board with this HX-Target.
@@ -926,6 +926,29 @@ def _race_label(race: AvailabilitySlotSelection | None) -> str:
     return f"{race.get_status_display()} · {count}"
 
 
+def _lineup_answer(answers: dict | None, stage: SeriesStage, state: str) -> dict[str, str]:
+    """One rider's answer to a stage, as the race dialog shows it beside their name.
+
+    Captains only: a note is the rider's own words, which only the squad's captains see.
+
+    Args:
+        answers: The rider's ``stage_answers``, or None for no response.
+        stage: The stage.
+        state: The rider's ``series.answer_state`` for it.
+
+    Returns:
+        ``state``, plus the rider's ``note`` for an answer to the stage's time, or ``said``,
+        the answer they gave for a time the stage has since moved from.
+
+    """
+    entry = (answers or {}).get(str(stage.pk)) or {}
+    if state == series.STALE:
+        return {"state": state, "said": series.ANSWER(entry["answer"]).label}
+    if state in series.ANSWER_VALUES:
+        return {"state": state, "note": entry.get("note", "")}
+    return {"state": state}
+
+
 def series_results(request: HttpRequest, event: Event, squad: Squad, grid: AvailabilityGrid) -> HttpResponse:
     """Show a squad's answers stage by stage, and let its captains pick each stage's lineup.
 
@@ -1022,16 +1045,16 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
     modal: dict = {}
     if is_captain:
         cell_users: dict[str, list[int]] = {}
-        cell_notes: dict[str, dict[str, str]] = {}
+        cell_answers: dict[str, dict[str, dict[str, str]]] = {}
         for column in open_columns:
             cell_users[column["key"]] = []
-            cell_notes[column["key"]] = {}
+            cell_answers[column["key"]] = {}
             for user in members:
-                state = series.answer_state(answers_by_user.get(user.pk), column["ss"])
+                answers = answers_by_user.get(user.pk)
+                state = series.answer_state(answers, column["ss"])
                 if state == series.ANSWER.AVAILABLE:
                     cell_users[column["key"]].append(user.pk)
-                else:
-                    cell_notes[column["key"]][str(user.pk)] = MODAL_NOTE[state]
+                cell_answers[column["key"]][str(user.pk)] = _lineup_answer(answers, column["stage"], state)
         user_data = {
             entry["user"].pk: {
                 "display_name": entry["display_name"],
@@ -1052,7 +1075,8 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             }
         modal = {
             "utc_cell_users_json": cell_users,
-            "utc_cell_notes_json": cell_notes,
+            "utc_cell_answers_json": cell_answers,
+            "answer_legend_json": ANSWER_LEGEND,
             "user_data_json": user_data,
             "squad_roster_ids_json": [user.pk for user in roster],
             "selections_json": _slot_modal_selections(list(races.values())),

@@ -10,7 +10,11 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
   squad_roster_ids_json  [user ids] for "Everyone else on this squad"
   selections_json        {"<date>|<time>": the existing race's fields}
   slot_defaults_json     optional: {"<date>|<time>": {name, laps, course_url, custom_finish_km}} prefilling a new race
-  utc_cell_notes_json    optional: {"<date>|<time>": {user id: note}} replacing "(not available)"
+  utc_cell_answers_json  optional: {"<date>|<time>": {user id: {state, note | said}}}, a race series' answers
+                         to the stage at that time. Where a time has them, both lists hold the whole squad,
+                         sorted by answer, each rider with the badge the results grid shows
+                         (answer_legend_json: {order, labels, badges}) and, in the riders list, their note;
+                         "Everyone else on this squad" is not used. Weekly sheets send neither.
 {% endcomment %}
 <!-- Slot Selection Modal -->
 <dialog id="slot-modal" class="modal">
@@ -83,8 +87,9 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
 
       <div class="form-control mb-3">
         <label class="label"><span class="label-text">Select Riders</span></label>
+        <p id="slot-modal-answer-summary" class="hidden mb-2 flex flex-wrap items-center gap-1 text-xs"></p>
         <div class="mb-2 flex gap-2">
-          <button type="button" class="btn btn-xs btn-outline" onclick="toggleAllRiders(true)">Select All</button>
+          <button type="button" class="btn btn-xs btn-outline" onclick="toggleAllRiders(true)">Select all available</button>
           <button type="button" class="btn btn-xs btn-outline" onclick="toggleAllRiders(false)">Deselect All</button>
         </div>
         <div id="slot-modal-riders" class="max-h-60 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
@@ -93,7 +98,7 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
           <summary class="text-xs cursor-pointer text-base-content/60 hover:text-base-content select-none">
             Everyone else on this squad (<span id="slot-modal-others-count">0</span>)
           </summary>
-          <p class="text-xs text-base-content/50 mt-1">These riders did not mark themselves available at this time.</p>
+          <p class="text-xs text-base-content/70 mt-1">These riders did not mark themselves available at this time.</p>
           <div id="slot-modal-others" class="mt-1 max-h-48 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
           </div>
         </details>
@@ -107,7 +112,7 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
           <summary class="text-xs cursor-pointer text-base-content/60 hover:text-base-content select-none">
             Everyone else on this squad (<span id="slot-modal-sub-others-count">0</span>)
           </summary>
-          <p class="text-xs text-base-content/50 mt-1">These riders did not mark themselves available at this time.</p>
+          <p class="text-xs text-base-content/70 mt-1">These riders did not mark themselves available at this time.</p>
           <div id="slot-modal-sub-others" class="mt-1 max-h-48 overflow-y-auto border border-base-300 rounded-lg p-2 space-y-1">
           </div>
         </details>
@@ -165,17 +170,19 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
 {{ squad_roster_ids_json|json_script:"squad-roster-ids-data" }}
 {{ selections_json|json_script:"selections-data" }}
 {{ slot_defaults_json|json_script:"slot-defaults-data" }}
-{{ utc_cell_notes_json|json_script:"utc-cell-notes-data" }}
+{{ utc_cell_answers_json|json_script:"utc-cell-answers-data" }}
+{{ answer_legend_json|json_script:"answer-legend-data" }}
 <script>
   const utcCellUsers = JSON.parse(document.getElementById('utc-cell-users-data').textContent);
   const userData = JSON.parse(document.getElementById('user-data').textContent);
   const squadRosterIds = JSON.parse(document.getElementById('squad-roster-ids-data').textContent) || [];
   const existingSelections = JSON.parse(document.getElementById('selections-data').textContent);
-  // Both optional, so a host that sends neither gets "" back, read here as {}. The
-  // race-series page sends them: a stage's own name, laps and course prefill a new race,
-  // and a rider who did not answer Available is listed with the answer they gave.
+  // Optional, so a host that sends none gets "" back, read here as {}. The race-series page
+  // sends them: a stage's own name, laps and course prefill a new race, and every rider is
+  // listed with the answer they gave to the stage.
   const slotDefaults = JSON.parse(document.getElementById('slot-defaults-data').textContent) || {};
-  const cellNotes = JSON.parse(document.getElementById('utc-cell-notes-data').textContent) || {};
+  const cellAnswers = JSON.parse(document.getElementById('utc-cell-answers-data').textContent) || {};
+  const answerLegend = JSON.parse(document.getElementById('answer-legend-data').textContent) || {};
   const createUrl = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}";
   const updateUrlBase = "{% url 'events:slot_selection_create' event.pk squad.pk grid.pk %}".replace(/slots\/$/, "slots/");
   const squadDiscordChannelId = {{ squad.discord_channel_id|default:0 }};
@@ -252,9 +259,15 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
     }
     window.__slotModalExisting = existing || null;
 
-    // Riders and substitutes are both drawn from the availability pool for this
+    // Weekly: riders and substitutes are both drawn from the availability pool for this
     // slot, with an "everyone else on this squad" list underneath so a captain can
-    // pick someone who never marked availability (or is not free at this time).
+    // pick someone who never marked availability (or is not free at this time). A race
+    // series lists the whole squad instead, sorted by each rider's answer to the stage.
+    const answersHere = cellAnswers[utcKey] || null;
+    const seriesMode = answersHere !== null;
+    const answerOrder = answerLegend.order || [];
+    const answerLabels = answerLegend.labels || {};
+    const answerBadges = answerLegend.badges || {};
     const availableIds = available.map(String);
     const availableSet = new Set(availableIds);
     const rosterIds = (typeof squadRosterIds !== 'undefined' ? squadRosterIds : []).map(String);
@@ -272,60 +285,141 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
       return ids;
     };
 
-    const makeRow = function(uid, inputName, cssClass, checked, note) {
+    // The name, categories and notes are rider data, so they go in as text, never as HTML.
+    const span = function(className, text) {
+      const el = document.createElement('span');
+      el.className = className;
+      el.textContent = text;
+      return el;
+    };
+
+    // available marks the rows "Select all available" picks. answer is a race series'
+    // {state, note | said} for the rider; showNote puts the rider's note, or the answer
+    // they gave before the stage moved, under their name.
+    const makeRow = function(uid, inputName, cssClass, checked, note, available, answer, showNote) {
       const u = userData[uid];
       if (!u) return null;
       const label = document.createElement('label');
-      label.className = 'flex items-center gap-2 cursor-pointer text-sm py-0.5';
       const input = document.createElement('input');
       input.type = 'checkbox';
       input.name = inputName;
       input.value = uid;
       input.className = 'checkbox checkbox-xs ' + cssClass;
       input.defaultChecked = checked;
-      // The name and categories are rider data, so they go in as text, never as HTML.
-      const span = function(className, text) {
-        const el = document.createElement('span');
-        el.className = className;
-        el.textContent = text;
-        return el;
-      };
-      label.append(input, ' ' + u.display_name);
-      if (u.zr_category) label.append(span('badge badge-xs badge-outline', u.zr_category));
-      if (u.zr_rating) label.append(span('text-xs text-base-content/50', u.zr_rating));
-      if (note) label.append(span('text-xs text-warning', note));
+      if (available) input.dataset.available = '1';
+      if (!seriesMode) {
+        label.className = 'flex items-center gap-2 cursor-pointer text-sm py-0.5';
+        label.append(input, ' ' + u.display_name);
+        if (u.zr_category) label.append(span('badge badge-xs badge-outline', u.zr_category));
+        if (u.zr_rating) label.append(span('text-xs text-base-content/70', u.zr_rating));
+        if (note) label.append(span('text-xs text-base-content/70', note));
+        return label;
+      }
+      label.className = 'flex items-start gap-2 cursor-pointer text-sm py-1';
+      input.classList.add('mt-0.5', 'shrink-0');
+      const main = span('flex-1 min-w-0 flex flex-col', '');
+      const line = span('flex flex-wrap items-center gap-x-2', '');
+      line.append(u.display_name);
+      if (u.zr_category) line.append(span('badge badge-xs badge-outline', u.zr_category));
+      if (u.zr_rating) line.append(span('text-xs text-base-content/70', u.zr_rating));
+      main.append(line);
+      if (showNote && answer) {
+        let said = '';
+        if (answer.state === 'stale') said = 'Said ' + answer.said + ' before the stage moved';
+        else if (answer.note) said = '“' + answer.note + '”';
+        if (said) main.append(span('text-xs text-base-content/80', said));
+      }
+      label.append(input, main);
+      if (answer) label.append(span((answerBadges[answer.state] || 'badge badge-sm') + ' shrink-0', answerLabels[answer.state] || ''));
       return label;
     };
 
-    const fillList = function(container, ids, inputName, cssClass, chosenIds, note, emptyText) {
+    const fillList = function(container, ids, inputName, cssClass, chosenIds, note, emptyText, available) {
       container.innerHTML = '';
       let count = 0;
       ids.forEach(function(uid) {
-        const rowNote = typeof note === 'function' ? note(uid) : note;
-        const row = makeRow(uid, inputName, cssClass, chosenIds.indexOf(String(uid)) !== -1, rowNote);
+        const row = makeRow(uid, inputName, cssClass, chosenIds.indexOf(String(uid)) !== -1, note, available, null, false);
         if (row) { container.appendChild(row); count += 1; }
       });
-      if (count === 0) container.innerHTML = '<p class="text-xs text-base-content/50">' + emptyText + '</p>';
+      if (count === 0) container.innerHTML = '<p class="text-xs text-base-content/70">' + emptyText + '</p>';
       return count;
     };
 
-    const noneAvailable = 'No riders available at this slot';
-    const allAvailable = 'Everyone on this squad is available at this slot';
-    fillList(ridersDiv, availableIds, 'selected_users', 'checkbox-primary rider-cb', selectedIds, '', noneAvailable);
-    fillList(substitutesDiv, availableIds, 'substitutes', 'checkbox-secondary sub-cb', subIds, '', noneAvailable);
+    // The whole squad, each answer's riders together in the legend's order, keeping the
+    // results grid's order within an answer. Riders the sheet does not ask (a captain who is
+    // not a squad member) and saved picks who have since left come last, so a saved choice
+    // stays listed instead of vanishing on the next save.
+    const seriesIds = function() {
+      const rank = function(uid) {
+        const answer = answersHere[uid];
+        const at = answer ? answerOrder.indexOf(answer.state) : -1;
+        return at === -1 ? answerOrder.length : at;
+      };
+      const ids = rosterIds.slice();
+      selectedIds.concat(subIds).forEach(function(uid) { if (ids.indexOf(uid) === -1) ids.push(uid); });
+      return ids.sort(function(a, b) { return rank(a) - rank(b); });
+    };
 
-    const riderOtherIds = othersFor(selectedIds);
-    const subOtherIds = othersFor(subIds);
-    const notesHere = cellNotes[utcKey] || {};
-    const otherNote = function(uid) { return notesHere[uid] || '(not available)'; };
-    const othersCount = fillList(othersDiv, riderOtherIds, 'selected_users', 'checkbox-primary rider-cb', selectedIds, otherNote, allAvailable);
-    const subOthersCount = fillList(subOthersDiv, subOtherIds, 'substitutes', 'checkbox-secondary sub-cb', subIds, otherNote, allAvailable);
-    document.getElementById('slot-modal-others-count').textContent = othersCount;
-    document.getElementById('slot-modal-sub-others-count').textContent = subOthersCount;
-    // Open the disclosure when it already holds a pick, so a rider chosen from it
-    // is never hidden behind a collapsed section.
-    othersWrap.open = riderOtherIds.some(function(uid) { return selectedIds.indexOf(uid) !== -1; });
-    subOthersWrap.open = subOtherIds.some(function(uid) { return subIds.indexOf(uid) !== -1; });
+    const fillSeries = function(container, ids, inputName, cssClass, chosenIds, showNote) {
+      container.innerHTML = '';
+      let previous = null;
+      ids.forEach(function(uid) {
+        const answer = answersHere[uid] || null;
+        const isAvailable = answer !== null && answer.state === 'available';
+        const row = makeRow(uid, inputName, cssClass, chosenIds.indexOf(uid) !== -1, '', isAvailable, answer, showNote);
+        if (!row) return;
+        // A line where one answer's riders end and the next begin.
+        const group = answer ? answer.state : '';
+        if (previous !== null && group !== previous) row.classList.add('border-t', 'border-base-300', 'pt-1.5');
+        previous = group;
+        container.appendChild(row);
+      });
+      if (!container.children.length) container.innerHTML = '<p class="text-xs text-base-content/70">No riders on this squad</p>';
+    };
+
+    const summary = document.getElementById('slot-modal-answer-summary');
+    summary.textContent = '';
+    summary.classList.toggle('hidden', !seriesMode);
+    othersWrap.classList.toggle('hidden', seriesMode);
+    subOthersWrap.classList.toggle('hidden', seriesMode);
+    [ridersDiv, substitutesDiv].forEach(function(box) {
+      box.classList.toggle('max-h-96', seriesMode);
+      box.classList.toggle('max-h-60', !seriesMode);
+    });
+
+    if (seriesMode) {
+      const ids = seriesIds();
+      fillSeries(ridersDiv, ids, 'selected_users', 'checkbox-primary rider-cb', selectedIds, true);
+      fillSeries(substitutesDiv, ids, 'substitutes', 'checkbox-secondary sub-cb', subIds, false);
+      // Nothing may stay in the hidden disclosures, or a rider would be posted twice.
+      othersDiv.innerHTML = '';
+      subOthersDiv.innerHTML = '';
+      othersWrap.open = false;
+      subOthersWrap.open = false;
+      summary.append(span('text-base-content/80', 'Answers for this stage:'));
+      answerOrder.forEach(function(state) {
+        const count = rosterIds.filter(function(uid) {
+          return answersHere[uid] && answersHere[uid].state === state;
+        }).length;
+        if (count) summary.append(span(answerBadges[state] || 'badge badge-sm', count + ' ' + (answerLabels[state] || state)));
+      });
+    } else {
+      const noneAvailable = 'No riders available at this slot';
+      const allAvailable = 'Everyone on this squad is available at this slot';
+      fillList(ridersDiv, availableIds, 'selected_users', 'checkbox-primary rider-cb', selectedIds, '', noneAvailable, true);
+      fillList(substitutesDiv, availableIds, 'substitutes', 'checkbox-secondary sub-cb', subIds, '', noneAvailable, true);
+
+      const riderOtherIds = othersFor(selectedIds);
+      const subOtherIds = othersFor(subIds);
+      const othersCount = fillList(othersDiv, riderOtherIds, 'selected_users', 'checkbox-primary rider-cb', selectedIds, '(not available)', allAvailable, false);
+      const subOthersCount = fillList(subOthersDiv, subOtherIds, 'substitutes', 'checkbox-secondary sub-cb', subIds, '(not available)', allAvailable, false);
+      document.getElementById('slot-modal-others-count').textContent = othersCount;
+      document.getElementById('slot-modal-sub-others-count').textContent = subOthersCount;
+      // Open the disclosure when it already holds a pick, so a rider chosen from it
+      // is never hidden behind a collapsed section.
+      othersWrap.open = riderOtherIds.some(function(uid) { return selectedIds.indexOf(uid) !== -1; });
+      subOthersWrap.open = subOtherIds.some(function(uid) { return subIds.indexOf(uid) !== -1; });
+    }
 
     // Re-process HTMX attributes after changing hx-post
     htmx.process(form);
@@ -344,9 +438,10 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
   const RIDER_CB_CHECKED_SELECTOR = '#slot-modal-riders .rider-cb:checked, #slot-modal-others .rider-cb:checked';
 
   function toggleAllRiders(selectAll) {
-    // Select All applies to the available pool only — it should not silently pull
-    // in riders who never marked themselves available. Deselect All clears both.
-    const scope = selectAll ? '#slot-modal-riders .rider-cb' : RIDER_CB_SELECTOR;
+    // "Select all available" picks only riders marked available (a race series lists the
+    // whole squad in this list) -- it should not silently pull in anyone else. Deselect
+    // All clears both lists.
+    const scope = selectAll ? '#slot-modal-riders .rider-cb[data-available]' : RIDER_CB_SELECTOR;
     document.querySelectorAll(scope).forEach(function(cb) {
       cb.checked = selectAll;
     });
