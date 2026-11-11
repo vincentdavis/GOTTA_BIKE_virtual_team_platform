@@ -127,10 +127,11 @@ def discord_login(db, discord_app, guilds_response):
 
     Returns:
         ``login(client, discord_id, *, guild_ids=(TEST_GUILD_ID,), guilds=None, email=None,
-        verified=True, configured_guild_id=TEST_GUILD_ID)`` returning the callback response,
-        with the guild-list mock as ``response.guild_get``. ``guilds`` (an ``httpx.Response``
-        or an exception) replaces the guild-list answer built from ``guild_ids``;
-        ``configured_guild_id`` is what Constance ``GUILD_ID`` holds during the callback.
+        verified=True, configured_guild_id=TEST_GUILD_ID, next_url=None)`` returning the
+        callback response, with the guild-list mock as ``response.guild_get``. ``guilds`` (an
+        ``httpx.Response`` or an exception) replaces the guild-list answer built from
+        ``guild_ids``; ``configured_guild_id`` is what Constance ``GUILD_ID`` holds during the
+        callback; ``next_url`` is the ``?next=`` the login starts with.
 
     """
     cache.clear()
@@ -144,6 +145,7 @@ def discord_login(db, discord_app, guilds_response):
         email=None,
         verified=True,
         configured_guild_id=TEST_GUILD_ID,
+        next_url=None,
     ):
         profile = {
             "id": str(discord_id),
@@ -162,7 +164,7 @@ def discord_login(db, discord_app, guilds_response):
                 return _requests_json(profile)
             pytest.fail(f"unexpected outbound request {method} {url}")
 
-        start = client.get("/accounts/discord/login/")
+        start = client.get("/accounts/discord/login/", {"next": next_url} if next_url else {})
         if start.status_code != 302:
             pytest.fail(f"Discord login did not redirect to Discord: {start.status_code}")
         state = parse_qs(urlparse(start["Location"]).query)["state"][0]

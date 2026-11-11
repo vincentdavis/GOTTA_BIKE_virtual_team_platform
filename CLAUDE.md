@@ -140,6 +140,7 @@ Answers live on `EventSignup.custom_answers` (JSON `{str(question_id): answer}`;
 ### Authentication (django-allauth)
 
 - Discord OAuth is the rider login; `/admin/` also accepts username/password (`ModelBackend`) for staff such as the `ensuresuperuser` account
+- **Signing in returns the rider to the page they asked for**: the login page's Discord button is `{% provider_login_url 'discord' process='login' %}`, which carries the page's `?next=` on to Discord, so a rider sent to sign in from a link posted in Discord (an availability sheet) lands back on it, not on `/`. allauth keeps `next` only when it is one of our own URLs. A bare `{% url 'discord_login' %}` drops it. With no page to return to, an incomplete profile lands on Edit Profile and a complete one on `/` (`NoLocalSignupAccountAdapter.get_login_redirect_url`, and `get_signup_redirect_url` for a first login; allauth asks the account adapter, never the social one, which is where this rule used to sit unused). Guarded by `apps/accounts/test_login_next.py`
 - **allauth's own signup is closed** (`NoLocalSignupAccountAdapter.is_open_for_signup` → False, wired as `ACCOUNT_ADAPTER`), so an account can only come from a Discord login, where the block-list / guild / verified-email checks live. `DiscordSocialAccountAdapter.is_open_for_signup` returns True to keep Discord signup open — allauth's social adapter delegates to the account adapter, so removing it shuts new riders out. Guarded by `apps/accounts/test_local_signup_closed.py`
 - **Guild membership required**: Users must be a member of the configured Discord server (`GUILD_ID`) to sign up or log
   in. The check is live, with the rider's own token, and fails closed: **`GUILD_ID=0` refuses every Discord login** (`logfire.error`) rather than skipping the check, and a Discord error, timeout or 429 (JSON body or not) refuses without a 500. Guarded by `apps/accounts/test_guild_membership_check.py`, which mocks Discord only at the HTTP boundary (fixtures in `apps/accounts/conftest.py`, including `discord_login`, a full callback run)
@@ -169,7 +170,7 @@ Answers live on `EventSignup.custom_answers` (JSON `{str(question_id): answer}`;
 
 ### Profile Completion
 
-Users are encouraged to complete their profile but are **not blocked** from accessing the app (events can require it to sign up — see Signup requirements).
+Users are encouraged to complete their profile but are **not blocked** from accessing the app (events can require it to sign up — see Signup requirements). A login with no page to return to lands on Edit Profile until the profile is complete (see Authentication).
 
 #### Profile Fields
 

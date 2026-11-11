@@ -106,6 +106,40 @@ class NoLocalSignupAccountAdapter(DefaultAccountAdapter):
             redirect_url=redirect_url,
         )
 
+    def get_login_redirect_url(self, request) -> str:
+        """Where a login lands when it carries no ``next``: Edit Profile until it is complete.
+
+        allauth asks this, the account adapter, only after the rider is signed in, and only
+        when the login has no page of its own to return to; a link's ``?next=`` wins
+        (``templates/account/login.html``). It used to sit on ``DiscordSocialAccountAdapter``,
+        which allauth never asks, so every login landed on ``LOGIN_REDIRECT_URL``.
+
+        Args:
+            request: The HTTP request, with the rider already signed in.
+
+        Returns:
+            Edit Profile for an incomplete profile, otherwise ``LOGIN_REDIRECT_URL``.
+
+        """
+        user = request.user
+        if user.is_authenticated and not user.is_profile_complete:
+            return reverse("accounts:profile_edit")
+        return super().get_login_redirect_url(request)
+
+    def get_signup_redirect_url(self, request) -> str:
+        """Where a rider's first login lands: the same place as any other.
+
+        A new account is always incomplete, so this is Edit Profile.
+
+        Args:
+            request: The HTTP request, with the new rider already signed in.
+
+        Returns:
+            What ``get_login_redirect_url`` gives.
+
+        """
+        return self.get_login_redirect_url(request)
+
 
 def _is_discord_login(sociallogin) -> bool:
     """Whether a login's ``sociallogin`` is a real Discord social login.
@@ -599,21 +633,3 @@ class DiscordSocialAccountAdapter(DefaultSocialAccountAdapter):
             problem = login_help.OAuthProblem.ERROR
         login_help.record_oauth_problem(request, problem, code=str(error or "unknown"))
         raise ImmediateHttpResponse(redirect("login_help"))
-
-    def get_login_redirect_url(self, request):
-        """Return redirect URL after login.
-
-        Redirects users with incomplete profiles to profile edit page.
-
-        Args:
-            request: The HTTP request.
-
-        Returns:
-            URL to redirect to after login.
-
-        """
-        user = request.user
-        # Check if profile is incomplete
-        if user.is_authenticated and not user.is_profile_complete:
-            return reverse("accounts:profile_edit")
-        return super().get_login_redirect_url(request)
