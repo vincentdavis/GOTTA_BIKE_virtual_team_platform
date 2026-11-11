@@ -229,15 +229,34 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
     </label>
   </div>
   {% endif %}
-  <div class="flex-1">
-    <a href="{% url 'home' %}" class="btn btn-ghost text-xl">
-      {% if config.LOGO_DISPLAY_MODE == 'logo_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' %}
-        {% if site_settings.site_logo %}
-          <img src="{{ site_settings.site_logo.url }}" alt="{{ config.TEAM_NAME }}" class="h-8 max-w-32 object-contain">
-        {% endif %}
-      {% endif %}
-      {% if config.LOGO_DISPLAY_MODE == 'name_only' or config.LOGO_DISPLAY_MODE == 'logo_and_name' or not site_settings.site_logo %}
-        <span>{{ config.TEAM_NAME }}</span>
+  {% comment %}
+    The home link gives way so the avatar menu always fits (WCAG 1.4.10 Reflow). Everything
+    here is rem, so it grows with the text size: at the largest step a wide logo and the team
+    name needed 493px on a 375px phone and pushed the avatar menu off the right edge.
+
+    - min-w-0 lets this flex-1 wrapper shrink below its content, and max-w-full keeps the link
+      inside it. The avatar side is flex-none, so it keeps its full width.
+    - The logo shrinks (min-w-0, and object-contain keeps its shape), so even a wide one fits.
+    - A name on its own stays on one line and is cut with an ellipsis. The button's height is
+      fixed, so a name that wrapped spilled out of it over the page below.
+    - Beside a logo, the name shows only when it fits whole. The two share a box one line tall
+      that wraps and clips, so a name with no room drops to a second line, out of view, and
+      the logo is left. It is still in the link's accessible name, which is why the logo's alt
+      is empty there: the name would otherwise be read twice.
+
+    Any other LOGO_DISPLAY_MODE (a free-text setting) shows the name, so the link is never empty.
+  {% endcomment %}
+  <div class="flex-1 min-w-0">
+    <a href="{% url 'home' %}" class="btn btn-ghost text-xl max-w-full">
+      {% if site_settings.site_logo and config.LOGO_DISPLAY_MODE == 'logo_and_name' %}
+        <span class="flex flex-wrap items-center gap-x-1.5 h-8 min-w-0 overflow-hidden">
+          <img src="{{ site_settings.site_logo.url }}" alt="" class="h-8 max-w-32 min-w-0 object-contain">
+          <span class="whitespace-nowrap">{{ config.TEAM_NAME }}</span>
+        </span>
+      {% elif site_settings.site_logo and config.LOGO_DISPLAY_MODE == 'logo_only' %}
+        <img src="{{ site_settings.site_logo.url }}" alt="{{ config.TEAM_NAME }}" class="h-8 max-w-32 min-w-0 object-contain">
+      {% else %}
+        <span class="truncate">{{ config.TEAM_NAME }}</span>
       {% endif %}
     </a>
   </div>
