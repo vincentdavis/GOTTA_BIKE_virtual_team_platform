@@ -353,6 +353,7 @@ Non-obvious gates / behavior not visible from the URL pattern alone:
     - `base.html` includes profile incomplete warning (red) for users with incomplete profiles
     - `base.html` has sticky header with logo/team name and user menu (avatar, dropdown)
     - `base.html` hides sidebar and hamburger menu for non-authenticated users (full-width layout)
+    - **The page has one scroller, `.drawer-content`, at every width; the document itself never scrolls**, so `position: sticky; bottom: …` works everywhere. It is `relative`, or an absolutely positioned element with no positioned ancestor in the page (any `sr-only` span) is placed against `.drawer`, outside the scroller, and stretches the document. From `lg` the open sidebar carries `lg:h-full`: daisyUI gives it `height: 100dvh`, which made the drawer's row, and the scroller beside it, a whole window tall under the header. Guarded by `apps/accounts/test_drawer_layout.py`
     - `sidebar.html` contains navigation menu with conditional sections based on user permissions
 - `templates/index.html` - Home page with hero section (supports background image via `site_settings.hero_image`)
 - `templates/account/` - Auth templates (login, logout) with DaisyUI styling

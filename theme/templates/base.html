@@ -466,7 +466,14 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
   <input id="main-drawer" type="checkbox" class="drawer-toggle"/>
 
   <!-- Main Content Area -->
-  <div class="drawer-content flex flex-col bg-base-100 overflow-y-auto h-full pb-16 sm:pb-0">
+  {% comment %}
+    relative: this is the page's scroller, and it has to be the containing block of what it
+    scrolls. Without it, an absolutely positioned element with no positioned ancestor in the
+    page (any sr-only span) was placed against .drawer instead, so this scroller neither
+    clipped it nor counted it, and one far down a long page stretched the document: the page
+    scrolled in two places, at every width.
+  {% endcomment %}
+  <div class="drawer-content relative flex flex-col bg-base-100 overflow-y-auto h-full pb-16 sm:pb-0">
     <!-- Main Content -->
     <main id="main-content" tabindex="-1" class="flex-1 container mx-auto px-4 py-8">
       {% if messages %}
@@ -543,7 +550,15 @@ are the whole migration backlog. Off by default (ZAUTH_BANNER_ENABLED).
 
   <!-- Sidebar (only for authenticated users) -->
   {% if user.is_authenticated %}
-  <div class="drawer-side z-[60]">
+  {% comment %}
+    lg:h-full: from lg the open drawer's side sits in the drawer's grid row, and daisyUI still
+    gives it height: 100dvh. That made the row, and the h-full .drawer-content beside it, a
+    whole window tall below the header and banners: the page scrolled in two places, and its
+    bottom, with anything stuck to it, sat off-screen. 100% of the row is the space left under
+    the header, and the sidebar's <nav> scrolls on its own inside it. Below lg the side is
+    daisyUI's fixed, full-height overlay, which this leaves alone.
+  {% endcomment %}
+  <div class="drawer-side z-[60] lg:h-full">
     <label for="main-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
     {% include "sidebar.html" %}
   </div>
