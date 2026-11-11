@@ -70,12 +70,6 @@
   @media (min-width: 40rem) {
     .answer-bar { bottom: 1rem; }
   }
-  /* From 64rem, where base.html opens the sidebar, its drawer makes the page's scroller a
-     whole window tall below the header, so the scroller's bottom edge is off-screen and a bar
-     stuck to it would be hidden. There the bar stays at the end of the form. */
-  @media (min-width: 64rem) {
-    .answer-bar { position: static; }
-  }
   /* Side by side while both fit, the status taking the spare room; where they don't, the
      button takes a line of its own, full width. */
   .answer-status { flex: 999 1 8rem; min-width: 0; }
