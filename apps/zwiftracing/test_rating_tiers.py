@@ -13,23 +13,23 @@ from apps.accounts.views import zr_rating_tiers
 from apps.zwiftracing.models import ZRRider
 from apps.zwiftracing.tasks import _map_rider_to_model
 
-# The exact payload for a rider who has not raced in 90+ days.
+# The payload's shape for a rider who has not raced in 90+ days.
 LAPSED = {
-    "riderId": 6960102, "name": "Julius Ad (COALITION)", "gender": "M", "country": "de",
-    "age": "Mas", "height": 191, "weight": 90, "zpCategory": "B", "zpFTP": 355,
+    "riderId": 9000005, "name": "Test Rider 5 (TEST CLUB)", "gender": "M", "country": "us",
+    "age": "Snr", "height": 180, "weight": 75, "zpCategory": "B", "zpFTP": 280,
     "power": None, "race": None,
-    "handicaps": {"profile": {"flat": 76.5, "rolling": 50.6, "hilly": -10.7, "mountainous": -93.2}},
-    "phenotype": None, "club": {"id": 11991, "name": "COALITION"},
-    "seed": None, "velo": None, "zrs": None, "weightChangedAt": 1758043980,
+    "handicaps": {"profile": {"flat": 40.0, "rolling": 25.0, "hilly": -5.0, "mountainous": -60.0}},
+    "phenotype": None, "club": {"id": 99999, "name": "TEST CLUB"},
+    "seed": None, "velo": None, "zrs": None, "weightChangedAt": 1750000000,
 }
 
 ACTIVE = {
     **LAPSED,
     "race": {
-        "current": {"rating": 1517.47, "date": 1787401800, "mixed": {"category": "Sapphire", "number": 4}},
-        "max30": {"rating": 1529.69, "date": 1785886200, "expires": 1789993800,
+        "current": {"rating": 1504.25, "date": 1787400000, "mixed": {"category": "Sapphire", "number": 4}},
+        "max30": {"rating": 1521.50, "date": 1785900000, "expires": 1790000000,
                   "mixed": {"category": "Sapphire", "number": 4}},
-        "max90": {"rating": 1559.60, "date": 1781911800, "expires": 1795177800,
+        "max90": {"rating": 1548.75, "date": 1781900000, "expires": 1795200000,
                   "mixed": {"category": "Sapphire", "number": 4}},
     },
 }
@@ -43,7 +43,7 @@ def test_all_three_tiers_are_offered(db) -> None:
     tiers = zr_rating_tiers(rider)
 
     assert [t["label"] for t in tiers] == ["Current", "30-day max", "90-day max"]
-    assert [float(t["rating"]) for t in tiers] == [1517.47, 1529.69, 1559.60]
+    assert [float(t["rating"]) for t in tiers] == [1504.25, 1521.50, 1548.75]
     assert {t["category"] for t in tiers} == {"Sapphire"}
 
 
@@ -86,7 +86,7 @@ def test_the_best_rating_survives_in_history(db) -> None:
 
     assert best is not None
     # max90 was the highest figure ever reported, above any current rating.
-    assert best["rating"] == Decimal("1559.60")
+    assert best["rating"] == Decimal("1548.75")
     assert best["category"] == "Sapphire"
     assert best["source"] == "max90"
 
