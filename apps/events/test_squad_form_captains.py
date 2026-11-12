@@ -8,8 +8,11 @@ from datetime import date, timedelta
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
+from apps.accounts.models import GuildMember
 from apps.events.models import Event, EventSignup, Squad, SquadMember
+from apps.events.views import _apply_squad_leadership
 from apps.team.models import DiscordRole
 
 CAPTAIN_ROLE = 4001
@@ -150,6 +153,39 @@ def test_the_checkbox_adds_them_to_the_squad_with_its_role(client, event, squad,
     assert member.status == SquadMember.Status.MEMBER
     assert (rider.pk, SQUAD_ROLE) in discord_calls["added"]
     assert (rider.pk, CAPTAIN_ROLE) in discord_calls["added"]
+
+
+@pytest.mark.django_db
+def test_a_captain_who_left_the_team_is_not_added_to_the_riders(client, event, squad, rider, event_admin,
+                                                                discord_calls) -> None:
+    """Assign Riders refuses a rider who has left the server, so the checkbox must too."""
+    GuildMember.objects.create(discord_id=rider.discord_id, username=rider.username, date_left=timezone.now())
+    client.force_login(event_admin)
+
+    resp = _post(client, event, squad, captains=[rider.pk], captains_add_as_members="on")
+    sent = " ".join(str(m) for m in resp.context["messages"])
+
+    assert list(squad.captains.all()) == [rider]  # leading needs no roster place
+    assert not SquadMember.objects.filter(squad=squad, user=rider).exists()
+    assert (rider.pk, SQUAD_ROLE) not in discord_calls["added"]
+    assert "Alice Rider was not added to the riders: they have left the team's Discord server." in sent
+
+
+@pytest.mark.django_db
+def test_a_withdrawn_captain_is_not_added_to_the_riders(squad, rider, discord_calls) -> None:
+    """The picker offers registered riders only, but the roster rule does not lean on that."""
+    EventSignup.objects.filter(user=rider).update(status=EventSignup.Status.WITHDRAWN)
+    squad.captains.add(rider)
+
+    warnings = _apply_squad_leadership(
+        squad,
+        before={"captains": set(), "vice_captains": set()},
+        add_as_members={"captains": True},
+        admin_user_id=0,
+    )
+
+    assert not SquadMember.objects.filter(squad=squad, user=rider).exists()
+    assert warnings == ["Alice Rider was not added to the riders: they have withdrawn from the event."]
 
 
 @pytest.mark.django_db

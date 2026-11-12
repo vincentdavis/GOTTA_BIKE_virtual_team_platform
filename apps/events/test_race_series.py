@@ -888,6 +888,42 @@ def test_the_lineup_dialog_shows_each_riders_answer_to_the_stage(
     assert 'id="slot-modal-answer-summary"' in page
 
 
+@pytest.mark.django_db
+def test_results_stop_asking_about_a_stage_that_has_started(client, event, user_model, squad, stages) -> None:
+    """A started stage is no longer asked about, so it keeps nobody on the to-answer count."""
+    ana = _member(user_model, squad, "ana")
+    _member(user_model, squad, "bo")
+    cy = _member(user_model, squad, "cy")
+    grid = _sheet(squad, stages, [_when(-1), _when(18), None])
+    _answer(grid, ana, stages[1], "available")  # never answered the stage that has started
+    _answer(grid, cy, stages[0], "maybe", at=_when(-3))  # an old time, on the started stage
+    _answer(grid, cy, stages[1], "no", at=_when(17))  # and on the stage still to come
+    client.force_login(ana)
+
+    response = client.get(reverse("events:availability_results", args=[event.pk, squad.pk, grid.pk]))
+
+    rows = {row["user"].username: row for row in response.context["rows"]}
+    assert {name: row["pending"] for name, row in rows.items()} == {"ana": False, "bo": True, "cy": True}
+    assert response.context["complete_count"] == 1
+    assert response.context["stale_count"] == 1  # cy's answer to the started stage can't be re-confirmed
+    assert response.context["unanswered"] == [rows["bo"]["display_name"]]
+    assert "1 of 3 riders answered every upcoming stage" in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_results_ask_nobody_once_every_stage_has_started(client, event, user_model, squad, stages) -> None:
+    ana = _member(user_model, squad, "ana")
+    grid = _sheet(squad, stages, [_when(-8), _when(-1), None])
+    client.force_login(ana)
+
+    response = client.get(reverse("events:availability_results", args=[event.pk, squad.pk, grid.pk]))
+
+    page = response.content.decode()
+    assert response.context["unanswered"] == []
+    assert "Nothing left to answer: every stage with a time has started." in page
+    assert "answered every upcoming stage" not in page
+
+
 # --- The series board --------------------------------------------------------------------------
 
 
@@ -923,6 +959,27 @@ def test_the_board_flags_what_needs_attention(client, event, event_admin, user_m
     assert rows["C1"][0]["chip"] == "No sheet"
     tags = sorted(item["tag"] for item in response.context["attention"])
     assert tags == ["Draft", "No sheet", "Short"]
+
+
+@pytest.mark.django_db
+def test_the_board_raises_nothing_for_a_stage_that_has_started(
+    client, event, event_admin, user_model, squad, stages
+) -> None:
+    """A started stage can no longer be re-confirmed or filled, so it needs no attention."""
+    ana = _member(user_model, squad, "ana")
+    grid = _sheet(squad, stages, [_when(-1), _when(18), None])
+    _answer(grid, ana, stages[0], "available", at=_when(-3))  # an old time, and short of 2
+    _answer(grid, ana, stages[1], "available", at=_when(17))  # the same, still to come
+    client.force_login(event_admin)
+
+    response = client.get(reverse("events:series_board", args=[event.pk]))
+
+    cells = response.context["rows"][0]["cells"]
+    assert cells[0]["extra"] == ""
+    assert cells[1]["extra"] == "↻ 1 to re-confirm"
+    attention = [(item["tag"], item["text"]) for item in response.context["attention"]]
+    assert [tag for tag, _ in attention] == ["Re-confirm", "Short"]
+    assert all("Stage 2" in text for _, text in attention)
 
 
 # --- My Events, and the participation report ---------------------------------------------------

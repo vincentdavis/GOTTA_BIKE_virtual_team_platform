@@ -971,6 +971,9 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
     is_captain = _can_manage_squad_availability(request.user, squad)
     user_tz = getattr(request.user, "timezone", "") or ""
     tz = series.zone(user_tz or grid.grid_timezone)
+    # A stage that has started is no longer asked about (``series_respond``), so the summary
+    # of who still owes answers counts only the stages still to come.
+    now = timezone.now()
 
     members = list(
         User.objects.filter(
@@ -1000,6 +1003,7 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             race = races.get((utc_date, utc_time))
             column.update({
                 "is_open": True,
+                "started": ss.starts_at <= now,
                 "when": series.when_label(ss.starts_at, tz),
                 "utc_date": utc_date.isoformat(),
                 "utc_time": utc_time,
@@ -1018,6 +1022,7 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             })
         columns.append(column)
     open_columns = [column for column in columns if column["is_open"]]
+    upcoming_columns = [column for column in open_columns if not column["started"]]
 
     enriched = _enrich_members(members)
     rows, notes = [], []
@@ -1040,7 +1045,11 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
                     "answer": label,
                     "note": note,
                 })
-        rows.append({**entry, "cells": cells, "pending": series.needs_answer(sheet_stages.values(), answers)})
+        rows.append({
+            **entry,
+            "cells": cells,
+            "pending": series.needs_answer(sheet_stages.values(), answers, after=now),
+        })
 
     modal: dict = {}
     if is_captain:
@@ -1107,9 +1116,13 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             "rows": rows,
             "notes": notes,
             "member_count": len(members),
+            "asking": bool(upcoming_columns),
+            "all_started": bool(open_columns) and not upcoming_columns,
             "complete_count": sum(1 for row in rows if not row["pending"]),
-            "unanswered": [row["display_name"] for row in rows if row["user"].pk not in answers_by_user],
-            "stale_count": sum(column["counts"].stale for column in open_columns),
+            "unanswered": [row["display_name"] for row in rows if row["user"].pk not in answers_by_user]
+            if upcoming_columns
+            else [],
+            "stale_count": sum(column["counts"].stale for column in upcoming_columns),
             "display_timezone": tz.key,
             "tz_is_default": not user_tz,
             "is_event_admin": is_captain,
@@ -1198,6 +1211,8 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
     }
     mine = request.GET.get("tz") == "mine"
     viewer_tz = series.zone(getattr(request.user, "timezone", "") or "UTC")
+    # A stage that has started can no longer be re-confirmed or filled, so it raises nothing.
+    now = timezone.now()
 
     racing = [0] * len(stages)
     rows, attention = [], []
@@ -1263,7 +1278,8 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
                         cell.update({"chip": status[1], "chip_class": STATUS_BADGE[status[0]]})
                     else:
                         cell.update({"chip": "Open", "chip_class": "badge badge-outline badge-sm"})
-                    if counts.stale:
+                    started = ss.starts_at <= now
+                    if counts.stale and not started:
                         cell["extra"] = f"↻ {counts.stale} to re-confirm"
                         attention.append({
                             "tag": "Re-confirm",
@@ -1272,7 +1288,7 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
                             f"{'s' if counts.stale != 1 else ''} still to answer its new time.",
                             "url": link,
                         })
-                    if race is None and status and status[0] == "short":
+                    if race is None and status and status[0] == "short" and not started:
                         attention.append({
                             "tag": "Short",
                             "cls": "badge badge-error badge-sm",

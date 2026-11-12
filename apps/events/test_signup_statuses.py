@@ -7,7 +7,7 @@ squad assignment itself and the invite link.
 """
 
 import uuid
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -16,7 +16,15 @@ from django.utils import timezone
 
 from apps.accounts.models import GuildMember
 from apps.events import signup_status
-from apps.events.models import Event, EventSignup, SignupStatus, Squad, SquadMember
+from apps.events.models import (
+    AvailabilityGrid,
+    AvailabilitySlotSelection,
+    Event,
+    EventSignup,
+    SignupStatus,
+    Squad,
+    SquadMember,
+)
 from apps.events.signup_status_views import DIALOG_BODY_ID
 from conftest import _make_user
 
@@ -266,6 +274,74 @@ def test_withdrawing_frees_squad_places_and_clears_the_status(client, event, eve
     assert signup.status == EventSignup.Status.WITHDRAWN
     assert signup.staff_status is None
     assert not SquadMember.objects.filter(user=rider).exists()
+
+
+def _race(squad: Squad, days: int, *riders, subs=()) -> AvailabilitySlotSelection:
+    """Schedule a race ``days`` from today at 19:00 UTC, with riders picked and substitutes.
+
+    Returns:
+        The race.
+
+    """
+    today = date.today()
+    grid = squad.availability_grids.first() or AvailabilityGrid.objects.create(
+        squad=squad,
+        start_date=today - timedelta(days=7),
+        end_date=today + timedelta(days=7),
+        start_time="18:00",
+        end_time="21:00",
+        slot_duration=60,
+        grid_timezone="UTC",
+        status=AvailabilityGrid.Status.PUBLISHED,
+    )
+    starts = datetime.combine(today + timedelta(days=days), time(19, 0), tzinfo=UTC)
+    race = AvailabilitySlotSelection.objects.create(
+        grid=grid, name=f"Race {days}", slot_date=starts.date(), slot_time=starts.strftime("%H:%M")
+    )
+    race.selected_users.add(*riders)
+    race.substitutes.add(*subs)
+    return race
+
+
+@pytest.mark.django_db
+def test_withdrawing_takes_the_rider_off_upcoming_lineups_and_keeps_raced_ones(
+    client, event, event_admin, user_model
+):
+    ana = _rider(user_model, "ana")
+    bea = _rider(user_model, "bea")
+    squad = Squad.objects.create(event=event, name="A1")
+    picked = _race(squad, 2, ana, bea)
+    on_the_bench = _race(squad, 3, bea, subs=[ana])
+    raced = _race(squad, -2, ana, bea)
+    signup = _signup(event, ana)
+    client.force_login(event_admin)
+
+    response = client.post(_status_url(signup), {"choice": "withdrawn"}, follow=True)
+
+    assert list(picked.selected_users.all()) == [bea]
+    assert not on_the_bench.substitutes.exists()
+    assert set(raced.selected_users.all()) == {ana, bea}  # the record of who rode it
+    sent = " ".join(str(message) for message in response.context["messages"])
+    assert "They're off the lineup of 2 upcoming races." in sent
+
+
+@pytest.mark.django_db
+def test_the_edit_pages_withdraw_and_deleting_your_own_signup_leave_lineups_too(
+    client, event, event_admin, user_model
+):
+    ana = _rider(user_model, "ana")
+    cy = _rider(user_model, "cy")
+    race = _race(Squad.objects.create(event=event, name="A1"), 2, ana, cy)
+    signup = _signup(event, ana)
+    _signup(event, cy)
+
+    client.force_login(event_admin)
+    client.post(reverse("events:event_signup_withdraw", args=[event.pk, signup.pk]))
+    client.force_login(cy)
+    client.post(reverse("events:event_signup_delete", args=[event.pk]))
+
+    assert not race.selected_users.exists()
+    assert not EventSignup.objects.filter(event=event, user=cy).exists()
 
 
 @pytest.mark.django_db

@@ -253,7 +253,7 @@ def _save(request: HttpRequest, event: Event, signup: EventSignup, *, departed: 
         messages.info(request, "Nothing changed.")
         return
 
-    freed = 0
+    freed = signup_status.Withdrawal(squad_places=0, races=0)
     with transaction.atomic():
         if withdrawing:
             freed = signup_status.withdraw(signup)
@@ -278,12 +278,13 @@ def _save(request: HttpRequest, event: Event, signup: EventSignup, *, departed: 
         kind=status.kind if status else None,
         withdrew=withdrawing,
         returned=returning,
-        squad_places_freed=freed,
+        squad_places_freed=freed.squad_places,
+        races_left=freed.races,
         note_changed=note_changed,
     )
     if withdrawing:
-        places = f" Their place in {', '.join(s.name for s in squads)} is free." if freed else ""
-        messages.success(request, f"{name} has been withdrawn.{places}")
+        places = f" Their place in {', '.join(s.name for s in squads)} is free." if freed.squad_places else ""
+        messages.success(request, f"{name} has been withdrawn.{places}{freed.lineup_note()}")
     elif returning:
         messages.success(request, f"{name} is back on the event.")
     elif status_changed:

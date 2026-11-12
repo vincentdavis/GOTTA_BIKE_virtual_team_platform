@@ -17,6 +17,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -427,6 +428,45 @@ def _annotate_squad_role_names(squads, *, event=None) -> str:
     return event_role_name
 
 
+#: Why a rider may not be given a squad place, worded to follow "Cannot add <rider>: ".
+SQUAD_PLACE_REFUSALS = {
+    "withdrawn": "they have withdrawn from the event",
+    "departed": "they have left the team's Discord server",
+}
+
+
+def _squad_place_refusals(event, users) -> dict[int, str]:
+    """Say which riders may not be given a place in one of an event's squads.
+
+    A withdrawn rider is not racing, and one who has left the team's Discord server can
+    neither see the squad's channel nor be given its roles. A withdrawn rider is brought back
+    from the status dialog first. Having no signup refuses nothing: a captain need not have
+    signed up.
+
+    Args:
+        event: The event.
+        users: The riders.
+
+    Returns:
+        A ``SQUAD_PLACE_REFUSALS`` key by user id; riders who may join are left out.
+
+    """
+    users = list(users)
+    withdrawn = set(
+        EventSignup.objects.filter(event=event, user__in=users, status=EventSignup.Status.WITHDRAWN).values_list(
+            "user_id", flat=True
+        )
+    )
+    departed = signup_status.departed_user_ids(users)
+    refusals = {}
+    for user in users:
+        if user.pk in withdrawn:
+            refusals[user.pk] = "withdrawn"
+        elif user.pk in departed:
+            refusals[user.pk] = "departed"
+    return refusals
+
+
 def _apply_squad_leadership(
     squad,
     *,
@@ -442,7 +482,8 @@ def _apply_squad_leadership(
     Both roles map to the same ``discord_captain_role``, so a rider moving between
     captain and vice-captain must not have it revoked in passing: the role is only
     removed once they hold neither. New leaders optionally join the squad roster too,
-    which is a separate decision from leading it -- a captain need not race.
+    which is a separate decision from leading it -- a captain need not race. A leader who
+    has withdrawn or left the team is not added, as Assign Riders would refuse them too.
 
     Squad limits are deliberately *not* enforced here. A strong rider captaining a
     development squad is legitimate; the caller surfaces a warning instead.
@@ -454,7 +495,8 @@ def _apply_squad_leadership(
         admin_user_id: The acting admin, for logging.
 
     Returns:
-        Human-readable warnings about leaders who fail the squad's own limits.
+        Human-readable warnings about leaders who could not join the roster, then about
+        leaders who fail the squad's own limits.
 
     """
     now = {
@@ -463,6 +505,27 @@ def _apply_squad_leadership(
     }
     still_leading = now["captains"] | now["vice_captains"]
     was_leading = before["captains"] | before["vice_captains"]
+    joining = {
+        user_id
+        for relation in ("captains", "vice_captains")
+        if add_as_members.get(relation)
+        for user_id in now[relation] - before[relation]
+    }
+    refused = _squad_place_refusals(squad.event, User.objects.filter(pk__in=joining)) if joining else {}
+
+    warnings: list[str] = []
+    for user in User.objects.filter(pk__in=list(refused)):
+        warnings.append(
+            f"{user.get_full_name() or user.username} was not added to the riders: "
+            f"{SQUAD_PLACE_REFUSALS[refused[user.pk]]}."
+        )
+        logfire.info(
+            "Squad leader not added to the roster",
+            squad_id=squad.pk,
+            user_id=user.pk,
+            admin_user_id=admin_user_id,
+            reason=refused[user.pk],
+        )
 
     for relation in ("captains", "vice_captains"):
         arrivals = now[relation] - before[relation]
@@ -471,7 +534,7 @@ def _apply_squad_leadership(
                 _assign_discord_role(
                     user, squad.discord_captain_role, f"{squad.name} Captain", admin_user_id=admin_user_id
                 )
-            if add_as_members.get(relation):
+            if add_as_members.get(relation) and user.pk not in refused:
                 _, created = SquadMember.objects.update_or_create(
                     squad=squad, user=user, defaults={"status": SquadMember.Status.MEMBER}
                 )
@@ -491,7 +554,6 @@ def _apply_squad_leadership(
         admin_user_id=admin_user_id,
     )
 
-    warnings: list[str] = []
     for user in User.objects.filter(pk__in=still_leading):
         for ok, reason in (
             squad.check_gender_eligibility(member_gender(user)),
@@ -3273,14 +3335,17 @@ def event_signup_delete_view(request: HttpRequest, pk: int) -> HttpResponse:
     """
     event = get_object_or_404(Event, pk=pk)
     signup = get_object_or_404(EventSignup, event=event, user=request.user, status=EventSignup.Status.REGISTERED)
-    removed_squads, _ = SquadMember.objects.filter(squad__event=event, user=request.user).delete()
-    signup.delete()
+    with transaction.atomic():
+        removed_squads, _ = SquadMember.objects.filter(squad__event=event, user=request.user).delete()
+        races_left = signup_status.leave_upcoming_races(event.pk, request.user.pk)
+        signup.delete()
     logfire.info(
         "Event signup deleted",
         event_id=pk,
         event_title=event.title,
         user_id=request.user.id,
         squad_memberships_removed=removed_squads,
+        races_left=races_left,
     )
     messages.success(request, "Your signup has been removed.")
     return redirect("events:event_detail", pk=pk)
@@ -3467,17 +3532,19 @@ def event_signup_withdraw_view(request: HttpRequest, event_pk: int, signup_pk: i
         return redirect("events:event_detail", pk=event_pk)
 
     signup = get_object_or_404(EventSignup, pk=signup_pk, event=event)
-    removed_squads = signup_status.withdraw(signup)
-    signup.save(update_fields=["status", "staff_status", "updated_at"])
+    with transaction.atomic():
+        freed = signup_status.withdraw(signup)
+        signup.save(update_fields=["status", "staff_status", "updated_at"])
     logfire.info(
         "Event signup withdrawn",
         event_id=event_pk,
         signup_id=signup_pk,
         signup_user_id=signup.user_id,
         admin_user_id=request.user.id,
-        squad_memberships_removed=removed_squads,
+        squad_memberships_removed=freed.squad_places,
+        races_left=freed.races,
     )
-    messages.success(request, f"Signup for {signup.user} has been withdrawn.")
+    messages.success(request, f"Signup for {signup.user} has been withdrawn.{freed.lineup_note()}")
     return redirect("events:event_edit", pk=event_pk)
 
 
@@ -3869,15 +3936,7 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 messages.info(request, f"{signup.user} was not assigned to any squad.")
     else:
         squad = target_squad
-        # A withdrawn rider is not racing, and one who has left the team's Discord server can
-        # neither see the squad's channel nor be given its roles: neither may be put in a squad.
-        # A withdrawn rider is brought back from the status dialog first.
-        if signup.status == EventSignup.Status.WITHDRAWN:
-            refusal = "they have withdrawn from the event"
-        elif signup_status.departed_user_ids([signup.user]):
-            refusal = "they have left the team's Discord server"
-        else:
-            refusal = ""
+        refusal = _squad_place_refusals(event, [signup.user]).get(signup.user_id)
         if refusal:
             logfire.info(
                 "Squad assignment refused by signup status",
@@ -3885,9 +3944,9 @@ def squad_assign_view(request: HttpRequest, event_pk: int) -> HttpResponse:
                 squad_id=squad.pk,
                 user_id=signup.user_id,
                 admin_user_id=request.user.id,
-                withdrawn=signup.status == EventSignup.Status.WITHDRAWN,
+                withdrawn=refusal == "withdrawn",
             )
-            block_msg = f"Cannot add {signup.user} to {squad.name}: {refusal}."
+            block_msg = f"Cannot add {signup.user} to {squad.name}: {SQUAD_PLACE_REFUSALS[refusal]}."
             if is_htmx:
                 resp = HttpResponse(status=204)
                 resp["HX-Trigger"] = json.dumps({"showToast": [{"message": block_msg, "tags": "error"}]})

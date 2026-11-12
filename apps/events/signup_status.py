@@ -18,13 +18,13 @@ in ``signup_status_views`` (the status dialog and an event's list) and the exist
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.utils import timezone
 
 from apps.accounts.membership import departed_discord_ids
-from apps.events.models import EventSignup, SignupStatus, SquadMember
+from apps.events.models import AvailabilitySlotSelection, EventSignup, SignupStatus, SquadMember
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -153,23 +153,75 @@ def offered_statuses(event: Event, current: SignupStatus | None = None) -> list[
     ]
 
 
-def withdraw(signup: EventSignup) -> int:
-    """Withdraw a signup: out of every squad in its event, the row kept and marked.
+class Withdrawal(NamedTuple):
+    """What withdrawing a signup freed."""
+
+    squad_places: int
+    races: int
+
+    def lineup_note(self) -> str:
+        """Say which lineups the rider left, for the confirmation message.
+
+        Returns:
+            A sentence with a leading space, or "" when no lineup changed.
+
+        """
+        if not self.races:
+            return ""
+        return f" They're off the lineup of {self.races} upcoming race{'s' if self.races != 1 else ''}."
+
+
+def leave_upcoming_races(event_id: int, user_id: int) -> int:
+    """Take a rider out of every lineup of an event's races that have not started.
+
+    As a rider picked or as a substitute: someone no longer on the event must not count in a
+    lineup, be told they are racing, or be mentioned when its thread is updated. A race that
+    has started is left as it was, the record of who rode it. A DS place stays, since helping
+    with a race is not riding in it.
+
+    Args:
+        event_id: The event.
+        user_id: The rider.
+
+    Returns:
+        How many races the rider was taken out of.
+
+    """
+    now = timezone.now()
+    races = [
+        race
+        for race in AvailabilitySlotSelection.objects
+        .filter(grid__squad__event_id=event_id)
+        .filter(Q(selected_users=user_id) | Q(substitutes=user_id))
+        .distinct()
+        if race.race_datetime_utc > now
+    ]
+    for race in races:
+        race.selected_users.remove(user_id)
+        race.substitutes.remove(user_id)
+    if races:
+        AvailabilitySlotSelection.objects.filter(pk__in=[race.pk for race in races]).update(updated_at=now)
+    return len(races)
+
+
+def withdraw(signup: EventSignup) -> Withdrawal:
+    """Withdraw a signup: out of every squad and upcoming lineup in its event, the row kept and marked.
 
     Discord roles are left as they are, as they always have been on withdrawing. Any staff
-    status goes, since withdrawn is the status now.
+    status goes, since withdrawn is the status now. Not saved here.
 
     Args:
         signup: The signup.
 
     Returns:
-        How many squad places were freed.
+        How many squad places and race lineups the rider was taken out of.
 
     """
     removed, _ = SquadMember.objects.filter(squad__event_id=signup.event_id, user_id=signup.user_id).delete()
+    races = leave_upcoming_races(signup.event_id, signup.user_id)
     signup.status = EventSignup.Status.WITHDRAWN
     signup.staff_status = None
-    return removed
+    return Withdrawal(squad_places=removed, races=races)
 
 
 def clear_waiting(event: Event, user: User) -> bool:

@@ -23,10 +23,18 @@
     {% endif %}
   </div>
 
+  {% comment %}
+    Who still owes answers, counting only the stages still to come: a stage that has started
+    is no longer asked about, so it never keeps a rider here.
+  {% endcomment %}
   <div class="flex flex-wrap items-center gap-2 mb-4 text-sm">
-    <span class="badge badge-neutral">{{ complete_count }} of {{ member_count }} rider{{ member_count|pluralize }} answered every stage</span>
-    {% if stale_count %}<span class="badge badge-warning">{{ stale_count }} answer{{ stale_count|pluralize }} to re-confirm after a time change</span>{% endif %}
+    {% if asking %}
+    <span class="badge badge-neutral h-auto min-h-[var(--size)] py-0.5 max-w-full text-left">{{ complete_count }} of {{ member_count }} rider{{ member_count|pluralize }} answered every upcoming stage</span>
+    {% if stale_count %}<span class="badge badge-warning h-auto min-h-[var(--size)] py-0.5 max-w-full text-left">{{ stale_count }} answer{{ stale_count|pluralize }} to re-confirm after a time change</span>{% endif %}
     {% if unanswered %}<span class="text-base-content/80">No answer yet: {{ unanswered|join:", " }}</span>{% endif %}
+    {% elif all_started %}
+    <span class="text-base-content/80">Nothing left to answer: every stage with a time has started.</span>
+    {% endif %}
   </div>
 
   {% if columns %}
