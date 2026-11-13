@@ -645,7 +645,10 @@ cache on expiry, not on a sweep). The rule:
 Consumers: `squad_expiring_summary` (the captain banner and its modal) goes through it wholesale. The rider's own banner
 (`expiring_verifications`) and the DM task (`warn_expiring_verifications`) warn per verify_type and take only the cross-type half,
 `superseded_weight_types` — a weight record whose either-weight requirement the *other* weight covers for longer stops warning,
-exactly as `covering_records_by_type` already suppresses a renewed record of the same type. They deliberately still warn about a
+exactly as `covering_records_by_type` already suppresses a renewed record of the same type. Both also leave out a type
+whose renewal is awaiting review (`renewal_pending_types`; the rule is under Notification Badges), and the DM task does not
+stamp the warning it skipped, so it catches up after a rejection. The captain's list does not: a rider still waiting cannot
+race once the old record lapses. They deliberately still warn about a
 type the category does not require (a `power` record, a `weight_full` held by a rider with no category): it is evidence the rider
 chose to hold, it feeds Extra Verified, and silencing it is a policy change, not a fix. `verification_days_bulk` (the events
 Eligibility table) shares only the required-types lookup — its docstring lists the three ways it still diverges, and fixing those
