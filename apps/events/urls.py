@@ -3,7 +3,14 @@
 from django.urls import path
 from django.views.generic import RedirectView
 
-from apps.events.series_views import series_board_view, series_sheet_view, series_stages_view, stage_courses_view
+from apps.events.series_views import (
+    series_board_view,
+    series_lineup_dialog_view,
+    series_sheet_view,
+    series_squads_view,
+    series_stages_view,
+    stage_courses_view,
+)
 from apps.events.signup_status_views import signup_status_view, signup_statuses_view
 from apps.events.views import (
     add_members_search_view,
@@ -93,6 +100,8 @@ urlpatterns = [
     path("<int:pk>/stages/", series_stages_view, name="series_stages"),
     path("<int:pk>/stages/<int:stage_pk>/courses/", stage_courses_view, name="stage_courses"),
     path("<int:pk>/series/", series_board_view, name="series_board"),
+    path("<int:pk>/series/squads/", series_squads_view, name="series_squads"),
+    path("<int:pk>/series/squads/<int:squad_pk>/lineup/", series_lineup_dialog_view, name="series_lineup_dialog"),
     path(
         "<int:pk>/signup-questions/<int:question_pk>/edit/",
         signup_question_edit_view,

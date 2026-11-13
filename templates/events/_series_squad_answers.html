@@ -1,0 +1,110 @@
+{% comment %}
+  One squad's series answers, stage by stage: the riders x stages grid, its totals and, for the
+  squad's captains, the riders' notes. Shared by the squad's results page and its card on the
+  "Squads together" page; ``series_views.squad_results`` builds the values.
+
+  ``is_event_admin`` (may manage this squad) shows each open stage's lineup button. On the
+  results page it opens the dialog already on the page; with ``dialog_url`` (a card) it first
+  loads this squad's dialog into ``#lineup-dialog-host``, since a page of cards holds one
+  dialog at a time. That button is never disabled while it loads: a disabled button loses
+  focus, and the dialog then has nowhere to send it back to when it closes. ``in_card`` leaves out the key, which that page shows once, and makes the
+  notes heading an h3 under the card's h2.
+{% endcomment %}
+<div class="flex flex-col gap-4">
+  {% if columns %}
+  <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th scope="col" class="sticky left-0 z-[6] bg-base-200 align-bottom text-base-content">Rider</th>
+          {% for column in columns %}
+          <th scope="col" class="align-top min-w-40 text-base-content font-normal">
+            <div class="flex flex-col items-center gap-1 text-center">
+              <span class="badge badge-neutral badge-sm">Stage {{ column.number }}</span>
+              <span class="text-sm font-semibold">{{ column.stage.name }}</span>
+              <span class="text-xs text-base-content/80">{{ column.stage.get_stage_type_display }}</span>
+              {% if column.route %}<span class="text-xs text-base-content/80">{{ column.route }}</span>{% endif %}
+              <span class="text-xs tabular-nums">{{ column.when }}</span>
+              {% if column.is_open and is_event_admin %}
+              {% if dialog_url %}
+              <button type="button" class="btn btn-xs btn-outline mt-1"
+                      hx-get="{{ dialog_url }}" hx-vals='{"slot": "{{ column.key }}"}' hx-target="#lineup-dialog-host" hx-swap="innerHTML"
+                      aria-label="{% if column.race %}Edit{% else %}Pick{% endif %} {{ squad.name }}'s lineup for stage {{ column.number }}, {{ column.stage.name }}">{% if column.race %}Edit lineup{% else %}Pick lineup{% endif %}</button>
+              {% else %}
+              <button type="button" class="btn btn-xs btn-outline mt-1"
+                      onclick="openSlotModal('{{ column.utc_date }}', '{{ column.utc_time }}')"
+                      aria-label="{% if column.race %}Edit{% else %}Pick{% endif %} {{ squad.name }}'s lineup for stage {{ column.number }}, {{ column.stage.name }}">{% if column.race %}Edit lineup{% else %}Pick lineup{% endif %}</button>
+              {% endif %}
+              {% endif %}
+            </div>
+          </th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody class="bg-base-100">
+        {% for row in rows %}
+        <tr>
+          <th scope="row" class="sticky left-0 z-[5] bg-base-100 font-normal whitespace-nowrap">
+            {% include "accounts/_user_tooltip.html" with display_name=row.display_name user_id=row.user.pk discord_id=row.user.discord_id discord_avatar_url=row.user.discord_avatar_url zwid=row.zwid zp_category=row.zp_category zp_category_w=row.zp_category_w zr_category=row.zr_category zr_v2=row.zr_v2_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype zr_age=row.zr_age is_race_ready=row.is_race_ready is_extra_verified=row.is_extra_verified in_zwiftpower=row.in_zwiftpower in_zwiftracing=row.in_zwiftracing %}
+          </th>
+          {% for cell in row.cells %}
+          <td class="text-center">
+            {% if cell.badge %}<span class="{{ cell.badge }} whitespace-nowrap">{{ cell.label }}</span>{% else %}<span class="text-base-content/70">{{ cell.label }}</span>{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{{ columns|length|add:1 }}" class="text-base-content/80">This squad has no members yet.</td></tr>
+        {% endfor %}
+      </tbody>
+      <tfoot class="text-base-content">
+        <tr>
+          <th scope="row" class="sticky left-0 z-[5] bg-base-200">Available &middot; Maybe</th>
+          {% for column in columns %}
+          <td class="text-center tabular-nums">{% if column.is_open %}{{ column.counts.available }} &middot; {{ column.counts.maybe }}{% else %}&mdash;{% endif %}</td>
+          {% endfor %}
+        </tr>
+        <tr>
+          <th scope="row" class="sticky left-0 z-[5] bg-base-200">Riders needed</th>
+          {% for column in columns %}
+          <td class="text-center">
+            {% if column.is_open and column.status %}
+            <span class="{{ column.status_class }}">{{ column.status }}</span>
+            <span class="block text-xs mt-1">{{ column.stage.riders_min }}{% if column.stage.riders_max %}&ndash;{{ column.stage.riders_max }}{% endif %} riders</span>
+            {% elif column.is_open %}&mdash;{% else %}<span class="text-xs">{{ column.when }}</span>{% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        <tr>
+          <th scope="row" class="sticky left-0 z-[5] bg-base-200">Lineup</th>
+          {% for column in columns %}
+          <td class="text-center text-xs">{% if column.is_open %}{{ column.race_label }}{% else %}&mdash;{% endif %}</td>
+          {% endfor %}
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% if not in_card %}
+  <p class="text-xs text-base-content/80">
+    Answers count current squad members only. "Old time" is an answer given before the stage moved; "Tight" means the
+    stage needs some of its Maybes.
+  </p>
+  {% endif %}
+  {% else %}
+  <p class="text-sm text-base-content/80">This event has no stages yet.</p>
+  {% endif %}
+
+  {% if notes %}
+  <div>
+    {% if in_card %}<h3 class="text-sm font-semibold mb-2">Notes from riders</h3>{% else %}<h2 class="text-sm font-semibold mb-2">Notes from riders</h2>{% endif %}
+    <ul class="flex flex-col gap-2">
+      {% for note in notes %}
+      <li class="rounded-box {% if in_card %}bg-base-100{% else %}bg-base-200{% endif %} px-3 py-2 text-sm">
+        <span class="font-medium">{{ note.rider }}</span> &middot; {{ note.stage }} &middot; {{ note.answer }}
+        <span class="block mt-0.5">{{ note.note }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>

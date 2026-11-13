@@ -2,7 +2,9 @@
 The scheduled-race dialog: create or edit a race at one UTC date and time, pick its riders,
 substitutes and power-ups, and create or update its Discord thread. Shared by the weekly
 results heatmap and the race-series results page; the host includes it only for captains
-(``is_event_admin``) and gives it a ``#slot-selections-container`` to swap into.
+(``is_event_admin``) and gives it a ``#slot-selections-container`` to swap into. The series
+"Squads together" page loads it, one squad at a time, through ``_series_lineup_dialog.html``,
+which also sends ``lineup_context``: the squad and stage, named under the heading.
 
 Context: event, squad, grid, powerup_choices, and the JSON the script reads --
   utc_cell_users_json    {"<date>|<time>": [user ids free then]} -- the riders listed first
@@ -17,10 +19,11 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
                          "Everyone else on this squad" is not used. Weekly sheets send neither.
 {% endcomment %}
 <!-- Slot Selection Modal -->
-<dialog id="slot-modal" class="modal">
+<dialog id="slot-modal" class="modal" aria-labelledby="slot-modal-title"{% if lineup_context %} aria-describedby="slot-modal-context"{% endif %}>
   <div class="modal-box max-w-md">
     <button type="button" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" aria-label="Close" onclick="document.getElementById('slot-modal').close()">✕</button>
-    <h3 class="font-bold text-lg mb-3" id="slot-modal-title">Schedule Race</h3>
+    <h3 class="font-bold text-lg {% if lineup_context %}mb-1 pr-8{% else %}mb-3{% endif %}" id="slot-modal-title">Schedule Race</h3>
+    {% if lineup_context %}<p id="slot-modal-context" class="text-sm text-base-content/80 mb-3 pr-8">{{ lineup_context }}</p>{% endif %}
     <form id="slot-modal-form" method="post"
           hx-target="#slot-selections-container"
           hx-swap="innerHTML">
@@ -172,7 +175,10 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
 {{ slot_defaults_json|json_script:"slot-defaults-data" }}
 {{ utc_cell_answers_json|json_script:"utc-cell-answers-data" }}
 {{ answer_legend_json|json_script:"answer-legend-data" }}
+{# One function scope, so the script can run again: the series "Squads together" page loads this dialog #}
+{# into one host each time a card's lineup is opened, and a second top-level const would not run. #}
 <script>
+(function () {
   const utcCellUsers = JSON.parse(document.getElementById('utc-cell-users-data').textContent);
   const userData = JSON.parse(document.getElementById('user-data').textContent);
   const squadRosterIds = JSON.parse(document.getElementById('squad-roster-ids-data').textContent) || [];
@@ -568,6 +574,15 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
     document.getElementById('slot-modal-submit').click();
   });
 
+  // The page calls these from its Lineup buttons, and the dialog's own buttons call the second.
+  window.openSlotModal = openSlotModal;
+  window.toggleAllRiders = toggleAllRiders;
+
+  // The body listeners look every element up by id when they fire, so they are added once,
+  // however many times the dialog is loaded.
+  if (window.__slotModalWired) return;
+  window.__slotModalWired = true;
+
   // Surface server errors from any of the modal's HTMX buttons inline.
   document.body.addEventListener('htmx:responseError', function(e) {
     const elt = e.detail.elt;
@@ -591,4 +606,5 @@ Context: event, squad, grid, powerup_choices, and the JSON the script reads --
       window.location.reload();
     }
   });
+})();
 </script>

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Squads together - {{ event.title }}{% endblock %}
+
+{% block content %}
+{% comment %}
+  Several squads' series answers on one page, a card each (series_views.series_squads_view),
+  opened from the series board. Each card is the squad's results grid; its lineup buttons load
+  that squad's dialog into #lineup-dialog-host, one at a time. Everything the page shows is in
+  its address (?squad=, ?tz=), so a saved lineup's reload brings it back as it was; folding a
+  card is the one thing kept elsewhere, per tab, in sessionStorage.
+{% endcomment %}
+<div class="max-w-7xl mx-auto flex flex-col gap-5">
+  <a href="{{ board_url }}" class="link text-sm self-start">&larr; Series board</a>
+
+  <div>
+    <h1 class="text-2xl font-bold mb-1">Squads together</h1>
+    <p class="text-base-content/80">{{ event.title }} &middot; {{ cards|length }} squad{{ cards|length|pluralize }} &middot; times in {% if mine %}your timezone ({{ viewer_timezone }}){% else %}each squad's own timezone{% endif %}</p>
+  </div>
+
+  <div class="flex flex-wrap items-end gap-x-6 gap-y-3 rounded-box border border-base-300 p-3 text-sm">
+    <div class="flex flex-col gap-1.5 min-w-0">
+      <span id="together-squads-label" class="font-semibold">Squads on this page</span>
+      <div class="flex flex-wrap items-center gap-1.5" role="group" aria-labelledby="together-squads-label">
+        {% for card in cards %}
+        <a href="{{ card.remove_url }}" class="btn btn-xs btn-outline gap-1.5" aria-label="Remove {{ card.squad.name }} from this page">
+          {{ card.squad.name }}
+          <svg aria-hidden="true" class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </a>
+        {% endfor %}
+        {% if others %}
+        <form method="get" action="{% url 'events:series_squads' event.pk %}" class="flex flex-wrap items-center gap-1.5">
+          {% for squad_id in chosen_ids %}<input type="hidden" name="squad" value="{{ squad_id }}">{% endfor %}
+          {% if mine %}<input type="hidden" name="tz" value="mine">{% endif %}
+          <label for="together-add" class="sr-only">Add a squad</label>
+          <select id="together-add" name="squad" class="select select-xs w-auto">
+            {% for squad in others %}<option value="{{ squad.pk }}">{{ squad.name }}{% if squad.gender %} &middot; {{ squad.gender }}{% endif %}</option>{% endfor %}
+          </select>
+          <button type="submit" class="btn btn-xs">Add</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+    <div class="flex flex-col gap-1.5 min-w-0">
+      <span id="together-times-label" class="font-semibold">Times</span>
+      <div class="join flex-wrap" role="group" aria-labelledby="together-times-label">
+        <a href="{{ own_times_url }}" class="btn btn-xs join-item{% if not mine %} btn-active{% endif %}"{% if not mine %} aria-current="true"{% endif %}>Each squad's own</a>
+        <a href="{{ my_times_url }}" class="btn btn-xs join-item{% if mine %} btn-active{% endif %}"{% if mine %} aria-current="true"{% endif %}>Mine ({{ viewer_timezone }})</a>
+      </div>
+    </div>
+    {% if cards %}
+    <div id="together-fold-all" class="flex flex-wrap gap-2 sm:ml-auto" hidden>
+      <button type="button" class="btn btn-xs btn-ghost" data-fold-all="true">Collapse all</button>
+      <button type="button" class="btn btn-xs btn-ghost" data-fold-all="false">Expand all</button>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if capped %}
+  <p role="alert" class="alert alert-warning text-sm">Only {{ max_squads }} squads fit on one page, so the first {{ max_squads }} are shown.</p>
+  {% endif %}
+
+  {% for card in cards %}
+  <section class="card bg-base-200 shadow-sm" aria-labelledby="squad-card-{{ card.squad.pk }}" data-squad-card="{{ card.squad.pk }}">
+    <div class="card-body p-4 gap-3">
+      <div class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+        <div class="flex flex-col gap-1.5 min-w-0">
+          <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <h2 id="squad-card-{{ card.squad.pk }}" class="text-lg font-bold"><a href="{{ card.results_url }}" class="link">{{ card.squad.name }}</a></h2>
+            <span class="text-sm text-base-content/80">{% if card.squad.gender %}{{ card.squad.gender }} &middot; {% endif %}{{ card.member_count }} rider{{ card.member_count|pluralize }} &middot; {{ card.timezone }}</span>
+            {% if not card.is_event_admin %}<span class="badge badge-ghost badge-sm">View only</span>{% endif %}
+          </div>
+          {% include "events/_series_answer_summary.html" with asking=card.asking all_started=card.all_started complete_count=card.complete_count member_count=card.member_count stale_count=card.stale_count unanswered=card.unanswered %}
+        </div>
+        <div class="flex flex-wrap items-center gap-1.5">
+          {% if card.can_edit_times %}<a href="{% url 'events:series_sheet' event.pk card.squad.pk %}" class="btn btn-sm btn-ghost">Edit stage times</a>{% endif %}
+          <button type="button" class="btn btn-sm btn-ghost gap-1.5" data-fold aria-expanded="true" aria-controls="squad-card-{{ card.squad.pk }}-body" hidden>
+            <span data-fold-label>Collapse</span>
+            <svg aria-hidden="true" class="size-3.5 rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+        </div>
+      </div>
+      {% if not card.is_event_admin %}
+      <p class="text-sm text-base-content/80">You can see {{ card.squad.name }}'s answers. Its lineups and riders' notes are for its captains and the event's coordinators.</p>
+      {% endif %}
+      <ul class="flex flex-wrap gap-x-3.5 gap-y-1.5 text-sm" data-fold-strip aria-label="{{ card.squad.name }} by stage" hidden>
+        {% for stage in card.strip %}
+        <li class="flex flex-wrap items-center gap-1.5"><span class="font-semibold">Stage {{ stage.number }}</span><span class="{{ stage.badge }} whitespace-nowrap">{{ stage.label }}</span></li>
+        {% endfor %}
+      </ul>
+      <div id="squad-card-{{ card.squad.pk }}-body" data-fold-body>
+        {% include "events/_series_squad_answers.html" with columns=card.columns rows=card.rows notes=card.notes is_event_admin=card.is_event_admin squad=card.squad dialog_url=card.dialog_url in_card=True %}
+      </div>
+    </div>
+  </section>
+  {% empty %}
+  <p class="text-base-content/80">No squads on this page yet. <a href="{{ board_url }}" class="link">Tick some on the series board.</a></p>
+  {% endfor %}
+
+  {% if cards %}
+  <p class="text-xs text-base-content/80">
+    Answers count current squad members only. "Old time" is an answer given before the stage moved; "Tight" means the
+    stage needs some of its Maybes.
+  </p>
+  {% endif %}
+</div>
+
+{# One lineup dialog at a time: a card's button loads its squad's here. A saved lineup swaps into the #}
+{# container below, and the dialog then reloads the page, as it does on a squad's own results page. #}
+<div id="lineup-dialog-host"></div>
+<div id="slot-selections-container" hidden></div>
+
+<script>
+  (function () {
+    const storeKey = 'seriesSquadsFolded:{{ event.pk }}';
+    let folded = {};
+    try { folded = JSON.parse(sessionStorage.getItem(storeKey) || '{}') || {}; } catch (e) { folded = {}; }
+    const cards = Array.from(document.querySelectorAll('[data-squad-card]'));
+    function setFold(card, fold) {
+      const button = card.querySelector('[data-fold]');
+      card.querySelector('[data-fold-body]').hidden = fold;
+      card.querySelector('[data-fold-strip]').hidden = !fold;
+      button.setAttribute('aria-expanded', fold ? 'false' : 'true');
+      button.querySelector('[data-fold-label]').textContent = fold ? 'Expand' : 'Collapse';
+      button.querySelector('svg').classList.toggle('rotate-180', !fold);
+      folded[card.dataset.squadCard] = fold;
+    }
+    function save() {
+      // A private window may refuse storage; the folds then just aren't kept over a reload.
+      try { sessionStorage.setItem(storeKey, JSON.stringify(folded)); } catch (e) { /* not kept */ }
+    }
+    cards.forEach(function (card) {
+      const button = card.querySelector('[data-fold]');
+      button.hidden = false;
+      setFold(card, Boolean(folded[card.dataset.squadCard]));
+      button.addEventListener('click', function () {
+        setFold(card, button.getAttribute('aria-expanded') === 'true');
+        save();
+      });
+    });
+    const foldAll = document.getElementById('together-fold-all');
+    if (foldAll) {
+      foldAll.hidden = false;
+      foldAll.querySelectorAll('[data-fold-all]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          const fold = button.dataset.foldAll === 'true';
+          cards.forEach(function (card) { setFold(card, fold); });
+          save();
+        });
+      });
+    }
+  })();
+</script>
+{% endblock %}

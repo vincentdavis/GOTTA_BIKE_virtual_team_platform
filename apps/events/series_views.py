@@ -9,6 +9,7 @@ event-wide series board for coordinators. My Events gets each rider's stages fro
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from datetime import time
 from typing import TYPE_CHECKING
@@ -20,7 +21,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.db import transaction
 from django.db.models import Count
-from django.http import Http404, HttpResponseForbidden
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -65,8 +66,9 @@ from apps.zwiftpower.models import ZPTeamRiders
 
 if TYPE_CHECKING:
     from datetime import datetime
+    from zoneinfo import ZoneInfo
 
-    from django.http import HttpRequest, HttpResponse
+    from django.http import HttpRequest
 
 #: A results cell for each answer state: (label, badge classes). Every state has a word,
 #: so none is told apart by colour alone.
@@ -949,28 +951,37 @@ def _lineup_answer(answers: dict | None, stage: SeriesStage, state: str) -> dict
     return {"state": state}
 
 
-def series_results(request: HttpRequest, event: Event, squad: Squad, grid: AvailabilityGrid) -> HttpResponse:
-    """Show a squad's answers stage by stage, and let its captains pick each stage's lineup.
+def squad_results(
+    request: HttpRequest,
+    event: Event,
+    squad: Squad,
+    grid: AvailabilityGrid,
+    *,
+    tz: ZoneInfo,
+    with_dialog: bool = True,
+) -> dict:
+    """Build one squad's series answers, stage by stage, as its results page and its card show them.
 
-    Reached through ``availability_results_view``, which has already checked the sheet is
-    published or closed. Visible to any team member, like a weekly sheet's results; riders'
-    notes and the lineup controls only to those who manage the squad.
+    The one place the grid is worked out, for the squad's results page, its card on the
+    "Squads together" page and the lineup dialog a card loads. Riders' notes and the dialog's
+    data only for those who manage the squad.
 
     Args:
-        request: The HTTP request.
+        request: The HTTP request, for who is asking and the dialog's links.
         event: The race-series event.
         squad: The squad.
         grid: The squad's series sheet.
+        tz: The zone to show start times in.
+        with_dialog: Whether to add the lineup dialog's data (still only for its managers).
 
     Returns:
-        The results page.
+        Template values: ``columns``, ``rows``, ``notes``, the answer summary
+        (``_series_answer_summary.html``), ``is_event_admin`` and, with the dialog, its JSON.
 
     """
     stages = series.event_stages(event)
     sheet_stages = {ss.stage_id: ss for ss in grid.sheet_stages.all()}
     is_captain = _can_manage_squad_availability(request.user, squad)
-    user_tz = getattr(request.user, "timezone", "") or ""
-    tz = series.zone(user_tz or grid.grid_timezone)
     # A stage that has started is no longer asked about (``series_respond``), so the summary
     # of who still owes answers counts only the stages still to come.
     now = timezone.now()
@@ -1052,7 +1063,7 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
         })
 
     modal: dict = {}
-    if is_captain:
+    if is_captain and with_dialog:
         cell_users: dict[str, list[int]] = {}
         cell_answers: dict[str, dict[str, dict[str, str]]] = {}
         for column in open_columns:
@@ -1064,29 +1075,23 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
                 if state == series.ANSWER.AVAILABLE:
                     cell_users[column["key"]].append(user.pk)
                 cell_answers[column["key"]][str(user.pk)] = _lineup_answer(answers, column["stage"], state)
-        user_data = {
-            entry["user"].pk: {
-                "display_name": entry["display_name"],
-                "zr_category": entry["zr_category"],
-                "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
-                "is_race_ready": entry["is_race_ready"],
-            }
-            for entry in enriched
-        }
         # Captains race too, and are not always squad MEMBER rows.
         roster = squad_roster_users(squad)
-        for entry in _enrich_members([user for user in roster if user.pk not in user_data]):
-            user_data[entry["user"].pk] = {
-                "display_name": entry["display_name"],
-                "zr_category": entry["zr_category"],
-                "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
-                "is_race_ready": entry["is_race_ready"],
-            }
+        on_roster = set(member_ids)
+        everyone = enriched + _enrich_members([user for user in roster if user.pk not in on_roster])
         modal = {
             "utc_cell_users_json": cell_users,
             "utc_cell_answers_json": cell_answers,
             "answer_legend_json": ANSWER_LEGEND,
-            "user_data_json": user_data,
+            "user_data_json": {
+                entry["user"].pk: {
+                    "display_name": entry["display_name"],
+                    "zr_category": entry["zr_category"],
+                    "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
+                    "is_race_ready": entry["is_race_ready"],
+                }
+                for entry in everyone
+            },
             "squad_roster_ids_json": [user.pk for user in roster],
             "selections_json": _slot_modal_selections(list(races.values())),
             # A new race starts from the squad's own course on the stage.
@@ -1097,6 +1102,43 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             "powerup_choices": _powerup_choices(),
         }
 
+    return {
+        "columns": columns,
+        "rows": rows,
+        "notes": notes,
+        "member_count": len(members),
+        "asking": bool(upcoming_columns),
+        "all_started": bool(open_columns) and not upcoming_columns,
+        "complete_count": sum(1 for row in rows if not row["pending"]),
+        "unanswered": [row["display_name"] for row in rows if row["user"].pk not in answers_by_user]
+        if upcoming_columns
+        else [],
+        "stale_count": sum(column["counts"].stale for column in upcoming_columns),
+        "is_event_admin": is_captain,
+        **modal,
+    }
+
+
+def series_results(request: HttpRequest, event: Event, squad: Squad, grid: AvailabilityGrid) -> HttpResponse:
+    """Show a squad's answers stage by stage, and let its captains pick each stage's lineup.
+
+    Reached through ``availability_results_view``, which has already checked the sheet is
+    published or closed. Visible to any team member, like a weekly sheet's results; riders'
+    notes and the lineup controls only to those who manage the squad.
+
+    Args:
+        request: The HTTP request.
+        event: The race-series event.
+        squad: The squad.
+        grid: The squad's series sheet.
+
+    Returns:
+        The results page.
+
+    """
+    user_tz = getattr(request.user, "timezone", "") or ""
+    tz = series.zone(user_tz or grid.grid_timezone)
+    results = squad_results(request, event, squad, grid, tz=tz)
     slot_selections_enriched, _ = _enriched_slot_selections(request, grid)
     logfire.debug(
         "Series results viewed",
@@ -1112,23 +1154,11 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             "event": event,
             "squad": squad,
             "grid": grid,
-            "columns": columns,
-            "rows": rows,
-            "notes": notes,
-            "member_count": len(members),
-            "asking": bool(upcoming_columns),
-            "all_started": bool(open_columns) and not upcoming_columns,
-            "complete_count": sum(1 for row in rows if not row["pending"]),
-            "unanswered": [row["display_name"] for row in rows if row["user"].pk not in answers_by_user]
-            if upcoming_columns
-            else [],
-            "stale_count": sum(column["counts"].stale for column in upcoming_columns),
+            **results,
             "display_timezone": tz.key,
             "tz_is_default": not user_tz,
-            "is_event_admin": is_captain,
             "slot_selections_enriched": slot_selections_enriched,
             "schedule_hint": "Use a stage's Lineup button to schedule its race.",
-            **modal,
         },
     )
 
@@ -1178,7 +1208,7 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect("events:event_detail", pk=pk)
 
     stages = series.event_stages(event)
-    every_squad = list(event.squads.order_by("name"))
+    every_squad = list(event.squads.order_by("name").prefetch_related("captains", "vice_captains"))
     # A squad's gender is one of the fixed options or blank; the filter offers those in use, and
     # one no squad has shows every squad, as a stale link would expect.
     in_use = {squad.gender for squad in every_squad}
@@ -1213,6 +1243,8 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
     viewer_tz = series.zone(getattr(request.user, "timezone", "") or "UTC")
     # A stage that has started can no longer be re-confirmed or filled, so it raises nothing.
     now = timezone.now()
+    # Squads ticked to open together, carried through the board's own choices.
+    picked = {int(value) for value in request.GET.getlist("squad") if value.isdigit()}
 
     racing = [0] * len(stages)
     rows, attention = [], []
@@ -1303,6 +1335,11 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
             "link": link,
             "tz": tz.key,
             "member_count": len(members.get(squad.pk, [])),
+            # Only a squad whose riders have been asked has answers to open.
+            "openable": bool(link),
+            "picked": bool(link) and squad.pk in picked,
+            "leads": bool(link) and _leads_squad(request.user, squad),
+            "closed_reason": "" if link else ("its times are a draft" if sheet else "no stage times"),
             "cells": cells,
         })
 
@@ -1319,6 +1356,10 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
         for index, stage in enumerate(stages)
     ]
     noun = "squad" if len(squads) == 1 else "squads"
+    shown = {squad.pk for squad in squads}
+    chosen = [
+        squad for squad in every_squad if squad.pk in picked and squad.pk in sheets and not sheets[squad.pk].is_draft
+    ]
     logfire.debug(
         "Series board viewed",
         event_id=pk,
@@ -1355,17 +1396,267 @@ def series_board_view(request: HttpRequest, pk: int) -> HttpResponse:
             ),
             # What a changed choice now shows; the tab opening (no choice yet) says nothing.
             "announce": fragment and ("gender" in request.GET or "tz" in request.GET),
+            "together_url": reverse("events:series_squads", args=[event.pk]),
+            "picked_names": [squad.name for squad in chosen],
+            # Ticked squads the gender filter now hides still go with the form.
+            "picked_hidden": [squad for squad in chosen if squad.pk not in shown],
+            "mine_count": sum(1 for row in rows if row["leads"]),
         },
     )
     if fragment and not embedded:
         # The page's address follows its choices, minus any left at their default.
         query = urlencode([
-            (name, value) for name, value in (("gender", gender.lower()), ("tz", "mine" if mine else "")) if value
+            *((name, value) for name, value in (("gender", gender.lower()), ("tz", "mine" if mine else "")) if value),
+            *(("squad", squad.pk) for squad in chosen),
         ])
         response["HX-Replace-Url"] = reverse("events:series_board", args=[event.pk]) + (f"?{query}" if query else "")
     # One URL answers with a whole page or with the board alone, so a cache must keep them apart.
     patch_vary_headers(response, ("HX-Request",))
     return response
+
+
+def _leads_squad(user: User, squad: Squad) -> bool:
+    """Whether a user leads a squad, for the series board's "Select my squads".
+
+    Its captain or vice-captain, or a holder of its Discord captain role or its regional
+    coordinator role.
+
+    Args:
+        user: The viewer.
+        squad: The squad, ``captains`` and ``vice_captains`` prefetched.
+
+    Returns:
+        True if the user leads it.
+
+    """
+    if any(leader.pk == user.pk for leader in [*squad.captains.all(), *squad.vice_captains.all()]):
+        return True
+    return any(
+        role and user.has_discord_role(role) for role in (squad.discord_captain_role, squad.regional_coordinator_role)
+    )
+
+
+#: The most squads "Squads together" shows at once: each card is a squad's whole results grid,
+#: so the page's cost grows with every one.
+MAX_SQUADS_TOGETHER = 12
+
+
+def _open_series_sheets(event: Event) -> dict[int, AvailabilityGrid]:
+    """Find each squad's series sheet whose riders have been asked: the ones a results page shows.
+
+    Args:
+        event: The race-series event.
+
+    Returns:
+        Published or closed series sheets by squad pk, a squad's first sheet as
+        ``series.series_sheet`` finds it.
+
+    """
+    sheets: dict[int, AvailabilityGrid] = {}
+    for grid in AvailabilityGrid.objects.filter(squad__event=event, kind=AvailabilityGrid.Kind.SERIES).order_by(
+        "created_at"
+    ):
+        sheets.setdefault(grid.squad_id, grid)
+    return {squad_id: grid for squad_id, grid in sheets.items() if not grid.is_draft}
+
+
+def _together_url(event: Event, squad_ids: list[int], *, mine: bool) -> str:
+    """Link the "Squads together" page for these squads.
+
+    Args:
+        event: The event.
+        squad_ids: The squads, in the order they show.
+        mine: Whether times show in the viewer's timezone.
+
+    Returns:
+        The URL.
+
+    """
+    query = [("squad", pk) for pk in squad_ids] + ([("tz", "mine")] if mine else [])
+    return reverse("events:series_squads", args=[event.pk]) + (f"?{urlencode(query)}" if query else "")
+
+
+def _stage_chip(column: dict) -> tuple[str, str]:
+    """Sum up one stage of a squad for its folded card, as the series board's cell does.
+
+    Args:
+        column: A ``squad_results`` column.
+
+    Returns:
+        ``(label, badge classes)``.
+
+    """
+    if not column["is_open"]:
+        if column["when"] == "Not racing":
+            return "Not racing", "badge badge-ghost badge-sm"
+        return "Not set", "badge badge-dash badge-sm"
+    race = column["race"]
+    if race is not None:
+        riders = len(race.selected_users.all())
+        if race.status == AvailabilitySlotSelection.Status.CONFIRMED:
+            return f"Lineup set · {riders}", "badge badge-success badge-sm"
+        return f"Picking · {riders}", "badge badge-info badge-sm"
+    if column["status"]:
+        return column["status"], column["status_class"]
+    return "Open", "badge badge-outline badge-sm"
+
+
+@require_GET
+@login_required
+@team_member_required()
+def series_squads_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Show several squads' series answers on one page, a card each, with their lineups.
+
+    Reached from the series board, where the squads are ticked: ``?squad=<pk>`` once per squad,
+    so the page can be bookmarked or shared, and saving a lineup from a card reloads it as it
+    was. Gated like the board. Each card is the squad's results grid (``squad_results``); its
+    lineup buttons, "Edit stage times" and riders' notes are for those who manage that squad,
+    so a captain who opens their own squad beside another sees the other read-only. A card loads
+    its squad's lineup dialog when one of its buttons is pressed (``series_lineup_dialog_view``).
+    Only squads whose riders have been asked can be shown, at most ``MAX_SQUADS_TOGETHER``.
+
+    Args:
+        request: The HTTP request. ``?tz=mine`` shows every time in the viewer's timezone.
+        pk: The event primary key.
+
+    Returns:
+        The page, or a redirect when not allowed or not a series.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    if not _can_view_v_report(request.user, event):
+        logfire.warning("Unauthorized squads together access", event_id=pk, user_id=request.user.id)
+        messages.error(request, "You don't have permission to view the series board.")
+        return redirect("events:event_detail", pk=pk)
+    if not event.is_race_series:
+        messages.info(request, "This event collects weekly availability, so it has no series board.")
+        return redirect("events:event_detail", pk=pk)
+
+    sheets = _open_series_sheets(event)
+    wanted = {int(value) for value in request.GET.getlist("squad") if value.isdigit()}
+    openable = [squad for squad in event.squads.order_by("name") if squad.pk in sheets]
+    chosen = [squad for squad in openable if squad.pk in wanted]
+    capped = len(chosen) > MAX_SQUADS_TOGETHER
+    chosen = chosen[:MAX_SQUADS_TOGETHER]
+    chosen_ids = [squad.pk for squad in chosen]
+    mine = request.GET.get("tz") == "mine"
+    viewer_tz = series.zone(getattr(request.user, "timezone", "") or "UTC")
+
+    cards = []
+    for squad in chosen:
+        grid = sheets[squad.pk]
+        own_tz = series.zone(grid.grid_timezone or squad.squad_timezone)
+        results = squad_results(request, event, squad, grid, tz=viewer_tz if mine else own_tz, with_dialog=False)
+        strip = []
+        for column in results["columns"]:
+            label, badge = _stage_chip(column)
+            strip.append({"number": column["number"], "label": label, "badge": badge})
+        dialog_url = ""
+        if results["is_event_admin"]:
+            dialog_url = reverse("events:series_lineup_dialog", args=[event.pk, squad.pk])
+            dialog_url += "?tz=mine" if mine else ""
+        cards.append({
+            **results,
+            "squad": squad,
+            "grid": grid,
+            "timezone": own_tz.key,
+            "results_url": reverse("events:availability_results", args=[event.pk, squad.pk, grid.pk]),
+            "dialog_url": dialog_url,
+            "can_edit_times": results["is_event_admin"] and not grid.is_closed,
+            "remove_url": _together_url(event, [other for other in chosen_ids if other != squad.pk], mine=mine),
+            "strip": strip,
+        })
+    logfire.info(
+        "Squads together viewed",
+        event_id=pk,
+        user_id=request.user.id,
+        squads=len(cards),
+        capped=capped,
+        mine=mine,
+    )
+    return render(
+        request,
+        "events/series_squads.html",
+        {
+            "event": event,
+            "cards": cards,
+            "chosen_ids": chosen_ids,
+            "others": [squad for squad in openable if squad.pk not in chosen_ids],
+            "capped": capped,
+            "max_squads": MAX_SQUADS_TOGETHER,
+            "mine": mine,
+            "viewer_timezone": viewer_tz.key,
+            "own_times_url": _together_url(event, chosen_ids, mine=False),
+            "my_times_url": _together_url(event, chosen_ids, mine=True),
+            "board_url": reverse("events:series_board", args=[event.pk])
+            + (f"?{urlencode([('squad', squad_id) for squad_id in chosen_ids])}" if chosen_ids else ""),
+        },
+    )
+
+
+@require_GET
+@login_required
+@team_member_required()
+def series_lineup_dialog_view(request: HttpRequest, pk: int, squad_pk: int) -> HttpResponse:
+    """Load one squad's lineup dialog, opened on one stage, into the "Squads together" page.
+
+    That page holds a card per squad and one dialog at a time, so a card's lineup button asks
+    for its squad's dialog here (``?slot=<UTC date>|<HH:MM>``, a stage's start), and the answer
+    replaces whatever dialog was loaded before, then opens. Saving it reloads the page, as on
+    the squad's own results page. A refusal is a 204 with a toast, never a redirect, which htmx
+    would follow and swap a whole page into the dialog's place; a request not from htmx goes to
+    the squad's results page.
+
+    Args:
+        request: The HTTP request. ``?tz=mine`` words the stage's start in the viewer's timezone.
+        pk: The event primary key.
+        squad_pk: The squad primary key.
+
+    Returns:
+        The dialog and the script that opens it, a 204 saying why not, or a redirect.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    squad = get_object_or_404(Squad, pk=squad_pk, event=event)
+    grid = _open_series_sheets(event).get(squad.pk) if event.is_race_series else None
+
+    def refuse(message: str, reason: str) -> HttpResponse:
+        logfire.warning(
+            "Lineup dialog refused", event_id=pk, squad_id=squad_pk, user_id=request.user.id, reason=reason
+        )
+        response = HttpResponse(status=204)
+        response["HX-Trigger"] = json.dumps({"showToast": [{"message": message, "tags": "error"}]})
+        return response
+
+    if not _can_manage_squad_availability(request.user, squad):
+        return refuse("Only this squad's captains and the event's coordinators can pick its lineups.", "permission")
+    if grid is None:
+        return refuse("This squad has no published stage times.", "no_sheet")
+    if not getattr(request, "htmx", False):
+        return redirect("events:availability_results", event_pk=pk, squad_pk=squad.pk, grid_pk=grid.pk)
+    mine = request.GET.get("tz") == "mine"
+    tz_name = (getattr(request.user, "timezone", "") or "UTC") if mine else (grid.grid_timezone or squad.squad_timezone)
+    tz = series.zone(tz_name)
+    results = squad_results(request, event, squad, grid, tz=tz)
+    slot = request.GET.get("slot", "")
+    column = next((column for column in results["columns"] if column["is_open"] and column["key"] == slot), None)
+    if column is None:
+        return refuse("That stage's time has changed. Reload the page and try again.", "stale_slot")
+    logfire.info("Lineup dialog loaded", event_id=pk, squad_id=squad.pk, user_id=request.user.id)
+    return render(
+        request,
+        "events/_series_lineup_dialog.html",
+        {
+            "event": event,
+            "squad": squad,
+            "grid": grid,
+            **results,
+            "lineup_context": (
+                f"{squad.name} · Stage {column['number']}: {column['stage'].name} · {column['when']} ({tz.key})"
+            ),
+            "open_slot": {"date": column["utc_date"], "time": column["utc_time"]},
+        },
+    )
 
 
 def my_series_stages(request: HttpRequest, grids: list[AvailabilityGrid]) -> dict[int, dict]:

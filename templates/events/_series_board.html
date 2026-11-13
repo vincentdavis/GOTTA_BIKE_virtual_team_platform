@@ -21,7 +21,8 @@
   {# short in the event page's narrower tab at the largest text size. htmx puts focus back on the #}
   {# chosen radio after the swap, found by its id, so each keeps one. #}
   <form method="get" action="{% url 'events:series_board' event.pk %}" class="flex flex-wrap items-end gap-x-6 gap-y-3 min-w-0 text-sm"
-        hx-get="{% url 'events:series_board' event.pk %}" hx-trigger="change" hx-target="#{{ board_target }}" hx-swap="innerHTML">
+        hx-get="{% url 'events:series_board' event.pk %}" hx-trigger="change" hx-target="#{{ board_target }}" hx-swap="innerHTML"
+        hx-include="[form='series-squad-pick'][name='squad']">
     {% if gender_options %}
     <fieldset class="min-w-0">
       <legend class="font-medium mb-1">Squad gender</legend>
@@ -58,11 +59,39 @@
 {% if announce %}<p id="series-board-announcer" hx-swap-oob="innerHTML">{{ squad_summary }} shown, times in {% if mine %}your timezone{% else %}each squad's own timezone{% endif %}.</p>{% endif %}
 
 {% if columns %}
+{% comment %}
+  Ticking squads opens them together, a card each, on "Squads together"
+  (series_views.series_squads_view). The boxes belong to #series-squad-pick by their form
+  attribute, since the board's own choices are another form; those choices carry the ticks
+  through their swap (hx-include), and ticked squads they hide go as hidden inputs. Without
+  JavaScript the boxes and "Open together" still work; the script adds the live count,
+  "Select all", "Select my squads" and Clear.
+{% endcomment %}
+<style>
+  #{{ board_target }} tr:has(input[name="squad"]:checked) > * { background-color: color-mix(in oklab, var(--color-primary) 9%, var(--color-base-100)); }
+  .pick-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; padding: 0.625rem 0.75rem; border: 1px solid var(--color-base-300); border-radius: var(--radius-box); background: var(--color-base-100); }
+  .pick-bar.is-picking { position: sticky; bottom: 0; z-index: 30; box-shadow: 0 -0.25rem 1rem rgb(0 0 0 / 0.12); }
+  @media (min-width: 40rem) { .pick-bar.is-picking { bottom: 1rem; } }
+  .pick-status { flex: 999 1 12rem; min-width: 0; margin: 0; }
+  /* At the two largest text sizes a bar that stuck would cover much of a phone's screen (WCAG 1.4.10). */
+  :root[data-text-size="larger"] .pick-bar.is-picking,
+  :root[data-text-size="largest"] .pick-bar.is-picking { position: static; }
+</style>
+<div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm mb-2">
+  <span class="text-base-content/80">Tick squads to work on their answers and lineups together, on one page.</span>
+  {% if mine_count %}<button type="button" class="btn btn-xs btn-outline" data-pick-mine hidden>Select my squads ({{ mine_count }})</button>{% endif %}
+</div>
 <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200 mb-3">
   <table class="table table-sm">
     <thead>
       <tr>
-        <th scope="col" class="sticky left-0 z-[6] bg-base-200 align-bottom text-base-content">Squad</th>
+        <th scope="col" class="sticky left-0 z-[6] bg-base-200 align-bottom text-base-content">
+          <span class="flex items-center gap-2.5">
+            <input type="checkbox" class="checkbox checkbox-sm checkbox-primary" data-pick-all hidden
+                   aria-label="Select every squad shown whose riders have been asked">
+            Squad
+          </span>
+        </th>
         {% for column in columns %}
         <th scope="col" class="align-top min-w-44 text-base-content font-normal">
           <div class="flex flex-col gap-0.5">
@@ -79,14 +108,20 @@
       {% for row in rows %}
       <tr class="align-top">
         <th scope="row" class="sticky left-0 z-[5] bg-base-100 font-normal">
-          <div class="flex flex-col gap-0.5">
-            {% if row.link %}
-            <a href="{{ row.link }}" class="link font-semibold">{{ row.squad.name }}</a>
-            {% else %}
-            <span class="font-semibold">{{ row.squad.name }}</span>
-            {% endif %}
-            <span class="text-xs text-base-content/80">{% if row.squad.gender %}{{ row.squad.gender }} &middot; {% endif %}{{ row.member_count }} rider{{ row.member_count|pluralize }}</span>
-            <span class="text-xs text-base-content/80">{{ row.tz }}</span>
+          <div class="flex items-start gap-2.5">
+            <input type="checkbox" form="series-squad-pick" name="squad" value="{{ row.squad.pk }}"
+                   class="checkbox checkbox-sm checkbox-primary mt-0.5 shrink-0" aria-label="Select {{ row.squad.name }}"
+                   data-squad-name="{{ row.squad.name }}"{% if row.leads %} data-mine{% endif %}{% if row.picked %} checked{% endif %}{% if not row.openable %} disabled aria-describedby="pick-closed-{{ row.squad.pk }}"{% endif %}>
+            <div class="flex flex-col gap-0.5 min-w-0">
+              {% if row.link %}
+              <a href="{{ row.link }}" class="link font-semibold">{{ row.squad.name }}</a>
+              {% else %}
+              <span class="font-semibold">{{ row.squad.name }}</span>
+              {% endif %}
+              <span class="text-xs text-base-content/80">{% if row.squad.gender %}{{ row.squad.gender }} &middot; {% endif %}{{ row.member_count }} rider{{ row.member_count|pluralize }}</span>
+              <span class="text-xs text-base-content/80">{{ row.tz }}</span>
+              {% if not row.openable %}<span id="pick-closed-{{ row.squad.pk }}" class="text-xs text-base-content/80">Can't open yet: {{ row.closed_reason }}</span>{% endif %}
+            </div>
           </div>
         </th>
         {% for cell in row.cells %}
@@ -106,6 +141,67 @@
     </tbody>
   </table>
 </div>
+<form id="series-squad-pick" method="get" action="{{ together_url }}" class="pick-bar{% if picked_names %} is-picking{% endif %} mb-3">
+  {% for squad in picked_hidden %}<input type="hidden" form="series-squad-pick" name="squad" value="{{ squad.pk }}" data-squad-name="{{ squad.name }}">{% endfor %}
+  <p class="pick-status text-sm" role="status" data-pick-status>{% if picked_names %}{{ picked_names|length }} squad{{ picked_names|length|pluralize }} selected: {{ picked_names|join:", " }}{% else %}Tick squads above, then open them together.{% endif %}</p>
+  <button type="button" class="btn btn-sm btn-ghost" data-pick-clear hidden>Clear</button>
+  {# Accent, not primary: btn-primary's text fails 4.5:1 in the dark theme. #}
+  <button type="submit" class="btn btn-sm btn-accent">Open together</button>
+</form>
+<script>
+  // After the current task: htmx inserts a swapped-in board before it removes the old one, so
+  // run now and the old board's boxes would still be counted.
+  setTimeout(function () {
+    const form = document.getElementById('series-squad-pick');
+    if (!form) return;
+    const boxes = Array.from(document.querySelectorAll('input[type="checkbox"][form="series-squad-pick"]'));
+    const open = boxes.filter(function (box) { return !box.disabled; });
+    let hiddenPicks = Array.from(form.querySelectorAll('input[type="hidden"][name="squad"]'));
+    const status = form.querySelector('[data-pick-status]');
+    const submit = form.querySelector('button[type="submit"]');
+    const clear = form.querySelector('[data-pick-clear]');
+    const all = document.querySelector('[data-pick-all]');
+    const mine = document.querySelector('[data-pick-mine]');
+    function dropHidden() {
+      hiddenPicks.forEach(function (input) { input.remove(); });
+      hiddenPicks = [];
+    }
+    function update() {
+      const names = boxes.filter(function (box) { return box.checked; }).map(function (box) { return box.dataset.squadName; })
+        .concat(hiddenPicks.map(function (input) { return input.dataset.squadName; }));
+      const count = names.length;
+      status.textContent = count
+        ? count + ' squad' + (count === 1 ? '' : 's') + ' selected: ' + names.join(', ')
+        : 'Tick squads above, then open them together.';
+      submit.disabled = count === 0;
+      clear.hidden = count === 0;
+      form.classList.toggle('is-picking', count > 0);
+      if (all) all.checked = open.length > 0 && open.every(function (box) { return box.checked; });
+    }
+    boxes.forEach(function (box) { box.addEventListener('change', update); });
+    if (all && open.length) {
+      all.hidden = false;
+      all.addEventListener('change', function () {
+        open.forEach(function (box) { box.checked = all.checked; });
+        update();
+      });
+    }
+    if (mine) {
+      mine.hidden = false;
+      mine.addEventListener('click', function () {
+        dropHidden();
+        open.forEach(function (box) { box.checked = 'mine' in box.dataset; });
+        update();
+      });
+    }
+    clear.addEventListener('click', function () {
+      dropHidden();
+      boxes.forEach(function (box) { box.checked = false; });
+      update();
+    });
+    update();
+  }, 0);
+</script>
 <div class="flex flex-wrap items-center gap-2 text-xs mb-6">
   <span class="text-base-content/80">Key:</span>
   <span class="badge badge-success badge-sm">Lineup set</span>

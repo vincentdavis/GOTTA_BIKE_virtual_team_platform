@@ -1,0 +1,14 @@
+{% comment %}
+  One squad's lineup dialog, loaded into the "Squads together" page's #lineup-dialog-host by
+  series_lineup_dialog_view and opened at once on the stage its button asked for. It replaces
+  whatever dialog the page held before; ``lineup_context`` names the squad and stage, since the
+  page holds several squads.
+{% endcomment %}
+{% include "events/_slot_modal.html" %}
+{{ open_slot|json_script:"lineup-dialog-slot" }}
+<script>
+  (function () {
+    const slot = JSON.parse(document.getElementById('lineup-dialog-slot').textContent);
+    window.openSlotModal(slot.date, slot.time);
+  })();
+</script>
