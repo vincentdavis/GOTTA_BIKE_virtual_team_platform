@@ -49,8 +49,14 @@ def signup(event, user_model):
 
 
 def _page(client, viewer, event):
+    """Load the event page opened on By Squad, which builds that tab in place.
+
+    Returns:
+        The decoded response body.
+
+    """
     client.force_login(viewer)
-    return client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+    return client.get(reverse("events:event_detail", args=[event.pk]) + "?tab=squads").content.decode()
 
 
 def _header_keys(body, table_marker):
@@ -115,7 +121,7 @@ def test_a_member_without_the_signup_table_gets_only_the_squad_columns_it_had(
 
 def test_new_squad_columns_start_hidden():
     """An expanded squad looks as it did until somebody picks one."""
-    template = (Path(__file__).resolve().parents[2] / "templates/events/event_detail.html").read_text()
+    template = (Path(__file__).resolve().parents[2] / "templates/events/_squads_panel.html").read_text()
     defaults = template[template.index("var STORAGE_KEY = 'event_squad_cols';") :]
     defaults = defaults[: defaults.index("};")]
     for key in ("zwid", "timezone", "squad_gender", "zftp", "zmap", "zauth", "event_role", "notes", "custom_answers"):

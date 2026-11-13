@@ -103,6 +103,17 @@ def _event_post(event, **extra) -> dict:
     }
 
 
+def _page_url(url_name: str, event) -> str:
+    """Return a squad page's URL; the event page's is opened on By Squad, which it then builds in place.
+
+    Returns:
+        The URL.
+
+    """
+    url = reverse(f"events:{url_name}", args=[event.pk])
+    return url + "?tab=squads" if url_name == "event_detail" else url
+
+
 def _body(client, url: str) -> str:
     """GET a page and return its body.
 
@@ -520,7 +531,7 @@ def test_event_detail_renders_the_tags_column_menu_and_filter(client, event, eve
     Squad.objects.create(event=event, name="A", tags=["Blue"])
     Squad.objects.create(event=event, name="B")
     client.force_login(event_admin)
-    body = _body(client, reverse("events:event_detail", args=[event.pk]))
+    body = _body(client, reverse("events:event_detail", args=[event.pk]) + "?tab=squads")
 
     assert '<th data-scol="sqf_tags" data-sort="text"' in body
     assert 'class="checkbox checkbox-xs squad-field-toggle" data-scol="sqf_tags"> Tags</label>' in body
@@ -542,7 +553,7 @@ def test_event_detail_renders_the_tags_column_menu_and_filter(client, event, eve
 def test_event_detail_leaves_it_all_out_without_tags(client, untagged_event, event_admin) -> None:
     Squad.objects.create(event=untagged_event, name="A")
     client.force_login(event_admin)
-    body = _body(client, reverse("events:event_detail", args=[untagged_event.pk]))
+    body = _body(client, reverse("events:event_detail", args=[untagged_event.pk]) + "?tab=squads")
 
     assert 'data-scol="sqf_tags"' not in body
     assert 'id="squad-tag-filter"' not in body
@@ -565,7 +576,7 @@ def test_the_tag_filter_script_shows_hides_and_counts_squads(client, event, even
     for name, tags in [("Delta", ["Red", "Blue"]), ("Charlie", []), ("Bravo", ["Blue"]), ("Alpha", ["Red"])]:
         Squad.objects.create(event=event, name=name, tags=tags)
     client.force_login(event_admin)
-    body = _body(client, reverse("events:event_detail", args=[event.pk]))
+    body = _body(client, reverse("events:event_detail", args=[event.pk]) + "?tab=squads")
     _run_page_check("squad_tag_filter_check.js", body, tmp_path)
 
 
@@ -577,7 +588,7 @@ def test_the_tag_filter_script_shows_hides_and_counts_squads(client, event, even
 def test_squad_cards_show_the_tags(client, event, event_admin, url_name) -> None:
     Squad.objects.create(event=event, name="A", gender="Male", tags=["Blue", "Red"])
     client.force_login(event_admin)
-    body = _body(client, reverse(f"events:{url_name}", args=[event.pk]))
+    body = _body(client, _page_url(url_name, event))
     # A named list, so a screen reader hears where the tags end: the gender badge that
     # follows on the Assign Riders card is not read as one more tag.
     tag_list = re.search(r'<ul role="list" class="[^"]*" aria-label="Tags">(.*?)</ul>', body)
@@ -601,7 +612,7 @@ def test_every_page_shows_the_same_tags_even_after_a_write_that_skipped_the_form
     Squad.objects.filter(pk=squad.pk).update(tags=["Gone", "blue"])
     client.force_login(event_admin)
 
-    body = _body(client, reverse(f"events:{url_name}", args=[event.pk]))
+    body = _body(client, _page_url(url_name, event))
 
     assert "Gone" not in body
     assert re.search(r'<li class="badge[^"]*">Blue</li>', body), "no Blue badge"
@@ -619,7 +630,7 @@ def test_a_long_tag_can_wrap_instead_of_widening_the_page(client, event, event_a
     event.save(update_fields=["squad_tags"])
     Squad.objects.create(event=event, name="A", tags=[long_tag])
     client.force_login(event_admin)
-    body = _body(client, reverse(f"events:{url_name}", args=[event.pk]))
+    body = _body(client, _page_url(url_name, event))
     badges = re.findall(r'<li class="([^"]*)">Thursday EMEA Women&#x27;s Development Group</li>', body)
     assert badges
     for classes in badges:
@@ -659,7 +670,7 @@ def _assert_escaped(body: str) -> None:
 @pytest.mark.parametrize("url_name", ["event_detail", "squad_manage", "squad_assign_page"])
 def test_hostile_tags_are_escaped_on_event_pages(client, hostile_event, event_admin, url_name) -> None:
     client.force_login(event_admin)
-    _assert_escaped(_body(client, reverse(f"events:{url_name}", args=[hostile_event.pk])))
+    _assert_escaped(_body(client, _page_url(url_name, hostile_event)))
 
 
 @pytest.mark.django_db
@@ -685,7 +696,7 @@ def test_hostile_tags_are_escaped_on_the_squad_form(client, hostile_event, event
 @pytest.mark.django_db
 def test_hostile_tags_are_escaped_inside_the_filter_data_attribute(client, hostile_event, event_admin) -> None:
     client.force_login(event_admin)
-    body = _body(client, reverse("events:event_detail", args=[hostile_event.pk]))
+    body = _body(client, reverse("events:event_detail", args=[hostile_event.pk]) + "?tab=squads")
     assert (
         'data-squad-tags="[&quot;&lt;script&gt;alert(1)&lt;/script&gt;&quot;, '
         '&quot;Say \\&quot;hi\\&quot; &amp; &#x27;bye&#x27;&quot;]"'

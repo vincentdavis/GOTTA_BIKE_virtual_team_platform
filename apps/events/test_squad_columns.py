@@ -48,13 +48,13 @@ def squad(event) -> Squad:
 
 
 def _page(client, event):
-    """Load the event detail page.
+    """Load the event page opened on By Squad, which builds that tab in place.
 
     Returns:
         The decoded response body.
 
     """
-    response = client.get(reverse("events:event_detail", args=[event.pk]))
+    response = client.get(reverse("events:event_detail", args=[event.pk]) + "?tab=squads")
     assert response.status_code == 200
     return response.content.decode()
 

@@ -1410,6 +1410,135 @@ def event_list_view(request: HttpRequest) -> HttpResponse:
     )
 
 
+#: The By Squad tab's content on the event page. ``event_squads_panel_view`` answers this id as
+#: HX-Target with the panel alone.
+SQUADS_PANEL_ID = "squads-panel"
+
+
+def _event_squads(event) -> list:
+    """Return the event's squads as the event page and its By Squad tab show them.
+
+    Args:
+        event: The event.
+
+    Returns:
+        The squads, with their captains and vice-captains prefetched and ``member_count`` set.
+
+    """
+    return list(
+        event.squads.prefetch_related("captains", "vice_captains").annotate(member_count=Count("squad_members")).all()
+    )
+
+
+def _attach_squad_members(event, squads) -> None:
+    """Give each squad its ``enriched_members`` (``_enrich_squad_members``), all in one batch.
+
+    Args:
+        event: The event.
+        squads: The event's squads, changed in place.
+
+    """
+    members = _enrich_squad_members(event) if squads else {}
+    for squad in squads:
+        squad.enriched_members = members.get(squad.pk, [])
+
+
+def _squads_panel_context(request: HttpRequest, event, squads, *, enriched_signups) -> dict:
+    """Build what the By Squad tab (``events/_squads_panel.html``) reads.
+
+    One builder for both ways the tab is drawn -- in the event page, or fetched by it -- so the
+    two cannot disagree about who sees which columns.
+
+    Args:
+        request: The HTTP request.
+        event: The event.
+        squads: The event's squads (``_event_squads``) with their ``enriched_members``, changed
+            in place.
+        enriched_signups: The event's signups as ``_enrich_signups`` builds them; only the
+            members' rows are read, and only for a viewer who sees the full signup table.
+
+    Returns:
+        The template context.
+
+    """
+    can_view_signup_table = request.user.is_event_admin or _can_view_v_report(request.user, event)
+    # The By Squad view offers the signup table's rider columns to the same viewers, so each
+    # member carries their signup's row: its timezone, notes and answers, and the key the
+    # Zwift Racing columns are looked up by. Nobody else's members get one.
+    signup_entries = {entry["user"].pk: entry for entry in enriched_signups} if can_view_signup_table else {}
+    for squad in squads:
+        for member in squad.enriched_members:
+            member["signup_entry"] = signup_entries.get(member["user"].pk)
+        names = [m["user"].get_full_name() or m["user"].discord_username for m in squad.enriched_members]
+        squad.member_names_tooltip = ", ".join(names) if names else "No members"
+        # Squad.tag_list is the squad's tags as the event spells and orders them -- the same
+        # list the Tags column renders. Carried here as JSON for the tag filter's data
+        # attribute, so the filter can never disagree with the badges beside it (rendered
+        # auto-escaped, never |safe).
+        squad.tags_json = json.dumps(squad.tag_list)
+    return {
+        "event": event,
+        "squads": squads,
+        # The event's squad tags drive the Tags column, its menu entry and the tag filter; with
+        # none, all three are left out.
+        "event_squad_tags": normalize_tags(event.squad_tags),
+        "is_event_admin": request.user.is_event_admin,
+        "can_view_signup_table": can_view_signup_table,
+        # Same rule as the event page's: see event_detail_view.
+        "can_view_signup_notes": request.user.is_event_admin or _can_export_event_signups(request.user, event),
+        "signup_questions": active_questions(event),
+        # The member tables' extra Zwift Racing columns are built from the page's JSON, which only
+        # those who see the full table are sent.
+        "signup_stat_groups": rider_stats.STAT_GROUPS if can_view_signup_table else (),
+        "guild_id": config.GUILD_ID,
+        "can_manage_roles": _can_manage_event_roles(request.user, event),
+    }
+
+
+@require_GET
+@login_required
+@team_member_required()
+def event_squads_panel_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Answer the event page's By Squad tab, which it fetches the first time the tab is shown.
+
+    The tab is part of the event page, never a page of its own: anything but the tab's own fetch
+    (``HX-Target: squads-panel``) is sent to the event page opened on it, where it is built in
+    place. Gated as the event page is.
+
+    Args:
+        request: The HTTP request.
+        pk: The event primary key.
+
+    Returns:
+        The By Squad panel alone, or a redirect to the event page.
+
+    Raises:
+        Http404: If the event is hidden from this viewer.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    if not _can_view_event(request.user, event):
+        logfire.info("Hidden event squads withheld", event_id=event.pk, user_id=request.user.id)
+        raise Http404
+    htmx = getattr(request, "htmx", None)
+    if not (htmx and htmx.target == SQUADS_PANEL_ID):
+        return redirect(reverse("events:event_detail", args=[event.pk]) + "?tab=squads")
+    squads = _event_squads(event)
+    _attach_squad_members(event, squads)
+    member_ids = {member["user"].pk for squad in squads for member in squad.enriched_members}
+    enriched_signups = (
+        _enrich_signups(event.signups.select_related("user").filter(user_id__in=member_ids), event=event)
+        if member_ids and (request.user.is_event_admin or _can_view_v_report(request.user, event))
+        else []
+    )
+    logfire.debug("Event squads tab loaded", user_id=request.user.id, event_id=event.pk, squads=len(squads))
+    return render(
+        request,
+        "events/_squads_panel.html",
+        _squads_panel_context(request, event, squads, enriched_signups=enriched_signups),
+    )
+
+
 @require_GET
 @login_required
 @team_member_required()
@@ -1435,9 +1564,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         logfire.info("Hidden event detail withheld", event_id=event.pk, user_id=request.user.id)
         raise Http404
     races = event.races.all()
-    squads = list(
-        event.squads.prefetch_related("captains", "vice_captains").annotate(member_count=Count("squad_members")).all()
-    )
+    squads = _event_squads(event)
     signups = event.signups.select_related("user").all()
     # One aggregate rather than a .count() round trip, and it replaces the separate
     # signups.count() the template's badge used to trigger.
@@ -1486,40 +1613,19 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     if user_signup and user_signup.status == EventSignup.Status.REGISTERED and user_signup.staff_status_id:
         my_status = SignupStatus.objects.filter(pk=user_signup.staff_status_id).exclude(rider_message="").first()
 
-    # Attach enriched member data and tooltip to each squad
-    squad_members_data = _enrich_squad_members(event) if squads else {}
-    user_squad_ids = set(
-        SquadMember.objects.filter(squad__event=event, user=request.user).values_list("squad_id", flat=True)
-    )
-    published_grids_by_squad: dict[int, list] = {}
-    for grid in AvailabilityGrid.objects.filter(squad__event=event, status__in=["published", "closed"]):
-        published_grids_by_squad.setdefault(grid.squad_id, []).append(grid)
-    # The event's squad tags drive the Tags column, its menu entry and the tag filter; with
-    # none, all three are left out.
-    event_squad_tags = normalize_tags(event.squad_tags)
-
-    # The By Squad view offers the signup table's rider columns to the same viewers, so each
-    # member carries their signup's row: its timezone, notes and answers, and the key the
-    # Zwift Racing columns are looked up by. Nobody else's members get one.
-    signup_entries = {entry["user"].pk: entry for entry in enriched_signups} if can_view_signup_table else {}
-
-    for squad in squads:
-        squad.enriched_members = squad_members_data.get(squad.pk, [])
-        for member in squad.enriched_members:
-            member["signup_entry"] = signup_entries.get(member["user"].pk)
-        names = [m["user"].get_full_name() or m["user"].discord_username for m in squad.enriched_members]
-        squad.member_names_tooltip = ", ".join(names) if names else "No members"
-        squad.user_is_member = squad.pk in user_squad_ids
-        squad.published_grids = published_grids_by_squad.get(squad.pk, [])
-        # Squad.tag_list is the squad's tags as the event spells and orders them -- the same
-        # list the Tags column renders. Carried here as JSON for the tag filter's data
-        # attribute, so the filter can never disagree with the badges beside it (rendered
-        # auto-escaped, never |safe).
-        squad.tags_json = json.dumps(squad.tag_list)
-
     # The By Category tab: each squad's members counted on Zwift's categories, vELO 1's tiers
     # and vELO 2's, mixed and (for a woman) women's, all from the rider profile cache.
+    _attach_squad_members(event, squads)
     category_tables = rider_stats.category_tables(squads)
+
+    # The By Squad tab lists every member again with the signup table's columns -- on a big
+    # event as much markup as the rest of the page -- so it is fetched the first time it is
+    # shown (event_squads_panel_view). The page builds it in place when it opens on it:
+    # ?tab=squads, or a viewer who cannot see the signups. That is also the way in without JS.
+    squads_inline = request.GET.get("tab") == "squads" or not can_view_signups
+    squads_panel = (
+        _squads_panel_context(request, event, squads, enriched_signups=enriched_signups) if squads_inline else {}
+    )
 
     signup_questions = active_questions(event)
     signup_question_fields = build_question_fields(
@@ -1538,15 +1644,17 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
         answer_payload = answers_payload(signup_list, signup_questions)
         answer_panel_open = panel_starts_open(signup_questions)
 
-    logfire.debug("Event detail viewed", user_id=request.user.id, event_id=pk)
+    logfire.debug("Event detail viewed", user_id=request.user.id, event_id=pk, squads_inline=squads_inline)
     return render(
         request,
         "events/event_detail.html",
         {
+            **squads_panel,
             "event": event,
             "races": races,
             "squads": squads,
-            "event_squad_tags": event_squad_tags,
+            "squads_inline": squads_inline,
+            "squads_panel_id": SQUADS_PANEL_ID,
             "signups": enriched_signups,
             "signup_count": signup_totals["total"],
             "user_signup": user_signup,

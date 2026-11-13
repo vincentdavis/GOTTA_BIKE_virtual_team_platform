@@ -144,3 +144,16 @@ def test_every_popover_given_a_zr_category_is_given_the_velo2_one_too():
     ]
 
     assert missing == []
+
+
+# --- the Discord logo: drawn once per page, not once per card ------------------------------------------
+
+
+def test_the_card_references_the_discord_logo_that_base_draws_once():
+    """An event page holds hundreds of cards; the logo's path used to be copied into each one."""
+    card = render_to_string("accounts/_user_tooltip.html", {"display_name": "Ana", "discord_id": "123"})
+    base = (_ROOT / "theme/templates/base.html").read_text()
+
+    assert '<use href="#icon-discord">' in card
+    assert "<path" not in card.split('aria-label="Message Ana on Discord"', 1)[1].split("</a>", 1)[0]
+    assert base.count('<symbol id="icon-discord"') == 1

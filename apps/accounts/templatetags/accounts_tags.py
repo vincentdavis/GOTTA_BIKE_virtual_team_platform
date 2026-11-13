@@ -1,5 +1,6 @@
 """Template tags and filters for accounts app."""
 
+import functools
 import json
 from typing import TYPE_CHECKING
 
@@ -182,6 +183,25 @@ def render_markdown_inline(value: str) -> str:
     """
     if not value:
         return ""
+    return mark_safe(_inline_markdown_html(str(value)))  # noqa: S308  # trusted admin-authored markdown (signup questions)
+
+
+@functools.lru_cache(maxsize=1024)
+def _inline_markdown_html(value: str) -> str:
+    """Render one inline markdown string; see :func:`render_markdown_inline`.
+
+    Cached because the same few strings are rendered over and over: the signup table repeats a
+    question's label in every rider's Answers cell, and each render builds a new Markdown
+    instance, so a big event spent most of a second on the same handful of labels. The output
+    depends on the text alone, and the cache is bounded.
+
+    Args:
+        value: Markdown text to render.
+
+    Returns:
+        The HTML, with a lone wrapping paragraph unwrapped.
+
+    """
     html = markdown.markdown(
         value,
         extensions=[
@@ -192,7 +212,7 @@ def render_markdown_inline(value: str) -> str:
     ).strip()
     if html.startswith("<p>") and html.endswith("</p>") and html.count("<p>") == 1:
         html = html[len("<p>") : -len("</p>")]
-    return mark_safe(html)  # noqa: S308  # trusted admin-authored markdown (signup questions)
+    return html
 
 
 @register.filter
