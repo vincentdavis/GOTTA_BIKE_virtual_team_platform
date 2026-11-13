@@ -554,6 +554,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
         skipped_already_warned = 0
         skipped_opted_out = 0
         skipped_departed = 0
+        skipped_renewal_pending = 0
 
         from collections import defaultdict
 
@@ -561,6 +562,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             covering_records_by_type,
             is_expiring_soon,
             record_days_left,
+            renewal_pending_types,
             required_types_bulk,
             superseded_weight_types,
             verify_type_validity_days,
@@ -572,6 +574,17 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             total_checked += 1
             records_by_user[record.user_id].append(record)
             users_by_id[record.user_id] = record.user
+
+        # Renewals awaiting review, in one query for the whole run: a warning one of them has
+        # answered is not sent (services.renewal_pending_types, which the banner shares).
+        pending_by_user: dict[int, list[RaceReadyRecord]] = defaultdict(list)
+        for record in (
+            RaceReadyRecord.objects
+            .filter(status=RaceReadyRecord.Status.PENDING, user__discord_id__isnull=False)
+            .exclude(user__discord_id="")
+            .only("user_id", "verify_type", "record_date")
+        ):
+            pending_by_user[record.user_id].append(record)
 
         # Required types for every rider in ONE batch (two queries for the whole run), so the
         # weight reconciliation below cannot reintroduce a per-rider ZwiftPower lookup.
@@ -601,7 +614,11 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             # either weight: a weight_full lapsing in 5 days costs them nothing while their
             # weight_light covers that requirement for 30 more, so DMing them to renew it is
             # the false alarm their captain was also being shown.
-            superseded = superseded_weight_types(required_by_user.get(user_id, ()), days_by_type)
+            required_types = required_by_user.get(user_id, ())
+            superseded = superseded_weight_types(required_types, days_by_type)
+            renewed = renewal_pending_types(
+                required_types, days_by_type, pending_by_user.get(user_id, ()), validity_by_type, today
+            )
             for record in covering.values():
                 remaining = days_by_type[record.verify_type]
                 if remaining is None:
@@ -627,6 +644,10 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                 due = _threshold_due(remaining, record.last_warned_threshold, days_list)
                 if due is None:
                     continue
+                # Not stamped as warned: if the renewal is rejected, the next run catches up.
+                if record.verify_type in renewed:
+                    skipped_renewal_pending += 1
+                    continue
                 if record.last_warned_at == today:
                     skipped_already_warned += 1
                     continue
@@ -650,6 +671,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             skipped_already_warned=skipped_already_warned,
             skipped_opted_out=skipped_opted_out,
             skipped_departed=skipped_departed,
+            skipped_renewal_pending=skipped_renewal_pending,
             dry_run=dry_run,
         )
 
@@ -668,6 +690,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
                 "warnings_sent": 0,
                 "skipped_opted_out": skipped_opted_out,
                 "skipped_departed": skipped_departed,
+                "skipped_renewal_pending": skipped_renewal_pending,
                 "users_warned": users_warned,
                 "errors": [],
             }
@@ -761,6 +784,7 @@ def warn_expiring_verifications(days: int | list[int] | None = None, dry_run: bo
             "warnings_sent": warnings_sent,
             "skipped_opted_out": skipped_opted_out,
             "skipped_departed": skipped_departed,
+            "skipped_renewal_pending": skipped_renewal_pending,
             "users_warned": users_warned,
             "errors": errors,
         }

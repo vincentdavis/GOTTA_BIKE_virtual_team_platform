@@ -27,6 +27,7 @@ from apps.accounts.models import BlockedDiscordId, User
 from apps.accounts.services import ZWIFT_LINK_KEY, delete_user_account
 from apps.rider_data.models import RiderProfile, member_gender
 from apps.rider_data.tasks import refresh_zwift_profile, request_profile_refresh
+from apps.team.context_processors import note_own_records_changed
 from apps.team.forms import RaceReadyRecordForm
 from apps.team.services import (
     build_verify_type_options,
@@ -672,6 +673,8 @@ def verification_delete(request: HttpRequest) -> HttpResponse:
     if not result["deleted"]:
         messages.info(request, "No records were selected.")
         return redirect("accounts:verification")
+    # Deleting a pending renewal brings its expiring-verification warning back.
+    note_own_records_changed(request)
 
     deleted = result["deleted"]
     noun = "record" if deleted == 1 else "records"
@@ -1310,6 +1313,8 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
         record = form.save(commit=False)
         record.user = request.user
         record.save()
+        # A renewal awaiting review answers the expiring-verification banner; let it see this one.
+        note_own_records_changed(request)
         logfire.info(
             "Race ready record created",
             user_id=request.user.id,
@@ -1361,6 +1366,9 @@ def submit_race_ready(request: HttpRequest) -> HttpResponse:
                     "weight_instructions_url": config.WEIGHT_INSTRUCTIONS_URL,
                     "height_instructions_url": config.HEIGHT_INSTRUCTIONS_URL,
                     "unit_preference": request.user.unit_preference,
+                    # The page does not reload, so the banner is sent again out of band: it
+                    # leaves if this renewal answered it.
+                    "banner_oob": True,
                 },
             )
         return redirect("accounts:verification")

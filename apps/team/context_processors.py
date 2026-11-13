@@ -1,5 +1,6 @@
 """Context processors for team app."""
 
+import time
 from typing import TYPE_CHECKING
 
 import logfire
@@ -17,15 +18,36 @@ PENDING_VERIFICATION_CACHE_PREFIX = "pending_verification_count:v2"
 PENDING_VERIFICATION_CACHE_TIMEOUT = 60  # seconds
 
 # v2: a weight record the rider's OTHER weight record supersedes no longer warns, where the
-# category accepts either one. A different set of warnings, so a different key.
-EXPIRING_VERIFICATION_CACHE_PREFIX = "expiring_verifications:v2"
+# category accepts either one. v3: nor does a type a renewal awaiting review has answered.
+# A different set of warnings each time, so a different key.
+EXPIRING_VERIFICATION_CACHE_PREFIX = "expiring_verifications:v3"
 EXPIRING_VERIFICATION_CACHE_TIMEOUT = 360  # seconds
+#: Session key: when the rider last submitted or deleted one of their own records. It is part
+#: of the banner's cache key because the cache is per web worker and the session is not, so the
+#: next page shows the change whichever worker serves it.
+OWN_RECORDS_CHANGED_SESSION_KEY = "verification_records_changed"
 
 # v2: the count now follows the rider's REQUIRED verifications (services.verification_coverage_bulk)
 # instead of every type they hold, so the same squad yields a different number. A new meaning,
 # so a new key -- otherwise captains read the old, wrong count for the whole cache window.
 SQUAD_EXPIRING_CACHE_PREFIX = "squad_expiring_verifications:v2"
 SQUAD_EXPIRING_CACHE_TIMEOUT = 360  # seconds
+
+
+def note_own_records_changed(request: HttpRequest) -> None:
+    """Make the rider's own expiring-verification banner read their records afresh.
+
+    Call it where the rider submits or deletes one of their own records. A reviewer's decision
+    reaches the banner within its cache window instead: the reviewer's request cannot touch the
+    rider's session.
+
+    Args:
+        request: The rider's request.
+
+    """
+    session = getattr(request, "session", None)
+    if session is not None:
+        session[OWN_RECORDS_CHANGED_SESSION_KEY] = time.time_ns()
 
 
 def pending_verification_count(request: HttpRequest) -> dict[str, int]:
@@ -96,6 +118,10 @@ def expiring_verifications(request: HttpRequest) -> dict:
     the reminder for it would be a policy change rather than a fix. The captain list
     does drop those, because "who on my squad cannot race" is a different question.
 
+    A type the rider has already renewed, with the new record still awaiting review, does not
+    warn either (``services.renewal_pending_types``, which the DM task shares): the banner's
+    one ask is "renew", and they have.
+
     Note the banner is CONTINUOUS while the DM is discrete: the banner shows on
     every day inside the window, the task sends at most one DM per configured
     threshold. Same window, different cadence — deliberately, since nobody wants
@@ -117,7 +143,9 @@ def expiring_verifications(request: HttpRequest) -> dict:
     if user is None or not user.is_authenticated:
         return {"expiring_verifications": None}
 
-    cache_key = f"{EXPIRING_VERIFICATION_CACHE_PREFIX}:{user.pk}"
+    session = getattr(request, "session", None)
+    changed = session.get(OWN_RECORDS_CHANGED_SESSION_KEY, 0) if session is not None else 0
+    cache_key = f"{EXPIRING_VERIFICATION_CACHE_PREFIX}:{user.pk}:{changed}"
     cached = cache.get(cache_key)
     if cached is not None:
         # ``False`` is the sentinel for "computed, nothing expiring".
@@ -131,6 +159,7 @@ def expiring_verifications(request: HttpRequest) -> dict:
             get_user_required_verification_types,
             is_expiring_soon,
             record_days_left,
+            renewal_pending_types,
             superseded_weight_types,
             verify_type_validity_days,
         )
@@ -150,7 +179,8 @@ def expiring_verifications(request: HttpRequest) -> dict:
         # a weight_full expiring in 5 days is not the rider's problem while a weight_light
         # covers that one requirement for 30 more. Without this the rider was told to renew a
         # record their better one had already superseded -- the false alarm their captain saw.
-        superseded = superseded_weight_types(get_user_required_verification_types(user), days_by_type)
+        required_types = get_user_required_verification_types(user)
+        superseded = superseded_weight_types(required_types, days_by_type)
         # One shared definition with the DM task -- see services.is_expiring_soon. Both used
         # to parse EXPIRE_WARNING_DAYS separately while claiming to be in lockstep, and they
         # disagreed about the last day: the banner vanished when a record expired today, and
@@ -160,6 +190,14 @@ def expiring_verifications(request: HttpRequest) -> dict:
             for vtype, days in days_by_type.items()
             if vtype not in superseded and is_expiring_soon(days)
         ]
+        if expiring:
+            # A renewal already submitted answers its warning. Read only when something is
+            # expiring, so most riders pay no extra query.
+            pending = user.race_ready_records.filter(status=RaceReadyRecord.Status.PENDING).only(
+                "verify_type", "record_date"
+            )
+            renewed = renewal_pending_types(required_types, days_by_type, pending, validity_by_type, today)
+            expiring = [record for record in expiring if record.verify_type not in renewed]
         payload: dict | bool = False
         if expiring:
             soonest = min(expiring, key=lambda r: days_by_type[r.verify_type])

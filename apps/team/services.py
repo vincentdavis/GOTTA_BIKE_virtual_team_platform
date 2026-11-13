@@ -1693,6 +1693,51 @@ def superseded_weight_types(required_types, days_by_type: dict[str, int | None])
     return {t for t, days in held.items() if days < best}
 
 
+def renewal_pending_types(
+    required_types,
+    days_by_type: dict[str, int | None],
+    pending_records,
+    validity_by_type: dict[str, int],
+    today: date,
+) -> set[str]:
+    """Verify_types whose expiry warning a renewal awaiting review has already answered.
+
+    The rider's banner and the expiry DM ask them to renew. Once they have submitted a new
+    record, repeating the ask while it waits for a reviewer is noise, and invites a second
+    submission. A pending record answers the warning for its own type and, in a category that
+    accepts either weight, for the other weight type too: those are one requirement, as in
+    :func:`superseded_weight_types`. It counts only when, verified, it would cover the type for
+    longer than the record covering it now, so a forgotten duplicate carrying the same or older
+    evidence never silences a real warning. A rejected record is no longer pending, so the
+    warning comes back with the rejection. The captain's list does not use this: a rider whose
+    renewal is still waiting cannot race once the old record lapses.
+
+    Args:
+        required_types: The rider's required verify_types.
+        days_by_type: Signed days remaining per covering verified type (None = never expires).
+        pending_records: The rider's pending records (``verify_type`` and ``record_date``).
+        validity_by_type: The four windows, read once by the caller.
+        today: The local date, taken once by the caller.
+
+    Returns:
+        The verify_types to leave out of the rider's warnings.
+
+    """
+    accepted = WEIGHT_VERIFY_TYPES.intersection(required_types)
+    either_weight = accepted if len(accepted) > 1 else frozenset()
+    renewed: set[str] = set()
+    for record in pending_records:
+        # What the record would give once verified, counted as record_days_left counts a
+        # verified one: from its evidence date, None when it would never expire.
+        would_cover = record_days_left(record, validity_by_type, today)
+        answers = either_weight if record.verify_type in either_weight else {record.verify_type}
+        for verify_type in answers:
+            current = days_by_type.get(verify_type)
+            if current is not None and (would_cover is None or would_cover > current):
+                renewed.add(verify_type)
+    return renewed
+
+
 def squad_expiring_summary(user) -> dict:
     """Squad-mates who cannot race, or soon will not be able to, for the squads this user leads.
 
