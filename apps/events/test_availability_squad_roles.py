@@ -97,14 +97,18 @@ def _page(client, viewer, grid: AvailabilityGrid) -> BeautifulSoup:
 def _marks(scope) -> dict[str, str]:
     """Read the role mark beside each rider name in part of the page.
 
+    The mark sits inside the name, on its line; in a heatmap lane, whose name is cut short
+    to fit, it sits just before the rider link instead, like the race flag.
+
     Returns:
         ``{rider name: "Captain" | "Vice Captain" | ""}``, for every rider named there.
 
     """
     marks = {}
     for tooltip in scope.select("[data-user-tooltip]"):
-        name = tooltip.select_one("a > span").get_text(strip=True)
-        mark = tooltip.find_previous_sibling(class_="squad-role")
+        name_span = tooltip.select_one("a > span")
+        name = "".join(name_span.find_all(string=True, recursive=False)).strip()
+        mark = name_span.select_one(".squad-role") or tooltip.find_previous_sibling(class_="squad-role")
         marks[name] = mark["aria-label"] if mark else ""
     return marks
 

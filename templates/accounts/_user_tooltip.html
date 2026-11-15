@@ -11,7 +11,8 @@
       </div>
     </div>
     {% endif %}
-    <span>{{ display_name }}</span>
+    {# squad_role (optional): the captain / vice-captain mark, kept on the name's line. #}
+    <span>{{ display_name }}{% if squad_role %} {% include "events/_squad_role_icon.html" with role=squad_role %}{% endif %}</span>
     <span class="inline-flex items-center gap-0.5">
     {% if not hide_verification %}
     {% if is_extra_verified %}
