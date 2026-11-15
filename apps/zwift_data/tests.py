@@ -245,6 +245,25 @@ def test_import_velo_missing_only_fills_new_routes_and_keeps_the_rest(synced):
     assert float(edited.velo_sprint) == pytest.approx(50)
 
 
+def test_bundled_velo_file_is_one_entry_per_route_with_race_weights_summing_to_one():
+    """The shipped ZwiftRacing weights file stays importable as it is refreshed by hand.
+
+    Entries added on 2026-11-14 come from zwiftracing's Race Simulator and carry no
+    ``numEvents``; the import leaves ``velo_num_events`` empty for them.
+    """
+    from apps.zwift_data.services.velo import DEFAULT_VELO_FILE
+
+    data = json.loads(DEFAULT_VELO_FILE.read_text())
+    ids = [str(e["routeId"]) for e in data]
+    assert len(ids) == len(set(ids))
+    for entry in data:
+        race = entry["velo"]["race"]
+        total = sum(race.get(k) or 0 for k in ("sprint", "punch", "climb", "endurance", "pursuit"))
+        assert total == pytest.approx(1, abs=0.01), entry["name"]
+    names = {e["name"] for e in data}
+    assert {"Twilight Crit", "Urumaze", "Crit Cross"} <= names  # routes the July snapshot lacked
+
+
 @pytest.mark.django_db
 def test_sync_if_empty_is_noop_when_populated(synced):
     """sync_zwift_data --if-empty skips when routes already exist (deploy-safe seed)."""

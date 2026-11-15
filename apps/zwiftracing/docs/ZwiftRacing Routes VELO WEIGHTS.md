@@ -297,3 +297,43 @@ saved: 2026-07-01
 | Yorkshire | [Royal Pump Room 8](https://zwiftinsider.com/route/royal-pump-room-8/) | 7.10% | 13.13% | 19.06% | 0.00% | 60.71% |
 | Yorkshire | [Tour Of Tewit Well](https://zwiftinsider.com/route/tour-of-tewit-well/) | 9.79% | 21.76% | 21.08% | 40.67% | 6.71% |
 | Yorkshire | [Yorkshire Double Loop](https://zwiftinsider.com/route/yorkshire-double-loop/) | 0.02% | 22.15% | 15.48% | 0.00% | 62.36% |
+
+## Added 2026-11-14
+
+28 routes zwiftracing.app has added since the snapshot above. Its routes page no longer lists factor
+weights, so these come from its Race Simulator (vELO2 model 3.13.1, source `gpx`, a 1-lap race),
+one route at a time. No time-trial weights and no event counts were taken for them. The routes
+already in the JSON were spot-checked (Twilight Harbor) and are unchanged. Still without weights: Liminal
+Loop, Ring Leader, It's a bit Sgurry and It's really Sgurry (not on zwiftracing.app), and 1 x 3 Min
+Lightning Lap (zwiftracing.app returns no simulation for it).
+
+| World | Route | Sprint | Punch | Climb | Endurance | Pursuit |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Gravel Mountain | [Red Rock Loop Arcade 3](https://zwiftinsider.com/route/red-rock-loop-arcade-3/) | 3.59% | 55.92% | 0.00% | 0.00% | 40.48% |
+| Gravel Mountain | [Red Rock Loop Arcade 4](https://zwiftinsider.com/route/red-rock-loop-arcade-4/) | 3.59% | 55.92% | 0.00% | 0.00% | 40.48% |
+| Makuri Islands | [Mech Isle Mayhem](https://zwiftinsider.com/route/mech-isle-mayhem/) | 24.87% | 24.87% | 0.00% | 16.34% | 33.91% |
+| Makuri Islands | [Twilight Crit](https://zwiftinsider.com/route/twilight-crit/) | 32.68% | 25.79% | 0.00% | 0.00% | 41.53% |
+| Makuri Islands | [Urumaze](https://zwiftinsider.com/route/urumaze/) | 12.29% | 18.72% | 14.29% | 40.08% | 14.63% |
+| Makuri Islands | [WhatYumeziWe'reLost?](https://zwiftinsider.com/route/whatyumeziwerelost/) | 1.15% | 3.87% | 44.31% | 18.08% | 32.59% |
+| Paris | [Sacré Trois!](https://zwiftinsider.com/route/sacre-trois/) | 22.47% | 20.04% | 2.42% | 42.70% | 12.37% |
+| Watopia | [1 x 4 Min Lightning Lap](https://zwiftinsider.com/route/1-x-4-min-lightning-lap/) | 28.34% | 28.32% | 0.00% | 0.00% | 43.35% |
+| Watopia | [3 x 3 Min Lightning Laps](https://zwiftinsider.com/route/3-x-3-min-lightning-laps/) | 25.83% | 25.78% | 0.00% | 9.72% | 38.67% |
+| Watopia | [4 x 4 Min Lightning Laps](https://zwiftinsider.com/route/4-x-4-min-lightning-laps/) | 24.64% | 24.60% | 0.00% | 18.41% | 32.35% |
+| Watopia | [6 x 4 Min Lightning Laps](https://zwiftinsider.com/route/6-x-4-min-lightning-laps/) | 22.15% | 22.15% | 0.00% | 47.59% | 8.10% |
+| Watopia | [Better Lap Than Never](https://zwiftinsider.com/route/better-lap-than-never/) | 0.52% | 2.91% | 26.84% | 69.73% | 0.00% |
+| Watopia | [Caldera Coaster](https://zwiftinsider.com/route/caldera-coaster/) | 31.31% | 27.28% | 0.00% | 0.00% | 41.42% |
+| Watopia | [California Dreamin'](https://zwiftinsider.com/route/california-dreamin/) | 24.78% | 20.22% | 4.56% | 17.11% | 33.33% |
+| Watopia | [California Roll](https://zwiftinsider.com/route/california-roll/) | 0.00% | 43.26% | 0.00% | 56.73% | 0.01% |
+| Watopia | [Crit Cross](https://zwiftinsider.com/route/crit-cross/) | 26.85% | 26.85% | 0.00% | 3.90% | 42.41% |
+| Watopia | [Four Foalsmen](https://zwiftinsider.com/route/four-foalsmen/) | 12.50% | 5.17% | 7.33% | 75.00% | 0.00% |
+| Watopia | [Island Interlude](https://zwiftinsider.com/route/island-interlude/) | 14.66% | 7.50% | 10.98% | 66.86% | 0.00% |
+| Watopia | [Laps, Camera, Traction](https://zwiftinsider.com/route/laps-camera-traction/) | 0.00% | 41.51% | 3.13% | 44.92% | 10.44% |
+| Watopia | [Loopipelago](https://zwiftinsider.com/route/loopipelago/) | 25.59% | 25.59% | 0.00% | 11.14% | 37.68% |
+| Watopia | [Miles of Isles](https://zwiftinsider.com/route/miles-of-isles/) | 11.57% | 14.68% | 18.33% | 45.48% | 9.95% |
+| Watopia | [Molten Momentum](https://zwiftinsider.com/route/molten-momentum/) | 23.34% | 4.20% | 19.14% | 31.14% | 22.18% |
+| Watopia | [One Ride to Rule Them All](https://zwiftinsider.com/route/one-ride-to-rule-them-all/) | 0.03% | 3.52% | 31.49% | 64.97% | 0.00% |
+| Watopia | [Pacific Pursuit](https://zwiftinsider.com/route/pacific-pursuit/) | 14.25% | 7.52% | 6.74% | 71.49% | 0.00% |
+| Watopia | [Seafoam Circuit](https://zwiftinsider.com/route/seafoam-circuit/) | 0.00% | 59.15% | 0.00% | 0.00% | 40.85% |
+| Watopia | [Spiral Summit](https://zwiftinsider.com/route/spiral-summit/) | 0.04% | 7.86% | 37.65% | 38.33% | 16.12% |
+| Watopia | [The Watopia 150!](https://zwiftinsider.com/route/the-watopia-150/) | 12.50% | 12.50% | 0.00% | 75.00% | 0.00% |
+| Watopia | [Watt Goes Up Must Come Down](https://zwiftinsider.com/route/watt-goes-up-must-come-down/) | 12.50% | 2.41% | 10.09% | 75.00% | 0.00% |

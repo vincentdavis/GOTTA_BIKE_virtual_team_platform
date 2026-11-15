@@ -862,6 +862,52 @@
     }
   },
   {
+    "world": "Gravel Mountain",
+    "routeId": "2273747093",
+    "name": "Red Rock Loop Arcade 3",
+    "distance": 2.5915072924800002,
+    "elevation": 26.13675308,
+    "leadIn": 0.1064891663,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/red-rock-loop-arcade-3/",
+    "eventCount90d": 0,
+    "velo": {
+      "race": {
+        "endurance": 0,
+        "pursuit": 0.40483157627357197,
+        "sprint": 0.035927223556300986,
+        "punch": 0.5592412001701271,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Gravel Mountain",
+    "routeId": "434255158",
+    "name": "Red Rock Loop Arcade 4",
+    "distance": 2.5915072924800002,
+    "elevation": 26.13675308,
+    "leadIn": 0.1064891663,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/red-rock-loop-arcade-4/",
+    "eventCount90d": 0,
+    "velo": {
+      "race": {
+        "endurance": 0,
+        "pursuit": 0.40483157627357197,
+        "sprint": 0.035927223556300986,
+        "punch": 0.5592412001701271,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "69d83d89ae840315437bdd4c",
     "world": "Gravel Mountain",
     "routeId": "1437969615",
@@ -2620,6 +2666,29 @@
     }
   },
   {
+    "world": "Makuri Islands",
+    "routeId": "2919739330",
+    "name": "Mech Isle Mayhem",
+    "distance": 18.334873046875,
+    "elevation": 113.1468200684,
+    "leadIn": 2.0310549316406,
+    "profile": "Flat",
+    "url": "https://zwiftinsider.com/route/mech-isle-mayhem/",
+    "eventCount90d": 105,
+    "velo": {
+      "race": {
+        "endurance": 0.16343145362940653,
+        "pursuit": 0.3390786720860373,
+        "sprint": 0.24874493714227808,
+        "punch": 0.24874493714227805,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "61ad75f8fec61d309d4acdab",
     "world": "Makuri Islands",
     "routeId": "1453570384",
@@ -3196,6 +3265,29 @@
     }
   },
   {
+    "world": "Makuri Islands",
+    "routeId": "362278484",
+    "name": "Twilight Crit",
+    "distance": 3.9037590332031,
+    "elevation": 20.3926963806,
+    "leadIn": 1.8387584228516,
+    "profile": "Flat",
+    "url": "https://zwiftinsider.com/route/twilight-crit/",
+    "eventCount90d": 320,
+    "velo": {
+      "race": {
+        "endurance": 0,
+        "pursuit": 0.41533360447455375,
+        "sprint": 0.32679465297793575,
+        "punch": 0.25787174254751055,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "61e58acd0dccb30016db5e96",
     "world": "Makuri Islands",
     "routeId": "1457923570",
@@ -3260,6 +3352,29 @@
     }
   },
   {
+    "world": "Makuri Islands",
+    "routeId": "4092230492",
+    "name": "Urumaze",
+    "distance": 24.749908203125,
+    "elevation": 193.373336792,
+    "leadIn": 2.0310532226562,
+    "profile": "Rolling",
+    "url": "https://zwiftinsider.com/route/urumaze/",
+    "eventCount90d": 519,
+    "velo": {
+      "race": {
+        "endurance": 0.40079147046858904,
+        "pursuit": 0.14625100243751377,
+        "sprint": 0.12286733142966932,
+        "punch": 0.18721785204020722,
+        "climb": 0.1428723436240207,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "6128474ad4b60c00169f3856",
     "world": "Makuri Islands",
     "routeId": "1941800093",
@@ -3320,6 +3435,29 @@
         "timeTrial": 0.45102350651493883
       },
       "version": "2.13.0",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Makuri Islands",
+    "routeId": "811898717",
+    "name": "WhatYumeziWe'reLost?",
+    "distance": 17.4295078125,
+    "elevation": 281.609954834,
+    "leadIn": 0.11196083068849999,
+    "profile": "Hilly",
+    "url": "https://zwiftinsider.com/route/whatyumeziwerelost/",
+    "eventCount90d": 297,
+    "velo": {
+      "race": {
+        "endurance": 0.18084291854032647,
+        "pursuit": 0.3259447549316018,
+        "sprint": 0.011479827338626741,
+        "punch": 0.038663983855863185,
+        "climb": 0.4430685153335817,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
       "source": "gpx"
     }
   },
@@ -4947,6 +5085,29 @@
     }
   },
   {
+    "world": "Paris",
+    "routeId": "764392844",
+    "name": "Sacré Trois!",
+    "distance": 24.1703828125,
+    "elevation": 217.2142486572,
+    "leadIn": 3.1853352050781,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/sacre-trois/",
+    "eventCount90d": 0,
+    "velo": {
+      "race": {
+        "endurance": 0.4269961661196133,
+        "pursuit": 0.12366760420222962,
+        "sprint": 0.22466811483907853,
+        "punch": 0.2004444711753685,
+        "climb": 0.02422364366371004,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "61284749d4b60c00169f3817",
     "world": "Richmond",
     "routeId": "1545087483",
@@ -5651,6 +5812,98 @@
     }
   },
   {
+    "world": "Watopia",
+    "routeId": "568123398",
+    "name": "1 x 4 Min Lightning Lap",
+    "distance": 5.0000434570312,
+    "elevation": 0,
+    "leadIn": 4.8531782226562,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/1-x-4-min-lightning-lap/",
+    "eventCount90d": 0,
+    "velo": {
+      "race": {
+        "endurance": 0,
+        "pursuit": 0.43345295471477663,
+        "sprint": 0.28339417479201534,
+        "punch": 0.2831528704932081,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "1156630474",
+    "name": "3 x 3 Min Lightning Laps",
+    "distance": 15.003025390625,
+    "elevation": 0.0001953125,
+    "leadIn": 5.049923828125,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/3-x-3-min-lightning-laps/",
+    "eventCount90d": 0,
+    "velo": {
+      "race": {
+        "endurance": 0.09717930806062125,
+        "pursuit": 0.3866555709389157,
+        "sprint": 0.25831967565164865,
+        "punch": 0.2578454453488144,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "2125439468",
+    "name": "4 x 4 Min Lightning Laps",
+    "distance": 20.0030390625,
+    "elevation": 0.0006103512,
+    "leadIn": 4.8531782226562,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/4-x-4-min-lightning-laps/",
+    "eventCount90d": 0,
+    "velo": {
+      "race": {
+        "endurance": 0.184088922845052,
+        "pursuit": 0.323471873059058,
+        "sprint": 0.2464021139442579,
+        "punch": 0.24603709015163214,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "1507816665",
+    "name": "6 x 4 Min Lightning Laps",
+    "distance": 30.00480859375,
+    "elevation": 0.0002929686,
+    "leadIn": 4.8532309570312,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/6-x-4-min-lightning-laps/",
+    "eventCount90d": 0,
+    "velo": {
+      "race": {
+        "endurance": 0.4759164779548523,
+        "pursuit": 0.08104868195471612,
+        "sprint": 0.2215440949312103,
+        "punch": 0.22149074515922132,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "653c31653f1494cf62577592",
     "world": "Watopia",
     "routeId": "1115260805",
@@ -5711,6 +5964,29 @@
         "timeTrial": 0.5396088066832291
       },
       "version": "2.13.0",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "4123597378",
+    "name": "Better Lap Than Never",
+    "distance": 15.07371875,
+    "elevation": 185.1976165771,
+    "leadIn": 35.33967578125,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/better-lap-than-never/",
+    "eventCount90d": 49,
+    "velo": {
+      "race": {
+        "endurance": 0.6973359877418099,
+        "pursuit": 0,
+        "sprint": 0.005168510573104272,
+        "punch": 0.029105046250203846,
+        "climb": 0.26839045543488194,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
       "source": "gpx"
     }
   },
@@ -5871,6 +6147,75 @@
         "timeTrial": 0.19999999999999996
       },
       "version": "2.13.0",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "3266658632",
+    "name": "Caldera Coaster",
+    "distance": 4.0005053710938,
+    "elevation": 11.5805072784,
+    "leadIn": 1.7826162109375,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/caldera-coaster/",
+    "eventCount90d": 97,
+    "velo": {
+      "race": {
+        "endurance": 0,
+        "pursuit": 0.4141638185879931,
+        "sprint": 0.3130526590951779,
+        "punch": 0.27278352231682895,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "966890401",
+    "name": "California Dreamin'",
+    "distance": 19.06704296875,
+    "elevation": 101.6892471313,
+    "leadIn": 2.0884892578125,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/california-dreamin/",
+    "eventCount90d": 388,
+    "velo": {
+      "race": {
+        "endurance": 0.17110178852008548,
+        "pursuit": 0.33332051302449284,
+        "sprint": 0.24778884922771086,
+        "punch": 0.20217940909034518,
+        "climb": 0.04560944013736562,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "2076673816",
+    "name": "California Roll",
+    "distance": 33.24674609375,
+    "elevation": 122.7669296265,
+    "leadIn": 0.6234912109375,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/california-roll/",
+    "eventCount90d": 55,
+    "velo": {
+      "race": {
+        "endurance": 0.567315853336719,
+        "pursuit": 6.748654372367872e-05,
+        "sprint": 0,
+        "punch": 0.43261666011955735,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
       "source": "gpx"
     }
   },
@@ -6095,6 +6440,29 @@
         "timeTrial": 0.4501667184712279
       },
       "version": "2.13.0",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "3464446734",
+    "name": "Crit Cross",
+    "distance": 13.4845625,
+    "elevation": 35.1227226257,
+    "leadIn": 1.7826162109375,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/crit-cross/",
+    "eventCount90d": 10,
+    "velo": {
+      "race": {
+        "endurance": 0.038954765348225145,
+        "pursuit": 0.42411832536816924,
+        "sprint": 0.2684634546418028,
+        "punch": 0.2684634546418028,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
       "source": "gpx"
     }
   },
@@ -6387,6 +6755,29 @@
     }
   },
   {
+    "world": "Watopia",
+    "routeId": "1353706660",
+    "name": "Four Foalsmen",
+    "distance": 67.938609375,
+    "elevation": 617.8128662109,
+    "leadIn": 2.2795705566406,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/four-foalsmen/",
+    "eventCount90d": 40,
+    "velo": {
+      "race": {
+        "endurance": 0.75,
+        "pursuit": 0,
+        "sprint": 0.125,
+        "punch": 0.051749737692430145,
+        "climb": 0.07325026230756987,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "61284749d4b60c00169f3827",
     "world": "Watopia",
     "routeId": "2878180967",
@@ -6611,6 +7002,29 @@
     }
   },
   {
+    "world": "Watopia",
+    "routeId": "2155564554",
+    "name": "Island Interlude",
+    "distance": 49.23108203125,
+    "elevation": 253.5018157959,
+    "leadIn": 0.949383972168,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/island-interlude/",
+    "eventCount90d": 0,
+    "velo": {
+      "race": {
+        "endurance": 0.6686398554453967,
+        "pursuit": 0,
+        "sprint": 0.14661971463407264,
+        "punch": 0.07498166383279156,
+        "climb": 0.10975876608773907,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "666ca3c66947dcb937114d25",
     "world": "Watopia",
     "routeId": "2333249368",
@@ -6803,6 +7217,29 @@
     }
   },
   {
+    "world": "Watopia",
+    "routeId": "3288023593",
+    "name": "Laps, Camera, Traction",
+    "distance": 25.782357421875,
+    "elevation": 201.0417480469,
+    "leadIn": 0.623340637207,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/laps-camera-traction/",
+    "eventCount90d": 34,
+    "velo": {
+      "race": {
+        "endurance": 0.44921857500338175,
+        "pursuit": 0.10437797751806017,
+        "sprint": 1.0346381794357527e-16,
+        "punch": 0.4151018986696042,
+        "climb": 0.03130154880895384,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "6128474ad4b60c00169f3858",
     "world": "Watopia",
     "routeId": "3864857876",
@@ -6899,6 +7336,29 @@
     }
   },
   {
+    "world": "Watopia",
+    "routeId": "4236593520",
+    "name": "Loopipelago",
+    "distance": 18.487015625,
+    "elevation": 35.1294288635,
+    "leadIn": 2.0885473632812,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/loopipelago/",
+    "eventCount90d": 278,
+    "velo": {
+      "race": {
+        "endurance": 0.1113525958522264,
+        "pursuit": 0.376845756610687,
+        "sprint": 0.2559008237685433,
+        "punch": 0.2559008237685433,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "66e79371b0fac6206073b7e6",
     "world": "Watopia",
     "routeId": "4084028627",
@@ -6991,6 +7451,52 @@
         "timeTrial": 0.4511360124673658
       },
       "version": "2.13.0",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "3306391797",
+    "name": "Miles of Isles",
+    "distance": 27.212154296875,
+    "elevation": 161.2507019043,
+    "leadIn": 1.8375631103516,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/miles-of-isles/",
+    "eventCount90d": 0,
+    "velo": {
+      "race": {
+        "endurance": 0.45477289426260314,
+        "pursuit": 0.09953799387686244,
+        "sprint": 0.11565251564375123,
+        "punch": 0.1467750090738716,
+        "climb": 0.1832615871429116,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "121619062",
+    "name": "Molten Momentum",
+    "distance": 20.679400390625,
+    "elevation": 209.428237915,
+    "leadIn": 2.0885795898438,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/molten-momentum/",
+    "eventCount90d": 288,
+    "velo": {
+      "race": {
+        "endurance": 0.31135868958765284,
+        "pursuit": 0.2217661491717279,
+        "sprint": 0.23343758062030961,
+        "punch": 0.04199142187450031,
+        "climb": 0.19144615874580928,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
       "source": "gpx"
     }
   },
@@ -7155,6 +7661,29 @@
     }
   },
   {
+    "world": "Watopia",
+    "routeId": "458819181",
+    "name": "One Ride to Rule Them All",
+    "distance": 38.5872421875,
+    "elevation": 461.1985168457,
+    "leadIn": 1.8375631103516,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/one-ride-to-rule-them-all/",
+    "eventCount90d": 5,
+    "velo": {
+      "race": {
+        "endurance": 0.6496820785641799,
+        "pursuit": 0,
+        "sprint": 0.00027449072158104487,
+        "punch": 0.03516728935476241,
+        "climb": 0.3148761413594766,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "61284749d4b60c00169f3832",
     "world": "Watopia",
     "routeId": "2748657713",
@@ -7183,6 +7712,29 @@
         "timeTrial": 0.323666094489675
       },
       "version": "2.13.0",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "1396603072",
+    "name": "Pacific Pursuit",
+    "distance": 53.96066796875,
+    "elevation": 381.393951416,
+    "leadIn": 0.1939167175293,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/pacific-pursuit/",
+    "eventCount90d": 9,
+    "velo": {
+      "race": {
+        "endurance": 0.7149314391685044,
+        "pursuit": 0,
+        "sprint": 0.14253428041574778,
+        "punch": 0.07516087462551199,
+        "climb": 0.06737340579023579,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
       "source": "gpx"
     }
   },
@@ -7539,6 +8091,29 @@
     }
   },
   {
+    "world": "Watopia",
+    "routeId": "4045681681",
+    "name": "Seafoam Circuit",
+    "distance": 3.5001000976562,
+    "elevation": 17.9418983459,
+    "leadIn": 0.623340637207,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/seafoam-circuit/",
+    "eventCount90d": 71,
+    "velo": {
+      "race": {
+        "endurance": 0,
+        "pursuit": 0.4085014740421061,
+        "sprint": 0,
+        "punch": 0.5914985259578939,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
+      "source": "gpx"
+    }
+  },
+  {
     "_id": "6128474ad4b60c00169f3838",
     "world": "Watopia",
     "routeId": "3454338139",
@@ -7695,6 +8270,29 @@
         "timeTrial": 0.4492704478027678
       },
       "version": "2.13.0",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "159415549",
+    "name": "Spiral Summit",
+    "distance": 23.86948046875,
+    "elevation": 283.5184631348,
+    "leadIn": 0.1504228973389,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/spiral-summit/",
+    "eventCount90d": 90,
+    "velo": {
+      "race": {
+        "endurance": 0.38327459535809877,
+        "pursuit": 0.16124141379013582,
+        "sprint": 0.00035006403232437666,
+        "punch": 0.07864559078106967,
+        "climb": 0.3764883360383714,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
       "source": "gpx"
     }
   },
@@ -8015,6 +8613,29 @@
         "timeTrial": 0.19999999999999996
       },
       "version": "2.13.0",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "162354031",
+    "name": "The Watopia 150!",
+    "distance": 149.75146875,
+    "elevation": 0.0013476552,
+    "leadIn": 1.8375278320312,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/the-watopia-150/",
+    "eventCount90d": 5,
+    "velo": {
+      "race": {
+        "endurance": 0.75,
+        "pursuit": 0,
+        "sprint": 0.12500346476047536,
+        "punch": 0.12499653523952464,
+        "climb": 0,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
       "source": "gpx"
     }
   },
@@ -8847,6 +9468,29 @@
         "timeTrial": 0.4504943073125569
       },
       "version": "2.13.0",
+      "source": "gpx"
+    }
+  },
+  {
+    "world": "Watopia",
+    "routeId": "1374321160",
+    "name": "Watt Goes Up Must Come Down",
+    "distance": 60.63127734375,
+    "elevation": 774.7005004883,
+    "leadIn": 1.7826162109375,
+    "profile": null,
+    "url": "https://zwiftinsider.com/route/watt-goes-up-must-come-down/",
+    "eventCount90d": 3,
+    "velo": {
+      "race": {
+        "endurance": 0.75,
+        "pursuit": 0,
+        "sprint": 0.125,
+        "punch": 0.024094118465311933,
+        "climb": 0.1009058815346881,
+        "timeTrial": 0
+      },
+      "version": "3.13.1",
       "source": "gpx"
     }
   },
