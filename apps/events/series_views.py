@@ -878,16 +878,19 @@ def series_respond(request: HttpRequest, event: Event, squad: Squad, grid: Avail
     )
 
 
-def _enrich_members(users: list[User]) -> list[dict]:
+def _enrich_members(users: list[User], roles: dict[int, str] | None = None) -> list[dict]:
     """Add each rider's ZwiftPower and Zwift Racing figures for the rider popover.
 
     Args:
         users: The riders.
+        roles: ``Squad.leader_roles()``, so a captain or vice-captain is marked as one.
 
     Returns:
-        One dict per rider, in order, with the keys ``accounts/_user_tooltip.html`` reads.
+        One dict per rider, in order, with the keys ``accounts/_user_tooltip.html`` reads
+        plus ``squad_role`` ("Captain", "Vice Captain" or "").
 
     """
+    roles = roles or {}
     zwids = [u.zwid for u in users if u.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
     profiles = rider_stats.profiles_by_zwid(zwids)
@@ -905,6 +908,7 @@ def _enrich_members(users: list[User]) -> list[dict]:
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
             **{key: zr[key] for key in rider_stats.TOOLTIP_FIELDS},
+            "squad_role": roles.get(user.pk, ""),
         })
     return enriched
 
@@ -1035,7 +1039,8 @@ def squad_results(
     open_columns = [column for column in columns if column["is_open"]]
     upcoming_columns = [column for column in open_columns if not column["started"]]
 
-    enriched = _enrich_members(members)
+    roles = squad.leader_roles()
+    enriched = _enrich_members(members, roles)
     rows, notes = [], []
     for entry in enriched:
         user = entry["user"]
@@ -1078,7 +1083,7 @@ def squad_results(
         # Captains race too, and are not always squad MEMBER rows.
         roster = squad_roster_users(squad)
         on_roster = set(member_ids)
-        everyone = enriched + _enrich_members([user for user in roster if user.pk not in on_roster])
+        everyone = enriched + _enrich_members([user for user in roster if user.pk not in on_roster], roles)
         modal = {
             "utc_cell_users_json": cell_users,
             "utc_cell_answers_json": cell_answers,
@@ -1089,6 +1094,7 @@ def squad_results(
                     "zr_category": entry["zr_category"],
                     "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
                     "is_race_ready": entry["is_race_ready"],
+                    "squad_role": entry["squad_role"],
                 }
                 for entry in everyone
             },

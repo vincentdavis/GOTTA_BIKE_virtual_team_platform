@@ -1,0 +1,7 @@
+{% comment %}
+  The squad captain / vice-captain mark beside a rider's name, the same icons the squad
+  panel uses. ``role`` is a value of ``Squad.leader_roles()``: "Captain", "Vice Captain",
+  or empty for everyone else, who gets nothing. ``extra_class`` lets a tight spot (a
+  heatmap lane) size it.
+{% endcomment %}
+{% if role == "Captain" %}<span class="squad-role {{ extra_class }}" role="img" aria-label="Captain" title="Captain">🎖️</span>{% elif role == "Vice Captain" %}<span class="squad-role {{ extra_class }}" role="img" aria-label="Vice Captain" title="Vice Captain">🏅</span>{% endif %}

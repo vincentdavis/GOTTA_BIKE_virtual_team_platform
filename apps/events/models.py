@@ -1286,6 +1286,21 @@ class Squad(models.Model):
         """The set of vice-captain user PKs (uses prefetched ``vice_captains`` when available)."""
         return {u.pk for u in self.vice_captains.all()}
 
+    def leader_roles(self) -> dict[int, str]:
+        """Map each captain and vice-captain to the role a page marks them with.
+
+        A rider listed as both reads as Captain. Uses prefetched ``captains`` and
+        ``vice_captains`` when available, two small queries otherwise -- read it once per
+        page, not once per rider.
+
+        Returns:
+            ``{user pk: "Captain" | "Vice Captain"}``.
+
+        """
+        roles = dict.fromkeys(self.vice_captain_pks, "Vice Captain")
+        roles.update(dict.fromkeys(self.captain_pks, "Captain"))
+        return roles
+
     def is_leader(self, user) -> bool:
         """Return whether ``user`` is a captain or vice-captain of this squad.
 

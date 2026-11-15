@@ -71,6 +71,8 @@
   /* Picked to race that day: outside the rider link, so a cut-short name never hides it
      and the Icons toggle never does either. */
   .heatmap-cell .cell-racing { flex: none; font-size: 0.65rem; line-height: 1; margin-right: 0.15rem; }
+  /* Captain / vice-captain mark: outside the rider link too, for the same reasons. */
+  .heatmap-cell .cell-role { flex: none; font-size: 0.65rem; line-height: 1; margin-right: 0.15rem; }
   .heatmap-cell.cell-clickable { cursor: pointer; }
   .heatmap-cell.cell-clickable:hover { outline: 2px solid oklch(0.6 0.15 250); outline-offset: -2px; }
   .slot-badge { font-size: 0.55rem; font-weight: 700; background: oklch(0.55 0.2 250); color: white; border-radius: 0.2rem; padding: 0 0.2rem; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.1rem; }
@@ -151,6 +153,7 @@
               <div class="cell-lane{% if entry %} cell-name{% endif %}">
                 {% if entry %}
                 {% if entry.racing %}<span class="cell-racing" role="img" aria-label="Racing {{ entry.racing }}" title="Racing {{ entry.racing }}">🏁</span>{% endif %}
+                {% include "events/_squad_role_icon.html" with role=entry.squad_role extra_class="cell-role" %}
                 {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=None zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2=entry.zr_v2_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
                 {% endif %}
               </div>
@@ -193,6 +196,14 @@
     <div class="flex items-center gap-1 ml-2">
       <span aria-hidden="true">🏁</span>
       <span>Picked to race that day</span>
+    </div>
+    {% endif %}
+    {% if has_squad_leaders %}
+    <div class="flex items-center gap-1 ml-2">
+      <span aria-hidden="true">🎖️</span>
+      <span>Captain</span>
+      <span aria-hidden="true" class="ml-1">🏅</span>
+      <span>Vice Captain</span>
     </div>
     {% endif %}
   </div>
@@ -264,7 +275,10 @@
           {% for entry in enriched_responders %}
           <tr>
             <td>
+              <div class="flex items-center gap-1">
+              {% include "events/_squad_role_icon.html" with role=entry.squad_role %}
               {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2=entry.zr_v2_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+              </div>
             </td>
             {% if grid.max_races_question %}
             <td class="text-center font-mono">{% if entry.max_races is not None %}{{ entry.max_races }}{% else %}<span class="text-base-content/30">-</span>{% endif %}</td>
@@ -287,7 +301,10 @@
     <h3 class="text-sm font-semibold mb-2">Waiting Response ({{ enriched_non_responders|length }})</h3>
     <div class="flex flex-wrap gap-2">
       {% for entry in enriched_non_responders %}
+      <span class="inline-flex items-center gap-1">
+      {% include "events/_squad_role_icon.html" with role=entry.squad_role %}
       {% include "accounts/_user_tooltip.html" with display_name=entry.display_name user_id=entry.user.pk discord_id=entry.user.discord_id discord_avatar_url=entry.user.discord_avatar_url zwid=entry.zwid zp_category=entry.zp_category zp_category_w=entry.zp_category_w zr_category=entry.zr_category zr_v2=entry.zr_v2_category zr_rating=entry.zr_rating zr_phenotype=entry.zr_phenotype zr_age=entry.zr_age is_race_ready=entry.is_race_ready is_extra_verified=entry.is_extra_verified in_zwiftpower=entry.in_zwiftpower in_zwiftracing=entry.in_zwiftracing %}
+      </span>
       {% endfor %}
     </div>
   </div>

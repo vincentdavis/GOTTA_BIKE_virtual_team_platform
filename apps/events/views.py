@@ -6314,6 +6314,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
     profiles = rider_stats.profiles_by_zwid(zwids)
 
+    roles = squad.leader_roles()
     enriched_responders = []
     user_by_id: dict[int, dict] = {}
     response_by_user: dict[int, AvailabilityResponse] = {r.user.pk: r for r in responses}
@@ -6345,6 +6346,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "zr_age": zr_age,
             "max_races": resp.max_races if resp else None,
             "rest_days": resp.rest_days if resp else None,
+            "squad_role": roles.get(user.pk, ""),
         }
         enriched_responders.append(entry)
         user_by_id[user.pk] = entry
@@ -6363,6 +6365,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "zp_category": ZP_DIV_TO_CATEGORY.get(zp.div, "") if zp and zp.div else "",
             "zp_category_w": ZP_DIV_TO_CATEGORY.get(zp.divw, "") if zp and zp.divw else "",
             **{key: zr[key] for key in rider_stats.TOOLTIP_FIELDS},
+            "squad_role": roles.get(user.pk, ""),
         })
 
     # Aggregate user IDs keyed by UTC cell
@@ -6488,6 +6491,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "zr_category": entry["zr_category"],
             "zr_rating": float(entry["zr_rating"]) if entry["zr_rating"] is not None else None,
             "is_race_ready": entry["is_race_ready"],
+            "squad_role": entry["squad_role"],
         }
     # Full squad roster for the modal's "others" picker, so a race can include
     # someone who never marked availability or is not free at that slot. Uses the
@@ -6509,6 +6513,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
                 "zr_category": zr["zr_category"],
                 "zr_rating": float(rating) if rating is not None else None,
                 "is_race_ready": user.is_race_ready,
+                "squad_role": roles.get(user.pk, ""),
             }
 
     # Slot selections with selected user IDs for pre-filling the modal
@@ -6533,6 +6538,7 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
                 "zp_category": zp_cat,
                 "zp_category_w": zp_cat_w,
                 **{key: zr[key] for key in rider_stats.TOOLTIP_FIELDS},
+                "squad_role": roles.get(user.pk, ""),
             })
         utc_dt = datetime.combine(
             sel.slot_date,
@@ -6567,6 +6573,8 @@ def availability_results_view(request: HttpRequest, event_pk: int, squad_pk: int
             "display_dates": display_dates,
             "grid_rows": grid_rows,
             "has_racing_flags": has_racing_flags,
+            # The legend explains the captain marks only when a rider on the page wears one.
+            "has_squad_leaders": any(e["squad_role"] for e in enriched_responders + enriched_non_responders),
             "total_responders": total_responders,
             "enriched_responders": enriched_responders,
             "enriched_non_responders": enriched_non_responders,
@@ -8743,6 +8751,7 @@ def _enriched_slot_selections(request: HttpRequest, grid: AvailabilityGrid) -> t
     zwids = [u.zwid for u in all_selected_users if u.zwid]
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
     profiles = rider_stats.profiles_by_zwid(zwids)
+    roles = grid.squad.leader_roles()
 
     enriched_selections = []
     for sel in selections:
@@ -8762,6 +8771,7 @@ def _enriched_slot_selections(request: HttpRequest, grid: AvailabilityGrid) -> t
                 "zp_category": zp_cat,
                 "zp_category_w": zp_cat_w,
                 **{key: zr[key] for key in rider_stats.TOOLTIP_FIELDS},
+                "squad_role": roles.get(user.pk, ""),
             })
         # Convert slot time to display timezone
         from datetime import datetime as dt

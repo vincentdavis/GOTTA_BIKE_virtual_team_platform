@@ -45,7 +45,10 @@
         {% for row in rows %}
         <tr>
           <th scope="row" class="sticky left-0 z-[5] bg-base-100 font-normal whitespace-nowrap">
+            <div class="flex items-center gap-1">
+            {% include "events/_squad_role_icon.html" with role=row.squad_role %}
             {% include "accounts/_user_tooltip.html" with display_name=row.display_name user_id=row.user.pk discord_id=row.user.discord_id discord_avatar_url=row.user.discord_avatar_url zwid=row.zwid zp_category=row.zp_category zp_category_w=row.zp_category_w zr_category=row.zr_category zr_v2=row.zr_v2_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype zr_age=row.zr_age is_race_ready=row.is_race_ready is_extra_verified=row.is_extra_verified in_zwiftpower=row.in_zwiftpower in_zwiftracing=row.in_zwiftracing %}
+            </div>
           </th>
           {% for cell in row.cells %}
           <td class="text-center">
