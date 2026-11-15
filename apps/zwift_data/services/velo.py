@@ -43,6 +43,7 @@ class VeloImportResult:
     unmatched: int
     total: int
     unmatched_names: list[str]
+    kept: int = 0  # matched routes left alone because they already had weights (``only_missing``)
 
 
 def _pct(value: object) -> Decimal:
@@ -55,23 +56,29 @@ def _pct(value: object) -> Decimal:
     return round(Decimal(str(value or 0)) * 100, 2)
 
 
-def import_velo_weights(data: list[dict]) -> VeloImportResult:
+def import_velo_weights(data: list[dict], *, only_missing: bool = False) -> VeloImportResult:
     """Write vELO2 Race weights from parsed JSON onto ZwiftRoute rows, matched by name_hash.
 
     Args:
         data: The parsed ZwiftRacing routes list (each entry has ``routeId`` + ``velo``).
+        only_missing: Fill only routes that have no weights yet, leaving the rest (and any
+            hand edits to them) alone. Deploy runs it this way, so a route the dataset sync
+            added after the first seed picks up its weights once the file has them.
 
     Returns:
         A :class:`VeloImportResult` with counts and the names that didn't match a route.
 
     """
     by_hash = {r.name_hash: r for r in ZwiftRoute.objects.all()}
-    updated = 0
+    updated = kept = 0
     unmatched_names: list[str] = []
     for entry in data:
         route = by_hash.get(str(entry.get("routeId")))
         if route is None:
             unmatched_names.append(str(entry.get("name") or entry.get("routeId")))
+            continue
+        if only_missing and route.has_velo_factors:
+            kept += 1
             continue
         race = (entry.get("velo") or {}).get("race") or {}
         for json_key, suffix in _FACTOR_MAP.items():
@@ -80,17 +87,18 @@ def import_velo_weights(data: list[dict]) -> VeloImportResult:
         route.velo_num_events = int(num_events) if num_events is not None else None
         route.save(update_fields=[f"velo_{s}" for s in _FACTOR_MAP.values()] + ["velo_num_events"])
         updated += 1
-    logfire.info("vELO weights imported", updated=updated, unmatched=len(unmatched_names), total=len(data))
+    logfire.info("vELO weights imported", updated=updated, kept=kept, unmatched=len(unmatched_names), total=len(data))
     return VeloImportResult(
-        updated=updated, unmatched=len(unmatched_names), total=len(data), unmatched_names=unmatched_names
+        updated=updated, unmatched=len(unmatched_names), total=len(data), unmatched_names=unmatched_names, kept=kept
     )
 
 
-def import_velo_from_file(path: Path | str | None = None) -> VeloImportResult:
+def import_velo_from_file(path: Path | str | None = None, *, only_missing: bool = False) -> VeloImportResult:
     """Import vELO2 weights from a JSON file (defaults to the bundled reference).
 
     Args:
         path: Path to the ZwiftRacing routes JSON; defaults to :data:`DEFAULT_VELO_FILE`.
+        only_missing: See :func:`import_velo_weights`.
 
     Returns:
         A :class:`VeloImportResult`.
@@ -103,4 +111,4 @@ def import_velo_from_file(path: Path | str | None = None) -> VeloImportResult:
     data = json.loads(path.read_text())
     if not isinstance(data, list):
         raise ValueError("vELO weights JSON must be a list of route entries")
-    return import_velo_weights(data)
+    return import_velo_weights(data, only_missing=only_missing)

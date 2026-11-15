@@ -4,7 +4,8 @@ Usage::
 
     uv run python manage.py import_velo_weights
     uv run python manage.py import_velo_weights --file path/to/weights.json
-    uv run python manage.py import_velo_weights --if-empty   # deploy: no-op once loaded
+    uv run python manage.py import_velo_weights --if-empty   # no-op once any route has weights
+    uv run python manage.py import_velo_weights --missing-only   # deploy: fill routes without weights
 """
 
 from django.core.management.base import BaseCommand
@@ -29,7 +30,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--if-empty",
             action="store_true",
-            help="No-op if any route already has weights (safe to run on every deploy; won't clobber edits)",
+            help="No-op if any route already has weights (won't clobber edits, but never fills a route added later)",
+        )
+        parser.add_argument(
+            "--missing-only",
+            action="store_true",
+            help="Fill only routes that have no weights yet (safe to run on every deploy; won't clobber edits)",
         )
 
     def handle(self, *args, **options) -> None:
@@ -43,10 +49,11 @@ class Command(BaseCommand):
         if options["if_empty"] and ZwiftRoute.objects.exclude(velo_sprint__isnull=True).exists():
             self.stdout.write("vELO weights already present — skipping (--if-empty).")
             return
-        result = import_velo_from_file(options["file"])
+        result = import_velo_from_file(options["file"], only_missing=options["missing_only"])
+        kept = f", {result.kept} already had weights" if options["missing_only"] else ""
         self.stdout.write(
             self.style.SUCCESS(
-                f"vELO weights: {result.updated} routes updated, {result.unmatched} unmatched "
+                f"vELO weights: {result.updated} routes updated{kept}, {result.unmatched} unmatched "
                 f"of {result.total} entries."
             )
         )

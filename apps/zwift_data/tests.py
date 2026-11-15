@@ -211,6 +211,41 @@ def test_import_velo_if_empty_is_noop_when_present(synced):
 
 
 @pytest.mark.django_db
+def test_import_velo_missing_only_fills_new_routes_and_keeps_the_rest(synced):
+    """--missing-only gives weights to a route without any and leaves a weighted one (edits too) alone.
+
+    A route the dataset sync added after the first seed used to stay without weights forever:
+    the deploy import was --if-empty, so it never ran again once any route had weights.
+    """
+    from django.core.management import call_command
+
+    from apps.zwift_data.services.velo import import_velo_weights
+
+    edited = ZwiftRoute.objects.get(name_hash="111")
+    edited.velo_sprint = 50
+    edited.save(update_fields=["velo_sprint"])
+    assert not ZwiftRoute.objects.get(name_hash="222").has_velo_factors
+
+    velo_json = [
+        {"routeId": "111", "name": "Flat Route", "velo": {"race": {"sprint": 0.2, "endurance": 0.8}}},
+        {"routeId": "222", "name": "Second Route", "numEvents": 7, "velo": {"race": {"sprint": 0.3, "punch": 0.7}}},
+    ]
+    result = import_velo_weights(velo_json, only_missing=True)
+
+    assert (result.updated, result.kept, result.unmatched) == (1, 1, 0)
+    edited.refresh_from_db()
+    assert float(edited.velo_sprint) == pytest.approx(50)  # the hand edit survives
+    added = ZwiftRoute.objects.get(name_hash="222")
+    assert added.has_velo_factors and added.velo_num_events == 7
+    assert float(added.velo_punch) == pytest.approx(70)
+
+    # The deploy command takes the same path: both routes have weights now, so nothing changes.
+    call_command("import_velo_weights", "--missing-only")
+    edited.refresh_from_db()
+    assert float(edited.velo_sprint) == pytest.approx(50)
+
+
+@pytest.mark.django_db
 def test_sync_if_empty_is_noop_when_populated(synced):
     """sync_zwift_data --if-empty skips when routes already exist (deploy-safe seed)."""
     from django.core.management import call_command

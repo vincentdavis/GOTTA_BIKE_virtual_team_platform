@@ -752,6 +752,8 @@ def event_factors(matchup: LadderMatchup) -> dict[str, Any]:
     Returns:
         A dict with ``available`` (bool), ``route_name``, and ``factors`` (a list
         of ``{key, label, color, icon, value}`` dicts, sorted descending, non-zero).
+        ``route_name`` is set whenever a route is picked, weights or not, so the tab
+        can tell "pick a route" apart from "this route has no weights yet".
 
     """
     route = matchup.route

@@ -498,6 +498,11 @@
     <p class="text-sm text-base-content/60">Add racing riders to both teams to see the factor match.</p>
     {% endif %}
     {% endwith %}
+    {% elif summary.event_factors.route_name %}
+    <div class="text-center text-base-content/60 py-10">
+      No vELO2 event factor weights for <span class="font-medium">{{ summary.event_factors.route_name }}</span> yet.
+      <div class="text-xs mt-1">ZwiftRacing hasn't published weights for this route, or they haven't been loaded here yet.</div>
+    </div>
     {% else %}
     <div class="text-center text-base-content/60 py-10">Select a route to see its vELO2 event factor weights.</div>
     {% endif %}

@@ -1039,6 +1039,21 @@ def test_event_factors_tab_empty_state(auth_client, team_member):
     assert "Select a route to see" in body
 
 
+@pytest.mark.django_db
+def test_event_factors_tab_names_a_picked_route_without_weights(auth_client, team_member):
+    """A picked route with no weights says so, rather than asking for a route that is already picked."""
+    from django.urls import reverse
+
+    route = make_route(name="Twilight Crit", distance_km=3.9, elevation_m=20)
+    matchup = _make_matchup(team_member, route=route)
+    body = auth_client.get(reverse("ladder_planner:detail", args=[matchup.pk])).content.decode()
+    tab = body.split('aria-label="Event Factors"', 1)[1].split('role="tab"', 1)[0]
+
+    assert "No vELO2 event factor weights for" in tab
+    assert "Twilight Crit" in tab
+    assert "Select a route to see" not in tab
+
+
 # ----- Event factor match ------------------------------------------------------------------------
 
 

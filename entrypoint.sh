@@ -11,15 +11,18 @@ set -e
 echo "Running migrations..."
 uv run manage.py migrate
 
-# Seed the canonical Zwift dataset + vELO2 weights on first deploy only. Both are
-# --if-empty (no-op once populated) and non-fatal (|| true): seeding must never keep
-# the web server from starting. After first seed, the scheduler keeps the dataset
-# fresh and admins can re-run either from the /routes/ page.
+# Seed the canonical Zwift dataset on first deploy only (--if-empty), then give every
+# route that has no vELO2 weights yet the bundled file's weights (--missing-only: routes
+# that have weights, hand edits included, are left alone). Without that, a route the
+# scheduler's sync added after the first seed never got weights, even once the file had
+# them. Both are non-fatal (|| echo): seeding must never keep the web server from
+# starting. The scheduler keeps the dataset fresh, and admins can re-run either from the
+# /routes/ page.
 echo "Seeding Zwift route/segment dataset (if empty)..."
 uv run manage.py sync_zwift_data --if-empty || echo "warning: zwift_data seed failed (retry via scheduler / Check for updates)"
 
-echo "Seeding vELO2 route factor weights (if empty)..."
-uv run manage.py import_velo_weights --if-empty || echo "warning: vELO seed failed (retry via Load vELO weights)"
+echo "Loading vELO2 route factor weights for routes without them..."
+uv run manage.py import_velo_weights --missing-only || echo "warning: vELO seed failed (retry via Load vELO weights)"
 
 # Create superuser if not exists
 #echo "Creating superuser if not exists..."
