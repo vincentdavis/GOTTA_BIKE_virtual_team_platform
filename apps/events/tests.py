@@ -2408,6 +2408,32 @@ def test_signup_answers_shown_in_admin_table(client, event_admin, team_member) -
     assert 'data-col="custom_answers"' in body
 
 
+@pytest.mark.django_db
+def test_signup_answers_are_one_line_each_with_the_full_text_on_hover(client, event_admin, team_member) -> None:
+    """A long question is cut short on the row; the tooltip still carries the whole thing.
+
+    Wrapped in full, a sentence-long question on every row made each row hundreds of pixels tall.
+    """
+    import re
+
+    from django.urls import reverse
+
+    from apps.events.models import EventSignup, SignupQuestion
+
+    event = _q_event()
+    label = "I acknowledge that I need to have a Race Verified team status to participate."
+    q = SignupQuestion.objects.create(event=event, label=label, question_type="text", order=0)
+    EventSignup.objects.create(event=event, user=team_member, custom_answers={str(q.pk): "Yes"})
+    client.force_login(event_admin)
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    line = re.search(rf'<div class="flex gap-1 text-xs" data-aq="{q.pk}" title="([^"]*)">(.*?)</div>', body)
+    assert line, "answer line not rendered"
+    assert line.group(1) == f"{label}: Yes"
+    assert '<span class="truncate min-w-0 text-base-content/50">' in line.group(2)
+    assert "data-aq-value>Yes</span>" in line.group(2)  # what the facet script sorts and filters on
+
+
 def test_render_markdown_inline_filter() -> None:
     from apps.accounts.templatetags.accounts_tags import render_markdown_inline
 

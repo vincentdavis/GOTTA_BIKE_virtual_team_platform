@@ -15,9 +15,15 @@
 </td>
 {% endif %}
 {% if full and signup_questions %}
+{% comment %}
+  One line per answer: the question label shrinks to an ellipsis first, the answer keeps up
+  to 10rem, and the full text is in the line's tooltip. Wrapped in full, a sentence-long
+  question repeated on every row made rows several hundred pixels tall. The data-aq /
+  data-aq-value markup is what _answer_facets_script.html filters and sorts on.
+{% endcomment %}
 <td data-col="{{ p }}custom_answers" class="align-top">
-  <div class="max-w-xs space-y-0.5">
-    {% for a in e.custom_answers %}{% if a.answered %}<div class="text-xs" data-aq="{{ a.question.pk }}"><span class="text-base-content/50">{{ a.label|render_markdown_inline }}:</span> <span data-aq-value>{{ a.display }}</span></div>{% endif %}{% endfor %}
+  <div class="w-72 space-y-0.5">
+    {% for a in e.custom_answers %}{% if a.answered %}<div class="flex gap-1 text-xs" data-aq="{{ a.question.pk }}" title="{{ a.label|striptags }}: {{ a.display }}"><span class="truncate min-w-0 text-base-content/50">{{ a.label|render_markdown_inline }}:</span> <span class="truncate shrink-0 max-w-[10rem]" data-aq-value>{{ a.display }}</span></div>{% endif %}{% endfor %}
   </div>
 </td>
 {% endif %}
