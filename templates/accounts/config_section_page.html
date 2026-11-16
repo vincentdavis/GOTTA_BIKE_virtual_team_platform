@@ -105,7 +105,8 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto">
+{# Team kit is wider: its member list has a column per kit, which 4xl cut off with two kits. #}
+<div class="{% if is_team_kit %}max-w-6xl{% else %}max-w-4xl{% endif %} mx-auto">
     <div class="card bg-base-200 shadow-xl">
         <div class="card-body">
             <h2 class="card-title text-2xl mb-4">{{ current_section.name }}</h2>
