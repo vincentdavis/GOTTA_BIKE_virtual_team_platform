@@ -318,25 +318,30 @@ def test_export_downloads_the_list_on_screen(client, app_admin, user_model, kits
 
 @pytest.mark.django_db
 def test_export_follows_each_kits_filter_and_keeps_every_kits_column(client, app_admin, user_model):
-    """Filter on two kits and the file holds who matches both, with every kit's status still in it."""
+    """Filter on two kits and the file holds who matches either, with every kit's status still in it."""
     TeamKit.objects.create(name="2026 Race Kit", slug="race-2026", is_current=True)
     TeamKit.objects.create(name="2025 Race Kit", slug="race-2025")
     TeamKit.objects.create(name="2024 Race Kit", slug="race-2024", active=False)
-    _member(user_model, "both", {"race-2026": "need", "race-2025": "have", "race-2024": "completed"})
-    _member(user_model, "new-only", {"race-2026": "need", "race-2025": "need"})
-    _member(user_model, "old-only", {"race-2026": "have", "race-2025": "have"})
+    _member(user_model, "needs-2026", {"race-2026": "need", "race-2025": "have", "race-2024": "completed"})
+    _member(user_model, "needs-2025", {"race-2026": "have", "race-2025": "need"})
+    _member(user_model, "needs-both", {"race-2026": "need", "race-2025": "need"})
+    _member(user_model, "needs-neither", {"race-2026": "have", "race-2025": "have"})
 
-    response, rows = _export(client, app_admin, "?status_race-2025=have&status_race-2026=need")
+    response, rows = _export(client, app_admin, "?status_race-2025=need&status_race-2026=need")
 
     # Current first, then by name -- the retired kit's column included.
     assert rows[0] == [*INFO_COLUMNS, "kit:race-2026", "kit:race-2024", "kit:race-2025", "exported_statuses"]
     columns = [rows[0].index(f"kit:{slug}") for slug in ("race-2026", "race-2025", "race-2024")]
-    assert [(row[2], *(row[i] for i in columns)) for row in rows[1:]] == [("both", "need", "have", "completed")]
-    assert response["Content-Disposition"].endswith('-race-2026-need-race-2025-have.csv"')
+    assert [(row[2], *(row[i] for i in columns)) for row in rows[1:]] == [
+        ("needs-2025", "have", "need", "unknown"),
+        ("needs-2026", "need", "have", "completed"),
+        ("needs-both", "need", "need", "unknown"),
+    ]
+    assert response["Content-Disposition"].endswith('-race-2026-need-race-2025-need.csv"')
 
     # A retired kit has no filter on the page, so the export ignores one typed by hand.
     response, rows = _export(client, app_admin, "?status_race-2024=completed")
-    assert [row[2] for row in rows[1:]] == ["both", "new-only", "old-only"]
+    assert [row[2] for row in rows[1:]] == ["needs-2025", "needs-2026", "needs-both", "needs-neither"]
     assert "race-2024" not in response["Content-Disposition"]
 
 

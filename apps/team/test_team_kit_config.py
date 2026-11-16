@@ -663,12 +663,12 @@ KIT_2025 = TeamKit(name="2025 Race Kit", slug="race-2025")
         (
             {"kit_statuses": ((KIT_2026, ("need",)), (KIT_2025, ("have", "completed")))},
             "whose 2026 Race Kit status is Need kit"
-            " and whose 2025 Race Kit status is I have the kit or Completed by Zwift",
+            " or whose 2025 Race Kit status is I have the kit or Completed by Zwift",
         ),
         (
             {"verified_only": True, "kit_statuses": ((KIT_2026, ("need",)), (KIT_2025, ("have",)))},
             "verified with zauth, whose 2026 Race Kit status is Need kit"
-            " and whose 2025 Race Kit status is I have the kit",
+            " or whose 2025 Race Kit status is I have the kit",
         ),
         ({}, ""),
     ],
@@ -1123,25 +1123,45 @@ def test_a_hand_typed_status_without_a_current_kit_is_ignored(client, app_admin,
 
 @pytest.mark.django_db
 def test_each_kit_is_filtered_by_its_own_statuses(client, app_admin, user_model, old_kit, new_kit):
-    """Within a kit, any ticked status; across kits, every kit with a tick must match."""
+    """A member shows if they match any ticked status on any kit -- "needs this kit OR needs that one"."""
     _member(user_model, "need-old-have-new", {old_kit.slug: "need", new_kit.slug: "have"})
+    _member(user_model, "have-old-need-new", {old_kit.slug: "have", new_kit.slug: "need"})
     _member(user_model, "need-old-need-new", {old_kit.slug: "need", new_kit.slug: "need"})
     _member(user_model, "have-old-have-new", {old_kit.slug: "have", new_kit.slug: "have"})
     _member(user_model, "never-answered")
 
+    # The team's own example: Need kit ticked on both kits is everyone who needs either one.
+    assert _usernames(_list(client, app_admin, **{OLD_KIT_PARAM: "need", NEW_KIT_PARAM: "need"})) == [
+        "have-old-need-new",
+        "need-old-have-new",
+        "need-old-need-new",
+    ]
+    # One kit alone filters by that kit only.
     assert _usernames(_list(client, app_admin, **{NEW_KIT_PARAM: "have"})) == [
         "have-old-have-new",
         "need-old-have-new",
     ]
-    assert _usernames(_list(client, app_admin, **{OLD_KIT_PARAM: "need", NEW_KIT_PARAM: "have"})) == [
-        "need-old-have-new"
-    ]
-    assert _usernames(_list(client, app_admin, **{OLD_KIT_PARAM: "need", NEW_KIT_PARAM: ["have", "need"]})) == [
+    # Different statuses on different kits combine the same way.
+    assert _usernames(_list(client, app_admin, **{OLD_KIT_PARAM: "have", NEW_KIT_PARAM: "have"})) == [
+        "have-old-have-new",
+        "have-old-need-new",
         "need-old-have-new",
-        "need-old-need-new",
     ]
     # Unknown on one kit matches those who never answered it, as for the current kit.
     assert _usernames(_list(client, app_admin, **{NEW_KIT_PARAM: "unknown"})) == ["never-answered"]
+
+
+@pytest.mark.django_db
+def test_the_zauth_and_race_boxes_still_narrow_the_kit_filters(client, app_admin, user_model, old_kit, new_kit):
+    """Either kit's status lets a member in; being verified is still required on top."""
+    _member(user_model, "verified-needs-old", {old_kit.slug: "need"}, zwid=1, **ZAUTH_VERIFIED)
+    _member(user_model, "verified-needs-new", {new_kit.slug: "need"}, zwid=2, **ZAUTH_VERIFIED)
+    _member(user_model, "unverified-needs-both", {old_kit.slug: "need", new_kit.slug: "need"}, zwid=3)
+    _member(user_model, "verified-has-both", {old_kit.slug: "have", new_kit.slug: "have"}, zwid=4, **ZAUTH_VERIFIED)
+
+    params = {OLD_KIT_PARAM: "need", NEW_KIT_PARAM: "need", "verified": "1"}
+
+    assert _usernames(_list(client, app_admin, **params)) == ["verified-needs-new", "verified-needs-old"]
 
 
 @pytest.mark.django_db
@@ -1167,11 +1187,11 @@ def test_two_kit_filters_are_named_in_the_summary_and_the_export_link(client, ap
     body = " ".join(_list(client, app_admin, **{NEW_KIT_PARAM: "have", OLD_KIT_PARAM: "need"}).content.decode().split())
 
     assert (
-        "Showing 1 of 2 members &mdash; whose 2026 Race Kit status is Need kit and whose 2027 Race Kit status is "
+        "Showing 1 of 2 members &mdash; whose 2026 Race Kit status is Need kit or whose 2027 Race Kit status is "
         "I have the kit."
     ) in body
     assert f'href="{reverse("team_kit_export")}?{OLD_KIT_PARAM}=need&amp;{NEW_KIT_PARAM}=have"' in body
-    assert "they have to match each of those kits" in body  # the hint shows once there are two kits
+    assert "A member shows if they match any status you tick, on any kit." in body  # once there are two kits
 
 
 # --- membership admins -------------------------------------------------------------------

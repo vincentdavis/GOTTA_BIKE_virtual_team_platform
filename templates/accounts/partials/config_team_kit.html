@@ -211,9 +211,9 @@
     from apps.team.kits.MemberFilters.describe.
 
     One row of status boxes per active kit, in the order of the list's kit columns, each named
-    by apps.team.kits.status_param. Within a kit, tick any number: a member shows if their
-    status is any one of them, and ticking none means any status. Across kits, every kit with
-    a box ticked has to match.
+    by apps.team.kits.status_param. Tick any number, on any kits: a member shows if they match
+    any one ticked status on any kit ("needs the 2026 kit or needs the original"), and ticking
+    none means any status. The two boxes above still narrow that.
   {% endcomment %}
   <form method="get" action="{% url 'config_section_page' 'team_kit' %}" class="flex flex-wrap items-center gap-x-4">
     <label class="label cursor-pointer gap-2"
@@ -249,7 +249,7 @@
     {% endfor %}
     {% if kit_status_filters|length > 1 %}
     <p class="basis-full text-xs text-base-content/60 mt-1">
-      Within a kit, a member shows if they have any status you tick. With boxes ticked on more than one kit, they have to match each of those kits.
+      A member shows if they match any status you tick, on any kit.
     </p>
     {% endif %}
   </form>

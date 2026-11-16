@@ -211,8 +211,9 @@ class MemberFilters(NamedTuple):
     verified_only: bool = False  # Zwift account verified through zauth -- zauth_verified_q
     race_verified_only: bool = False  # Race Verified -- the cached User.is_race_ready
     # Per kit, the statuses to keep, as (kit, statuses) pairs in kit order, statuses in
-    # KitStatus order. Only kits with something ticked appear. Within a kit a member matches
-    # if their status is any one of the statuses; across kits they must match every kit listed.
+    # KitStatus order. Only kits with something ticked appear. A member matches if their status
+    # for ANY listed kit is one of that kit's statuses -- "needs the 2026 kit or needs the
+    # original" -- the way the team asked for it. The zauth and race boxes still narrow that.
     kit_statuses: tuple[tuple[TeamKit, tuple[str, ...]], ...] = ()
 
     @property
@@ -262,8 +263,9 @@ class MemberFilters(NamedTuple):
 
         Returns:
             A phrase such as "verified with zauth and race verified, whose 2026 Race Kit status
-            is Need kit or Submitted to Zwift and whose 2025 Race Kit status is I have the kit"
-            -- statuses in the team's own labels, the ones the list's kit columns show.
+            is Need kit or Submitted to Zwift or whose 2025 Race Kit status is I have the kit"
+            -- statuses in the team's own labels, the ones the list's kit columns show, and
+            kits joined with "or" because a member need match only one of them.
 
         """
         qualities = []
@@ -277,7 +279,8 @@ class MemberFilters(NamedTuple):
             for kit, statuses in self.kit_statuses
         ]
         if clauses:
-            phrase = f"{phrase}, {_join(clauses)}" if phrase else _join(clauses)
+            kits = _join(clauses, "or")
+            phrase = f"{phrase}, {kits}" if phrase else kits
         return phrase
 
 
@@ -397,9 +400,9 @@ def kit_member_rows(
             by ``refresh_race_ready`` and the scheduled sweep. (Display badges rank Extra
             Verified above it, so a rider who is Extra Verified but not race ready shows "EV"
             on their profile yet is left out here, as by the roster's filter.)
-        kit_statuses: ``(kit, statuses)`` pairs: limit to members whose status for each kit
-            is any of its ``KitStatus`` values -- any one within a kit, every kit listed.
-            "unknown" includes members who never answered. Empty for no status filter.
+        kit_statuses: ``(kit, statuses)`` pairs: limit to members whose status for any one of
+            these kits is one of that kit's ``KitStatus`` values. "unknown" includes members
+            who never answered. Empty for no status filter.
         kits: The kits to report status for, one column each, in display order.
 
     Returns:
@@ -444,7 +447,7 @@ def kit_member_rows(
         # in team_kit__<slug>; "unknown" has to match riders with no entry (or a junk one),
         # which status_for already folds in; and the members are in memory anyway -- so this
         # is safer, simpler and free.
-        if not all(status_for(member, kit) in statuses for kit, statuses in wanted):
+        if wanted and not any(status_for(member, kit) in statuses for kit, statuses in wanted):
             continue
         cells = []
         for kit in kits:
