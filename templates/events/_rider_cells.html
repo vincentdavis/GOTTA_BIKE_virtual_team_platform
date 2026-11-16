@@ -71,10 +71,17 @@
   <span class="text-base-content/30">-</span>
   {% endif %}
 </td>
+{# zMAP's watts and W/kg are two columns, so each can be shown and sorted on its own. #}
 <td data-col="{{ p }}zmap" data-sort-value="{{ e.z_map|default_if_none:0 }}">
   {% if e.z_map %}
   <span class="font-mono text-sm">{{ e.z_map|floatformat:0 }}w</span>
-  {% if e.z_map_wkg %}<span class="block font-mono text-xs text-base-content/50">{{ e.z_map_wkg|floatformat:2 }}</span>{% endif %}
+  {% else %}
+  <span class="text-base-content/30">-</span>
+  {% endif %}
+</td>
+<td data-col="{{ p }}zmap_wkg" data-sort-value="{{ e.z_map_wkg|default_if_none:0 }}">
+  {% if e.z_map_wkg %}
+  <span class="font-mono text-sm">{{ e.z_map_wkg|floatformat:2 }}</span>
   {% else %}
   <span class="text-base-content/30">-</span>
   {% endif %}

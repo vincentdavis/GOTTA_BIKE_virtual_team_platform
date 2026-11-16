@@ -101,6 +101,25 @@ def test_signup_table_shows_the_metrics(client, event, powered_rider, bare_rider
     assert "3.76" in body
 
 
+def _cell(body, column):
+    cell = body[body.index(f'<td data-col="{column}"') :]
+    return cell[: cell.index("</td>")]
+
+
+@pytest.mark.django_db
+def test_zmap_watts_and_wkg_are_separate_columns(client, event, powered_rider, event_admin) -> None:
+    """Each has its own header, its own box in Columns, and its own sort."""
+    client.force_login(event_admin)
+    body = client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+    assert '<th data-col="zmap_wkg" data-sort="num"' in body
+    assert 'col-toggle" data-col="zmap_wkg" checked> zMAP W/kg' in body
+    assert "340w" in _cell(body, "zmap")
+    assert "5.15" not in _cell(body, "zmap")
+    assert 'data-sort-value="5.15' in _cell(body, "zmap_wkg")
+    assert ">5.15<" in _cell(body, "zmap_wkg")
+
+
 @pytest.mark.django_db
 def test_assign_page_shows_how_stale_the_mirror_is(client, event, powered_rider, event_admin) -> None:
     """The mirror's age is shown on the page.

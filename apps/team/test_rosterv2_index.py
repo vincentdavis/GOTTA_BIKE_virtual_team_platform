@@ -12,6 +12,7 @@ a plausible implementation passes the obvious version of the test while leaking.
 
 from dataclasses import FrozenInstanceError, fields
 from datetime import timedelta
+from decimal import Decimal
 
 import pytest
 from constance.test import override_config
@@ -59,6 +60,10 @@ EXPECTED_CARD_FIELDS = (
     "zp_skill",
     "compound_score",
     "zftp",
+    # zMAP and zMAP/kg together give a rider's weight to about a kilo. Accepted 2026-11-16:
+    # a racer's weight is effectively public in Zwift racing (see RiderCard).
+    "zmap",
+    "zmap_wkg",
     "wkg_20min",
     "wkg_1min",
     "distance_km",
@@ -330,6 +335,55 @@ def test_lifetime_distance_agrees_with_the_model_accessor(roster_rider):
 
     assert card.distance_km == pytest.approx(RiderProfile.objects.get(zwid=1001).lifetime_distance_km)
     assert card.climbed_m == pytest.approx(RiderProfile.objects.get(zwid=1001).lifetime_climbed_m)
+
+
+# --- zMAP -----------------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_zmap_is_the_profiles_over_its_weight(roster_rider):
+    """A rider with no account here: zauth's zMAP, per kilo of the profile's weight."""
+    roster_rider(zwid=1001, weight_kg=68.0, power={"zmap": 340.0})
+
+    card = build_roster_index().rows[0].card
+
+    assert card.zmap == pytest.approx(340.0)
+    assert card.zmap_wkg == pytest.approx(5.0)
+
+
+@pytest.mark.django_db
+def test_a_members_own_zmap_and_its_weight_come_first(roster_rider, user_model):
+    """The weight Zwift computed zMAP with, as on the signups table: 340 W / 66 kg is 5.15."""
+    roster_rider(zwid=1001, weight_kg=72.0, power={"zmap": 330.0})
+    _member(user_model, "zmapper", 1001, z_map=Decimal("340.0"), z_metrics_weight_grams=66000)
+
+    card = build_roster_index().rows[0].card
+
+    assert card.zmap == pytest.approx(340.0)
+    assert card.zmap_wkg == pytest.approx(5.2)
+
+
+@pytest.mark.django_db
+def test_an_unverified_claim_does_not_lend_its_zmap(roster_rider, user_model):
+    """Only an account shown to be this rider's may speak for them."""
+    roster_rider(zwid=1001, weight_kg=68.0, power={"zmap": 340.0})
+    _member(user_model, "claimant", 1001, verified=False, z_map=Decimal("400.0"), z_metrics_weight_grams=50000)
+
+    card = build_roster_index().rows[0].card
+
+    assert card.zmap == pytest.approx(340.0)
+    assert card.zmap_wkg == pytest.approx(5.0)
+
+
+@pytest.mark.django_db
+def test_a_rider_without_zmap_has_none(roster_rider):
+    """Zwift computes zMAP only for a rider connected through zauth; the rest show a dash."""
+    roster_rider(zwid=1001)
+
+    card = build_roster_index().rows[0].card
+
+    assert card.zmap is None
+    assert card.zmap_wkg is None
 
 
 # --- whose card is whose ------------------------------------------------------------------

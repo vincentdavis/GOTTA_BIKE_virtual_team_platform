@@ -223,14 +223,6 @@
         {% endif %}
       </div>
       <div class="rounded border border-base-300 px-1 py-2">
-        <dt class="text-xs text-base-content/70">FTP</dt>
-        <dd class="font-semibold tabular-nums">{% if row.card.zftp is not None %}{{ row.card.zftp|floatformat:0 }}<span class="text-xs font-normal"> W</span>{% else %}—{% endif %}</dd>
-      </div>
-      <div class="rounded border border-base-300 px-1 py-2">
-        <dt class="text-xs text-base-content/70">20 min</dt>
-        <dd class="font-semibold tabular-nums">{% if row.card.wkg_20min is not None %}{{ row.card.wkg_20min|floatformat:1 }}<span class="text-xs font-normal"> w/kg</span>{% else %}—{% endif %}</dd>
-      </div>
-      <div class="rounded border border-base-300 px-1 py-2">
         {# The window comes from RACE_WINDOW_DAYS, so the label cannot outlive a change to it. #}
         <dt class="text-xs text-base-content/70">Races {{ race_window_days }}d</dt>
         <dd class="font-semibold tabular-nums">{{ row.card.competitive_recent }}</dd>
@@ -241,6 +233,23 @@
         {% if row.card.podiums_recent %}
           <dd class="text-xs text-base-content/70 tabular-nums">{{ row.card.podiums_recent }} podium{{ row.card.podiums_recent|pluralize }}</dd>
         {% endif %}
+      </div>
+      {# The power tiles sit together: FTP and 20-minute w/kg, then zMAP in watts and per kilo. #}
+      <div class="rounded border border-base-300 px-1 py-2">
+        <dt class="text-xs text-base-content/70">FTP</dt>
+        <dd class="font-semibold tabular-nums">{% if row.card.zftp is not None %}{{ row.card.zftp|floatformat:0 }}<span class="text-xs font-normal"> W</span>{% else %}—{% endif %}</dd>
+      </div>
+      <div class="rounded border border-base-300 px-1 py-2">
+        <dt class="text-xs text-base-content/70">20 min</dt>
+        <dd class="font-semibold tabular-nums">{% if row.card.wkg_20min is not None %}{{ row.card.wkg_20min|floatformat:1 }}<span class="text-xs font-normal"> w/kg</span>{% else %}—{% endif %}</dd>
+      </div>
+      <div class="rounded border border-base-300 px-1 py-2">
+        <dt class="text-xs text-base-content/70">zMAP</dt>
+        <dd class="font-semibold tabular-nums">{% if row.card.zmap is not None %}{{ row.card.zmap|floatformat:0 }}<span class="text-xs font-normal"> W</span>{% else %}—{% endif %}</dd>
+      </div>
+      <div class="rounded border border-base-300 px-1 py-2">
+        <dt class="text-xs text-base-content/70">zMAP/kg</dt>
+        <dd class="font-semibold tabular-nums">{% if row.card.zmap_wkg is not None %}{{ row.card.zmap_wkg|floatformat:1 }}<span class="text-xs font-normal"> w/kg</span>{% else %}—{% endif %}</dd>
       </div>
       {% comment %}
         vELO 2 is a different scale from vELO (650 in one beside 1,600 in the other), so it

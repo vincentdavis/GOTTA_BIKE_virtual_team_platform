@@ -66,6 +66,25 @@ def test_a_card_shows_the_riders_racing(auth_client, roster_rider):
 
 
 @pytest.mark.django_db
+def test_zmap_sits_with_ftp_and_20_minute_wkg(auth_client, roster_rider):
+    """FTP, 20 min, zMAP, zMAP/kg: the four power tiles in a row of the reading order."""
+    roster_rider(zwid=4242, name="Ada Racer", ftp=286.0, wkg_20min=4.1, weight_kg=68.0, power={"zmap": 340.0})
+
+    text = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
+
+    assert "FTP 286 W 20 min 4.1 w/kg zMAP 340 W zMAP/kg 5.0 w/kg" in text
+
+
+@pytest.mark.django_db
+def test_a_card_without_zmap_shows_dashes(auth_client, roster_rider):
+    roster_rider(zwid=4242, name="Ada Racer")
+
+    text = _text_of(_card_for(auth_client.get(reverse("team:roster")).content.decode(), "Ada Racer"))
+
+    assert "zMAP — zMAP/kg —" in text
+
+
+@pytest.mark.django_db
 def test_a_joined_card_links_to_the_profile_and_names_the_rider(auth_client, roster_rider, user_model):
     roster_rider(zwid=4242, name="Ada Racer")
     user = _member(user_model, "ada_discord", 4242)
@@ -98,8 +117,8 @@ def test_a_missing_figure_is_an_em_dash(auth_client, roster_rider):
 
     body = auth_client.get(reverse("team:roster")).content.decode()
 
-    # vELO, FTP and 20 min, and vELO 2, which the factory's rider has no block for.
-    assert _text_of(_card_for(body, "Ada Racer")).count("—") == 4
+    # vELO, FTP and 20 min, and zMAP, zMAP/kg and vELO 2, which the factory's rider has none of.
+    assert _text_of(_card_for(body, "Ada Racer")).count("—") == 6
 
 
 @pytest.mark.django_db
@@ -109,7 +128,9 @@ def test_a_real_zero_is_printed_as_zero_not_as_missing(auth_client, roster_rider
     `|default_if_none` cannot fix it either: floatformat turns None into "", so the default
     never fires and the em dash never appears at all. Both bugs are silent.
     """
-    roster_rider(zwid=4242, name="Zero Rider", velo=0.0, ftp=0.0, wkg_20min=0.0, velo2={"race": 0.0})
+    roster_rider(
+        zwid=4242, name="Zero Rider", velo=0.0, ftp=0.0, wkg_20min=0.0, velo2={"race": 0.0}, power={"zmap": 0.0}
+    )
 
     body = auth_client.get(reverse("team:roster")).content.decode()
     card = _text_of(_card_for(body, "Zero Rider"))
@@ -117,6 +138,7 @@ def test_a_real_zero_is_printed_as_zero_not_as_missing(auth_client, roster_rider
     assert "—" not in card
     assert "0 W" in card
     assert "0.0 w/kg" in card
+    assert "zMAP 0 W zMAP/kg 0.0 w/kg" in card
     assert "vELO 2 0" in card
 
 

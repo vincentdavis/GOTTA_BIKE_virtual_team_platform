@@ -80,7 +80,7 @@ def test_an_expanded_squad_offers_every_column_of_the_signup_list(client, event,
     squad_columns = [key.removeprefix("sq_") for key in _header_keys(body, 'class="table table-xs squad-member-table"')]
 
     assert squad_columns == signup_columns
-    assert {"zwid", "timezone", "zftp", "zmap", "zauth", "notes"} <= set(squad_columns)
+    assert {"zwid", "timezone", "zftp", "zmap", "zmap_wkg", "zauth", "notes"} <= set(squad_columns)
     # Every column has its box in the By Squad menu, and so do the 53 Zwift Racing extras.
     boxes = re.findall(r'squad-col-toggle" data-col="sq_([a-z0-9_]+)"', body)
     assert set(squad_columns) <= set(boxes)
@@ -124,5 +124,6 @@ def test_new_squad_columns_start_hidden():
     template = (Path(__file__).resolve().parents[2] / "templates/events/_squads_panel.html").read_text()
     defaults = template[template.index("var STORAGE_KEY = 'event_squad_cols';") :]
     defaults = defaults[: defaults.index("};")]
-    for key in ("zwid", "timezone", "squad_gender", "zftp", "zmap", "zauth", "event_role", "notes", "custom_answers"):
+    keys = ("zwid", "timezone", "squad_gender", "zftp", "zmap", "zmap_wkg", "zauth", "event_role", "notes")
+    for key in (*keys, "custom_answers"):
         assert f"sq_{key}: false" in defaults, key

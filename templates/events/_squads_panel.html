@@ -50,6 +50,7 @@
         {% if can_view_signup_table %}
         <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zftp"> zFTP</label></li>
         <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zmap"> zMAP</label></li>
+        <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zmap_wkg"> zMAP W/kg</label></li>
         <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_zauth"> Zauth</label></li>
         {% endif %}
         <li><label class="label cursor-pointer justify-start gap-2 py-1"><input type="checkbox" class="checkbox checkbox-xs squad-col-toggle" data-col="sq_verified" checked> Verified</label></li>
@@ -204,6 +205,7 @@
                   {% if can_view_signup_table %}
                   <th data-col="sq_zftp">zFTP</th>
                   <th data-col="sq_zmap">zMAP</th>
+                  <th data-col="sq_zmap_wkg">zMAP W/kg</th>
                   <th data-col="sq_zauth">Zauth</th>
                   {% endif %}
                   <th data-col="sq_verified">Verified</th>
@@ -375,7 +377,7 @@ function syncSquadExpandAllLabel() {
   var DEFAULTS = {
     sq_name: true, sq_gender: true, sq_category: true, sq_rating: true,
     sq_ftp: false, sq_wkg: false, sq_verified: false, sq_has_role: true,
-    sq_zwid: false, sq_timezone: false, sq_squad_gender: false, sq_zftp: false, sq_zmap: false,
+    sq_zwid: false, sq_timezone: false, sq_squad_gender: false, sq_zftp: false, sq_zmap: false, sq_zmap_wkg: false,
     sq_zauth: false, sq_event_role: false, sq_notes: false, sq_custom_answers: false,
     sq_zr_age: false, sq_zr_cur_rating: false, sq_zr_cur_cat: false,
     sq_zr_max30_rating: false, sq_zr_max30_cat: false,

@@ -109,6 +109,10 @@ ACCOUNT_COLUMNS = (
     "team_kit",
     # The member's own answer, which comes before zauth's (rider_data.models.rider_gender).
     "gender",
+    # zMAP as this app mirrors it, with the weight Zwift computed it with: the card's zMAP/kg
+    # divides by that weight, as the signups table does (see _zmap).
+    "z_map",
+    "z_metrics_weight_grams",
 )
 
 GUILD_COLUMNS = ("user_id", "joined_at", "nickname", "display_name", "username")
@@ -241,6 +245,10 @@ class RiderCard:
     What stays out is the measurement -- weight, height, birth year -- and the allow-list is
     what keeps it out.
 
+    One exception is knowingly made: ``zmap`` beside ``zmap_wkg`` gives away a rider's weight to
+    about a kilo, and that was accepted (2026-11-16) because a racer's weight is effectively
+    public in Zwift racing. Weight itself is still never a field.
+
     Attributes:
         zwid: Zwift id. Also the join key, and an exact search term.
         name: The rider's Zwift name, or "Unknown rider" -- never their zwid as a name.
@@ -249,6 +257,9 @@ class RiderCard:
         country: The raw upstream flag string, which includes subdivisions like "gb-wls".
         age_bracket: A bracket label from ``AGE_BRACKETS_SHOWN``, or "" -- never a number.
         zftp: Watts. Shown beside W/kg, which is the pair Vincent chose over weight.
+        zmap: Zwift's zMAP in watts. Zwift computes it only for a rider connected through
+            zauth, so most cards have none.
+        zmap_wkg: ``zmap`` per kilo of the weight Zwift computed it with -- see ``_zmap``.
         wkg_20min: 20-minute watts per kilo, as reported. NOT ftp divided by weight.
         wkg_1min: One-minute watts per kilo, as reported.
         last_race_at: Derived upstream from race results; stale for riders zauth has not
@@ -281,6 +292,8 @@ class RiderCard:
     zp_skill: float | None = None
     compound_score: float | None = None
     zftp: float | None = None
+    zmap: float | None = None
+    zmap_wkg: float | None = None
     wkg_20min: float | None = None
     wkg_1min: float | None = None
     distance_km: float | None = None
@@ -519,7 +532,38 @@ def _wkg(payload: dict, seconds: str) -> float | None:
     return round(value, 1) if value is not None else None
 
 
-def _card(row: dict, payload: dict, record: RaceRecord | None = None, member_gender: str = "") -> RiderCard:
+def _zmap(payload: dict, account: dict | None) -> tuple[float | None, float | None]:
+    """Read a rider's zMAP, in watts and per kilo.
+
+    The rider's own account first: this app mirrors zMAP there together with the weight Zwift
+    computed it with, and dividing by that weight is what keeps the figure in line with the
+    rider's Zwift category and with the signups table (``User.z_map_wkg``). Without one, the
+    cached profile's zMAP over its weight, which is the live profile weight first.
+
+    Per kilo is rounded to one decimal, as on the other tiles.
+
+    Args:
+        payload: The ProfileFull document.
+        account: The rider's own ``ACCOUNT_COLUMNS`` row, when one has been shown to be theirs.
+
+    Returns:
+        ``(watts, watts per kilo)``; either may be None.
+
+    """
+    if account and account.get("z_map") is not None:
+        watts = float(account["z_map"])
+        grams = account.get("z_metrics_weight_grams")
+        kg = grams / 1000 if grams else None
+    else:
+        watts = _number(_block(payload, "power").get("zmap"))
+        kg = _number(_block(payload, "physical").get("weight_kg"))
+    wkg = round(watts / kg, 1) if watts is not None and kg else None
+    return watts, wkg
+
+
+def _card(
+    row: dict, payload: dict, record: RaceRecord | None = None, member_gender: str = "", account: dict | None = None
+) -> RiderCard:
     """Build one card from an allow-listed row, its (discarded) payload and its results.
 
     Args:
@@ -528,6 +572,7 @@ def _card(row: dict, payload: dict, record: RaceRecord | None = None, member_gen
         record: The rider's recent racing, or None when we hold no results for them.
         member_gender: The gender on the rider's own account, when one has been shown to be
             theirs. It comes before zauth's.
+        account: That account's ``ACCOUNT_COLUMNS`` row, whose zMAP comes before zauth's.
 
     Returns:
         The rider's card.
@@ -538,6 +583,7 @@ def _card(row: dict, payload: dict, record: RaceRecord | None = None, member_gen
     totals = _block(payload, "totals")
     metres = _number(totals.get("distance_km"))  # MISNAMED upstream: the value is metres.
     velo2 = _block(payload, "velo2")
+    zmap, zmap_wkg = _zmap(payload, account)
 
     return RiderCard(
         zwid=row["zwid"],
@@ -560,6 +606,8 @@ def _card(row: dict, payload: dict, record: RaceRecord | None = None, member_gen
         zp_skill=row["zp_skill"],
         compound_score=row["compound_score"],
         zftp=row["zftp"],
+        zmap=zmap,
+        zmap_wkg=zmap_wkg,
         wkg_20min=_wkg(payload, _20_MINUTES),
         wkg_1min=_wkg(payload, _1_MINUTE),
         distance_km=metres / 1000 if metres is not None else None,
@@ -1867,7 +1915,8 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
         payload = row.pop("payload") or {}
         claims = claimants.get(row["zwid"], ())
         # Only an account shown to be this rider's may speak for them, as in the join below.
-        card = _card(row, payload, records.get(row["zwid"]), claims[0]["gender"] if len(claims) == 1 else "")
+        own = claims[0] if len(claims) == 1 else None
+        card = _card(row, payload, records.get(row["zwid"]), own["gender"] if own else "", own)
 
         account = None
         claimed: dict | None = None
