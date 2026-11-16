@@ -268,6 +268,14 @@
           {% endif %}
         </div>
 
+        {# Stats section, just below Enforced Requirements: open by default, unlike Discord and Riders -- it is a summary, not reference detail. #}
+        <details class="collapse collapse-arrow bg-base-300 mb-2" open>
+          <summary class="collapse-title text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2 min-h-0 cursor-pointer">Stats</summary>
+          <div class="collapse-content">
+            {% include "events/_squad_stats.html" with squad=squad members=squad.enriched_members oob=False %}
+          </div>
+        </details>
+
         {# Category Range section #}
         {% if squad.min_zwift_racing_category or squad.max_zwift_racing_category or squad.min_zwift_category or squad.max_zwift_category or squad.min_womens_zwift_category or squad.max_womens_zwift_category %}
         <div class="card bg-base-300 p-3 mb-2">
@@ -479,14 +487,6 @@
           <p class="text-sm text-base-content/50">No availability grids yet.</p>
           {% endif %}
         </div>
-
-        {# Stats section: open by default, unlike Discord and Riders -- it is a summary, not reference detail. #}
-        <details class="collapse collapse-arrow bg-base-300 mb-2" open>
-          <summary class="collapse-title text-xs font-semibold uppercase tracking-wide text-base-content/50 py-2 min-h-0 cursor-pointer">Stats</summary>
-          <div class="collapse-content">
-            {% include "events/_squad_stats.html" with squad=squad members=squad.enriched_members oob=False %}
-          </div>
-        </details>
 
         {# Riders section (expandable) #}
         <details class="collapse collapse-arrow bg-base-300 mb-2">
