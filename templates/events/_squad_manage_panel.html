@@ -123,4 +123,6 @@
 {% if htmx_count_oob %}
 {# Keep the collapsed summary's member count in sync after an HTMX re-render. #}
 <span id="squad-count-{{ squad.pk }}" hx-swap-oob="true" class="badge badge-neutral badge-sm normal-case">{{ members|length }} member{{ members|length|pluralize }}</span>
+{# And the card's Stats table, which counts the same riders. #}
+{% include "events/_squad_stats.html" with oob=True %}
 {% endif %}

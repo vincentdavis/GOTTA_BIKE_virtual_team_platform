@@ -1,0 +1,42 @@
+{% load squad_stats_tags %}
+{% comment %}
+  A squad's Stats table: min, max, median, mean and range of zMAP, zMAP W/kg and vELO 2 over
+  the squad's riders (apps.events.squad_stats). Each column counts only the riders who have
+  that figure, and the last row says how many that is.
+
+  The id sits on the content, not the <details>, so the out-of-band copy that
+  _squad_manage_panel.html sends after a rider is added or removed swaps the figures without
+  closing an open section.
+{% endcomment %}
+{% squad_stats members as stats %}
+<div id="squad-stats-{{ squad.pk }}"{% if oob %} hx-swap-oob="true"{% endif %}>
+  {% if stats.has_data %}
+  <div class="overflow-x-auto">
+    {# text-sm on every cell, as the card's other sections: daisyUI sizes thead and tfoot apart from the body. #}
+    <table class="table table-xs">
+      <thead>
+        <tr>
+          <th class="text-sm"><span class="sr-only">Statistic</span></th>
+          {% for figure in stats.figures %}<th class="text-sm text-right">{{ figure.label }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in stats.rows %}
+        <tr>
+          <th scope="row" class="text-sm font-normal text-base-content/70">{{ row.label }}</th>
+          {% for value in row.values %}<td class="text-sm text-right tabular-nums">{{ value|default:"&mdash;" }}</td>{% endfor %}
+        </tr>
+        {% endfor %}
+        <tr class="text-base-content/60">
+          <th scope="row" class="text-sm font-normal">Riders</th>
+          {% for count in stats.counts %}<td class="text-sm text-right tabular-nums">{{ count }} of {{ stats.rider_count }}</td>{% endfor %}
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% elif stats.rider_count %}
+  <p class="text-sm text-base-content/60">None of this squad's riders has a zMAP or vELO 2 yet.</p>
+  {% else %}
+  <p class="text-sm text-base-content/60">No riders yet.</p>
+  {% endif %}
+</div>

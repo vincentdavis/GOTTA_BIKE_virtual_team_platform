@@ -1,5 +1,6 @@
 """The Discord section on the Manage Squads page."""
 
+import re
 from datetime import date, timedelta
 
 import pytest
@@ -24,8 +25,12 @@ def event(db) -> Event:
     DiscordRole.objects.create(role_id=CAPTAIN_ROLE, name="$ Div 1 Captain", position=2)
     today = date.today()
     return Event.objects.create(
-        title="ZRL", start_date=today, end_date=today + timedelta(days=7), visible=True,
-        prefixes=["$"], captain_role_ids=[CAPTAIN_ROLE],
+        title="ZRL",
+        start_date=today,
+        end_date=today + timedelta(days=7),
+        visible=True,
+        prefixes=["$"],
+        captain_role_ids=[CAPTAIN_ROLE],
     )
 
 
@@ -38,8 +43,10 @@ def squad(event) -> Squad:
 
     """
     return Squad.objects.create(
-        event=event, name="Div 1",
-        team_discord_role=int(SQUAD_ROLE), discord_captain_role=int(CAPTAIN_ROLE),
+        event=event,
+        name="Div 1",
+        team_discord_role=int(SQUAD_ROLE),
+        discord_captain_role=int(CAPTAIN_ROLE),
     )
 
 
@@ -83,16 +90,16 @@ def test_the_discord_section_is_collapsed_by_default(client, event, squad, super
     client.force_login(superuser)
     body = _page(client, event)
 
-    marker = '<details class="collapse collapse-arrow bg-base-300 mb-2">'
-    assert marker in body
+    # The Discord section's own <details>: the Stats section beside it starts open, so the
+    # check is on this one tag, not on every section of the card.
+    discord = re.search(r"(<details[^>]*>)\s*<summary[^>]*>Discord</summary>", body)
+    assert discord
     # No `open` attribute -> closed on load.
-    assert marker.replace(">", " open>") not in body
+    assert " open" not in discord.group(1)
 
 
 @pytest.mark.django_db
-def test_a_squad_with_a_captain_role_but_nothing_else_still_shows_the_section(
-    client, event, superuser
-) -> None:
+def test_a_squad_with_a_captain_role_but_nothing_else_still_shows_the_section(client, event, superuser) -> None:
     """The section's visibility test has to include the captain role, or it hides itself."""
     Squad.objects.create(event=event, name="Captain only", discord_captain_role=int(CAPTAIN_ROLE))
     client.force_login(superuser)
