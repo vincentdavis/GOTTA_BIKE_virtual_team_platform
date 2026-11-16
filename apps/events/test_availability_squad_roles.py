@@ -216,3 +216,34 @@ def test_a_series_sheet_marks_its_leaders_in_the_rider_column(client, event_admi
 
     rider_column = page.select_one("table tbody")
     assert _marks(rider_column) == {"Cap Rider": "Captain", "Plain Rider": "", "Vice Rider": "Vice Captain"}
+
+
+@pytest.mark.django_db
+def test_the_event_signups_table_marks_squad_leaders(client, event_admin, user_model, squad):
+    """Captain wins across the event's squads: captain of one and vice-captain of another reads Captain."""
+    from apps.events.models import EventSignup
+
+    other = Squad.objects.create(event=squad.event, name="Other")
+    cap, vice, both, plain = (
+        user_model.objects.create_user(
+            username=name.lower(), email=f"{name.lower()}@example.test", first_name=name, last_name="Rider"
+        )
+        for name in ("Cap", "Vice", "Both", "Plain")
+    )
+    for user in (cap, vice, both, plain):
+        EventSignup.objects.create(event=squad.event, user=user)
+    squad.captains.add(cap)
+    squad.vice_captains.add(vice, both)
+    other.captains.add(both)
+
+    client.force_login(event_admin)
+    response = client.get(reverse("events:event_detail", args=[squad.event_id]))
+    page = BeautifulSoup(response.content, "html.parser")
+
+    names = page.select_one("[data-signup-table] tbody")
+    assert _marks(names) == {
+        "Cap Rider": "Captain",
+        "Vice Rider": "Vice Captain",
+        "Both Rider": "Captain",
+        "Plain Rider": "",
+    }

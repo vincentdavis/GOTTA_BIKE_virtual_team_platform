@@ -1034,10 +1034,16 @@ def _enrich_signups(signups, event=None):
 
     # Build captain/VC lookup: user_id -> set of squad PKs where they are captain/VC
     captain_squads: dict[int, set] = {}
+    # And the mark beside the rider's name: Captain where they captain any of the event's
+    # squads, else Vice Captain where they vice-captain one (Squad.leader_roles, event-wide).
+    leader_roles: dict[int, str] = {}
     if event:
         for sq in event.squads.prefetch_related("captains", "vice_captains").all():
             for leader in (*sq.captains.all(), *sq.vice_captains.all()):
                 captain_squads.setdefault(leader.pk, set()).add(sq.pk)
+            for user_id, role in sq.leader_roles().items():
+                if leader_roles.get(user_id) != "Captain":
+                    leader_roles[user_id] = role
 
     enriched = []
     for signup in signups:
@@ -1097,6 +1103,7 @@ def _enrich_signups(signups, event=None):
             "rider_profile": profile,
             "assigned_squads": user_squads,
             "role_badges": role_badges,
+            "squad_role": leader_roles.get(user.pk, ""),
             "custom_answers": resolve_signup_answers(signup, signup_questions),
             "staff_status": staff_status,
             "departed": is_departed,
