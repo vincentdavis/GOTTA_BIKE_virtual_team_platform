@@ -257,7 +257,8 @@ def team_kit_export(request: HttpRequest) -> HttpResponse:
     """Download the team member list as CSV, with every rider's status for every kit.
 
     Takes the page's own filters, so "Export CSV" downloads the list on screen -- filter to
-    "needs the kit" and the file is the list to send to Zwift.
+    "needs the kit" and the file is the list to send to Zwift. Filters are read for the
+    active kits, as the page offers them; the file still has a column for every kit.
 
     Args:
         request: The HTTP request.
@@ -268,9 +269,8 @@ def team_kit_export(request: HttpRequest) -> HttpResponse:
     """
     _require_config_access(request)
     kits = list(TeamKit.objects.all())
-    current = next((kit for kit in kits if kit.is_current), None)
-    filters = member_filters(request.GET, current)
-    rows = kit_member_rows(kit=current, **filters._asdict())
+    filters = member_filters(request.GET, [kit for kit in kits if kit.active])
+    rows = kit_member_rows(**filters._asdict())
     header, data = export_table(rows, kits)
 
     filename = export_filename(filters, today=timezone.localdate())
@@ -290,7 +290,7 @@ def team_kit_export(request: HttpRequest) -> HttpResponse:
         kit_count=len(kits),
         verified_only=filters.verified_only,
         race_verified_only=filters.race_verified_only,
-        statuses=list(filters.statuses),
+        kit_statuses={kit.slug: list(statuses) for kit, statuses in filters.kit_statuses},
     )
     return response
 

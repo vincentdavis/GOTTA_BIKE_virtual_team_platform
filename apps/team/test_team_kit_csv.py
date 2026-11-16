@@ -298,17 +298,46 @@ def test_export_downloads_the_list_on_screen(client, app_admin, user_model, kits
     _member(user_model, "needs-legacy", {"race-2026": "need"}, zwid_verified=True, zwid_verification_method="legacy")
     _member(user_model, "has-it", {"race-2026": "have"}, **zauth)
 
+    response, rows = _export(client, app_admin, "?status_race-2026=need")
+    assert [row[2] for row in rows[1:]] == ["needs-legacy", "needs-unverified", "needs-verified"]
+    assert response["Content-Disposition"].endswith('-race-2026-need.csv"')
+
+    response, rows = _export(client, app_admin, "?status_race-2026=need&verified=1")
+    assert [row[2] for row in rows[1:]] == ["needs-verified"]
+    assert response["Content-Disposition"].endswith('-zauth-verified-race-2026-need.csv"')
+
+    response, rows = _export(client, app_admin, "?status_race-2026=need&status_race-2026=have")
+    assert [row[2] for row in rows[1:]] == ["has-it", "needs-legacy", "needs-unverified", "needs-verified"]
+    assert response["Content-Disposition"].endswith('-race-2026-need-have.csv"')
+
+    # The page's links from before every kit had its own filter still export the current kit.
     response, rows = _export(client, app_admin, "?status=need")
     assert [row[2] for row in rows[1:]] == ["needs-legacy", "needs-unverified", "needs-verified"]
-    assert response["Content-Disposition"].endswith('-status-need.csv"')
+    assert response["Content-Disposition"].endswith('-race-2026-need.csv"')
 
-    response, rows = _export(client, app_admin, "?status=need&verified=1")
-    assert [row[2] for row in rows[1:]] == ["needs-verified"]
-    assert response["Content-Disposition"].endswith('-zauth-verified-status-need.csv"')
 
-    response, rows = _export(client, app_admin, "?status=need&status=have")
-    assert [row[2] for row in rows[1:]] == ["has-it", "needs-legacy", "needs-unverified", "needs-verified"]
-    assert response["Content-Disposition"].endswith('-status-need-have.csv"')
+@pytest.mark.django_db
+def test_export_follows_each_kits_filter_and_keeps_every_kits_column(client, app_admin, user_model):
+    """Filter on two kits and the file holds who matches both, with every kit's status still in it."""
+    TeamKit.objects.create(name="2026 Race Kit", slug="race-2026", is_current=True)
+    TeamKit.objects.create(name="2025 Race Kit", slug="race-2025")
+    TeamKit.objects.create(name="2024 Race Kit", slug="race-2024", active=False)
+    _member(user_model, "both", {"race-2026": "need", "race-2025": "have", "race-2024": "completed"})
+    _member(user_model, "new-only", {"race-2026": "need", "race-2025": "need"})
+    _member(user_model, "old-only", {"race-2026": "have", "race-2025": "have"})
+
+    response, rows = _export(client, app_admin, "?status_race-2025=have&status_race-2026=need")
+
+    # Current first, then by name -- the retired kit's column included.
+    assert rows[0] == [*INFO_COLUMNS, "kit:race-2026", "kit:race-2024", "kit:race-2025", "exported_statuses"]
+    columns = [rows[0].index(f"kit:{slug}") for slug in ("race-2026", "race-2025", "race-2024")]
+    assert [(row[2], *(row[i] for i in columns)) for row in rows[1:]] == [("both", "need", "have", "completed")]
+    assert response["Content-Disposition"].endswith('-race-2026-need-race-2025-have.csv"')
+
+    # A retired kit has no filter on the page, so the export ignores one typed by hand.
+    response, rows = _export(client, app_admin, "?status_race-2024=completed")
+    assert [row[2] for row in rows[1:]] == ["both", "new-only", "old-only"]
+    assert "race-2024" not in response["Content-Disposition"]
 
 
 @pytest.mark.django_db
@@ -353,9 +382,9 @@ def test_export_follows_the_race_verified_filter(client, app_admin, user_model, 
     assert [row[2] for row in rows[1:]] == ["ready-needs", "ready-zauth-needs"]
     assert response["Content-Disposition"].endswith('-race-verified.csv"')
 
-    response, rows = _export(client, app_admin, "?verified=1&race_verified=1&status=need")
+    response, rows = _export(client, app_admin, "?verified=1&race_verified=1&status_race-2026=need")
     assert [row[2] for row in rows[1:]] == ["ready-zauth-needs"]
-    assert response["Content-Disposition"].endswith('-zauth-verified-race-verified-status-need.csv"')
+    assert response["Content-Disposition"].endswith('-zauth-verified-race-verified-race-2026-need.csv"')
 
 
 @pytest.mark.django_db
@@ -711,9 +740,12 @@ def test_page_offers_export_with_its_filters_and_the_import_dialog(client, app_a
     """Export carries the filters on screen; import explains the format it expects."""
     client.force_login(app_admin)
     page = reverse("config_section_page", args=["team_kit"])
-    content = client.get(page + "?status=submitted&verified=1&status=need").content.decode()
+    content = client.get(page + "?status_race-2026=submitted&verified=1&status_race-2026=need").content.decode()
     # Statuses in the team's order, whatever order the query gave them in.
-    assert f'href="{reverse("team_kit_export")}?verified=1&amp;status=need&amp;status=submitted"' in content
+    assert (
+        f'href="{reverse("team_kit_export")}?verified=1&amp;status_race-2026=need&amp;status_race-2026=submitted"'
+        in content
+    )
     assert 'id="kit-import-dialog"' in content
     assert "<code>kit:race-2026</code>" in content
     assert "<code>submitted</code>" in content

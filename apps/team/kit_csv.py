@@ -89,7 +89,8 @@ def export_filename(filters: MemberFilters, *, today: date) -> str:
         today: The date to stamp it with.
 
     Returns:
-        The filename.
+        The filename, each filtered kit's slug followed by its statuses, e.g.
+        ``team-kit-2026-11-15-zauth-verified-race-2026-need-submitted.csv``.
 
     """
     parts = ["team-kit", today.isoformat()]
@@ -97,8 +98,8 @@ def export_filename(filters: MemberFilters, *, today: date) -> str:
         parts.append("zauth-verified")
     if filters.race_verified_only:
         parts.append("race-verified")
-    if filters.statuses:
-        parts.extend(["status", *filters.statuses])
+    for kit, statuses in filters.kit_statuses:
+        parts.extend([kit.slug, *statuses])
     return "-".join(parts) + ".csv"
 
 

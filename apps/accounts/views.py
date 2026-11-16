@@ -1815,17 +1815,27 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
         from django.utils.http import urlencode
 
         from apps.team.kit_csv import KIT_COLUMN_PREFIX, MAX_IMPORT_BYTES
-        from apps.team.kits import BADGE_CLASSES, kit_member_rows, kit_status_counts, member_filters, team_members
+        from apps.team.kits import (
+            BADGE_CLASSES,
+            kit_member_rows,
+            kit_status_counts,
+            member_filters,
+            status_param,
+            team_members,
+        )
         from apps.team.models import KitStatus, TeamKit
 
         kits = list(TeamKit.objects.all())
         counts = kit_status_counts(kits)
         entries = [{"kit": kit, "counts": counts.get(kit.slug, {})} for kit in kits]
-        current = next((kit for kit in kits if kit.is_current), None)
+        # The member list has a column, and a status filter, for each active kit -- current
+        # first, by the model's ordering. Retired kits are left off the page, as they are for
+        # riders; the export still has a column for every kit.
+        member_kits = [kit for kit in kits if kit.active]
         # The filters narrow only the member list. The counts above it stay whole-team, so a
         # filtered view never changes what "12 need it" means.
-        filters = member_filters(request.GET, current)
-        member_rows = kit_member_rows(kit=current, **filters._asdict())
+        filters = member_filters(request.GET, member_kits)
+        member_rows = kit_member_rows(kits=member_kits, **filters._asdict())
         member_total = team_members().count() if filters.active else len(member_rows)
         return render(
             request,
@@ -1843,19 +1853,27 @@ def config_section_page(request: HttpRequest, section_key: str) -> HttpResponse:
                 "member_total": member_total,
                 "verified_only": filters.verified_only,
                 "race_verified_only": filters.race_verified_only,
-                "status_filter": filters.statuses,
-                # One box per status, worded and coloured as the list's status column shows it.
-                "status_filter_options": [
+                "member_kits": member_kits,
+                "kit_statuses": filters.kit_statuses,
+                # Per kit, one box per status, worded and coloured as that kit's column shows it.
+                "kit_status_filters": [
                     {
-                        "value": status.value,
-                        "label": status.label,
-                        "badge": BADGE_CLASSES.get(status.value, "badge-ghost"),
-                        "checked": status.value in filters.statuses,
+                        "kit": kit,
+                        "param": status_param(kit),
+                        "options": [
+                            {
+                                "value": status.value,
+                                "label": status.label,
+                                "badge": BADGE_CLASSES.get(status.value, "badge-ghost"),
+                                "checked": status.value in filters.statuses_for(kit),
+                            }
+                            for status in KitStatus
+                        ],
                     }
-                    for status in KitStatus
+                    for kit in member_kits
                 ],
                 "member_list_filtered": filters.active,
-                "member_filter_summary": filters.describe(current.name if current else ""),
+                "member_filter_summary": filters.describe(),
                 "export_query": urlencode(filters.query()),
                 "kit_column_prefix": KIT_COLUMN_PREFIX,
                 "kit_status_choices": KitStatus.choices,

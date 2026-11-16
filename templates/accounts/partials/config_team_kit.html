@@ -210,8 +210,10 @@
     form on change, so there is no separate button to find. The summary sentence above comes
     from apps.team.kits.MemberFilters.describe.
 
-    The status boxes are the current kit's statuses. Tick any number: a member shows if their
-    status is any one of them, and ticking none means any status.
+    One row of status boxes per active kit, in the order of the list's kit columns, each named
+    by apps.team.kits.status_param. Within a kit, tick any number: a member shows if their
+    status is any one of them, and ticking none means any status. Across kits, every kit with
+    a box ticked has to match.
   {% endcomment %}
   <form method="get" action="{% url 'config_section_page' 'team_kit' %}" class="flex flex-wrap items-center gap-x-4">
     <label class="label cursor-pointer gap-2"
@@ -226,24 +228,29 @@
              {% if race_verified_only %}checked{% endif %} onchange="this.form.submit()">
       <span class="label-text">Race verified only</span>
     </label>
-    {% if current_kit_entry %}
-    <div class="basis-full" role="group" aria-labelledby="kit-status-filter-label">
-      <p id="kit-status-filter-label" class="label-text">{{ current_kit_entry.kit.name }} status</p>
+    {% for group in kit_status_filters %}
+    <div class="basis-full" role="group" aria-labelledby="kit-status-filter-{{ forloop.counter }}">
+      <p id="kit-status-filter-{{ forloop.counter }}" class="label-text">{{ group.kit.name }} status</p>
       <div class="flex flex-wrap items-center gap-x-3">
-        {% for option in status_filter_options %}
+        {% for option in group.options %}
         <label class="label cursor-pointer gap-1.5">
-          <input type="checkbox" name="status" value="{{ option.value }}" class="checkbox checkbox-sm checkbox-primary"
+          <input type="checkbox" name="{{ group.param }}" value="{{ option.value }}" class="checkbox checkbox-sm checkbox-primary"
                  {% if option.checked %}checked{% endif %} onchange="this.form.submit()">
           <span class="badge {{ option.badge }} badge-sm whitespace-nowrap">{{ option.label }}</span>
         </label>
         {% endfor %}
       </div>
     </div>
-    {% else %}
-    <label class="label gap-2 cursor-not-allowed basis-full" title="Make a kit current first -- there is no kit status to filter by until one is">
+    {% empty %}
+    <label class="label gap-2 cursor-not-allowed basis-full" title="Add or restore a kit first -- there is no kit status to filter by until one is active">
       <input type="checkbox" class="checkbox checkbox-sm" disabled>
       <span class="label-text text-base-content/50">Kit status</span>
     </label>
+    {% endfor %}
+    {% if kit_status_filters|length > 1 %}
+    <p class="basis-full text-xs text-base-content/60 mt-1">
+      Within a kit, a member shows if they have any status you tick. With boxes ticked on more than one kit, they have to match each of those kits.
+    </p>
     {% endif %}
   </form>
 </div>
@@ -333,7 +340,13 @@
         <th>Zwift name</th>
         <th>Zwift ID</th>
         <th>Zwift verified</th>
-        <th>{% if current_kit_entry %}{{ current_kit_entry.kit.name }}{% else %}Kit status{% endif %}</th>
+        {% comment %}
+          Kit names are long ("THE COALITION Original") and DaisyUI keeps headers on one line, so
+          a kit's header may wrap: its column is then only as wide as its status badges.
+        {% endcomment %}
+        {% for kit in member_kits %}
+        <th class="whitespace-normal">{{ kit.name }}{% if kit.is_current %} <span class="badge badge-primary badge-xs align-middle">Current</span>{% endif %}</th>
+        {% endfor %}
       </tr>
     </thead>
     <tbody>
@@ -352,10 +365,9 @@
           {% elif row.verification_method %}<span class="badge badge-warning badge-sm whitespace-nowrap" title="Verified, but not through zauth -- not counted as verified here">{{ row.verification_label }}</span>
           {% else %}<span class="badge badge-ghost badge-sm whitespace-nowrap">Not verified</span>{% endif %}
         </td>
-        <td>
-          {% if current_kit_entry %}<span class="badge {{ row.badge }} badge-sm whitespace-nowrap">{{ row.label }}</span>
-          {% else %}<span class="text-base-content/50">No current kit</span>{% endif %}
-        </td>
+        {% for cell in row.kits %}
+        <td><span class="badge {{ cell.badge }} badge-sm whitespace-nowrap">{{ cell.label }}</span></td>
+        {% endfor %}
       </tr>
       {% endfor %}
     </tbody>

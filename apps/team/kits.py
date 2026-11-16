@@ -18,7 +18,7 @@ from django.db.models import Q
 from apps.team.models import KitStatus, TeamKit
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Iterable
 
     from apps.accounts.models import User
 
@@ -184,6 +184,23 @@ def _join(parts: list[str], conjunction: str = "and") -> str:
     return parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} {conjunction} {parts[-1]}"
 
 
+def status_param(kit: TeamKit) -> str:
+    """Name the query parameter that filters the member list by one kit's status.
+
+    One per kit, keyed by slug for the reason the CSV column is: the slug is what statuses
+    are stored under and never changes, so a bookmarked filter survives a rename. The page
+    looks each one up by the exact name it builds here, so no slug can be read as another's.
+
+    Args:
+        kit: The kit.
+
+    Returns:
+        The parameter name, e.g. ``status_race-2026``.
+
+    """
+    return f"status_{kit.slug}"
+
+
 class MemberFilters(NamedTuple):
     """The team kit page's member-list filters. Each narrows the list; together they combine.
 
@@ -193,9 +210,10 @@ class MemberFilters(NamedTuple):
 
     verified_only: bool = False  # Zwift account verified through zauth -- zauth_verified_q
     race_verified_only: bool = False  # Race Verified -- the cached User.is_race_ready
-    # Current-kit statuses to keep, in KitStatus order; empty means any. A member matches if
-    # their status is any one of them.
-    statuses: tuple[str, ...] = ()
+    # Per kit, the statuses to keep, as (kit, statuses) pairs in kit order, statuses in
+    # KitStatus order. Only kits with something ticked appear. Within a kit a member matches
+    # if their status is any one of the statuses; across kits they must match every kit listed.
+    kit_statuses: tuple[tuple[TeamKit, tuple[str, ...]], ...] = ()
 
     @property
     def active(self) -> bool:
@@ -205,16 +223,29 @@ class MemberFilters(NamedTuple):
             True if the list is narrowed at all.
 
         """
-        return self.verified_only or self.race_verified_only or bool(self.statuses)
+        return self.verified_only or self.race_verified_only or bool(self.kit_statuses)
+
+    def statuses_for(self, kit: TeamKit) -> tuple[str, ...]:
+        """Return the statuses ticked for one kit.
+
+        Args:
+            kit: The kit.
+
+        Returns:
+            Its statuses, in KitStatus order; empty when its status is not filtered on.
+
+        """
+        return next((statuses for k, statuses in self.kit_statuses if k.slug == kit.slug), ())
 
     def query(self) -> list[tuple[str, str]]:
         """Write the filters back as query parameters, for the export link.
 
         Built from the parsed filters rather than passing the request's query string through,
-        so the export carries exactly the filters the page applied.
+        so the export carries exactly the filters the page applied -- and an old ``?status=``
+        or ``?need=1`` link comes out in the per-kit form.
 
         Returns:
-            ``(name, value)`` pairs -- a list, since ``status`` repeats once per status.
+            ``(name, value)`` pairs -- a list, since a kit's parameter repeats once per status.
 
         """
         pairs = []
@@ -222,19 +253,17 @@ class MemberFilters(NamedTuple):
             pairs.append(("verified", "1"))
         if self.race_verified_only:
             pairs.append(("race_verified", "1"))
-        pairs.extend(("status", status) for status in self.statuses)
+        for kit, statuses in self.kit_statuses:
+            pairs.extend((status_param(kit), status) for status in statuses)
         return pairs
 
-    def describe(self, kit_name: str) -> str:
+    def describe(self) -> str:
         """Say what a filtered list is showing, for "Showing 3 of 40 members -- ...".
-
-        Args:
-            kit_name: The current kit's name, for the status filter.
 
         Returns:
             A phrase such as "verified with zauth and race verified, whose 2026 Race Kit status
-            is Need kit or Submitted to Zwift" -- statuses in the team's own labels, the ones
-            the list's status column shows.
+            is Need kit or Submitted to Zwift and whose 2025 Race Kit status is I have the kit"
+            -- statuses in the team's own labels, the ones the list's kit columns show.
 
         """
         qualities = []
@@ -243,36 +272,49 @@ class MemberFilters(NamedTuple):
         if self.race_verified_only:
             qualities.append("race verified")
         phrase = _join(qualities) if qualities else ""
-        if self.statuses:
-            labels = _join([KitStatus(status).label for status in self.statuses], "or")
-            clause = f"whose {kit_name} status is {labels}"
-            phrase = f"{phrase}, {clause}" if phrase else clause
+        clauses = [
+            f"whose {kit.name} status is {_join([KitStatus(status).label for status in statuses], 'or')}"
+            for kit, statuses in self.kit_statuses
+        ]
+        if clauses:
+            phrase = f"{phrase}, {_join(clauses)}" if phrase else _join(clauses)
         return phrase
 
 
-def member_filters(params, current: TeamKit | None) -> MemberFilters:
+def member_filters(params, kits: list[TeamKit]) -> MemberFilters:
     """Read the member-list filters from a query string.
 
     Shared by the page and its CSV export, so "Export CSV" always downloads the list on screen.
 
     Args:
         params: The request's GET parameters.
-        current: The current kit, or None.
+        kits: The kits the page offers a status filter for, in display order -- the active
+            ones. A parameter for any other kit (a retired one, or one since deleted) is
+            ignored rather than narrowing the list by a filter the page does not show.
 
     Returns:
-        The filters. Statuses are those of the current kit, so without one they are ignored --
-        the page disables them -- rather than emptying the list for no visible reason. A value
-        that is not a status is ignored too. ``?need=1``, this filter's only option before it
-        took several, still means "Need kit", so old links and bookmarks keep working.
+        The filters. A value that is not a status is ignored, rather than emptying the list for
+        no visible reason. Two older spellings still filter the current kit, so links and
+        bookmarks from before the filter was per kit keep working: ``?status=need``, from when
+        only the current kit could be filtered, and ``?need=1``, from before that filter took
+        several statuses. Without a current kit they are ignored.
 
     """
-    requested = set(params.getlist("status"))
-    if params.get("need") == "1":
-        requested.add(KitStatus.NEED)
+    current = next((kit for kit in kits if kit.is_current), None)
+    kit_statuses = []
+    for kit in kits:
+        requested = set(params.getlist(status_param(kit)))
+        if kit is current:
+            requested.update(params.getlist("status"))
+            if params.get("need") == "1":
+                requested.add(KitStatus.NEED)
+        statuses = tuple(s for s in KitStatus.values if s in requested)
+        if statuses:
+            kit_statuses.append((kit, statuses))
     return MemberFilters(
         verified_only=params.get("verified") == "1",
         race_verified_only=params.get("race_verified") == "1",
-        statuses=tuple(s for s in KitStatus.values if s in requested) if current is not None else (),
+        kit_statuses=tuple(kit_statuses),
     )
 
 
@@ -332,8 +374,8 @@ def kit_member_rows(
     *,
     verified_only: bool = False,
     race_verified_only: bool = False,
-    statuses: Collection[str] = (),
-    kit: TeamKit | None = None,
+    kit_statuses: Iterable[tuple[TeamKit, Collection[str]]] = (),
+    kits: Iterable[TeamKit] = (),
 ) -> list[dict]:
     """Build the team member list for the team kit page.
 
@@ -355,17 +397,17 @@ def kit_member_rows(
             by ``refresh_race_ready`` and the scheduled sweep. (Display badges rank Extra
             Verified above it, so a rider who is Extra Verified but not race ready shows "EV"
             on their profile yet is left out here, as by the roster's filter.)
-        statuses: Limit to members whose status for ``kit`` is any of these ``KitStatus``
-            values; empty for any status. "unknown" includes members who never answered.
-            Ignored when no kit is given, since there is no status to match.
-        kit: The kit to report status for, normally the current one; None for no column.
+        kit_statuses: ``(kit, statuses)`` pairs: limit to members whose status for each kit
+            is any of its ``KitStatus`` values -- any one within a kit, every kit listed.
+            "unknown" includes members who never answered. Empty for no status filter.
+        kits: The kits to report status for, one column each, in display order.
 
     Returns:
         Rows sorted by Discord name, each with ``user``, ``discord_name``, ``zwift_name``,
         ``zwid``, ``zauth_verified``, ``verification_method`` (the stored method of a current
         verification: "zauth", "legacy", "admin", "other" when it has none, or "" when not
-        verified), ``verification_label`` and -- when a kit is given -- ``status``, ``label``
-        and ``badge``.
+        verified), ``verification_label`` and ``kits`` -- one ``{kit, status, label, badge}``
+        per kit given, in the same order.
 
     """
     from apps.zwiftpower.models import ZPTeamRiders
@@ -393,9 +435,27 @@ def kit_member_rows(
     zp_names = dict(ZPTeamRiders.objects.filter(zwid__in=zwids).values_list("zwid", "name")) if zwids else {}
     zr_names = dict(ZRRider.objects.filter(zwid__in=zwids).values_list("zwid", "name")) if zwids else {}
 
+    kits = list(kits)
+    wanted = [(kit, set(statuses)) for kit, statuses in kit_statuses if statuses]
     rows = []
     for member in members:
-        row = {
+        # Filtered here, on the already-loaded members, rather than with a JSON key lookup in
+        # the query. A slug may contain "__", which Django would read as a lookup separator
+        # in team_kit__<slug>; "unknown" has to match riders with no entry (or a junk one),
+        # which status_for already folds in; and the members are in memory anyway -- so this
+        # is safer, simpler and free.
+        if not all(status_for(member, kit) in statuses for kit, statuses in wanted):
+            continue
+        cells = []
+        for kit in kits:
+            status = status_for(member, kit)
+            cells.append({
+                "kit": kit,
+                "status": status,
+                "label": KitStatus(status).label,
+                "badge": BADGE_CLASSES.get(status, "badge-ghost"),
+            })
+        rows.append({
             "user": member,
             "discord_name": member.discord_nickname or member.discord_username,
             "discord_username": member.discord_username,
@@ -403,19 +463,8 @@ def kit_member_rows(
             "zwid": member.zwid,
             "zauth_verified": verified_through_zauth(member),
             **_verification_method(member),
-        }
-        if kit is not None:
-            status = status_for(member, kit)
-            row.update(status=status, label=KitStatus(status).label, badge=BADGE_CLASSES.get(status, "badge-ghost"))
-        rows.append(row)
-    # Filtered here, on the already-loaded rows, rather than with a JSON key lookup in the
-    # query. A slug may contain "__", which Django would read as a lookup separator in
-    # team_kit__<slug>; "unknown" has to match riders with no entry (or a junk one), which
-    # status_for already folds in; and the rows are in memory anyway -- so this is safer,
-    # simpler and free.
-    if statuses and kit is not None:
-        wanted = set(statuses)
-        rows = [row for row in rows if row["status"] in wanted]
+            "kits": cells,
+        })
     rows.sort(key=lambda row: (row["discord_name"] or "").lower())
     return rows
 

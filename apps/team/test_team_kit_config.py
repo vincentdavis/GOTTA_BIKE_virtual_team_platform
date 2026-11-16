@@ -39,6 +39,11 @@ def new_kit(db) -> TeamKit:
     return TeamKit.objects.create(name="2027 Race Kit", slug="race-2027")
 
 
+# The member-list status filter's query parameter for each fixture kit (kits.status_param).
+OLD_KIT_PARAM = "status_race-2026"
+NEW_KIT_PARAM = "status_race-2027"
+
+
 def _page(client, viewer):
     """Render the team kit section.
 
@@ -281,10 +286,10 @@ def test_every_filter_box_applies_itself(client, app_admin, old_kit):
 
     body = _page(client, app_admin).content.decode()
     form = body[body.index('<form method="get"') : body.index("</form>", body.index('<form method="get"'))]
-    boxes = re.findall(r'<input type="checkbox" name="(\w+)"[^>]*>', form)
+    boxes = re.findall(r'<input type="checkbox" name="([\w-]+)"[^>]*>', form)
 
-    assert sorted(boxes) == sorted(["verified", "race_verified", *["status"] * len(KitStatus.values)])
-    for box in re.findall(r'<input type="checkbox" name="\w+"[^>]*>', form):
+    assert sorted(boxes) == sorted(["verified", "race_verified", *[OLD_KIT_PARAM] * len(KitStatus.values)])
+    for box in re.findall(r'<input type="checkbox" name="[\w-]+"[^>]*>', form):
         assert 'onchange="this.form.submit()"' in box, box
 
 
@@ -591,9 +596,9 @@ def test_only_race_verified_1_turns_it_on(rf):
     """The same strictness as the other boxes: the page only ever sends "1"."""
     from apps.team.kits import member_filters
 
-    assert member_filters(rf.get("/", {"race_verified": "1"}).GET, None).race_verified_only is True
+    assert member_filters(rf.get("/", {"race_verified": "1"}).GET, []).race_verified_only is True
     for value in ("yes", "true", "0", ""):
-        assert member_filters(rf.get("/", {"race_verified": value}).GET, None).race_verified_only is False
+        assert member_filters(rf.get("/", {"race_verified": value}).GET, []).race_verified_only is False
 
 
 @pytest.mark.django_db
@@ -623,26 +628,47 @@ def test_the_race_filter_does_not_change_the_counts(client, app_admin, user_mode
     assert filtered["need"] == 2
 
 
+# Unsaved: describe() needs only a kit's name, so these tests need no database.
+KIT_2026 = TeamKit(name="2026 Race Kit", slug="race-2026")
+KIT_2025 = TeamKit(name="2025 Race Kit", slug="race-2025")
+
+
 @pytest.mark.parametrize(
     ("filters", "phrase"),
     [
         ({"verified_only": True}, "verified with zauth"),
         ({"race_verified_only": True}, "race verified"),
-        ({"statuses": ("need",)}, "whose 2026 Race Kit status is Need kit"),
-        ({"statuses": ("need", "submitted")}, "whose 2026 Race Kit status is Need kit or Submitted to Zwift"),
+        ({"kit_statuses": ((KIT_2026, ("need",)),)}, "whose 2026 Race Kit status is Need kit"),
         (
-            {"statuses": ("unknown", "need", "have")},
+            {"kit_statuses": ((KIT_2026, ("need", "submitted")),)},
+            "whose 2026 Race Kit status is Need kit or Submitted to Zwift",
+        ),
+        (
+            {"kit_statuses": ((KIT_2026, ("unknown", "need", "have")),)},
             "whose 2026 Race Kit status is Unknown, Need kit or I have the kit",
         ),
         ({"verified_only": True, "race_verified_only": True}, "verified with zauth and race verified"),
-        ({"verified_only": True, "statuses": ("need",)}, "verified with zauth, whose 2026 Race Kit status is Need kit"),
         (
-            {"race_verified_only": True, "statuses": ("completed",)},
+            {"verified_only": True, "kit_statuses": ((KIT_2026, ("need",)),)},
+            "verified with zauth, whose 2026 Race Kit status is Need kit",
+        ),
+        (
+            {"race_verified_only": True, "kit_statuses": ((KIT_2026, ("completed",)),)},
             "race verified, whose 2026 Race Kit status is Completed by Zwift",
         ),
         (
-            {"verified_only": True, "race_verified_only": True, "statuses": ("need", "submitted")},
+            {"verified_only": True, "race_verified_only": True, "kit_statuses": ((KIT_2026, ("need", "submitted")),)},
             "verified with zauth and race verified, whose 2026 Race Kit status is Need kit or Submitted to Zwift",
+        ),
+        (
+            {"kit_statuses": ((KIT_2026, ("need",)), (KIT_2025, ("have", "completed")))},
+            "whose 2026 Race Kit status is Need kit"
+            " and whose 2025 Race Kit status is I have the kit or Completed by Zwift",
+        ),
+        (
+            {"verified_only": True, "kit_statuses": ((KIT_2026, ("need",)), (KIT_2025, ("have",)))},
+            "verified with zauth, whose 2026 Race Kit status is Need kit"
+            " and whose 2025 Race Kit status is I have the kit",
         ),
         ({}, ""),
     ],
@@ -651,7 +677,7 @@ def test_the_summary_says_which_filters_are_on(filters, phrase):
     """Every combination reads as a sentence, so a short list is never mistaken for a small team."""
     from apps.team.kits import MemberFilters
 
-    assert MemberFilters(**filters).describe("2026 Race Kit") == phrase
+    assert MemberFilters(**filters).describe() == phrase
 
 
 @pytest.mark.django_db
@@ -682,7 +708,7 @@ def _ticked(response) -> set[tuple[str, str]]:
     body = response.content.decode()
     form = body[body.index('<form method="get"') :]
     form = form[: form.index("</form>")]
-    return set(re.findall(r'name="(\w+)" value="(\w+)"[^>]*\bchecked\b', form))
+    return set(re.findall(r'name="([\w-]+)" value="(\w+)"[^>]*\bchecked\b', form))
 
 
 @pytest.mark.django_db
@@ -692,16 +718,18 @@ def _ticked(response) -> set[tuple[str, str]]:
         (),
         (("verified", "1"),),
         (("race_verified", "1"),),
-        (("status", "need"),),
-        (("status", "need"), ("status", "submitted")),
-        (("verified", "1"), ("status", "unknown")),
-        (("race_verified", "1"), ("status", "completed"), ("status", "have")),
-        (("verified", "1"), ("race_verified", "1"), ("status", "need")),
-        tuple(("status", status) for status in KitStatus.values),
+        ((OLD_KIT_PARAM, "need"),),
+        ((OLD_KIT_PARAM, "need"), (OLD_KIT_PARAM, "submitted")),
+        (("verified", "1"), (OLD_KIT_PARAM, "unknown")),
+        (("race_verified", "1"), (OLD_KIT_PARAM, "completed"), (OLD_KIT_PARAM, "have")),
+        (("verified", "1"), ("race_verified", "1"), (OLD_KIT_PARAM, "need")),
+        tuple((OLD_KIT_PARAM, status) for status in KitStatus.values),
+        ((NEW_KIT_PARAM, "have"),),
+        ((OLD_KIT_PARAM, "need"), (NEW_KIT_PARAM, "have"), (NEW_KIT_PARAM, "completed")),
     ],
     ids=lambda on: "+".join(f"{name}={value}" for name, value in on) or "none",
 )
-def test_each_box_is_ticked_exactly_when_its_filter_is_on(client, app_admin, old_kit, on):
+def test_each_box_is_ticked_exactly_when_its_filter_is_on(client, app_admin, old_kit, new_kit, on):
     """Each box shows its own filter, and no other.
 
     The form submits on change, and an unticked box sends nothing -- so a box shown unticked
@@ -763,7 +791,7 @@ def test_the_columns(client, app_admin, user_model, old_kit):
     assert "6164399" in table
     assert ">Zauth</span>" in table
     assert "Submitted to Zwift" in table
-    assert "2026 Race Kit" in table  # the status column is headed with the current kit's name
+    assert "2026 Race Kit" in table  # the kit's column is headed with its name
 
 
 @pytest.mark.django_db
@@ -779,20 +807,62 @@ def test_the_zwift_name_follows_the_roster(user_model, old_kit):
     ZRRider.objects.create(zwid=1, name="ZR Name")
     ZRRider.objects.create(zwid=2, name="Only ZR")
 
-    names = {row["user"].username: row["zwift_name"] for row in kit_member_rows(kit=old_kit)}
+    names = {row["user"].username: row["zwift_name"] for row in kit_member_rows(kits=[old_kit])}
 
     assert names["both"] == "ZP Name"
     assert names["zr-only"] == "Only ZR"
 
 
+def _kit_headers(response) -> list[str]:
+    """Read the member list's kit column headers, in order.
+
+    Args:
+        response: The page response.
+
+    Returns:
+        Each kit column's header text, without the "Current" badge.
+
+    """
+    import re
+
+    body = response.content.decode()
+    head = body[body.index("<th>Discord name</th>") : body.index("</thead>")]
+    headers = re.findall(r"<th[^>]*>(.*?)</th>", head, re.S)
+    return [re.sub(r"<span.*?</span>", "", header).strip() for header in headers[4:]]
+
+
 @pytest.mark.django_db
-def test_no_current_kit_says_so_in_the_status_column(client, app_admin, user_model, new_kit):
-    """There is no kit to report on; the column must not invent a status."""
-    _member(user_model, "rider")
+def test_every_active_kit_has_a_column_current_first(client, app_admin, user_model, old_kit, new_kit):
+    """One column per kit, each showing that kit's status, the current kit leading."""
+    retired = TeamKit.objects.create(name="2024 Race Kit", slug="race-2024", active=False)
+    new_kit.sort_order = 0
+    old_kit.sort_order = 5  # later by sort order, but current -- and current leads
+    TeamKit.objects.bulk_update([new_kit, old_kit], ["sort_order"])
+    _member(user_model, "rider", {old_kit.slug: "need", new_kit.slug: "have", retired.slug: "completed"})
 
-    body = _list(client, app_admin).content.decode()
+    response = _list(client, app_admin)
+    row = response.context["member_rows"][0]
 
-    assert "No current kit" in body
+    assert _kit_headers(response) == ["2026 Race Kit", "2027 Race Kit"]  # the retired kit is left off
+    assert [(cell["kit"].slug, cell["label"]) for cell in row["kits"]] == [
+        ("race-2026", "Need kit"),
+        ("race-2027", "I have the kit"),
+    ]
+    assert '2026 Race Kit <span class="badge badge-primary badge-xs align-middle">Current</span></th>' in (
+        response.content.decode()
+    )
+
+
+@pytest.mark.django_db
+def test_without_a_current_kit_every_active_kit_still_has_a_column(client, app_admin, user_model, new_kit):
+    """No kit needs to be current for its column to show what riders have recorded."""
+    _member(user_model, "rider", {new_kit.slug: "need"})
+
+    response = _list(client, app_admin)
+
+    assert _kit_headers(response) == ["2027 Race Kit"]
+    assert response.context["member_rows"][0]["kits"][0]["label"] == "Need kit"
+    assert "Current</span>" not in response.content.decode()
 
 
 @pytest.mark.django_db
@@ -806,12 +876,8 @@ def test_the_list_is_sorted_by_discord_name(client, app_admin, user_model):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize(
-    "filters",
-    [{}, {"verified_only": True}, {"race_verified_only": True}, {"statuses": ("need",)}],
-    ids=["unfiltered", "zauth", "race", "status"],
-)
-def test_the_list_costs_the_same_however_many_members(user_model, old_kit, filters):
+@pytest.mark.parametrize("which", ["unfiltered", "zauth", "race", "status"])
+def test_the_list_costs_the_same_however_many_members(user_model, old_kit, new_kit, which):
     """A fixed handful of queries, never one per rider -- the lesson of the captain banner.
 
     Warmed first, and asserted as equality: an unwarmed baseline once hid a per-rider query
@@ -827,6 +893,13 @@ def test_the_list_costs_the_same_however_many_members(user_model, old_kit, filte
     # out of the query's field list, that read would cost a query per rider.
     methods = ["zauth", "legacy", "admin", ""]
     kit_need = {old_kit.slug: KitStatus.NEED}
+    filters = {
+        "unfiltered": {},
+        "zauth": {"verified_only": True},
+        "race": {"race_verified_only": True},
+        "status": {"kit_statuses": ((old_kit, ("need",)), (new_kit, ("unknown",)))},
+    }[which]
+    kits = [old_kit, new_kit]  # a column each, so the per-kit cells are measured too
 
     def make(prefix: str, count: int, zwid_base: int) -> None:
         for i in range(count):
@@ -842,13 +915,13 @@ def test_the_list_costs_the_same_however_many_members(user_model, old_kit, filte
             ZPTeamRiders.objects.create(zwid=zwid_base + i, name=f"{prefix} {i}")
 
     make("few", 4, 100)
-    kit_member_rows(kit=old_kit, **filters)  # warm
+    kit_member_rows(kits=kits, **filters)  # warm
     with CaptureQueriesContext(connection) as few:
-        rows_few = kit_member_rows(kit=old_kit, **filters)
+        rows_few = kit_member_rows(kits=kits, **filters)
 
     make("many", 20, 200)
     with CaptureQueriesContext(connection) as many:
-        rows_many = kit_member_rows(kit=old_kit, **filters)
+        rows_many = kit_member_rows(kits=kits, **filters)
 
     assert len(rows_many) > len(rows_few) > 0, "the filter left nothing to measure"
     assert len(many.captured_queries) == len(few.captured_queries)
@@ -890,9 +963,9 @@ def test_statuses_are_read_in_the_teams_order_once_each(rf, old_kit):
     """So the export link, its filename and the summary come out the same for the same choice."""
     from apps.team.kits import member_filters
 
-    params = rf.get("/", {"status": ["have", "need", "need", "unknown"]}).GET
+    params = rf.get("/", {OLD_KIT_PARAM: ["have", "need", "need", "unknown"]}).GET
 
-    assert member_filters(params, old_kit).statuses == ("unknown", "need", "have")
+    assert member_filters(params, [old_kit]).statuses_for(old_kit) == ("unknown", "need", "have")
 
 
 @pytest.mark.django_db
@@ -903,10 +976,24 @@ def test_old_need_links_still_mean_need_kit(client, app_admin, user_model, old_k
 
     response = _list(client, app_admin, need="1")
     assert _usernames(response) == ["needs"]
-    assert _ticked(response) == {("status", "need")}
-    assert f'href="{reverse("team_kit_export")}?status=need"' in response.content.decode()
-    # Alongside the new form, it adds Need kit to whatever else is ticked.
+    assert _ticked(response) == {(OLD_KIT_PARAM, "need")}
+    assert f'href="{reverse("team_kit_export")}?{OLD_KIT_PARAM}=need"' in response.content.decode()
+    # Alongside the newer forms, it adds Need kit to whatever else is ticked.
     assert _usernames(_list(client, app_admin, need="1", status="submitted")) == ["needs", "submitted"]
+    assert _usernames(_list(client, app_admin, need="1", **{OLD_KIT_PARAM: "submitted"})) == ["needs", "submitted"]
+
+
+@pytest.mark.django_db
+def test_old_status_links_still_mean_the_current_kit(client, app_admin, user_model, old_kit, new_kit):
+    """?status= filtered the current kit before every kit had its own filter, and still does."""
+    _member(user_model, "needs-current", {old_kit.slug: KitStatus.NEED})
+    _member(user_model, "needs-new", {new_kit.slug: KitStatus.NEED})
+
+    response = _list(client, app_admin, status="need")
+
+    assert _usernames(response) == ["needs-current"]
+    assert _ticked(response) == {(OLD_KIT_PARAM, "need")}  # shown, and carried on, in the per-kit form
+    assert f'href="{reverse("team_kit_export")}?{OLD_KIT_PARAM}=need"' in response.content.decode()
 
 
 @pytest.mark.django_db
@@ -919,11 +1006,11 @@ def test_the_status_boxes_wear_the_status_columns_badges(client, app_admin, old_
     body = _list(client, app_admin).content.decode()
     form = body[body.index('<form method="get"') : body.index("</form>", body.index('<form method="get"'))]
     boxes = re.findall(
-        r'name="status" value="(\w+)"[^>]*>\s*<span class="badge ([\w-]+) badge-sm[^"]*">([^<]+)</span>', form
+        rf'name="{OLD_KIT_PARAM}" value="(\w+)"[^>]*>\s*<span class="badge ([\w-]+) badge-sm[^"]*">([^<]+)</span>', form
     )
 
     assert boxes == [(status.value, BADGE_CLASSES[status.value], status.label) for status in KitStatus]
-    assert f'id="kit-status-filter-label" class="label-text">{old_kit.name} status</p>' in form
+    assert f'id="kit-status-filter-1" class="label-text">{old_kit.name} status</p>' in form
 
 
 @pytest.mark.django_db
@@ -998,26 +1085,93 @@ def test_the_summary_names_what_is_being_shown(client, app_admin, user_model, ol
 
 
 @pytest.mark.django_db
-def test_without_a_current_kit_the_box_is_disabled(client, app_admin, user_model, new_kit):
-    """There is nothing to need until a kit is current."""
+def test_without_a_current_kit_each_active_kit_can_still_be_filtered(client, app_admin, user_model, new_kit):
+    """Every kit has its own filter, so none needs to be current to be filtered on."""
+    _member(user_model, "needs", {new_kit.slug: KitStatus.NEED})
+    _member(user_model, "has", {new_kit.slug: KitStatus.HAVE})
+
+    response = _list(client, app_admin, **{NEW_KIT_PARAM: "need"})
+
+    assert _usernames(response) == ["needs"]
+    assert f'name="{NEW_KIT_PARAM}"' in response.content.decode()
+
+
+@pytest.mark.django_db
+def test_with_no_active_kit_the_box_is_disabled(client, app_admin, user_model, new_kit):
+    """A retired kit gets no filter, so with only retired kits there is nothing to filter by."""
+    new_kit.active = False
+    new_kit.save(update_fields=["active"])
     _member(user_model, "rider")
 
     body = _list(client, app_admin).content.decode()
 
-    assert 'name="status"' not in body
-    assert "Make a kit current first" in body
+    assert NEW_KIT_PARAM not in body
+    assert "Add or restore a kit first" in body
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("params", [{"status": "need"}, {"status": ["need", "have"]}, {"need": "1"}])
 def test_a_hand_typed_status_without_a_current_kit_is_ignored(client, app_admin, user_model, new_kit, params):
-    """Rather than emptying the list for a reason nothing on the page explains."""
+    """The old spellings meant the current kit; with none, they mean nothing rather than emptying the list."""
     _member(user_model, "rider")
 
     response = _list(client, app_admin, **params)
 
     assert "rider" in _usernames(response)
-    assert response.context["status_filter"] == ()
+    assert response.context["kit_statuses"] == ()
+
+
+@pytest.mark.django_db
+def test_each_kit_is_filtered_by_its_own_statuses(client, app_admin, user_model, old_kit, new_kit):
+    """Within a kit, any ticked status; across kits, every kit with a tick must match."""
+    _member(user_model, "need-old-have-new", {old_kit.slug: "need", new_kit.slug: "have"})
+    _member(user_model, "need-old-need-new", {old_kit.slug: "need", new_kit.slug: "need"})
+    _member(user_model, "have-old-have-new", {old_kit.slug: "have", new_kit.slug: "have"})
+    _member(user_model, "never-answered")
+
+    assert _usernames(_list(client, app_admin, **{NEW_KIT_PARAM: "have"})) == [
+        "have-old-have-new",
+        "need-old-have-new",
+    ]
+    assert _usernames(_list(client, app_admin, **{OLD_KIT_PARAM: "need", NEW_KIT_PARAM: "have"})) == [
+        "need-old-have-new"
+    ]
+    assert _usernames(_list(client, app_admin, **{OLD_KIT_PARAM: "need", NEW_KIT_PARAM: ["have", "need"]})) == [
+        "need-old-have-new",
+        "need-old-need-new",
+    ]
+    # Unknown on one kit matches those who never answered it, as for the current kit.
+    assert _usernames(_list(client, app_admin, **{NEW_KIT_PARAM: "unknown"})) == ["never-answered"]
+
+
+@pytest.mark.django_db
+def test_a_retired_kits_filter_is_ignored(client, app_admin, user_model, old_kit, new_kit):
+    """The page offers no filter for a retired kit, so a hand-typed one must not narrow the list."""
+    new_kit.active = False
+    new_kit.save(update_fields=["active"])
+    _member(user_model, "a", {new_kit.slug: "need"})
+    _member(user_model, "b", {new_kit.slug: "have"})
+
+    response = _list(client, app_admin, **{NEW_KIT_PARAM: "need"})
+
+    assert _usernames(response) == ["a", "b"]
+    assert response.context["member_list_filtered"] is False
+
+
+@pytest.mark.django_db
+def test_two_kit_filters_are_named_in_the_summary_and_the_export_link(client, app_admin, user_model, old_kit, new_kit):
+    """The sentence and the export say both kits' filters, in the kit columns' order."""
+    _member(user_model, "match", {old_kit.slug: "need", new_kit.slug: "have"})
+    _member(user_model, "other")
+
+    body = " ".join(_list(client, app_admin, **{NEW_KIT_PARAM: "have", OLD_KIT_PARAM: "need"}).content.decode().split())
+
+    assert (
+        "Showing 1 of 2 members &mdash; whose 2026 Race Kit status is Need kit and whose 2027 Race Kit status is "
+        "I have the kit."
+    ) in body
+    assert f'href="{reverse("team_kit_export")}?{OLD_KIT_PARAM}=need&amp;{NEW_KIT_PARAM}=have"' in body
+    assert "they have to match each of those kits" in body  # the hint shows once there are two kits
 
 
 # --- membership admins -------------------------------------------------------------------
