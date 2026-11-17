@@ -31,7 +31,7 @@ from apps.accounts.tasks import (
 from apps.analytics.tasks import purge_page_visits
 from apps.club_strava.tasks import purge_strava_activities, sync_strava_activities
 from apps.data_connection.tasks import sync_all_data_connections
-from apps.events.tasks import remove_expired_ds_roles
+from apps.events.tasks import remove_expired_ds_roles, run_availability_schedules
 from apps.ladder_planner.tasks import refresh_cached_clubs
 from apps.rider_data.tasks import purge_rider_profiles, sync_rider_profiles
 from apps.team.tasks import (
@@ -384,6 +384,13 @@ TASK_REGISTRY: dict[str, dict[str, Any]] = {
         "description": "Remove squad roles from Directeurs Sportifs after their race has finished",
         "scheduled": True,
         "hours_setting": "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS",
+    },
+    "run_availability_schedules": {
+        "task": run_availability_schedules,
+        "group": "discord",
+        "description": "Post, remind about and close squads' scheduled availability sheets",
+        "scheduled": True,
+        "minutes_setting": "SCHEDULER_RUN_AVAILABILITY_SCHEDULES_MINUTES",
     },
     "refresh_cached_clubs": {
         "task": refresh_cached_clubs,

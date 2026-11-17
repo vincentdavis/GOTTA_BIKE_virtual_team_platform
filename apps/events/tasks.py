@@ -282,3 +282,21 @@ def remove_expired_ds_roles() -> dict:
     result = {"checked": checked, "removed": removed, "kept": kept}
     logfire.info("DS role sweep complete", **result)
     return result
+
+
+@task
+def run_availability_schedules() -> dict:
+    """Post, remind about and close each squad's scheduled availability sheets that are due.
+
+    Runs every few minutes; ``apps.events.availability_schedules`` decides what is due and
+    makes sure nothing is done twice.
+
+    Returns:
+        Dict with ``schedules`` and ``failed`` counts.
+
+    """
+    from apps.events.availability_schedules import run_schedules
+
+    result = run_schedules()
+    logfire.info("Availability schedules run", **result)
+    return result

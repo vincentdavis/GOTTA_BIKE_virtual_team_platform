@@ -1829,6 +1829,26 @@ class AvailabilityGrid(models.Model):
     )
     expires = models.DateField(null=True, blank=True, help_text="Date when this grid expires and is no longer visible")
 
+    # Set only on sheets a squad's AvailabilitySchedule made (apps.events.availability_schedules).
+    # A sheet made by hand leaves all three empty. ``scheduled_for`` is the day the schedule
+    # posted it, which is what makes the job idempotent: one sheet per schedule per post day.
+    schedule = models.ForeignKey(
+        "AvailabilitySchedule",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="grids",
+        help_text="The schedule that made this sheet, if a schedule made it",
+    )
+    scheduled_for = models.DateField(
+        null=True, blank=True, help_text="The day the schedule posted this sheet (in the schedule's timezone)"
+    )
+    reminders_sent = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Days after posting whose reminder has been sent (or passed), e.g. [2, 4]",
+    )
+
     # Presentation only. A single-slot grid is an ordinary grid whose time axis has one
     # row: end_date == start_date and end_time == start_time + slot_duration. Every
     # consumer -- responses, the v-report, scheduled races -- sees the same shape it
@@ -1875,6 +1895,14 @@ class AvailabilityGrid(models.Model):
         ordering = ["-created_at"]  # noqa: RUF012
         verbose_name = "Availability Grid"
         verbose_name_plural = "Availability Grids"
+        constraints = [  # noqa: RUF012
+            # Two job runs that overlap cannot both make this week's sheet: the second insert fails.
+            models.UniqueConstraint(
+                fields=["schedule", "scheduled_for"],
+                condition=models.Q(schedule__isnull=False),
+                name="one_sheet_per_schedule_post",
+            ),
+        ]
 
     def __str__(self) -> str:
         """Return squad and title description.
@@ -2539,3 +2567,119 @@ class AvailabilityGridTemplate(models.Model):
 
         """
         return f"{self.squad} - {self.name}"
+
+
+class AvailabilitySchedule(models.Model):
+    """A squad's standing order to post a new availability sheet every week, from a template.
+
+    Each week, on ``weekday`` at ``post_time`` in ``schedule_timezone``, the job
+    (``apps.events.availability_schedules.run_schedules``) makes a sheet from ``template``
+    covering ``starts_after_days`` days later, publishes it and posts it to the squad's channel
+    (or leaves it a draft and DMs the captains). Later it reminds the riders who have not
+    answered, on each day in ``reminder_days``, and closes the sheet ``close_after_days`` after
+    posting. One schedule per squad; a paused one does nothing at all.
+
+    Attributes:
+        squad: The squad it posts for.
+        template: The template each sheet is made from. Deleting it leaves the schedule with
+            nothing to post, which the page says.
+        active: False while paused.
+        weekday: Day to post, Monday = 0.
+        post_time: Local "HH:MM" to post at.
+        schedule_timezone: IANA timezone of ``weekday`` and ``post_time``.
+        starts_after_days: Days from posting to the sheet's first day.
+        reminder_days: Days after posting on which to remind riders who have not answered.
+        close_after_days: Days after posting to close the sheet; None leaves it open.
+        publish_mode: Publish and post, or make a draft and DM the captains.
+        skip_date: A post day to skip, set by "Skip next".
+        not_before: Posts due before this are never made, so saving or resuming a schedule
+            after this week's time has passed waits for next week instead of posting late.
+        base_url: The site's address, taken from the page that saved the schedule, for the
+            links the job posts (it has no request of its own).
+        last_note: What the job last did or why it could not, shown on the schedule page.
+        last_note_at: When ``last_note`` was written.
+
+    """
+
+    retention = RetentionPolicy.keep(
+        "A squad's posting schedule: a template, a weekday and some times. No personal content."
+    )
+
+    class PublishMode(models.TextChoices):
+        """What the job does with each sheet it makes."""
+
+        PUBLISH = "publish", "Publish it and post it to the squad's channel"
+        DRAFT = "draft", "Make a draft and DM the captains to publish it"
+
+    WEEKDAYS = (
+        (0, "Monday"),
+        (1, "Tuesday"),
+        (2, "Wednesday"),
+        (3, "Thursday"),
+        (4, "Friday"),
+        (5, "Saturday"),
+        (6, "Sunday"),
+    )
+
+    squad = models.OneToOneField(
+        Squad,
+        on_delete=models.CASCADE,
+        related_name="availability_schedule",
+        help_text="The squad this schedule posts for",
+    )
+    template = models.ForeignKey(
+        AvailabilityGridTemplate,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="schedules",
+        help_text="The template each sheet is made from",
+    )
+    active = models.BooleanField(default=True, help_text="False while the schedule is paused")
+    weekday = models.PositiveSmallIntegerField(choices=WEEKDAYS, default=4, help_text="Day to post (Monday = 0)")
+    post_time = models.CharField(max_length=5, default="18:00", help_text='Local time to post, "HH:MM"')
+    schedule_timezone = models.CharField(
+        max_length=50, default="UTC", help_text="IANA timezone of the post day and time"
+    )
+    starts_after_days = models.PositiveSmallIntegerField(
+        default=7, help_text="Days from posting to the sheet's first day"
+    )
+    reminder_days = models.JSONField(
+        default=list, blank=True, help_text="Days after posting to remind riders who have not answered"
+    )
+    close_after_days = models.PositiveSmallIntegerField(
+        null=True, blank=True, help_text="Days after posting to close the sheet (blank: leave it open)"
+    )
+    publish_mode = models.CharField(
+        max_length=10, choices=PublishMode.choices, default=PublishMode.PUBLISH, help_text="What to do with each sheet"
+    )
+    skip_date = models.DateField(null=True, blank=True, help_text="A post day to skip")
+    not_before = models.DateTimeField(default=timezone.now, help_text="Posts due before this are not made")
+    base_url = models.CharField(max_length=200, blank=True, help_text="The site address used in posted links")
+    last_note = models.CharField(max_length=500, blank=True, help_text="What the job last did, or why it could not")
+    last_note_at = models.DateTimeField(null=True, blank=True, help_text="When last_note was written")
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_availability_schedules",
+        help_text="Who last saved the schedule",
+    )
+    created_at = models.DateTimeField(default=timezone.now, help_text="When the schedule was created")
+    updated_at = models.DateTimeField(auto_now=True, help_text="When the schedule was last saved")
+
+    class Meta:
+        """Meta options for AvailabilitySchedule model."""
+
+        verbose_name = "Availability Schedule"
+        verbose_name_plural = "Availability Schedules"
+
+    def __str__(self) -> str:
+        """Return the squad and when it posts.
+
+        Returns:
+            String in format "Squad - Fridays 18:00 Europe/London".
+
+        """
+        return f"{self.squad} - {self.get_weekday_display()}s {self.post_time} {self.schedule_timezone}"

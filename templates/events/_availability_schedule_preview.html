@@ -1,0 +1,47 @@
+{% load tz %}
+{% comment %}
+  The schedule page's "Coming sheets" table: the next three posts, what each sheet covers, and
+  when its reminders and closing happen. Redrawn by HTMX as the form changes
+  (availability_schedule_preview_view), from the form as it stands, before it is saved.
+{% endcomment %}
+<div id="schedule-preview">
+  {% if form_errors %}
+  <p class="text-sm text-warning mb-2">Fix the highlighted fields to update the preview.</p>
+  {% endif %}
+  {% if upcoming %}
+  <div class="overflow-x-auto">
+    <table class="table table-sm">
+      <thead>
+        <tr>
+          <th>Posts</th>
+          <th>Sheet covers</th>
+          <th>Reminders</th>
+          <th>Closes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in upcoming %}
+        <tr{% if u.skipped %} class="text-base-content/50"{% endif %}>
+          <td class="whitespace-nowrap">
+            {{ u.post_at|timezone:tz|date:"D j M, H:i" }}
+            {% if u.skipped %}<span class="badge badge-warning badge-xs ml-1">Skipped</span>{% endif %}
+          </td>
+          <td class="whitespace-nowrap">{{ u.first_day|date:"D j M" }} &ndash; {{ u.last_day|date:"D j M" }}</td>
+          <td>
+            {% for reminder in u.reminders %}{{ reminder|timezone:tz|date:"D j M" }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-base-content/50">None</span>{% endfor %}
+          </td>
+          <td class="whitespace-nowrap">
+            {% if u.closes_at %}{{ u.closes_at|timezone:tz|date:"D j M, H:i" }}{% else %}<span class="text-base-content/50">Stays open</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-base-content/60 mt-1">
+    Times are {{ tz }}. Each sheet runs {{ preview_schedule.template.default_length_days }} day{{ preview_schedule.template.default_length_days|pluralize }}, the length set on its template.
+  </p>
+  {% else %}
+  <p class="text-sm text-base-content/60">Pick a template to see the coming sheets.</p>
+  {% endif %}
+</div>

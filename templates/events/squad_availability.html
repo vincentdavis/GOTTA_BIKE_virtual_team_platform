@@ -25,7 +25,10 @@
           <tbody>
             {% for grid in availability_grids %}
             <tr>
-              <td class="font-medium">{{ grid.title }}</td>
+              <td class="font-medium">
+                {{ grid.title }}
+                {% if grid.schedule_id %}<span class="badge badge-info badge-xs ml-1" title="Made by the posting schedule">Auto</span>{% endif %}
+              </td>
               <td class="text-sm">{{ grid.start_date|date:"M j" }} &mdash; {{ grid.end_date|date:"M j" }}</td>
               <td class="text-sm">
                 <div class="flex items-center gap-1">
@@ -214,6 +217,21 @@
       {% endif %}
 
       {% if not event.is_race_series %}
+      <div class="divider">Schedule</div>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <p class="text-sm">
+          {% if not schedule_status %}
+          <span class="text-base-content/70">No schedule. A schedule posts a new sheet from a template every week, and reminds riders who haven't answered.</span>
+          {% elif schedule_status.state == "active" %}
+          <span class="badge badge-success badge-sm mr-1">Auto</span>{{ schedule_status.text }}
+          {% else %}
+          <span class="badge badge-warning badge-sm mr-1">{{ schedule_status.text }}</span>
+          {% endif %}
+        </p>
+        <a href="{% url 'events:availability_schedule' event.pk squad.pk %}"
+           class="btn btn-sm btn-outline">{% if schedule_status %}Edit schedule{% else %}Set up schedule{% endif %}</a>
+      </div>
+
       <div class="divider">Templates</div>
       <p class="text-xs text-base-content/60 mb-2">
         Reusable starting points for this squad. Build a grid and click <strong>Save as Template</strong> to add one,

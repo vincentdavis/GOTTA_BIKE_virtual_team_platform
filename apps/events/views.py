@@ -47,8 +47,9 @@ from apps.accounts.discord_service import (
     sync_user_discord_roles,
 )
 from apps.accounts.models import Permissions, User
-from apps.events import ds_service, grid_defaults, rider_stats, series, signup_status
+from apps.events import availability_schedules, ds_service, grid_defaults, rider_stats, series, signup_status
 from apps.events.answer_facets import answers_payload, build_facets, panel_starts_open
+from apps.events.availability_schedules import grid_from_template
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
 from apps.events.channel_access import can_view
 from apps.events.forms import EventForm, EventRoleSetupForm, SignupQuestionForm, SquadForm
@@ -58,6 +59,7 @@ from apps.events.models import (
     AvailabilityGrid,
     AvailabilityGridTemplate,
     AvailabilityResponse,
+    AvailabilitySchedule,
     AvailabilitySlotSelection,
     Event,
     EventSignup,
@@ -2203,6 +2205,13 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     )
     event_role_name = role_names.get(str(event.event_role), "") if event.event_role else ""
 
+    # Each squad's weekly posting schedule, summarised on its card ("Next Fri 21 Nov 18:00").
+    now = timezone.now()
+    schedules_by_squad = {
+        schedule.squad_id: schedule
+        for schedule in AvailabilitySchedule.objects.filter(squad__event=event).select_related("template")
+    }
+
     # Attach availability grids (published/closed) grouped by squad
     grids_by_squad: dict[int, list] = {}
     for grid in AvailabilityGrid.objects.filter(
@@ -2236,6 +2245,7 @@ def squad_manage_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         )
         s.region_role_name = role_names.get(str(s.region_role), "") if s.region_role else ""
         s.active_grids = grids_by_squad.get(s.pk, [])
+        s.schedule_status = availability_schedules.status(schedules_by_squad.get(s.pk), now)
         # Roles this squad uses that Role Setup no longer allows. A squad keeps whatever
         # was stored before the event's lists were narrowed, and the squad form drops such
         # a value silently on the next edit -- so surface it here rather than let it
@@ -3889,6 +3899,10 @@ def squad_availability_view(request: HttpRequest, event_pk: int, squad_pk: int) 
             "shared_templates": shared_templates,
             # A race series has one sheet of stage times per squad instead of grids.
             "series_sheet": next((grid for grid in availability_grids if grid.is_series), None),
+            # The squad's weekly posting schedule, if it has one (apps.events.schedule_views).
+            "schedule_status": availability_schedules.status(
+                AvailabilitySchedule.objects.filter(squad=squad).first(), timezone.now()
+            ),
             # Only the shared-template dialog offers a timezone; a squad's own template
             # already carries its own clock.
             "timezone_choices": TIMEZONE_CHOICES,
@@ -5219,12 +5233,14 @@ def availability_preview_view(request: HttpRequest, event_pk: int, squad_pk: int
 
 
 def _post_grid_published_notification(
-    request: HttpRequest,
+    request: HttpRequest | None,
     event: Event,
     squad: Squad,
     grid: AvailabilityGrid,
     *,
     reminder: bool = False,
+    base_url: str = "",
+    mention_user_ids: list[str] | None = None,
 ) -> bool | str:
     """Post a Discord channel message about an availability grid, pinging the squad role.
 
@@ -5244,12 +5260,18 @@ def _post_grid_published_notification(
     timezones, the unix timestamp is anchored at noon in the grid's authoring
     timezone.
 
+    A squad's posting schedule (``apps.events.availability_schedules``) calls this with no
+    request, so its link is built on ``base_url``. Its reminders pass ``mention_user_ids``:
+    they mention the riders who have not answered, one by one, and not the squad role.
+
     Args:
-        request: The HTTP request (used for ``build_absolute_uri``).
+        request: The HTTP request (used for ``build_absolute_uri``), or None from a job.
         event: Parent event.
         squad: Squad whose Discord channel/role we post to.
         grid: The availability grid being announced.
         reminder: Word it as a reminder about an already-published sheet.
+        base_url: The site's address, used when there is no request.
+        mention_user_ids: Discord ids to mention in place of the squad role.
 
     Returns:
         ``True`` on success, otherwise the explanation to show.
@@ -5266,12 +5288,11 @@ def _post_grid_published_notification(
     start_unix = int(datetime.combine(grid.start_date, time(12, 0), tzinfo=grid_tz).timestamp())
     end_unix = int(datetime.combine(grid.end_date, time(12, 0), tzinfo=grid_tz).timestamp())
 
-    response_url = request.build_absolute_uri(
-        reverse(
-            "events:availability_respond",
-            kwargs={"event_pk": event.pk, "squad_pk": squad.pk, "grid_pk": grid.pk},
-        )
+    path = reverse(
+        "events:availability_respond",
+        kwargs={"event_pk": event.pk, "squad_pk": squad.pk, "grid_pk": grid.pk},
     )
+    response_url = request.build_absolute_uri(path) if request is not None else f"{base_url.rstrip('/')}{path}"
 
     title = grid.title or "Availability Grid"
     role_mention = f"<@&{squad.team_discord_role}>" if squad.team_discord_role else ""
@@ -5281,13 +5302,17 @@ def _post_grid_published_notification(
         f"<t:{start_unix}:D> – <t:{end_unix}:D>",  # noqa: RUF001
         response_url,
     ]
-    if reminder:
-        lines.append("Please open the sheet and check your availability is still correct.")
-    if role_mention:
-        lines.extend(["", role_mention])
-    body = "\n".join(lines)
-
+    allowed_user_ids = None
     allowed_role_ids = [str(squad.team_discord_role)] if squad.team_discord_role else None
+    if mention_user_ids is not None:
+        lines.extend(["Still waiting to hear from:", " ".join(f"<@{uid}>" for uid in mention_user_ids)])
+        allowed_user_ids, allowed_role_ids = [str(uid) for uid in mention_user_ids], None
+    else:
+        if reminder:
+            lines.append("Please open the sheet and check your availability is still correct.")
+        if role_mention:
+            lines.extend(["", role_mention])
+    body = "\n".join(lines)
 
     with logfire.span(
         "availability_publish_notify",
@@ -5300,6 +5325,7 @@ def _post_grid_published_notification(
         result = post_discord_channel_message(
             squad.discord_channel_id,
             body,
+            allowed_user_ids=allowed_user_ids,
             allowed_role_ids=allowed_role_ids,
         )
     if result.ok:
@@ -5836,8 +5862,6 @@ def availability_template_apply_view(
         messages.error(request, "Invalid or missing start date.")
         return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
-    end_date = start_date + timedelta(days=template.default_length_days - 1)
-
     # A shared template arrives on the squad that built it clock. The dialog lets the
     # borrowing squad set the time and timezone up front rather than create a draft and
     # then correct it; both fall back to the template's own values.
@@ -5851,64 +5875,10 @@ def availability_template_apply_view(
         messages.error(request, f"Invalid timezone: {local_tz}")
         return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
-    # Shift the end time by however much the start moved, so a re-timed template keeps
-    # the span it was built with instead of being silently shortened.
-    span_minutes = (
-        datetime.combine(date.min, time.fromisoformat(template.end_time))
-        - datetime.combine(date.min, time.fromisoformat(template.start_time))
-    ).total_seconds() / 60
-    if span_minutes <= 0:
-        span_minutes += 24 * 60
-    local_end_time = (
-        datetime.combine(date.min, time.fromisoformat(local_start_time))
-        + timedelta(minutes=span_minutes)
-    ).strftime("%H:%M")
-
-    start_date_utc, end_date_utc, start_time_utc, end_time_utc = convert_local_to_utc(
-        start_date,
-        end_date,
-        local_start_time,
-        local_end_time,
-        local_tz,
-    )
-
-    if template.single_slot:
-        # Re-derive rather than trusting the conversion. A local time near midnight can
-        # land start and end on different UTC dates, and the grid generator would then
-        # emit one slot per date -- two cells from a template that means one. Same
-        # derivation the builder's save uses, so both routes agree.
-        end_date_utc = start_date_utc
-        end_time_utc = (
-            datetime.combine(date.min, time.fromisoformat(start_time_utc))
-            + timedelta(minutes=template.slot_duration)
-        ).strftime("%H:%M")
-
-    # A shared template names a specific session ("Round 3 Qualifier"), and several squads
-    # create grids from it -- carrying that name through beats the auto-generated
-    # "<event> <squad> <dates>" title. A squad's own templates keep the auto title.
-    grid = AvailabilityGrid.objects.create(
-        squad=squad,
-        title=template.name if template.shared else "",
-        start_date=start_date_utc,
-        end_date=end_date_utc,
-        start_time=start_time_utc,
-        end_time=end_time_utc,
-        slot_duration=template.slot_duration,
-        grid_timezone=local_tz,
-        blocked_cells=[],
-        max_races_question=template.max_races_question,
-        rest_days_question=template.rest_days_question,
-        hide_empty_days=template.hide_empty_days,
-        single_slot=template.single_slot,
-        expanded_features=template.expanded_features,
-        description=template.description,
-        website_url=template.website_url,
-        course_url=template.course_url,
-        recon_url=template.recon_url,
-        invite_url=template.invite_url,
-        expires=None,
-        status=AvailabilityGrid.Status.DRAFT,
-        created_by=request.user,
+    # Shared with the squad's posting schedule (apps.events.availability_schedules), which makes
+    # its weekly sheets the same way: same span, same UTC conversion, same carried settings.
+    grid = grid_from_template(
+        template, squad, start_date, local_start_time=local_start_time, local_tz=local_tz, created_by=request.user
     )
     logfire.info(
         "Availability grid created from template",

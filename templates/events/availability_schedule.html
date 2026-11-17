@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% load tz %}
+
+{% block title %}Posting Schedule - {{ squad.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-4">
+  <a href="{% url 'events:squad_availability' event.pk squad.pk %}" class="btn btn-ghost btn-sm">&larr; Back to Manage Availability</a>
+
+  {# Status and controls #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 class="card-title text-2xl mb-1">Posting Schedule</h2>
+          <p class="text-sm text-base-content/70">{{ squad.name }} &mdash; {{ event.title }}</p>
+        </div>
+        {% if not schedule %}
+        <span class="badge badge-ghost">Not set up</span>
+        {% elif schedule.active %}
+        <span class="badge badge-success">Active</span>
+        {% else %}
+        <span class="badge badge-warning">Paused</span>
+        {% endif %}
+      </div>
+      <p class="text-sm text-base-content/70 mt-2">
+        Each week a new sheet is made from a template, published and posted to the squad's Discord channel.
+        Reminders mention only the riders who haven't answered yet.
+      </p>
+
+      {% if not squad.discord_channel_id %}
+      <div role="alert" class="alert alert-warning text-sm mt-2">
+        <span>This squad has no Discord channel, so sheets will be published but not posted, and no reminders go out.
+          <a href="{% url 'events:squad_edit' event.pk squad.pk %}" class="link">Pick a channel</a>.</span>
+      </div>
+      {% endif %}
+
+      {% if schedule %}
+      <div class="bg-base-300 rounded-box p-3 mt-3 space-y-2">
+        {% if not schedule.active %}
+        <p class="text-sm"><strong>Paused.</strong> Nothing is posted, reminded or closed until you resume it.</p>
+        {% elif not schedule.template %}
+        <p class="text-sm text-warning"><strong>No template.</strong> The template this schedule used was deleted. Pick another below.</p>
+        {% elif next_post %}
+        <p class="text-sm"><strong>Next post:</strong> {{ next_post|timezone:tz|date:"l j M, H:i" }} ({{ tz }})</p>
+        {% endif %}
+        {% if schedule.skip_date %}
+        <p class="text-sm text-base-content/70">Skipping the sheet due {{ schedule.skip_date|date:"l j M" }}.</p>
+        {% endif %}
+        {% if schedule.last_note %}
+        <p class="text-sm text-base-content/70">
+          <span class="font-medium">Last:</span> {{ schedule.last_note }}
+          <span class="text-base-content/50">({{ schedule.last_note_at|timezone:tz|date:"D j M, H:i" }})</span>
+        </p>
+        {% endif %}
+        <div class="flex flex-wrap gap-2 pt-1">
+          <form method="post" action="{% url 'events:availability_schedule_action' event.pk squad.pk %}">
+            {% csrf_token %}
+            {% if schedule.active %}
+            <button type="submit" name="action" value="pause" class="btn btn-sm">Pause</button>
+            {% else %}
+            <button type="submit" name="action" value="resume" class="btn btn-sm btn-primary">Resume</button>
+            {% endif %}
+          </form>
+          {% if schedule.active and schedule.template %}
+          <form method="post" action="{% url 'events:availability_schedule_action' event.pk squad.pk %}">
+            {% csrf_token %}
+            {% if schedule.skip_date %}
+            <button type="submit" name="action" value="unskip" class="btn btn-sm">Undo skip</button>
+            {% else %}
+            <button type="submit" name="action" value="skip" class="btn btn-sm">Skip next sheet</button>
+            {% endif %}
+          </form>
+          {% endif %}
+          <form method="post" action="{% url 'events:availability_schedule_action' event.pk squad.pk %}"
+                onsubmit="return confirm('Delete this schedule? The sheets it made stay, but stop getting reminders and closing on their own.');">
+            {% csrf_token %}
+            <button type="submit" name="action" value="delete" class="btn btn-sm btn-ghost text-error">Delete schedule</button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# The schedule itself #}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="card-title text-lg">{% if schedule %}Settings{% else %}Set up a schedule{% endif %}</h3>
+      {% if not has_templates %}
+      <p class="text-sm text-base-content/70">
+        A schedule makes each sheet from a template, and this squad has none yet.
+        Build a sheet the way you want it and click <strong>Save as Template</strong>, then come back here.
+      </p>
+      <div><a href="{% url 'events:availability_create' event.pk squad.pk %}" class="btn btn-sm btn-primary">New Availability</a></div>
+      {% else %}
+      <form method="post" class="space-y-4" id="schedule-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="alert alert-error text-sm">{{ form.non_field_errors }}</div>{% endif %}
+        <div hx-post="{% url 'events:availability_schedule_preview' event.pk squad.pk %}"
+             hx-trigger="change"
+             hx-include="#schedule-form" hx-target="#schedule-preview" hx-swap="outerHTML"
+             class="space-y-4">
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">Template</legend>
+            {{ form.template }}
+            {% for error in form.template.errors %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+            <p class="label whitespace-normal">Each sheet copies this template's times, slots and questions.
+              <a href="{% url 'events:squad_availability' event.pk squad.pk %}" class="link">Manage templates</a></p>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">Post every</legend>
+            <div class="flex flex-wrap items-center gap-2">
+              {{ form.weekday }}
+              <span class="text-sm">at</span>
+              {{ form.post_time }}
+            </div>
+            {% for error in form.weekday.errors %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+            {% for error in form.post_time.errors %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+            {{ form.schedule_timezone }}
+            <p class="label whitespace-normal">Posts go out within a few minutes of this time.</p>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">Sheet starts</legend>
+            <div class="flex flex-wrap items-center gap-2">
+              {{ form.starts_after_days }}
+              <span class="text-sm">days after posting</span>
+            </div>
+            {% for error in form.starts_after_days.errors %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">Remind riders who haven't answered</legend>
+            <div class="flex flex-wrap gap-2" id="reminder-days">
+              {% for choice in form.reminder_days %}
+              <label class="flex items-center gap-1.5 rounded-field border border-base-content/20 px-2 py-1 text-sm cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-primary/10">
+                {{ choice.tag }}
+                <span>+{{ choice.data.value }} <span class="text-base-content/60" data-reminder-weekday="{{ choice.data.value }}"></span></span>
+              </label>
+              {% endfor %}
+            </div>
+            {% for error in form.reminder_days.errors %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+            <p class="label whitespace-normal">Days after posting, at the posting time. Each reminder is posted in the squad's channel and mentions only those riders.</p>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">Close the sheet</legend>
+            <div class="flex flex-wrap items-center gap-2">
+              {{ form.close_after_days }}
+              <span class="text-sm">days after posting</span>
+            </div>
+            {% for error in form.close_after_days.errors %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+            <p class="label whitespace-normal">Leave blank to keep it open until you close it.</p>
+          </fieldset>
+
+          <fieldset class="fieldset">
+            <legend class="fieldset-legend">Each sheet</legend>
+            {% for radio in form.publish_mode %}
+            <label class="flex items-center gap-2 text-sm cursor-pointer">{{ radio.tag }} {{ radio.choice_label }}</label>
+            {% endfor %}
+          </fieldset>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <button type="submit" class="btn btn-primary btn-sm">{% if schedule %}Save changes{% else %}Start schedule{% endif %}</button>
+          <span class="text-xs text-base-content/60">Changes apply from the next post time.</span>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if has_templates %}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="card-title text-lg">Coming sheets</h3>
+      {% include "events/_availability_schedule_preview.html" %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if history %}
+  <div class="card bg-base-200 shadow-xl">
+    <div class="card-body">
+      <h3 class="card-title text-lg">Sheets this schedule made</h3>
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Sheet</th>
+              <th>Posted</th>
+              <th>Status</th>
+              <th class="text-right">Answered</th>
+              <th>Reminders sent</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for grid in history %}
+            <tr>
+              <td><a href="{% url 'events:availability_results' event.pk squad.pk grid.pk %}" class="link link-hover">{{ grid.title }}</a></td>
+              <td class="whitespace-nowrap">{{ grid.scheduled_for|date:"D j M" }}</td>
+              <td>
+                {% if grid.is_draft %}<span class="badge badge-ghost badge-sm">Draft</span>
+                {% elif grid.is_published %}<span class="badge badge-success badge-sm">Open</span>
+                {% else %}<span class="badge badge-neutral badge-sm">Closed</span>{% endif %}
+              </td>
+              <td class="text-right tabular-nums">{{ grid.answered }}</td>
+              <td>{% for day in grid.reminders_sent %}+{{ day }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="text-base-content/50">None</span>{% endfor %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  // Name the weekday each reminder chip falls on, from the post day picked above it.
+  (function () {
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const weekday = document.getElementById("id_weekday");
+    if (!weekday) return;
+    const label = () => {
+      const start = Number(weekday.value);
+      document.querySelectorAll("[data-reminder-weekday]").forEach((el) => {
+        el.textContent = days[(start + Number(el.dataset.reminderWeekday)) % 7];
+      });
+    };
+    weekday.addEventListener("change", label);
+    label();
+  })();
+</script>
+{% endblock %}

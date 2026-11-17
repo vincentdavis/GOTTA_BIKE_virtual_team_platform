@@ -460,6 +460,21 @@
             <a href="{% url 'events:squad_availability' event.pk squad.pk %}" class="btn btn-primary btn-xs">Manage Availability</a>
             {% endif %}
           </div>
+          {% if not event.is_race_series %}
+          {# The squad's weekly posting schedule, so an admin can check every squad's at a glance. #}
+          <p class="text-xs text-base-content/70 mb-2" id="squad-schedule-{{ squad.pk }}">
+            {% if not squad.schedule_status %}
+            <span class="text-base-content/50">No schedule</span>
+            {% elif squad.schedule_status.state == "active" %}
+            <span class="badge badge-success badge-xs mr-1">Auto</span>{{ squad.schedule_status.text }}
+            {% else %}
+            <span class="badge badge-warning badge-xs">{{ squad.schedule_status.text }}</span>
+            {% endif %}
+            {% if squad.can_manage %}
+            &middot; <a href="{% url 'events:availability_schedule' event.pk squad.pk %}" class="link link-hover">{% if squad.schedule_status %}Edit{% else %}Set up{% endif %}</a>
+            {% endif %}
+          </p>
+          {% endif %}
           {% if squad.active_grids %}
           <div class="space-y-1">
             {% for grid in squad.active_grids %}

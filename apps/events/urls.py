@@ -3,6 +3,11 @@
 from django.urls import path
 from django.views.generic import RedirectView
 
+from apps.events.schedule_views import (
+    availability_schedule_action_view,
+    availability_schedule_preview_view,
+    availability_schedule_view,
+)
 from apps.events.series_views import (
     series_board_view,
     series_lineup_dialog_view,
@@ -177,6 +182,21 @@ urlpatterns = [
         "<int:event_pk>/squads/<int:squad_pk>/availability/stages/",
         series_sheet_view,
         name="series_sheet",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/schedule/",
+        availability_schedule_view,
+        name="availability_schedule",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/schedule/preview/",
+        availability_schedule_preview_view,
+        name="availability_schedule_preview",
+    ),
+    path(
+        "<int:event_pk>/squads/<int:squad_pk>/availability/schedule/action/",
+        availability_schedule_action_view,
+        name="availability_schedule_action",
     ),
     path(
         "<int:event_pk>/squads/<int:squad_pk>/availability/create/",

@@ -1042,6 +1042,13 @@ CONSTANCE_CONFIG = {
         "Requires scheduler restart to take effect.",
         int,
     ),
+    "SCHEDULER_RUN_AVAILABILITY_SCHEDULES_MINUTES": (
+        10,
+        "How often to run squads' availability schedules (MINUTES): post each week's sheet, "
+        "remind riders who haven't answered, close sheets. A scheduled post goes out within "
+        "this long of its time. Requires scheduler restart to take effect.",
+        int,
+    ),
     "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS": (
         24,
         "How often to remove squad roles from Directeurs Sportifs after their race has finished (hours). "
@@ -1261,6 +1268,7 @@ CONSTANCE_CONFIG_FIELDSETS = {
         "SCHEDULER_PURGE_EXPIRED_MEDIA_HOURS",
         "SCHEDULER_PURGE_EXPIRED_API_KEYS_HOURS",
         "SCHEDULER_REMOVE_EXPIRED_DS_ROLES_HOURS",
+        "SCHEDULER_RUN_AVAILABILITY_SCHEDULES_MINUTES",
         "SCHEDULER_REFRESH_CACHED_CLUBS_HOURS",
         "SCHEDULER_SYNC_ZWIFT_DATA_HOURS",
         "SCHEDULER_SYNC_ZAUTH_VERIFICATIONS_HOURS",

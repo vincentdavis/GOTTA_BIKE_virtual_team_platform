@@ -7,6 +7,7 @@ from typing import ClassVar
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 
 from apps.events import series
 
@@ -16,7 +17,9 @@ from apps.events.grid_defaults import SETTINGS as GRID_DEFAULT_SETTINGS
 from apps.events.models import (
     SQUAD_GENDER_CHOICES,
     AvailabilityGrid,
+    AvailabilityGridTemplate,
     AvailabilityResponse,
+    AvailabilitySchedule,
     Event,
     EventSignup,
     SeriesStage,
@@ -2161,3 +2164,119 @@ class SignupStatusForm(forms.ModelForm):
 
         """
         return (self.cleaned_data.get("rider_message") or "").strip()
+
+
+#: Reminder days a schedule offers: up to almost two weeks after posting.
+SCHEDULE_REMINDER_DAYS = tuple(range(1, 14))
+
+
+class AvailabilityScheduleForm(forms.ModelForm):
+    """A squad's posting schedule: which template, when to post, remind and close.
+
+    The template list is the squad's own templates and those other squads of the event have
+    shared, the same set the Use buttons offer. Times are local to the chosen timezone.
+    """
+
+    post_time = forms.TimeField(
+        widget=forms.TimeInput(attrs={"class": "input input-sm w-32", "type": "time"}, format="%H:%M"),
+        help_text="Posts go out within a few minutes of this time.",
+    )
+    reminder_days = forms.TypedMultipleChoiceField(
+        choices=[(day, str(day)) for day in SCHEDULE_REMINDER_DAYS],
+        coerce=int,
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "checkbox checkbox-xs"}),
+    )
+
+    class Meta:
+        """Meta options."""
+
+        model = AvailabilitySchedule
+        fields = (
+            "template",
+            "weekday",
+            "post_time",
+            "schedule_timezone",
+            "starts_after_days",
+            "reminder_days",
+            "close_after_days",
+            "publish_mode",
+        )
+        widgets = {
+            "template": forms.Select(attrs={"class": "select select-sm w-full"}),
+            "weekday": forms.Select(attrs={"class": "select select-sm w-40"}),
+            "schedule_timezone": forms.Select(attrs={"class": "select select-sm w-full"}),
+            "starts_after_days": forms.NumberInput(attrs={"class": "input input-sm w-24", "min": 0, "max": 60}),
+            "close_after_days": forms.NumberInput(attrs={"class": "input input-sm w-24", "min": 1, "max": 60}),
+            "publish_mode": forms.RadioSelect(attrs={"class": "radio radio-sm"}),
+        }
+
+    def __init__(self, *args, squad: Squad, **kwargs) -> None:
+        """Limit the templates to the ones this squad can use.
+
+        Args:
+            *args: Passed to ModelForm.
+            squad: The squad the schedule is for.
+            **kwargs: Passed to ModelForm.
+
+        """
+        super().__init__(*args, **kwargs)
+        self.fields["template"].queryset = (
+            AvailabilityGridTemplate.objects.filter(
+                Q(squad=squad) | Q(shared=True, squad__event_id=squad.event_id)
+            )
+            .select_related("squad")
+            .order_by("name")
+        )
+        self.fields["template"].required = True
+        self.fields["template"].empty_label = "Pick a template"
+        self.fields["template"].label_from_instance = lambda t: (
+            t.name if t.squad_id == squad.pk else f"{t.name} (shared by {t.squad.name})"
+        )
+        current = self.data.get("schedule_timezone") if self.is_bound else self.initial.get("schedule_timezone")
+        current = current or (self.instance.schedule_timezone if self.instance.pk else None)
+        choices = list(TIMEZONE_CHOICES)
+        if current and current not in dict(choices) and series.zone(current).key == current:
+            choices.append((current, current))
+        self.fields["schedule_timezone"] = forms.ChoiceField(
+            choices=choices, widget=forms.Select(attrs={"class": "select select-sm w-full"})
+        )
+        self.fields["starts_after_days"].min_value = 0
+        self.fields["starts_after_days"].max_value = 60
+        self.fields["close_after_days"].min_value = 1
+        self.fields["close_after_days"].max_value = 60
+
+    def clean_post_time(self) -> str:
+        """Store the time as "HH:MM".
+
+        Returns:
+            The time.
+
+        """
+        return self.cleaned_data["post_time"].strftime("%H:%M")
+
+    def clean_reminder_days(self) -> list[int]:
+        """Keep each reminder day once, in order.
+
+        Returns:
+            The days.
+
+        """
+        return sorted(set(self.cleaned_data.get("reminder_days") or []))
+
+    def clean(self) -> dict:
+        """Refuse a reminder after the sheet closes: it would remind nobody about anything.
+
+        Returns:
+            The cleaned data.
+
+        """
+        cleaned = super().clean()
+        close = cleaned.get("close_after_days")
+        late = [day for day in cleaned.get("reminder_days") or [] if close and day >= close]
+        if late:
+            self.add_error(
+                "reminder_days",
+                f"The sheet closes {close} day{'s' * (close != 1)} after posting, so remind before then.",
+            )
+        return cleaned
