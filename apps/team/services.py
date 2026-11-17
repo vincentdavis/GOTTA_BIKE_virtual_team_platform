@@ -207,14 +207,11 @@ def verification_days_bulk(users: list[User]) -> dict[int, dict]:
     # 1) Latest verified record per (user, group). Ordered newest-first so the
     # first record seen for each group is the latest.
     latest: dict[int, dict[str, RaceReadyRecord]] = {}
-    records = (
-        RaceReadyRecord.objects.filter(
-            user_id__in=user_ids,
-            status=RaceReadyRecord.Status.VERIFIED,
-            verify_type__in=_ALL_VERIFY_TYPES,
-        )
-        .order_by("user_id", "-record_date")
-    )
+    records = RaceReadyRecord.objects.filter(
+        user_id__in=user_ids,
+        status=RaceReadyRecord.Status.VERIFIED,
+        verify_type__in=_ALL_VERIFY_TYPES,
+    ).order_by("user_id", "-record_date")
     for rec in records:
         groups = latest.setdefault(rec.user_id, {})
         for group, types in _VERIFICATION_GROUPS.items():
@@ -824,8 +821,7 @@ def media_retention_rules(record: RaceReadyRecord) -> list[MediaRetentionRule]:
                     due=expires,
                     automatic=True,
                     detail=(
-                        f"{record.get_verify_type_display()} verifications stay valid for "
-                        f"{record.validity_days} days."
+                        f"{record.get_verify_type_display()} verifications stay valid for {record.validity_days} days."
                     ),
                 )
             )
@@ -1126,9 +1122,9 @@ def _reviewer_pool_ids() -> list[int]:
     if cached is not None:
         return cached
 
-    candidates = User.objects.filter(
-        Q(is_superuser=True) | ~Q(discord_roles={}) | ~Q(permission_overrides={})
-    ).only("id", "is_superuser", "discord_roles", "permission_overrides", "roles")
+    candidates = User.objects.filter(Q(is_superuser=True) | ~Q(discord_roles={}) | ~Q(permission_overrides={})).only(
+        "id", "is_superuser", "discord_roles", "permission_overrides", "roles"
+    )
     ids = [user.pk for user in candidates if user.is_superuser or user.can_approve_verification]
     cache.set(_REVIEWER_POOL_CACHE_KEY, ids, _REVIEWER_POOL_TTL_SECONDS)
     return ids
@@ -1329,9 +1325,7 @@ def expiry_warning_thresholds() -> list[int]:
         logfire.error("Failed to parse EXPIRE_WARNING_DAYS config", error=str(exc))
         parsed = [15]
 
-    values = {
-        int(d) for d in parsed if isinstance(d, int) or str(d).strip().lstrip("-").isdigit()
-    }
+    values = {int(d) for d in parsed if isinstance(d, int) or str(d).strip().lstrip("-").isdigit()}
     usable = sorted((v for v in values if v >= 0), reverse=True)
     return usable or [15]
 
@@ -1658,6 +1652,71 @@ def verification_coverage_bulk(users, *, warn_within: int | None = None) -> dict
     }
 
 
+# The roster's verification-expiry filter groups types the way a rider's category requires
+# them: weight is one group whichever weight verification the category asks for.
+VERIFY_GROUP_TYPES: dict[str, frozenset[str]] = {
+    "weight": WEIGHT_VERIFY_TYPES,
+    "height": frozenset({"height"}),
+    "power": frozenset({"power"}),
+}
+
+
+def riders_with_lapsing_verification(user_ids, *, within: int | None, group: str = "") -> set[int]:
+    """Find the riders a REQUIRED verification is about to lapse for, or already has.
+
+    The roster's "Verification expiring" filter. Judged by the race-ready rule, as
+    :func:`verification_coverage_bulk` judges it -- per requirement, with either weight
+    satisfying a category that takes either -- so a rider shows up exactly when their Race
+    Verified status is at stake. Unlike that function, every requirement is looked at rather
+    than only the soonest, so "Height within 30 days" finds a rider whose weight lapses
+    sooner still. A requirement with no record at all is neither expiring nor expired.
+
+    Costs a constant number of queries: the riders, their verified records, and what
+    :func:`required_types_bulk` and the expiry windows read.
+
+    Args:
+        user_ids: The accounts to judge.
+        within: Days ahead: a requirement lapsing in 0 to ``within`` days matches. None
+            matches a requirement whose best record has already lapsed instead.
+        group: A key of :data:`VERIFY_GROUP_TYPES` to look only at that type; "" for any.
+
+    Returns:
+        The ids of the riders who match.
+
+    """
+    ids = list(user_ids)
+    if not ids:
+        return set()
+    # What required_types_bulk reads: the zwid for the ZwiftPower category, gender for which one.
+    users = list(User.objects.filter(id__in=ids).only("id", "zwid", "gender"))
+    # only(), as in verification_coverage_bulk: the row also holds the measurement itself.
+    records_by_user: dict[int, list[RaceReadyRecord]] = {}
+    for record in RaceReadyRecord.objects.filter(user_id__in=ids, status=RaceReadyRecord.Status.VERIFIED).only(
+        "id", "user_id", "verify_type", "record_date", "status"
+    ):
+        records_by_user.setdefault(record.user_id, []).append(record)
+
+    required_by_user = required_types_bulk(users)
+    validity_by_type = verify_type_validity_days()
+    today = timezone.localdate()
+    wanted = VERIFY_GROUP_TYPES.get(group)
+
+    matched: set[int] = set()
+    for user in users:
+        cover = _cover_days_by_type(records_by_user.get(user.id, ()), validity_by_type, today)
+        for requirement in requirements_for(required_by_user.get(user.id) or DEFAULT_VERIFICATION_TYPES):
+            if wanted is not None and not requirement.types & wanted:
+                continue
+            held = [cover[t] for t in requirement.types if t in cover]
+            if not held or any(days is None for days in held):
+                continue  # nothing held, or a record that never lapses
+            days = max(held)
+            if (days < 0) if within is None else (0 <= days <= within):
+                matched.add(user.id)
+                break
+    return matched
+
+
 def superseded_weight_types(required_types, days_by_type: dict[str, int | None]) -> set[str]:
     """Weight types whose requirement a better record of the OTHER weight type already covers.
 
@@ -1795,7 +1854,8 @@ def squad_expiring_summary(user) -> dict:
     from apps.events.models import Squad, SquadMember
 
     squads = list(
-        Squad.objects.filter(
+        Squad.objects
+        .filter(
             Q(captains=user) | Q(vice_captains=user),
             notify_captain_expiring_verification=True,
             event__end_date__gte=timezone.localdate(),
@@ -2048,15 +2108,27 @@ def get_unified_team_roster() -> list[UnifiedRider]:
     """
     # Query each source with .values() for efficiency
     users = User.objects.filter(zwid__isnull=False).values(
-        "id", "zwid", "username", "discord_username", "discord_id", "discord_avatar", "zwid_verified", "gender",
+        "id",
+        "zwid",
+        "username",
+        "discord_username",
+        "discord_id",
+        "discord_avatar",
+        "zwid_verified",
+        "gender",
         "zwid_verification_method",
-        "is_race_ready", "is_extra_verified",
+        "is_race_ready",
+        "is_extra_verified",
     )
-    zp_riders = ZPTeamRiders.objects.all().values(
-        "zwid", "name", "div", "divw", "date_left", "rank", "ftp", "weight"
-    )
+    zp_riders = ZPTeamRiders.objects.all().values("zwid", "name", "div", "divw", "date_left", "rank", "ftp", "weight")
     zr_riders = ZRRider.objects.all().values(
-        "zwid", "name", "race_current_category", "date_left", "race_current_rating", "phenotype_value", "gender",
+        "zwid",
+        "name",
+        "race_current_category",
+        "date_left",
+        "race_current_rating",
+        "phenotype_value",
+        "gender",
     )
 
     # Get result counts per rider
@@ -2352,18 +2424,26 @@ def get_performance_review_data() -> list[PerformanceRider]:
 
     # Get most recent verified records per user per type using subquery
     # First, get the latest verified record ID for each user/type combination
-    latest_verified_subquery = RaceReadyRecord.objects.filter(
-        user__zwid=OuterRef("user__zwid"),
-        verify_type=OuterRef("verify_type"),
-        status=RaceReadyRecord.Status.VERIFIED,
-    ).order_by("-reviewed_date").values("pk")[:1]
+    latest_verified_subquery = (
+        RaceReadyRecord.objects
+        .filter(
+            user__zwid=OuterRef("user__zwid"),
+            verify_type=OuterRef("verify_type"),
+            status=RaceReadyRecord.Status.VERIFIED,
+        )
+        .order_by("-reviewed_date")
+        .values("pk")[:1]
+    )
 
-    verified_records = RaceReadyRecord.objects.filter(
-        status=RaceReadyRecord.Status.VERIFIED,
-        user__zwid__in=rider_info.keys(),
-        pk__in=Subquery(latest_verified_subquery),
-    ).select_related("user").values(
-        "user__zwid", "verify_type", "weight", "height", "reviewed_date"
+    verified_records = (
+        RaceReadyRecord.objects
+        .filter(
+            status=RaceReadyRecord.Status.VERIFIED,
+            user__zwid__in=rider_info.keys(),
+            pk__in=Subquery(latest_verified_subquery),
+        )
+        .select_related("user")
+        .values("user__zwid", "verify_type", "weight", "height", "reviewed_date")
     )
 
     # Build lookup of verification data by zwid
@@ -2388,7 +2468,8 @@ def get_performance_review_data() -> list[PerformanceRider]:
     # Fetch all results at once instead of one query per rider
     zp_data_by_zwid: dict[int, dict] = {}
     all_results = (
-        ZPRiderResults.objects.filter(zwid__in=rider_info.keys())
+        ZPRiderResults.objects
+        .filter(zwid__in=rider_info.keys())
         .exclude(weight__isnull=True, height__isnull=True)
         .select_related("event")
         .order_by("zwid", "-event__event_date")
@@ -2424,7 +2505,8 @@ def get_performance_review_data() -> list[PerformanceRider]:
     # Query historical records directly with aggregation instead of one query per rider
     ftp_stats_by_zwid: dict[int, dict] = {}
     ftp_agg = (
-        ZPTeamRiders.history.filter(zwid__in=rider_info.keys())
+        ZPTeamRiders.history
+        .filter(zwid__in=rider_info.keys())
         .exclude(ftp__isnull=True)
         .values("zwid")
         .annotate(ftp_min=Min("ftp"), ftp_max=Max("ftp"))

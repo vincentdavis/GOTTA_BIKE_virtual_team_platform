@@ -313,7 +313,8 @@ def test_every_control_has_a_real_label(auth_client, roster_rider):
     body = auth_client.get(reverse("team:roster")).content.decode()
 
     for control in ("f-category", "f-zr", "f-gender", "f-phenotype", "f-age", "f-verified",
-                    "f-account", "f-wkg", "f-ftp", "f-joined", "f-racing", "f-country",
+                    "f-account", "f-wkg", "f-ftp", "f-zmap", "f-zmap-wkg", "f-joined-after",
+                    "f-joined-before", "f-kit", "f-signup", "f-event", "f-racing", "f-country", "f-tz",
                     "f-sort", "f-dir", "roster-search"):
         assert f'for="{control}"' in body, f"{control} has no label"
         assert f'id="{control}"' in body, f"{control} is not there"

@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import patch_vary_headers
+from django.utils.formats import date_format
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.accounts.decorators import discord_permission_required, team_member_required
@@ -36,17 +37,24 @@ from apps.team.forms import (
 from apps.team.models import MembershipApplication, RaceReadyRecord, RecordView, RosterFilter, TeamLink
 from apps.team.rosterv2 import (
     DEFAULT_SORT,
+    EXPIRING_WINDOWS,
     FTP_STEPS,
-    JOINED_WINDOWS,
+    JOINED_QUICK_DAYS,
+    KIT_FILTER_LABELS,
     LINK_LABELS,
     LINK_NOUNS,
     LINK_VALUES,
     RACE_WINDOW_DAYS,
     SORTS,
+    VERIFY_GROUPS,
     WKG_STEPS,
+    ZMAP_STEPS,
+    ZMAP_WKG_STEPS,
     ZR_CATEGORY_ORDER,
+    RosterFilters,
     apply_filters,
     build_link_rows,
+    filter_choices,
     filter_options,
     matching_squads,
     parse_filters,
@@ -554,7 +562,6 @@ _CHIP_LABELS = {
     "account": "Account",
     "wkg": "Min W/kg",
     "ftp": "Min FTP",
-    "joined": "Joined within",
     "racing": "Racing",
     "country": "Country",
     "link": "Not linked",
@@ -602,18 +609,23 @@ def _roster_part(request: HttpRequest) -> str:
     return ROSTER_PARTS.get(htmx.target or "", "")
 
 
-def _roster_chips(request: HttpRequest, *, link: str = "") -> list[dict]:
+def _roster_chips(
+    request: HttpRequest, *, link: str = "", filters: RosterFilters | None = None, choices: dict | None = None
+) -> list[dict]:
     """Describe each active control as a chip that can be taken off.
 
     Takes the EFFECTIVE link value rather than reading it back off the querystring. This
     function works in raw ``request.GET``, so it is the one place that cannot see a filter
     the view declined to apply -- and a chip asserting a filter the page did not use is
     worse than no chip, because the chip is what a reader trusts to tell them why the list
-    looks the way it does.
+    looks the way it does. The filters that take more than one parameter (kit, signups,
+    expiry, the join dates) are described from the effective ``filters`` for the same reason.
 
     Args:
         request: The HTTP request.
         link: The not-linked population actually in force, empty when none is.
+        filters: The filters actually in force.
+        choices: ``filter_choices()``, for the kit and event names.
 
     Returns:
         One entry per active control, with the querystring that removes it.
@@ -638,6 +650,49 @@ def _roster_chips(request: HttpRequest, *, link: str = "") -> list[dict]:
             # "Country: GB" tells a reader nothing; the chip says what the dropdown said.
             shown = resolve_country(value)[1] or value
         chips.append({"label": label, "value": shown, "without": _query_without(request, name, "page")})
+    if on_link or filters is None:
+        return chips
+    for label, shown, params in _effective_filter_chips(filters, choices or {}):
+        chips.append({"label": label, "value": shown, "without": _query_without(request, *params, "page")})
+    return chips
+
+
+def _effective_filter_chips(filters: RosterFilters, choices: dict) -> list[tuple[str, str, tuple[str, ...]]]:
+    """Word the filters read from the effective state, each with the parameters that remove it.
+
+    Args:
+        filters: The filters actually in force.
+        choices: ``filter_choices()``.
+
+    Returns:
+        ``(label, value, parameters to drop)`` per filter that is set.
+
+    """
+    names = {kind: {c.value: c.label for c in choices.get(kind, [])} for kind in ("kits", "events")}
+    chips: list[tuple[str, str, tuple[str, ...]]] = []
+    if filters.zmap is not None:
+        chips.append(("Min zMAP", f"{filters.zmap} W", ("zmap",)))
+    if filters.zmap_wkg is not None:
+        chips.append(("Min zMAP W/kg", f"{filters.zmap_wkg}", ("zmap_wkg",)))
+    if filters.timezone:
+        place = "Not set" if filters.timezone == "none" else filters.timezone.rsplit("/", 1)[-1].replace("_", " ")
+        chips.append(("Timezone", place, ("tz",)))
+    if filters.kit_statuses:
+        statuses = ", ".join(KIT_FILTER_LABELS[status] for status in filters.kit_statuses)
+        chips.append((names["kits"].get(filters.kit, "Kit"), statuses, ("kit", "kit_status")))
+    if filters.signup:
+        label = "Signed up for" if filters.signup == "yes" else "Not signed up for"
+        event = "Any open event" if filters.event == "any" else names["events"].get(filters.event, "Event")
+        chips.append((label, event, ("signup", "event")))
+    if filters.expiring:
+        window = "Already expired" if filters.expiring == "expired" else f"Within {filters.expiring} days"
+        if filters.verify_group:
+            window += f" · {VERIFY_GROUPS[filters.verify_group]}"
+        chips.append(("Verification expiring", window, ("expiring", "vtype")))
+    if filters.joined_after:
+        chips.append(("Joined on or after", date_format(filters.joined_after, "j M Y"), ("joined_after", "joined")))
+    if filters.joined_before:
+        chips.append(("Joined before", date_format(filters.joined_before, "j M Y"), ("joined_before",)))
     return chips
 
 
@@ -669,10 +724,16 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     direction = request.GET.get("dir", "")
     may_see_gaps = request.user.has_permission("membership_admin")
+    # Who is about to lose Race Verified is the verification records page's business, so the
+    # expiry filter follows that page's gate rather than the roster's.
+    may_see_expiry = request.user.can_approve_verification or request.user.is_superuser
 
-    filters = parse_filters(request.GET, roster.rows)
+    choices = filter_choices()
+    filters = parse_filters(request.GET, roster.rows, choices)
     if filters.link and not may_see_gaps:
         filters = replace(filters, link="")
+    if filters.expiring and not may_see_expiry:
+        filters = replace(filters, expiring="", verify_group="")
 
     sort = DEFAULT_SORT
     link_total = 0
@@ -700,7 +761,7 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
         # would append riders already shown -- so the answer is nothing, which removes the button.
         try:
             page_obj = paginator.page(request.GET.get("page", ""))
-        except (EmptyPage, PageNotAnInteger):
+        except EmptyPage, PageNotAnInteger:
             return HttpResponse("")
     else:
         page_obj = paginator.get_page(request.GET.get("page", "1"))
@@ -750,16 +811,26 @@ def rosterv2_view(request: HttpRequest) -> HttpResponse:
             "options": filter_options(roster.rows),
             "wkg_steps": WKG_STEPS,
             "ftp_steps": FTP_STEPS,
-            "joined_windows": JOINED_WINDOWS,
-            "chips": _roster_chips(request, link=filters.link),
+            "zmap_steps": ZMAP_STEPS,
+            "zmap_wkg_steps": ZMAP_WKG_STEPS,
+            "joined_quick_days": JOINED_QUICK_DAYS,
+            # The quick buttons count back from the site's today, as the filter compares.
+            "today": timezone.localdate(),
+            "kits": choices["kits"],
+            # The kit the statuses are about: the one asked for, else the current kit.
+            "selected_kit": filters.kit or next((kit.value for kit in choices["kits"] if kit.is_current), ""),
+            "kit_status_choices": list(KIT_FILTER_LABELS.items()),
+            "signup_events": choices["events"],
+            "may_see_expiry": may_see_expiry,
+            "expiring_windows": EXPIRING_WINDOWS,
+            "verify_groups": VERIFY_GROUPS,
+            "chips": _roster_chips(request, link=filters.link, filters=filters, choices=choices),
             "may_see_gaps": may_see_gaps,
-            "link_options": [
-                {"value": value, "label": LINK_LABELS[value]} for value in LINK_VALUES
-            ] if may_see_gaps else [],
+            "link_options": [{"value": value, "label": LINK_LABELS[value]} for value in LINK_VALUES]
+            if may_see_gaps
+            else [],
             "link_label": LINK_LABELS.get(filters.link, ""),
-            "link_noun": (
-                LINK_NOUNS[filters.link][0 if link_total == 1 else 1] if filters.link else ""
-            ),
+            "link_noun": (LINK_NOUNS[filters.link][0 if link_total == 1 else 1] if filters.link else ""),
             "link_total": link_total,
             "last_profile_sync": last_successful_sync() if filters.link == "no_stats" else None,
             "sorts": [(key, label) for key, (label, _) in SORTS.items()],
@@ -2580,8 +2651,19 @@ def _zwift_connections_csv(rows: list[dict]) -> HttpResponse:
 
     writer = csv.writer(response)
     writer.writerow([
-        "Name", "Discord", "Username", "ZWID", "Status", "Verified", "Verified at",
-        "Connected", "Connected at", "Service ZWID", "Zwift name", "Category", "Women's category",
+        "Name",
+        "Discord",
+        "Username",
+        "ZWID",
+        "Status",
+        "Verified",
+        "Verified at",
+        "Connected",
+        "Connected at",
+        "Service ZWID",
+        "Zwift name",
+        "Category",
+        "Women's category",
     ])
     for row in rows:
         user = row["user"]

@@ -180,6 +180,33 @@
                 </select>
               </div>
 
+              {% if may_see_expiry %}
+                {% comment %}
+                  Verification reviewers only, as the verification records page is. Judged as
+                  Race Verified judges it: only the verifications the rider's category requires,
+                  with either weight counting where the category takes either.
+                {% endcomment %}
+                <div>
+                  <label class="label py-1" for="f-expiring"><span class="label-text">Verification expiring</span></label>
+                  <div class="grid grid-cols-2 gap-2">
+                    <select class="select select-bordered w-full" id="f-expiring" name="expiring">
+                      <option value="">Any time</option>
+                      {% for days in expiring_windows %}
+                        <option value="{{ days }}" {% if filters.expiring == days|stringformat:"d" %}selected{% endif %}>Within {{ days }} days</option>
+                      {% endfor %}
+                      <option value="expired" {% if filters.expiring == "expired" %}selected{% endif %}>Already expired</option>
+                    </select>
+                    <label class="sr-only" for="f-vtype">Verification type</label>
+                    <select class="select select-bordered w-full" id="f-vtype" name="vtype">
+                      <option value="">Any type</option>
+                      {% for value, label in verify_groups.items %}
+                        <option value="{{ value }}" {% if filters.verify_group == value %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+              {% endif %}
+
               <div>
                 <label class="label py-1" for="f-account"><span class="label-text">Account here</span></label>
                 <select class="select select-bordered w-full" id="f-account" name="account">
@@ -210,12 +237,48 @@
               </div>
 
               <div>
+                <label class="label py-1" for="f-zmap"><span class="label-text">Minimum zMAP</span></label>
+                <select class="select select-bordered w-full" id="f-zmap" name="zmap">
+                  <option value="">Any</option>
+                  {% for value in zmap_steps %}
+                    <option value="{{ value }}" {% if filters.zmap == value %}selected{% endif %}>{{ value }} W and up</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="label py-1" for="f-zmap-wkg"><span class="label-text">Minimum zMAP W/kg</span></label>
+                <select class="select select-bordered w-full" id="f-zmap-wkg" name="zmap_wkg">
+                  <option value="">Any</option>
+                  {% for value in zmap_wkg_steps %}
+                    <option value="{{ value }}" {% if filters.zmap_wkg == value %}selected{% endif %}>{{ value }} and up</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
                 <label class="label py-1" for="f-country"><span class="label-text">Country</span></label>
                 <select class="select select-bordered w-full" id="f-country" name="country">
                   <option value="">Anywhere</option>
                   {% for code, name in options.countries %}
                     <option value="{{ code }}" {% if filters.country == code %}selected{% endif %}>{{ name }}</option>
                   {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                {# Only zones members have set, west to east, with how many set each. #}
+                <label class="label py-1" for="f-tz"><span class="label-text">Timezone</span></label>
+                <select class="select select-bordered w-full" id="f-tz" name="tz">
+                  <option value="">Any</option>
+                  {% for group, zones in options.timezones %}
+                    <optgroup label="{{ group }}">
+                      {% for zone in zones %}
+                        <option value="{{ zone.value }}" {% if filters.timezone == zone.value %}selected{% endif %}>{{ zone.label }} · {{ zone.count }}</option>
+                      {% endfor %}
+                    </optgroup>
+                  {% endfor %}
+                  <option value="none" {% if filters.timezone == "none" %}selected{% endif %}>Not set · {{ options.timezones_unset }}</option>
                 </select>
               </div>
 
@@ -247,15 +310,74 @@
                 </select>
               </div>
 
-              <div>
-                <label class="label py-1" for="f-joined"><span class="label-text">Joined the Discord</span></label>
-                <select class="select select-bordered w-full" id="f-joined" name="joined">
-                  <option value="">Any time</option>
-                  {% for value in joined_windows %}
-                    <option value="{{ value }}" {% if filters.joined == value %}selected{% endif %}>In the last {{ value }} days</option>
+              {% comment %}
+                Kit, signups and join dates take a whole row each: they are two or more
+                controls that read as one sentence.
+              {% endcomment %}
+              <fieldset class="sm:col-span-2 lg:col-span-3">
+                <legend class="label py-1"><span class="label-text">Team kit</span></legend>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <label class="sr-only" for="f-kit">Kit</label>
+                  <select class="select select-bordered w-full sm:w-64" id="f-kit" name="kit">
+                    {% for kit in kits %}
+                      <option value="{{ kit.value }}" {% if selected_kit == kit.value %}selected{% endif %}>{{ kit.label }}{% if kit.is_current %} (current){% endif %}</option>
+                    {% empty %}
+                      <option value="">No kits yet</option>
+                    {% endfor %}
+                  </select>
+                  {% for value, label in kit_status_choices %}
+                    <label class="label cursor-pointer gap-2 py-0">
+                      <input type="checkbox" class="checkbox checkbox-sm" name="kit_status" value="{{ value }}" {% if value in filters.kit_statuses %}checked{% endif %}>
+                      <span class="label-text">{{ label }}</span>
+                    </label>
                   {% endfor %}
-                </select>
-              </div>
+                </div>
+                <p class="text-xs text-base-content/60 mt-1">Any ticked status matches. Riders with no account here have no kit status.</p>
+              </fieldset>
+
+              <fieldset class="sm:col-span-2 lg:col-span-3">
+                <legend class="label py-1"><span class="label-text">Event signup</span></legend>
+                <div class="flex flex-wrap gap-2">
+                  <label class="sr-only" for="f-signup">Signed up or not</label>
+                  <select class="select select-bordered w-full sm:w-48" id="f-signup" name="signup">
+                    <option value="yes" {% if filters.signup != "no" %}selected{% endif %}>Signed up for</option>
+                    <option value="no" {% if filters.signup == "no" %}selected{% endif %}>Not signed up for</option>
+                  </select>
+                  <label class="sr-only" for="f-event">Event</label>
+                  <select class="select select-bordered w-full sm:flex-1 sm:w-auto" id="f-event" name="event">
+                    <option value="">No filter</option>
+                    <option value="any" {% if filters.event == "any" %}selected{% endif %}>Any open event</option>
+                    {% if signup_events %}
+                      <optgroup label="Events that haven't ended">
+                        {% for event in signup_events %}
+                          <option value="{{ event.value }}" {% if filters.event == event.value %}selected{% endif %}>{{ event.label }}</option>
+                        {% endfor %}
+                      </optgroup>
+                    {% endif %}
+                  </select>
+                </div>
+                <p class="text-xs text-base-content/60 mt-1">Only events that show their signups. "Not signed up for" finds who's missing.</p>
+              </fieldset>
+
+              <fieldset class="sm:col-span-2 lg:col-span-3">
+                <legend class="label py-1"><span class="label-text">Joined the Discord</span></legend>
+                <div class="flex flex-wrap items-end gap-2">
+                  <div class="w-full sm:w-48">
+                    <label class="label-text text-xs text-base-content/60 block pb-1" for="f-joined-after">On or after</label>
+                    <input type="date" class="input input-bordered w-full" id="f-joined-after" name="joined_after" value="{{ filters.joined_after|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}">
+                  </div>
+                  <div class="w-full sm:w-48">
+                    <label class="label-text text-xs text-base-content/60 block pb-1" for="f-joined-before">Before</label>
+                    <input type="date" class="input input-bordered w-full" id="f-joined-before" name="joined_before" value="{{ filters.joined_before|date:'Y-m-d' }}">
+                  </div>
+                  <div class="flex gap-1" role="group" aria-label="Fill 'On or after'">
+                    {% for days in joined_quick_days %}
+                      <button type="button" class="btn btn-sm btn-ghost border-base-300" data-joined-days="{{ days }}">{% if days == 365 %}1 year{% else %}{{ days }} days{% endif %}</button>
+                    {% endfor %}
+                  </div>
+                </div>
+                <p class="text-xs text-base-content/60 mt-1">Either date works alone. The buttons fill "On or after".</p>
+              </fieldset>
 
               {% comment %}
                 Every sort keys off a stat, so on a not-linked list there is nothing to sort
@@ -313,6 +435,31 @@
         filters.addEventListener('submit', function () {
           hiddenQuery.value = search.value;
           hiddenQuery.disabled = !search.value;  // no empty q= in the URL
+        });
+      }
+      if (filters) {
+        // The kit and the "signed up / not" selects always hold a value, but mean nothing
+        // without a ticked status or an event, so they stay out of the URL until they do.
+        filters.addEventListener('submit', function () {
+          const kit = document.getElementById('f-kit');
+          const signup = document.getElementById('f-signup');
+          const event = document.getElementById('f-event');
+          if (kit) kit.disabled = !filters.querySelector('input[name="kit_status"]:checked');
+          if (signup && event) signup.disabled = !event.value;
+        });
+        // A disabled select stays disabled when the page comes back from the history cache.
+        window.addEventListener('pageshow', function () {
+          filters.querySelectorAll('select:disabled').forEach(function (el) { el.disabled = false; });
+        });
+        // "30 days", "90 days", "1 year": fill "On or after" counting back from the site's today.
+        const joinedAfter = document.getElementById('f-joined-after');
+        const today = '{{ today|date:"Y-m-d" }}';
+        filters.querySelectorAll('[data-joined-days]').forEach(function (button) {
+          button.addEventListener('click', function () {
+            const day = new Date(today + 'T00:00:00Z');
+            day.setUTCDate(day.getUTCDate() - Number(button.dataset.joinedDays));
+            if (joinedAfter) joinedAfter.value = day.toISOString().slice(0, 10);
+          });
         });
       }
     })();

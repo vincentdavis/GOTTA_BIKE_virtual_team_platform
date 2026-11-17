@@ -41,8 +41,9 @@ import threading
 import time
 import unicodedata
 from dataclasses import dataclass, field, replace
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import logfire
 from constance import config
@@ -60,7 +61,7 @@ from apps.team.kits import current_kit
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from datetime import date, datetime
+    from datetime import datetime
 
 # Columns read from the cache. THIS TUPLE IS THE ALLOW-LIST -- see the module docstring.
 # Deliberately absent, and not to be added without deciding the privacy question again:
@@ -113,6 +114,8 @@ ACCOUNT_COLUMNS = (
     # divides by that weight, as the signups table does (see _zmap).
     "z_map",
     "z_metrics_weight_grams",
+    # The member's chosen IANA zone, for the Timezone filter only: never drawn on a card.
+    "timezone",
 )
 
 GUILD_COLUMNS = ("user_id", "joined_at", "nickname", "display_name", "username")
@@ -216,7 +219,21 @@ RACE_WINDOW_DAYS = 90
 
 WKG_STEPS = (2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
 FTP_STEPS = (150, 200, 250, 300, 350, 400)
+# zMAP's watts and W/kg, coarse for the same reason as the two above: two fine power steps
+# together would bracket a rider's weight.
+ZMAP_STEPS = (250, 300, 350, 400, 450, 500)
+ZMAP_WKG_STEPS = (3.5, 4.0, 4.5, 5.0, 5.5, 6.0)
+# The old "joined in the last N days" values. The panel now asks for dates, but a saved or
+# shared ?joined=30 link still works: it reads as "on or after N days ago".
 JOINED_WINDOWS = (30, 90)
+# The quick buttons beside the join dates, which fill "on or after" with N days ago.
+JOINED_QUICK_DAYS = (30, 90, 365)
+# How far ahead the verification-expiry filter looks, in days, plus "expired".
+EXPIRING_WINDOWS = (7, 15, 30)
+EXPIRING_VALUES = (*(str(days) for days in EXPIRING_WINDOWS), "expired")
+# The verification filter's types, as a rider's category requires them. "weight" covers both
+# weight verifications: where a category takes either, they are one requirement.
+VERIFY_GROUPS = {"weight": "Weight", "height": "Height", "power": "Power"}
 
 
 def gender_bucket(raw: str) -> str:
@@ -351,6 +368,10 @@ class AccountFacts:
             bundled one, so this is an override rather than the only source.
         events: Upcoming events this rider has signed up for and the reader may know about --
             see ``event_chips`` for which those are.
+        kit_statuses: ``(kit slug, stored status)`` for every kit the rider has a status
+            for, for the Team kit filter. Never drawn: the card shows the current kit only.
+        timezone: The rider's own IANA zone, "" when they have not set one. For the Timezone
+            filter only; never drawn on a card.
 
     """
 
@@ -365,6 +386,22 @@ class AccountFacts:
     kit_badge: str = ""
     kit_icon_url: str = ""
     events: tuple[EventChip, ...] = ()
+    kit_statuses: tuple[tuple[str, str], ...] = ()
+    timezone: str = ""
+
+    def kit_status_on(self, slug: str) -> str:
+        """Return the rider's stored status for a kit, as the kit page reads it.
+
+        Args:
+            slug: The kit's slug.
+
+        Returns:
+            The stored status, or "unknown" when the team has not asked about that kit.
+
+        """
+        from apps.team.kits import DEFAULT_STATUS
+
+        return dict(self.kit_statuses).get(slug, DEFAULT_STATUS)
 
     def __str__(self) -> str:
         """Return the Discord name, so rendering the object never falls back to its repr.
@@ -992,9 +1029,9 @@ def _no_account_qs():
 
     """
     linked = User.objects.exclude(discord_id="").exclude(discord_id__isnull=True).values("discord_id")
-    return GuildMember.objects.filter(
-        user__isnull=True, date_left__isnull=True, is_bot=False
-    ).exclude(discord_id__in=linked)
+    return GuildMember.objects.filter(user__isnull=True, date_left__isnull=True, is_bot=False).exclude(
+        discord_id__in=linked
+    )
 
 
 def _no_zwid_qs():
@@ -1009,8 +1046,11 @@ def _no_zwid_qs():
         The queryset.
 
     """
-    return User.objects.filter(is_active=True).filter(Q(zwid__isnull=True) | Q(zwid=0)).filter(
-        guild_member__isnull=False, guild_member__date_left__isnull=True, guild_member__is_bot=False
+    return (
+        User.objects
+        .filter(is_active=True)
+        .filter(Q(zwid__isnull=True) | Q(zwid=0))
+        .filter(guild_member__isnull=False, guild_member__date_left__isnull=True, guild_member__is_bot=False)
     )
 
 
@@ -1027,13 +1067,17 @@ def _no_stats_qs():
         The queryset.
 
     """
-    return User.objects.filter(is_active=True, zwid__isnull=False, zwid__gt=0).filter(
-        guild_member__isnull=False, guild_member__date_left__isnull=True, guild_member__is_bot=False
-    ).exclude(zwid__in=RiderProfile.objects.values("zwid"))
+    return (
+        User.objects
+        .filter(is_active=True, zwid__isnull=False, zwid__gt=0)
+        .filter(guild_member__isnull=False, guild_member__date_left__isnull=True, guild_member__is_bot=False)
+        .exclude(zwid__in=RiderProfile.objects.values("zwid"))
+    )
 
 
-def _link_row(*, name, discord_id="", handle="", avatar_hash="", user_id=None, zwid=None,
-              joined_at=None, extra_names=()):
+def _link_row(
+    *, name, discord_id="", handle="", avatar_hash="", user_id=None, zwid=None, joined_at=None, extra_names=()
+):
     """Assemble one row, folding every name it is known by into the haystack.
 
     Args:
@@ -1086,20 +1130,30 @@ def build_link_rows(kind: str) -> list[LinkRow]:
     if kind == "no_account":
         for row in _no_account_qs().values(*GUILD_GAP_COLUMNS).iterator(chunk_size=500):
             shown = row["nickname"] or row["display_name"] or row["username"] or "Unknown member"
-            rows.append(_link_row(
-                name=shown,
-                discord_id=row["discord_id"],
-                handle=row["username"] or "",
-                avatar_hash=row["avatar_hash"] or "",
-                joined_at=row["joined_at"],
-                extra_names=(row["display_name"], row["username"], row["nickname"]),
-            ))
+            rows.append(
+                _link_row(
+                    name=shown,
+                    discord_id=row["discord_id"],
+                    handle=row["username"] or "",
+                    avatar_hash=row["avatar_hash"] or "",
+                    joined_at=row["joined_at"],
+                    extra_names=(row["display_name"], row["username"], row["nickname"]),
+                )
+            )
     elif kind in ("no_zwid", "no_stats"):
         qs = _no_zwid_qs() if kind == "no_zwid" else _no_stats_qs()
         columns = (
-            "id", "zwid", "first_name", "last_name", "discord_id", "discord_avatar",
-            "discord_username", "guild_member__nickname", "guild_member__display_name",
-            "guild_member__username", "guild_member__joined_at",
+            "id",
+            "zwid",
+            "first_name",
+            "last_name",
+            "discord_id",
+            "discord_avatar",
+            "discord_username",
+            "guild_member__nickname",
+            "guild_member__display_name",
+            "guild_member__username",
+            "guild_member__joined_at",
         )
         for row in qs.values(*columns).iterator(chunk_size=500):
             shown = (
@@ -1110,17 +1164,19 @@ def build_link_rows(kind: str) -> list[LinkRow]:
                 or "Unknown member"
             )
             real = f"{row['first_name'] or ''} {row['last_name'] or ''}".strip()
-            rows.append(_link_row(
-                name=shown,
-                discord_id=row["discord_id"] or "",
-                handle=row["discord_username"] or "",
-                avatar_hash=row["discord_avatar"] or "",
-                user_id=row["id"],
-                zwid=row["zwid"] if kind == "no_stats" else None,
-                joined_at=row["guild_member__joined_at"],
-                # Real names are searchable and never shown, exactly as on a card.
-                extra_names=(real, row["discord_username"], row["guild_member__display_name"]),
-            ))
+            rows.append(
+                _link_row(
+                    name=shown,
+                    discord_id=row["discord_id"] or "",
+                    handle=row["discord_username"] or "",
+                    avatar_hash=row["discord_avatar"] or "",
+                    user_id=row["id"],
+                    zwid=row["zwid"] if kind == "no_stats" else None,
+                    joined_at=row["guild_member__joined_at"],
+                    # Real names are searchable and never shown, exactly as on a card.
+                    extra_names=(real, row["discord_username"], row["guild_member__display_name"]),
+                )
+            )
     rows.sort(key=lambda r: (fold(r.name), r.discord_id))
     return rows
 
@@ -1198,12 +1254,29 @@ class RosterFilters:
         account: "yes" for riders with an account here, "no" for the rest.
         wkg: Minimum 20-minute W/kg.
         ftp: Minimum zFTP in watts.
-        joined: Days since joining the Discord, 30 or 90.
+        zmap: Minimum zMAP in watts.
+        zmap_wkg: Minimum zMAP W/kg.
+        joined_after: Joined the Discord on or after this day (current membership).
+        joined_before: Joined the Discord before this day.
         racing: "30" or "90" for a rider who raced that recently, "quiet" for one who has
             not raced in 60 days -- including one who has never raced at all.
         country: An ISO 3166-1 alpha-2 code. Subdivisions resolve to their parent, so
             picking "United Kingdom" finds the Welsh and Scottish riders too -- which is
             what the card promises, since it flies the Union Flag for all of them.
+        timezone: An IANA zone some member has set, or "none" for members who have not set
+            one. A rider with no account here has no timezone and matches neither.
+        kit: The slug of the kit ``kit_statuses`` is about. Set only alongside them.
+        kit_statuses: Stored kit statuses; a rider matches when their status for ``kit`` is
+            any of them. Empty narrows nothing.
+        signup: "yes" for "signed up for", "no" for "not signed up for". Set only with
+            ``event``.
+        event: "any" for any event in ``signup_events``, else one of their ids as a string.
+        event_ids: The events ``event`` stands for, resolved when parsed.
+        expiring: "7", "15" or "30" for a required verification that lapses within that many
+            days, "expired" for one that already has. Reviewers only -- the view clears it
+            for anyone else.
+        verify_group: A key of ``VERIFY_GROUPS``, narrowing ``expiring`` to that type; ""
+            for any type.
         link: One of ``LINK_VALUES``. Unlike every other field here it does not narrow the
             roster -- it selects a different list entirely, of people who have no card at
             all. Setting it clears the rest, because a stat filter over people with no
@@ -1222,9 +1295,20 @@ class RosterFilters:
     account: str = ""
     wkg: float | None = None
     ftp: int | None = None
-    joined: int | None = None
+    zmap: int | None = None
+    zmap_wkg: float | None = None
+    joined_after: date | None = None
+    joined_before: date | None = None
     racing: str = ""
     country: str = ""
+    timezone: str = ""
+    kit: str = ""
+    kit_statuses: tuple[str, ...] = ()
+    signup: str = ""
+    event: str = ""
+    event_ids: frozenset[int] = frozenset()
+    expiring: str = ""
+    verify_group: str = ""
     link: str = ""
 
     @property
@@ -1235,11 +1319,33 @@ class RosterFilters:
             True if any filter is set.
 
         """
-        return any(value not in ("", None) for value in (
-            self.category, self.zr, self.velo2, self.velo2_women, self.gender, self.phenotype,
-            self.verified, self.age, self.account, self.wkg, self.ftp, self.joined, self.racing,
-            self.country, self.link,
-        ))
+        return any(
+            value not in ("", None, ())
+            for value in (
+                self.category,
+                self.zr,
+                self.velo2,
+                self.velo2_women,
+                self.gender,
+                self.phenotype,
+                self.verified,
+                self.age,
+                self.account,
+                self.wkg,
+                self.ftp,
+                self.zmap,
+                self.zmap_wkg,
+                self.joined_after,
+                self.joined_before,
+                self.racing,
+                self.country,
+                self.timezone,
+                self.kit_statuses,
+                self.signup,
+                self.expiring,
+                self.link,
+            )
+        )
 
 
 def _one_of(params, key: str, allowed) -> str:
@@ -1277,7 +1383,98 @@ def _number_choice(params, key: str, allowed):
     return None
 
 
-def parse_filters(params, rows: tuple[RosterRow, ...]) -> RosterFilters:
+def _many(params, key: str, allowed) -> tuple[str, ...]:
+    """Read a repeated querystring value, keeping only the values we offer.
+
+    Args:
+        params: The request's GET parameters, or a plain dict in tests.
+        key: The parameter name.
+        allowed: The values this parameter may take, in the order to return them.
+
+    Returns:
+        The recognised values, in ``allowed`` order, without repeats.
+
+    """
+    raw = params.getlist(key) if hasattr(params, "getlist") else params.get(key) or []
+    if isinstance(raw, str):
+        raw = [raw]
+    given = {value.strip() for value in raw}
+    return tuple(value for value in allowed if value in given)
+
+
+def _iso_date(params, key: str) -> date | None:
+    """Read a ``YYYY-MM-DD`` querystring value.
+
+    Args:
+        params: The request's GET parameters.
+        key: The parameter name.
+
+    Returns:
+        The date, or None when absent or not a date.
+
+    """
+    raw = (params.get(key) or "").strip()
+    try:
+        return date.fromisoformat(raw) if raw else None
+    except ValueError:
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class FilterChoice:
+    """One option in a filter dropdown that comes from the database rather than the rows.
+
+    Attributes:
+        value: What the querystring carries.
+        label: What the dropdown says.
+        is_current: For a kit, whether it is the team's current one (the default choice).
+
+    """
+
+    value: str
+    label: str
+    is_current: bool = False
+
+    def __str__(self) -> str:
+        """Return the label.
+
+        Returns:
+            The label.
+
+        """
+        return self.label
+
+
+def filter_choices() -> dict[str, list[FilterChoice]]:
+    """Read the dropdown options that live in the database: kits and events. Two queries.
+
+    **Events are only those whose signups the event itself shows** (``show_signups``), as
+    well as visible and not yet finished. That is the rule ``event_chips`` follows for every
+    card but the reader's own, and for the same reason: filtering by an event whose page hides
+    its signups would list them anyway, one rider at a time.
+
+    Returns:
+        ``{"kits": [...], "events": [...]}``, kits current first, events soonest first.
+
+    """
+    from apps.events.models import Event
+    from apps.team.models import TeamKit
+
+    kits = [
+        FilterChoice(value=slug, label=name, is_current=is_current)
+        for slug, name, is_current in TeamKit.objects.filter(active=True).values_list("slug", "name", "is_current")
+    ]
+    events = [
+        FilterChoice(value=str(event_id), label=f"{title or 'Event'} · ends {end.day} {end:%b}")
+        for event_id, title, end in Event.objects
+        .filter(visible=True, show_signups=True, end_date__gte=timezone.localdate())
+        .order_by("start_date", "title")
+        .values_list("id", "title", "end_date")
+    ]
+    return {"kits": kits, "events": events}
+
+
+def parse_filters(params, rows: tuple[RosterRow, ...], choices: dict | None = None) -> RosterFilters:
     """Read the filter state out of a querystring.
 
     Values are checked against what this roster actually offers -- the categories present,
@@ -1288,6 +1485,7 @@ def parse_filters(params, rows: tuple[RosterRow, ...]) -> RosterFilters:
     Args:
         params: The request's GET parameters.
         rows: The whole roster, for the vocabularies it actually contains.
+        choices: ``filter_choices()``, when the caller already has it; read here otherwise.
 
     Returns:
         The filters to apply.
@@ -1300,7 +1498,33 @@ def parse_filters(params, rows: tuple[RosterRow, ...]) -> RosterFilters:
     if link:
         return RosterFilters(link=link)
 
+    from apps.team.kits import KitStatus
+
     options = filter_options(rows)
+    choices = filter_choices() if choices is None else choices
+
+    # Team kit: the statuses are the filter. The kit only says which kit they are about, and
+    # falls back to the current kit (the panel's default) when the link does not name one.
+    kit_statuses = _many(params, "kit_status", KitStatus.values)
+    kit = _one_of(params, "kit", [c.value for c in choices["kits"]])
+    kit = kit or next((c.value for c in choices["kits"] if c.is_current), "")
+    if not kit or not kit_statuses:
+        kit, kit_statuses = "", ()
+
+    # Event signup: the event is the filter, and "signed up for" its default sense.
+    events = [c.value for c in choices["events"]]
+    event = _one_of(params, "event", ["any", *events])
+    signup = (_one_of(params, "signup", ("yes", "no")) or "yes") if event else ""
+    picked = events if event == "any" else [event] if event else []
+
+    expiring = _one_of(params, "expiring", EXPIRING_VALUES)
+
+    # A ?joined=30 link from before the panel took dates means "on or after 30 days ago".
+    joined_after = _iso_date(params, "joined_after")
+    legacy_days = _number_choice(params, "joined", JOINED_WINDOWS)
+    if joined_after is None and legacy_days:
+        joined_after = timezone.localdate() - timedelta(days=legacy_days)
+
     return RosterFilters(
         category=_one_of(params, "category", options["categories"]),
         zr=_one_of(params, "zr", options["zr"]),
@@ -1313,9 +1537,20 @@ def parse_filters(params, rows: tuple[RosterRow, ...]) -> RosterFilters:
         account=_one_of(params, "account", ("yes", "no")),
         wkg=_number_choice(params, "wkg", WKG_STEPS),
         ftp=_number_choice(params, "ftp", FTP_STEPS),
-        joined=_number_choice(params, "joined", JOINED_WINDOWS),
+        zmap=_number_choice(params, "zmap", ZMAP_STEPS),
+        zmap_wkg=_number_choice(params, "zmap_wkg", ZMAP_WKG_STEPS),
+        joined_after=joined_after,
+        joined_before=_iso_date(params, "joined_before"),
         racing=_one_of(params, "racing", ("30", "90", "quiet")),
         country=_one_of(params, "country", [code for code, _ in options["countries"]]),
+        timezone=_one_of(params, "tz", [*options["timezone_values"], "none"]),
+        kit=kit,
+        kit_statuses=kit_statuses,
+        signup=signup,
+        event=event,
+        event_ids=frozenset(int(value) for value in picked),
+        expiring=expiring,
+        verify_group=_one_of(params, "vtype", VERIFY_GROUPS) if expiring else "",
     )
 
 
@@ -1350,22 +1585,135 @@ def filter_options(rows: tuple[RosterRow, ...]) -> dict[str, list]:
         "phenotypes": sorted(p for p in phenotypes if p),
         "ages": [a for a in AGE_BRACKETS_ORDER if a in ages],
         "countries": sorted(countries.items(), key=lambda pair: pair[1]),
+        **timezone_options(rows),
     }
 
 
-def apply_filters(rows: list[RosterRow], filters: RosterFilters) -> list[RosterRow]:
+# The Timezone dropdown's groups, by the IANA area before the first slash, in display order.
+TIMEZONE_GROUPS = (
+    ("Americas", ("America",)),
+    ("Europe and Africa", ("Europe", "Africa")),
+    ("Asia and Pacific", ("Asia", "Australia", "Pacific", "Indian")),
+)
+TIMEZONE_OTHER_GROUP = "Other"
+
+
+@dataclass(frozen=True, slots=True)
+class TimezoneOption:
+    """One zone in the Timezone dropdown.
+
+    Attributes:
+        value: The IANA name, as stored on the account.
+        label: The place and its offset now, "New York (UTC-5)".
+        count: How many riders on the roster have set it.
+        offset_minutes: The offset now, for ordering; 0 for a zone this server cannot read.
+
+    """
+
+    value: str
+    label: str
+    count: int
+    offset_minutes: int = 0
+
+    def __str__(self) -> str:
+        """Return the label.
+
+        Returns:
+            The label.
+
+        """
+        return self.label
+
+
+def _offset_label(minutes: int) -> str:
+    """Write a UTC offset the way the dropdown shows it: "UTC+0", "UTC-5", "UTC+5:30".
+
+    Args:
+        minutes: The offset in minutes.
+
+    Returns:
+        The label.
+
+    """
+    sign = "-" if minutes < 0 else "+"
+    hours, rest = divmod(abs(minutes), 60)
+    return f"UTC{sign}{hours}" + (f":{rest:02d}" if rest else "")
+
+
+def timezone_options(rows: tuple[RosterRow, ...]) -> dict:
+    """Group the zones the roster's members have set, west to east, with how many set each.
+
+    Only zones someone has chosen are offered, so the list stays short and every option
+    finds somebody. Offsets are taken now, so they follow daylight saving.
+
+    Args:
+        rows: The whole roster.
+
+    Returns:
+        ``timezones`` (``[(group label, [TimezoneOption, ...])]``), ``timezone_values`` (every
+        zone offered) and ``timezones_unset`` (members with no zone set).
+
+    """
+    counts: dict[str, int] = {}
+    unset = 0
+    for row in rows:
+        if row.account is None:
+            continue
+        if row.account.timezone:
+            counts[row.account.timezone] = counts.get(row.account.timezone, 0) + 1
+        else:
+            unset += 1
+
+    now = timezone.now()
+    grouped: dict[str, list[TimezoneOption]] = {}
+    for zone, count in counts.items():
+        place = zone.rsplit("/", 1)[-1].replace("_", " ")
+        try:
+            offset = now.astimezone(ZoneInfo(zone)).utcoffset()
+        except ZoneInfoNotFoundError, ValueError:
+            offset = None
+        minutes = int(offset.total_seconds() // 60) if offset is not None else 0
+        label = f"{place} ({_offset_label(minutes)})" if offset is not None else place
+        area = zone.split("/", 1)[0]
+        group = next((name for name, areas in TIMEZONE_GROUPS if area in areas), TIMEZONE_OTHER_GROUP)
+        if offset is None:
+            group = TIMEZONE_OTHER_GROUP
+        grouped.setdefault(group, []).append(TimezoneOption(zone, label, count, minutes))
+
+    order = [name for name, _ in TIMEZONE_GROUPS] + [TIMEZONE_OTHER_GROUP]
+    timezones = [
+        (name, sorted(grouped[name], key=lambda option: (option.offset_minutes, option.label)))
+        for name in order
+        if name in grouped
+    ]
+    return {"timezones": timezones, "timezone_values": sorted(counts), "timezones_unset": unset}
+
+
+def apply_filters(
+    rows: list[RosterRow], filters: RosterFilters, *, expiring_user_ids: set[int] | None = None
+) -> list[RosterRow]:
     """Narrow the roster to the riders the reader asked for.
 
     Args:
         rows: The rows to narrow.
         filters: The filter state.
+        expiring_user_ids: The accounts the verification-expiry filter matches, when the caller
+            has already worked them out; looked up here otherwise, and only when that filter
+            is set.
 
     Returns:
         The matching rows, order preserved.
 
     """
     now = timezone.now()
-    cutoff = now - timedelta(days=filters.joined) if filters.joined else None
+    if filters.expiring and expiring_user_ids is None:
+        from apps.team.services import riders_with_lapsing_verification
+
+        expiring_user_ids = riders_with_lapsing_verification(
+            [row.account.user_id for row in rows if row.account is not None],
+            within=None if filters.expiring == "expired" else int(filters.expiring),
+            group=filters.verify_group,
+        )
 
     def keep(row: RosterRow) -> bool:
         card, account = row.card, row.account
@@ -1397,13 +1745,56 @@ def apply_filters(rows: list[RosterRow], filters: RosterFilters) -> list[RosterR
             return False
         if filters.ftp is not None and (card.zftp is None or card.zftp < filters.ftp):
             return False
+        if filters.zmap is not None and (card.zmap is None or card.zmap < filters.zmap):
+            return False
+        if filters.zmap_wkg is not None and (card.zmap_wkg is None or card.zmap_wkg < filters.zmap_wkg):
+            return False
         if filters.racing and not _raced(card, filters.racing, now):
             return False
         if filters.country and resolve_country(card.country)[0] != filters.country:
             return False
-        return not (cutoff and not (account and account.member_since and account.member_since >= cutoff))
+        return _account_matches(account, filters, expiring_user_ids)
 
     return [row for row in rows if keep(row)]
+
+
+def _account_matches(account: AccountFacts | None, filters: RosterFilters, expiring_user_ids: set[int] | None) -> bool:
+    """Apply the filters that read the account half: kit, signups, timezone, expiry, joining.
+
+    A rider with no account here has none of these, so matches only "not signed up for".
+
+    Args:
+        account: The row's account half, or None.
+        filters: The filter state.
+        expiring_user_ids: The accounts the verification-expiry filter matches.
+
+    Returns:
+        Whether the account passes every one of them that is set.
+
+    """
+    if filters.kit_statuses and not (account and account.kit_status_on(filters.kit) in filters.kit_statuses):
+        return False
+    if filters.signup:
+        signed = bool(account and {chip.event_id for chip in account.events} & filters.event_ids)
+        if signed != (filters.signup == "yes"):
+            return False
+    if filters.timezone == "none" and not (account and not account.timezone):
+        return False
+    if filters.timezone not in ("", "none") and not (account and account.timezone == filters.timezone):
+        return False
+    if filters.expiring and not (account and account.user_id in (expiring_user_ids or ())):
+        return False
+    if filters.joined_after or filters.joined_before:
+        # Compared as the day it began in the site's timezone, which is what the date inputs
+        # mean: "on or after 1 Sep" starts at midnight here, not in UTC.
+        joined_on = timezone.localdate(account.member_since) if account and account.member_since else None
+        if joined_on is None:
+            return False
+        if filters.joined_after and joined_on < filters.joined_after:
+            return False
+        if filters.joined_before and joined_on >= filters.joined_before:
+            return False
+    return True
 
 
 # "Quiet" is deliberately longer than the windows above it: a rider is only worth flagging
@@ -1545,7 +1936,8 @@ def race_records(roster_zwids: list[int], *, now: datetime | None = None) -> dic
     # .order_by() clears Meta.ordering ("-event__event_date", "pos"), which would otherwise
     # drag those columns into the GROUP BY.
     windowed = (
-        ZPRiderResults.objects.filter(zwid__in=roster_zwids, event__event_date__gte=cutoff, event__event_date__lte=now)
+        ZPRiderResults.objects
+        .filter(zwid__in=roster_zwids, event__event_date__gte=cutoff, event__event_date__lte=now)
         .order_by()
         .values("zwid")
         .annotate(
@@ -1559,7 +1951,8 @@ def race_records(roster_zwids: list[int], *, now: datetime | None = None) -> dic
     # Last result is deliberately NOT windowed: "last raced 4 months ago" is the useful
     # answer for a rider who has been quiet, and an empty window would say nothing at all.
     latest = (
-        ZPRiderResults.objects.filter(zwid__in=roster_zwids)
+        ZPRiderResults.objects
+        .filter(zwid__in=roster_zwids)
         .order_by()
         .values("zwid")
         .annotate(last=Max("event__event_date"))
@@ -1587,6 +1980,7 @@ class EventChip:
         logo_url: The event's own logo, when it has one. The name still travels with it: it
             is the image's accessible name, and the chip falls back to it entirely when an
             event has no logo.
+        event_id: The event's id, for the Event signup filter. Never drawn.
 
     """
 
@@ -1595,6 +1989,7 @@ class EventChip:
     start_date: object = None
     role: str = ""
     logo_url: str = ""
+    event_id: int | None = None
 
     def __str__(self) -> str:
         """Return the event name, never the repr.
@@ -1643,7 +2038,8 @@ def event_chips(user_ids: list[int], *, viewer_id: int | None = None) -> dict[in
         shown |= Q(user_id=viewer_id)
 
     rows = (
-        EventSignup.objects.filter(
+        EventSignup.objects
+        .filter(
             status=EventSignup.Status.REGISTERED,
             user_id__in=user_ids,
             event__visible=True,
@@ -1666,6 +2062,7 @@ def event_chips(user_ids: list[int], *, viewer_id: int | None = None) -> dict[in
                 start_date=start_date,
                 role=roles.get((event_id, user_id), ""),
                 logo_url=_logo_url(logo),
+                event_id=event_id,
             )
         )
     return {user_id: tuple(items) for user_id, items in chips.items()}
@@ -1693,7 +2090,7 @@ def _logo_url(name: str | None) -> str:
 
     try:
         return Event._meta.get_field("logo").storage.url(name)
-    except (ValueError, NotImplementedError, SuspiciousOperation):
+    except ValueError, NotImplementedError, SuspiciousOperation:
         # A storage that refuses to name the file (an unset MEDIA_URL, a path it reads as
         # escaping the root) must cost the card its logo, not the whole roster.
         logfire.warning("Event logo could not be resolved to a URL")
@@ -1728,7 +2125,8 @@ def _squad_roles(event_ids: set[int]) -> dict[tuple[int, int], str]:
     # Vice-captains first, so a rider holding both roles in one event reads as Captain.
     for relation, label in (("vice_captains", "Vice-captain"), ("captains", "Captain")):
         pairs = (
-            Squad.objects.filter(event_id__in=event_ids, **{f"{relation}__isnull": False})
+            Squad.objects
+            .filter(event_id__in=event_ids, **{f"{relation}__isnull": False})
             .values_list("event_id", f"{relation}__id")
             .distinct()
         )
@@ -1762,6 +2160,10 @@ _KIT_CARD_LABELS = {
     "have": "Has the kit",
 }
 
+# The Team kit filter's checkboxes and chip, in the card's third person, with the state the
+# card leaves blank named the way the kit page names it. In KitStatus order.
+KIT_FILTER_LABELS = {"unknown": "Unknown", **_KIT_CARD_LABELS}
+
 
 # The two stored statuses that mean there is nothing left to chase. The card draws a jersey
 # for these and words for the rest -- see templates/team/partials/_rider_card.html. Kept
@@ -1789,7 +2191,7 @@ def _kit_icon_url(kit: object | None) -> str:
         return ""
     try:
         return icon.url
-    except (ValueError, NotImplementedError, SuspiciousOperation):
+    except ValueError, NotImplementedError, SuspiciousOperation:
         # A storage that refuses to name the file costs the cards their kit icon, not the
         # roster -- the same rule the event logos follow.
         logfire.warning("Team kit icon could not be resolved to a URL")
@@ -1830,11 +2232,14 @@ def _account_facts(
     # User instance -- this half of the roster is .values() dicts by design. The default is
     # deliberately blank rather than "unknown": a rider the team has never asked has no kit
     # status to report, and a card saying "Unknown" on two thousand riders is noise, not news.
+    from apps.team.kits import BADGE_CLASSES, KitStatus
+
+    team_kit = account.get("team_kit") or {}
+    if not isinstance(team_kit, dict):
+        team_kit = {}
     status, label, badge = "", "", ""
     if kit is not None:
-        from apps.team.kits import BADGE_CLASSES, KitStatus
-
-        stored = (account.get("team_kit") or {}).get(kit.slug)
+        stored = team_kit.get(kit.slug)
         if stored in KitStatus.values and stored != KitStatus.UNKNOWN:
             status = stored
             label = _KIT_CARD_LABELS[stored]
@@ -1854,6 +2259,9 @@ def _account_facts(
         # kit" would have the picture and the words saying opposite things.
         kit_icon_url=kit_icon_url if status in SETTLED_KIT_STATUSES else "",
         events=events,
+        # Only statuses the kit page knows, so a hand-edited value cannot match a filter.
+        kit_statuses=tuple((slug, stored) for slug, stored in sorted(team_kit.items()) if stored in KitStatus.values),
+        timezone=(account.get("timezone") or "").strip(),
     )
 
 
@@ -1924,9 +2332,7 @@ def build_roster_index(viewer_id: int | None = None) -> RosterIndex:
         if len(claims) == 1:
             claimed = claims[0]
             guild = guild_rows.get(claimed["id"])
-            account = _account_facts(
-                claimed, guild, kit, chips.get(claimed["id"], ()), kit_icon_url=kit_icon_url
-            )
+            account = _account_facts(claimed, guild, kit, chips.get(claimed["id"], ()), kit_icon_url=kit_icon_url)
             joined += 1
         elif len(claims) > 1:
             contested += 1
