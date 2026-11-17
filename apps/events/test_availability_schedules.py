@@ -445,6 +445,7 @@ def test_a_captain_sets_up_a_schedule(client, event, squad, template, captain):
     page = client.get(url).content.decode()
     assert "Set up a schedule" in page
     assert 'value="18:00"' in page
+    assert "A sheet that would start after the event ends (Sun 31 Jan 2027) is never posted." in page
 
     response = client.post(
         url,

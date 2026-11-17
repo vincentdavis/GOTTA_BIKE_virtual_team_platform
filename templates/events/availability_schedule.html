@@ -129,6 +129,7 @@
               <span class="text-sm">days after posting</span>
             </div>
             {% for error in form.starts_after_days.errors %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+            <p class="label whitespace-normal">A sheet that would start after the event ends ({{ event.end_date|date:"D j M Y" }}) is never posted.</p>
           </fieldset>
 
           <fieldset class="fieldset">
