@@ -1948,8 +1948,77 @@ def event_role_setup_view(request: HttpRequest, pk: int) -> HttpResponse:
             "can_edit": can_edit,
             "role_display": role_display,
             "allowed_prefixes": "  ".join(allowed_prefixes),
+            "can_set_signup_emails": _can_set_signup_export_emails(request.user),
         },
     )
+
+
+def _can_set_signup_export_emails(user: User) -> bool:
+    """Check if a user may turn email addresses in an event's signup download on or off.
+
+    Event admins only (superusers pass through ``has_permission``). Deliberately not the
+    head captain or coordinators: they are the ones downloading, and they can edit the
+    rest of Role Setup, so letting them flip this would make it no control at all.
+
+    Args:
+        user: The requesting user.
+
+    Returns:
+        True if the user may change the event's ``signup_export_emails`` setting.
+
+    """
+    return user.has_permission(Permissions.EVENT_ADMIN)
+
+
+@login_required
+@team_member_required()
+@require_POST
+def event_signup_emails_setting_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Turn the email column in an event's signup download on or off.
+
+    Posted from its own form on the Role Setup page, separate from the role form, because
+    the people allowed to change it (event admins) and the people allowed to edit the
+    roles (assign_roles, head captain, coordinators) are different sets.
+
+    Args:
+        request: The HTTP request; ``signup_export_emails=on`` turns it on, absent turns it off.
+        pk: The event primary key.
+
+    Returns:
+        A redirect back to the Role Setup page.
+
+    Raises:
+        PermissionDenied: If the user isn't an event admin.
+
+    """
+    event = get_object_or_404(Event, pk=pk)
+    if not _can_set_signup_export_emails(request.user):
+        from django.core.exceptions import PermissionDenied
+
+        logfire.warning(
+            "Unauthorized signup email setting change",
+            event_id=pk,
+            user_id=request.user.id,
+        )
+        raise PermissionDenied
+
+    enabled = request.POST.get("signup_export_emails") == "on"
+    if enabled != event.signup_export_emails:
+        event.signup_export_emails = enabled
+        event.save(update_fields=["signup_export_emails"])
+        logfire.info(
+            "Event signup email download setting changed",
+            event_id=pk,
+            user_id=request.user.id,
+            enabled=enabled,
+        )
+    messages.success(
+        request,
+        "Email addresses can now be included in the signup download."
+        if enabled
+        else "Email addresses are no longer included in the signup download.",
+    )
+    return redirect("events:event_role_setup", pk=pk)
 
 
 @login_required
@@ -2431,6 +2500,10 @@ def _availability_columns(event: Event, tz_obj: ZoneInfo, today_local: date) -> 
 def signup_export_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     """Download the event's registered signups as CSV.
 
+    ``?email=1`` adds each rider's email address. It is refused unless an event admin has
+    turned on the event's ``signup_export_emails`` setting (Role Setup page), so emails
+    never leave the app by default -- and never reach anyone who can't download at all.
+
     Args:
         request: The HTTP request.
         event_pk: The event primary key.
@@ -2439,13 +2512,14 @@ def signup_export_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         A CSV attachment.
 
     Raises:
-        PermissionDenied: If the user may not export this event's signups.
+        PermissionDenied: If the user may not export this event's signups, or asked for
+            emails on an event that doesn't allow them.
 
     """
+    from django.core.exceptions import PermissionDenied
+
     event = get_object_or_404(Event, pk=event_pk)
     if not _can_export_event_signups(request.user, event):
-        from django.core.exceptions import PermissionDenied
-
         logfire.warning(
             "Unauthorized signup export attempt",
             event_id=event_pk,
@@ -2453,15 +2527,25 @@ def signup_export_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         )
         raise PermissionDenied("Only the event's head captain or a coordinator can export signups.")
 
+    include_email = request.GET.get("email") == "1"
+    if include_email and not event.signup_export_emails:
+        logfire.warning(
+            "Signup email export refused: setting is off",
+            event_id=event_pk,
+            user_id=request.user.id,
+        )
+        raise PermissionDenied("Email addresses can't be downloaded for this event.")
+
     signups = event.signups.select_related("user").filter(status=EventSignup.Status.REGISTERED)
     enriched = _enrich_signups(signups, event=event)
     enriched.sort(key=lambda e: (e["user"].get_full_name() or e["user"].discord_username or "").lower())
     questions = active_questions(event)
-    header, rows = _signup_export_rows(event, enriched, questions)
+    header, rows = _signup_export_rows(event, enriched, questions, include_email=include_email)
 
     slug = re.sub(r"[^A-Za-z0-9]+", "-", event.title).strip("-").lower() or "event"
+    suffix = "signups-with-emails" if include_email else "signups"
     response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="{slug}-signups.csv"'
+    response["Content-Disposition"] = f'attachment; filename="{slug}-{suffix}.csv"'
     writer = csv.writer(response)
     writer.writerow(header)
     writer.writerows(rows)
@@ -2471,6 +2555,7 @@ def signup_export_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         event_id=event_pk,
         user_id=request.user.id,
         row_count=len(rows),
+        include_email=include_email,
     )
     return response
 
@@ -2498,22 +2583,27 @@ def _can_export_event_signups(user: User, event: Event) -> bool:
     return _is_event_coordinator(user, event)
 
 
-def _signup_export_rows(event: Event, enriched: list[dict], questions: list) -> tuple[list[str], list[list]]:
+def _signup_export_rows(
+    event: Event, enriched: list[dict], questions: list, *, include_email: bool = False
+) -> tuple[list[str], list[list]]:
     """Build the header and data rows for the signup CSV.
 
     Columns mirror the signup table on the event page, including the ones hidden
     behind the column picker -- the export is the whole list, not the current view.
+    The Email column is the one exception: the table never shows it.
 
     Args:
         event: The event being exported.
         enriched: Enriched signup dicts from ``_enrich_signups``.
         questions: The event's active signup questions, one column each.
+        include_email: Add an Email column after Discord. The caller checks the
+            event's ``signup_export_emails`` setting.
 
     Returns:
         ``(header, rows)`` ready to hand to ``csv.writer``.
 
     """
-    header = ["Name", "Discord", "ZWID", "Timezone"]
+    header = ["Name", "Discord", *(["Email"] if include_email else []), "ZWID", "Timezone"]
     if event.squad_gender_required:
         header.append("Squad Gender")
     header += [
@@ -2542,6 +2632,7 @@ def _signup_export_rows(event: Event, enriched: list[dict], questions: list) -> 
         row = [
             user.get_full_name() or user.discord_username or "",
             user.discord_username or "",
+            *([(user.email or "").strip()] if include_email else []),
             e["zwid"] or "",
             ", ".join(signup.signup_timezone or []),
         ]

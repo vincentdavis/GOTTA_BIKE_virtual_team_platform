@@ -414,12 +414,33 @@
             {% endif %}
             <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
             {% if can_export_signups %}
+            {% if event.signup_export_emails %}
+            {# An event admin turned on emails for this event (Role Setup page), so the download offers both. Emails stay opt-in per download. #}
+            <div class="dropdown dropdown-end" data-signup-export-menu>
+              <div tabindex="0" role="button" class="btn btn-outline btn-sm btn-square"
+                   title="Download every registered signup as CSV, all columns" aria-label="Export signups as CSV">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+              </div>
+              <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-72 max-w-[calc(100vw-4rem)]">
+                <li><a href="{% url 'events:signup_export' event.pk %}">Download CSV</a></li>
+                <li>
+                  <a href="{% url 'events:signup_export' event.pk %}?email=1" class="flex flex-col items-start gap-0.5">
+                    <span>Download CSV with emails</span>
+                    <span class="text-xs text-base-content/60">Members' personal email addresses. Don't share the file.</span>
+                  </a>
+                </li>
+              </ul>
+            </div>
+            {% else %}
             <a href="{% url 'events:signup_export' event.pk %}" class="btn btn-outline btn-sm btn-square"
                title="Download every registered signup as CSV, all columns" aria-label="Export signups as CSV">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
               </svg>
             </a>
+            {% endif %}
             {% endif %}
             <div class="dropdown dropdown-end">
               <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>

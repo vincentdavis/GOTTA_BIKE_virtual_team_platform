@@ -231,6 +231,37 @@
       {% endif %}
     </div>
   </div>
+
+  {# Its own form, not part of the role form above: only event admins may change it, and they are not the people who edit roles. #}
+  <div class="card bg-base-200 shadow-xl mt-6" id="signup-emails">
+    <div class="card-body">
+      <h2 class="card-title text-xl">Signup download</h2>
+      <p class="text-sm text-base-content/70">
+        The head captain and coordinators can download this event's signups as a CSV. Turn this on to let
+        them include each rider's email address. Emails are never shown on the event page.
+      </p>
+      {% if can_set_signup_emails %}
+      <form method="post" action="{% url 'events:event_signup_emails_setting' event.pk %}" class="mt-2">
+        {% csrf_token %}
+        <label class="label cursor-pointer justify-start gap-3" for="id_signup_export_emails">
+          <input type="checkbox" id="id_signup_export_emails" name="signup_export_emails" class="toggle toggle-primary"
+                 {% if event.signup_export_emails %}checked{% endif %}>
+          <span class="label-text">Email addresses can be downloaded</span>
+        </label>
+        <div class="card-actions justify-end mt-4">
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        </div>
+      </form>
+      {% else %}
+      <p class="mt-2">
+        <span class="badge {% if event.signup_export_emails %}badge-success{% else %}badge-ghost{% endif %}">
+          Email addresses {% if event.signup_export_emails %}can{% else %}can't{% endif %} be downloaded
+        </span>
+      </p>
+      <p class="text-xs text-base-content/60 mt-1">Only event admins can change this.</p>
+      {% endif %}
+    </div>
+  </div>
 </div>
 
 {% if can_edit %}

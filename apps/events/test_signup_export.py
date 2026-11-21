@@ -235,3 +235,131 @@ def test_negative_numbers_are_left_as_numbers(client, event, user_model, rider_p
     assert not row["Current Rating"].startswith("'")   # a number, so never prefixed
     assert row["Current Rating"].startswith("-12")
     assert rider.pk
+
+
+# --- Email addresses: off by default, turned on per event by an event admin (Role Setup page) ---
+
+
+def _with_emails(event: Event) -> Event:
+    """Turn the event's email download on, as an event admin would on Role Setup.
+
+    Returns:
+        The event.
+
+    """
+    event.signup_export_emails = True
+    event.save(update_fields=["signup_export_emails"])
+    return event
+
+
+@pytest.mark.django_db
+def test_emails_are_off_by_default(client, event, user_model) -> None:
+    """A new event never lets emails out: no column, no menu, and the URL refuses them."""
+    _rider(user_model, event, "ann")
+    client.force_login(_actor(user_model, "hc", discord_roles={"777": "Head Captain"}))
+    export_url = reverse("events:signup_export", args=[event.pk])
+
+    assert event.signup_export_emails is False
+    assert "Email" not in _read(client.get(export_url))[0]
+    assert client.get(export_url, {"email": "1"}).status_code == 403
+    assert f"{export_url}?email=1" not in client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+
+
+@pytest.mark.django_db
+def test_with_the_setting_on_a_download_can_include_emails(client, event, user_model) -> None:
+    _with_emails(event)
+    _rider(user_model, event, "ann")
+    client.force_login(_actor(user_model, "coord", discord_roles={"555": "EMEA Coordinator"}))
+    export_url = reverse("events:signup_export", args=[event.pk])
+
+    resp = client.get(export_url, {"email": "1"})
+    rows = _read(resp)
+    row = dict(zip(rows[0], rows[1], strict=True))
+
+    assert resp.status_code == 200
+    assert rows[0][:3] == ["Name", "Discord", "Email"]
+    assert row["Email"] == "ann@example.test"
+    assert "zrl-season-5-signups-with-emails.csv" in resp["Content-Disposition"]
+    # Still opt-in per download: the plain download stays email-free.
+    assert "Email" not in _read(client.get(export_url))[0]
+
+
+@pytest.mark.django_db
+def test_the_setting_lets_no_one_else_download(client, event, event_admin, team_member, user_model) -> None:
+    """Turning emails on widens what the download carries, never who may download."""
+    _with_emails(event)
+    _rider(user_model, event, "ann")
+    export_url = reverse("events:signup_export", args=[event.pk])
+
+    for user in (event_admin, team_member):
+        client.force_login(user)
+        assert client.get(export_url, {"email": "1"}).status_code == 403
+
+
+@pytest.mark.django_db
+def test_the_detail_page_offers_the_email_download_only_when_on(client, event, user_model) -> None:
+    _rider(user_model, event, "ann")
+    client.force_login(_actor(user_model, "hc", discord_roles={"777": "Head Captain"}))
+    detail_url = reverse("events:event_detail", args=[event.pk])
+    email_url = f"{reverse('events:signup_export', args=[event.pk])}?email=1"
+
+    assert email_url not in client.get(detail_url).content.decode()
+    _with_emails(event)
+    body = client.get(detail_url).content.decode()
+    assert email_url in body
+    assert "Download CSV with emails" in body
+
+
+@pytest.mark.django_db
+def test_only_event_admins_can_change_the_setting(client, event, event_admin, user_model) -> None:
+    """The head captain and coordinators edit Role Setup and do the downloading, so they can't flip it."""
+    setting_url = reverse("events:event_signup_emails_setting", args=[event.pk])
+
+    for actor in (
+        _actor(user_model, "hc", discord_roles={"777": "Head Captain"}),
+        _actor(user_model, "coord", discord_roles={"555": "EMEA Coordinator"}),
+        user_model.objects.create_user(
+            username="roles",
+            permission_overrides={"team_member": True, "assign_roles": True},
+        ),
+    ):
+        client.force_login(actor)
+        assert client.post(setting_url, {"signup_export_emails": "on"}).status_code == 403
+        event.refresh_from_db()
+        assert event.signup_export_emails is False
+
+    client.force_login(event_admin)
+    resp = client.post(setting_url, {"signup_export_emails": "on"})
+    assert resp.status_code == 302
+    assert resp["Location"] == reverse("events:event_role_setup", args=[event.pk])
+    event.refresh_from_db()
+    assert event.signup_export_emails is True
+
+    client.post(setting_url, {})
+    event.refresh_from_db()
+    assert event.signup_export_emails is False
+    assert client.get(setting_url).status_code == 405
+
+
+@pytest.mark.django_db
+def test_role_setup_shows_the_switch_only_to_event_admins(client, event, event_admin, user_model) -> None:
+    role_setup_url = reverse("events:event_role_setup", args=[event.pk])
+    setting_url = reverse("events:event_signup_emails_setting", args=[event.pk])
+
+    client.force_login(_actor(user_model, "hc", discord_roles={"777": "Head Captain"}))
+    body = client.get(role_setup_url).content.decode()
+    assert setting_url not in body
+    assert "Only event admins can change this." in body
+    assert "Email addresses can't be downloaded" in body
+
+    client.force_login(event_admin)
+    body = client.get(role_setup_url).content.decode()
+    assert setting_url in body
+    assert 'name="signup_export_emails"' in body
+
+
+def test_the_role_form_cannot_set_it() -> None:
+    """The main Role Setup form is open to the head captain, so the setting must stay out of it."""
+    from apps.events.forms import EventRoleSetupForm
+
+    assert "signup_export_emails" not in EventRoleSetupForm.base_fields

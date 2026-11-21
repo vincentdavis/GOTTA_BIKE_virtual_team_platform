@@ -264,6 +264,13 @@ class Event(models.Model):
         blank=True,
         help_text="List of Discord role IDs (strings) a squad's Captain Discord Role may be chosen from",
     )
+    signup_export_emails = models.BooleanField(
+        default=False,
+        help_text=(
+            "Let the people who can download this event's signups include members' email addresses. "
+            "Only event admins can change it."
+        ),
+    )
     squad_tags = models.JSONField(
         default=list,
         blank=True,

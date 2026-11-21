@@ -342,7 +342,8 @@ Non-obvious gates / behavior not visible from the URL pattern alone:
 - `/events/<id>/squads/<sid>/availability/...` — `_can_manage_squad_availability` (above + squad captain/vice-captain + `discord_captain_role` holders)
 - `/events/<id>/role-setup/` — event admins read-only; `assign_roles`, head captain or a coordinator role can edit
 - `/events/<id>/discord-roles/` — `assign_roles`, event head captain, or an event coordinator role
-- `/events/<id>/signups/export/` — signup CSV; **narrower than the signup table**: event head captain or coordinator role only (plus superusers). Not `event_admin`
+- `/events/<id>/signups/export/` — signup CSV; **narrower than the signup table**: event head captain or coordinator role only (plus superusers). Not `event_admin`. `?email=1` adds an Email column, refused (403) unless the event's `signup_export_emails` is on; it never widens who may download
+- `/events/<id>/role-setup/signup-emails/` — POST only; turns `Event.signup_export_emails` on/off (default off). `event_admin` only — deliberately not the head captain or coordinators, who edit the rest of Role Setup and do the downloading. Emails are never shown on the event page
 - `/analytics/` — `app_admin` only
 - `/robots.txt` — dynamic (rendered by `gotta_bike_platform/views.py`)
 - `/accounts/3rdparty/signup/` — shadowed by `block_social_signup` (redirects to login), ahead of the allauth include
