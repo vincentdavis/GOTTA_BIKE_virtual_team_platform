@@ -28,6 +28,7 @@
 .event-tab-count{display:inline-block;min-width:1.5rem;padding:0 .5rem;border-radius:999px;font-size:.75rem;line-height:1.25rem;font-weight:600;text-align:center;font-variant-numeric:tabular-nums;background:color-mix(in oklab,var(--color-base-content) 12%,transparent)}
 .event-tab[aria-selected="true"] .event-tab-count{background:var(--color-base-content);color:var(--color-base-100)}
 .event-panels{--pin-col-bg:var(--color-base-100);background:var(--color-base-100);border:1px solid var(--event-tab-line);border-radius:var(--radius-box);padding:1rem}
+[data-export-group]>summary::-webkit-details-marker{display:none}
 @media(min-width:640px){
   .event-tabs{display:flex;flex-wrap:wrap;align-items:flex-end;gap:.125rem;margin-bottom:0}
   .event-tab{flex-wrap:nowrap;white-space:nowrap;justify-content:flex-start;padding:0 1.25rem;background:transparent;border-color:transparent;border-bottom-width:0;border-radius:.625rem .625rem 0 0;color:color-mix(in oklab,var(--color-base-content) 80%,transparent)}
@@ -414,33 +415,160 @@
             {% endif %}
             <input type="text" class="input input-bordered input-sm w-48" placeholder="Search by name..." data-signup-search="detail">
             {% if can_export_signups %}
-            {% if event.signup_export_emails %}
-            {# An event admin turned on emails for this event (Role Setup page), so the download offers both. Emails stay opt-in per download. #}
-            <div class="dropdown dropdown-end" data-signup-export-menu>
-              <div tabindex="0" role="button" class="btn btn-outline btn-sm btn-square"
-                   title="Download every registered signup as CSV, all columns" aria-label="Export signups as CSV">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                </svg>
-              </div>
-              <ul tabindex="0" class="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 p-2 w-72 max-w-[calc(100vw-4rem)]">
-                <li><a href="{% url 'events:signup_export' event.pk %}">Download CSV</a></li>
-                <li>
-                  <a href="{% url 'events:signup_export' event.pk %}?email=1" class="flex flex-col items-start gap-0.5">
-                    <span>Download CSV with emails</span>
-                    <span class="text-xs text-base-content/60">Members' personal email addresses. Don't share the file.</span>
-                  </a>
-                </li>
-              </ul>
-            </div>
-            {% else %}
-            <a href="{% url 'events:signup_export' event.pk %}" class="btn btn-outline btn-sm btn-square"
-               title="Download every registered signup as CSV, all columns" aria-label="Export signups as CSV">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <button type="button" class="btn btn-outline btn-sm btn-square" data-signup-export-open
+                    title="Download signups as CSV, choosing the columns" aria-label="Download signups as CSV"
+                    aria-haspopup="dialog" aria-controls="signup-export-dialog">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
               </svg>
-            </a>
-            {% endif %}
+            </button>
+            {% comment %}
+              The download dialog. Its columns come from apps/events/signup_export.py, the same list the
+              CSV is built from, so the two can't disagree. Email is there only when an event admin allowed
+              it for this event (Role Setup page); it is never ticked for you, not even by "All".
+            {% endcomment %}
+            <dialog id="signup-export-dialog" class="modal" aria-labelledby="signup-export-title">
+              <div class="modal-box w-11/12 max-w-2xl">
+                <h3 id="signup-export-title" class="font-bold text-lg">Download signups</h3>
+                <p class="text-sm text-base-content/70 mt-1">One row per registered rider. Choose the columns; they come out in this order.</p>
+                <div class="flex flex-wrap items-center gap-2 mt-3">
+                  <button type="button" class="btn btn-xs" data-export-preset="all">All</button>
+                  <button type="button" class="btn btn-xs" data-export-preset="none">None</button>
+                  <button type="button" class="btn btn-xs" data-export-preset="default">Default</button>
+                  <button type="button" class="btn btn-xs" data-export-preset="table" title="Tick the columns the table above is showing">Match table</button>
+                </div>
+                <form method="get" action="{% url 'events:signup_export' event.pk %}" data-export-form class="mt-3">
+                  {# Always sent, so unticking everything else still downloads Name rather than the defaults. #}
+                  <input type="hidden" name="cols" value="name">
+                  <div class="max-h-[55vh] overflow-y-auto space-y-2 pr-1">
+                    {% for group in signup_export_groups %}
+                    <details class="group rounded-box border border-base-300 bg-base-100" data-export-group {% if not group.optional %}open{% endif %}>
+                      <summary class="flex items-center gap-2 cursor-pointer px-3 py-2 select-none list-none">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 shrink-0 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7"/></svg>
+                        <input type="checkbox" class="checkbox checkbox-sm" data-export-group-toggle aria-label="All {{ group.title }} columns">
+                        <span class="font-semibold text-sm">{{ group.title }}</span>
+                        <span class="text-xs text-base-content/60 ml-auto" data-export-group-count></span>
+                      </summary>
+                      <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 px-3 pb-2">
+                        {% for column in group.columns %}
+                        <label class="label cursor-pointer justify-start gap-2 py-0.5 min-w-0"{% if column.key == "name" %} title="Always included"{% endif %}>
+                          <input type="checkbox" class="checkbox checkbox-xs" name="cols" value="{{ column.key }}"
+                                 data-default="{% if column.default %}1{% else %}0{% endif %}" data-table-cols="{{ column.table_cols_attr }}"
+                                 {% if column.default %}checked{% endif %}{% if column.key == "name" %} disabled{% endif %}{% if column.key == "email" %} data-personal{% endif %}>
+                          <span class="label-text truncate">{{ column.choice_label }}</span>
+                          {% if column.key == "email" %}<span class="badge badge-warning badge-xs shrink-0">personal</span>{% endif %}
+                        </label>
+                        {% endfor %}
+                      </div>
+                    </details>
+                    {% endfor %}
+                  </div>
+                  <p class="text-xs text-warning mt-2" data-export-email-warning hidden>This file will hold members' personal email addresses. Don't share it.</p>
+                  <div class="modal-action items-center mt-4">
+                    <span class="text-sm text-base-content/70 mr-auto" data-export-count></span>
+                    <button type="button" class="btn btn-ghost btn-sm" data-export-cancel>Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Download CSV</button>
+                  </div>
+                </form>
+              </div>
+              <form method="dialog" class="modal-backdrop"><button>close</button></form>
+            </dialog>
+            <script>
+            (function () {
+              var dialog = document.getElementById('signup-export-dialog');
+              var opener = document.querySelector('[data-signup-export-open]');
+              if (!dialog || !opener) return;
+              var form = dialog.querySelector('[data-export-form]');
+              var boxes = Array.prototype.slice.call(form.querySelectorAll('input[name="cols"][type="checkbox"]'));
+              var groups = Array.prototype.slice.call(dialog.querySelectorAll('[data-export-group]'));
+              // Remembered in this browser across events; a signup question's key is the event's own.
+              var STORAGE_KEY = 'event_signup_export_cols';
+
+              function load() {
+                try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { return {}; }
+              }
+              function save() {
+                var saved = load();
+                boxes.forEach(function (box) { if (!box.disabled && !box.hasAttribute('data-personal')) saved[box.value] = box.checked; });
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(saved)); } catch (e) {}
+              }
+              // Set a box from a bulk action (a preset, a group's tick-all). Email may be unticked
+              // that way but never ticked: it is only ever ticked on its own.
+              function setBox(box, on) {
+                if (box.disabled) return;
+                box.checked = box.hasAttribute('data-personal') ? box.checked && on : on;
+              }
+
+              function refresh() {
+                var total = 0;
+                groups.forEach(function (group) {
+                  // Email is left out of the group's tick-all and its count: it is only ever ticked on its own.
+                  var own = Array.prototype.slice.call(group.querySelectorAll('input[name="cols"]')).filter(function (box) { return !box.hasAttribute('data-personal'); });
+                  var on = own.filter(function (box) { return box.checked; }).length;
+                  var toggle = group.querySelector('[data-export-group-toggle]');
+                  toggle.checked = on === own.length;
+                  toggle.indeterminate = on > 0 && on < own.length;
+                  group.querySelector('[data-export-group-count]').textContent = on + ' of ' + own.length;
+                });
+                boxes.forEach(function (box) { if (box.checked) total += 1; });
+                dialog.querySelector('[data-export-count]').textContent = total + (total === 1 ? ' column' : ' columns');
+                var email = form.querySelector('input[data-personal]');
+                dialog.querySelector('[data-export-email-warning]').hidden = !(email && email.checked);
+              }
+
+              // Is a column showing in the table above? "col:<data-col>" or "stat:<key>".
+              function tableShows(ref) {
+                var split = ref.indexOf(':');
+                var kind = ref.slice(0, split), key = ref.slice(split + 1);
+                if (kind === 'stat') {
+                  var stat = document.querySelector('.stat-col-toggle[data-stat-col="' + key + '"]');
+                  return !!(stat && stat.checked);
+                }
+                var toggle = document.querySelector('.col-toggle[data-col="' + key + '"]');
+                if (toggle) return toggle.checked;
+                return !!document.querySelector('[data-signup-table="detail"] th[data-col="' + key + '"]');
+              }
+              var presets = {
+                all: function () { return true; },
+                none: function () { return false; },
+                'default': function (box) { return box.getAttribute('data-default') === '1'; },
+                table: function (box) {
+                  return (box.getAttribute('data-table-cols') || '').split(' ').filter(Boolean).some(tableShows);
+                }
+              };
+              dialog.querySelectorAll('[data-export-preset]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                  var pick = presets[button.getAttribute('data-export-preset')];
+                  boxes.forEach(function (box) { setBox(box, pick(box)); });
+                  refresh();
+                });
+              });
+              groups.forEach(function (group) {
+                var toggle = group.querySelector('[data-export-group-toggle]');
+                toggle.addEventListener('change', function () {
+                  group.querySelectorAll('input[name="cols"]').forEach(function (box) { setBox(box, toggle.checked); });
+                  refresh();
+                });
+              });
+              boxes.forEach(function (box) { box.addEventListener('change', refresh); });
+
+              opener.addEventListener('click', function () {
+                var saved = load();
+                boxes.forEach(function (box) {
+                  if (box.disabled) return;
+                  if (box.hasAttribute('data-personal')) { box.checked = false; return; }
+                  box.checked = Object.prototype.hasOwnProperty.call(saved, box.value) ? !!saved[box.value] : box.getAttribute('data-default') === '1';
+                });
+                refresh();
+                dialog.showModal();
+              });
+              dialog.querySelector('[data-export-cancel]').addEventListener('click', function () { dialog.close(); });
+              form.addEventListener('submit', function () {
+                save();
+                setTimeout(function () { dialog.close(); }, 0);
+              });
+            })();
+            </script>
             {% endif %}
             <div class="dropdown dropdown-end">
               <label tabindex="0" class="btn btn-outline btn-sm">Columns</label>

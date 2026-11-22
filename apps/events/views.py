@@ -47,7 +47,15 @@ from apps.accounts.discord_service import (
     sync_user_discord_roles,
 )
 from apps.accounts.models import Permissions, User
-from apps.events import availability_schedules, ds_service, grid_defaults, rider_stats, series, signup_status
+from apps.events import (
+    availability_schedules,
+    ds_service,
+    grid_defaults,
+    rider_stats,
+    series,
+    signup_export,
+    signup_status,
+)
 from apps.events.answer_facets import answers_payload, build_facets, panel_starts_open
 from apps.events.availability_schedules import grid_from_template
 from apps.events.calendar_utils import build_race_ics, race_calendar_urls, unsign_race_token
@@ -94,7 +102,6 @@ from apps.team.rosterv2 import fold
 from apps.team.services import ZP_DIV_TO_CATEGORY
 from apps.zwiftpower.models import ZPTeamRiders
 from apps.zwiftracing.models import ZRRider
-from gotta_bike_platform.csv_utils import csv_safe
 
 # Upper bound for the numeric availability answers. Both are counts bounded by a year --
 # more races than days, or more rest than a year between them, is a typo. It also keeps
@@ -1637,6 +1644,7 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
     signup_questions = active_questions(event)
+    can_export_signups = _can_export_event_signups(request.user, event)
     signup_question_fields = build_question_fields(
         signup_questions, user_signup.custom_answers if user_signup else None
     )
@@ -1683,7 +1691,11 @@ def event_detail_view(request: HttpRequest, pk: int) -> HttpResponse:
             "can_view_signup_notes": can_view_signup_notes,
             # Narrower than viewing the table: the export is a bulk extract of every
             # rider's details, so only the people running the event get the button.
-            "can_export_signups": _can_export_event_signups(request.user, event),
+            "can_export_signups": can_export_signups,
+            # The download dialog's columns: the same list the CSV itself is built from.
+            "signup_export_groups": (
+                signup_export.export_groups(event, signup_questions) if can_export_signups else ()
+            ),
             "can_manage_signup_questions": _can_manage_signup_questions(request.user),
             "is_event_admin": request.user.is_event_admin,
             "can_view_signups": can_view_signups,
@@ -2498,11 +2510,16 @@ def _availability_columns(event: Event, tz_obj: ZoneInfo, today_local: date) -> 
 @team_member_required()
 @require_GET
 def signup_export_view(request: HttpRequest, event_pk: int) -> HttpResponse:
-    """Download the event's registered signups as CSV.
+    """Download the event's registered signups as CSV, with the columns the downloader chose.
 
-    ``?email=1`` adds each rider's email address. It is refused unless an event admin has
-    turned on the event's ``signup_export_emails`` setting (Role Setup page), so emails
-    never leave the app by default -- and never reach anyone who can't download at all.
+    ``?cols=`` names the columns (repeated, or comma-separated); none named gives the
+    default ones. The choices and their order are ``signup_export``'s, which also builds the
+    download dialog on the event page.
+
+    The Email column exists only when an event admin has turned on the event's
+    ``signup_export_emails`` setting (Role Setup page). Asking for it otherwise -- in
+    ``cols``, or with the older ``?email=1`` -- is refused rather than quietly dropped, and
+    the setting never widens who may download at all.
 
     Args:
         request: The HTTP request.
@@ -2527,8 +2544,9 @@ def signup_export_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         )
         raise PermissionDenied("Only the event's head captain or a coordinator can export signups.")
 
-    include_email = request.GET.get("email") == "1"
-    if include_email and not event.signup_export_emails:
+    requested = signup_export.requested_keys(request.GET)
+    legacy_email = request.GET.get("email") == "1"
+    if (legacy_email or signup_export.EMAIL in (requested or ())) and not event.signup_export_emails:
         logfire.warning(
             "Signup email export refused: setting is off",
             event_id=event_pk,
@@ -2539,8 +2557,13 @@ def signup_export_view(request: HttpRequest, event_pk: int) -> HttpResponse:
     signups = event.signups.select_related("user").filter(status=EventSignup.Status.REGISTERED)
     enriched = _enrich_signups(signups, event=event)
     enriched.sort(key=lambda e: (e["user"].get_full_name() or e["user"].discord_username or "").lower())
-    questions = active_questions(event)
-    header, rows = _signup_export_rows(event, enriched, questions, include_email=include_email)
+    columns = signup_export.chosen_columns(
+        signup_export.export_groups(event, active_questions(event)),
+        requested,
+        also=[signup_export.EMAIL] if legacy_email else [],
+    )
+    header, rows = signup_export.build_rows(columns, enriched)
+    include_email = any(column.key == signup_export.EMAIL for column in columns)
 
     slug = re.sub(r"[^A-Za-z0-9]+", "-", event.title).strip("-").lower() or "event"
     suffix = "signups-with-emails" if include_email else "signups"
@@ -2555,6 +2578,8 @@ def signup_export_view(request: HttpRequest, event_pk: int) -> HttpResponse:
         event_id=event_pk,
         user_id=request.user.id,
         row_count=len(rows),
+        column_count=len(columns),
+        chose_columns=requested is not None,
         include_email=include_email,
     )
     return response
@@ -2581,87 +2606,6 @@ def _can_export_event_signups(user: User, event: Event) -> bool:
     if event.head_captain_role_id and user.has_discord_role(event.head_captain_role_id):
         return True
     return _is_event_coordinator(user, event)
-
-
-def _signup_export_rows(
-    event: Event, enriched: list[dict], questions: list, *, include_email: bool = False
-) -> tuple[list[str], list[list]]:
-    """Build the header and data rows for the signup CSV.
-
-    Columns mirror the signup table on the event page, including the ones hidden
-    behind the column picker -- the export is the whole list, not the current view.
-    The Email column is the one exception: the table never shows it.
-
-    Args:
-        event: The event being exported.
-        enriched: Enriched signup dicts from ``_enrich_signups``.
-        questions: The event's active signup questions, one column each.
-        include_email: Add an Email column after Discord. The caller checks the
-            event's ``signup_export_emails`` setting.
-
-    Returns:
-        ``(header, rows)`` ready to hand to ``csv.writer``.
-
-    """
-    header = ["Name", "Discord", *(["Email"] if include_email else []), "ZWID", "Timezone"]
-    if event.squad_gender_required:
-        header.append("Squad Gender")
-    header += [
-        "Gender", "ZP Category", "ZP Category (W)", "ZR Category", "FTP", "WKG",
-        "zFTP", "zFTP W/kg", "zMAP", "zMAP W/kg", "Zauth", "Race Verified",
-    ]
-    if event.event_role:
-        header.append("Event Role")
-    header += [
-        "Squads", "Notes", "Signed Up", "Age", "Current Rating", "Current Cat",
-        "Max30 Rating", "Max30 Cat", "Max90 Rating", "Max90 Cat", "Phenotype",
-    ]
-    header += [q.label for q in questions]
-
-    def _zauth(user: User) -> str:
-        if user.is_zauth_verified:
-            return "Zauth"
-        if user.zwid_verified:
-            return user.get_zwid_verification_method_display() or "Other"
-        return ""
-
-    rows = []
-    for e in enriched:
-        user = e["user"]
-        signup = e["signup"]
-        row = [
-            user.get_full_name() or user.discord_username or "",
-            user.discord_username or "",
-            *([(user.email or "").strip()] if include_email else []),
-            e["zwid"] or "",
-            ", ".join(signup.signup_timezone or []),
-        ]
-        if event.squad_gender_required:
-            row.append(", ".join(signup.signup_squad_gender or []))
-        row += [
-            e["gender"],
-            e["zp_category"], e["zp_category_w"], e["zr_category"],
-            e["zp_ftp"] or "", e["wkg"] or "",
-            e["z_ftp"] or "", e["z_ftp_wkg"] or "",
-            e["z_map"] or "", e["z_map_wkg"] or "",
-            _zauth(user),
-            "Extra Verified" if e["is_extra_verified"] else ("Yes" if e["is_race_ready"] else "No"),
-        ]
-        if event.event_role:
-            row.append("Yes" if e["has_event_role"] else "No")
-        row += [
-            ", ".join(sq.name for sq in e["assigned_squads"]),
-            signup.notes or "",
-            signup.created_at.isoformat() if signup.created_at else "",
-            e["zr_age"], e["zr_current_rating"] or "", e["zr_current_category"],
-            e["zr_max30_rating"] or "", e["zr_max30_category"],
-            e["zr_max90_rating"] or "", e["zr_max90_category"],
-            e["zr_phenotype"],
-        ]
-        answers = {a["question"].pk: a["display"] for a in e["custom_answers"]}
-        row += [answers.get(q.pk, "") for q in questions]
-        rows.append([csv_safe(cell) for cell in row])
-    return header, rows
 
 
 def _build_participation_report(event: Event, tz_obj: ZoneInfo, now_utc: datetime) -> list[dict]:

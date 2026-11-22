@@ -140,7 +140,7 @@ def test_only_registered_riders_are_exported(client, event, user_model) -> None:
 
 @pytest.mark.django_db
 def test_hidden_columns_are_still_exported(client, event, user_model) -> None:
-    """The export is the whole list, not whatever the column picker currently shows.
+    """With no columns chosen, the export is the default list, not whatever the table shows.
 
     Phenotype and the Max90 ratings default to hidden in the table.
     """
@@ -149,7 +149,7 @@ def test_hidden_columns_are_still_exported(client, event, user_model) -> None:
 
     header = _read(client.get(reverse("events:signup_export", args=[event.pk])))[0]
 
-    for column in ("Phenotype", "Max90 Rating", "zMAP", "Zauth", "ZWID", "Notes"):
+    for column in ("Phenotype", "vELO 1 Max90", "zMAP", "Zauth", "ZWID", "Notes"):
         assert column in header
 
 
@@ -232,8 +232,8 @@ def test_negative_numbers_are_left_as_numbers(client, event, user_model, rider_p
     rows = _read(client.get(reverse("events:signup_export", args=[event.pk])))
     row = dict(zip(rows[0], rows[1], strict=True))
 
-    assert not row["Current Rating"].startswith("'")   # a number, so never prefixed
-    assert row["Current Rating"].startswith("-12")
+    assert not row["vELO 1"].startswith("'")   # a number, so never prefixed
+    assert row["vELO 1"].startswith("-12")
     assert rider.pk
 
 
@@ -262,7 +262,7 @@ def test_emails_are_off_by_default(client, event, user_model) -> None:
     assert event.signup_export_emails is False
     assert "Email" not in _read(client.get(export_url))[0]
     assert client.get(export_url, {"email": "1"}).status_code == 403
-    assert f"{export_url}?email=1" not in client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
+    assert 'value="email"' not in client.get(reverse("events:event_detail", args=[event.pk])).content.decode()
 
 
 @pytest.mark.django_db
@@ -298,16 +298,17 @@ def test_the_setting_lets_no_one_else_download(client, event, event_admin, team_
 
 @pytest.mark.django_db
 def test_the_detail_page_offers_the_email_download_only_when_on(client, event, user_model) -> None:
+    """The dialog's Email checkbox appears only when allowed, and is never ticked for you."""
     _rider(user_model, event, "ann")
     client.force_login(_actor(user_model, "hc", discord_roles={"777": "Head Captain"}))
     detail_url = reverse("events:event_detail", args=[event.pk])
-    email_url = f"{reverse('events:signup_export', args=[event.pk])}?email=1"
 
-    assert email_url not in client.get(detail_url).content.decode()
+    assert 'value="email"' not in client.get(detail_url).content.decode()
     _with_emails(event)
     body = client.get(detail_url).content.decode()
-    assert email_url in body
-    assert "Download CSV with emails" in body
+    email_box = body[body.index('value="email"') :].split(">", 1)[0]
+    assert 'data-default="0"' in email_box
+    assert "checked" not in email_box
 
 
 @pytest.mark.django_db
@@ -363,3 +364,198 @@ def test_the_role_form_cannot_set_it() -> None:
     from apps.events.forms import EventRoleSetupForm
 
     assert "signup_export_emails" not in EventRoleSetupForm.base_fields
+
+
+# --- Choosing the columns: ?cols=, from the download dialog ---
+
+
+def _hc_download(client, user_model, event, **params) -> list[list[str]]:
+    """Download as the head captain.
+
+    Returns:
+        The parsed rows, header first.
+
+    """
+    client.force_login(_actor(user_model, "hc", discord_roles={"777": "Head Captain"}))
+    resp = client.get(reverse("events:signup_export", args=[event.pk]), params)
+    assert resp.status_code == 200
+    return _read(resp)
+
+
+@pytest.mark.django_db
+def test_chosen_columns_come_out_in_the_lists_order_with_name_first(client, event, user_model) -> None:
+    """Ticking order doesn't matter; unknown keys are ignored; Name is always there."""
+    _rider(user_model, event, "ann", zwid=4242)
+
+    rows = _hc_download(client, user_model, event, cols="zwid,nonsense,discord")
+
+    assert rows[0] == ["Name", "Discord", "ZWID"]
+    assert rows[1] == ["Ann R", "", "4242"]
+
+
+@pytest.mark.django_db
+def test_repeated_cols_from_the_dialogs_checkboxes_work_too(client, event, user_model) -> None:
+    _rider(user_model, event, "ann")
+
+    rows = _hc_download(client, user_model, event, cols=["name", "zauth", "race_verified"])
+
+    assert rows[0] == ["Name", "Zauth", "Race Verified"]
+
+
+@pytest.mark.django_db
+def test_unticking_everything_still_gives_names_not_the_defaults(client, event, user_model) -> None:
+    """The dialog always sends cols=name, so "nothing chosen" can't fall back to every column."""
+    _rider(user_model, event, "ann")
+
+    assert _hc_download(client, user_model, event, cols="name")[0] == ["Name"]
+
+
+@pytest.mark.django_db
+def test_the_default_columns(client, event, user_model) -> None:
+    """No cols at all: what the CSV always carried, vELO 1 headed as such, and no stat columns."""
+    q = SignupQuestion.objects.create(
+        event=event,
+        label="Preferred day?",
+        question_type=SignupQuestion.Type.SINGLE,
+        options=["Tue"],
+        order=1,
+    )
+    _rider(user_model, event, "ann")
+
+    header = _hc_download(client, user_model, event)[0]
+
+    assert header == [
+        "Name",
+        "Discord",
+        "ZWID",
+        "Timezone",
+        "Gender",
+        "Squads",
+        "Notes",
+        "Signed Up",
+        "ZP Category",
+        "ZP Category (W)",
+        "FTP",
+        "WKG",
+        "zFTP",
+        "zFTP W/kg",
+        "zMAP",
+        "zMAP W/kg",
+        "Zauth",
+        "Race Verified",
+        "vELO 1",
+        "vELO 1 Cat",
+        "vELO 1 Cat (W)",
+        "vELO 1 Max30",
+        "vELO 1 Max30 Cat",
+        "vELO 1 Max30 Cat (W)",
+        "vELO 1 Max90",
+        "vELO 1 Max90 Cat",
+        "vELO 1 Max90 Cat (W)",
+        "Age",
+        "Phenotype",
+        q.label,
+    ]
+
+
+@pytest.mark.django_db
+def test_velo1_womens_categories_are_a_womans_only(client, event, user_model, rider_profile_factory) -> None:
+    """Both riders carry a women's category upstream; only the woman's is shown."""
+    _rider(user_model, event, "ann", zwid=101)
+    _rider(user_model, event, "bob", zwid=102)
+    women = {"racing_women": "Diamond"}
+    rider_profile_factory(
+        zwid=101,
+        name="Ann",
+        velo=1700.0,
+        category_racing="Ruby",
+        gender="female",
+        category=women,
+    )
+    rider_profile_factory(
+        zwid=102,
+        name="Bob",
+        velo=1600.0,
+        category_racing="Ruby",
+        gender="male",
+        category=women,
+    )
+
+    rows = _hc_download(client, user_model, event, cols="velo1,velo1_cat,velo1_cat_w")
+    by_name = {row[0]: row for row in rows[1:]}
+
+    assert rows[0] == ["Name", "vELO 1", "vELO 1 Cat", "vELO 1 Cat (W)"]
+    assert by_name["Ann R"][1:] == ["1700", "Ruby", "Diamond"]
+    assert by_name["Bob R"][1:] == ["1600", "Ruby", ""]
+
+
+@pytest.mark.django_db
+def test_the_tables_stat_columns_can_be_downloaded(client, event, user_model, rider_profile_factory) -> None:
+    """The table's vELO 2 and other Zwift Racing columns, under its own headers, as numbers."""
+    _rider(user_model, event, "ann", zwid=101)
+    rider_profile_factory(
+        zwid=101,
+        name="Ann",
+        velo2={"race": 650.4, "category": "Ruby"},
+        race_counts={"wins": 0, "finishes": 12},
+    )
+
+    rows = _hc_download(client, user_model, event, cols="zr_v2_race,zr_v2_cat,zr_finishes,zr_wins")
+    row = dict(zip(rows[0], rows[1], strict=True))
+
+    assert row["vELO 2"] == "650"
+    assert row["vELO 2 Cat"] == "Ruby"
+    assert row["Finishes"] == "12"
+    assert row["Wins"] == "0"  # a real zero, not a blank
+
+
+@pytest.mark.django_db
+def test_every_stat_column_is_offered(event) -> None:
+    from apps.events import rider_stats, signup_export
+
+    offered = {c.key for g in signup_export.export_groups(event, []) for c in g.columns}
+
+    assert {column.key for column in rider_stats.STAT_COLUMNS} <= offered
+
+
+@pytest.mark.django_db
+def test_column_keys_are_unique_and_events_add_their_own(event) -> None:
+    from apps.events import signup_export
+
+    q = SignupQuestion.objects.create(event=event, label="Day?", question_type=SignupQuestion.Type.TEXT, order=1)
+    event.squad_gender_required = True
+    event.event_role = 4242
+    event.signup_export_emails = True
+
+    keys = [c.key for g in signup_export.export_groups(event, [q]) for c in g.columns]
+
+    assert len(keys) == len(set(keys))
+    assert {"email", "squad_gender", "event_role", f"q{q.pk}"} <= set(keys)
+
+
+@pytest.mark.django_db
+def test_email_in_cols_is_refused_while_the_setting_is_off(client, event, user_model) -> None:
+    _rider(user_model, event, "ann")
+    client.force_login(_actor(user_model, "hc", discord_roles={"777": "Head Captain"}))
+    export_url = reverse("events:signup_export", args=[event.pk])
+
+    assert client.get(export_url, {"cols": "name,email"}).status_code == 403
+    _with_emails(event)
+    rows = _read(client.get(export_url, {"cols": "email,name"}))
+    assert rows[0] == ["Name", "Email"]
+    assert rows[1] == ["Ann R", "ann@example.test"]
+
+
+@pytest.mark.django_db
+def test_the_dialog_lists_the_columns_for_those_who_may_download(client, event, event_admin, user_model) -> None:
+    _rider(user_model, event, "ann")
+    detail_url = reverse("events:event_detail", args=[event.pk])
+
+    client.force_login(_actor(user_model, "hc", discord_roles={"777": "Head Captain"}))
+    body = client.get(detail_url).content.decode()
+    assert 'id="signup-export-dialog"' in body
+    assert 'name="cols" value="zr_v2_race"' in body
+    assert 'name="cols" value="velo1_cat_w"' in body
+
+    client.force_login(event_admin)
+    assert 'id="signup-export-dialog"' not in client.get(detail_url).content.decode()

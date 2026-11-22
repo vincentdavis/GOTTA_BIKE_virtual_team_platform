@@ -362,6 +362,33 @@ def stat_values(profile: RiderProfile, gender: str | None = None) -> list[str]:
     return values
 
 
+def stat_cells(profile: RiderProfile, gender: str | None = None) -> dict[str, int | float | str | None]:
+    """Return a rider's extra columns for a CSV, by column key.
+
+    Rounded as the table shows them, but kept as numbers, so a spreadsheet can sum them and a
+    negative handicap isn't mistaken for a formula.
+
+    Args:
+        profile: The rider's cached profile.
+        gender: The member's own gender, which decides the women's categories.
+
+    Returns:
+        ``{column key: value}`` for every column in :data:`STAT_COLUMNS`; None where the
+        profile has no value.
+
+    """
+    blocks = _Blocks(profile, gender)
+    cells: dict[str, int | float | str | None] = {}
+    for column in STAT_COLUMNS:
+        value = column.read(blocks)
+        if value is None or column.kind == "category":
+            cells[column.key] = value
+        else:
+            shown = Decimal(_display(value, column.decimals))
+            cells[column.key] = int(shown) if column.decimals == 0 else float(shown)
+    return cells
+
+
 def stat_rows(entries: Iterable[dict]) -> dict[str, list[str]]:
     """Return the extra columns of the signups table, by signup, for the page to build cells from.
 
