@@ -8,6 +8,21 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 
+def _span_minutes(start_time: str, end_time: str) -> int:
+    """Minutes from ``start_time`` to ``end_time`` on the clock, wrapping past midnight.
+
+    Equal times are a full day, as an end at or before the start means the next day.
+
+    Returns:
+        The span in minutes, more than 0 and at most a day.
+
+    """
+    start = time.fromisoformat(start_time)
+    end = time.fromisoformat(end_time)
+    minutes = (end.hour * 60 + end.minute) - (start.hour * 60 + start.minute)
+    return minutes if minutes > 0 else minutes + 24 * 60
+
+
 def convert_local_to_utc(
     start_date: date,
     end_date: date,
@@ -20,6 +35,14 @@ def convert_local_to_utc(
     Used by the builder on save. The admin enters dates and times in their
     chosen timezone; this function returns the UTC dates and times that
     should be stored on the grid.
+
+    A grid stores one UTC start and end time for every day, so everything is
+    worked out from the first local day: the UTC start is that day's local
+    start, the UTC end is the UTC start plus the local span, and the UTC end
+    date keeps the local day count. A range that crosses a daylight-saving
+    change therefore keeps the same number of slots on every day (its later
+    days show an hour off locally) instead of taking the start from one
+    offset and the end from the other.
 
     Args:
         start_date: Local start date.
@@ -38,24 +61,18 @@ def convert_local_to_utc(
     tz = ZoneInfo(source_tz)
     utc = ZoneInfo("UTC")
 
-    local_start_time = time.fromisoformat(start_time)
-    local_end_time = time.fromisoformat(end_time)
-
-    local_start_dt = datetime.combine(start_date, local_start_time, tzinfo=tz)
-    local_end_dt = datetime.combine(end_date, local_end_time, tzinfo=tz)
-    # Anchor the saved utc_end_date to the *start* of the last local day, not
-    # its end. When local end_time crosses midnight UTC (e.g. 23:30 PDT →
-    # 06:30 UTC next day), using utc_end_dt.date() pushes end_date forward by
-    # a day, and grid.dates x grid.time_slots produces an extra day of slots.
-    local_end_anchor_dt = datetime.combine(end_date, local_start_time, tzinfo=tz)
-
-    utc_start_dt = local_start_dt.astimezone(utc)
-    utc_end_dt = local_end_dt.astimezone(utc)
-    utc_end_anchor_dt = local_end_anchor_dt.astimezone(utc)
+    utc_start_dt = datetime.combine(start_date, time.fromisoformat(start_time), tzinfo=tz).astimezone(utc)
+    utc_end_dt = utc_start_dt + timedelta(minutes=_span_minutes(start_time, end_time))
+    # The end date is the start date plus the local day count, not the UTC date of the
+    # last day's end: an end that crosses midnight UTC (23:30 PDT is 06:30 UTC the next
+    # day) would add a day, and grid.dates x grid.time_slots would produce an extra day
+    # of slots. Counting days also keeps a start near UTC midnight from gaining or losing
+    # a day when the range crosses a daylight-saving change.
+    utc_end_date = utc_start_dt.date() + (end_date - start_date)
 
     return (
         utc_start_dt.date(),
-        utc_end_anchor_dt.date(),
+        utc_end_date,
         utc_start_dt.strftime("%H:%M"),
         utc_end_dt.strftime("%H:%M"),
     )
@@ -71,9 +88,10 @@ def convert_utc_to_local_config(
     """Reverse of :func:`convert_local_to_utc` for re-editing a stored grid.
 
     Recovers the local start/end dates and times a grid was originally built with, so the
-    builder can be pre-filled in the grid's own timezone. The end time is reconstructed by
-    finding the UTC date (near the local end date) whose instant maps back onto the local
-    end date, which handles end times that cross UTC midnight.
+    builder can be pre-filled in the grid's own timezone. Like the forward conversion it
+    works from the first day: the local start is the UTC start in the grid's timezone, and
+    the local end is that plus the stored span, which also handles spans that cross
+    midnight in either timezone and ranges that cross a daylight-saving change.
 
     Args:
         utc_start_date: Stored UTC start date.
@@ -100,13 +118,10 @@ def convert_utc_to_local_config(
     length_days = (utc_end_date - utc_start_date).days + 1
     local_end_date = local_start_date + timedelta(days=length_days - 1)
 
-    end_time_obj = time.fromisoformat(utc_end_time)
-    local_end_time = utc_end_time
-    for delta in (0, 1, -1):
-        candidate = datetime.combine(local_end_date + timedelta(days=delta), end_time_obj, tzinfo=utc).astimezone(tz)
-        if candidate.date() == local_end_date:
-            local_end_time = candidate.strftime("%H:%M")
-            break
+    local_end_time = (
+        datetime.combine(date.min, time.fromisoformat(local_start_time))
+        + timedelta(minutes=_span_minutes(utc_start_time, utc_end_time))
+    ).strftime("%H:%M")
 
     return local_start_date, local_end_date, local_start_time, local_end_time
 
