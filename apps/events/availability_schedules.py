@@ -181,6 +181,7 @@ def grid_from_template(
         max_races_question=template.max_races_question,
         rest_days_question=template.rest_days_question,
         hide_empty_days=template.hide_empty_days,
+        require_race_verified_availability=template.require_race_verified_availability,
         single_slot=template.single_slot,
         expanded_features=template.expanded_features,
         description=template.description,

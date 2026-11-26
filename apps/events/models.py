@@ -2489,6 +2489,8 @@ class AvailabilityGridTemplate(models.Model):
         rest_days_question: Carry the "rest days" question onto created grids.
         blocked_slots: Times riders can't pick, as ``{"weekday": 0-6 (Monday = 0), "time":
             "HH:MM"}`` in ``grid_timezone``; on a sheet longer than a week they repeat weekly.
+        require_race_verified_availability: Only Race Verified riders may answer sheets made
+            from this template.
         created_by: User who created this template.
         created_at: When the template was created.
         updated_at: When the template was last modified.
@@ -2551,6 +2553,10 @@ class AvailabilityGridTemplate(models.Model):
     rest_days_question = models.BooleanField(
         default=False,
         help_text="Carry the rest-days question onto grids created from this template",
+    )
+    require_race_verified_availability = models.BooleanField(
+        default=False,
+        help_text="Only Race Verified riders may answer sheets made from this template",
     )
     blocked_slots = models.JSONField(
         default=list,

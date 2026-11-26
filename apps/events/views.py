@@ -5791,9 +5791,9 @@ def availability_template_create_view(request: HttpRequest, event_pk: int, squad
     """Save the builder's current configuration as a reusable per-squad template.
 
     Accepts a JSON body with the grid shape (local times, timezone, slot duration, length,
-    and the optional questions). Dates are not stored; blocked cells arrive as
-    ``blocked_slots``, each a weekday (Monday = 0) and local "HH:MM", so they land on the
-    same days of every sheet made from the template.
+    the optional questions and whether only Race Verified riders may answer). Dates are not
+    stored; blocked cells arrive as ``blocked_slots``, each a weekday (Monday = 0) and local
+    "HH:MM", so they land on the same days of every sheet made from the template.
 
     Args:
         request: The HTTP request with a JSON body.
@@ -5867,6 +5867,7 @@ def availability_template_create_view(request: HttpRequest, event_pk: int, squad
         course_url=(data.get("course_url") or "").strip(),
         recon_url=(data.get("recon_url") or "").strip(),
         invite_url=(data.get("invite_url") or "").strip(),
+        require_race_verified_availability=bool(data.get("require_race_verified_availability", False)),
         blocked_slots=blocked_slots,
         created_by=request.user,
     )
