@@ -916,11 +916,13 @@ def _enrich_members(users: list[User], roles: dict[int, str] | None = None) -> l
     return enriched
 
 
-def _race_label(race: AvailabilitySlotSelection | None) -> str:
+def _race_label(race: AvailabilitySlotSelection | None, *, over: bool = False) -> str:
     """Summarise a stage's scheduled race for the results footer.
 
     Args:
         race: The race, riders prefetched, or None.
+        over: Whether the race is over (``series.race_is_over``): a confirmed one then reads
+            "Raced", as its card does (``views._race_status_badge``).
 
     Returns:
         "Not picked", or the race's status and rider count.
@@ -932,6 +934,8 @@ def _race_label(race: AvailabilitySlotSelection | None) -> str:
     count = f"{riders} rider{'s' if riders != 1 else ''}"
     if race.status == AvailabilitySlotSelection.Status.NONE:
         return count
+    if over and race.status == AvailabilitySlotSelection.Status.CONFIRMED:
+        return f"Raced · {count}"
     return f"{race.get_status_display()} · {count}"
 
 
@@ -1019,6 +1023,10 @@ def squad_results(
             counts = series.tally(ss, answers_by_user, member_ids)
             status = series.riders_status(stage, counts)
             race = races.get((utc_date, utc_time))
+            # Once the race is over, its lineup's cells say "Raced" under their answer, as
+            # My Events does (``series.rider_stage_status``): picked for a finished race.
+            over = series.race_is_over(ss.starts_at, now)
+            raced = {u.pk for u in race.selected_users.all()} if race is not None and over else set()
             column.update({
                 "is_open": True,
                 "started": ss.starts_at <= now,
@@ -1030,7 +1038,8 @@ def squad_results(
                 "status": status[1] if status else "",
                 "status_class": STATUS_BADGE[status[0]] if status else "",
                 "race": race,
-                "race_label": _race_label(race),
+                "race_label": _race_label(race, over=over),
+                "raced": raced,
             })
         else:
             column.update({
@@ -1056,7 +1065,7 @@ def squad_results(
             state = series.answer_state(answers, column["ss"])
             label, badge = CELL[state]
             # ``state`` lets the results page sort riders by their answer to a stage.
-            cells.append({"label": label, "badge": badge, "state": state})
+            cells.append({"label": label, "badge": badge, "state": state, "raced": user.pk in column["raced"]})
             note = ((answers or {}).get(str(column["stage"].pk)) or {}).get("note", "")
             if is_captain and note:
                 notes.append({
