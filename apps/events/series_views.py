@@ -80,6 +80,14 @@ CELL = {
     series.UNANSWERED: ("No answer", "badge badge-dash badge-sm"),
 }
 
+#: A results cell once a lineup has the say over the answer (``_lineup_cell``).
+LINEUP_CELL = {
+    "scheduled": ("Scheduled", "badge badge-info badge-sm"),
+    "sub": ("Substitute", "badge badge-info badge-outline badge-sm"),
+    "raced": ("Raced", "badge badge-success badge-outline badge-sm"),
+    "dnr": ("DNR", "badge badge-ghost badge-sm"),
+}
+
 #: How each answer reads on the rider's sheet: the hint under its word and the icon beside it
 #: (an SVG path on a 24-unit grid). Its colour when picked is the page's CSS, keyed on the value.
 ANSWER_LOOK = {
@@ -939,6 +947,32 @@ def _race_label(race: AvailabilitySlotSelection | None, *, over: bool = False) -
     return f"{race.get_status_display()} · {count}"
 
 
+def _lineup_cell(column: dict, user_pk: int) -> tuple[str, str] | None:
+    """Say what a stage's lineup makes of one rider's results cell, if anything.
+
+    The lineup outranks the rider's answer: before the race a rider in it is "Scheduled"
+    (confirmed or still a draft) and a substitute a "Substitute"; once the race is over
+    (``series.race_is_over``) the lineup "Raced", a substitute stays one and everyone else
+    is "DNR", as on My Events (``series.rider_stage_status``). The app has no results, so
+    "Raced" means picked for a race that has finished.
+
+    Args:
+        column: An open stage's column, with its ``lineup``, ``subs`` and ``over``.
+        user_pk: The rider.
+
+    Returns:
+        ``(label, badge classes)`` from ``LINEUP_CELL``, or None to show the rider's answer.
+
+    """
+    if user_pk in column["lineup"]:
+        return LINEUP_CELL["raced" if column["over"] else "scheduled"]
+    if user_pk in column["subs"]:
+        return LINEUP_CELL["sub"]
+    if column["over"]:
+        return LINEUP_CELL["dnr"]
+    return None
+
+
 def _lineup_answer(answers: dict | None, stage: SeriesStage, state: str) -> dict[str, str]:
     """One rider's answer to a stage, as the race dialog shows it beside their name.
 
@@ -1023,10 +1057,7 @@ def squad_results(
             counts = series.tally(ss, answers_by_user, member_ids)
             status = series.riders_status(stage, counts)
             race = races.get((utc_date, utc_time))
-            # Once the race is over, its lineup's cells say "Raced" under their answer, as
-            # My Events does (``series.rider_stage_status``): picked for a finished race.
             over = series.race_is_over(ss.starts_at, now)
-            raced = {u.pk for u in race.selected_users.all()} if race is not None and over else set()
             column.update({
                 "is_open": True,
                 "started": ss.starts_at <= now,
@@ -1039,7 +1070,9 @@ def squad_results(
                 "status_class": STATUS_BADGE[status[0]] if status else "",
                 "race": race,
                 "race_label": _race_label(race, over=over),
-                "raced": raced,
+                "over": over,
+                "lineup": {u.pk for u in race.selected_users.all()} if race is not None else set(),
+                "subs": {u.pk for u in race.substitutes.all()} if race is not None else set(),
             })
         else:
             column.update({
@@ -1063,15 +1096,17 @@ def squad_results(
                 cells.append({"label": "—", "badge": "", "state": ""})
                 continue
             state = series.answer_state(answers, column["ss"])
-            label, badge = CELL[state]
-            # ``state`` lets the results page sort riders by their answer to a stage.
-            cells.append({"label": label, "badge": badge, "state": state, "raced": user.pk in column["raced"]})
+            answer = CELL[state][0]
+            label, badge = _lineup_cell(column, user.pk) or CELL[state]
+            # ``state`` (the answer, whatever the cell says) lets the results page sort riders
+            # by their answer to a stage.
+            cells.append({"label": label, "badge": badge, "state": state})
             note = ((answers or {}).get(str(column["stage"].pk)) or {}).get("note", "")
             if is_captain and note:
                 notes.append({
                     "rider": entry["display_name"],
                     "stage": f"Stage {column['number']}: {column['stage'].name}",
-                    "answer": label,
+                    "answer": answer,
                     "note": note,
                 })
         rows.append({

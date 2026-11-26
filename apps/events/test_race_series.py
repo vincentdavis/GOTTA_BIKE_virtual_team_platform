@@ -1098,42 +1098,40 @@ def test_a_finished_confirmed_race_card_says_raced_and_a_pending_one_stays_pendi
 
 
 @pytest.mark.django_db
-def test_the_results_grid_marks_a_finished_stages_lineup_raced(
+def test_the_results_grid_shows_scheduled_then_raced_or_dnr(
     client, event, event_admin, user_model, squad, stages
 ) -> None:
-    """Under their answer, not instead of it: a captain still sees who was available but didn't ride."""
+    """A lineup outranks the answer: Scheduled before the race, then Raced or DNR, as on My Events."""
     ana = _member(user_model, squad, "ana")
     bo = _member(user_model, squad, "bo")
+    cy = _member(user_model, squad, "cy")
+    _member(user_model, squad, "dee")  # never answered, never picked
     grid = _sheet(squad, stages, [_when(-1), _when(11), None])
     for stage in stages[:2]:
-        _answer(grid, ana, stage, "available")
+        _answer(grid, ana, stage, "maybe")  # picked anyway
         _answer(grid, bo, stage, "available")
+        _answer(grid, cy, stage, "available")
     over = AvailabilitySlotSelection.objects.create(grid=grid, name="Race 1", status="confirmed", **_slot(_when(-1)))
     over.selected_users.add(ana)
-    upcoming = AvailabilitySlotSelection.objects.create(
-        grid=grid, name="Race 2", status="confirmed", **_slot(_when(11))
-    )
+    over.substitutes.add(cy)
+    upcoming = AvailabilitySlotSelection.objects.create(grid=grid, name="Race 2", status="pending", **_slot(_when(11)))
     upcoming.selected_users.add(ana)
+    upcoming.substitutes.add(cy)
     client.force_login(event_admin)
 
     response = client.get(reverse("events:availability_results", args=[event.pk, squad.pk, grid.pk]))
 
-    cells = {
-        row["user"].username: [(c["label"], c.get("raced")) for c in row["cells"]] for row in response.context["rows"]
+    cells = {row["user"].username: [c["label"] for c in row["cells"]] for row in response.context["rows"]}
+    assert cells == {
+        "ana": ["Raced", "Scheduled", "—"],
+        "bo": ["DNR", "Available", "—"],
+        "cy": ["Substitute", "Substitute", "—"],
+        "dee": ["DNR", "No answer", "—"],
     }
-    assert cells["ana"] == [("Available", True), ("Available", False), ("—", None)]
-    assert cells["bo"] == [("Available", False), ("Available", False), ("—", None)]
-    assert [c.get("race_label") for c in response.context["columns"]] == [
-        "Raced · 1 rider",
-        "Confirmed · 1 rider",
-        None,
-    ]
-    assert (
-        response.content.decode().count(
-            '<span class="badge badge-success badge-outline badge-xs whitespace-nowrap">Raced</span>'
-        )
-        == 1
-    )
+    # Sorting by answer still sorts by what the rider said.
+    ana_row = next(row for row in response.context["rows"] if row["user"] == ana)
+    assert [c["state"] for c in ana_row["cells"][:2]] == ["maybe", "maybe"]
+    assert [c.get("race_label") for c in response.context["columns"]] == ["Raced · 1 rider", "Pending · 1 rider", None]
 
 
 @pytest.mark.django_db

@@ -80,7 +80,6 @@
           {% for cell in row.cells %}
           <td class="text-center"{% if sortable %} data-answer="{{ cell.state }}"{% endif %}>
             {% if cell.badge %}<span class="{{ cell.badge }} whitespace-nowrap">{{ cell.label }}</span>{% else %}<span class="text-base-content/70">{{ cell.label }}</span>{% endif %}
-            {% if cell.raced %}<span class="block mt-1"><span class="badge badge-success badge-outline badge-xs whitespace-nowrap">Raced</span></span>{% endif %}
           </td>
           {% endfor %}
         </tr>
@@ -118,7 +117,8 @@
   {% if not in_card %}
   <p class="text-xs text-base-content/80">
     Answers count current squad members only. "Old time" is an answer given before the stage moved; "Tight" means the
-    stage needs some of its Maybes.
+    stage needs some of its Maybes. A rider picked for a stage's lineup shows Scheduled. Once the race is over (3 hours
+    after the start) that becomes Raced, and riders not picked show DNR (did not race).
   </p>
   {% endif %}
   {% else %}
