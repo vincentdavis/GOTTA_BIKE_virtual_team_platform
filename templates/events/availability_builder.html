@@ -1037,6 +1037,21 @@
     // singleSlotValues() also carries date/time overrides, which the template has its
     // own handling for and must not inherit here.
     Object.assign(payload, expandedFeatureValues());
+    // Blocked cells travel by weekday and local time, not date, so they land on the same
+    // days of every sheet made from the template -- the weekly schedule's included. On a
+    // grid longer than a week, a block on one Wednesday blocks every Wednesday.
+    var blockedSlots = {};
+    if (!singleSlotEl.checked) {
+      dates.forEach(function(date) {
+        var weekday = (parseDateStr(date).getDay() + 6) % 7;  // Monday = 0, as the server counts
+        timeSlots.forEach(function(time) {
+          if (cellStates[cellKey(date, time)] === 'blocked') {
+            blockedSlots[weekday + '|' + time] = { weekday: weekday, time: time };
+          }
+        });
+      });
+    }
+    payload.blocked_slots = Object.keys(blockedSlots).map(function(key) { return blockedSlots[key]; });
 
     btnSaveTemplate.disabled = true;
     fetch(TEMPLATE_CREATE_URL, {
@@ -1050,7 +1065,8 @@
     .then(function(result) {
       btnSaveTemplate.disabled = false;
       if (result.ok) {
-        showToast('Template "' + name + '" saved.', false);
+        var blocked = payload.blocked_slots.length;
+        showToast('Template "' + name + '" saved' + (blocked ? ' with ' + blocked + ' blocked time' + (blocked === 1 ? '' : 's') : '') + '.', false);
       } else {
         showToast(result.data.error || 'Could not save template.', true);
       }

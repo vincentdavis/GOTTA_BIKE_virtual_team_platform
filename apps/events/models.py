@@ -2472,8 +2472,10 @@ class AvailabilityGridTemplate(models.Model):
     optional questions) so captains can spin up a new draft grid for the squad without
     rebuilding the configuration each time. Times are stored as **local** "HH:MM" in
     ``timezone``; the apply flow converts them to UTC for the chosen dates so DST is
-    handled correctly. Blocked cells are not stored (set fresh per grid). A shared template
-    is offered to the other squads of the same event, never to another event's.
+    handled correctly. Blocked times are kept by weekday and local time (``blocked_slots``),
+    not by date, so they land on the same days of every sheet made from the template,
+    including the weekly schedule's. A shared template is offered to the other squads of
+    the same event, never to another event's.
 
     Attributes:
         squad: The squad this template belongs to.
@@ -2485,6 +2487,8 @@ class AvailabilityGridTemplate(models.Model):
         default_length_days: Number of days a grid spans; used to derive end date on apply.
         max_races_question: Carry the "max races" question onto created grids.
         rest_days_question: Carry the "rest days" question onto created grids.
+        blocked_slots: Times riders can't pick, as ``{"weekday": 0-6 (Monday = 0), "time":
+            "HH:MM"}`` in ``grid_timezone``; on a sheet longer than a week they repeat weekly.
         created_by: User who created this template.
         created_at: When the template was created.
         updated_at: When the template was last modified.
@@ -2547,6 +2551,14 @@ class AvailabilityGridTemplate(models.Model):
     rest_days_question = models.BooleanField(
         default=False,
         help_text="Carry the rest-days question onto grids created from this template",
+    )
+    blocked_slots = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            'Blocked times, each {"weekday": 0-6 (Monday = 0), "time": "HH:MM"} in the template\'s '
+            "timezone. They land on the matching days of every sheet made from the template."
+        ),
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

@@ -31,7 +31,7 @@ from django.utils import timezone
 
 from apps.events.models import AvailabilityGrid, AvailabilitySchedule, SquadMember
 from apps.events.series import zone
-from apps.events.tz_utils import convert_local_to_utc
+from apps.events.tz_utils import convert_grid_to_local, convert_local_to_utc
 
 if TYPE_CHECKING:
     from apps.accounts.models import User
@@ -92,6 +92,49 @@ def template_span_utc(
     return start_utc, end_utc, start_time_utc, end_time_utc
 
 
+def template_blocked_cells(
+    template: AvailabilityGridTemplate, span_utc: tuple[date, date, str, str], local_tz: str
+) -> list[dict]:
+    """Place a template's blocked times on a sheet made from it.
+
+    A template keeps its blocks by weekday and local time. This walks the sheet's own cells
+    (its UTC days and times, as riders see them in ``local_tz``) and blocks each one whose
+    local weekday and time the template blocks, so a block only ever lands on a real cell and
+    each day is converted on its own (a week across a daylight-saving change included).
+    Blocks the sheet has no cell for -- outside its hours, or a re-timed start -- are dropped.
+
+    Args:
+        template: The template.
+        span_utc: The sheet's ``(start_date, end_date, start_time, end_time)`` in UTC, from
+            :func:`template_span_utc`.
+        local_tz: The timezone the template's times are in.
+
+    Returns:
+        The sheet's ``blocked_cells``, as UTC ``{"date", "time"}`` dicts.
+
+    """
+    if template.single_slot:
+        return []
+    wanted = {
+        (slot["weekday"], slot["time"])
+        for slot in template.blocked_slots or []
+        if isinstance(slot, dict) and isinstance(slot.get("weekday"), int) and isinstance(slot.get("time"), str)
+    }
+    if not wanted:
+        return []
+    start_utc, end_utc, start_time_utc, end_time_utc = span_utc
+    utc_dates = [(start_utc + timedelta(days=offset)).isoformat() for offset in range((end_utc - start_utc).days + 1)]
+    cell_map = convert_grid_to_local(utc_dates, start_time_utc, end_time_utc, template.slot_duration, [], local_tz)[
+        "cell_map"
+    ]
+    blocked = []
+    for local_key, utc_cell in sorted(cell_map.items()):
+        local_day, local_time = local_key.split("|")
+        if (date.fromisoformat(local_day).weekday(), local_time) in wanted:
+            blocked.append({"date": utc_cell["date"], "time": utc_cell["time"]})
+    return blocked
+
+
 def grid_from_template(
     template: AvailabilityGridTemplate,
     squad: Squad,
@@ -119,9 +162,8 @@ def grid_from_template(
     """
     local_start_time = local_start_time or template.start_time
     local_tz = local_tz or template.grid_timezone
-    start_utc, end_utc, start_time_utc, end_time_utc = template_span_utc(
-        template, start_date, local_start_time, local_tz
-    )
+    span_utc = template_span_utc(template, start_date, local_start_time, local_tz)
+    start_utc, end_utc, start_time_utc, end_time_utc = span_utc
     fields.setdefault("status", AvailabilityGrid.Status.DRAFT)
     # A shared template names a specific session ("Round 3 Qualifier"), and several squads
     # create grids from it -- carrying that name through beats the auto-generated
@@ -135,7 +177,7 @@ def grid_from_template(
         end_time=end_time_utc,
         slot_duration=template.slot_duration,
         grid_timezone=local_tz,
-        blocked_cells=[],
+        blocked_cells=template_blocked_cells(template, span_utc, local_tz),
         max_races_question=template.max_races_question,
         rest_days_question=template.rest_days_question,
         hide_empty_days=template.hide_empty_days,

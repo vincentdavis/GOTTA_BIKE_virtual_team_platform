@@ -5755,6 +5755,35 @@ def availability_copy_view(request: HttpRequest, event_pk: int, squad_pk: int, g
     return redirect("events:squad_availability", event_pk=event_pk, squad_pk=squad_pk)
 
 
+def _template_blocked_slots(raw: object) -> list[dict] | None:
+    """Check and tidy a template's blocked times, as the builder sends them.
+
+    Args:
+        raw: The ``blocked_slots`` value: a list of ``{"weekday": 0-6, "time": "HH:MM"}``.
+
+    Returns:
+        The slots, deduplicated and in weekday then time order; None if any is malformed.
+
+    """
+    if not isinstance(raw, list) or len(raw) > 7 * 24 * 4:  # a week of 15-minute slots
+        return None
+    found: set[tuple[int, str]] = set()
+    for slot in raw:
+        if not isinstance(slot, dict):
+            return None
+        weekday, at = slot.get("weekday"), str(slot.get("time", ""))
+        if isinstance(weekday, bool) or not isinstance(weekday, int) or not 0 <= weekday <= 6:
+            return None
+        try:
+            if not _HHMM_RE.match(at):
+                return None
+            time.fromisoformat(at)
+        except ValueError:
+            return None
+        found.add((weekday, at))
+    return [{"weekday": weekday, "time": at} for weekday, at in sorted(found)]
+
+
 @login_required
 @team_member_required()
 @require_POST
@@ -5762,7 +5791,9 @@ def availability_template_create_view(request: HttpRequest, event_pk: int, squad
     """Save the builder's current configuration as a reusable per-squad template.
 
     Accepts a JSON body with the grid shape (local times, timezone, slot duration, length,
-    and the optional questions). Blocked cells and dates are intentionally not stored.
+    and the optional questions). Dates are not stored; blocked cells arrive as
+    ``blocked_slots``, each a weekday (Monday = 0) and local "HH:MM", so they land on the
+    same days of every sheet made from the template.
 
     Args:
         request: The HTTP request with a JSON body.
@@ -5813,6 +5844,10 @@ def availability_template_create_view(request: HttpRequest, event_pk: int, squad
     if grid_tz != "UTC" and grid_tz not in available_timezones():
         return JsonResponse({"error": f"Invalid timezone: {grid_tz}"}, status=400)
 
+    blocked_slots = _template_blocked_slots(data.get("blocked_slots", []))
+    if blocked_slots is None:
+        return JsonResponse({"error": 'blocked_slots must be a list of {"weekday": 0-6, "time": "HH:MM"}.'}, status=400)
+
     template = AvailabilityGridTemplate.objects.create(
         squad=squad,
         name=name,
@@ -5832,12 +5867,14 @@ def availability_template_create_view(request: HttpRequest, event_pk: int, squad
         course_url=(data.get("course_url") or "").strip(),
         recon_url=(data.get("recon_url") or "").strip(),
         invite_url=(data.get("invite_url") or "").strip(),
+        blocked_slots=blocked_slots,
         created_by=request.user,
     )
     logfire.info(
         "Availability template created",
         template_id=template.pk,
         squad_id=squad.pk,
+        blocked_slot_count=len(blocked_slots),
         event_id=event.pk,
         user_id=request.user.id,
     )
