@@ -7,10 +7,8 @@
       <div>
         <div class="flex items-center gap-2">
           <h4 class="font-bold text-sm">{{ item.selection.name }}</h4>
-          {% if item.selection.status == "confirmed" %}
-          <span class="badge badge-success badge-xs">Confirmed</span>
-          {% elif item.selection.status == "pending" %}
-          <span class="badge badge-warning badge-xs">Pending</span>
+          {% if item.selection.status == "confirmed" or item.selection.status == "pending" %}
+          <span class="badge {{ item.status_class }} badge-xs">{{ item.status_label }}</span>
           {% endif %}
         </div>
         <p class="text-xs text-base-content/60">{{ item.local_day }} {{ item.local_date }} {{ item.local_time }} ({{ display_timezone }})</p>

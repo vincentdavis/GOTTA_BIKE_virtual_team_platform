@@ -1098,6 +1098,21 @@ def test_a_finished_confirmed_race_card_says_raced_and_a_pending_one_stays_pendi
 
 
 @pytest.mark.django_db
+def test_the_results_page_says_raced_on_a_finished_race_card(client, event, event_admin, squad, stages) -> None:
+    grid = _sheet(squad, stages, [_when(-1), _when(11), None])
+    AvailabilitySlotSelection.objects.create(grid=grid, name="Race 1", status="confirmed", **_slot(_when(-1)))
+    AvailabilitySlotSelection.objects.create(grid=grid, name="Race 2", status="confirmed", **_slot(_when(11)))
+    AvailabilitySlotSelection.objects.create(grid=grid, name="Race 0", status="pending", **_slot(_when(-2)))
+    client.force_login(event_admin)
+
+    response = client.get(reverse("events:availability_results", args=[event.pk, squad.pk, grid.pk]))
+
+    cards = {c["selection"].name: c["status_label"] for c in response.context["slot_selections_enriched"]}
+    assert cards == {"Race 0": "Pending", "Race 1": "Raced", "Race 2": "Confirmed"}
+    assert '<span class="badge badge-success badge-outline badge-xs">Raced</span>' in response.content.decode()
+
+
+@pytest.mark.django_db
 def test_the_participation_report_counts_available_stages(
     client, event, event_admin, user_model, squad, stages
 ) -> None:

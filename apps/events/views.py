@@ -8818,6 +8818,7 @@ def _enriched_slot_selections(request: HttpRequest, grid: AvailabilityGrid) -> t
     zp_by_zwid = {r.zwid: r for r in ZPTeamRiders.objects.filter(zwid__in=zwids)} if zwids else {}
     profiles = rider_stats.profiles_by_zwid(zwids)
     roles = grid.squad.leader_roles()
+    now = timezone.now()
 
     enriched_selections = []
     for sel in selections:
@@ -8849,8 +8850,12 @@ def _enriched_slot_selections(request: HttpRequest, grid: AvailabilityGrid) -> t
             {"user": d, "display_name": d.get_full_name() or d.discord_username}
             for d in sel.directeurs_sportifs.all()
         ]
+        # "Raced" once a confirmed race is over, as on My Events.
+        status_label, status_class = _race_status_badge(sel, utc_dt, now)
         enriched_selections.append({
             "selection": sel,
+            "status_label": status_label,
+            "status_class": status_class,
             "enriched_users": enriched_users,
             "ds_list": ds_list,
             "local_date": local_dt.strftime("%Y-%m-%d"),
