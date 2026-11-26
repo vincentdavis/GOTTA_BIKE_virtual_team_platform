@@ -476,31 +476,62 @@ def answered_stage_ids(event: Event) -> set[int]:
     return ids
 
 
+#: A scheduled race stores only its start time; it counts as over this long after it.
+#: A ZRL race is about an hour, so three leaves room for a late start or a long course.
+RACE_OVER_AFTER = timedelta(hours=3)
+
+
+def race_is_over(starts_at: datetime, now: datetime | None = None) -> bool:
+    """Tell whether a race starting at ``starts_at`` has finished, by :data:`RACE_OVER_AFTER`.
+
+    Args:
+        starts_at: The race's start, timezone-aware.
+        now: The time to judge by; the current time when None.
+
+    Returns:
+        True once the race is over.
+
+    """
+    return starts_at + RACE_OVER_AFTER <= (now or timezone.now())
+
+
 def rider_stage_status(
     sheet_stage: SheetStage,
     answers: dict | None,
     selection: AvailabilitySlotSelection | None,
     user_pk: int,
+    now: datetime | None = None,
 ) -> tuple[str, str]:
     """Say what one stage means for one rider, for their My Events page.
 
-    A lineup outranks the rider's own answer: once picked, that is the news.
+    A lineup outranks the rider's own answer: once picked, that is the news. Once the race is
+    over (:func:`race_is_over`) it is history instead: a rider in its lineup -- confirmed or
+    still a draft, as captains don't always confirm -- "Raced", a substitute stays one, and
+    everyone else "DNR" (did not race), whatever they had answered. The app has no race
+    results, so "Raced" means picked for a race that has finished.
 
     Args:
         sheet_stage: The squad's time for the stage.
         answers: The rider's ``stage_answers``, or None.
         selection: The stage's scheduled race, riders and substitutes prefetched, or None.
         user_pk: The rider.
+        now: The time to judge "over" by; the current time when None.
 
     Returns:
-        ``(kind, label)``, kind being one of racing, lineup, sub, not_picked, picking,
-        available, maybe, no, again, unanswered, off, untimed.
+        ``(kind, label)``, kind being one of raced, dnr, racing, lineup, sub, not_picked,
+        picking, available, maybe, no, again, unanswered, off, untimed.
 
     """
     if not sheet_stage.racing:
         return "off", "Not racing"
     if not sheet_stage.starts_at:
         return "untimed", "Time not set yet"
+    if race_is_over(sheet_stage.starts_at, now):
+        if selection is not None and any(u.pk == user_pk for u in selection.selected_users.all()):
+            return "raced", "Raced"
+        if selection is not None and any(u.pk == user_pk for u in selection.substitutes.all()):
+            return "sub", "Substitute"
+        return "dnr", "DNR"
     if selection is not None:
         confirmed = selection.status == AvailabilitySlotSelection.Status.CONFIRMED
         if any(u.pk == user_pk for u in selection.selected_users.all()):

@@ -111,6 +111,9 @@ STATUS_BADGE = {
 
 #: Badges for ``series.rider_stage_status`` on My Events.
 RIDER_BADGE = {
+    # A finished stage: "Raced" in the lineup, "DNR" (did not race) otherwise.
+    "raced": "badge badge-success badge-outline badge-sm",
+    "dnr": "badge badge-ghost badge-sm",
     "racing": "badge badge-success badge-sm",
     "lineup": "badge badge-info badge-sm",
     "sub": "badge badge-info badge-sm",
@@ -1712,9 +1715,9 @@ def my_series_stages(request: HttpRequest, grids: list[AvailabilityGrid]) -> dic
             if ss is None:
                 kind, label = "untimed", "Time not set yet"
             else:
-                kind, label = series.rider_stage_status(ss, answers.get(sheet.pk), race, user.pk)
+                kind, label = series.rider_stage_status(ss, answers.get(sheet.pk), race, user.pk, now)
             # Links only for a race the rider is in: the thread and invite are theirs to use.
-            mine = race if kind in {"racing", "lineup", "sub"} else None
+            mine = race if kind in {"raced", "racing", "lineup", "sub"} else None
             local = ss.starts_at.astimezone(tz) if ss is not None and ss.is_open else None
             rows.append({
                 "number": number,

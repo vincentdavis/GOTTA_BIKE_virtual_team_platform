@@ -1014,6 +1014,90 @@ def test_my_events_lists_my_stages(client, event, user_model, squad, stages) -> 
 
 
 @pytest.mark.django_db
+def test_my_events_says_raced_or_dnr_once_a_stage_is_over(client, event, user_model, squad, stages) -> None:
+    """A finished stage is history: "Raced" if the rider was in its lineup, "DNR" otherwise.
+
+    Stage 1's race had the rider in its lineup; stage 2's, confirmed without them, though they
+    said Available; stage 3 is still to come.
+    """
+    rider = _member(user_model, squad, "ana")
+    from apps.events.models import EventSignup
+
+    EventSignup.objects.create(event=event, user=rider, status=EventSignup.Status.REGISTERED)
+    grid = _sheet(squad, stages, [_when(-7), _when(-1), _when(6)])
+    for stage in stages:
+        _answer(grid, rider, stage, "available")
+    raced = AvailabilitySlotSelection.objects.create(
+        grid=grid, name="Race 1", status=AvailabilitySlotSelection.Status.CONFIRMED, **_slot(_when(-7))
+    )
+    raced.selected_users.add(rider)
+    AvailabilitySlotSelection.objects.create(
+        grid=grid, name="Race 2", status=AvailabilitySlotSelection.Status.CONFIRMED, **_slot(_when(-1))
+    )
+    client.force_login(rider)
+
+    response = client.get(reverse("events:my_events"), {"show_past": "on"})
+
+    squad_data = response.context["events_data"][0]["squads"][0]
+    rows = squad_data["series"]["stages"]
+    assert [row["label"] for row in rows] == ["Raced", "DNR", "You said Available"]
+    assert rows[0]["race"] == raced  # its thread and calendar links stay on the stage
+    assert rows[1]["race"] is None
+    # Scheduled Races lists the rider's own races: Race 1, confirmed and over, now reads Raced.
+    cards = squad_data["user_slot_selections"]
+    assert [(card["selection"].name, card["status_label"]) for card in cards] == [("Race 1", "Raced")]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("hours_after", "lineup_status", "where", "expected"),
+    [
+        (2.9, "confirmed", "selected", ("racing", "You're racing")),
+        (3, "confirmed", "selected", ("raced", "Raced")),
+        (3, "pending", "selected", ("raced", "Raced")),  # a draft lineup the captain never confirmed
+        (3, "confirmed", "substitute", ("sub", "Substitute")),
+        (3, "confirmed", "", ("dnr", "DNR")),
+        (3, None, "", ("dnr", "DNR")),  # no race was ever scheduled
+    ],
+)
+def test_a_stage_is_over_three_hours_after_it_starts(
+    user_model, squad, stages, hours_after, lineup_status, where, expected
+) -> None:
+    rider = _member(user_model, squad, "ana")
+    grid = _sheet(squad, stages, [_when(-1), None, None])
+    sheet_stage = grid.sheet_stages.get(stage=stages[0])
+    race = None
+    if lineup_status:
+        race = AvailabilitySlotSelection.objects.create(
+            grid=grid, name="Race 1", status=lineup_status, **_slot(sheet_stage.starts_at)
+        )
+        if where == "selected":
+            race.selected_users.add(rider)
+        elif where == "substitute":
+            race.substitutes.add(rider)
+    now = sheet_stage.starts_at + timedelta(hours=hours_after)
+
+    assert series.rider_stage_status(sheet_stage, {}, race, rider.pk, now) == expected
+
+
+@pytest.mark.django_db
+def test_a_finished_confirmed_race_card_says_raced_and_a_pending_one_stays_pending(squad, stages) -> None:
+    from apps.events.views import _race_status_badge
+
+    grid = _sheet(squad, stages, [_when(-1), None, None])
+    starts = grid.sheet_stages.get(stage=stages[0]).starts_at
+    confirmed = AvailabilitySlotSelection(grid=grid, name="R", status="confirmed", **_slot(starts))
+    pending = AvailabilitySlotSelection(grid=grid, name="R", status="pending", **_slot(starts))
+
+    assert _race_status_badge(confirmed, starts, starts + timedelta(hours=1)) == ("Confirmed", "badge-success")
+    assert _race_status_badge(confirmed, starts, starts + timedelta(hours=3)) == (
+        "Raced",
+        "badge-success badge-outline",
+    )
+    assert _race_status_badge(pending, starts, starts + timedelta(hours=3)) == ("Pending", "badge-warning")
+
+
+@pytest.mark.django_db
 def test_the_participation_report_counts_available_stages(
     client, event, event_admin, user_model, squad, stages
 ) -> None:

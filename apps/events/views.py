@@ -1126,6 +1126,31 @@ def _enrich_signups(signups, event=None):
     return enriched
 
 
+def _race_status_badge(sel: AvailabilitySlotSelection, starts_at: datetime, now: datetime) -> tuple[str, str]:
+    """Label a scheduled race's status for its card, and say how to colour it.
+
+    A confirmed race reads "Raced" once it is over (``series.race_is_over``): the app has no
+    results, so that means a confirmed lineup for a race that has finished. A pending one
+    stays "Pending" -- a captain's loose end, not a result.
+
+    Args:
+        sel: The scheduled race.
+        starts_at: Its start, in UTC.
+        now: The time to judge "over" by.
+
+    Returns:
+        ``(label, badge classes)``.
+
+    """
+    if sel.status == AvailabilitySlotSelection.Status.CONFIRMED:
+        if series.race_is_over(starts_at, now):
+            return "Raced", "badge-success badge-outline"
+        return sel.get_status_display(), "badge-success"
+    if sel.status == AvailabilitySlotSelection.Status.PENDING:
+        return sel.get_status_display(), "badge-warning"
+    return sel.get_status_display(), ""
+
+
 @require_GET
 @login_required
 @team_member_required()
@@ -1283,12 +1308,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             for u in sel.selected_users.all()
             if u.pk in enriched_by_user_id
         ]
-        if sel.status == AvailabilitySlotSelection.Status.CONFIRMED:
-            status_class = "badge-success"
-        elif sel.status == AvailabilitySlotSelection.Status.PENDING:
-            status_class = "badge-warning"
-        else:
-            status_class = ""
+        status_label, status_class = _race_status_badge(sel, utc_dt, now_utc)
         slot_selections_by_squad.setdefault(sel.grid.squad_id, []).append({
             "selection": sel,
             "grid_title": sel.grid.title or "Availability Grid",
@@ -1299,7 +1319,7 @@ def my_events_view(request: HttpRequest) -> HttpResponse:
             "days_until": days_until,
             "days_label": days_label,
             "days_class": days_class,
-            "status_label": sel.get_status_display(),
+            "status_label": status_label,
             "status_class": status_class,
             "is_status_visible": sel.status != AvailabilitySlotSelection.Status.NONE,
             "riders": riders,
@@ -2779,6 +2799,7 @@ def _build_scheduled_race_slots(
 
     enriched_by_user_id = {pk: _enrich(u) for pk, u in users_for_lookup.items()}
 
+    now = timezone.now()
     slots: list[dict] = []
     for sel in selections:
         display_tz = user_tz or sel.grid.grid_timezone or "UTC"
@@ -2806,12 +2827,7 @@ def _build_scheduled_race_slots(
         else:
             days_label = f"{abs(days_until)} day{'s' if abs(days_until) != 1 else ''} ago"
             days_class = "badge-ghost"
-        if sel.status == AvailabilitySlotSelection.Status.CONFIRMED:
-            status_class = "badge-success"
-        elif sel.status == AvailabilitySlotSelection.Status.PENDING:
-            status_class = "badge-warning"
-        else:
-            status_class = ""
+        status_label, status_class = _race_status_badge(sel, utc_dt, now)
         riders = [
             enriched_by_user_id[u.pk]
             for u in sel.selected_users.all()
@@ -2829,7 +2845,7 @@ def _build_scheduled_race_slots(
             "days_until": days_until,
             "days_label": days_label,
             "days_class": days_class,
-            "status_label": sel.get_status_display(),
+            "status_label": status_label,
             "status_class": status_class,
             "is_status_visible": sel.status != AvailabilitySlotSelection.Status.NONE,
             "riders": riders,
