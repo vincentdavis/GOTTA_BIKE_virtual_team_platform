@@ -31,7 +31,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 from apps.accounts.decorators import team_member_required
 from apps.accounts.discord_service import send_discord_channel_message
 from apps.accounts.models import User
-from apps.events import rider_stats, series
+from apps.events import rider_sort, rider_stats, series
 from apps.events.calendar_utils import race_calendar_urls
 from apps.events.context_processors import PENDING_AVAILABILITY_CACHE_PREFIX
 from apps.events.forms import (
@@ -1048,11 +1048,12 @@ def squad_results(
         cells = []
         for column in columns:
             if not column["is_open"]:
-                cells.append({"label": "—", "badge": ""})
+                cells.append({"label": "—", "badge": "", "state": ""})
                 continue
             state = series.answer_state(answers, column["ss"])
             label, badge = CELL[state]
-            cells.append({"label": label, "badge": badge})
+            # ``state`` lets the results page sort riders by their answer to a stage.
+            cells.append({"label": label, "badge": badge, "state": state})
             note = ((answers or {}).get(str(column["stage"].pk)) or {}).get("note", "")
             if is_captain and note:
                 notes.append({
@@ -1146,6 +1147,10 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
     tz = series.zone(user_tz or grid.grid_timezone)
     results = squad_results(request, event, squad, grid, tz=tz)
     slot_selections_enriched, _ = _enriched_slot_selections(request, grid)
+    # Sorting by power and the like follows the signups table: only those who see its full
+    # columns there get those figures here (rider_sort keeps the rest off the page).
+    full_figures = request.user.is_event_admin or _can_view_v_report(request.user, event)
+    sort_groups, sort_values = rider_sort.sort_data(event, [row["user"] for row in results["rows"]], full=full_figures)
     logfire.debug(
         "Series results viewed",
         grid_id=str(grid.id),
@@ -1165,6 +1170,10 @@ def series_results(request: HttpRequest, event: Event, squad: Squad, grid: Avail
             "tz_is_default": not user_tz,
             "slot_selections_enriched": slot_selections_enriched,
             "schedule_hint": "Use a stage's Lineup button to schedule its race.",
+            # The rider sort above the table; the "Squads together" cards leave it out.
+            "sortable": True,
+            "sort_groups": sort_groups,
+            "sort_values": sort_values,
         },
     )
 

@@ -10,13 +10,37 @@
   focus, and the dialog then has nowhere to send it back to when it closes. ``in_card`` leaves out the key, which that page shows once, and makes the
   notes heading an h3 under the card's h2.
 {% endcomment %}
-<div class="flex flex-col gap-4">
+<div class="flex flex-col gap-4"{% if sortable %} data-rider-sort-scope{% endif %}>
   {% if columns %}
+  {% if sortable %}
+  {% comment %}
+    The rider sort (results page only; series_results passes ``sortable``). Options show the figure's
+    header ("vELO 1 Cat", not "Category"): a closed menu doesn't show its group. Its figures come from
+    rider_sort.sort_data: the signup download's columns, and only those this viewer may see on the
+    signups table. The page sorts in the browser; "Available first" on a stage sorts by its answers,
+    keeping the chosen figure as the tie-break.
+  {% endcomment %}
+  <div class="flex flex-wrap items-center gap-2" data-rider-sort>
+    <label for="rider-sort" class="text-sm font-medium">Sort riders</label>
+    <select id="rider-sort" class="select select-bordered select-sm w-auto max-w-full">
+      <option value="">Name</option>
+      <option value="stages" data-header="Stages available">Most stages available</option>
+      {% for group in sort_groups %}
+      <optgroup label="{{ group.title }}">
+        {% for option in group.options %}<option value="{{ option.key }}" data-header="{{ option.header }}"{% if option.category %} data-category{% endif %}>{{ option.header }}</option>{% endfor %}
+      </optgroup>
+      {% endfor %}
+    </select>
+    <button type="button" class="btn btn-sm btn-outline" data-sort-dir hidden>Highest first</button>
+    <span class="text-sm text-base-content/80" data-sort-stage-note hidden></span>
+    <button type="button" class="btn btn-xs btn-ghost" data-sort-stage-clear hidden>Clear stage</button>
+  </div>
+  {% endif %}
   <div class="overflow-x-auto rounded-box border border-base-300 bg-base-200">
     <table class="table table-sm">
       <thead>
         <tr>
-          <th scope="col" class="sticky left-0 z-[6] bg-base-200 align-bottom text-base-content">Rider</th>
+          <th scope="col" class="sticky left-0 z-[6] bg-base-200 align-bottom text-base-content">{% if sortable %}<div class="flex items-end justify-between gap-3"><span>Rider</span><span class="text-xs font-normal text-base-content/80" data-rider-figure-head hidden></span></div>{% else %}Rider{% endif %}</th>
           {% for column in columns %}
           <th scope="col" class="align-top min-w-40 text-base-content font-normal">
             <div class="flex flex-col items-center gap-1 text-center">
@@ -36,6 +60,10 @@
                       aria-label="{% if column.race %}Edit{% else %}Pick{% endif %} {{ squad.name }}'s lineup for stage {{ column.number }}, {{ column.stage.name }}">{% if column.race %}Edit lineup{% else %}Pick lineup{% endif %}</button>
               {% endif %}
               {% endif %}
+              {% if sortable and column.is_open %}
+              <button type="button" class="btn btn-xs btn-ghost" data-stage-sort="{{ forloop.counter0 }}" data-stage-name="Stage {{ column.number }}"
+                      aria-pressed="false" aria-label="Riders available for stage {{ column.number }} first">Available first</button>
+              {% endif %}
             </div>
           </th>
           {% endfor %}
@@ -43,12 +71,14 @@
       </thead>
       <tbody class="bg-base-100">
         {% for row in rows %}
-        <tr>
+        <tr{% if sortable %} data-rider-row data-user-id="{{ row.user.pk }}" data-order="{{ forloop.counter0 }}"{% endif %}>
           <th scope="row" class="sticky left-0 z-[5] bg-base-100 font-normal whitespace-nowrap">
+            {% if sortable %}<div class="flex items-center justify-between gap-3">{% endif %}
             {% include "accounts/_user_tooltip.html" with display_name=row.display_name user_id=row.user.pk discord_id=row.user.discord_id discord_avatar_url=row.user.discord_avatar_url zwid=row.zwid zp_category=row.zp_category zp_category_w=row.zp_category_w zr_category=row.zr_category zr_v2=row.zr_v2_category zr_rating=row.zr_rating zr_phenotype=row.zr_phenotype zr_age=row.zr_age is_race_ready=row.is_race_ready is_extra_verified=row.is_extra_verified in_zwiftpower=row.in_zwiftpower in_zwiftracing=row.in_zwiftracing squad_role=row.squad_role %}
+            {% if sortable %}<span class="tabular-nums text-sm font-semibold" data-rider-figure hidden></span></div>{% endif %}
           </th>
           {% for cell in row.cells %}
-          <td class="text-center">
+          <td class="text-center"{% if sortable %} data-answer="{{ cell.state }}"{% endif %}>
             {% if cell.badge %}<span class="{{ cell.badge }} whitespace-nowrap">{{ cell.label }}</span>{% else %}<span class="text-base-content/70">{{ cell.label }}</span>{% endif %}
           </td>
           {% endfor %}
@@ -108,3 +138,113 @@
   </div>
   {% endif %}
 </div>
+
+{% if sortable and columns %}
+{{ sort_values|json_script:"rider-sort-values" }}
+<script>
+(function () {
+  var scope = document.querySelector('[data-rider-sort-scope]');
+  var root = scope && scope.querySelector('[data-rider-sort]');
+  if (!root) return;
+  var select = root.querySelector('#rider-sort');
+  var dirButton = root.querySelector('[data-sort-dir]');
+  var stageNote = root.querySelector('[data-sort-stage-note]');
+  var stageClear = root.querySelector('[data-sort-stage-clear]');
+  var table = scope.querySelector('table');
+  var tbody = table.querySelector('tbody');
+  var head = table.querySelector('[data-rider-figure-head]');
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-rider-row]'));
+  var stageButtons = Array.prototype.slice.call(table.querySelectorAll('[data-stage-sort]'));
+  var values = JSON.parse(document.getElementById('rider-sort-values').textContent);
+  // A stage's answers, best first: "Old time" was a yes or maybe for a time the stage left.
+  var ANSWER_RANK = {available: 0, maybe: 1, stale: 2, no: 3, none: 4};
+  var STORAGE_KEY = 'series_rider_sort';
+  var state = {key: '', dir: 'desc', stage: null};
+
+  function figure(row) {
+    if (state.key === 'stages') {
+      var count = row.querySelectorAll('td[data-answer="available"]').length;
+      return [count, count + ' of ' + stageButtons.length];
+    }
+    return state.key ? (values[row.getAttribute('data-user-id')] || {})[state.key] || null : null;
+  }
+  function stageRank(row) {
+    var cell = row.querySelectorAll('td[data-answer]')[state.stage];
+    var rank = cell ? ANSWER_RANK[cell.getAttribute('data-answer')] : undefined;
+    return rank === undefined ? 5 : rank;
+  }
+  function apply() {
+    var sign = state.dir === 'asc' ? 1 : -1;
+    rows.slice().sort(function (a, b) {
+      if (state.stage !== null) {
+        var byStage = stageRank(a) - stageRank(b);
+        if (byStage) return byStage;
+      }
+      if (state.key) {
+        var fa = figure(a), fb = figure(b);
+        if (fa && !fb) return -1;   // a rider with no value always goes last
+        if (fb && !fa) return 1;
+        if (fa && fb && fa[0] !== fb[0]) return sign * (fa[0] - fb[0]);
+      }
+      return Number(a.getAttribute('data-order')) - Number(b.getAttribute('data-order'));
+    }).forEach(function (row) { tbody.appendChild(row); });
+
+    var option = select.options[select.selectedIndex];
+    var header = state.key ? option.getAttribute('data-header') : '';
+    head.textContent = header;
+    head.hidden = !header;
+    rows.forEach(function (row) {
+      var span = row.querySelector('[data-rider-figure]');
+      var shown = figure(row);
+      span.textContent = state.key ? (shown ? shown[1] : '–') : '';
+      span.hidden = !state.key;
+    });
+    var category = option.hasAttribute('data-category');
+    dirButton.hidden = !state.key;
+    dirButton.textContent = state.dir === 'desc' ? (category ? 'Best first' : 'Highest first') : (category ? 'Worst first' : 'Lowest first');
+    stageButtons.forEach(function (button) {
+      var on = state.stage !== null && String(state.stage) === button.getAttribute('data-stage-sort');
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      button.classList.toggle('btn-primary', on);
+      button.classList.toggle('btn-ghost', !on);
+      if (on) stageNote.textContent = 'Available for ' + button.getAttribute('data-stage-name') + ' first';
+    });
+    stageNote.hidden = stageClear.hidden = state.stage === null;
+  }
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({key: state.key, dir: state.dir})); } catch (e) {}
+  }
+
+  select.addEventListener('change', function () {
+    state.key = select.value;
+    state.dir = 'desc';
+    save();
+    apply();
+  });
+  dirButton.addEventListener('click', function () {
+    state.dir = state.dir === 'desc' ? 'asc' : 'desc';
+    save();
+    apply();
+  });
+  stageButtons.forEach(function (button) {
+    button.addEventListener('click', function () {
+      var index = Number(button.getAttribute('data-stage-sort'));
+      state.stage = state.stage === index ? null : index;
+      apply();
+    });
+  });
+  stageClear.addEventListener('click', function () { state.stage = null; apply(); });
+
+  // The last sort chosen in this browser, if this viewer is offered it here.
+  try {
+    var saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    var offered = Array.prototype.some.call(select.options, function (option) { return option.value === saved.key; });
+    if (saved.key && offered) {
+      select.value = state.key = saved.key;
+      state.dir = saved.dir === 'asc' ? 'asc' : 'desc';
+    }
+  } catch (e) {}
+  apply();
+})();
+</script>
+{% endif %}

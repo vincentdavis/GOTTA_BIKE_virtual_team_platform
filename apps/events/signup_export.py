@@ -33,26 +33,39 @@ NAME = "name"
 EMAIL = "email"
 
 
-class _Row:
-    """One signup as the columns read it; the costlier lookups run once, when first asked for."""
+class ExportRow:
+    """One rider as the columns read them; the costlier lookups run once, when first asked for.
+
+    Built from an enriched signup (``views._enrich_signups``), or from a dict with the same
+    keys for riders who aren't signups (``rider_sort``), whose ``signup`` is None.
+    """
 
     def __init__(self, entry: dict) -> None:
+        """Wrap one rider's entry.
+
+        Args:
+            entry: The enriched signup, or a dict with its keys.
+
+        """
         self.entry = entry
         self.user = entry["user"]
         self.signup = entry["signup"]
 
     @cached_property
     def stats(self) -> dict:
+        """The table's extra Zwift Racing columns, by key; empty without a profile."""
         profile = self.entry.get("rider_profile")
         return rider_stats.stat_cells(profile, self.entry.get("gender")) if profile is not None else {}
 
     @cached_property
     def velo1_women(self) -> dict:
+        """The women's vELO 1 categories; empty for anyone but a woman."""
         profile = self.entry.get("rider_profile")
         return (profile.velo_women(self.entry.get("gender")) or {}) if profile is not None else {}
 
     @cached_property
     def answers(self) -> dict[int, str]:
+        """The rider's signup answers, by question pk."""
         return {answer["question"].pk: answer["display"] for answer in self.entry["custom_answers"]}
 
 
@@ -73,7 +86,7 @@ class ExportColumn:
 
     key: str
     header: str
-    read: Callable[[_Row], object]
+    read: Callable[[ExportRow], object]
     label: str = ""
     default: bool = True
     table_cols: tuple[str, ...] = ()
@@ -119,7 +132,7 @@ def _blank_if_none(value: object) -> object:
     return "" if value is None else value
 
 
-def _zauth(row: _Row) -> str:
+def _zauth(row: ExportRow) -> str:
     user = row.user
     if user.is_zauth_verified:
         return "Zauth"
@@ -128,25 +141,25 @@ def _zauth(row: _Row) -> str:
     return ""
 
 
-def _race_verified(row: _Row) -> str:
+def _race_verified(row: ExportRow) -> str:
     if row.entry["is_extra_verified"]:
         return "Extra Verified"
     return "Yes" if row.entry["is_race_ready"] else "No"
 
 
-def _entry(key: str, *, blank: Callable[[object], object] = _or_blank) -> Callable[[_Row], object]:
+def _entry(key: str, *, blank: Callable[[object], object] = _or_blank) -> Callable[[ExportRow], object]:
     return lambda row: blank(row.entry[key])
 
 
-def _velo1_women(key: str) -> Callable[[_Row], str]:
+def _velo1_women(key: str) -> Callable[[ExportRow], str]:
     return lambda row: row.velo1_women.get(key) or ""
 
 
-def _stat(key: str) -> Callable[[_Row], object]:
+def _stat(key: str) -> Callable[[ExportRow], object]:
     return lambda row: _blank_if_none(row.stats.get(key))
 
 
-def _answer(question_pk: int) -> Callable[[_Row], str]:
+def _answer(question_pk: int) -> Callable[[ExportRow], str]:
     return lambda row: row.answers.get(question_pk, "")
 
 
@@ -420,6 +433,6 @@ def build_rows(columns: Iterable[ExportColumn], entries: Iterable[dict]) -> tupl
     header = [csv_safe(column.header) for column in columns]
     rows = []
     for entry in entries:
-        row = _Row(entry)
+        row = ExportRow(entry)
         rows.append([csv_safe(column.read(row)) for column in columns])
     return header, rows
